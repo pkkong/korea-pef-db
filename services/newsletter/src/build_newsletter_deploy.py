@@ -5,22 +5,47 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import sys
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.request import urlopen
 
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SERVICE_ROOT.parents[1]
 DEFAULT_DEPLOY_DIR = SERVICE_ROOT / "deploy"
 DEFAULT_SITE_DIR = DEFAULT_DEPLOY_DIR / "site"
+DEFAULT_ARCHIVE_SEED_URL = os.environ.get(
+    "NEWSLETTER_ARCHIVE_SEED_URL",
+    "https://pkkong.github.io/kpef-newsletter/archive.json",
+)
 
 LEGACY_SCRIPTS_DIR = REPO_ROOT / "scripts"
 if str(LEGACY_SCRIPTS_DIR) not in sys.path:
     sys.path.append(str(LEGACY_SCRIPTS_DIR))
-from build_service_site import DEFAULT_ARCHIVE_LIMIT, DEFAULT_EXPORT_DIR, build  # noqa: E402
+from build_service_site import (  # noqa: E402
+    DEFAULT_ARCHIVE_LIMIT,
+    DEFAULT_EXPORT_DIR,
+    DEFAULT_LP_COMMITMENT_MONITOR,
+    DEFAULT_SERVICE_INTEGRATION_WORKLIST,
+    build,
+    compact_date,
+    parse_brief,
+    parse_brief_basis,
+    read_lp_monitor,
+    read_service_context,
+    render_app,
+)
 from daily_news_common import today_seoul  # noqa: E402
+
+
+ARCHIVE_SCRIPT_RE = re.compile(
+    r"<script>window\.KPEF_DAILY_ARCHIVE\s*=\s*(?P<payload>.*?);</script>",
+    re.DOTALL,
+)
 
 
 def assert_newsletter_only(site_dir: Path) -> None:
@@ -47,6 +72,71 @@ def write_static_support_files(site_dir: Path) -> None:
     (site_dir / "404.html").write_text((site_dir / "index.html").read_text(encoding="utf-8"), encoding="utf-8")
 
 
+def read_embedded_archive(html_path: Path) -> list[dict[str, object]]:
+    if not html_path.exists():
+        return []
+    match = ARCHIVE_SCRIPT_RE.search(html_path.read_text(encoding="utf-8"))
+    if not match:
+        return []
+    try:
+        payload = json.loads(match.group("payload"))
+    except json.JSONDecodeError:
+        return []
+    return payload if isinstance(payload, list) else []
+
+
+def read_archive_seed(seed_url: str) -> list[dict[str, object]]:
+    if not seed_url:
+        return []
+    try:
+        with urlopen(seed_url, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return []
+    return payload if isinstance(payload, list) else []
+
+
+def merge_archives(
+    local_entries: list[dict[str, object]],
+    seed_entries: list[dict[str, object]],
+    archive_limit: int,
+) -> list[dict[str, object]]:
+    by_date: dict[str, dict[str, object]] = {}
+    for entry in seed_entries + local_entries:
+        report_date = str(entry.get("reportDate") or "").strip()
+        articles = entry.get("articles")
+        if not report_date or not isinstance(articles, list):
+            continue
+        by_date[report_date] = entry
+    merged = [by_date[date] for date in sorted(by_date, reverse=True)]
+    if archive_limit > 0:
+        merged = merged[:archive_limit]
+    return merged
+
+
+def rewrite_site_archive(site_dir: Path, report_date: str, archive_entries: list[dict[str, object]]) -> None:
+    markdown_path = DEFAULT_EXPORT_DIR / f"daily_news_brief_{compact_date(report_date)}.md"
+    articles = parse_brief(markdown_path)
+    basis_text = parse_brief_basis(markdown_path)
+    service_context = read_service_context(DEFAULT_SERVICE_INTEGRATION_WORKLIST)
+    lp_monitor = read_lp_monitor(DEFAULT_LP_COMMITMENT_MONITOR)
+    html = render_app(
+        report_date,
+        articles,
+        basis_text,
+        service_context,
+        archive_entries,
+        lp_monitor,
+        newsletter_only=True,
+    )
+    (site_dir / "index.html").write_text(html, encoding="utf-8")
+    (site_dir / "daily-news.html").write_text(html, encoding="utf-8")
+    (site_dir / "archive.json").write_text(
+        json.dumps(archive_entries, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
     zip_path = deploy_dir / "kpef-newsletter-site.zip"
     if zip_path.exists():
@@ -55,6 +145,7 @@ def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
         site_dir / "index.html",
         site_dir / "daily-news.html",
         site_dir / "health.json",
+        site_dir / "archive.json",
         site_dir / "robots.txt",
         site_dir / "404.html",
         site_dir / "assets" / "service.css",
@@ -72,6 +163,8 @@ def main() -> int:
     parser.add_argument("--date", default=today_seoul())
     parser.add_argument("--deploy-dir", type=Path, default=DEFAULT_DEPLOY_DIR)
     parser.add_argument("--archive-limit", type=int, default=DEFAULT_ARCHIVE_LIMIT)
+    parser.add_argument("--archive-seed-url", default=DEFAULT_ARCHIVE_SEED_URL)
+    parser.add_argument("--no-archive-seed", action="store_true")
     args = parser.parse_args()
 
     deploy_dir = args.deploy_dir
@@ -86,6 +179,11 @@ def main() -> int:
         archive_limit=args.archive_limit,
         newsletter_only=True,
     )
+    local_archive = read_embedded_archive(site_dir / "index.html")
+    seed_archive = [] if args.no_archive_seed else read_archive_seed(args.archive_seed_url)
+    archive_entries = merge_archives(local_archive, seed_archive, args.archive_limit)
+    if archive_entries:
+        rewrite_site_archive(site_dir, args.date, archive_entries)
     write_health_file(site_dir, result)
     write_static_support_files(site_dir)
     assert_newsletter_only(site_dir)
