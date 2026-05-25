@@ -21,12 +21,16 @@ python scripts\build_newsletter_deploy.py --date 2026-05-22
 
 뉴스레터만 먼저 어디서든 볼 수 있게 하기 위해 GitHub Pages 배포 워크플로를 둔다.
 
-- Workflow: `.github/workflows/deploy-newsletter-pages.yml`
-- Published branch: `gh-pages`
-- Site root: `/`
-- URL: `https://pkkong.github.io/korea-pef-db/`
+- Public mirror repository: `pkkong/kpef-newsletter`
+- Public URL: `https://pkkong.github.io/kpef-newsletter/`
+- Private workflow: `.github/workflows/deploy-newsletter-pages.yml`
 
-워크플로는 GitHub Actions 안에서 다음 순서로 실행된다.
+현재 private 원본 저장소는 GitHub Pages endpoint가 열리지 않을 수 있으므로,
+일단 공개 가능한 정적 뉴스레터 산출물만 별도 public 저장소에 배포한다.
+배포 저장소에는 `deploy/newsletter/site/`의 HTML/CSS/JS/health 파일만 올라가며,
+로컬 SQLite DB, raw crawl cache, secrets, operator exports는 포함하지 않는다.
+
+private workflow는 GitHub Actions 안에서 다음 순서로 실행되도록 준비되어 있다.
 
 ```text
 run_daily_news_pipeline.py
@@ -35,8 +39,9 @@ run_daily_news_pipeline.py
 → gh-pages 브랜치에 정적 파일 배포
 ```
 
-처음 한 번은 GitHub 저장소 Settings → Pages에서 Source를 `Deploy from a branch`,
-Branch를 `gh-pages`, Folder를 `/ (root)`로 설정해야 한다.
+private repo Pages를 쓰려면 GitHub 저장소 Settings → Pages에서 Source를
+`Deploy from a branch`, Branch를 `gh-pages`, Folder를 `/ (root)`로 설정해야 한다.
+계정/플랜에서 private Pages가 지원되지 않으면 public mirror 저장소를 계속 사용한다.
 Naver News까지 정상 수집하려면 저장소 Secrets에 아래 두 값을 넣는다.
 
 - `NAVER_CLIENT_ID`
