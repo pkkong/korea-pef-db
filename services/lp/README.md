@@ -30,3 +30,28 @@ prefer the service path.
 python3 scripts/build_lp_commitment_monitor.py --skip-source-fetch
 python3 services/lp/src/build_lp_commitment_monitor.py --skip-source-fetch
 ```
+
+## CSV Review Workflow
+
+Export the current `candidate` queue for human review:
+
+```bash
+python3 scripts/lp_commitment_notice_review.py export
+```
+
+Fill `review_action` in the exported CSV with one of:
+
+- `validated`: keep the notice and mark it reviewed
+- `dismissed`: hide the notice and mark it reviewed out
+- `candidate`: reset the notice to the review queue
+
+Preview and apply the completed CSV:
+
+```bash
+python3 scripts/lp_commitment_notice_review.py apply exports/lp_commitment_notice_review_queue_latest.csv --dry-run
+python3 scripts/lp_commitment_notice_review.py apply exports/lp_commitment_notice_review_queue_latest.csv
+```
+
+The review tool updates `lp_commitment_notice.monitor_status`. By default,
+`validated` sets `public_visible=1`, `dismissed` sets `public_visible=0`, and
+`candidate` keeps the current visibility unless `review_public_visible` is set.

@@ -97,6 +97,52 @@ Google/RSS/HTML 소스만으로 빌드한다.
 Public mirror 저장소의 Pages 설정은 `Settings` → `Pages`에서 Source를 `Deploy from a branch`,
 Branch를 `main`, Folder를 `/ (root)`로 둔다.
 
+## GitHub Actions Readiness Check
+
+이 절차는 Secret 값을 열람하지 않고, private 원본 저장소에 필요한 Secret 이름이 있는지만 확인한다.
+정상 준비 기준은 아래 네 가지다.
+
+- Workflow `.github/workflows/deploy-newsletter-pages.yml`에 `schedule`과 `workflow_dispatch`가 모두 있다.
+- Repository secrets에 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `NEWSLETTER_PUBLIC_REPO_TOKEN` 세 이름이 있다.
+- `Actions` → `Deploy newsletter to GitHub Pages` 화면에 `Run workflow` 버튼이 보인다.
+- 실행 성공 후 `https://pkkong.github.io/kpef-newsletter/`와 `/health.json`이 열린다.
+
+터미널에서 한 번에 점검하려면 private 원본 저장소 루트에서 실행한다.
+
+```bash
+python3 services/newsletter/scripts/check_github_actions_readiness.py
+```
+
+정상이라면 `schedule trigger present`, `manual workflow_dispatch trigger present`, 세 Secret 이름이 모두 `[OK]`로 나온다.
+`gh CLI not found` 또는 `GitHub secret names not checked`가 나오면 로컬에서 이름 확인만 못 한 상태다. 이때는 GitHub 화면에서
+아래 경로로 확인한다.
+
+```text
+pkkong/korea-pef-db
+→ Settings
+→ Secrets and variables
+→ Actions
+→ Repository secrets
+```
+
+비개발자가 GitHub 화면에서 확인할 때는 값이 보이지 않는 것이 정상이다. 목록에 아래 세 이름이 있으면 된다.
+
+```text
+NAVER_CLIENT_ID
+NAVER_CLIENT_SECRET
+NEWSLETTER_PUBLIC_REPO_TOKEN
+```
+
+`Actions`에서 수동 점검을 할 때는 `Deploy newsletter to GitHub Pages` → `Run workflow`를 누르고,
+`report_date`는 비워 두면 한국시간 오늘 날짜로 실행된다. 실행 상세 화면의 job summary에는
+`Newsletter GitHub Actions readiness` 표가 남으며, Secret 값은 표시하지 않고 `configured` 또는 `missing`만 표시한다.
+
+문제 대응 기준:
+
+- `NEWSLETTER_PUBLIC_REPO_TOKEN`이 없으면 public mirror push가 실패하므로 즉시 보강한다.
+- `NAVER_CLIENT_ID` 또는 `NAVER_CLIENT_SECRET`이 없으면 Naver News 소스가 빠지므로 기사 커버리지가 줄어든다.
+- 수동 실행은 되지만 schedule 실행 이력이 없으면 workflow 파일의 cron `30 23 * * *`와 Actions enabled 상태를 확인한다.
+
 ## Local Smoke Test
 
 ```powershell

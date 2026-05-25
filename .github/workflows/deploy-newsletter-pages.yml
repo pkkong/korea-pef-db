@@ -57,14 +57,52 @@ jobs:
             echo "report_date=$(TZ=Asia/Seoul date +%F)" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Check required secrets
+      - name: Check automation readiness
         env:
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           NEWSLETTER_PUBLIC_REPO_TOKEN: ${{ secrets.NEWSLETTER_PUBLIC_REPO_TOKEN }}
         shell: bash
         run: |
+          {
+            echo "### Newsletter GitHub Actions readiness"
+            echo ""
+            echo "| Secret | Status |"
+            echo "| --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          missing_required=0
+
+          check_secret() {
+            local name="$1"
+            local value="$2"
+            local required="$3"
+            local missing_message="$4"
+
+            if [ -n "$value" ]; then
+              echo "| \`$name\` | configured |" >> "$GITHUB_STEP_SUMMARY"
+              return
+            fi
+
+            echo "| \`$name\` | missing - $missing_message |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$required" = "required" ]; then
+              echo "::error::$name is required. $missing_message"
+              missing_required=1
+            else
+              echo "::warning::$name is not configured. $missing_message"
+            fi
+          }
+
+          check_secret "NAVER_CLIENT_ID" "${NAVER_CLIENT_ID:-}" "recommended" "Naver News sources will be skipped."
+          check_secret "NAVER_CLIENT_SECRET" "${NAVER_CLIENT_SECRET:-}" "recommended" "Naver News sources will be skipped."
+          check_secret "NEWSLETTER_PUBLIC_REPO_TOKEN" "${NEWSLETTER_PUBLIC_REPO_TOKEN:-}" "required" "Publishing to ${NEWSLETTER_PUBLIC_REPO} will fail."
+
           if [ -z "${NEWSLETTER_PUBLIC_REPO_TOKEN:-}" ]; then
             echo "::error::NEWSLETTER_PUBLIC_REPO_TOKEN is required to publish ${NEWSLETTER_PUBLIC_REPO}."
             echo "::error::Create a fine-grained GitHub token with Contents read/write access to ${NEWSLETTER_PUBLIC_REPO}, then save it as this repository secret."
+          fi
+
+          if [ "$missing_required" -ne 0 ]; then
             exit 1
           fi
 
