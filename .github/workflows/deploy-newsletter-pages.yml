@@ -33,6 +33,7 @@ env:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -76,6 +77,9 @@ jobs:
           fi
           python3 services/newsletter/src/run_daily_news_pipeline.py \
             --date "${{ steps.date.outputs.report_date }}" \
+            --limit-per-source 10 \
+            --brief-limit 30 \
+            --review-limit 80 \
             --allow-insecure-ssl \
             --google-date-window
 
