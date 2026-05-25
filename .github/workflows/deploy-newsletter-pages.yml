@@ -29,6 +29,16 @@ concurrency:
 env:
   NEWSLETTER_PUBLIC_REPO: pkkong/kpef-newsletter
   NEWSLETTER_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter/
+  NEWSLETTER_SOURCE_CODES: >-
+    naver_pef_core_samo,naver_pef_core_pef,naver_pef_deal_sale,
+    naver_pef_deal_acquisition,naver_pef_gp_mbk,naver_pef_lp_commitment,
+    naver_pef_lp_nps,naver_pef_lp_mutual_aid,naver_pef_fundraising,
+    naver_pef_credit,naver_pef_portfolio_valueup,naver_pef_regulation,
+    naver_publisher_thebell,naver_publisher_newstomato,
+    naver_publisher_newstomato_pef,naver_publisher_newstomato_mna,
+    naver_publisher_newstof,naver_publisher_newstof_pef,
+    naver_publisher_newstof_mna,naver_ai_pe_gaic,
+    newstop_private_equity,kgnews_economy_lp_people
 
 jobs:
   build-and-publish:
@@ -77,7 +87,8 @@ jobs:
           fi
           python3 services/newsletter/src/run_daily_news_pipeline.py \
             --date "${{ steps.date.outputs.report_date }}" \
-            --limit-per-source 10 \
+            --source-code "${NEWSLETTER_SOURCE_CODES//[[:space:]]/}" \
+            --limit-per-source 5 \
             --brief-limit 30 \
             --review-limit 80 \
             --allow-insecure-ssl \
