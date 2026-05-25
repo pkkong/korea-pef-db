@@ -38,6 +38,8 @@ The product-level service menu and entity roadmap are tracked in
 `docs/service_information_architecture.md`.
 The practical entity data dictionary and future schema plan are tracked in
 `docs/entity_data_model.md`.
+Project-level Codex/team operating rules are tracked in `AGENTS.md`, with
+role-specific operating briefs in `docs/agent_operating_briefs.md`.
 
 ## Service Layout
 
