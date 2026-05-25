@@ -10,6 +10,7 @@ This folder owns the standalone Korea PEF daily newsletter service.
 2. Mac이 뉴스 기사를 모으고 뉴스레터용 정적 HTML 파일을 만든다.
 3. 공개해도 되는 HTML/CSS/JS 파일만 public mirror 저장소인 `pkkong/kpef-newsletter`에 올린다.
 4. 사용자는 GitHub Pages 주소 `https://pkkong.github.io/kpef-newsletter/`에서 최신 뉴스레터를 본다.
+5. LP 공고는 Daily 본문이 아니라 `lp-notices.html` 별도 탭/페이지로 분리한다.
 
 로컬 Mac에는 `config/daily_news.env`와 GitHub push 권한이 필요하다.
 GitHub Actions는 수동 fallback으로만 사용한다. fallback을 쓰려면 GitHub 저장소 Secrets에 아래 값이 필요하다.

@@ -19,7 +19,7 @@
 | 뉴스 소스 | 기본 활성 소스 전체 | workflow의 `NEWSLETTER_SOURCE_CODES` 지정 소스 | GitHub는 빠르고 안정적인 소스 위주라 커버리지가 좁을 수 있다. |
 | 뉴스 수집량 | `run_daily_news_today.ps1` 기준 소스당 30개 | workflow 기준 소스당 5개 | 로컬이 더 많은 후보를 보므로 누락 가능성은 낮다. |
 | 브리프 기사 수 | 보통 30개까지 후보화 가능 | 30개까지 후보화 가능 | 최종 노출 수는 같아도 GitHub는 앞단 후보 풀이 작다. |
-| LP 모니터 | 소스당 50개 | 소스당 20개 | 로컬이 더 자세하고 GitHub는 공개 배포에 필요한 최소 안정성을 우선한다. |
+| LP 공고 탭 | 소스당 50개 | 소스당 20개 | Daily 본문과 분리된 별도 페이지/서비스로 관리한다. |
 | DB/캐시 | 기존 `db/private_equity.db`, raw cache, exports 활용 | 매 실행마다 GitHub 환경에서 새로 생성 | 로컬은 과거 캐시와 검수 흔적 덕분에 더 풍부할 수 있다. |
 | 공개 배포 | public mirror에 자동 push | 수동 실행 시 public mirror에 push | 로컬 Mac이 primary publisher다. |
 
@@ -42,7 +42,7 @@ GitHub 결과물이 항상 더 나쁘다는 뜻은 아니다. 공개 뉴스레�
 - `article_count > 0`
 - `index.html`, `daily-news.html`, `archive.json` 존재
 
-`lp_monitor_count`가 0이면 로컬 발행 스크립트는 경고만 낸다. LP 공고 모니터는 뉴스레터 핵심 콘텐츠가 아니기 때문이다.
+`lp_monitor_count`가 0이면 로컬 발행 스크립트는 경고만 낸다. LP 공고는 별도 탭/서비스이며 뉴스레터 Daily 본문 핵심 콘텐츠가 아니기 때문이다.
 
 또한 deploy builder는 public mirror의 기존 `archive.json`을 seed로 읽어서, 같은 날짜의 기존 비어 있지 않은 뉴스가 새 0건 결과로 덮이지 않게 한다.
 

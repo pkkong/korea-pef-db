@@ -1,6 +1,6 @@
 # Newsletter Deployment
 
-오늘 배포 범위는 뉴스레터 서비스만이다. GP/LP DB 화면은 서버 번들에서 제외하고, `Daily Brief`, 저장함, 공식 출자공고 패널만 포함한다.
+오늘 배포 범위는 뉴스레터 서비스와 별도 LP 공고 탭이다. GP/LP DB 화면은 서버 번들에서 제외하고, `Daily Brief`, 저장함, `LP 공고` 페이지를 포함한다. LP 공고는 Daily 본문 패널로 붙이지 않는다.
 
 ## Build
 
@@ -12,6 +12,7 @@ python services\newsletter\src\build_newsletter_deploy.py --date 2026-05-22
 빌드 산출물:
 
 - `services/newsletter/deploy/site/`: 서버에 올릴 정적 파일
+- `services/newsletter/deploy/site/lp-notices.html`: 별도 LP 공식 공고 페이지
 - `services/newsletter/deploy/kpef-newsletter-site.zip`: 압축 배포본
 - `services/newsletter/deploy/deploy-manifest.json`: 배포 메타데이터
 - `services/newsletter/deploy/Dockerfile`: Docker 배포용

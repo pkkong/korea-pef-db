@@ -67,7 +67,7 @@ KPEF Daily의 1차 섹션은 `AI & PE`, `Deal`, `LP`, `GP`, `Market` 다섯 개�
 - 매일 로컬 Mac 발행 작업은 초안 생성 직후 `services/newsletter/src/validate_daily_news_pipeline.py` 기준 검증을 남긴다.
 - 매일 로컬 Mac 발행 작업은 `services/newsletter/src/build_newsletter_deploy.py`로 `services/newsletter/deploy/site/`를 만들고 public mirror `pkkong/kpef-newsletter`에 push한다.
 - 매일 로컬 Mac 발행 작업은 `scripts/build_lp_commitment_monitor.py`를 실행해서 주요 LP 출자사업 공고/선정/뉴스 후보를 갱신한다. LP 공고 모니터는 뉴스레터 핵심 콘텐츠가 아니므로 공개 Daily와 분리하는 방향을 기본으로 둔다.
-- Daily의 `출자사업 모니터`는 `new_notice`, `deadline_soon`, `shortlist`, `final_selection` 등 이벤트 타입을 우선 노출한다. `program_size`는 정책펀드 전체 규모로 보관하되, 공개 출자규모 합산에는 `allocation_amount`만 사용한다.
+- 별도 LP 공고 탭은 `new_notice`, `deadline_soon`, `shortlist`, `final_selection` 등 이벤트 타입을 우선 노출한다. `program_size`는 정책펀드 전체 규모로 보관하되, 공개 출자규모 합산에는 `allocation_amount`만 사용한다.
 - 공개 Daily 화면은 최근 날짜별 `daily_news_brief_YYYYMMDD.md`를 함께 포함하므로, 사용자는 날짜 선택으로 과거 브리프의 주요 뉴스도 볼 수 있다.
 - 매일 뉴스 파이프라인은 `scripts/build_service_integration_worklist.py`도 실행해서 뉴스 노출 GP, People DB 커버리지, 담당자별 다음 액션을 하나의 작업 큐로 갱신한다.
 - 공개 뉴스 화면은 확인된 GP/관련 인물 같은 독자용 맥락만 표시한다. `프로필 보강`, `식별자 보강`, 리뷰 큐, 작업 담당자 같은 운영 상태는 공개 화면에 노출하지 않는다.

@@ -33,6 +33,7 @@ from build_service_site import (  # noqa: E402
     DEFAULT_SERVICE_INTEGRATION_WORKLIST,
     build,
     compact_date,
+    html_escape,
     parse_brief,
     parse_brief_basis,
     read_lp_monitor,
@@ -71,6 +72,142 @@ def write_static_support_files(site_dir: Path) -> None:
     (site_dir / ".nojekyll").write_text("", encoding="utf-8")
     (site_dir / "robots.txt").write_text("User-agent: *\nDisallow:\n", encoding="utf-8")
     (site_dir / "404.html").write_text((site_dir / "index.html").read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def lp_event_label(value: object) -> str:
+    return {
+        "new_notice": "신규 공고",
+        "deadline_soon": "마감 임박",
+        "deadline_closed": "마감",
+        "shortlist": "숏리스트",
+        "final_selection": "최종 선정",
+        "revision": "정정",
+        "cancellation": "취소",
+        "performance_update": "성과",
+    }.get(str(value or ""), "공고")
+
+
+def lp_amount_label(value: object) -> str:
+    try:
+        parsed = float(str(value or "0").replace(",", ""))
+    except ValueError:
+        return ""
+    if parsed <= 0:
+        return ""
+    if parsed >= 10000:
+        return f"{parsed / 10000:,.1f}조"
+    return f"{round(parsed):,}억"
+
+
+def render_lp_notices_page(report_date: str, notices: list[dict[str, object]]) -> str:
+    if notices:
+        notice_cards = "\n".join(render_lp_notice_card(item) for item in notices)
+    else:
+        notice_cards = """        <div class="empty-state visible">
+          <strong>표시할 공식 공고가 없습니다</strong>
+          <span>LP 공고 모니터는 별도 서비스로 분리해 운영합니다.</span>
+        </div>"""
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Korea PEF Intelligence LP Notices</title>
+  <link rel="stylesheet" href="assets/service.css">
+  <style>
+    .lp-page-list {{ display: grid; gap: 10px; }}
+    .lp-page-card {{ display: grid; gap: 8px; padding: 14px; border: 1px solid var(--separator); border-radius: 14px; background: var(--surface); }}
+    .lp-page-card h2 {{ margin: 0; font-size: 15px; line-height: 1.38; }}
+    .lp-page-card h2 a {{ color: inherit; text-decoration: none; }}
+    .lp-page-meta {{ display: flex; flex-wrap: wrap; gap: 6px; color: var(--secondary); font-size: 12px; line-height: 1.35; }}
+    .lp-page-meta span + span::before {{ content: "·"; margin-right: 6px; color: var(--tertiary); }}
+    .lp-page-actions {{ display: flex; flex-wrap: wrap; gap: 8px; }}
+    .lp-page-actions a {{ display: inline-flex; min-height: 32px; align-items: center; border-radius: 999px; padding: 6px 10px; background: var(--surface-muted); color: var(--text); font-size: 12px; font-weight: 650; text-decoration: none; }}
+    @media (min-width: 960px) {{ .lp-page-list {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
+  </style>
+</head>
+<body>
+  <div class="app-shell newsletter-only">
+    <header class="app-header">
+      <div class="header-topline">
+        <div>
+          <p>Korea PEF Intelligence</p>
+          <strong>LP 공고</strong>
+        </div>
+        <div class="header-actions">
+          <a class="header-action" href="index.html" aria-label="뉴스 브리프 열기">브리프</a>
+        </div>
+      </div>
+      <div class="brief-meta">공식 공고 {len(notices)}건 · 기준일 {html_escape(report_date)}</div>
+    </header>
+
+    <main class="content-area">
+      <section class="section-block" aria-label="LP 공식 공고">
+        <div class="lp-page-list">
+{notice_cards}
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="하단 메뉴">
+      <a href="index.html">
+        <span aria-hidden="true" class="nav-dot nav-icon-brief"></span>
+        <strong>브리프</strong>
+      </a>
+      <a class="active" href="lp-notices.html">
+        <span aria-hidden="true" class="nav-dot nav-icon-db"></span>
+        <strong>공고</strong>
+      </a>
+      <a href="index.html#saved">
+        <span aria-hidden="true" class="nav-dot nav-icon-saved"></span>
+        <strong>저장</strong>
+      </a>
+    </nav>
+  </div>
+</body>
+</html>
+"""
+
+
+def render_lp_notice_card(item: dict[str, object]) -> str:
+    title = str(item.get("displayTitle") or item.get("title") or "공식 공고")
+    url = str(item.get("url") or "")
+    document_url = str(item.get("documentUrl") or "")
+    amount = lp_amount_label(item.get("allocationAmount"))
+    meta_values = [
+        str(item.get("lpName") or "LP 미분류"),
+        lp_event_label(item.get("eventType")),
+        str(item.get("assetClass") or ""),
+        f"마감 {item.get('applicationDeadline')}" if item.get("applicationDeadline") else "",
+        amount,
+    ]
+    meta = "".join(f"<span>{html_escape(value)}</span>" for value in meta_values if value)
+    official_link = (
+        f'<a href="{html_escape(url)}" target="_blank" rel="noreferrer">공식 공고 보기</a>'
+        if url
+        else ""
+    )
+    document_link = (
+        f'<a href="{html_escape(document_url)}" target="_blank" rel="noreferrer">첨부파일</a>'
+        if document_url and document_url != url
+        else ""
+    )
+    linked_title = (
+        f'<a href="{html_escape(url)}" target="_blank" rel="noreferrer">{html_escape(title)}</a>'
+        if url
+        else html_escape(title)
+    )
+    return f"""          <article class="lp-page-card">
+            <h2>{linked_title}</h2>
+            <div class="lp-page-meta">{meta}</div>
+            <div class="lp-page-actions">{official_link}{document_link}</div>
+          </article>"""
+
+
+def write_lp_notices_page(site_dir: Path, report_date: str) -> int:
+    notices = read_lp_monitor(DEFAULT_LP_COMMITMENT_MONITOR)
+    (site_dir / "lp-notices.html").write_text(render_lp_notices_page(report_date, notices), encoding="utf-8")
+    return len(notices)
 
 
 def read_embedded_archive(html_path: Path) -> list[dict[str, object]]:
@@ -159,6 +296,7 @@ def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
     include_paths = [
         site_dir / "index.html",
         site_dir / "daily-news.html",
+        site_dir / "lp-notices.html",
         site_dir / "health.json",
         site_dir / "archive.json",
         site_dir / ".nojekyll",
@@ -207,6 +345,7 @@ def main() -> int:
                 int(result.get("article_count", "0") or 0),
             )
         )
+    result["lp_monitor_count"] = str(write_lp_notices_page(site_dir, args.date))
     write_health_file(site_dir, result)
     write_static_support_files(site_dir)
     assert_newsletter_only(site_dir)

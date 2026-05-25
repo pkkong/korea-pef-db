@@ -739,19 +739,51 @@ def render_app(
     max_date = max(available_dates) if available_dates else report_date
     shell_class = "app-shell newsletter-only" if newsletter_only else "app-shell"
     header_db_link = (
-        ""
+        '<a class="header-action" href="lp-notices.html" aria-label="LP 공식 공고 열기">공고</a>'
         if newsletter_only
         else '<a class="header-action" href="db.html" aria-label="공개 GP·펀드 데이터베이스 열기">DB</a>'
     )
     lp_db_link = "" if newsletter_only else '<a href="db.html#lp">LP DB</a>'
     bottom_db_link = (
-        ""
+        """      <a href="lp-notices.html">
+        <span aria-hidden="true" class="nav-dot nav-icon-db"></span>
+        <strong>공고</strong>
+      </a>"""
         if newsletter_only
         else """      <a href="db.html">
         <span aria-hidden="true" class="nav-dot nav-icon-db"></span>
         <strong>DB</strong>
       </a>"""
     )
+    search_placeholder = "뉴스·GP 검색" if newsletter_only else "뉴스·공식공고·GP 검색"
+    lp_monitor_section = (
+        ""
+        if newsletter_only
+        else f"""      <section class="lp-monitor-panel" id="lpMonitorPanel" aria-label="공식 출자공고" hidden>
+        <div class="lp-monitor-head">
+          <h2>공식 출자공고</h2>
+          {lp_db_link}
+        </div>
+        <div class="lp-monitor-list" id="lpMonitorList"></div>
+      </section>
+
+"""
+    )
+    lp_detail_markup = (
+        ""
+        if newsletter_only
+        else """    <div class="lp-detail-backdrop" id="lpDetailBackdrop" hidden></div>
+    <section class="lp-detail-sheet" id="lpDetailSheet" aria-label="출자공고 상세" aria-modal="true" role="dialog" hidden>
+      <div class="lp-detail-head">
+        <span>출자공고 상세</span>
+        <button type="button" id="lpDetailClose" aria-label="닫기"></button>
+      </div>
+      <div id="lpDetailBody"></div>
+    </section>
+
+"""
+    )
+    lp_monitor_script = "" if newsletter_only else f"  <script>window.KPEF_LP_MONITOR = {lp_payload};</script>\n"
     return f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -792,20 +824,13 @@ def render_app(
     <section class="search-area" id="searchArea" aria-label="기사 검색">
       <label class="search-box">
         <span aria-hidden="true"></span>
-        <input id="clipSearch" type="search" placeholder="뉴스·공식공고·GP 검색" autocomplete="off">
+        <input id="clipSearch" type="search" placeholder="{html_escape(search_placeholder)}" autocomplete="off">
       </label>
       <button class="search-close" id="searchClose" type="button" aria-label="검색 닫기"></button>
     </section>
 
     <main class="content-area">
-      <section class="lp-monitor-panel" id="lpMonitorPanel" aria-label="공식 출자공고" hidden>
-        <div class="lp-monitor-head">
-          <h2>공식 출자공고</h2>
-          {lp_db_link}
-        </div>
-        <div class="lp-monitor-list" id="lpMonitorList"></div>
-      </section>
-
+{lp_monitor_section}
       <section id="todayView" class="view active" aria-label="오늘 브리프">
         <div class="skeleton-list" aria-hidden="true">
           <div></div><div></div><div></div>
@@ -822,15 +847,7 @@ def render_app(
       </section>
     </main>
 
-    <div class="lp-detail-backdrop" id="lpDetailBackdrop" hidden></div>
-    <section class="lp-detail-sheet" id="lpDetailSheet" aria-label="출자공고 상세" aria-modal="true" role="dialog" hidden>
-      <div class="lp-detail-head">
-        <span>출자공고 상세</span>
-        <button type="button" id="lpDetailClose" aria-label="닫기"></button>
-      </div>
-      <div id="lpDetailBody"></div>
-    </section>
-
+{lp_detail_markup}
     <nav class="bottom-nav" aria-label="하단 메뉴">
       <button class="active" type="button" data-view="today">
         <span aria-hidden="true" class="nav-dot nav-icon-brief"></span>
@@ -844,8 +861,7 @@ def render_app(
     </nav>
   </div>
   <script>window.KPEF_DAILY_ARCHIVE = {payload};</script>
-  <script>window.KPEF_LP_MONITOR = {lp_payload};</script>
-  <script src="assets/service.js"></script>
+{lp_monitor_script}  <script src="assets/service.js"></script>
 </body>
 </html>
 """
@@ -1570,7 +1586,7 @@ button, input { font: inherit; }
   background: rgba(249,249,249,0.88);
   backdrop-filter: blur(22px);
 }
-.newsletter-only .bottom-nav { grid-template-columns: repeat(2, 1fr); }
+.newsletter-only .bottom-nav { grid-template-columns: repeat(3, 1fr); }
 .bottom-nav button,
 .bottom-nav a {
   display: flex;
@@ -1725,6 +1741,7 @@ def service_js() -> str:
   const lpDetailClose = document.getElementById("lpDetailClose");
   const skeleton = document.querySelector(".skeleton-list");
   const navItems = [...document.querySelectorAll(".bottom-nav [data-view]")];
+  const showLpMonitor = lpMonitor.length > 0 && Boolean(lpMonitorPanel);
 
   const loadSaved = () => {
     try {
@@ -1829,8 +1846,12 @@ def service_js() -> str:
       const query = queryText();
       if (query) {
         const newsCount = Number.isFinite(counts.newsCount) ? counts.newsCount : filtered().length;
-        const noticeCount = Number.isFinite(counts.noticeCount) ? counts.noticeCount : filteredLpMonitor().length;
-        briefMeta.textContent = `검색 결과 뉴스 ${newsCount}건 · 공식공고 ${noticeCount}건`;
+        if (showLpMonitor) {
+          const noticeCount = Number.isFinite(counts.noticeCount) ? counts.noticeCount : filteredLpMonitor().length;
+          briefMeta.textContent = `검색 결과 뉴스 ${newsCount}건 · 공식공고 ${noticeCount}건`;
+        } else {
+          briefMeta.textContent = `검색 결과 뉴스 ${newsCount}건`;
+        }
         return;
       }
       const countLabel = activeBrief.countLabel || `주요 뉴스 ${articles.length}건`;
@@ -1866,6 +1887,7 @@ def service_js() -> str:
   };
 
   const filteredLpMonitor = () => {
+    if (!showLpMonitor) return [];
     const query = queryText();
     if (!query) return lpMonitor;
     return lpMonitor.filter((item) => textMatches([
