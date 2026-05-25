@@ -2,6 +2,25 @@
 
 This folder owns the standalone Korea PEF daily newsletter service.
 
+## Non-Developer Summary
+
+뉴스레터는 개인 PC에서 매일 수동으로 만드는 구조가 아니라, GitHub가 정해진 시간에 자동으로 만드는 구조다.
+
+1. Private 원본 저장소의 GitHub Actions가 매일 실행된다.
+2. Action이 뉴스 기사를 모으고 뉴스레터용 정적 HTML 파일을 만든다.
+3. 공개해도 되는 HTML/CSS/JS 파일만 public mirror 저장소인 `pkkong/kpef-newsletter`에 올린다.
+4. 사용자는 GitHub Pages 주소 `https://pkkong.github.io/kpef-newsletter/`에서 최신 뉴스레터를 본다.
+
+GitHub 저장소 Secrets에는 아래 값이 필요하다.
+
+- `NAVER_CLIENT_ID`: Naver News API client ID
+- `NAVER_CLIENT_SECRET`: Naver News API client secret
+- `NEWSLETTER_PUBLIC_REPO_TOKEN`: private 원본 저장소의 Action이 public mirror `pkkong/kpef-newsletter`에 push할 때 쓰는 GitHub token
+
+자동 실행을 기다리지 않고 바로 만들려면 GitHub의 원본 저장소에서 `Actions` 탭으로 가서
+`Deploy newsletter to GitHub Pages` 워크플로를 선택한 뒤 `Run workflow`를 누른다.
+날짜를 비워 두면 한국시간 기준 오늘 날짜로 생성된다.
+
 ## Layout
 
 - `src/`: Python implementation for collection, review, validation, delivery, source audit, and static deploy bundle generation

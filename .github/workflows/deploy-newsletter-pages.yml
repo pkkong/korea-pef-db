@@ -8,8 +8,8 @@ on:
         required: false
         type: string
   schedule:
-    # 08:30 KST every weekday.
-    - cron: "30 23 * * 0-4"
+    # 08:30 KST every day.
+    - cron: "30 23 * * *"
   push:
     branches:
       - main
@@ -20,11 +20,15 @@ on:
       - "scripts/build_service_integration_worklist.py"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: newsletter-pages
   cancel-in-progress: false
+
+env:
+  NEWSLETTER_PUBLIC_REPO: pkkong/kpef-newsletter
+  NEWSLETTER_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter/
 
 jobs:
   build-and-publish:
@@ -35,6 +39,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
       - name: Resolve report date
         id: date
         shell: bash
@@ -43,6 +52,17 @@ jobs:
             echo "report_date=${{ inputs.report_date }}" >> "$GITHUB_OUTPUT"
           else
             echo "report_date=$(TZ=Asia/Seoul date +%F)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check required secrets
+        env:
+          NEWSLETTER_PUBLIC_REPO_TOKEN: ${{ secrets.NEWSLETTER_PUBLIC_REPO_TOKEN }}
+        shell: bash
+        run: |
+          if [ -z "${NEWSLETTER_PUBLIC_REPO_TOKEN:-}" ]; then
+            echo "::error::NEWSLETTER_PUBLIC_REPO_TOKEN is required to publish ${NEWSLETTER_PUBLIC_REPO}."
+            echo "::error::Create a fine-grained GitHub token with Contents read/write access to ${NEWSLETTER_PUBLIC_REPO}, then save it as this repository secret."
+            exit 1
           fi
 
       - name: Build daily newsletter data
@@ -73,19 +93,27 @@ jobs:
               raise SystemExit("index.html was not generated")
           if not (site / "daily-news.html").exists():
               raise SystemExit("daily-news.html was not generated")
+          if not (site / "archive.json").exists():
+              raise SystemExit("archive.json was not generated")
+          archive = json.loads((site / "archive.json").read_text(encoding="utf-8"))
+          print(f"archive_count={len(archive)}")
           PY
 
-      - name: Publish gh-pages branch
+      - name: Publish public newsletter mirror
         shell: bash
+        env:
+          NEWSLETTER_PUBLIC_REPO_TOKEN: ${{ secrets.NEWSLETTER_PUBLIC_REPO_TOKEN }}
         run: |
           publish_dir="$(mktemp -d)"
           cp -R services/newsletter/deploy/site/. "$publish_dir"/
           cd "$publish_dir"
+          touch .nojekyll
           git init -q
-          git checkout -b gh-pages
+          git checkout -b main
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "Deploy newsletter ${{ steps.date.outputs.report_date }}" >/dev/null
-          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git push -f origin gh-pages
+          git remote add origin "https://x-access-token:${NEWSLETTER_PUBLIC_REPO_TOKEN}@github.com/${NEWSLETTER_PUBLIC_REPO}.git"
+          git push -f origin main
+          echo "Published ${NEWSLETTER_PUBLIC_URL}"

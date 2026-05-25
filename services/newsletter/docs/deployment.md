@@ -19,36 +19,49 @@ python services\newsletter\src\build_newsletter_deploy.py --date 2026-05-22
 
 ## GitHub Pages Deploy
 
-뉴스레터만 먼저 어디서든 볼 수 있게 하기 위해 GitHub Pages 배포 워크플로를 둔다.
+뉴스레터는 GitHub Actions가 자동으로 만들고, 공개 가능한 정적 파일만 별도 public mirror 저장소에 올린다.
+비개발자는 서버 접속이나 로컬 실행 없이 GitHub Pages 주소만 확인하면 된다.
 
+- 원본 저장소: private repo `pkkong/korea-pef-db`
 - Public mirror repository: `pkkong/kpef-newsletter`
 - Public URL: `https://pkkong.github.io/kpef-newsletter/`
 - Private workflow: `.github/workflows/deploy-newsletter-pages.yml`
+- Workflow name: `Deploy newsletter to GitHub Pages`
 
-현재 private 원본 저장소는 GitHub Pages endpoint가 열리지 않을 수 있으므로,
-일단 공개 가능한 정적 뉴스레터 산출물만 별도 public 저장소에 배포한다.
-배포 저장소에는 `services/newsletter/deploy/site/`의 HTML/CSS/JS/health 파일만 올라가며,
-로컬 SQLite DB, raw crawl cache, secrets, operator exports는 포함하지 않는다.
+현재 private 원본 저장소는 GitHub Pages endpoint가 열리지 않을 수 있으므로, 공개 가능한 뉴스레터 산출물만
+`pkkong/kpef-newsletter`에 복사해서 보여준다. Public mirror에는 `services/newsletter/deploy/site/`의
+HTML/CSS/JS/health 파일만 올라간다. 로컬 SQLite DB, raw crawl cache, secrets, operator exports는 올리지 않는다.
 
-private workflow는 GitHub Actions 안에서 다음 순서로 실행되도록 준비되어 있다.
+GitHub Actions는 다음 순서로 실행된다.
 
 ```text
-run_daily_news_pipeline.py
-→ build_newsletter_deploy.py
-→ services/newsletter/deploy/site 생성
-→ gh-pages 브랜치에 정적 파일 배포
+1. run_daily_news_pipeline.py로 그날의 뉴스 데이터를 만든다.
+2. build_newsletter_deploy.py로 정적 사이트 파일을 만든다.
+3. services/newsletter/deploy/site/ 결과물만 모은다.
+4. NEWSLETTER_PUBLIC_REPO_TOKEN으로 public mirror pkkong/kpef-newsletter에 push한다.
+5. GitHub Pages가 https://pkkong.github.io/kpef-newsletter/ 주소로 보여준다.
 ```
 
-private repo Pages를 쓰려면 GitHub 저장소 Settings → Pages에서 Source를
-`Deploy from a branch`, Branch를 `gh-pages`, Folder를 `/ (root)`로 설정해야 한다.
-계정/플랜에서 private Pages가 지원되지 않으면 public mirror 저장소를 계속 사용한다.
-Naver News까지 정상 수집하려면 저장소 Secrets에 아래 두 값을 넣는다.
+자동 실행은 GitHub Actions schedule이 담당한다. 현재 설정은 한국시간 매일 오전 8:30 실행이다.
+수동으로 바로 만들려면 private 원본 저장소의 GitHub 화면에서 `Actions` → `Deploy newsletter to GitHub Pages`
+→ `Run workflow`를 누른다. `report_date`를 비워 두면 한국시간 기준 오늘 날짜로 생성되고, 필요한 경우
+`YYYY-MM-DD` 형식으로 날짜를 직접 넣을 수 있다.
 
-- `NAVER_CLIENT_ID`
-- `NAVER_CLIENT_SECRET`
+## Required GitHub Secrets
 
-Secrets가 없으면 워크플로는 Naver News 소스를 건너뛰고 Google/RSS/HTML 소스만으로 빌드한다.
-수동 배포는 GitHub Actions 화면에서 `Deploy newsletter to GitHub Pages`를 실행하면 된다.
+Private 원본 저장소의 `Settings` → `Secrets and variables` → `Actions`에 아래 값을 넣는다.
+
+- `NAVER_CLIENT_ID`: Naver News API client ID
+- `NAVER_CLIENT_SECRET`: Naver News API client secret
+- `NEWSLETTER_PUBLIC_REPO_TOKEN`: private 원본 저장소의 Action이 public mirror `pkkong/kpef-newsletter`에 push할 때 쓰는 GitHub token
+
+`NAVER_CLIENT_ID` 또는 `NAVER_CLIENT_SECRET`이 없으면 워크플로는 Naver News 소스를 건너뛰고
+Google/RSS/HTML 소스만으로 빌드한다.
+`NEWSLETTER_PUBLIC_REPO_TOKEN`이 없거나 public mirror에 push 권한이 없으면 뉴스레터 파일을 만들 수는 있어도
+`pkkong/kpef-newsletter`에 게시할 수 없다.
+
+Public mirror 저장소의 Pages 설정은 `Settings` → `Pages`에서 Source를 `Deploy from a branch`,
+Branch를 `main`, Folder를 `/ (root)`로 둔다.
 
 ## Local Smoke Test
 
@@ -99,4 +112,5 @@ curl http://127.0.0.1/health.json
 
 ## Update Flow
 
-매일 갱신은 같은 방식으로 새 번들을 만들고 서버의 `site/`만 교체하면 된다. 수집 자체를 서버에서 자동 실행하려면 다음 단계에서 서버 crontab 또는 Cloud Run/Railway Cron으로 `run_daily_news_pipeline.py`와 `build_newsletter_deploy.py`를 묶는다.
+매일 갱신은 GitHub Actions가 처리한다. 로컬 PC가 켜져 있지 않아도 private 원본 저장소의 workflow가
+뉴스 수집, 정적 사이트 생성, public mirror push를 순서대로 실행한다.
