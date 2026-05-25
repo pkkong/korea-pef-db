@@ -1,0 +1,1 @@
+"""LP notice service package."""

@@ -100,7 +100,7 @@ if [ "$SKIP_GENERATE" -eq 0 ]; then
   "$PYTHON_BIN" services/newsletter/src/build_newsletter_source_audit.py \
     --date "$REPORT_DATE"
 
-  "$PYTHON_BIN" scripts/build_lp_commitment_monitor.py \
+  "$PYTHON_BIN" services/lp/src/build_lp_commitment_monitor.py \
     --date "$REPORT_DATE" \
     --days "$LP_MONITOR_DAYS" \
     --limit-per-source "$LP_LIMIT_PER_SOURCE" \

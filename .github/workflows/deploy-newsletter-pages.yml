@@ -1,6 +1,9 @@
-name: Deploy newsletter to GitHub Pages (fallback)
+name: Deploy newsletter to GitHub Pages
 
 on:
+  schedule:
+    # Daily 08:30 Asia/Seoul.
+    - cron: "30 23 * * *"
   workflow_dispatch:
     inputs:
       report_date:
@@ -85,7 +88,7 @@ jobs:
 
       - name: Build LP commitment monitor
         run: |
-          python3 scripts/build_lp_commitment_monitor.py \
+          python3 services/lp/src/build_lp_commitment_monitor.py \
             --date "${{ steps.date.outputs.report_date }}" \
             --days 180 \
             --limit-per-source 20 \
@@ -133,6 +136,6 @@ jobs:
             echo "No public newsletter changes to publish."
             exit 0
           fi
-          git commit -m "Deploy newsletter ${{ steps.date.outputs.report_date }} from GitHub fallback" >/dev/null
+          git commit -m "Deploy newsletter ${{ steps.date.outputs.report_date }} from GitHub Actions" >/dev/null
           git push origin main
           echo "Published ${NEWSLETTER_PUBLIC_URL}"

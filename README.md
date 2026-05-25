@@ -52,8 +52,15 @@ The newsletter service is separated under `services/newsletter/`:
 - `services/newsletter/deploy/`: Docker/Nginx files and generated static site bundle
 - `services/newsletter/docs/`: newsletter-specific operating and deployment docs
 
+The LP notice monitor is being separated under `services/lp/`:
+
+- `services/lp/src/`: LP official notice/news candidate collection and export implementation
+- `services/lp/docs/`: LP-specific operating notes
+
 The old `scripts/run_daily_news_pipeline.py` style commands remain as
 compatibility wrappers, but new automation should call the service path directly.
+The old `scripts/build_lp_commitment_monitor.py` command is also kept as a
+compatibility wrapper while new LP work moves under `services/lp/`.
 
 ## FSS PEF Pipeline
 
@@ -62,6 +69,17 @@ compatibility wrappers, but new automation should call the service path directly
 ```powershell
 python scripts/fetch_fss_pef_sources.py
 ```
+
+Raw source reproducibility health check:
+
+```powershell
+python scripts/check_fss_raw_sources.py
+```
+
+This checks that every registry `local_file` exists under `data/raw/fss_pef/`,
+reports file size and SHA-256, and compares SHA-256 to `source_document` when
+the local DB is available. Missing raw files fail non-zero; missing DB metadata
+only warns.
 
 2. If needed, manually put additional raw FSS quarterly Excel files in `data/raw/fss_pef/`.
 3. Register each manual source in `data/source_registry_fss_pef.csv`.
