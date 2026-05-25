@@ -22,7 +22,8 @@ python scripts\build_newsletter_deploy.py --date 2026-05-22
 뉴스레터만 먼저 어디서든 볼 수 있게 하기 위해 GitHub Pages 배포 워크플로를 둔다.
 
 - Workflow: `.github/workflows/deploy-newsletter-pages.yml`
-- Site root: `deploy/newsletter/site/`
+- Published branch: `gh-pages`
+- Site root: `/`
 - URL: `https://pkkong.github.io/korea-pef-db/`
 
 워크플로는 GitHub Actions 안에서 다음 순서로 실행된다.
@@ -30,11 +31,12 @@ python scripts\build_newsletter_deploy.py --date 2026-05-22
 ```text
 run_daily_news_pipeline.py
 → build_newsletter_deploy.py
-→ deploy/newsletter/site 업로드
-→ GitHub Pages 배포
+→ deploy/newsletter/site 생성
+→ gh-pages 브랜치에 정적 파일 배포
 ```
 
-처음 한 번은 GitHub 저장소 Settings → Pages에서 Source를 `GitHub Actions`로 설정해야 한다.
+처음 한 번은 GitHub 저장소 Settings → Pages에서 Source를 `Deploy from a branch`,
+Branch를 `gh-pages`, Folder를 `/ (root)`로 설정해야 한다.
 Naver News까지 정상 수집하려면 저장소 Secrets에 아래 두 값을 넣는다.
 
 - `NAVER_CLIENT_ID`
