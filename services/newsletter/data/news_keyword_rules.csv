@@ -22,9 +22,15 @@ deal_acquisition,title_or_excerpt,contains,인수,1,topic,Deal,인수 거래 관
 deal_sale,title_or_excerpt,contains,매각,1,topic,Deal,매각 거래 관련 맥락입니다.,1,Deal keyword
 deal_buyout,title_or_excerpt,contains,바이아웃,2,topic,Deal,바이아웃 기사로 볼 수 있습니다.,1,Deal keyword
 deal_preferred_bidder,title_or_excerpt,contains,우선협상대상자,2,topic,Deal,우선협상대상자 단계의 거래 기사입니다.,1,Deal keyword
+deal_preferred_bidder_abbrev,title_or_excerpt,contains,우협,2,topic,Deal,우선협상대상자 약어가 등장하는 거래 기사입니다.,1,Deal process keyword
 deal_sale_advisor,title_or_excerpt,contains,매각주관,1,topic,Deal,매각주관 선정 등 딜 프로세스 기사입니다.,1,Deal keyword
+deal_spa_execution,title_or_excerpt,contains,SPA 체결,3,topic,Deal,주식매매계약 체결 또는 임박 단계의 M&A 기사입니다.,1,Deal process keyword
+deal_potential_buyer,title_or_excerpt,contains,원매자,2,topic,Deal,원매자 탐색 또는 매각 흥행 관련 기사입니다.,1,Deal process keyword
+deal_resale,title_or_excerpt,contains,재매각,2,topic,Deal,재매각 프로세스 관련 기사입니다.,1,Deal process keyword
+deal_bidding_competition,title_or_excerpt,contains,인수전,2,topic,Deal,인수 경쟁 구도 관련 기사입니다.,1,Deal process keyword
 lp_commitment,title_or_excerpt,contains,출자사업,3,topic,LP,LP 출자사업 관련 기사입니다.,1,LP commitment event; eligible for LP section
 lp_fund_of_funds,title_or_excerpt,contains,모태펀드,3,topic,LP,모태펀드와 연결됩니다.,1,LP commitment event/facet; section still decided by headline event
+lp_national_growth_fund,title_or_excerpt,contains,국민성장펀드,3,topic,LP,국민성장펀드 출자 또는 간접투자 기사입니다.,1,LP commitment event/facet
 lp_pension,title_or_excerpt,contains,연기금,1,topic,LP,연기금 LP 동향일 수 있습니다.,1,LP institution facet only; not primary section
 lp_mutual_aid,title_or_excerpt,contains,공제회,1,topic,LP,공제회 LP 동향일 수 있습니다.,1,LP institution facet only; not primary section
 lp_nps,title_or_excerpt,contains,국민연금,1,topic,LP,국민연금 LP 동향일 수 있습니다.,1,LP institution facet only; not primary section
@@ -50,7 +56,16 @@ fundraising_blind_fund_build,title_or_excerpt,contains,블라인드펀드 조성
 fundraising_fund_challenge,title_or_excerpt,contains,펀드 도전,2,topic,GP,펀드레이징 목표 또는 신규 펀드 추진 기사입니다.,1,GP Fundraising keyword
 gp_ef_pe,title_or_excerpt,contains,E&F PE,4,topic,GP,E&F PE 관련 GP 기사입니다.,1,GP name and fundraising safety net
 gp_ef_private_equity,title_or_excerpt,contains,E&F프라이빗에쿼티,4,topic,GP,E&F PE 관련 GP 기사입니다.,1,GP name and fundraising safety net
+gp_helios_pe,title_or_excerpt,contains,헬리오스PE,4,topic,GP,헬리오스PE 관련 GP 기사입니다.,1,Named GP safety net
+gp_petrichor,title_or_excerpt,contains,페트리코,4,topic,GP,페트리코 관련 GP 기사입니다.,1,Named GP safety net
+gp_aurora_partners,title_or_excerpt,contains,오로라파트너스,3,topic,GP,오로라파트너스 관련 GP 기사입니다.,1,Named GP safety net
+gp_gravity_pe,title_or_excerpt,contains,그래비티PE,4,topic,GP,그래비티PE 관련 GP 기사입니다.,1,Named GP safety net
+gp_kcgi_asset_management,title_or_excerpt,contains,KCGI자산운용,3,topic,GP,KCGI자산운용 관련 운용사 기사입니다.,1,Named GP/asset-manager safety net
+gp_opus_nh_pe,title_or_excerpt,contains,오퍼스-NH PE,4,topic,GP,오퍼스-NH PE 관련 GP 기사입니다.,1,Named GP safety net
 lp_asset_management_head,title_or_excerpt,contains,자산운용본부장,4,topic,LP,LP 자산운용 조직 인사 또는 채용 기사입니다.,1,LP personnel and allocator operations keyword
+lp_cio,title_or_excerpt,contains,CIO,2,topic,LP,LP 또는 금융사 투자책임자 인사 기사일 수 있습니다.,1,LP people and allocator operations keyword
+lp_mutual_aid_chair,title_or_excerpt,contains,공제회 신임 이사장,3,topic,LP,공제회 거버넌스 또는 자산운용 의사결정권자 인사입니다.,1,LP people and governance keyword
+lp_big_money_leadership,title_or_excerpt,contains,큰손 사령탑,2,topic,LP,연기금·공제회 등 대형 LP 리더십 교체 기사입니다.,1,LP people and governance keyword
 lp_kbiz,title_or_excerpt,contains,중소기업중앙회,2,topic,LP,중소기업중앙회/노란우산공제 자금 운용 기사입니다.,1,LP institution keyword
 lp_mutual_aid_business,title_or_excerpt,contains,공제사업,2,topic,LP,공제사업 자금 운용 기사입니다.,1,LP mutual-aid asset management keyword
 lp_yellow_umbrella,title_or_excerpt,contains,노란우산공제,2,topic,LP,노란우산공제 자금 운용 기사입니다.,1,LP institution keyword
@@ -67,6 +82,7 @@ reg_capital_market,any_text,contains,자본시장법,2,topic,Market,자본시장
 exclude_political_choguk,title_or_excerpt,contains,조국,-5,,,정치권 사모펀드 논란은 PEF 시장 클리핑에서 제외합니다.,1,Noise filter
 exclude_political_innovation_party,title_or_excerpt,contains,혁신당,-3,,,정치권 사모펀드 논란은 PEF 시장 클리핑에서 제외합니다.,1,Noise filter
 exclude_scandal,title_or_excerpt,contains,사모펀드 의혹,-4,,,정치·수사성 사모펀드 의혹 기사는 제외합니다.,1,Noise filter
+exclude_etf_liquidity_provider,title_or_excerpt,contains,ETF LP,-5,,,ETF 유동성공급자 LP는 Limited Partner가 아니므로 제외합니다.,1,Noise filter
 advisory_lawfirm,any_text,contains,법무법인,2,topic,Advisory,법률 자문사 해설 자료일 수 있습니다.,0,Advisory keyword disabled for media-only MVP
 advisory_kpmg,any_text,contains,KPMG,2,topic,Advisory,회계·재무 자문사 자료일 수 있습니다.,0,Advisory keyword disabled for media-only MVP
 advisory_pwc,any_text,contains,PwC,2,topic,Advisory,회계·재무 자문사 자료일 수 있습니다.,0,Advisory keyword disabled for media-only MVP

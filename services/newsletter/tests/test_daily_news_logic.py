@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = SERVICE_ROOT / "src"
@@ -15,14 +17,19 @@ from run_daily_news_pipeline import (
     EXPORT_MIN_QUALITY_SCORE,
     coverage_window_label,
     editorial_quality,
+    extract_google_news_decode_params,
     google_query_for_report_date,
+    google_news_encoded_id,
     is_in_coverage_window,
+    is_previous_export,
+    load_previous_export_keys,
+    parse_google_news_batch_response,
     primary_section,
     render_markdown,
     select_brief_rows,
     should_export_row,
 )
-from daily_news_common import to_iso_datetime
+from daily_news_common import DEFAULT_RULES, load_rules, score_document, to_iso_datetime
 
 
 def test_coverage_window() -> None:
@@ -31,11 +38,61 @@ def test_coverage_window() -> None:
     assert not is_in_coverage_window("2026-04-30T09:00:00+09:00", "", "2026-04-30")
 
 
+def test_monday_coverage_window_catches_weekend() -> None:
+    label = coverage_window_label("2026-05-25")
+    assert "주말 포함 최근 72시간 브리핑" in label
+    assert "2026-05-22 08:30 ~ 2026-05-25 08:30" in label
+    assert is_in_coverage_window("2026-05-22T09:00:00+09:00", "", "2026-05-25")
+    assert is_in_coverage_window("2026-05-24T23:00:00+09:00", "", "2026-05-25")
+    assert not is_in_coverage_window("2026-05-22T08:00:00+09:00", "", "2026-05-25")
+
+
 def test_google_backtest_window() -> None:
     query = google_query_for_report_date("사모펀드 when:1d", "2026-04-30")
     assert "after:2026-04-29" in query
     assert "before:2026-05-01" in query
     assert "when:1d" not in query
+
+
+def test_google_backtest_window_catches_weekend_on_monday() -> None:
+    query = google_query_for_report_date("사모펀드 when:1d", "2026-05-25")
+    assert "after:2026-05-22" in query
+    assert "before:2026-05-26" in query
+    assert "when:1d" not in query
+
+
+def test_previous_export_keys_ignore_review_candidates() -> None:
+    with TemporaryDirectory() as tmp:
+        out_dir = Path(tmp)
+        (out_dir / "daily_news_brief_20260522.md").write_text(
+            "- [Exported Title](https://example.com/exported)\n",
+            encoding="utf-8",
+        )
+        (out_dir / "daily_news_review_actions_20260522.csv").write_text(
+            "normalized_source_url,title\nhttps://example.com/review,Review Candidate\n",
+            encoding="utf-8",
+        )
+
+        previous_keys = load_previous_export_keys(out_dir, "2026-05-25")
+        assert is_previous_export(
+            {"source_url": "https://example.com/exported", "normalized_source_url": "", "title": "Exported Title"},
+            previous_keys,
+        )
+        assert not is_previous_export(
+            {"source_url": "https://example.com/review", "normalized_source_url": "", "title": "Review Candidate"},
+            previous_keys,
+        )
+
+
+def test_google_news_decode_helpers() -> None:
+    url = "https://news.google.com/rss/articles/abc123?oc=5"
+    assert google_news_encoded_id(url) == "abc123"
+    html = '<div jscontroller="x" data-n-a-id="abc123" data-n-a-ts="1779720518" data-n-a-sg="sig"></div>'
+    assert extract_google_news_decode_params(html, "abc123") == ("sig", "1779720518")
+    response = ")]}'\n\n" + json.dumps(
+        [["wrb.fr", "Fbv4je", json.dumps(["garturlres", "https://example.com/original", 1]), None, None, None, ""]]
+    )
+    assert parse_google_news_batch_response(response) == "https://example.com/original"
 
 
 def test_weak_context_quality_penalty() -> None:
@@ -257,6 +314,26 @@ def test_gp_fundraising_beats_deal_word_when_title_is_fund_build() -> None:
     assert primary_section(row) == "GP"
 
 
+def test_company_clipping_keyword_gaps_are_scored() -> None:
+    rules = load_rules(DEFAULT_RULES)
+    cases = [
+        ("헬리오스PE, 서울전선 인수 우선협상대상자로 선정", 7, "GP"),
+        ("방산 수혜 '엠앤씨솔루션', SPA 체결 임박", 3, "Deal"),
+        ("신생 PE 페트리코, 카카오게임즈 빅딜 소싱 배경은", 4, "GP"),
+        ("[150조 국민성장펀드] 그로쓰 투자 대가 도미누스", 3, "LP"),
+        ("행정공제회 신임 이사장에 김기영 전 충남 행정부지사", 4, "LP"),
+        ("KCGI자산운용, AUM 6조원 돌파", 3, "GP"),
+    ]
+    for title, minimum_score, expected_topic in cases:
+        result = score_document(title, "", "", rules, [])
+        topics = {str(tag["tag_value"]) for tag in result["tags"] if str(tag["tag_type"]) == "topic"}
+        assert result["score"] >= minimum_score, title
+        assert expected_topic in topics, title
+
+    etf_lp = score_document("금감원, 증권사 ETF LP '선행매매' 정조준", "", "", rules, [])
+    assert etf_lp["score"] < 0
+
+
 def test_dot_datetime_to_iso() -> None:
     assert to_iso_datetime("2026.05.21 14:58:33") == "2026-05-21T14:58:33+09:00"
 
@@ -281,7 +358,11 @@ def test_render_markdown_coverage() -> None:
 def main() -> int:
     tests = [
         test_coverage_window,
+        test_monday_coverage_window_catches_weekend,
         test_google_backtest_window,
+        test_google_backtest_window_catches_weekend_on_monday,
+        test_previous_export_keys_ignore_review_candidates,
+        test_google_news_decode_helpers,
         test_weak_context_quality_penalty,
         test_strong_headline_quality,
         test_allocator_section_priority,
@@ -290,6 +371,7 @@ def main() -> int:
         test_ai_pe_reserved_in_brief_selection,
         test_lp_and_gp_reserved_in_full_brief_selection,
         test_gp_fundraising_beats_deal_word_when_title_is_fund_build,
+        test_company_clipping_keyword_gaps_are_scored,
         test_dot_datetime_to_iso,
         test_google_news_redirect_not_auto_exported,
         test_render_markdown_coverage,

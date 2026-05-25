@@ -4,17 +4,18 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
 import re
 import sqlite3
+import ssl
 import sys
 from datetime import date, datetime, timedelta
 from html import unescape
 from pathlib import Path
-from urllib.parse import quote_plus
-from urllib.parse import urlparse
+from urllib.parse import quote, quote_plus, urlparse
 from urllib.request import Request, urlopen
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
@@ -250,13 +251,126 @@ def clean_naver_html(value: str) -> str:
 
 
 def google_query_for_report_date(query: str, report_date: str) -> str:
-    parsed_date = date.fromisoformat(report_date)
-    after_date = parsed_date - timedelta(days=1)
-    before_date = parsed_date + timedelta(days=1)
+    start, end = coverage_window(report_date)
+    after_date = start.date()
+    before_date = end.date() + timedelta(days=1)
     query_without_window = re.sub(r"\s+when:\S+", "", query or "").strip()
     query_without_window = re.sub(r"\s+after:\d{4}-\d{2}-\d{2}", "", query_without_window).strip()
     query_without_window = re.sub(r"\s+before:\d{4}-\d{2}-\d{2}", "", query_without_window).strip()
     return f"{query_without_window} after:{after_date.isoformat()} before:{before_date.isoformat()}"
+
+
+def google_news_encoded_id(source_url: str) -> str:
+    parsed = urlparse(source_url or "")
+    host = parsed.netloc.lower()
+    host = host[4:] if host.startswith("www.") else host
+    if host != "news.google.com":
+        return ""
+    path_parts = [part for part in parsed.path.split("/") if part]
+    if len(path_parts) >= 2 and path_parts[-2] in {"articles", "read"}:
+        return path_parts[-1]
+    return ""
+
+
+def decode_legacy_google_news_url(encoded_id: str) -> str:
+    try:
+        decoded = base64.urlsafe_b64decode(encoded_id + "==").decode("latin1")
+    except Exception:
+        return ""
+    prefix = b"\x08\x13\x22".decode("latin1")
+    if decoded.startswith(prefix):
+        decoded = decoded[len(prefix) :]
+    suffix = b"\xd2\x01\x00".decode("latin1")
+    if decoded.endswith(suffix):
+        decoded = decoded[: -len(suffix)]
+    if not decoded:
+        return ""
+    length = bytearray(decoded, "latin1")[0]
+    if length >= 0x80:
+        decoded = decoded[2 : length + 1]
+    else:
+        decoded = decoded[1 : length + 1]
+    return decoded if decoded.startswith("http") else ""
+
+
+def extract_google_news_decode_params(html_text: str, encoded_id: str) -> tuple[str, str]:
+    tag_match = re.search(
+        r"<div\b[^>]*data-n-a-id=\"" + re.escape(encoded_id) + r"\"[^>]*>",
+        html_text,
+    )
+    if not tag_match:
+        tag_match = re.search(r"<div\b[^>]*data-n-a-id=\"[^\"]+\"[^>]*data-n-a-ts=\"[^\"]+\"[^>]*>", html_text)
+    if not tag_match:
+        return "", ""
+    attrs = dict(re.findall(r"(data-n-a-(?:sg|ts))=\"([^\"]+)\"", tag_match.group(0)))
+    return unescape(attrs.get("data-n-a-sg", "")), unescape(attrs.get("data-n-a-ts", ""))
+
+
+def parse_google_news_batch_response(response_text: str) -> str:
+    if "\n\n" not in response_text:
+        return ""
+    try:
+        payload = json.loads(response_text.split("\n\n", 1)[1])
+    except json.JSONDecodeError:
+        return ""
+    for item in payload:
+        if not isinstance(item, list) or len(item) < 3 or item[1] != "Fbv4je" or not item[2]:
+            continue
+        try:
+            decoded = json.loads(str(item[2]))
+        except json.JSONDecodeError:
+            continue
+        if len(decoded) >= 2 and decoded[0] == "garturlres" and str(decoded[1]).startswith("http"):
+            return str(decoded[1])
+    return ""
+
+
+def decode_google_news_url_with_params(encoded_id: str, signature: str, timestamp: str, verify_ssl: bool) -> str:
+    payload = [
+        "Fbv4je",
+        (
+            '["garturlreq",[["X","X",["X","X"],null,null,1,1,"US:en",null,1,'
+            f'null,null,null,null,null,0,1],"X","X",1,[1,1,1],1,1,null,0,0,null,0],"{encoded_id}",{timestamp},"{signature}"]'
+        ),
+    ]
+    request = Request(
+        "https://news.google.com/_/DotsSplashUi/data/batchexecute",
+        data=f"f.req={quote(json.dumps([[payload]]))}".encode(),
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+            ),
+        },
+    )
+    context = None
+    if not verify_ssl:
+        context = ssl._create_unverified_context()
+    with urlopen(request, timeout=10, context=context) as response:
+        text = response.read().decode("utf-8", errors="replace")
+    return parse_google_news_batch_response(text)
+
+
+def resolve_google_news_url(source_url: str, verify_ssl: bool = True) -> str:
+    encoded_id = google_news_encoded_id(source_url)
+    if not encoded_id:
+        return source_url
+    legacy_url = decode_legacy_google_news_url(encoded_id)
+    if legacy_url:
+        return legacy_url
+    try:
+        page = fetch_text(f"https://news.google.com/articles/{encoded_id}", timeout=10, verify_ssl=verify_ssl)
+        signature, timestamp = extract_google_news_decode_params(str(page["text"]), encoded_id)
+        if not signature or not timestamp:
+            page = fetch_text(source_url, timeout=10, verify_ssl=verify_ssl)
+            signature, timestamp = extract_google_news_decode_params(str(page["text"]), encoded_id)
+        if not signature or not timestamp:
+            return source_url
+        decoded_url = decode_google_news_url_with_params(encoded_id, signature, timestamp, verify_ssl)
+        return decoded_url or source_url
+    except Exception:
+        return source_url
 
 
 PUBLISHER_BY_DOMAIN = {
@@ -286,6 +400,34 @@ PUBLISHER_BY_DOMAIN = {
     "newstof.com": "뉴스톱",
     "etoday.co.kr": "이투데이",
     "joseilbo.com": "조세일보",
+    "dealsitetv.com": "DealSite경제TV",
+    "greened.kr": "녹색경제신문",
+    "joongangenews.com": "중앙이코노미뉴스",
+    "dailypop.kr": "데일리팝",
+    "dailybrief.co.kr": "데일리브리프",
+    "businesspost.co.kr": "비즈니스포스트",
+    "fieldnews.kr": "필드뉴스",
+    "livebiz.today": "생생비즈플러스",
+    "skyedaily.com": "스카이데일리",
+    "biztribune.co.kr": "비즈트리뷴",
+    "ebn.co.kr": "EBN",
+    "busan.com": "부산일보",
+    "heraldcorp.com": "헤럴드경제",
+    "ttlnews.com": "퍼블릭뉴스통신",
+    "financialpost.co.kr": "파이낸셜포스트",
+    "cfnews.kr": "CF뉴스",
+    "ekn.kr": "에너지경제",
+    "ezyeconomy.com": "이지경제",
+    "sidae.com": "동행미디어 시대",
+    "zdnet.co.kr": "ZDNet Korea",
+    "wikileaks-kr.org": "위키리크스한국",
+    "daily.hankooki.com": "데일리한국",
+    "dt.co.kr": "디지털타임스",
+    "news.mtn.co.kr": "머니투데이방송",
+    "inews24.com": "아이뉴스24",
+    "donga.com": "동아일보",
+    "pointdaily.co.kr": "포인트데일리",
+    "it.chosun.com": "IT조선",
 }
 
 
@@ -564,26 +706,21 @@ def load_previous_export_keys(out_dir: Path, report_date: str) -> dict[str, set[
     url_keys: set[str] = set()
     title_keys: set[str] = set()
     patterns = [
-        "daily_news_review_queue_*.csv",
-        "daily_news_review_actions_*.csv",
+        "daily_news_brief_*.md",
         "daily_news_final_*.md",
     ]
     for pattern in patterns:
         for path in out_dir.glob(pattern):
-            match = re.fullmatch(r"daily_news_(?:review_queue|review_actions|final)_(\d{8})\.(?:csv|md)", path.name)
+            match = re.fullmatch(r"daily_news_(?:brief|final)_(\d{8})\.md", path.name)
             if not match:
                 continue
             file_date = match.group(1)
             if file_date >= report_key:
                 continue
-            if path.suffix.lower() == ".csv":
-                for row in read_csv_rows(path):
-                    add_previous_key(row.get("normalized_source_url", "") or row.get("source_url", ""), row.get("title", ""), url_keys, title_keys)
-            else:
-                for line in path.read_text(encoding="utf-8").splitlines():
-                    match_line = re.match(r"- \[(.+?)\]\((.+?)\)", line.strip())
-                    if match_line:
-                        add_previous_key(match_line.group(2), match_line.group(1), url_keys, title_keys)
+            for line in path.read_text(encoding="utf-8").splitlines():
+                match_line = re.match(r"- \[(.+?)\]\((.+?)\)", line.strip())
+                if match_line:
+                    add_previous_key(match_line.group(2), match_line.group(1), url_keys, title_keys)
     return {"urls": url_keys, "titles": title_keys}
 
 
@@ -1399,7 +1536,8 @@ def coverage_window(report_date: str) -> tuple[datetime, datetime]:
         BRIEFING_CUTOFF_MINUTE,
         tzinfo=SEOUL_TZ,
     )
-    return end - timedelta(days=1), end
+    lookback_days = 3 if parsed.weekday() == 0 else 1
+    return end - timedelta(days=lookback_days), end
 
 
 def coverage_window_label(report_date: str) -> str:
@@ -1407,8 +1545,9 @@ def coverage_window_label(report_date: str) -> str:
         start, end = coverage_window(report_date)
     except ValueError:
         return "기준 : 최근 24시간 브리핑"
+    label = "주말 포함 최근 72시간 브리핑" if end - start >= timedelta(days=3) else "최근 24시간 브리핑"
     return (
-        "기준 : 최근 24시간 브리핑 "
+        f"기준 : {label} "
         f"({start.strftime('%Y-%m-%d %H:%M')} ~ {end.strftime('%Y-%m-%d %H:%M')}, KST)"
     )
 
@@ -1784,13 +1923,14 @@ def main() -> int:
                     break
                 source_stats[source.source_code]["candidate_count"] = int(source_stats[source.source_code]["candidate_count"]) + 1
 
+                article_url = resolve_google_news_url(source_url, verify_ssl=not args.allow_insecure_ssl)
                 try:
-                    article_response = fetch_text(source_url, verify_ssl=not args.allow_insecure_ssl)
+                    article_response = fetch_text(article_url, verify_ssl=not args.allow_insecure_ssl)
                 except Exception as exc:
-                    if reuse_cached_document_for_run(conn, run_id, args.date, source_url):
+                    if reuse_cached_document_for_run(conn, run_id, args.date, article_url):
                         source_stats[source.source_code]["cached_count"] = int(source_stats[source.source_code]["cached_count"]) + 1
                         continue
-                    warning = f"source={source.source_code} stage=article url={source_url} error={exc}"
+                    warning = f"source={source.source_code} stage=article url={article_url} error={exc}"
                     warnings.append(warning)
                     source_stats[source.source_code]["warning_count"] = int(source_stats[source.source_code]["warning_count"]) + 1
                     print(f"WARNING: {warning}", file=sys.stderr)
@@ -1882,6 +2022,8 @@ def main() -> int:
                     "review_status": review_status,
                     "raw_payload": {
                         "feed_item": item,
+                        "feed_source_url": source_url,
+                        "resolved_source_url": article_url if article_url != source_url else "",
                         "article_meta": article_meta,
                         "source_code": source.source_code,
                     },

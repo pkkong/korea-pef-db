@@ -85,6 +85,14 @@ KPEF Daily의 1차 섹션은 `AI & PE`, `Deal`, `LP`, `GP`, `Market` 다섯 개�
 - `카테고리`: 상위 섹션 또는 subtype 자동 분류가 틀렸을 때만 선택
 - LP/GP는 상위 섹션이지만 기관명이 등장했다는 이유만으로 선택하지 않는다. LP 세컨더리는 특정 거래이면 `Deal`, allocator의 유동성 관리 이슈이면 `LP`로 분류한다. GP 펀드 클로징은 `GP`, 특정 포트폴리오 인수·매각은 `Deal`로 분류한다.
 
+## 회사 클리핑 피드백 반영
+
+- 회사 내부 클리핑에서 좋은데 빠진 기사가 보이면 먼저 URL이 `news_document`에 있었는지 확인한다.
+- DB에 없던 기사는 `news_sources.csv`의 검색 소스 또는 허용 언론사 구멍으로 보고, 반복 가능성이 있는 검색어만 소스로 추가한다.
+- DB에는 있었지만 브리프에서 빠진 기사는 `news_keyword_rules.csv`의 점수 신호 또는 `news_manual_overrides.csv`의 수동 include로 보정한다.
+- `ETF LP`처럼 Limited Partner가 아닌 LP 표현은 제외 신호로 관리한다.
+- 월요일 브리프는 금요일 08:30 이후부터 월요일 08:30 전까지를 포함해 주말 누락을 줄인다.
+
 ## 발송
 
 아직 자동 발송은 초안 생성과 분리했다. 최종본을 확정한 뒤 발송하려면 `services/newsletter/scripts/send_daily_news_final.ps1`을 사용한다.

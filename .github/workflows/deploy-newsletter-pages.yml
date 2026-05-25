@@ -30,7 +30,12 @@ env:
     naver_publisher_newstomato_pef,naver_publisher_newstomato_mna,
     naver_publisher_newstof,naver_publisher_newstof_pef,
     naver_publisher_newstof_mna,naver_ai_pe_gaic,
-    newstop_private_equity,kgnews_economy_lp_people
+    naver_pef_growth_fund,naver_publisher_dealsite_pef,
+    naver_publisher_dealsite_growth_fund,naver_publisher_dealsite_lp_scope,
+    naver_pef_deal_pe_ub,naver_pef_deal_spa,
+    google_pef_named_gp_watch,google_pef_mna_process_watch,
+    google_lp_people_watch,newstop_private_equity,dealsite_pe_category,
+    kgnews_economy_lp_people
 
 jobs:
   build-and-publish:
