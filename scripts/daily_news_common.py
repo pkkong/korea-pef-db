@@ -809,6 +809,8 @@ def load_gp_aliases(db_path: Path, overrides_path: Path = DEFAULT_GP_ALIAS_OVERR
     aliases: dict[tuple[int, str], GpAlias] = {}
     conn = sqlite3.connect(db_path)
     try:
+        if not table_exists(conn, "gp_house"):
+            return []
         gp_name_to_id: dict[str, tuple[int, str]] = {}
         for gp_id, gp_name in conn.execute("SELECT gp_id, gp_name FROM gp_house"):
             canonical_name = str(gp_name)

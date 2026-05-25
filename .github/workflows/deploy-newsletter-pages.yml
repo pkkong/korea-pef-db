@@ -1,0 +1,105 @@
+name: Deploy newsletter to GitHub Pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      report_date:
+        description: "Report date in YYYY-MM-DD. Leave blank for today's date in Asia/Seoul."
+        required: false
+        type: string
+  schedule:
+    # 08:30 KST every weekday.
+    - cron: "30 23 * * 0-4"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-newsletter-pages.yml"
+      - "config/daily_news.env.example"
+      - "data/news_*.csv"
+      - "data/news_sources.csv"
+      - "data/news_gp_alias_overrides.csv"
+      - "schema/daily_news.sql"
+      - "scripts/daily_news_common.py"
+      - "scripts/run_daily_news_pipeline.py"
+      - "scripts/build_newsletter_deploy.py"
+      - "scripts/build_service_site.py"
+      - "scripts/build_news_gp_update_worklist.py"
+      - "scripts/build_service_integration_worklist.py"
+      - "deploy/newsletter/Dockerfile"
+      - "deploy/newsletter/nginx.conf"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve report date
+        id: date
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.report_date }}" ]; then
+            echo "report_date=${{ inputs.report_date }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "report_date=$(TZ=Asia/Seoul date +%F)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build daily newsletter data
+        env:
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+        run: |
+          mkdir -p db data/raw/daily_news exports/daily_news
+          if [ -z "${NAVER_CLIENT_ID:-}" ] || [ -z "${NAVER_CLIENT_SECRET:-}" ]; then
+            echo "::warning::NAVER_CLIENT_ID and NAVER_CLIENT_SECRET are not configured; Naver News sources will be skipped."
+          fi
+          python3 scripts/run_daily_news_pipeline.py \
+            --date "${{ steps.date.outputs.report_date }}" \
+            --allow-insecure-ssl \
+            --google-date-window
+
+      - name: Build static newsletter site
+        run: |
+          python3 scripts/build_newsletter_deploy.py --date "${{ steps.date.outputs.report_date }}"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          site = Path("deploy/newsletter/site")
+          health = json.loads((site / "health.json").read_text(encoding="utf-8"))
+          print(json.dumps(health, ensure_ascii=False, indent=2))
+          if not (site / "index.html").exists():
+              raise SystemExit("index.html was not generated")
+          if not (site / "daily-news.html").exists():
+              raise SystemExit("daily-news.html was not generated")
+          PY
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: deploy/newsletter/site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

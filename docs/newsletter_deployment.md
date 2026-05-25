@@ -17,6 +17,32 @@ python scripts\build_newsletter_deploy.py --date 2026-05-22
 - `deploy/newsletter/Dockerfile`: Docker 배포용
 - `deploy/newsletter/nginx.conf`: Nginx 설정
 
+## GitHub Pages Deploy
+
+뉴스레터만 먼저 어디서든 볼 수 있게 하기 위해 GitHub Pages 배포 워크플로를 둔다.
+
+- Workflow: `.github/workflows/deploy-newsletter-pages.yml`
+- Site root: `deploy/newsletter/site/`
+- URL: `https://pkkong.github.io/korea-pef-db/`
+
+워크플로는 GitHub Actions 안에서 다음 순서로 실행된다.
+
+```text
+run_daily_news_pipeline.py
+→ build_newsletter_deploy.py
+→ deploy/newsletter/site 업로드
+→ GitHub Pages 배포
+```
+
+처음 한 번은 GitHub 저장소 Settings → Pages에서 Source를 `GitHub Actions`로 설정해야 한다.
+Naver News까지 정상 수집하려면 저장소 Secrets에 아래 두 값을 넣는다.
+
+- `NAVER_CLIENT_ID`
+- `NAVER_CLIENT_SECRET`
+
+Secrets가 없으면 워크플로는 Naver News 소스를 건너뛰고 Google/RSS/HTML 소스만으로 빌드한다.
+수동 배포는 GitHub Actions 화면에서 `Deploy newsletter to GitHub Pages`를 실행하면 된다.
+
 ## Local Smoke Test
 
 ```powershell
