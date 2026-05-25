@@ -114,3 +114,6 @@ curl http://127.0.0.1/health.json
 
 매일 갱신은 GitHub Actions가 처리한다. 로컬 PC가 켜져 있지 않아도 private 원본 저장소의 workflow가
 뉴스 수집, 정적 사이트 생성, public mirror push를 순서대로 실행한다.
+
+로컬 실행과 GitHub Actions 실행의 품질/커버리지 차이는
+`services/newsletter/docs/local_vs_github_quality.md`에 정리한다.
