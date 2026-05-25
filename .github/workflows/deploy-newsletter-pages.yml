@@ -15,19 +15,9 @@ on:
       - main
     paths:
       - ".github/workflows/deploy-newsletter-pages.yml"
-      - "config/daily_news.env.example"
-      - "data/news_*.csv"
-      - "data/news_sources.csv"
-      - "data/news_gp_alias_overrides.csv"
-      - "schema/daily_news.sql"
-      - "scripts/daily_news_common.py"
-      - "scripts/run_daily_news_pipeline.py"
-      - "scripts/build_newsletter_deploy.py"
+      - "services/newsletter/**"
       - "scripts/build_service_site.py"
-      - "scripts/build_news_gp_update_worklist.py"
       - "scripts/build_service_integration_worklist.py"
-      - "deploy/newsletter/Dockerfile"
-      - "deploy/newsletter/nginx.conf"
 
 permissions:
   contents: write
@@ -64,19 +54,19 @@ jobs:
           if [ -z "${NAVER_CLIENT_ID:-}" ] || [ -z "${NAVER_CLIENT_SECRET:-}" ]; then
             echo "::warning::NAVER_CLIENT_ID and NAVER_CLIENT_SECRET are not configured; Naver News sources will be skipped."
           fi
-          python3 scripts/run_daily_news_pipeline.py \
+          python3 services/newsletter/src/run_daily_news_pipeline.py \
             --date "${{ steps.date.outputs.report_date }}" \
             --allow-insecure-ssl \
             --google-date-window
 
       - name: Build static newsletter site
         run: |
-          python3 scripts/build_newsletter_deploy.py --date "${{ steps.date.outputs.report_date }}"
+          python3 services/newsletter/src/build_newsletter_deploy.py --date "${{ steps.date.outputs.report_date }}"
           python3 - <<'PY'
           import json
           from pathlib import Path
 
-          site = Path("deploy/newsletter/site")
+          site = Path("services/newsletter/deploy/site")
           health = json.loads((site / "health.json").read_text(encoding="utf-8"))
           print(json.dumps(health, ensure_ascii=False, indent=2))
           if not (site / "index.html").exists():
@@ -89,7 +79,7 @@ jobs:
         shell: bash
         run: |
           publish_dir="$(mktemp -d)"
-          cp -R deploy/newsletter/site/. "$publish_dir"/
+          cp -R services/newsletter/deploy/site/. "$publish_dir"/
           cd "$publish_dir"
           git init -q
           git checkout -b gh-pages

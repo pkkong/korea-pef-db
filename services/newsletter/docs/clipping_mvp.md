@@ -24,13 +24,13 @@ This intentionally does **not** include weekly deep-dives, LP org charts, people
 
 ## Files
 
-- `schema/daily_news.sql`
-- `data/news_sources.csv`
-- `data/news_keyword_rules.csv`
-- `data/news_manual_overrides.csv`
-- `data/news_gp_alias_overrides.csv`
-- `scripts/daily_news_common.py`
-- `scripts/run_daily_news_pipeline.py`
+- `services/newsletter/schema/daily_news.sql`
+- `services/newsletter/data/news_sources.csv`
+- `services/newsletter/data/news_keyword_rules.csv`
+- `services/newsletter/data/news_manual_overrides.csv`
+- `services/newsletter/data/news_gp_alias_overrides.csv`
+- `services/newsletter/src/daily_news_common.py`
+- `services/newsletter/src/run_daily_news_pipeline.py`
 
 ## Initial Source Strategy
 
@@ -66,13 +66,13 @@ Main tables:
 
 ## First Version Workflow
 
-1. Sync source definitions from `data/news_sources.csv`
+1. Sync source definitions from `services/newsletter/data/news_sources.csv`
 2. Fetch item candidates from each source
 3. Resolve article URLs and fetch article pages
 4. Store normalized URL, metadata, summary text, body text, and raw HTML
-5. Score PEF relevance using `data/news_keyword_rules.csv`
+5. Score PEF relevance using `services/newsletter/data/news_keyword_rules.csv`
 6. Tag related GPs using existing `gp_house` and `gp_house_alias`
-7. Apply manual overrides from `data/news_manual_overrides.csv`
+7. Apply manual overrides from `services/newsletter/data/news_manual_overrides.csv`
 8. Export a daily brief and review queue
 
 ## Commands
@@ -80,31 +80,31 @@ Main tables:
 Run the end-to-end pipeline:
 
 ```powershell
-python scripts/run_daily_news_pipeline.py
+python services/newsletter/src/run_daily_news_pipeline.py
 ```
 
 Run for a specific report date:
 
 ```powershell
-python scripts/run_daily_news_pipeline.py --date 2026-04-27
+python services/newsletter/src/run_daily_news_pipeline.py --date 2026-04-27
 ```
 
 Useful tuning options:
 
 ```powershell
-python scripts/run_daily_news_pipeline.py --brief-limit 15 --limit-per-source 40 --min-score 3
+python services/newsletter/src/run_daily_news_pipeline.py --brief-limit 15 --limit-per-source 40 --min-score 3
 ```
 
 Run only selected sources while tuning:
 
 ```powershell
-python scripts/run_daily_news_pipeline.py --source-code kimchang_private_equity,yulchon_newsletter
+python services/newsletter/src/run_daily_news_pipeline.py --source-code kimchang_private_equity,yulchon_newsletter
 ```
 
 If some public pages fail because of local Windows certificate issues:
 
 ```powershell
-python scripts/run_daily_news_pipeline.py --allow-insecure-ssl
+python services/newsletter/src/run_daily_news_pipeline.py --allow-insecure-ssl
 ```
 
 The pipeline continues when one source fails, so a single broken site does not stop the full daily run.
@@ -125,9 +125,9 @@ Raw captured HTML is written to:
 
 To expand or tune the system, edit CSV files first:
 
-- Add or disable sources in `data/news_sources.csv`
-- Tune scoring logic in `data/news_keyword_rules.csv`
-- Force include/exclude or add comments in `data/news_manual_overrides.csv`
-- Add short-form or English GP aliases in `data/news_gp_alias_overrides.csv`
+- Add or disable sources in `services/newsletter/data/news_sources.csv`
+- Tune scoring logic in `services/newsletter/data/news_keyword_rules.csv`
+- Force include/exclude or add comments in `services/newsletter/data/news_manual_overrides.csv`
+- Add short-form or English GP aliases in `services/newsletter/data/news_gp_alias_overrides.csv`
 
 This keeps the first version usable even for a non-developer operator.

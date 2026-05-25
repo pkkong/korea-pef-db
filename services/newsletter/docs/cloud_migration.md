@@ -22,7 +22,7 @@ Cloud Scheduler
 - `public/index.html`: 서비스 랜딩 페이지
 - `public/daily-news.html`: 오늘자 Daily Clipping 페이지
 - `scripts/build_service_site.py`: 매일 수집 후 public 페이지 자동 갱신
-- `scripts/validate_daily_news_pipeline.py`: 수집 결과, public 페이지, DB, 스케줄러 상태 검증
+- `services/newsletter/src/validate_daily_news_pipeline.py`: 수집 결과, public 페이지, DB, 스케줄러 상태 검증
 
 이 단계는 여전히 PC가 켜져 있어야 한다.
 
@@ -44,10 +44,12 @@ Cloud Scheduler
   index.html
   daily-news.html
 
-/scripts
+services/newsletter/src
   run_daily_news_pipeline.py
-  build_service_site.py
   validate_daily_news_pipeline.py
+
+scripts
+  build_service_site.py
 
 /db
   local SQLite for development only

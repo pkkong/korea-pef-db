@@ -1,6 +1,8 @@
 # Local secrets
 config/*.env
 !config/*.env.example
+services/newsletter/config/*.env
+!services/newsletter/config/*.env.example
 .env
 .env.*
 
@@ -27,6 +29,9 @@ public/data/*.json
 deploy/newsletter/site/
 deploy/newsletter/*.zip
 deploy/newsletter/deploy-manifest.json
+services/newsletter/deploy/site/
+services/newsletter/deploy/*.zip
+services/newsletter/deploy/deploy-manifest.json
 
 # Runtime logs
 *.log

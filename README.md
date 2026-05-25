@@ -11,7 +11,7 @@ and are ignored by git.
 
 Local-only files commonly needed for operation:
 
-- `config/daily_news.env`
+- `services/newsletter/config/daily_news.env`
 - `db/private_equity.db`
 - `data/raw/fss_pef/*`
 - `data/raw/daily_news/*`
@@ -38,6 +38,20 @@ The product-level service menu and entity roadmap are tracked in
 `docs/service_information_architecture.md`.
 The practical entity data dictionary and future schema plan are tracked in
 `docs/entity_data_model.md`.
+
+## Service Layout
+
+The newsletter service is separated under `services/newsletter/`:
+
+- `services/newsletter/src/`: collection, review, validation, delivery, and deploy builders
+- `services/newsletter/data/`: source lists, keyword rules, manual overrides, GP alias overrides
+- `services/newsletter/schema/`: newsletter SQLite schema
+- `services/newsletter/scripts/`: Windows/PowerShell operating entrypoints
+- `services/newsletter/deploy/`: Docker/Nginx files and generated static site bundle
+- `services/newsletter/docs/`: newsletter-specific operating and deployment docs
+
+The old `scripts/run_daily_news_pipeline.py` style commands remain as
+compatibility wrappers, but new automation should call the service path directly.
 
 ## FSS PEF Pipeline
 
@@ -300,7 +314,7 @@ See `docs/fss_pef_ingestion_plan.md` and `schema/fss_pef.sql` for details.
 Run the daily news MVP:
 
 ```powershell
-python scripts/run_daily_news_pipeline.py
+python services/newsletter/src/run_daily_news_pipeline.py
 ```
 
 This exports daily clipping files under `exports/daily_news/`. It also creates
@@ -314,7 +328,7 @@ If news fetching is blocked by the local network/sandbox but the DB already has
 recent news rows, rebuild only the GP update worklist:
 
 ```powershell
-python scripts/build_news_gp_update_worklist.py --days 7
+python services/newsletter/src/build_news_gp_update_worklist.py --days 7
 ```
 
 The worklist separates `프로필 우선 보강`, `식별자 보강`, `선택정보 보강`, and
@@ -335,4 +349,4 @@ This creates:
 
 The integrated worklist joins news-visible GPs, GP profile coverage, People DB
 coverage, and the next owner/action. The normal `run_pipeline.py` and
-`run_daily_news_pipeline.py` flows refresh it automatically.
+newsletter pipeline flows refresh it automatically.

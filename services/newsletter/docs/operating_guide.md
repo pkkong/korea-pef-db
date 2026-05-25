@@ -2,8 +2,8 @@
 
 ## 매일 흐름
 
-1. 자동 작업이 오전 8:30에 `scripts/run_daily_news_today.ps1`로 초안을 생성한다.
-2. `scripts/start_daily_news_review.ps1`을 실행해 리뷰 화면을 연다.
+1. 자동 작업이 오전 8:30에 `services/newsletter/scripts/run_daily_news_today.ps1`로 초안을 생성한다.
+2. `services/newsletter/scripts/start_daily_news_review.ps1`을 실행해 리뷰 화면을 연다.
 3. 리뷰 화면 상단의 날짜 선택에서 오늘 또는 과거 클리핑 날짜를 고른다.
 4. 리뷰 화면에서 각 기사별로 필요하면 `포함`, `제외`, 카테고리 변경을 선택한다.
 5. `저장`을 누른다.
@@ -64,7 +64,7 @@ KPEF Daily의 1차 섹션은 `AI & PE`, `Deal`, `LP`, `GP`, `Market` 다섯 개�
 
 ## 검증
 
-- 매일 자동 작업은 초안 생성 직후 `scripts/validate_daily_news_pipeline.py`를 실행해서 같은 로그에 검증 결과를 남긴다.
+- 매일 자동 작업은 초안 생성 직후 `services/newsletter/src/validate_daily_news_pipeline.py`를 실행해서 같은 로그에 검증 결과를 남긴다.
 - 매일 자동 작업은 `scripts/build_service_site.py`도 실행해서 `public/index.html` 랜딩 페이지와 `public/daily-news.html`을 최신 클리핑으로 갱신한다.
 - 매일 자동 작업은 `scripts/build_lp_commitment_monitor.py`를 실행해서 주요 LP 출자사업 공고/선정/뉴스 후보를 갱신하고, 공개 Daily 화면 상단의 `출자사업 모니터`와 `public/db.html#lp`에 반영한다.
 - Daily의 `출자사업 모니터`는 `new_notice`, `deadline_soon`, `shortlist`, `final_selection` 등 이벤트 타입을 우선 노출한다. `program_size`는 정책펀드 전체 규모로 보관하되, 공개 출자규모 합산에는 `allocation_amount`만 사용한다.
@@ -72,11 +72,11 @@ KPEF Daily의 1차 섹션은 `AI & PE`, `Deal`, `LP`, `GP`, `Market` 다섯 개�
 - 매일 뉴스 파이프라인은 `scripts/build_service_integration_worklist.py`도 실행해서 뉴스 노출 GP, People DB 커버리지, 담당자별 다음 액션을 하나의 작업 큐로 갱신한다.
 - 공개 뉴스 화면은 확인된 GP/관련 인물 같은 독자용 맥락만 표시한다. `프로필 보강`, `식별자 보강`, 리뷰 큐, 작업 담당자 같은 운영 상태는 공개 화면에 노출하지 않는다.
 - 공개 DB 화면은 `public/db.html`과 `public/data/service_data.json`을 사용한다. 운영 큐와 DB 품질 점검은 `dashboard/` 운영 콘솔에만 둔다.
-- 당일 산출물과 자동화 상태를 수동으로 점검하려면 `scripts/validate_daily_news_today.ps1`을 실행한다.
-- 코드 변경 후 전체 점검은 `scripts/check_daily_news_pipeline.ps1`을 실행한다. 이 스크립트는 Python 컴파일, 핵심 로직 테스트, 당일 산출물 검증을 순서대로 실행한다.
+- 당일 산출물과 자동화 상태를 수동으로 점검하려면 `services/newsletter/scripts/validate_daily_news_today.ps1`을 실행한다.
+- 코드 변경 후 전체 점검은 `services/newsletter/scripts/check_daily_news_pipeline.ps1`을 실행한다. 이 스크립트는 Python 컴파일, 핵심 로직 테스트, 당일 산출물 검증을 순서대로 실행한다.
 - 검증 항목은 산출물 존재 여부, 최근 24시간 기준 문구, 중복 링크, Google News 중계 링크, 리뷰 카테고리 값, DB 최신 실행 상태, 네이버 API 설정, Windows 예약 작업 상태다.
 - 백테스트는 운영 산출물을 덮어쓰지 않도록 `exports/daily_news/backtests/` 아래 별도 폴더에 저장된다.
-- PC 의존성을 없애는 클라우드 이전 계획은 `docs/daily_news_cloud_migration.md`에 정리했다.
+- PC 의존성을 없애는 클라우드 이전 계획은 `services/newsletter/docs/cloud_migration.md`에 정리했다.
 
 ## 리뷰 기준
 
@@ -87,5 +87,5 @@ KPEF Daily의 1차 섹션은 `AI & PE`, `Deal`, `LP`, `GP`, `Market` 다섯 개�
 
 ## 발송
 
-아직 자동 발송은 초안 생성과 분리했다. 최종본을 확정한 뒤 발송하려면 `scripts/send_daily_news_final.ps1`을 사용한다.
+아직 자동 발송은 초안 생성과 분리했다. 최종본을 확정한 뒤 발송하려면 `services/newsletter/scripts/send_daily_news_final.ps1`을 사용한다.
 `daily_news_final_latest.*`가 최신 초안보다 오래된 경우에는 최종본 확정이 먼저 필요하다.

@@ -21,7 +21,7 @@ Current SQLite DB:
 Core schemas already present:
 
 - `schema/fss_pef.sql`
-- `schema/daily_news.sql`
+- `services/newsletter/schema/daily_news.sql`
 
 Current production-like entities:
 

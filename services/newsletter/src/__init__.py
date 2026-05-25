@@ -1,0 +1,1 @@
+"""Newsletter service implementation."""

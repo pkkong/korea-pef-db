@@ -35,12 +35,12 @@
 
 ### 입력
 
-- 뉴스 소스와 수집 설정: `data/news_sources.csv`
-- 키워드 및 분류 규칙: `data/news_keyword_rules.csv`
-- GP 별칭 보정: `data/news_gp_alias_overrides.csv`
-- 수동 포함/제외 보정: `data/news_manual_overrides.csv`
+- 뉴스 소스와 수집 설정: `services/newsletter/data/news_sources.csv`
+- 키워드 및 분류 규칙: `services/newsletter/data/news_keyword_rules.csv`
+- GP 별칭 보정: `services/newsletter/data/news_gp_alias_overrides.csv`
+- 수동 포함/제외 보정: `services/newsletter/data/news_manual_overrides.csv`
 - 원문 저장 위치: `data/raw/daily_news/YYYY-MM-DD/`
-- 뉴스 DB 스키마: `schema/daily_news.sql`
+- 뉴스 DB 스키마: `services/newsletter/schema/daily_news.sql`
 - 운영 DB: `db/private_equity.db`
 
 ### 출력
@@ -68,8 +68,8 @@
 - 발행 후보와 DB 갱신 후보를 분리한다. 독자가 읽을 가치가 낮아 발행에서 제외된 기사라도 GP/People 갱신 신호가 있으면 큐에는 남긴다.
 - 공개 뉴스 카드에는 운영용 표현을 노출하지 않는다. `GP 스톤브릿지캐피탈`, `관련 인물 3명`처럼 DB 작업 상태가 드러나는 라벨은 피하고, 확정 GP명 1개와 추가 개수 정도만 조용히 표시한다.
 - 뉴스 카드 메타는 중복 카테고리를 반복하지 않는다. 섹션 헤더가 이미 카테고리 역할을 하므로 카드 안에는 언론사만 표시하고, 기자명이 안정적으로 수집되면 `언론사 · 기자명`으로 확장한다.
-- 매일 발행 후 `scripts/build_newsletter_source_audit.py`를 실행해 더벨, 딜사이트, 인베스트조선, 블로터, 뉴스토마토, 뉴스톱 등 핵심 매체가 수집/리뷰/브리프 단계에서 어디까지 도달했는지 확인한다.
-- 검증은 `scripts/validate_daily_news_pipeline.py` 또는 `scripts/validate_daily_news_today.ps1` 기준을 통과해야 한다.
+- 매일 발행 후 `services/newsletter/src/build_newsletter_source_audit.py`를 실행해 더벨, 딜사이트, 인베스트조선, 블로터, 뉴스토마토, 뉴스톱 등 핵심 매체가 수집/리뷰/브리프 단계에서 어디까지 도달했는지 확인한다.
+- 검증은 `services/newsletter/src/validate_daily_news_pipeline.py` 또는 `services/newsletter/scripts/validate_daily_news_today.ps1` 기준을 통과해야 한다.
 
 ### 금지사항
 
@@ -124,7 +124,7 @@
 
 ## 매일 운영 흐름
 
-1. 뉴스 수집: `scripts/run_daily_news_pipeline.py` 또는 `scripts/run_daily_news_today.ps1`로 수집하고 `data/raw/daily_news/YYYY-MM-DD/`, `db/private_equity.db`, `exports/daily_news/`를 갱신한다.
+1. 뉴스 수집: `services/newsletter/src/run_daily_news_pipeline.py` 또는 `services/newsletter/scripts/run_daily_news_today.ps1`로 수집하고 `data/raw/daily_news/YYYY-MM-DD/`, `db/private_equity.db`, `exports/daily_news/`를 갱신한다.
 2. 발행 후보 검토: 뉴스 담당은 `exports/daily_news/daily_news_review_latest.html`과 `exports/daily_news/daily_news_review_queue_latest.csv`를 검토해 발행 포함/제외와 분류를 확정한다.
 3. GP update queue 생성: 뉴스 담당은 `exports/daily_news/news_gp_update_worklist_latest.csv`에 `source_gp_id`, `standard_gp_name`, `source_url`, 갱신 액션을 남긴다.
 4. 통합 작업 큐 생성: 운영자는 `scripts/build_service_integration_worklist.py`로 `exports/service_integration_worklist_latest.csv`를 갱신한다. 이 파일이 뉴스 담당, GP 프로필 담당, People DB 담당의 공통 작업판이다.
@@ -136,9 +136,9 @@
 ## repo 기준 핵심 경로
 
 - 운영 DB: `db/private_equity.db`
-- 뉴스 스키마: `schema/daily_news.sql`
+- 뉴스 스키마: `services/newsletter/schema/daily_news.sql`
 - People 스키마: `schema/people.sql`
-- 뉴스 입력 설정: `data/news_sources.csv`, `data/news_keyword_rules.csv`, `data/news_gp_alias_overrides.csv`, `data/news_manual_overrides.csv`
+- 뉴스 입력 설정: `services/newsletter/data/news_sources.csv`, `services/newsletter/data/news_keyword_rules.csv`, `services/newsletter/data/news_gp_alias_overrides.csv`, `services/newsletter/data/news_manual_overrides.csv`
 - People 입력: `data/people_input.csv`, `data/person_role_input.csv`, `data/person_education_input.csv`
 - 뉴스 원문: `data/raw/daily_news/YYYY-MM-DD/`
 - 뉴스 발행/검토/큐: `exports/daily_news/`
