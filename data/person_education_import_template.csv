@@ -1,0 +1,2 @@
+person_name_ko,school_name,degree,major,start_year,graduation_year,source_url,source_title,source_grade,verification_status,notes
+홍길동,샘플대학교,학사,경영학,,,https://example.com/team,회사 팀 페이지,supporting,source_derived,샘플 행이므로 실제 입력 전 삭제

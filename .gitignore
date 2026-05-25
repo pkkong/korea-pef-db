@@ -1,0 +1,54 @@
+# Local secrets
+config/*.env
+!config/*.env.example
+.env
+.env.*
+
+# Local databases
+db/*.db
+db/*.sqlite
+db/*.sqlite3
+*.db
+*.sqlite
+*.sqlite3
+
+# Downloaded source files and crawl cache
+data/raw/**
+!data/raw/
+!data/raw/**/
+!data/raw/**/.gitkeep
+
+# Generated outputs
+exports/
+logs/
+dashboard/data/*.json
+dashboard/pef_dashboard_standalone.html
+public/data/*.json
+deploy/newsletter/site/
+deploy/newsletter/*.zip
+deploy/newsletter/deploy-manifest.json
+
+# Runtime logs
+*.log
+*.out.log
+*.err.log
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# One-off spreadsheet working files
+*.xls
+*.xlsx
+~$*

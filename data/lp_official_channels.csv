@@ -1,0 +1,17 @@
+lp_code,lp_name,primary_channel_name,primary_locator,channel_status,parser_status,backup_channels,next_action
+nps,국민연금기금,국민연금기금운용본부 거래기관 선정공고,https://fund.nps.or.kr/impa/dlnginstslctnpbanclist/getOHEF0017M0.do,confirmed,active_parser,,첨부파일 추출 품질 점검
+kvic,한국벤처투자,벤처투자종합포털 출자공고,https://www.vcs.go.kr/web/portal/bbs/invtnotice/list?baCommSelec=false&baNotice=false&baOpenDay=false&baUse=true&bcId=invtnotice&pageSize=20,confirmed,active_parser,한국벤처투자 공지사항,KVIC 자체 공지 채널 병행 여부 확인
+kgrowth,한국성장금융,한국성장금융 공지/사업공고,TBD,needs_research,not_ready,벤처투자종합포털;금융투자협회,공식 사업공고 URL 확정
+kdb,한국산업은행,한국산업은행 공지/공고,TBD,needs_research,not_ready,벤처투자종합포털;금융투자협회,국민성장펀드/정책펀드 공식 게시 위치 확정
+kafi,농업정책보험금융원,농업정책보험금융원 알림마당 공고,https://www.apfs.kr/front/board/boardContentsListPage.do?boardId=10026&menuId=5386&selTab=1,confirmed,active_parser,벤처투자종합포털;금융투자협회,첨부파일/상세 품질 점검
+koreapost,우정사업본부,우체국금융 자산운용 거래기관 선정공고,https://www.kpasset.go.kr/,confirmed,active_parser,금융투자협회,POST 기반 상세/첨부 추출 보강
+poba,대한지방행정공제회,대한지방행정공제회 공지/입찰공고,TBD,needs_research,not_ready,금융투자협회,공식 공고 URL 확정
+ktcu,한국교직원공제회,한국교직원공제회 고객센터 공지사항,https://www.ktcu.or.kr/PPW-CSB-000101,confirmed,needs_parser,금융투자협회,SPA/상세 URL 패턴 구현
+pmaa,경찰공제회,경찰공제회 입찰공고,https://www.pmaa.or.kr/www/1461128463820/bbs.do,confirmed,active_parser,금융투자협회,첨부파일 직접 다운로드 URL 추출 보강
+cu,신협중앙회,신협중앙회 공지사항,https://cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007,confirmed,active_parser,검색 백업,첨부파일 추출 품질 점검
+tp,사립학교교직원연금공단,사학연금 공지/입찰공고,TBD,needs_research,not_ready,금융투자협회,공식 공고 URL 확정
+geps,공무원연금공단,공무원연금공단 공지/입찰공고,TBD,needs_research,not_ready,금융투자협회,공식 공고 URL 확정
+mmaa,군인공제회,군인공제회 공지/입찰공고,TBD,needs_research,not_ready,금융투자협회,공식 공고 URL 확정
+cwma,건설근로자공제회,건설근로자공제회 공지/입찰공고,TBD,needs_research,not_ready,금융투자협회,공식 공고 URL 확정
+kbiz,중소기업중앙회,중소기업중앙회 입찰·사업공고,https://www.kbiz.or.kr/ko/contents/bbs/list.do?mnSeq=211,confirmed,active_parser,벤처투자종합포털;금융투자협회,첨부파일/마감일 품질 점검
+ibk,IBK기업은행,IBK기업은행 공지/사업공고,TBD,needs_research,not_ready,벤처투자종합포털,동행펀드 공식 게시 위치 확정

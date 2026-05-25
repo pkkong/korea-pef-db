@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Korea PEF Intelligence DB</title>
+  <link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+  <main class="site-shell">
+    <header class="site-header">
+      <button class="logo" type="button" data-view="ranking">
+        <span>PE</span>
+        <strong>Korea PEF Intelligence</strong>
+      </button>
+      <nav class="nav" aria-label="서비스 메뉴">
+        <button class="active" type="button" data-view="ranking">시장</button>
+        <button type="button" data-view="profile">GP</button>
+        <button type="button" data-view="funds">펀드</button>
+        <button type="button" data-view="lp">LP</button>
+        <button type="button" data-view="compare">비교</button>
+      </nav>
+      <div class="data-pill" id="dataMeta">데이터 로딩 중...</div>
+    </header>
+
+    <section class="control-bar" aria-label="검색 및 기준 선택">
+      <div>
+        <label for="periodSelect">기준 시점</label>
+        <select id="periodSelect"></select>
+      </div>
+      <div>
+        <label for="basisSelect">집계 기준</label>
+        <select id="basisSelect">
+          <option value="primary">대표 GP 기준</option>
+          <option value="full">공동 GP 전체 반영</option>
+        </select>
+      </div>
+      <div class="global-search">
+        <label for="globalGpSearch">GP 검색</label>
+        <div>
+          <input id="globalGpSearch" list="gpList" placeholder="예: MBK, 한앤, IMM PE, VIG">
+          <button id="globalGpButton" type="button">열기</button>
+        </div>
+        <datalist id="gpList"></datalist>
+      </div>
+    </section>
+
+    <section class="view-panel active" data-view-panel="ranking">
+      <div class="page-head">
+        <p>Korea PEF Intelligence DB</p>
+        <h1>국내 기관전용 PEF 시장</h1>
+      </div>
+      <section class="metric-grid" aria-label="시장 지표">
+        <article><span>운용중 약정액</span><strong id="metricAum">-</strong><em>FSS 출자약정액 기준</em></article>
+        <article><span>운용중 PEF</span><strong id="metricFunds">-</strong><em>선택 시점 기준</em></article>
+        <article><span>활동 GP</span><strong id="metricGps">-</strong><em>대표 GP 기준</em></article>
+        <article><span>신규 결성</span><strong id="metricNewFormation">-</strong><em id="metricNewFormationNote">-</em></article>
+        <article><span>상위 10 집중도</span><strong id="metricTop10">-</strong><em>선택 시점 비중</em></article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>GP 순위</h2>
+            <p>약정액, 누적 약정액, 운용 펀드 수를 기준으로 GP를 비교합니다.</p>
+          </div>
+          <div class="table-tools">
+            <input id="rankingSearch" placeholder="순위 내 검색">
+            <select id="rankingLimit">
+              <option value="30">상위 30</option>
+              <option value="50">상위 50</option>
+              <option value="100">상위 100</option>
+              <option value="9999">전체</option>
+            </select>
+          </div>
+        </div>
+        <div class="mobile-list" id="rankingCards"></div>
+        <div class="table-wrap data-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th data-ranking-sort="rank">순위</th>
+                <th data-ranking-sort="name">GP</th>
+                <th data-ranking-sort="aum">약정액</th>
+                <th data-ranking-sort="cumulative">누적</th>
+                <th data-ranking-sort="funds">펀드</th>
+                <th data-ranking-sort="share">비중</th>
+                <th data-ranking-sort="qoq">전기 대비</th>
+                <th data-ranking-sort="profile">출처</th>
+              </tr>
+            </thead>
+            <tbody id="rankingBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view-panel" data-view-panel="profile">
+      <div class="profile-summary">
+        <section class="profile-copy">
+          <p>GP 프로필</p>
+          <h1 id="profileName">-</h1>
+          <p id="profileSubtitle">GP를 선택하세요.</p>
+          <dl id="profileInfo"></dl>
+        </section>
+        <section class="profile-kpis">
+          <article><span>순위</span><strong id="profileRank">-</strong></article>
+          <article><span>약정액</span><strong id="profileAum">-</strong></article>
+          <article><span>누적 약정액</span><strong id="profileCumulative">-</strong></article>
+          <article><span>펀드 수</span><strong id="profileFundCount">-</strong></article>
+        </section>
+      </div>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>약정액 추이</h2>
+            <p>분기별 FSS 출자약정액 기준입니다.</p>
+          </div>
+        </div>
+        <div class="chart" id="profileChart"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>연결 인물</h2>
+            <p id="profilePeopleNote">선택 GP 기준입니다.</p>
+          </div>
+          <div class="table-tools single">
+            <input id="profilePeopleSearch" placeholder="인물, 직함, 학력 검색">
+          </div>
+        </div>
+        <div class="people-sort">
+          <button class="active" type="button" data-profile-people-sort="title">직함</button>
+          <button type="button" data-profile-people-sort="name">이름</button>
+          <button type="button" data-profile-people-sort="team">팀</button>
+          <button type="button" data-profile-people-sort="education">학력</button>
+        </div>
+        <div class="school-filter" id="profileSchoolFilter"></div>
+        <div class="people-list" id="profilePeopleBody"></div>
+        <div class="person-detail" id="profilePersonDetail"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>운용중 펀드</h2>
+            <p id="profileFundNote">선택 GP 기준입니다.</p>
+          </div>
+          <div class="table-tools single">
+            <input id="profileFundSearch" placeholder="펀드 검색">
+          </div>
+        </div>
+        <div class="mobile-list" id="profileFundCards"></div>
+        <div class="table-wrap data-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th data-profile-fund-sort="name">펀드</th>
+                <th data-profile-fund-sort="amount">약정액</th>
+                <th data-profile-fund-sort="established">설립일</th>
+                <th>GP 원문</th>
+                <th data-profile-fund-sort="observed">관측</th>
+              </tr>
+            </thead>
+            <tbody id="profileFundBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view-panel" data-view-panel="funds">
+      <div class="page-head compact">
+        <p>Fund DB</p>
+        <h1>운용중 펀드</h1>
+      </div>
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>펀드 목록</h2>
+            <p>선택 시점 기준 운용중 PEF입니다.</p>
+          </div>
+          <div class="table-tools">
+            <input id="fundSearch" placeholder="펀드 또는 GP 검색">
+            <select id="fundLimit">
+              <option value="50">50개</option>
+              <option value="100">100개</option>
+              <option value="250">250개</option>
+              <option value="9999">전체</option>
+            </select>
+          </div>
+        </div>
+        <div class="mobile-list" id="fundCards"></div>
+        <div class="table-wrap data-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th data-fund-sort="name">펀드</th>
+                <th data-fund-sort="gp">GP</th>
+                <th data-fund-sort="amount">약정액</th>
+                <th data-fund-sort="established">설립일</th>
+                <th data-fund-sort="observed">관측</th>
+              </tr>
+            </thead>
+            <tbody id="fundBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view-panel" data-view-panel="lp">
+      <div class="page-head compact">
+        <p>LP Commitment DB</p>
+        <h1>출자사업 현황</h1>
+      </div>
+      <section class="metric-grid lp-metrics" aria-label="LP 출자사업 지표">
+        <article><span>모니터링 LP</span><strong id="lpMetricInstitutions">-</strong><em>주요 연기금·공제회·정책 FoF</em></article>
+        <article><span>모니터 이벤트</span><strong id="lpMetricNotices">-</strong><em>공고·마감·선정·변경</em></article>
+        <article><span>확인 출자규모</span><strong id="lpMetricAmount">-</strong><em>allocation 기준</em></article>
+        <article><span>선정 GP 식별</span><strong id="lpMetricSelectedGps">-</strong><em>GP alias 매칭 기준</em></article>
+      </section>
+
+      <section class="panel lp-institution-panel">
+        <div class="panel-head">
+          <div>
+            <h2>주요 LP</h2>
+            <p>출자사업 공고와 뉴스 후보가 연결된 LP별 현황입니다.</p>
+          </div>
+          <div class="table-tools single">
+            <input id="lpInstitutionSearch" placeholder="LP, 담당팀, 자산군 검색">
+          </div>
+        </div>
+        <div class="lp-card-grid" id="lpInstitutionCards"></div>
+      </section>
+
+      <section class="panel lp-notice-panel">
+        <div class="panel-head">
+          <div>
+            <h2>공고·선정·뉴스</h2>
+            <p>신규 공고, 마감 임박, 숏리스트, 최종 선정 이벤트를 우선 표시합니다.</p>
+          </div>
+          <div class="table-tools">
+            <input id="lpNoticeSearch" placeholder="LP, 공고, GP 검색">
+            <select id="lpNoticeStage">
+              <option value="">전체</option>
+              <option value="new_notice">신규 공고</option>
+              <option value="deadline_soon">마감 임박</option>
+              <option value="shortlist">숏리스트</option>
+              <option value="final_selection">최종 선정</option>
+              <option value="revision">정정/재공고</option>
+              <option value="cancellation">취소/철회</option>
+              <option value="performance_update">성과</option>
+            </select>
+          </div>
+        </div>
+        <div class="mobile-list" id="lpNoticeCards"></div>
+        <div class="table-wrap data-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>LP</th>
+                <th>출자사업</th>
+                <th>이벤트</th>
+                <th>자산군</th>
+                <th>출자규모</th>
+                <th>선정 GP</th>
+                <th>일자</th>
+              </tr>
+            </thead>
+            <tbody id="lpNoticeBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view-panel" data-view-panel="compare">
+      <div class="page-head compact">
+        <p>Peer Compare</p>
+        <h1>GP 비교</h1>
+      </div>
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>하우스 비교</h2>
+            <p>선택한 GP의 약정액 추이를 같은 축에서 비교합니다.</p>
+          </div>
+          <div class="compare-add">
+            <input id="compareInput" list="gpList" placeholder="비교할 GP 추가">
+            <button id="compareButton" type="button">추가</button>
+          </div>
+        </div>
+        <div class="chips" id="compareChips"></div>
+        <div class="chart" id="compareChart"></div>
+        <div class="mobile-list" id="compareCards"></div>
+        <div class="table-wrap data-table-wrap compare-table">
+          <table>
+            <thead>
+              <tr>
+                <th>GP</th>
+                <th>순위</th>
+                <th>약정액</th>
+                <th>누적</th>
+                <th>펀드</th>
+                <th>전기 대비</th>
+              </tr>
+            </thead>
+            <tbody id="compareBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="하단 메뉴">
+    <button class="active" type="button" data-view="ranking">시장</button>
+    <button type="button" data-view="profile">GP</button>
+    <button type="button" data-view="funds">펀드</button>
+    <button type="button" data-view="lp">LP</button>
+    <button type="button" data-view="compare">비교</button>
+  </nav>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+rule_id,match_target,match_mode,pattern,score_delta,tag_type,tag_value,comment_hint,is_active,notes
+pef_core_korean,title_or_excerpt,contains,사모펀드,4,topic,PEF,국내 사모펀드 키워드가 직접 등장합니다.,1,Core PEF keyword
+pef_core_abbrev,title_or_excerpt,contains,PEF,4,topic,PEF,PEF 약어가 직접 등장합니다.,1,Core PEF keyword
+pef_core_private_equity,title_or_excerpt,contains,프라이빗에쿼티,4,topic,PEF,프라이빗에쿼티 키워드가 직접 등장합니다.,1,Core PEF keyword
+pef_core_private_equity_english,title_or_excerpt,contains,private equity,4,topic,PEF,영문 private equity 키워드가 직접 등장합니다.,1,Core PEF keyword
+pef_core_management,title_or_excerpt,contains,경영참여형,4,topic,PEF,경영참여형 제도와 직접 연결됩니다.,1,Regulatory PEF keyword
+pef_core_private_investment,title_or_excerpt,contains,사모투자,3,topic,PEF,사모투자 맥락으로 직접 연결됩니다.,1,Core PEF keyword
+pef_core_pe_house,title_or_excerpt,contains,PE하우스,2,topic,PEF,PE 하우스 관련 기사일 가능성이 높습니다.,1,Core PEF keyword
+pef_core_gp,title_or_excerpt,contains, GP,2,topic,PEF,GP 관련 기사입니다.,1,GP is an entity/facet signal; use GP section only when the firm itself is the story
+pef_core_lp,title_or_excerpt,contains, LP,1,topic,LP,LP 관련 기사입니다.,1,LP is an allocator signal; use LP section for allocation/mandate/governance/portfolio/liquidity stories
+gp_mbk,title_or_excerpt,contains,MBK,2,topic,PEF,주요 GP 관련 기사입니다.,1,GP name boosts relevance only; not a section signal
+gp_hahn,title_or_excerpt,contains,한앤컴퍼니,2,topic,PEF,주요 GP 관련 기사입니다.,1,GP name boosts relevance only; not a section signal
+gp_imm,title_or_excerpt,contains,IMM,2,topic,PEF,주요 GP 관련 기사입니다.,1,GP name boosts relevance only; not a section signal
+gp_vig,title_or_excerpt,contains,VIG,2,topic,PEF,주요 GP 관련 기사입니다.,1,GP name boosts relevance only; not a section signal
+gp_glenwood,title_or_excerpt,contains,글랜우드,2,topic,PEF,주요 GP 관련 기사입니다.,1,GP name boosts relevance only; not a section signal
+gp_stic,title_or_excerpt,contains,스틱인베스트먼트,2,topic,PEF,주요 GP 관련 기사입니다.,1,GP name boosts relevance only; not a section signal
+gp_qcapital,title_or_excerpt,contains,큐캐피탈,2,topic,PEF,주요 GP 관련 기사입니다.,1,GP name boosts relevance only; not a section signal
+gp_uamco,title_or_excerpt,contains,유암코,2,topic,PEF,주요 GP 관련 기사입니다.,1,GP name boosts relevance only; not a section signal
+gp_kbpe,title_or_excerpt,contains,KB PE,2,topic,PEF,주요 GP 관련 기사입니다.,1,GP name boosts relevance only; not a section signal
+deal_mna,title_or_excerpt,contains,M&A,2,topic,Deal,딜 관련 기사일 가능성이 높습니다.,1,Deal keyword
+deal_acquisition,title_or_excerpt,contains,인수,1,topic,Deal,인수 거래 관련 맥락입니다.,1,Deal keyword
+deal_sale,title_or_excerpt,contains,매각,1,topic,Deal,매각 거래 관련 맥락입니다.,1,Deal keyword
+deal_buyout,title_or_excerpt,contains,바이아웃,2,topic,Deal,바이아웃 기사로 볼 수 있습니다.,1,Deal keyword
+deal_preferred_bidder,title_or_excerpt,contains,우선협상대상자,2,topic,Deal,우선협상대상자 단계의 거래 기사입니다.,1,Deal keyword
+deal_sale_advisor,title_or_excerpt,contains,매각주관,1,topic,Deal,매각주관 선정 등 딜 프로세스 기사입니다.,1,Deal keyword
+lp_commitment,title_or_excerpt,contains,출자사업,3,topic,LP,LP 출자사업 관련 기사입니다.,1,LP commitment event; eligible for LP section
+lp_fund_of_funds,title_or_excerpt,contains,모태펀드,3,topic,LP,모태펀드와 연결됩니다.,1,LP commitment event/facet; section still decided by headline event
+lp_pension,title_or_excerpt,contains,연기금,1,topic,LP,연기금 LP 동향일 수 있습니다.,1,LP institution facet only; not primary section
+lp_mutual_aid,title_or_excerpt,contains,공제회,1,topic,LP,공제회 LP 동향일 수 있습니다.,1,LP institution facet only; not primary section
+lp_nps,title_or_excerpt,contains,국민연금,1,topic,LP,국민연금 LP 동향일 수 있습니다.,1,LP institution facet only; not primary section
+lp_blind_fund,title_or_excerpt,contains,블라인드펀드,2,topic,GP,블라인드펀드 조성 기사입니다.,1,GP fundraising function unless explicit LP mandate signal appears
+lp_blind,title_or_excerpt,contains,블라인드,1,topic,GP,블라인드펀드 조성 기사일 수 있습니다.,1,GP fundraising context unless explicit LP mandate signal appears
+lp_anchor_fund,title_or_excerpt,contains,민간모펀드,3,topic,LP,민간모펀드 관련 기사입니다.,1,LP commitment event/facet
+lp_allocator,title_or_excerpt,contains,출자자,1,topic,LP,LP 출자자 관점의 기사입니다.,1,LP allocator facet only; not primary section
+lp_institutional_investor,title_or_excerpt,contains,기관투자가,1,topic,LP,기관투자가 또는 allocator 동향입니다.,1,LP allocator facet only; not primary section
+lp_mandate,title_or_excerpt,contains,위탁운용,3,topic,LP,위탁운용사 선정 또는 mandate 기사입니다.,1,LP commitment event; eligible for LP section
+lp_commitment_korean,title_or_excerpt,contains,출자확약,3,topic,LP,LP 커밋먼트 관련 기사입니다.,1,LP commitment event; eligible for LP section
+lp_asset_allocation,title_or_excerpt,contains,자산배분,1,topic,LP,LP 자산배분 관점의 기사입니다.,1,LP allocation strategy signal
+lp_alternatives,title_or_excerpt,contains,대체투자,1,topic,LP,대체투자 배분 또는 기관투자가 기사입니다.,1,LP allocation signal when allocator-focused
+lp_distribution,title_or_excerpt,contains,분배금,1,topic,LP,분배금과 DPI 등 LP 회수 관점의 기사입니다.,1,LP performance facet; section decided by event type
+lp_dpi,title_or_excerpt,contains,DPI,1,topic,LP,DPI와 capital recycling 관점의 기사입니다.,1,LP performance facet; section decided by event type
+lp_secondary,title_or_excerpt,contains,LP 세컨더리,2,topic,Deal,LP 지분 세컨더리 거래 기사입니다.,1,LP secondary is a deal event
+fundraising_close,title_or_excerpt,contains,펀드 결성,3,topic,GP,펀드 결성 또는 클로징 기사입니다.,1,GP Fundraising keyword
+fundraising_final_close,title_or_excerpt,contains,최종 결성,3,topic,GP,최종 결성 기사입니다.,1,GP Fundraising keyword
+fundraising_close_loanword,title_or_excerpt,contains,클로징,2,topic,GP,펀드 클로징 기사일 가능성이 높습니다.,1,GP Fundraising keyword
+fundraising_target,title_or_excerpt,contains,목표액,2,topic,GP,펀드레이징 목표액 관련 기사입니다.,1,GP Fundraising keyword
+fundraising_commitment_total,title_or_excerpt,contains,약정총액,3,topic,GP,펀드 약정총액 관련 기사입니다.,1,GP Fundraising keyword
+fundraising_co_invest,title_or_excerpt,contains,공동투자,2,topic,GP,공동투자 펀드 또는 co-investment 기사입니다.,1,GP Fundraising keyword
+fundraising_blind_fund_build,title_or_excerpt,contains,블라인드펀드 조성,3,topic,GP,블라인드펀드 조성 기사입니다.,1,GP Fundraising keyword
+fundraising_fund_challenge,title_or_excerpt,contains,펀드 도전,2,topic,GP,펀드레이징 목표 또는 신규 펀드 추진 기사입니다.,1,GP Fundraising keyword
+gp_ef_pe,title_or_excerpt,contains,E&F PE,4,topic,GP,E&F PE 관련 GP 기사입니다.,1,GP name and fundraising safety net
+gp_ef_private_equity,title_or_excerpt,contains,E&F프라이빗에쿼티,4,topic,GP,E&F PE 관련 GP 기사입니다.,1,GP name and fundraising safety net
+lp_asset_management_head,title_or_excerpt,contains,자산운용본부장,4,topic,LP,LP 자산운용 조직 인사 또는 채용 기사입니다.,1,LP personnel and allocator operations keyword
+lp_kbiz,title_or_excerpt,contains,중소기업중앙회,2,topic,LP,중소기업중앙회/노란우산공제 자금 운용 기사입니다.,1,LP institution keyword
+lp_mutual_aid_business,title_or_excerpt,contains,공제사업,2,topic,LP,공제사업 자금 운용 기사입니다.,1,LP mutual-aid asset management keyword
+lp_yellow_umbrella,title_or_excerpt,contains,노란우산공제,2,topic,LP,노란우산공제 자금 운용 기사입니다.,1,LP institution keyword
+ai_pe_gaic,title_or_excerpt,contains,GAIC,1,topic,AI_PE,AI와 PE 투자전략 관련 컨퍼런스 기사입니다.,1,AI & PE conference keyword
+credit_private_credit,title_or_excerpt,contains,프라이빗크레딧,3,topic,Deal,프라이빗크레딧 관련 기사입니다.,1,Deal financing keyword
+credit_private_credit_english,title_or_excerpt,contains,private credit,3,topic,Deal,Private credit 관련 기사입니다.,1,Deal financing keyword
+credit_acquisition_finance,title_or_excerpt,contains,인수금융,2,topic,Deal,인수금융 또는 레버리지 조달 기사입니다.,1,Deal financing keyword
+credit_refinancing,title_or_excerpt,contains,리파이낸싱,2,topic,Deal,리파이낸싱 관련 기사입니다.,1,Deal financing keyword
+credit_mezzanine,title_or_excerpt,contains,메자닌,2,topic,Deal,메자닌 투자 또는 조달 기사입니다.,1,Deal financing keyword
+reg_fsc,any_text,contains,금융위원회,2,topic,Market,금융위 발표 또는 규제 변화와 연결됩니다.,1,Market regulation keyword
+reg_fss,any_text,contains,금융감독원,2,topic,Market,금감원 발표 또는 감독 이슈와 연결됩니다.,1,Market regulation keyword
+reg_compliance,any_text,contains,내부통제,2,topic,Market,내부통제 이슈로 실무 체크 가치가 있습니다.,1,Market regulation keyword
+reg_capital_market,any_text,contains,자본시장법,2,topic,Market,자본시장법 관련 규제 해석입니다.,1,Market regulation keyword
+exclude_political_choguk,title_or_excerpt,contains,조국,-5,,,정치권 사모펀드 논란은 PEF 시장 클리핑에서 제외합니다.,1,Noise filter
+exclude_political_innovation_party,title_or_excerpt,contains,혁신당,-3,,,정치권 사모펀드 논란은 PEF 시장 클리핑에서 제외합니다.,1,Noise filter
+exclude_scandal,title_or_excerpt,contains,사모펀드 의혹,-4,,,정치·수사성 사모펀드 의혹 기사는 제외합니다.,1,Noise filter
+advisory_lawfirm,any_text,contains,법무법인,2,topic,Advisory,법률 자문사 해설 자료일 수 있습니다.,0,Advisory keyword disabled for media-only MVP
+advisory_kpmg,any_text,contains,KPMG,2,topic,Advisory,회계·재무 자문사 자료일 수 있습니다.,0,Advisory keyword disabled for media-only MVP
+advisory_pwc,any_text,contains,PwC,2,topic,Advisory,회계·재무 자문사 자료일 수 있습니다.,0,Advisory keyword disabled for media-only MVP
+advisory_deloitte,any_text,contains,Deloitte,2,topic,Advisory,회계·재무 자문사 자료일 수 있습니다.,0,Advisory keyword disabled for media-only MVP
+advisory_ey,any_text,contains,EY,2,topic,Advisory,회계·재무 자문사 자료일 수 있습니다.,0,Advisory keyword disabled for media-only MVP
+doc_newsletter,any_text,contains,뉴스레터,1,document_type,newsletter,뉴스레터 형식 문서입니다.,1,Document type
+doc_press_release,any_text,contains,보도자료,1,document_type,press_release,보도자료 형식 문서입니다.,1,Document type
+doc_report,any_text,contains,보고서,1,document_type,report,리포트 형식 문서입니다.,1,Document type

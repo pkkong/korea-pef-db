@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KPEF 운영 콘솔</title>
+  <link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="brand-mark">PE</div>
+        <div>
+          <div class="brand-title">KPEF 운영 콘솔</div>
+          <div class="brand-subtitle">수집 · 검증 · DB 품질 · 발행</div>
+        </div>
+      </div>
+      <nav class="topnav" aria-label="dashboard sections">
+        <a href="../public/">뉴스</a>
+        <a href="#market">시장</a>
+        <a href="#profile">GP</a>
+        <a href="#profile" data-profile-tab-target="people">인물</a>
+        <a href="#workqueue">작업 큐</a>
+        <a href="#compare">비교</a>
+        <a href="#sources">원천</a>
+      </nav>
+      <div class="top-meta"><span class="operator-badge">운영자용</span><span id="dataMeta">데이터 로딩 중...</span></div>
+    </header>
+
+    <section class="command-center" id="market">
+      <div class="command-copy">
+        <div class="eyebrow">Operator Console</div>
+        <h1>서비스 운영 상태와 DB 보강 우선순위</h1>
+        <p>
+          금감원 분기별 PEF 현황을 기반으로 하우스별 운용중 약정액, 누적 약정액,
+          운용 펀드 목록, 프로필 근거, 뉴스 기반 DB 업데이트 필요 여부를 한 화면에서 확인합니다.
+        </p>
+        <div class="source-line" id="sourceLine">출자약정액 기준 AUM 프록시 · NAV 아님</div>
+      </div>
+
+      <aside class="control-deck">
+        <div class="control-grid">
+          <div>
+            <label for="periodSelect">기준 시점</label>
+            <select id="periodSelect"></select>
+          </div>
+          <div>
+            <label for="basisSelect">집계 기준</label>
+            <select id="basisSelect">
+              <option value="primary">대표 GP 기준</option>
+              <option value="full">공동 GP 전체 반영</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label for="gpInput">GP 빠른 검색</label>
+          <div class="search-action">
+            <input id="gpInput" list="gpList" placeholder="예: MBK, 한앤, IMM PE, VIG">
+            <button id="selectGpButton">열기</button>
+          </div>
+          <datalist id="gpList"></datalist>
+        </div>
+        <div class="control-hint">
+          영문 약칭과 한글 법인명 alias를 같이 검색합니다.
+        </div>
+      </aside>
+    </section>
+
+    <section class="metric-strip" aria-label="market metrics">
+      <article class="metric-card">
+        <div class="metric-label">운용중 PEF</div>
+        <div class="metric-value" id="metricFunds">-</div>
+        <div class="metric-note" id="metricFundsNote">선택 시점 기준</div>
+      </article>
+      <article class="metric-card">
+        <div class="metric-label">활동 GP</div>
+        <div class="metric-value" id="metricGps">-</div>
+        <div class="metric-note">대표 GP 기준 관측 수</div>
+      </article>
+      <article class="metric-card">
+        <div class="metric-label">인물 DB</div>
+        <div class="metric-value" id="metricPeople">-</div>
+        <div class="metric-note" id="metricPeopleNote">연결 인물 수</div>
+      </article>
+      <article class="metric-card metric-strong">
+        <div class="metric-label">운용중 약정액</div>
+        <div class="metric-value" id="metricAum">-</div>
+        <div class="metric-note">억원 단위 약정액 기준 AUM 프록시</div>
+      </article>
+      <article class="metric-card">
+        <div class="metric-label">신규 PEF</div>
+        <div class="metric-value" id="metricNewFunds">-</div>
+        <div class="metric-note" id="metricNewFundsNote">선택 연도 기준</div>
+      </article>
+      <article class="metric-card">
+        <div class="metric-label">상위 5 집중도</div>
+        <div class="metric-value" id="metricTopShare">-</div>
+        <div class="metric-note">선택 시점 약정액 비중</div>
+      </article>
+    </section>
+
+    <section class="workspace">
+      <aside class="left-rail">
+        <section class="panel compact-panel" id="workqueue">
+          <div class="panel-header">
+            <div>
+              <h2>GP 순위</h2>
+              <p>행을 클릭하면 상세 프로필이 바뀝니다.</p>
+            </div>
+          </div>
+          <div class="toolbar">
+            <input id="rankSearch" placeholder="랭킹 내 검색">
+            <select id="rankLimit">
+              <option value="30">상위 30</option>
+              <option value="50">상위 50</option>
+              <option value="100">상위 100</option>
+              <option value="9999">전체</option>
+            </select>
+          </div>
+          <div class="table-wrap ranking-wrap">
+            <table class="ranking-table">
+              <thead>
+                <tr>
+                  <th>순위</th>
+                  <th>GP</th>
+                  <th>약정액</th>
+                  <th>비중</th>
+                </tr>
+              </thead>
+              <tbody id="rankingBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel compact-panel">
+          <div class="panel-header">
+            <div>
+              <h2>서비스 작업 큐</h2>
+              <p>뉴스, GP 프로필, 인물 DB를 같은 우선순위로 관리합니다.</p>
+            </div>
+          </div>
+          <div class="queue-list" id="newsQueueList"></div>
+        </section>
+      </aside>
+
+      <section class="main-stack">
+        <section class="profile-hero panel" id="profile">
+          <div class="profile-head">
+            <div>
+              <div class="eyebrow">GP 프로필</div>
+              <h2 id="gpTitle">GP 상세</h2>
+              <p id="gpSubtitle">GP를 선택하세요.</p>
+            </div>
+            <div class="profile-badges">
+              <span class="status" id="gpStatus">-</span>
+              <span class="status secondary" id="gpNewsStatus">뉴스 -</span>
+            </div>
+          </div>
+
+          <div class="gp-metrics">
+            <article class="mini-card">
+              <div class="metric-label">선택 시점 순위</div>
+              <div class="metric-value" id="gpRank">-</div>
+              <div class="metric-note">현재 랭킹 기준</div>
+            </article>
+            <article class="mini-card">
+              <div class="metric-label">운용중 약정액</div>
+              <div class="metric-value" id="gpAum">-</div>
+              <div class="metric-note">선택 시점 약정액</div>
+            </article>
+            <article class="mini-card">
+              <div class="metric-label">누적 약정액</div>
+              <div class="metric-value" id="gpCumulativeAum">-</div>
+              <div class="metric-note" id="gpCumulativeNote">역대 최대 약정액 합산</div>
+            </article>
+            <article class="mini-card">
+              <div class="metric-label">펀드 수</div>
+              <div class="metric-value" id="gpFundCount">-</div>
+              <div class="metric-note" id="gpFundCountNote">운용중 / 누적</div>
+            </article>
+          </div>
+
+          <div class="profile-tabs" aria-label="profile views">
+            <button class="profile-tab active" data-view="overview">개요</button>
+            <button class="profile-tab" data-view="funds">펀드</button>
+            <button class="profile-tab" data-view="people">인물</button>
+            <button class="profile-tab" data-view="analytics">추이</button>
+            <button class="profile-tab" data-view="evidence">근거</button>
+          </div>
+
+          <div class="profile-view active" data-view-panel="overview">
+            <div class="profile-grid">
+              <div class="profile-row">
+                <span>법인명</span>
+                <strong id="gpLegalKo">-</strong>
+              </div>
+              <div class="profile-row">
+                <span>영문명</span>
+                <strong id="gpLegalEn">-</strong>
+              </div>
+              <div class="profile-row">
+                <span>구분</span>
+                <strong id="gpCategory">-</strong>
+              </div>
+              <div class="profile-row">
+                <span>설립일</span>
+                <strong id="gpEstablished">-</strong>
+              </div>
+              <div class="profile-row">
+                <span>대표자</span>
+                <strong id="gpRepresentative">-</strong>
+              </div>
+              <div class="profile-row">
+                <span>전화</span>
+                <strong id="gpPhone">-</strong>
+              </div>
+              <div class="profile-row">
+                <span>사업자번호</span>
+                <strong id="gpBusinessNo">-</strong>
+              </div>
+              <div class="profile-row">
+                <span>법인번호</span>
+                <strong id="gpCorpNo">-</strong>
+              </div>
+              <div class="profile-row wide">
+                <span>주소</span>
+                <strong id="gpAddress">-</strong>
+              </div>
+              <div class="profile-row wide">
+                <span>홈페이지 / 근거</span>
+                <strong id="gpLinks">-</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-view" data-view-panel="funds">
+            <div class="table-wrap profile-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>펀드</th>
+                    <th>GP 원문</th>
+                    <th>설립일</th>
+                    <th>약정액</th>
+                    <th>관측</th>
+                  </tr>
+                </thead>
+                <tbody id="fundBody"></tbody>
+              </table>
+            </div>
+            <p class="footnote" id="fundListSubtitle">선택 GP와 시점 기준입니다.</p>
+          </div>
+
+          <div class="profile-view" data-view-panel="people">
+            <div class="people-list" id="peopleList"></div>
+            <p class="footnote" id="peopleListSubtitle">선택 GP와 연결된 인물 DB입니다.</p>
+          </div>
+
+          <div class="profile-view" data-view-panel="analytics">
+            <div class="chart-grid">
+              <div>
+                <div class="section-title">GP 약정액 시계열</div>
+                <div class="chart" id="gpTrendChart"></div>
+              </div>
+              <div>
+                <div class="section-title">시장 전체 추이</div>
+                <div class="chart" id="marketChart"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-view" data-view-panel="evidence">
+            <div class="evidence-grid">
+              <div>
+                <div class="section-title">DB 품질</div>
+                <div class="quality-list" id="gpQualityList"></div>
+              </div>
+              <div>
+                <div class="section-title">뉴스 업데이트</div>
+                <div class="quality-list" id="gpNewsDetail">-</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel analytics-panel">
+          <div class="panel-header">
+            <div>
+              <h2>신규 PEF 결성</h2>
+              <p>연도별 신규 PEF 결성과 최초 약정액 흐름입니다.</p>
+            </div>
+          </div>
+          <div class="chart" id="newFundsChart"></div>
+        </section>
+
+        <section class="panel" id="compare">
+          <div class="panel-header">
+            <div>
+              <h2>하우스 비교</h2>
+              <p>Capital IQ/Preqin식 peer monitoring을 간단히 구현한 비교 뷰입니다.</p>
+            </div>
+          </div>
+          <div class="compare-row">
+            <input id="compareInput" list="gpList" placeholder="비교할 GP 추가">
+            <button id="addCompareButton">추가</button>
+          </div>
+          <div class="chips" id="compareChips"></div>
+          <div class="chart" id="compareChart"></div>
+        </section>
+
+        <section class="panel" id="sources">
+          <div class="panel-header">
+            <div>
+              <h2>원천 자료</h2>
+              <p>대시보드의 원천 FSS 분기 자료입니다.</p>
+            </div>
+          </div>
+          <div class="source-list" id="sourceDocs"></div>
+        </section>
+      </section>
+    </section>
+  </main>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+person_name_ko,org_type,org_name,org_id,title,team,role_start_date,role_end_date,is_current,source_url,source_title,source_grade,verification_status,notes
+홍길동,GP,샘플파트너스,,대표이사,투자본부,,,1,https://example.com/team,회사 팀 페이지,official,source_derived,샘플 행이므로 실제 입력 전 삭제
