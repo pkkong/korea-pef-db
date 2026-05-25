@@ -7,8 +7,8 @@
 
 운영 기준은 다음과 같다.
 
-- GitHub Actions: 공개 배포용 기본본. 매일 자동으로 안정적으로 발행하는 것이 목적이다.
-- 로컬 실행: 조사/검수/백테스트용 확장본. 더 넓게 긁고 더 자세히 확인하는 것이 목적이다.
+- 로컬 Mac 실행: 공개 배포용 기본본. 더 넓게 긁고 더 자세히 확인한 뒤 GitHub Pages public mirror에 올린다.
+- GitHub Actions: 수동 fallback. Mac이 꺼져 있거나 로컬 발행이 실패했을 때만 직접 실행한다.
 
 ## Main Differences
 
@@ -21,12 +21,12 @@
 | 브리프 기사 수 | 보통 30개까지 후보화 가능 | 30개까지 후보화 가능 | 최종 노출 수는 같아도 GitHub는 앞단 후보 풀이 작다. |
 | LP 모니터 | 소스당 50개 | 소스당 20개 | 로컬이 더 자세하고 GitHub는 공개 배포에 필요한 최소 안정성을 우선한다. |
 | DB/캐시 | 기존 `db/private_equity.db`, raw cache, exports 활용 | 매 실행마다 GitHub 환경에서 새로 생성 | 로컬은 과거 캐시와 검수 흔적 덕분에 더 풍부할 수 있다. |
-| 공개 배포 | 직접 빌드 후 확인 | public mirror에 자동 push | GitHub는 웹 공개까지 자동으로 이어진다. |
+| 공개 배포 | public mirror에 자동 push | 수동 실행 시 public mirror에 push | 로컬 Mac이 primary publisher다. |
 
 ## Current Practical Judgment
 
 GitHub 결과물이 항상 더 나쁘다는 뜻은 아니다. 공개 뉴스레터로 보기에는 충분히 쓸 수 있게 맞춰져 있다.
-다만 중요한 날이나 커버리지 검수가 필요한 날에는 로컬 실행이 더 넓게 훑으므로 더 좋은 후보를 찾을 수 있다.
+다만 로컬 Mac 실행이 더 넓게 훑고 로컬 DB/cache를 활용할 수 있으므로, 현재 운영의 기본 발행 방식은 로컬 Mac으로 둔다.
 
 가장 큰 차이를 만드는 요소는 세 가지다.
 
@@ -36,20 +36,22 @@ GitHub 결과물이 항상 더 나쁘다는 뜻은 아니다. 공개 뉴스레�
 
 ## Deployment Guardrails
 
-GitHub 공개 배포는 빈 결과물을 그대로 덮어쓰지 않도록 막아야 한다.
-현재 workflow는 다음 조건을 검사한다.
+공개 배포는 빈 결과물을 그대로 덮어쓰지 않도록 막아야 한다.
+로컬 발행 스크립트와 GitHub fallback은 다음 조건을 검사한다.
 
 - `article_count > 0`
-- `lp_monitor_count > 0`
 - `index.html`, `daily-news.html`, `archive.json` 존재
+
+`lp_monitor_count`가 0이면 로컬 발행 스크립트는 경고만 낸다. LP 공고 모니터는 뉴스레터 핵심 콘텐츠가 아니기 때문이다.
 
 또한 deploy builder는 public mirror의 기존 `archive.json`을 seed로 읽어서, 같은 날짜의 기존 비어 있지 않은 뉴스가 새 0건 결과로 덮이지 않게 한다.
 
 ## When To Use Which
 
-- 매일 공개 발행: GitHub Actions를 기준으로 한다.
+- 매일 공개 발행: 로컬 Mac launchd 작업을 기준으로 한다.
 - 기사 누락이 의심될 때: 로컬에서 더 넓은 source/limit으로 돌린다.
 - 소스 품질, 분류, 키워드 룰을 손볼 때: 로컬에서 테스트하고 GitHub 설정에 반영한다.
+- Mac 발행이 실패했을 때: GitHub Actions를 수동 fallback으로 실행한다.
 - 사용자에게 보여줄 최종 URL 확인: GitHub Pages public URL을 본다.
 
 ## Direction

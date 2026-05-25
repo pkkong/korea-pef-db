@@ -1,4 +1,4 @@
-name: Deploy newsletter to GitHub Pages
+name: Deploy newsletter to GitHub Pages (fallback)
 
 on:
   workflow_dispatch:
@@ -7,21 +7,6 @@ on:
         description: "Report date in YYYY-MM-DD. Leave blank for today's date in Asia/Seoul."
         required: false
         type: string
-  schedule:
-    # 08:30 KST every day.
-    - cron: "30 23 * * *"
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/deploy-newsletter-pages.yml"
-      - "services/newsletter/**"
-      - "scripts/build_service_site.py"
-      - "scripts/build_service_integration_worklist.py"
-      - "scripts/build_lp_commitment_monitor.py"
-      - "schema/lp_commitments.sql"
-      - "data/lp_institutions.csv"
-      - "data/lp_commitment_sources.csv"
 
 permissions:
   contents: read
@@ -125,7 +110,7 @@ jobs:
           if health["article_count"] <= 0:
               raise SystemExit("article_count is 0; keeping the existing public newsletter instead of publishing an empty issue")
           if health["lp_monitor_count"] <= 0:
-              raise SystemExit("lp_monitor_count is 0; keeping the existing public newsletter instead of publishing without the LP monitor")
+              print("WARNING: lp_monitor_count is 0; publishing can continue because LP monitor is not the core newsletter.")
           archive = json.loads((site / "archive.json").read_text(encoding="utf-8"))
           print(f"archive_count={len(archive)}")
           PY
@@ -136,15 +121,18 @@ jobs:
           NEWSLETTER_PUBLIC_REPO_TOKEN: ${{ secrets.NEWSLETTER_PUBLIC_REPO_TOKEN }}
         run: |
           publish_dir="$(mktemp -d)"
-          cp -R services/newsletter/deploy/site/. "$publish_dir"/
-          cd "$publish_dir"
+          git clone --depth 1 --branch main "https://x-access-token:${NEWSLETTER_PUBLIC_REPO_TOKEN}@github.com/${NEWSLETTER_PUBLIC_REPO}.git" "$publish_dir/site-repo"
+          find "$publish_dir/site-repo" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -R services/newsletter/deploy/site/. "$publish_dir/site-repo"/
+          cd "$publish_dir/site-repo"
           touch .nojekyll
-          git init -q
-          git checkout -b main
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "Deploy newsletter ${{ steps.date.outputs.report_date }}" >/dev/null
-          git remote add origin "https://x-access-token:${NEWSLETTER_PUBLIC_REPO_TOKEN}@github.com/${NEWSLETTER_PUBLIC_REPO}.git"
-          git push -f origin main
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No public newsletter changes to publish."
+            exit 0
+          fi
+          git commit -m "Deploy newsletter ${{ steps.date.outputs.report_date }} from GitHub fallback" >/dev/null
+          git push origin main
           echo "Published ${NEWSLETTER_PUBLIC_URL}"
