@@ -20,7 +20,7 @@ DEFAULT_DEPLOY_DIR = SERVICE_ROOT / "deploy"
 DEFAULT_SITE_DIR = DEFAULT_DEPLOY_DIR / "site"
 DEFAULT_ARCHIVE_SEED_URL = os.environ.get(
     "NEWSLETTER_ARCHIVE_SEED_URL",
-    "https://pkkong.github.io/kpef-newsletter/archive.json",
+    "https://raw.githubusercontent.com/pkkong/kpef-newsletter/main/archive.json",
 )
 
 LEGACY_SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -68,6 +68,7 @@ def write_health_file(site_dir: Path, result: dict[str, str]) -> None:
 
 
 def write_static_support_files(site_dir: Path) -> None:
+    (site_dir / ".nojekyll").write_text("", encoding="utf-8")
     (site_dir / "robots.txt").write_text("User-agent: *\nDisallow:\n", encoding="utf-8")
     (site_dir / "404.html").write_text((site_dir / "index.html").read_text(encoding="utf-8"), encoding="utf-8")
 
@@ -107,11 +108,25 @@ def merge_archives(
         articles = entry.get("articles")
         if not report_date or not isinstance(articles, list):
             continue
+        existing = by_date.get(report_date)
+        existing_articles = existing.get("articles") if existing else []
+        if existing and isinstance(existing_articles, list) and existing_articles and not articles:
+            continue
         by_date[report_date] = entry
     merged = [by_date[date] for date in sorted(by_date, reverse=True)]
     if archive_limit > 0:
         merged = merged[:archive_limit]
     return merged
+
+
+def archive_article_count(archive_entries: list[dict[str, object]], report_date: str, fallback: int) -> int:
+    for entry in archive_entries:
+        if str(entry.get("reportDate") or "") != report_date:
+            continue
+        articles = entry.get("articles")
+        if isinstance(articles, list):
+            return len(articles)
+    return fallback
 
 
 def rewrite_site_archive(site_dir: Path, report_date: str, archive_entries: list[dict[str, object]]) -> None:
@@ -146,6 +161,7 @@ def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
         site_dir / "daily-news.html",
         site_dir / "health.json",
         site_dir / "archive.json",
+        site_dir / ".nojekyll",
         site_dir / "robots.txt",
         site_dir / "404.html",
         site_dir / "assets" / "service.css",
@@ -184,6 +200,13 @@ def main() -> int:
     archive_entries = merge_archives(local_archive, seed_archive, args.archive_limit)
     if archive_entries:
         rewrite_site_archive(site_dir, args.date, archive_entries)
+        result["article_count"] = str(
+            archive_article_count(
+                archive_entries,
+                args.date,
+                int(result.get("article_count", "0") or 0),
+            )
+        )
     write_health_file(site_dir, result)
     write_static_support_files(site_dir)
     assert_newsletter_only(site_dir)
