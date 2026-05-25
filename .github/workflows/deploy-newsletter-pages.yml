@@ -18,6 +18,10 @@ on:
       - "services/newsletter/**"
       - "scripts/build_service_site.py"
       - "scripts/build_service_integration_worklist.py"
+      - "scripts/build_lp_commitment_monitor.py"
+      - "schema/lp_commitments.sql"
+      - "data/lp_institutions.csv"
+      - "data/lp_commitment_sources.csv"
 
 permissions:
   contents: read
@@ -94,6 +98,14 @@ jobs:
             --allow-insecure-ssl \
             --google-date-window
 
+      - name: Build LP commitment monitor
+        run: |
+          python3 scripts/build_lp_commitment_monitor.py \
+            --date "${{ steps.date.outputs.report_date }}" \
+            --days 180 \
+            --limit-per-source 20 \
+            --allow-insecure-ssl
+
       - name: Build static newsletter site
         run: |
           python3 services/newsletter/src/build_newsletter_deploy.py --date "${{ steps.date.outputs.report_date }}"
@@ -110,6 +122,10 @@ jobs:
               raise SystemExit("daily-news.html was not generated")
           if not (site / "archive.json").exists():
               raise SystemExit("archive.json was not generated")
+          if health["article_count"] <= 0:
+              raise SystemExit("article_count is 0; keeping the existing public newsletter instead of publishing an empty issue")
+          if health["lp_monitor_count"] <= 0:
+              raise SystemExit("lp_monitor_count is 0; keeping the existing public newsletter instead of publishing without the LP monitor")
           archive = json.loads((site / "archive.json").read_text(encoding="utf-8"))
           print(f"archive_count={len(archive)}")
           PY
