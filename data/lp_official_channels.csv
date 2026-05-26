@@ -9,6 +9,8 @@ poba,대한지방행정공제회,대한지방행정공제회 공지/입찰공고
 ktcu,한국교직원공제회,한국교직원공제회 고객센터 공지사항,https://www.ktcu.or.kr/PPW-CSB-000101,confirmed,needs_parser,금융투자협회,SPA/상세 URL 패턴 구현
 pmaa,경찰공제회,경찰공제회 입찰공고,https://www.pmaa.or.kr/www/1461128463820/bbs.do,confirmed,active_parser,금융투자협회,첨부파일 직접 다운로드 URL 추출 보강
 cu,신협중앙회,신협중앙회 공지사항,https://cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007,confirmed,active_parser,검색 백업,첨부파일 추출 품질 점검
+kfcc,새마을금고중앙회,새마을금고중앙회 입찰공고,https://www.kfcc.co.kr/noticeofTender/noticeofTenderList.do,confirmed,active_parser,뉴스 백업;금융투자협회,PE/VC 운용사 공고 검색어 품질 점검
+kexim,한국수출입은행,한국수출입은행 공지사항,https://www.koreaexim.go.kr/index,confirmed,not_ready,뉴스 백업;공급망안정화기금,공급망안정화기금/정책펀드 공식 게시 위치 세분화 및 세션형 게시판 수집 보강
 tp,사립학교교직원연금공단,사학연금 공지/입찰공고,TBD,needs_research,not_ready,금융투자협회,공식 공고 URL 확정
 geps,공무원연금공단,공무원연금공단 공지/입찰공고,TBD,needs_research,not_ready,금융투자협회,공식 공고 URL 확정
 mmaa,군인공제회,군인공제회 공지/입찰공고,TBD,needs_research,not_ready,금융투자협회,공식 공고 URL 확정

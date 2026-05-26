@@ -196,6 +196,62 @@ LEFT JOIN lp_commitment_notice lcn
    AND lcn.public_visible = 1
 GROUP BY li.lp_code;
 
+DROP VIEW IF EXISTS v_lp_profile_fact_public;
+
+CREATE VIEW v_lp_profile_fact_public AS
+SELECT
+    fact_id,
+    lp_code,
+    section,
+    label,
+    value,
+    as_of_date,
+    source_name,
+    source_url,
+    confidence,
+    notes,
+    sort_order,
+    public_visible,
+    updated_at
+FROM lp_profile_fact
+WHERE public_visible = 1;
+
+DROP VIEW IF EXISTS v_lp_profile_summary;
+
+CREATE VIEW v_lp_profile_summary AS
+SELECT
+    li.lp_code,
+    li.lp_name,
+    li.lp_name_en,
+    li.lp_type,
+    li.ownership_type,
+    li.homepage_url,
+    li.notice_url,
+    li.default_team,
+    li.focus_asset_classes,
+    li.service_priority,
+    li.aliases,
+    li.notes,
+    COALESCE(stats.notice_count, 0) AS notice_count,
+    COALESCE(stats.allocation_amount_krw_100mn, 0) AS allocation_amount_krw_100mn,
+    COALESCE(stats.commitment_amount_krw_100mn, 0) AS commitment_amount_krw_100mn,
+    COALESCE(stats.latest_event_date, '') AS latest_event_date,
+    COALESCE(stats.latest_announced_date, '') AS latest_announced_date,
+    COALESCE(facts.fact_count, 0) AS fact_count,
+    COALESCE(facts.source_count, 0) AS source_count
+FROM lp_institution li
+LEFT JOIN v_lp_institution_stats stats
+    ON stats.lp_code = li.lp_code
+LEFT JOIN (
+    SELECT
+        lp_code,
+        COUNT(*) AS fact_count,
+        COUNT(DISTINCT NULLIF(source_url, '')) AS source_count
+    FROM v_lp_profile_fact_public
+    GROUP BY lp_code
+) facts
+    ON facts.lp_code = li.lp_code;
+
 DROP VIEW IF EXISTS v_lp_commitment_yearly_stats;
 
 CREATE VIEW v_lp_commitment_yearly_stats AS

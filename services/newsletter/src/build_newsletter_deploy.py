@@ -26,9 +26,16 @@ DEFAULT_ARCHIVE_SEED_URL = os.environ.get(
 )
 
 KTCU_CODE = "ktcu"
-LP_PROFILE_CODES = ("ktcu", "pmaa", "cu")
+LP_PROFILE_CODES = ("ktcu", "pmaa", "cu", "kfcc", "kexim")
 LP_PROFILE_ALIASES = {
     "ktcu": ("ktcu.html",),
+}
+LP_PROFILE_SHORT_LABELS = {
+    "ktcu": "교공",
+    "pmaa": "경공",
+    "cu": "신협",
+    "kfcc": "새마을금고",
+    "kexim": "수은",
 }
 KTCU_FACT_SECTION_LABELS = {
     "general": "일반현황",
@@ -38,6 +45,7 @@ KTCU_FACT_SECTION_LABELS = {
     "investment_governance": "투자 의사결정",
     "public_people": "핵심 의사결정자",
     "notice_history": "출자공고 히스토리",
+    "recent_news": "최근 동향",
     "data_gap": "공개자료 한계",
 }
 KTCU_FACT_SECTION_ORDER = {
@@ -48,6 +56,7 @@ KTCU_FACT_SECTION_ORDER = {
     "investment_governance": 50,
     "public_people": 60,
     "notice_history": 70,
+    "recent_news": 80,
     "data_gap": 90,
 }
 
@@ -94,6 +103,7 @@ def write_health_file(site_dir: Path, result: dict[str, str]) -> None:
         "lp_monitor_count": int(result.get("lp_monitor_count", "0") or 0),
         "ktcu_fact_count": int(result.get("ktcu_fact_count", "0") or 0),
         "lp_profile_fact_count": int(result.get("lp_profile_fact_count", result.get("ktcu_fact_count", "0")) or 0),
+        "lp_profile_page_count": int(result.get("lp_profile_page_count", "0") or 0),
     }
     (site_dir / "health.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -194,13 +204,92 @@ def display_asset_classes(value: object) -> str:
     return str(value or "").replace(";", " · ") or "-"
 
 
+def lp_short_label(lp_code: str, lp_name: str) -> str:
+    return LP_PROFILE_SHORT_LABELS.get(lp_code, lp_name)
+
+
+def read_lp_profile_nav(db_path: Path = DEFAULT_DB) -> list[dict[str, str]]:
+    fallback = [
+        {"lp_code": code, "lp_name": LP_PROFILE_SHORT_LABELS.get(code, code), "label": LP_PROFILE_SHORT_LABELS.get(code, code)}
+        for code in LP_PROFILE_CODES
+    ]
+    if not db_path.exists():
+        return fallback
+    conn = sqlite3.connect(db_path)
+    try:
+        if not db_object_exists(conn, "lp_institution"):
+            return fallback
+        placeholders = ", ".join("?" for _ in LP_PROFILE_CODES)
+        rows = fetch_dicts(
+            conn,
+            f"""
+            SELECT lp_code, lp_name
+            FROM lp_institution
+            WHERE lp_code IN ({placeholders})
+            """,
+            tuple(LP_PROFILE_CODES),
+        )
+    finally:
+        conn.close()
+    by_code = {str(row.get("lp_code") or ""): row for row in rows}
+    nav_items: list[dict[str, str]] = []
+    for code in LP_PROFILE_CODES:
+        row = by_code.get(code, {})
+        lp_name = str(row.get("lp_name") or LP_PROFILE_SHORT_LABELS.get(code, code))
+        nav_items.append({"lp_code": code, "lp_name": lp_name, "label": lp_short_label(code, lp_name)})
+    return nav_items
+
+
+def render_lp_profile_nav(nav_items: list[dict[str, str]], active_code: str = "") -> str:
+    rows = nav_items or [
+        {"lp_code": code, "lp_name": LP_PROFILE_SHORT_LABELS.get(code, code), "label": LP_PROFILE_SHORT_LABELS.get(code, code)}
+        for code in LP_PROFILE_CODES
+    ]
+    links = []
+    for item in rows:
+        code = str(item.get("lp_code") or "")
+        label = str(item.get("label") or item.get("lp_name") or code)
+        active_class = " active" if code == active_code else ""
+        links.append(
+            f'<a class="ktcu-profile-link{active_class}" href="lp-{html_escape(code)}.html">{html_escape(label)}</a>'
+        )
+    return "\n          ".join(links)
+
+
 def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE) -> dict[str, object]:
     if not db_path.exists():
         return {"profile": {}, "facts": [], "notices": [], "yearly": []}
     conn = sqlite3.connect(db_path)
     try:
         profile = {}
-        if db_object_exists(conn, "lp_institution"):
+        if db_object_exists(conn, "v_lp_profile_summary"):
+            rows = fetch_dicts(
+                conn,
+                """
+                SELECT
+                    lp_code,
+                    lp_name,
+                    lp_name_en,
+                    lp_type,
+                    ownership_type,
+                    homepage_url,
+                    notice_url,
+                    default_team,
+                    focus_asset_classes,
+                    notes,
+                    notice_count,
+                    allocation_amount_krw_100mn,
+                    latest_event_date,
+                    fact_count,
+                    source_count
+                FROM v_lp_profile_summary
+                WHERE lp_code = ?
+                LIMIT 1
+                """,
+                (lp_code,),
+            )
+            profile = rows[0] if rows else {}
+        elif db_object_exists(conn, "lp_institution"):
             stats_join = (
                 """
                 LEFT JOIN v_lp_institution_stats stats
@@ -246,10 +335,11 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE) -> d
             )
             profile = rows[0] if rows else {}
 
+        fact_source = "v_lp_profile_fact_public" if db_object_exists(conn, "v_lp_profile_fact_public") else "lp_profile_fact"
         facts = (
             fetch_dicts(
                 conn,
-                """
+                f"""
                 SELECT
                     section,
                     label,
@@ -260,14 +350,14 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE) -> d
                     confidence,
                     notes,
                     sort_order
-                FROM lp_profile_fact
+                FROM {fact_source}
                 WHERE lp_code = ?
-                  AND public_visible = 1
+                  {"AND public_visible = 1" if fact_source == "lp_profile_fact" else ""}
                 ORDER BY section, sort_order, label
                 """,
                 (lp_code,),
             )
-            if db_object_exists(conn, "lp_profile_fact")
+            if db_object_exists(conn, fact_source)
             else []
         )
         facts.sort(
@@ -458,24 +548,50 @@ def ktcu_year_amount(notices: list[dict[str, object]], year: int) -> float:
     )
 
 
-def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
+def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: list[dict[str, str]] | None = None) -> str:
     profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
     facts = payload.get("facts") if isinstance(payload.get("facts"), list) else []
     notices = payload.get("notices") if isinstance(payload.get("notices"), list) else []
     yearly = payload.get("yearly") if isinstance(payload.get("yearly"), list) else []
 
-    notice_rows = "\n".join(render_ktcu_notice_row(row) for row in notices)
+    notice_rows = "\n".join(render_ktcu_notice_row(row) for row in notices) or (
+        """        <p class="ktcu-empty-note">아직 공개 페이지에 표시할 공식 출자공고가 없습니다.</p>"""
+    )
     max_yearly = max([float(row.get("allocation_amount_krw_100mn") or 0) for row in yearly] or [0])
-    yearly_rows = "\n".join(render_ktcu_year_bar(row, max_yearly) for row in yearly)
-    source_rows = render_ktcu_source_links(facts)
-    asset_mix_rows = render_ktcu_asset_mix(notices)
-    general_rows = render_ktcu_fact_list(facts_in_section(facts, "general"))
-    status_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_status"))
-    org_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_org") + facts_in_section(facts, "public_people"))
+    yearly_rows = "\n".join(render_ktcu_year_bar(row, max_yearly) for row in yearly) or (
+        """        <p class="ktcu-empty-note">연도별 공고 규모는 공고 데이터가 쌓이면 표시됩니다.</p>"""
+    )
+    source_rows = render_ktcu_source_links(facts) or "          <li>공개 출처가 아직 정리되지 않았습니다.</li>"
+    asset_mix_rows = render_ktcu_asset_mix(notices) or (
+        """          <p class="ktcu-empty-note">자산군별 출자 패턴은 공식 공고가 추가되면 표시됩니다.</p>"""
+    )
+    general_rows = render_ktcu_fact_list(facts_in_section(facts, "general")) or (
+        """          <div><dt>기관 개요</dt><dd>공개자료 정리 중입니다.</dd></div>"""
+    )
+    status_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_status")) or (
+        """          <div><dt>투자 현황</dt><dd>공개자료 정리 중입니다.</dd></div>"""
+    )
+    org_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_org") + facts_in_section(facts, "public_people")) or (
+        """          <div><dt>담당 조직</dt><dd>공식 조직도 기준으로 확인 중입니다.</dd></div>"""
+    )
+    news_rows = render_ktcu_fact_list(facts_in_section(facts, "recent_news"))
+    news_panel = (
+        f"""      <section class="ktcu-panel">
+        <h2>최근 동향</h2>
+        <p>뉴스와 공개자료에서 확인되는 최근 움직임입니다.</p>
+        <dl class="ktcu-facts">
+{news_rows}
+        </dl>
+      </section>
+"""
+        if news_rows.strip()
+        else ""
+    )
     gap_rows = render_ktcu_fact_list(facts_in_section(facts, "data_gap")) or (
         """          <div><dt>선정 GP 히스토리</dt><dd>공개 공고와 별도 자료를 대조해 추가 검증해야 합니다.</dd></div>"""
     )
 
+    lp_code = str(profile.get("lp_code") or "")
     lp_name = str(profile.get("lp_name") or "LP")
     lp_type = str(profile.get("lp_type") or "LP")
     default_team = str(profile.get("default_team") or "투자 담당")
@@ -505,6 +621,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
         if highlight_amount != "금액 확인중"
         else f"공식 공고 {highlight_count}건을 확인했습니다."
     )
+    nav_html = render_lp_profile_nav(nav_items or [], lp_code)
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -514,38 +631,40 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
   <title>{html_escape(lp_name)} LP 프로필</title>
   <link rel="stylesheet" href="assets/service.css">
   <style>
-    body {{ background: #f7f8fa; }}
-    .ktcu-shell {{ width: min(1180px, calc(100% - 28px)); margin: 0 auto; padding: 16px 0 44px; }}
+    body {{ background: #f5f7fa; }}
+    .ktcu-shell {{ width: min(1200px, calc(100% - 28px)); margin: 0 auto; padding: 16px 0 48px; }}
     .ktcu-top {{ display: grid; gap: 14px; padding: 14px 0 12px; }}
     .ktcu-nav {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }}
     .ktcu-nav strong {{ color: var(--text); font-size: 13px; }}
+    .ktcu-nav span {{ display: flex; flex-wrap: wrap; gap: 7px; }}
     .ktcu-nav a {{ min-height: 34px; display: inline-flex; align-items: center; border: 1px solid var(--separator); border-radius: 8px; padding: 7px 11px; background: #fff; color: var(--text); text-decoration: none; font-size: 12px; font-weight: 700; }}
+    .ktcu-nav .ktcu-profile-link.active {{ border-color: #1f6b63; background: #e7f4f1; color: #164c46; }}
     .ktcu-hero {{ display: grid; gap: 18px; padding: 18px 0 8px; }}
     .ktcu-title {{ display: grid; gap: 10px; }}
-    .ktcu-title span {{ width: fit-content; border-left: 3px solid #2f6fbc; padding-left: 8px; color: #24598d; font-size: 12px; font-weight: 800; }}
+    .ktcu-title span {{ width: fit-content; border-left: 3px solid #1f6b63; padding-left: 8px; color: #164c46; font-size: 12px; font-weight: 800; }}
     .ktcu-title h1 {{ margin: 0; color: var(--text); font-size: clamp(32px, 5vw, 62px); line-height: 1.02; letter-spacing: 0; }}
     .ktcu-title p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 15px; line-height: 1.68; }}
     .ktcu-quick {{ display: grid; gap: 8px; }}
-    .ktcu-quick-item {{ border-left: 3px solid #d0a33c; padding-left: 10px; color: var(--text); font-size: 13px; line-height: 1.5; }}
+    .ktcu-quick-item {{ border-left: 3px solid #c6923b; padding-left: 10px; color: var(--text); font-size: 13px; line-height: 1.5; }}
     .ktcu-quick-item strong {{ display: block; margin-bottom: 2px; font-size: 13px; }}
     .ktcu-kpis {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }}
-    .ktcu-kpi {{ min-width: 0; border: 1px solid var(--separator); border-radius: 8px; padding: 12px; background: #fff; }}
+    .ktcu-kpi {{ min-width: 0; border: 1px solid var(--separator); border-radius: 8px; padding: 12px; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }}
     .ktcu-kpi span {{ display: block; color: var(--secondary); font-size: 11.5px; font-weight: 700; }}
     .ktcu-kpi strong {{ display: block; margin-top: 5px; color: var(--text); font-size: 22px; line-height: 1.15; overflow-wrap: anywhere; }}
     .ktcu-highlight-panel {{ margin-top: 10px; }}
     .ktcu-panel-head {{ display: flex; gap: 10px; align-items: start; justify-content: space-between; margin-bottom: 12px; }}
     .ktcu-panel-head h2 {{ margin-bottom: 4px; }}
     .ktcu-panel-head p {{ margin: 0; color: var(--secondary); font-size: 13px; line-height: 1.5; }}
-    .ktcu-panel-head > strong {{ flex: 0 0 auto; color: #15407d; font-size: 18px; line-height: 1.25; text-align: right; }}
+    .ktcu-panel-head > strong {{ flex: 0 0 auto; color: #164c46; font-size: 18px; line-height: 1.25; text-align: right; }}
     .ktcu-highlight-list {{ display: grid; gap: 8px; }}
     .ktcu-highlight-row {{ display: grid; grid-template-columns: minmax(86px, 0.28fr) minmax(74px, auto) minmax(0, 1fr); gap: 9px; align-items: center; border-top: 1px solid var(--separator); padding-top: 9px; font-size: 13px; }}
     .ktcu-highlight-row:first-child {{ border-top: 0; padding-top: 0; }}
     .ktcu-highlight-row span {{ color: var(--secondary); font-weight: 800; }}
-    .ktcu-highlight-row strong {{ color: #15407d; white-space: nowrap; }}
+    .ktcu-highlight-row strong {{ color: #164c46; white-space: nowrap; }}
     .ktcu-highlight-row em {{ color: var(--text); font-style: normal; font-weight: 700; line-height: 1.4; }}
     .ktcu-empty-note {{ margin: 0; color: var(--secondary); font-size: 13px; }}
     .ktcu-section-grid {{ display: grid; gap: 10px; margin-top: 12px; }}
-    .ktcu-panel {{ border: 1px solid var(--separator); border-radius: 8px; padding: 15px; background: #fff; }}
+    .ktcu-panel {{ border: 1px solid var(--separator); border-radius: 8px; padding: 16px; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }}
     .ktcu-panel h2 {{ margin: 0 0 11px; color: var(--text); font-size: 17px; line-height: 1.35; }}
     .ktcu-panel > p {{ margin: 0 0 12px; color: var(--secondary); font-size: 13px; line-height: 1.58; }}
     .ktcu-facts {{ display: grid; gap: 9px; margin: 0; }}
@@ -562,7 +681,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
     .ktcu-mix-row {{ display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; border-top: 1px solid var(--separator); padding-top: 8px; font-size: 13px; }}
     .ktcu-mix-row:first-child {{ border-top: 0; padding-top: 0; }}
     .ktcu-mix-row span {{ font-weight: 800; }}
-    .ktcu-mix-row strong {{ color: #24598d; }}
+    .ktcu-mix-row strong {{ color: #164c46; }}
     .ktcu-mix-row em {{ color: var(--secondary); font-style: normal; }}
     .ktcu-lower {{ display: grid; gap: 10px; margin-top: 10px; }}
     .ktcu-notices {{ display: grid; gap: 8px; }}
@@ -572,12 +691,12 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
     .ktcu-notice h3 {{ margin: 4px 0; font-size: 14px; line-height: 1.42; }}
     .ktcu-notice h3 a {{ color: var(--text); text-decoration: none; }}
     .ktcu-notice p {{ margin: 0; color: var(--secondary); font-size: 12px; line-height: 1.4; }}
-    .ktcu-notice strong {{ white-space: nowrap; color: #15407d; font-size: 14px; }}
+    .ktcu-notice strong {{ white-space: nowrap; color: #164c46; font-size: 14px; }}
     .ktcu-years {{ display: grid; gap: 8px; }}
     .ktcu-year-row {{ display: grid; grid-template-columns: 44px minmax(0, 1fr) 68px; gap: 8px; align-items: center; font-size: 12px; }}
     .ktcu-year-row span {{ color: var(--secondary); font-weight: 800; }}
     .ktcu-year-row div {{ height: 9px; border-radius: 999px; background: #edf0f4; overflow: hidden; }}
-    .ktcu-year-row i {{ display: block; height: 100%; border-radius: inherit; background: #2f6fbc; }}
+    .ktcu-year-row i {{ display: block; height: 100%; border-radius: inherit; background: #1f6b63; }}
     .ktcu-year-row strong {{ text-align: right; font-size: 12px; }}
     .ktcu-evidence {{ margin-top: 10px; border: 1px solid var(--separator); border-radius: 8px; background: #fff; }}
     .ktcu-evidence summary {{ cursor: pointer; padding: 12px 14px; color: var(--text); font-size: 13px; font-weight: 800; }}
@@ -603,9 +722,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
         <span>
           <a href="index.html">Daily Brief</a>
           <a href="lp-notices.html">LP 공고</a>
-          <a href="lp-ktcu.html">교공</a>
-          <a href="lp-pmaa.html">경공</a>
-          <a href="lp-cu.html">신협</a>
+          {nav_html}
         </span>
       </nav>
       <section class="ktcu-hero" aria-label="{html_escape(lp_name)} 요약">
@@ -616,7 +733,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
           <div class="ktcu-quick">
             <div class="ktcu-quick-item"><strong>핵심 창구</strong>{html_escape(default_team)}</div>
             <div class="ktcu-quick-item"><strong>{html_escape(str(highlight_year))}년 활동</strong>{html_escape(activity_phrase)}</div>
-            <div class="ktcu-quick-item"><strong>검증 범위</strong>공고와 공식 조직은 확인됐고, 최종 선정 GP는 별도 검증 대상입니다.</div>
+            <div class="ktcu-quick-item"><strong>공개자료 기준</strong>공식 조직과 공고를 먼저 반영하고, 최종 선정 GP는 출처가 확인되는 순서대로 추가합니다.</div>
           </div>
         </div>
         <div class="ktcu-kpis">
@@ -673,6 +790,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
 {general_rows}
         </dl>
       </section>
+{news_panel}
     </section>
 
     <section class="ktcu-lower" aria-label="출자공고 히스토리">
@@ -716,13 +834,14 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
 
 def write_lp_profile_pages(site_dir: Path, report_date: str) -> int:
     fact_count = 0
+    nav_items = read_lp_profile_nav()
     for lp_code in LP_PROFILE_CODES:
         payload = read_ktcu_payload(lp_code=lp_code)
         profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
         facts = payload.get("facts") if isinstance(payload.get("facts"), list) else []
         if not profile and not facts:
             continue
-        html = render_ktcu_page(report_date, payload)
+        html = render_ktcu_page(report_date, payload, nav_items)
         (site_dir / f"lp-{lp_code}.html").write_text(html, encoding="utf-8")
         for alias in LP_PROFILE_ALIASES.get(lp_code, ()):
             (site_dir / alias).write_text(html, encoding="utf-8")
@@ -730,7 +849,7 @@ def write_lp_profile_pages(site_dir: Path, report_date: str) -> int:
     return fact_count
 
 
-def render_lp_notices_page(report_date: str, notices: list[dict[str, object]]) -> str:
+def render_lp_notices_page(report_date: str, notices: list[dict[str, object]], nav_items: list[dict[str, str]] | None = None) -> str:
     if notices:
         notice_cards = "\n".join(render_lp_notice_card(item) for item in notices)
     else:
@@ -738,6 +857,7 @@ def render_lp_notices_page(report_date: str, notices: list[dict[str, object]]) -
           <strong>표시할 공식 공고가 없습니다</strong>
           <span>LP 공고 모니터는 별도 서비스로 분리해 운영합니다.</span>
         </div>"""
+    nav_html = render_lp_profile_nav(nav_items or [])
     return f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -776,9 +896,7 @@ def render_lp_notices_page(report_date: str, notices: list[dict[str, object]]) -
 
     <main class="content-area">
       <nav class="lp-profile-nav" aria-label="LP 프로필">
-        <a href="lp-ktcu.html">교직원공제회</a>
-        <a href="lp-pmaa.html">경찰공제회</a>
-        <a href="lp-cu.html">신협중앙회</a>
+        {nav_html}
       </nav>
       <section class="section-block" aria-label="LP 공식 공고">
         <div class="lp-page-list">
@@ -844,7 +962,10 @@ def render_lp_notice_card(item: dict[str, object]) -> str:
 
 def write_lp_notices_page(site_dir: Path, report_date: str) -> int:
     notices = read_lp_monitor(DEFAULT_LP_COMMITMENT_MONITOR)
-    (site_dir / "lp-notices.html").write_text(render_lp_notices_page(report_date, notices), encoding="utf-8")
+    (site_dir / "lp-notices.html").write_text(
+        render_lp_notices_page(report_date, notices, read_lp_profile_nav()),
+        encoding="utf-8",
+    )
     return len(notices)
 
 
@@ -931,14 +1052,14 @@ def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
     zip_path = deploy_dir / "kpef-newsletter-site.zip"
     if zip_path.exists():
         zip_path.unlink()
+    profile_paths = [site_dir / f"lp-{code}.html" for code in LP_PROFILE_CODES]
+    alias_paths = [site_dir / alias for aliases in LP_PROFILE_ALIASES.values() for alias in aliases]
     include_paths = [
         site_dir / "index.html",
         site_dir / "daily-news.html",
         site_dir / "lp-notices.html",
-        site_dir / "ktcu.html",
-        site_dir / "lp-ktcu.html",
-        site_dir / "lp-pmaa.html",
-        site_dir / "lp-cu.html",
+        *alias_paths,
+        *profile_paths,
         site_dir / "health.json",
         site_dir / "archive.json",
         site_dir / ".nojekyll",
@@ -989,6 +1110,7 @@ def main() -> int:
         )
     result["lp_monitor_count"] = str(write_lp_notices_page(site_dir, args.date))
     result["lp_profile_fact_count"] = str(write_lp_profile_pages(site_dir, args.date))
+    result["lp_profile_page_count"] = str(sum(1 for code in LP_PROFILE_CODES if (site_dir / f"lp-{code}.html").exists()))
     result["ktcu_fact_count"] = str(len(read_ktcu_payload(lp_code=KTCU_CODE).get("facts") or []))
     write_health_file(site_dir, result)
     write_static_support_files(site_dir)

@@ -45,3 +45,24 @@ cu,investment_org,리스크관리부문,리스크전략팀·리스크관리팀·
 cu,notice_history,2025년 국내 VC 블라인드 공고,국내 VC 블라인드펀드 선정 공고,2025-02-03,신협중앙회 공지사항,https://cu.co.kr/cu/na/ntt/selectNttInfo.do?nttSn=111261&mi=100007,high,공식 공고 기준,10,1
 cu,notice_history,2025년 국내 기업형 블라인드 공고,소형PE·중형PE 위탁운용사 선정 공고,2025-07-14,신협중앙회 공지사항,https://cu.co.kr/cu/na/ntt/selectNttInfo.do?nttSn=111681&mi=100007,high,공식 공고 기준,20,1
 cu,data_gap,공개자료 한계,공식 조직도와 공고는 확인되나 자금운용 AUM·대체투자 잔액·선정 GP 히스토리는 별도 검증 필요,2026-05-26,신협중앙회 공지사항,https://cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007,medium,LP-GP 연계의 다음 구현 대상,10,1
+kfcc,general,설립 목적,새마을금고 경영 지원·감독과 공동이익 추구,,새마을금고중앙회 주요업무,https://www.kfcc.co.kr/cc/kfccMainRoles.do,high,공식 주요업무 기준,10,1
+kfcc,general,자산·거래자,"자산 약 280조원·거래자수 2,355만명",,새마을금고 Company Brief,https://www.kfcc.co.kr/cc/companyBrief.do,medium,공식 Company Brief 기준,20,1
+kfcc,general,금고 수,"1,300여개",,새마을금고 Company Brief,https://www.kfcc.co.kr/cc/companyBrief.do,medium,공식 Company Brief 기준,30,1
+kfcc,general,본부 소재지,서울특별시 강남구 봉은사로 114길 20,,새마을금고중앙회 위치안내,https://www.kfcc.co.kr/federation/fed0701.do,high,공식 위치안내 기준,40,1
+kfcc,general,조직 네트워크,본부와 전국 13개 지역본부 운영,,새마을금고중앙회 주요업무,https://www.kfcc.co.kr/cc/kfccMainRoles.do,high,공식 주요업무 기준,50,1
+kfcc,general,대표전화,02-2145-9114,,새마을금고중앙회 위치안내,https://www.kfcc.co.kr/federation/fed0701.do,high,공식 위치안내 기준,60,1
+kfcc,investment_status,중앙은행 역할,새마을금고 운용자금 조절과 안정적 자금 운용 지원,,새마을금고중앙회 주요업무,https://www.kfcc.co.kr/cc/kfccMainRoles.do,high,공식 주요업무 기준,10,1
+kfcc,investment_status,주요 금융 기능,신용사업·공제사업·예금자보호준비금 관리,,새마을금고중앙회 주요업무,https://www.kfcc.co.kr/cc/kfccMainRoles.do,high,공식 주요업무 기준,20,1
+kfcc,investment_org,핵심 의사결정 축,신용공제대표이사 산하 자금운용부문(CIO)·대체운용본부,2026-05-26,새마을금고중앙회 조직현황,https://www.kfcc.co.kr/cc/organizationChart.do,high,공식 조직도 기준,10,1
+kfcc,investment_org,대체운용본부,투자관리부·부동산금융부·기업금융부·인프라금융부,2026-05-26,새마을금고중앙회 조직현황,https://www.kfcc.co.kr/cc/organizationChart.do,high,공식 조직도 기준,20,1
+kfcc,notice_history,2025년 PE·VC 위탁운용사 선정,"PEF·VC 대상 총 4,400억원 출자 계획 보도",2025-06-26,인베스트조선,https://www.investchosun.com/site/data/html_dir/2025/06/26/2025062680181.html,medium,뉴스 보도 기준으로 공식 선정 자료와 대조 필요,10,1
+kfcc,data_gap,공개자료 한계,공식 입찰공고는 일반 조달 공고와 투자 공고가 섞여 있어 PE/VC 공고만 선별 확인 필요,2026-05-26,새마을금고중앙회 입찰공고,https://www.kfcc.co.kr/noticeofTender/noticeofTenderList.do,medium,공식 공고 전용 필터 보강 대상,10,1
+kexim,general,기관 성격,수출입·해외투자 활동을 지원하는 정책금융기관,,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,high,공식 홈페이지 주요 서비스 기준,10,1
+kexim,general,본점 소재지,서울특별시 영등포구 은행로 38,,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,high,공식 홈페이지 푸터 기준,20,1
+kexim,general,해외 네트워크,대표사무소 25곳·현지법인 5곳·연락사무소 6곳,,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,high,공식 홈페이지 글로벌 네트워크 기준,30,1
+kexim,investment_status,주요 지원 프로그램,첨단전략산업·초대형수주·기간산업·ESG금융 프로그램,,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,high,공식 홈페이지 주요 지원 프로그램 기준,10,1
+kexim,investment_status,공급망안정화기금,공급망 안정화를 위한 핵심 산업 지원,,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,high,공식 홈페이지 공급망안정화기금 설명 기준,20,1
+kexim,investment_org,핵심 창구,공급망안정화기금과 기업금융 관련 조직·공고를 우선 추적,2026-05-26,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,medium,공식 조직도 세부 부서 연결은 추가 확인 대상,10,1
+kexim,notice_history,공급망안정화기금 공고,공식 홈페이지 공지사항에서 공급망안정화기금 관련 공고 확인,2026-05-26,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,medium,정책펀드성 공고와 순수 출자공고를 분리 관리해야 함,10,1
+kexim,recent_news,2026년 상반기 핵심광물·에너지 공급망안정화 펀드,"출자 1,000억원·비엔더블유인베스트먼트 500억원·한국투자프라이빗에쿼티 500억원 선정 보도",2026-01-09,딜사이트,https://dealsite.co.kr/articles/154841,medium,뉴스 기반 선정 결과. 공식 공고 URL과 첨부파일 추가 확보 필요,10,1
+kexim,data_gap,공개자료 한계,순수 LP 성격의 PE/VC 출자공고와 정책금융 프로그램 공고를 분리해서 축적 필요,2026-05-26,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,medium,정책금융형 LP 정규화의 다음 구현 대상,10,1

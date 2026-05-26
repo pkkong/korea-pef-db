@@ -128,6 +128,8 @@ required = [
     "lp-ktcu.html",
     "lp-pmaa.html",
     "lp-cu.html",
+    "lp-kfcc.html",
+    "lp-kexim.html",
     "archive.json",
     "health.json",
     ".nojekyll",

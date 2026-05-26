@@ -75,6 +75,12 @@ LP_CONTEXT_TERMS = [
     "한국벤처투자",
     "산업은행",
     "우정사업본부",
+    "새마을금고",
+    "새마을금고중앙회",
+    "한국수출입은행",
+    "수출입은행",
+    "수은",
+    "공급망안정화기금",
 ]
 
 COMBINED_AMOUNT_RE = re.compile(r"\[?(?P<jo>\d[\d,]*(?:\.\d+)?)\]?\s*조(?:\s*\[?(?P<eok>\d[\d,]*)\]?\s*억?|원)?(?![가-힣])", re.IGNORECASE)
@@ -146,6 +152,10 @@ NON_COMMITMENT_NOTICE_TERMS = [
     "크라우드펀딩",
     "부킹 이벤트",
     "회원 대상",
+    "공정가치 평가",
+    "투자성과 모니터링",
+    "용역 입찰",
+    "회계감사",
 ]
 GP_EXCLUSION_NAMES = {
     "국민연금기금",
@@ -163,6 +173,9 @@ GP_EXCLUSION_NAMES = {
     "농금원",
     "한국자산관리공사",
     "신한자산운용",
+    "새마을금고중앙회",
+    "한국수출입은행",
+    "수출입은행",
 }
 
 
@@ -295,6 +308,9 @@ def seed_lp_profile_facts(conn: sqlite3.Connection, path: Path) -> list[dict[str
     if not path.exists():
         return []
     rows = read_csv_rows(path)
+    managed_lp_codes = sorted({row.get("lp_code", "").strip() for row in rows if row.get("lp_code", "").strip()})
+    for lp_code in managed_lp_codes:
+        conn.execute("DELETE FROM lp_profile_fact WHERE lp_code = ?", (lp_code,))
     headers = [
         "lp_code",
         "section",
@@ -496,6 +512,8 @@ def infer_asset_class(text: str) -> str:
 
 def infer_strategy(text: str) -> str:
     value = text.lower()
+    if "공급망안정화기금" in text:
+        return "공급망안정화기금"
     if "국민성장펀드" in text:
         return "국민성장펀드"
     if "모태펀드" in text:
@@ -584,6 +602,8 @@ def classify_amounts(text: str) -> dict[str, object]:
 
 
 def infer_program_name(text: str) -> str:
+    if "공급망안정화기금" in text:
+        return "공급망안정화기금"
     if "국민성장펀드" in text:
         return "국민성장펀드"
     if "농식품모태펀드" in text or "농림수산식품모태펀드" in text:
@@ -1105,6 +1125,99 @@ def parse_cu_listing(source: dict[str, str], limit: int, allow_insecure_ssl: boo
     return rows[:limit]
 
 
+def parse_kfcc_tender_listing(source: dict[str, str], limit: int, allow_insecure_ssl: bool) -> list[dict[str, str]]:
+    locator = source.get("locator", "")
+    if not locator:
+        return []
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set()
+    search_terms = split_semicolon(source.get("must_contain", ""))
+
+    def add_rows_from_html(html_text: str, final_url: str) -> None:
+        for item in re.findall(r"<li\b.*?</li>", html_text, flags=re.IGNORECASE | re.DOTALL):
+            action = re.search(r"fnDetail\(['\"](?P<id>\d+)['\"]\)", item, flags=re.IGNORECASE)
+            title_match = re.search(r"<a\b[^>]*>\s*(?P<title>.*?)\s*</a>", item, flags=re.IGNORECASE | re.DOTALL)
+            if not action or not title_match:
+                continue
+            title = normalize_whitespace(strip_html_tags(title_match.group("title")))
+            if not title or not matches_must_contain(search_terms, title):
+                continue
+            notice_id = action.group("id")
+            link = urljoin(final_url, f"/noticeofTender/noticeofTenderDetail.do?no={notice_id}")
+            if link in seen:
+                continue
+            date_match = re.search(
+                r"<div\b[^>]*class=[\"'][^\"']*date[^\"']*[\"'][^>]*>(?P<date>.*?)</div>",
+                item,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            seen.add(link)
+            rows.append(
+                {
+                    "title": title,
+                    "link": link,
+                    "announced_date": normalize_date(strip_html_tags(date_match.group("date"))) if date_match else "",
+                    "contact_team": "",
+                }
+            )
+            if len(rows) >= limit:
+                break
+
+    page_count = max(1, min(12, (limit + 7) // 8 + 4))
+    for page_no in range(1, page_count + 1):
+        if len(rows) >= limit:
+            break
+        try:
+            if page_no == 1:
+                page_url = locator
+            else:
+                page_url = urljoin(locator, "/noticeofTender/noticeofTenderList.do") + "?" + urlencode(
+                    {
+                        "pageRows": "8",
+                        "pageUnit": "10",
+                        "totalRows": "",
+                        "currentPageNo": "1",
+                        "boardId": "A02",
+                        "no": "",
+                        "schCategoryId": "",
+                        "schType": "",
+                        "schValue": "",
+                        "status": "",
+                        "pageNo": str(page_no),
+                    }
+                )
+            fetched = fetch_text(page_url, verify_ssl=not allow_insecure_ssl)
+        except Exception as exc:
+            print(f"warning: kfcc_tender_fetch_failed page={page_no} error={exc}")
+            continue
+        add_rows_from_html(str(fetched.get("text") or ""), str(fetched.get("final_url") or page_url))
+
+    list_url = urljoin(locator, "/noticeofTender/noticeofTenderList.do")
+    for term in search_terms:
+        if len(rows) >= limit:
+            break
+        if len(term) < 2:
+            continue
+        try:
+            html_text = fetch_form_text(
+                list_url,
+                {
+                    "pageNo": "1",
+                    "no": "",
+                    "schCategoryId": "",
+                    "schType": "all",
+                    "schValue": term,
+                },
+                locator,
+                allow_insecure_ssl,
+            )
+        except Exception as exc:
+            print(f"warning: kfcc_tender_search_failed term={term} error={exc}")
+            continue
+        add_rows_from_html(html_text, list_url)
+    return rows[:limit]
+
+
 def selected_gp_names(title: str, excerpt: str, aliases: object, existing: str = "") -> str:
     names = [part.strip() for part in re.split(r"[,;]", existing or "") if part.strip()]
     for match in match_gp_entities(title, excerpt, "", aliases):
@@ -1215,7 +1328,7 @@ def load_official_candidates(
     rows: list[dict[str, object]] = []
     for source in sources:
         source_kind = source.get("source_kind", "")
-        if not parse_bool(source.get("is_active", "1")) or source_kind not in {"html_listing", "apfs_board", "kbiz_listing", "ktcu_notice", "cu_notice"}:
+        if not parse_bool(source.get("is_active", "1")) or source_kind not in {"html_listing", "apfs_board", "kbiz_listing", "ktcu_notice", "cu_notice", "kfcc_tender"}:
             continue
         locator = source.get("locator", "")
         if not locator:
@@ -1229,6 +1342,8 @@ def load_official_candidates(
                 links = parse_ktcu_listing(source, limit_per_source, allow_insecure_ssl)
             elif source_kind == "cu_notice":
                 links = parse_cu_listing(source, limit_per_source, allow_insecure_ssl)
+            elif source_kind == "kfcc_tender":
+                links = parse_kfcc_tender_listing(source, limit_per_source, allow_insecure_ssl)
             else:
                 fetched = fetch_text(locator, verify_ssl=not allow_insecure_ssl)
                 links = parse_html_listing(
