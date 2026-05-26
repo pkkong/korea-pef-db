@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import sqlite3
 import subprocess
 import sys
 from datetime import date, datetime, timedelta
@@ -25,10 +26,31 @@ BACKTEST_SOURCE_CODES = [
     "google_pef_deal",
     "google_pef_gp",
     "google_pef_lp",
+    "google_pef_lp_allocator",
+    "google_pef_fundraising",
+    "google_pef_credit",
     "google_pef_portfolio",
     "google_pef_regulation",
+    "google_publisher_thebell",
+    "google_publisher_newstomato_newstof",
+    "google_pef_named_gp_watch",
+    "google_pef_mna_process_watch",
+    "google_lp_people_watch",
 ]
 DISPLAY_SECTION_ORDER = [SECTION_LABELS[section] for section in SECTION_ORDER]
+
+
+def reset_news_tables(db_path: Path) -> None:
+    """Keep reference data from the copied DB, but isolate backtest news runs."""
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        for table in ["news_entity_link", "news_tag", "news_document", "news_run", "news_source"]:
+            conn.execute(f"DELETE FROM {table}")
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def main() -> int:
@@ -57,6 +79,7 @@ def main() -> int:
     raw_dir.mkdir(parents=True, exist_ok=True)
     if args.db_source.exists():
         copy2(args.db_source, db_path)
+        reset_news_tables(db_path)
 
     results: list[dict[str, object]] = []
     current = start_date
@@ -78,6 +101,7 @@ def main() -> int:
             "--out-dir",
             str(export_dir),
             "--google-date-window",
+            "--allow-google-news-redirects",
             "--no-latest",
             "--source-code",
             ",".join(BACKTEST_SOURCE_CODES),

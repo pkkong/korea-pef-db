@@ -22,7 +22,7 @@ DEFAULT_SITE_DIR = DEFAULT_DEPLOY_DIR / "site"
 DEFAULT_DB = REPO_ROOT / "db" / "private_equity.db"
 DEFAULT_ARCHIVE_SEED_URL = os.environ.get(
     "NEWSLETTER_ARCHIVE_SEED_URL",
-    "https://raw.githubusercontent.com/pkkong/kpef-newsletter/main/archive.json",
+    "https://raw.githubusercontent.com/pkkong/kpef-newsletter/gh-pages/archive.json",
 )
 
 KTCU_CODE = "ktcu"

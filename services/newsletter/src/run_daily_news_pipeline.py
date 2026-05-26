@@ -685,6 +685,7 @@ def build_export_rows(
     report_date: str,
     brief_limit: int,
     out_dir: Path,
+    allow_google_news_redirects: bool = False,
 ) -> list[dict[str, object]]:
     candidates = load_run_candidate_rows(conn, run_id, report_date)
     previous_keys = load_previous_export_keys(out_dir, report_date)
@@ -695,7 +696,7 @@ def build_export_rows(
         row["quality_reason"] = quality_reason
         if is_previous_export(row, previous_keys) and str(row.get("review_status", "")) != "force_include":
             continue
-        if should_export_row(row):
+        if should_export_row(row, allow_google_news_redirects=allow_google_news_redirects):
             eligible.append(row)
     eligible.sort(key=quality_sort_key)
     return select_brief_rows(eligible, brief_limit)
@@ -1432,13 +1433,13 @@ def editorial_quality(row: dict[str, object]) -> tuple[float, str]:
     return round(score, 2), "; ".join(reasons)
 
 
-def should_export_row(row: dict[str, object]) -> bool:
+def should_export_row(row: dict[str, object], allow_google_news_redirects: bool = False) -> bool:
     review_status = str(row.get("review_status", ""))
     if review_status == "force_exclude":
         return False
     if review_status == "force_include":
         return True
-    if str(row.get("source_url", "")).startswith("https://news.google.com/"):
+    if str(row.get("source_url", "")).startswith("https://news.google.com/") and not allow_google_news_redirects:
         return False
     return float(row.get("quality_score", 0) or 0) >= EXPORT_MIN_QUALITY_SCORE
 
@@ -1851,6 +1852,7 @@ def main() -> int:
     parser.add_argument("--allow-insecure-ssl", action="store_true", help="Disable TLS certificate verification for public source fetching")
     parser.add_argument("--source-code", default="", help="Comma-separated source_code filter for targeted testing")
     parser.add_argument("--google-date-window", action="store_true", help="Use Google News after/before operators based on --date")
+    parser.add_argument("--allow-google-news-redirects", action="store_true", help="Allow unresolved Google News redirect URLs in exported briefs")
     parser.add_argument("--no-latest", action="store_true", help="Do not update daily_news_*_latest export files")
     parser.add_argument("--gp-worklist-days", type=int, default=7)
     parser.add_argument("--service-integration-out-dir", type=Path, default=DEFAULT_EXPORT_DIR.parent)
@@ -2039,7 +2041,14 @@ def main() -> int:
                 source_stats[source.source_code]["relevant_count"] = int(source_stats[source.source_code]["relevant_count"]) + (1 if is_relevant_now else 0)
 
         conn.commit()
-        rows = build_export_rows(conn, run_id, args.date, args.brief_limit, args.out_dir)
+        rows = build_export_rows(
+            conn,
+            run_id,
+            args.date,
+            args.brief_limit,
+            args.out_dir,
+            allow_google_news_redirects=args.allow_google_news_redirects,
+        )
         review_rows = build_review_rows(conn, run_id, args.date, args.review_limit, rows, args.out_dir)
         markdown_path = args.out_dir / f"daily_news_brief_{args.date.replace('-', '')}.md"
         html_path = args.out_dir / f"daily_news_brief_{args.date.replace('-', '')}.html"
