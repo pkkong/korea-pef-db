@@ -131,8 +131,9 @@ CREATE INDEX IF NOT EXISTS idx_lp_notice_stage ON lp_commitment_notice(notice_st
 CREATE INDEX IF NOT EXISTS idx_lp_notice_event ON lp_commitment_notice(event_type, event_date);
 
 DROP VIEW IF EXISTS v_lp_commitment_notice_public;
+DROP VIEW IF EXISTS v_lp_commitment_notice_enriched;
 
-CREATE VIEW v_lp_commitment_notice_public AS
+CREATE VIEW v_lp_commitment_notice_enriched AS
 SELECT
     lcn.notice_id,
     lcn.lp_code,
@@ -173,6 +174,11 @@ SELECT
 FROM lp_commitment_notice lcn
 LEFT JOIN lp_institution li
     ON li.lp_code = lcn.lp_code;
+
+CREATE VIEW v_lp_commitment_notice_public AS
+SELECT *
+FROM v_lp_commitment_notice_enriched
+WHERE public_visible = 1;
 
 DROP VIEW IF EXISTS v_lp_institution_stats;
 
@@ -251,6 +257,26 @@ LEFT JOIN (
     GROUP BY lp_code
 ) facts
     ON facts.lp_code = li.lp_code;
+
+DROP VIEW IF EXISTS v_lp_profile_peer_compare;
+
+CREATE VIEW v_lp_profile_peer_compare AS
+SELECT
+    lp_code,
+    lp_name,
+    lp_type,
+    ownership_type,
+    default_team,
+    focus_asset_classes,
+    service_priority,
+    notice_count,
+    allocation_amount_krw_100mn,
+    commitment_amount_krw_100mn,
+    latest_event_date,
+    latest_announced_date,
+    fact_count,
+    source_count
+FROM v_lp_profile_summary;
 
 DROP VIEW IF EXISTS v_lp_commitment_yearly_stats;
 
