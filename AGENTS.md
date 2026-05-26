@@ -37,6 +37,6 @@
 ## Project Context
 
 - The newsletter service lives under `services/newsletter/`.
-- Newsletter deployment publishes the generated static site to `pkkong/kpef-newsletter`.
+- Newsletter deployment publishes the generated static site to `pkkong/kpef-newsletter` on the `gh-pages` branch.
 - Local secrets are not committed. The local daily news env file is `config/daily_news.env`; GitHub Actions uses repository secrets.
 - Product and role-specific operating briefs are in `docs/agent_operating_briefs.md`.

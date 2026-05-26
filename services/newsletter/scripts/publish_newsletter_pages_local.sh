@@ -9,7 +9,7 @@ cd "$REPO_ROOT"
 
 REPORT_DATE="${NEWSLETTER_REPORT_DATE:-$(TZ=Asia/Seoul date +%F)}"
 PUBLIC_REPO_URL="${NEWSLETTER_PUBLIC_REPO_URL:-https://github.com/pkkong/kpef-newsletter.git}"
-PUBLIC_BRANCH="${NEWSLETTER_PUBLIC_BRANCH:-main}"
+PUBLIC_BRANCH="${NEWSLETTER_PUBLIC_BRANCH:-gh-pages}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 LIMIT_PER_SOURCE="${NEWSLETTER_LOCAL_LIMIT_PER_SOURCE:-30}"
 BRIEF_LIMIT="${NEWSLETTER_LOCAL_BRIEF_LIMIT:-30}"
@@ -159,7 +159,7 @@ trap 'rm -rf "$TEMP_ROOT"' EXIT
 MIRROR_DIR="$TEMP_ROOT/kpef-newsletter"
 
 git clone --depth 1 --branch "$PUBLIC_BRANCH" "$PUBLIC_REPO_URL" "$MIRROR_DIR"
-find "$MIRROR_DIR" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+find "$MIRROR_DIR" -mindepth 1 -maxdepth 1 ! -name .git ! -name .github -exec rm -rf {} +
 cp -R "$SITE_DIR"/. "$MIRROR_DIR"/
 touch "$MIRROR_DIR/.nojekyll"
 

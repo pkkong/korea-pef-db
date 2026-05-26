@@ -8,7 +8,7 @@ This folder owns the standalone Korea PEF daily newsletter service.
 
 1. 로컬 Mac의 launchd 작업이 매일 실행된다.
 2. Mac이 뉴스 기사를 모으고 뉴스레터용 정적 HTML 파일을 만든다.
-3. 공개해도 되는 HTML/CSS/JS 파일만 public mirror 저장소인 `pkkong/kpef-newsletter`에 올린다.
+3. 공개해도 되는 HTML/CSS/JS 파일만 public mirror 저장소인 `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 올린다.
 4. 사용자는 GitHub Pages 주소 `https://pkkong.github.io/kpef-newsletter/`에서 최신 뉴스레터를 본다.
 5. LP 공고는 Daily 본문이 아니라 `lp-notices.html` 별도 탭/페이지로 분리한다.
 

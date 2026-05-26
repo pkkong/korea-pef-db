@@ -26,6 +26,7 @@ Mac launchd 발행은 GitHub Actions가 실패하거나 수동 복구가 필요�
 
 - 원본 저장소: private repo `pkkong/korea-pef-db`
 - Public mirror repository: `pkkong/kpef-newsletter`
+- Public mirror publish branch: `gh-pages`
 - Public URL: `https://pkkong.github.io/kpef-newsletter/`
 - Primary automation workflow: `.github/workflows/deploy-newsletter-pages.yml`
 - Workflow name: `Deploy newsletter to GitHub Pages`
@@ -42,7 +43,7 @@ GitHub Actions 자동 발행은 다음 순서로 실행된다.
 1. run_daily_news_pipeline.py로 그날의 뉴스 데이터를 만든다.
 2. build_newsletter_deploy.py로 정적 사이트 파일을 만든다.
 3. services/newsletter/deploy/site/ 결과물만 모은다.
-4. NEWSLETTER_PUBLIC_REPO_TOKEN으로 public mirror pkkong/kpef-newsletter에 push한다.
+4. NEWSLETTER_PUBLIC_REPO_TOKEN으로 public mirror pkkong/kpef-newsletter의 `gh-pages` 브랜치에 push한다.
 5. GitHub Pages가 https://pkkong.github.io/kpef-newsletter/ 주소로 보여준다.
 ```
 
@@ -95,7 +96,7 @@ Google/RSS/HTML 소스만으로 빌드한다.
 `pkkong/kpef-newsletter`에 게시할 수 없다.
 
 Public mirror 저장소의 Pages 설정은 `Settings` → `Pages`에서 Source를 `Deploy from a branch`,
-Branch를 `main`, Folder를 `/ (root)`로 둔다.
+Branch를 `gh-pages`, Folder를 `/ (root)`로 둔다.
 
 ## GitHub Actions Readiness Check
 

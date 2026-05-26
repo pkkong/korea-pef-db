@@ -65,7 +65,7 @@
 - 소스 커버리지 감사: `exports/daily_news/newsletter_source_audit_latest.md`, `exports/daily_news/newsletter_source_audit_latest.csv`
 - GP 업데이트 큐: `exports/daily_news/news_gp_update_worklist_latest.csv`, `exports/daily_news/news_gp_update_worklist_YYYYMMDD.csv`
 - 뉴스/People/GP 통합 작업 큐: `exports/service_integration_worklist_latest.csv`, `exports/service_integration_worklist_YYYYMMDD.csv`
-- newsletter public mirror 반영 파일: `services/newsletter/deploy/site/`, public mirror `pkkong/kpef-newsletter`
+- newsletter public mirror 반영 파일: `services/newsletter/deploy/site/`, public mirror `pkkong/kpef-newsletter`의 `gh-pages` 브랜치
 - legacy public 반영 파일: `public/daily-news.html`, `public/index.html`
 - 운영 로그: `exports/daily_news/logs/daily_news_YYYYMMDD_HHMMSS.log`
 
@@ -140,7 +140,7 @@
 4. 통합 작업 큐 생성: 운영자는 `scripts/build_service_integration_worklist.py`로 `exports/service_integration_worklist_latest.csv`를 갱신한다. 이 파일이 뉴스 담당, GP 프로필 담당, People DB 담당의 공통 작업판이다.
 5. People worklist 생성: People 담당은 통합 큐와 기존 People 산출물을 대조해 `exports/people_research_worklist_top50.csv` 또는 입력 CSV 갱신 후보를 만든다.
 6. People DB 반영: People 담당은 `data/people_input.csv`, `data/person_role_input.csv`, `data/person_education_input.csv`를 출처 기반으로 갱신하고 `scripts/import_people_csv.py`, `scripts/export_people_views.py`를 실행한다.
-7. newsletter public mirror 반영: 로컬 Mac 발행 작업은 `services/newsletter/src/build_newsletter_deploy.py`로 `services/newsletter/deploy/site/`를 만들고 `services/newsletter/scripts/publish_newsletter_pages_local.sh`로 public mirror `pkkong/kpef-newsletter`에 push한다.
+7. newsletter public mirror 반영: 로컬 Mac 발행 작업은 `services/newsletter/src/build_newsletter_deploy.py`로 `services/newsletter/deploy/site/`를 만들고 `services/newsletter/scripts/publish_newsletter_pages_local.sh`로 public mirror `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 push한다.
 8. dashboard/public 반영: 운영자는 `scripts/build_dashboard_data.py`, `scripts/build_service_site.py`를 통해 `dashboard/data/dashboard_data.json`, `dashboard/index.html`, `public/index.html`, `public/daily-news.html`을 최신 상태로 만든다.
 9. 상태 점검: `scripts/build_operational_status_report.py`로 `exports/operational_status_latest.md`를 갱신하고, 뉴스와 People의 미처리 `update_action`을 다음날 작업 목록으로 넘긴다.
 

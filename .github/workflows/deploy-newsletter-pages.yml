@@ -20,6 +20,7 @@ concurrency:
 
 env:
   NEWSLETTER_PUBLIC_REPO: pkkong/kpef-newsletter
+  NEWSLETTER_PUBLIC_BRANCH: gh-pages
   NEWSLETTER_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter/
   NEWSLETTER_SOURCE_CODES: >-
     naver_pef_core_samo,naver_pef_core_pef,naver_pef_deal_sale,
@@ -171,7 +172,7 @@ jobs:
           NEWSLETTER_PUBLIC_REPO_TOKEN: ${{ secrets.NEWSLETTER_PUBLIC_REPO_TOKEN }}
         run: |
           publish_dir="$(mktemp -d)"
-          git clone --depth 1 --branch main "https://x-access-token:${NEWSLETTER_PUBLIC_REPO_TOKEN}@github.com/${NEWSLETTER_PUBLIC_REPO}.git" "$publish_dir/site-repo"
+          git clone --depth 1 --branch "${NEWSLETTER_PUBLIC_BRANCH}" "https://x-access-token:${NEWSLETTER_PUBLIC_REPO_TOKEN}@github.com/${NEWSLETTER_PUBLIC_REPO}.git" "$publish_dir/site-repo"
           find "$publish_dir/site-repo" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           cp -R services/newsletter/deploy/site/. "$publish_dir/site-repo"/
           cd "$publish_dir/site-repo"
@@ -184,5 +185,5 @@ jobs:
             exit 0
           fi
           git commit -m "Deploy newsletter ${{ steps.date.outputs.report_date }} from GitHub Actions" >/dev/null
-          git push origin main
+          git push origin "${NEWSLETTER_PUBLIC_BRANCH}"
           echo "Published ${NEWSLETTER_PUBLIC_URL}"
