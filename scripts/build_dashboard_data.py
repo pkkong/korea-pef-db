@@ -474,6 +474,9 @@ def build_payload(
     service_integration_queue = load_news_gp_update_worklist(service_integration_worklist)
     lp_institutions: list[dict[str, object]] = []
     lp_institution_stats: list[dict[str, object]] = []
+    lp_profile_facts: list[dict[str, object]] = []
+    lp_notice_gp_links: list[dict[str, object]] = []
+    lp_notice_news_links: list[dict[str, object]] = []
     lp_commitment_notices: list[dict[str, object]] = []
     lp_commitment_yearly_stats: list[dict[str, object]] = []
     if object_exists(conn, "lp_institution"):
@@ -516,6 +519,67 @@ def build_payload(
                 latest_discovered_at
             FROM v_lp_institution_stats
             ORDER BY service_priority DESC, notice_count DESC, lp_name
+            """,
+        )
+    if object_exists(conn, "lp_profile_fact"):
+        lp_profile_facts = fetch_dicts(
+            conn,
+            """
+            SELECT
+                fact_id,
+                lp_code,
+                section,
+                label,
+                value,
+                as_of_date,
+                source_name,
+                source_url,
+                confidence,
+                notes,
+                sort_order,
+                public_visible,
+                updated_at
+            FROM lp_profile_fact
+            WHERE public_visible = 1
+            ORDER BY lp_code, section, sort_order, label
+            """,
+        )
+    if object_exists(conn, "lp_notice_gp_link"):
+        lp_notice_gp_links = fetch_dicts(
+            conn,
+            """
+            SELECT
+                notice_id,
+                lp_code,
+                source_gp_id,
+                gp_name,
+                matched_alias,
+                link_source,
+                confidence,
+                created_at
+            FROM lp_notice_gp_link
+            ORDER BY lp_code, notice_id, gp_name
+            """,
+        )
+    if object_exists(conn, "lp_notice_news_link"):
+        lp_notice_news_links = fetch_dicts(
+            conn,
+            """
+            SELECT
+                lnnl.notice_id,
+                lnnl.news_id,
+                lnnl.lp_code,
+                nd.publisher,
+                nd.title AS news_title,
+                nd.published_at,
+                nd.source_url,
+                lnnl.link_source,
+                lnnl.confidence,
+                lnnl.created_at
+            FROM lp_notice_news_link lnnl
+            LEFT JOIN news_document nd
+              ON nd.news_id = lnnl.news_id
+            ORDER BY lnnl.lp_code, COALESCE(nd.published_at, nd.discovered_at) DESC, lnnl.notice_id
             """,
         )
     if object_exists(conn, "v_lp_commitment_notice_public"):
@@ -615,6 +679,9 @@ def build_payload(
         "lp_profiles": lp_profiles,
         "lp_institutions": lp_institutions,
         "lp_institution_stats": lp_institution_stats,
+        "lp_profile_facts": lp_profile_facts,
+        "lp_notice_gp_links": lp_notice_gp_links,
+        "lp_notice_news_links": lp_notice_news_links,
         "lp_commitment_notices": lp_commitment_notices,
         "lp_commitment_yearly_stats": lp_commitment_yearly_stats,
         "news_gp_update_queue": news_gp_update_queue,
@@ -657,6 +724,9 @@ def main() -> int:
     print(f"people_education={len(payload['people_education'])}")
     print(f"lp_profiles={len(payload['lp_profiles'])}")
     print(f"lp_institutions={len(payload['lp_institutions'])}")
+    print(f"lp_profile_facts={len(payload['lp_profile_facts'])}")
+    print(f"lp_notice_gp_links={len(payload['lp_notice_gp_links'])}")
+    print(f"lp_notice_news_links={len(payload['lp_notice_news_links'])}")
     print(f"lp_commitment_notices={len(payload['lp_commitment_notices'])}")
     print(f"service_integration_queue={len(payload['service_integration_queue'])}")
     return 0

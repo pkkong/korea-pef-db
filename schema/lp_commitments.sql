@@ -17,6 +17,27 @@ CREATE TABLE IF NOT EXISTS lp_institution (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS lp_profile_fact (
+    fact_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lp_code TEXT NOT NULL,
+    section TEXT NOT NULL,
+    label TEXT NOT NULL,
+    value TEXT NOT NULL,
+    as_of_date TEXT,
+    source_name TEXT,
+    source_url TEXT,
+    confidence TEXT,
+    notes TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    public_visible INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(lp_code, section, label, source_url),
+    FOREIGN KEY (lp_code) REFERENCES lp_institution(lp_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lp_profile_fact_lp ON lp_profile_fact(lp_code, section, sort_order);
+
 CREATE TABLE IF NOT EXISTS lp_commitment_source (
     source_code TEXT PRIMARY KEY,
     lp_code TEXT,
@@ -71,6 +92,38 @@ CREATE TABLE IF NOT EXISTS lp_commitment_notice (
     FOREIGN KEY (lp_code) REFERENCES lp_institution(lp_code),
     FOREIGN KEY (source_code) REFERENCES lp_commitment_source(source_code)
 );
+
+CREATE TABLE IF NOT EXISTS lp_notice_gp_link (
+    notice_id INTEGER NOT NULL,
+    lp_code TEXT,
+    source_gp_id INTEGER NOT NULL,
+    gp_name TEXT NOT NULL,
+    matched_alias TEXT,
+    link_source TEXT NOT NULL DEFAULT 'selected_gp_names',
+    confidence TEXT NOT NULL DEFAULT 'medium',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (notice_id, source_gp_id),
+    FOREIGN KEY (notice_id) REFERENCES lp_commitment_notice(notice_id) ON DELETE CASCADE,
+    FOREIGN KEY (lp_code) REFERENCES lp_institution(lp_code),
+    FOREIGN KEY (source_gp_id) REFERENCES gp_house(gp_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lp_notice_gp_link_lp ON lp_notice_gp_link(lp_code, source_gp_id);
+
+CREATE TABLE IF NOT EXISTS lp_notice_news_link (
+    notice_id INTEGER NOT NULL,
+    news_id INTEGER NOT NULL,
+    lp_code TEXT,
+    link_source TEXT NOT NULL DEFAULT 'url_match',
+    confidence TEXT NOT NULL DEFAULT 'high',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (notice_id, news_id),
+    FOREIGN KEY (notice_id) REFERENCES lp_commitment_notice(notice_id) ON DELETE CASCADE,
+    FOREIGN KEY (news_id) REFERENCES news_document(news_id),
+    FOREIGN KEY (lp_code) REFERENCES lp_institution(lp_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lp_notice_news_link_lp ON lp_notice_news_link(lp_code, news_id);
 
 CREATE INDEX IF NOT EXISTS idx_lp_notice_lp ON lp_commitment_notice(lp_code);
 CREATE INDEX IF NOT EXISTS idx_lp_notice_year ON lp_commitment_notice(notice_year);

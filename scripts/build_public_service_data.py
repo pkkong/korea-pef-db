@@ -35,6 +35,9 @@ PUBLIC_KEYS = [
     "lp_profiles",
     "lp_institutions",
     "lp_institution_stats",
+    "lp_profile_facts",
+    "lp_notice_gp_links",
+    "lp_notice_news_links",
     "lp_commitment_notices",
     "lp_commitment_yearly_stats",
 ]
@@ -112,6 +115,8 @@ LP_NOTICE_KEYS = [
     "title",
     "notice_url",
     "document_url",
+    "attachment_names",
+    "attachment_urls",
     "program_name",
     "round_name",
     "announced_date",
@@ -120,11 +125,59 @@ LP_NOTICE_KEYS = [
     "notice_stage",
     "asset_class",
     "strategy",
+    "program_size_krw_100mn",
     "allocation_amount_krw_100mn",
+    "amount_type",
     "amount_confidence",
+    "commitment_amount_krw_100mn",
     "selected_gp_names",
+    "contact_team",
     "confidence",
+    "confidence_note",
     "public_visible",
+    "raw_excerpt",
+    "discovered_at",
+    "updated_at",
+]
+
+LP_FACT_KEYS = [
+    "fact_id",
+    "lp_code",
+    "section",
+    "label",
+    "value",
+    "as_of_date",
+    "source_name",
+    "source_url",
+    "confidence",
+    "notes",
+    "sort_order",
+    "public_visible",
+    "updated_at",
+]
+
+LP_NOTICE_GP_LINK_KEYS = [
+    "notice_id",
+    "lp_code",
+    "source_gp_id",
+    "gp_name",
+    "matched_alias",
+    "link_source",
+    "confidence",
+    "created_at",
+]
+
+LP_NOTICE_NEWS_LINK_KEYS = [
+    "notice_id",
+    "news_id",
+    "lp_code",
+    "publisher",
+    "news_title",
+    "published_at",
+    "source_url",
+    "link_source",
+    "confidence",
+    "created_at",
 ]
 
 
@@ -154,6 +207,21 @@ def build_payload(data: dict[str, object]) -> dict[str, object]:
         project(row, LP_NOTICE_KEYS)
         for row in data.get("lp_commitment_notices", [])
         if isinstance(row, dict) and str(row.get("public_visible", "1")).strip().lower() not in {"0", "false", "no"}
+    ]
+    payload["lp_profile_facts"] = [
+        project(row, LP_FACT_KEYS)
+        for row in data.get("lp_profile_facts", [])
+        if isinstance(row, dict) and str(row.get("public_visible", "1")).strip().lower() not in {"0", "false", "no"}
+    ]
+    payload["lp_notice_gp_links"] = [
+        project(row, LP_NOTICE_GP_LINK_KEYS)
+        for row in data.get("lp_notice_gp_links", [])
+        if isinstance(row, dict)
+    ]
+    payload["lp_notice_news_links"] = [
+        project(row, LP_NOTICE_NEWS_LINK_KEYS)
+        for row in data.get("lp_notice_news_links", [])
+        if isinstance(row, dict)
     ]
     return payload
 

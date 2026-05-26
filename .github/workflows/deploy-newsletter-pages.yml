@@ -151,6 +151,10 @@ jobs:
               raise SystemExit("index.html was not generated")
           if not (site / "daily-news.html").exists():
               raise SystemExit("daily-news.html was not generated")
+          if not (site / "ktcu.html").exists():
+              raise SystemExit("ktcu.html was not generated")
+          if not (site / "lp-ktcu.html").exists():
+              raise SystemExit("lp-ktcu.html was not generated")
           if not (site / "archive.json").exists():
               raise SystemExit("archive.json was not generated")
           if health["article_count"] <= 0:

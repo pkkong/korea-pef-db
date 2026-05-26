@@ -1,0 +1,26 @@
+lp_code,section,label,value,as_of_date,source_name,source_url,confidence,notes,sort_order,public_visible
+ktcu,general,설립,1971년,,KTCU 인사말,https://www.ktcu.or.kr/IN/IPW-INA-100101,high,공식 인사말 기준,10,1
+ktcu,general,설립 근거,한국교직원공제회법,,KTCU 기관소개,https://www.ktcu.or.kr/IN/IPW-IND-200100,high,공식 기관소개 기준,20,1
+ktcu,general,주무 부처,교육부,,KTCU 기관소개,https://www.ktcu.or.kr/IN/IPW-IND-200100,high,공식 기관소개 기준,30,1
+ktcu,general,본부 소재지,서울시 영등포구 여의나루로 50 The-K한국교직원공제회,,KTCU 기관소개,https://www.ktcu.or.kr/IN/IPW-IND-200100,high,공식 기관소개 기준,40,1
+ktcu,general,회원 수,94만명,,KTCU 인사말,https://www.ktcu.or.kr/IN/IPW-INA-100101,high,공식 인사말 기준,50,1
+ktcu,general,보유 자산,85조원,,KTCU 인사말,https://www.ktcu.or.kr/IN/IPW-INA-100101,high,공식 인사말 기준,60,1
+ktcu,general,주요 기능,급여·대여·복리후생·기금 조성·수익사업,,KTCU 기관소개,https://www.ktcu.or.kr/IN/IPW-IND-200100,high,공식 기관소개 기준,70,1
+ktcu,investment_status,2025년말 보유자산,"85조 8,938억원",2025-12-31,KTCU 자산운용개요,https://www.ktcu.or.kr/comm/getFile?srvcId=GONGSI&upperNo=QxJvTBd2nafjwUzK2ER94w==&fileTy=ATTACH&fileNo=sW069xsGkF_cG0wtJaCXWA==,high,공식 공시보고서 기준,10,1
+ktcu,investment_status,2026년 자산운용 목표,총자산 88.0조원·목표수익률 4.5%,2026,KTCU 자산운용목표 및 자산배분계획,https://www.ktcu.or.kr/comm/getFile?srvcId=GONGSI&upperNo=W7Sxd0F06xpQAZxcaE-_3vg==&fileTy=ATTACH&fileNo=S2_dCpscb6mgOardowp9ww==,high,공식 공시보고서 기준,20,1
+ktcu,investment_status,2025년 투자자산,"73조 2,883억원·대체투자 45조 4,724억원(62.1%)",2025-12-31,KTCU 투자자산 투자 및 수익현황,https://www.ktcu.or.kr/comm/getFile?srvcId=GONGSI&upperNo=yvu7N03YhCjnAQrG2mugAg==&fileTy=ATTACH&fileNo=D5wfgzP7KOkiC45AP_GcfA==,high,공식 공시보고서 기준,30,1
+ktcu,investment_strategy,운용 원칙,수익성과 안정성을 균형 있게 확보,,KTCU 자산운용,https://www.ktcu.or.kr/IN/IPW-INC-600101,high,공식 자산운용 설명 기준,10,1
+ktcu,investment_strategy,주요 투자 영역,"유가증권, 국내 부동산 및 인프라, 해외 대체투자",,KTCU 인사말,https://www.ktcu.or.kr/IN/IPW-INA-100101,high,공식 인사말 기준,20,1
+ktcu,investment_org,기금운용 조직,이사(기금운용) 산하 기금운용전략실·금융투자부·기업투자부·인프라투자부·부동산투자부,,KTCU 조직도,https://www.ktcu.or.kr/IN/IPW-INA-200101,high,공식 조직도 기준,10,1
+ktcu,investment_org,자산운용 전문 부서,기금운용전략실·금융투자부·기업투자부·인프라투자부·부동산투자부,,KTCU 자산운용 조직도,https://www.ktcu.or.kr/IN/IPW-INC-300101,high,공식 자산운용 조직도 설명 기준,20,1
+ktcu,investment_org,PE 관련 핵심 부서,기업투자부,,KTCU 조직도,https://www.ktcu.or.kr/IN/IPW-INA-200101,high,공식 조직도상 기금운용 산하 기업투자부,30,1
+ktcu,investment_org,기업투자1팀,국내·유라시아 PE 및 기업금융 투자·관리,2026-05-26,KTCU 조직도 부서 조회,https://www.ktcu.or.kr/IN/IPW-INA-200101,high,공식 부서 조회 엔드포인트 기준. 이름은 공개되지 않음,40,1
+ktcu,investment_org,기업투자2팀,북미 기업금융 및 국내외 벤처 투자·관리,2026-05-26,KTCU 조직도 부서 조회,https://www.ktcu.or.kr/IN/IPW-INA-200101,high,공식 부서 조회 엔드포인트 기준. 이름은 공개되지 않음,50,1
+ktcu,investment_governance,투자실무협의회,투자심의위원회에 부의하는 신규투자 등에 대한 사전 심의,,KTCU 위원회 현황,https://www.ktcu.or.kr/IN/IPW-INA-300701,high,공식 위원회 설명 기준,10,1
+ktcu,investment_governance,투자심의위원회,신규 대체투자 결정 및 변경에 대한 의사결정,,KTCU 위원회 현황,https://www.ktcu.or.kr/IN/IPW-INA-300701,high,공식 위원회 설명 기준,20,1
+ktcu,investment_governance,투자관리협의회,"금융, 대체, 전략 투자운용 전반에 대한 실무 협의",,KTCU 위원회 현황,https://www.ktcu.or.kr/IN/IPW-INA-300701,high,공식 위원회 설명 기준,30,1
+ktcu,public_people,이사장,정갑윤,,KTCU 인사말,https://www.ktcu.or.kr/IN/IPW-INA-100101,high,공식 인사말 기준,10,1
+ktcu,public_people,기금운용이사/CIO,고재택,2025-02-01,KTCU 임원 관련 현황,https://www.ktcu.or.kr/IN/IPW-IND-300101,high,상임 이사/기금운용이사. 임기 2025-02-01~2028-01-31,20,1
+ktcu,notice_history,2025년 PEF 블라인드 공고,"총 7,000억원 이내·10개사 이내·펀드별 400억~1,000억원",2025-03-21,KTCU 2025 PEF 공고,https://www.ktcu.or.kr/PPW-CSB-000101/57104,high,공식 공고문 기준,10,1
+ktcu,data_gap,기업투자부 실무자명,기업투자1팀·2팀 직급/업무/전화는 공개되지만 실명은 공개되지 않음,2026-05-26,KTCU 조직도 부서 조회,https://www.ktcu.or.kr/IN/IPW-INA-200101,high,실명은 빈 값으로 응답됨. 추정하지 않음,10,1
+ktcu,data_gap,선정 GP 히스토리,현재 자동 수집은 공고 중심이며 최종 선정 GP 정규화는 별도 추출·검증 테이블이 필요,2026-05-26,KTCU 공지사항,https://www.ktcu.or.kr/PPW-CSB-000101,medium,LP-GP 연계의 다음 구현 대상,20,1

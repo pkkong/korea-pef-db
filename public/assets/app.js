@@ -769,6 +769,21 @@ function gpSummary(value) {
   return names.length > 2 ? `${visible} 외 ${names.length - 2}` : visible;
 }
 
+function lpNoticeGpLinks(noticeId) {
+  return (state.data.lp_notice_gp_links || [])
+    .filter((row) => String(row.notice_id) === String(noticeId));
+}
+
+function renderLpGpLinks(row) {
+  const links = lpNoticeGpLinks(row.notice_id);
+  if (links.length) {
+    return links.slice(0, 3).map((link) => `
+      <button class="gp-link lp-gp-link" type="button" data-gp="${escapeAttr(link.gp_name)}">${escapeHtml(link.gp_name)}</button>
+    `).join(" · ") + (links.length > 3 ? ` <span class="subtle">외 ${links.length - 3}</span>` : "");
+  }
+  return escapeHtml(gpSummary(row.selected_gp_names) || "-");
+}
+
 function ownershipLabel(value) {
   return {
     public: "공공",
@@ -782,12 +797,48 @@ function semicolonLabel(value) {
   return values.length ? values.join(" · ") : "-";
 }
 
+function lpFactSectionLabel(value) {
+  return {
+    general: "일반현황",
+    investment_status: "투자현황",
+    investment_strategy: "투자전략",
+    investment_org: "PE 관련 조직",
+    investment_governance: "투자 의사결정",
+    public_people: "공개 인물",
+    notice_history: "출자공고 히스토리",
+    data_gap: "확인 필요"
+  }[value] || value || "기타";
+}
+
+function lpFactSectionRank(value) {
+  return {
+    general: 10,
+    investment_status: 20,
+    investment_strategy: 30,
+    investment_org: 40,
+    investment_governance: 50,
+    public_people: 60,
+    notice_history: 70,
+    data_gap: 90
+  }[value] || 99;
+}
+
 function lpProfiles() {
   if (Array.isArray(state.data.lp_profiles) && state.data.lp_profiles.length) {
     return state.data.lp_profiles;
   }
   const statsByCode = new Map((state.data.lp_institution_stats || []).map((row) => [row.lp_code, row]));
   return (state.data.lp_institutions || []).map((row) => ({ ...row, ...(statsByCode.get(row.lp_code) || {}) }));
+}
+
+function lpProfileFacts(lpCode) {
+  return (state.data.lp_profile_facts || [])
+    .filter((row) => Number(row.public_visible) !== 0 && row.lp_code === lpCode)
+    .sort((a, b) => {
+      const section = lpFactSectionRank(a.section) - lpFactSectionRank(b.section);
+      if (section) return section;
+      return num(a.sort_order) - num(b.sort_order) || String(a.label || "").localeCompare(String(b.label || ""), "ko");
+    });
 }
 
 function selectLp(lpCode) {
@@ -840,6 +891,30 @@ function renderLp() {
     </div>
   ` : `<div class="empty">LP 프로필 데이터가 없습니다.</div>`;
 
+  const facts = selectedLp ? lpProfileFacts(selectedLp.lp_code) : [];
+  const factsBySection = facts.reduce((acc, row) => {
+    const section = row.section || "other";
+    if (!acc.has(section)) acc.set(section, []);
+    acc.get(section).push(row);
+    return acc;
+  }, new Map());
+  byId("lpFactGrid").innerHTML = [...factsBySection.entries()].map(([section, sectionRows]) => `
+    <article class="lp-fact-card">
+      <h3>${escapeHtml(lpFactSectionLabel(section))}</h3>
+      <dl>
+        ${sectionRows.map((row) => `
+          <div>
+            <dt>${escapeHtml(row.label || "-")}</dt>
+            <dd>
+              <span>${escapeHtml(row.value || "-")}</span>
+              ${row.source_url ? `<a href="${escapeAttr(row.source_url)}" target="_blank" rel="noreferrer">${escapeHtml(row.source_name || "출처")}</a>` : ""}
+            </dd>
+          </div>
+        `).join("")}
+      </dl>
+    </article>
+  `).join("") || `<div class="empty">선택 LP의 공개 프로필 팩트가 없습니다.</div>`;
+
   byId("lpInstitutionCards").innerHTML = lpRows.map((row) => `
     <button class="lp-card ${row.lp_code === state.selectedLpCode ? "active" : ""}" type="button" data-lp-code="${escapeAttr(row.lp_code)}">
       <div>
@@ -868,7 +943,8 @@ function renderLp() {
         </span>
         <b>${fmtAmount(row.allocation_amount_krw_100mn)}</b>
       </a>
-      <div class="mobile-card-note">${escapeHtml([row.program_name, row.asset_class, row.strategy, gpSummary(row.selected_gp_names)].filter(Boolean).join(" · ") || row.raw_excerpt || "-")}</div>
+      <div class="mobile-card-note">${escapeHtml([row.program_name, row.asset_class, row.strategy].filter(Boolean).join(" · ") || row.raw_excerpt || "-")}</div>
+      <div class="mobile-card-links">${renderLpGpLinks(row)}</div>
     </article>
   `).join("") || `<div class="empty">검색 결과가 없습니다.</div>`;
 
@@ -879,10 +955,16 @@ function renderLp() {
       <td><span class="status">${lpEventLabel(row.event_type)}</span></td>
       <td>${escapeHtml(row.asset_class || row.strategy || "-")}</td>
       <td class="numeric">${fmtAmount(row.allocation_amount_krw_100mn)}</td>
-      <td>${escapeHtml(gpSummary(row.selected_gp_names) || "-")}</td>
+      <td>${renderLpGpLinks(row)}</td>
       <td>${escapeHtml(fmtDate(row.event_date || row.announced_date || row.notice_year))}</td>
     </tr>
   `).join("") || `<tr><td colspan="7"><div class="empty">검색 결과가 없습니다.</div></td></tr>`;
+  byId("lpNoticeBody").querySelectorAll(".lp-gp-link").forEach((button) => {
+    button.addEventListener("click", () => selectGp(button.dataset.gp));
+  });
+  byId("lpNoticeCards").querySelectorAll(".lp-gp-link").forEach((button) => {
+    button.addEventListener("click", () => selectGp(button.dataset.gp));
+  });
 }
 
 function renderCompare() {

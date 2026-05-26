@@ -121,7 +121,7 @@ from pathlib import Path
 
 report_date = sys.argv[1]
 site = Path("services/newsletter/deploy/site")
-required = ["index.html", "daily-news.html", "archive.json", "health.json", ".nojekyll"]
+required = ["index.html", "daily-news.html", "ktcu.html", "lp-ktcu.html", "archive.json", "health.json", ".nojekyll"]
 missing = [name for name in required if not (site / name).exists()]
 if missing:
     raise SystemExit(f"Missing deploy files: {', '.join(missing)}")

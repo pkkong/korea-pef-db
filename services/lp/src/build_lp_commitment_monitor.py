@@ -41,6 +41,7 @@ from services.newsletter.src.daily_news_common import (
 
 DEFAULT_SCHEMA = REPO_ROOT / "schema" / "lp_commitments.sql"
 DEFAULT_LP_INSTITUTIONS = REPO_ROOT / "data" / "lp_institutions.csv"
+DEFAULT_LP_PROFILE_FACTS = REPO_ROOT / "data" / "lp_profile_facts.csv"
 DEFAULT_LP_SOURCES = REPO_ROOT / "data" / "lp_commitment_sources.csv"
 DEFAULT_OUT_DIR = REPO_ROOT / "exports"
 NEWS_FEED_SOURCE_CODE = "daily_news_lp_feed"
@@ -76,8 +77,8 @@ LP_CONTEXT_TERMS = [
     "우정사업본부",
 ]
 
-COMBINED_AMOUNT_RE = re.compile(r"(?P<jo>\d[\d,]*(?:\.\d+)?)\s*조\s*(?P<eok>\d[\d,]*)?\s*억?", re.IGNORECASE)
-AMOUNT_RE = re.compile(r"(?P<num>\d[\d,]*(?:\.\d+)?)\s*(?P<unit>조\s*원|조원|조|억원|억)", re.IGNORECASE)
+COMBINED_AMOUNT_RE = re.compile(r"\[?(?P<jo>\d[\d,]*(?:\.\d+)?)\]?\s*조(?:\s*\[?(?P<eok>\d[\d,]*)\]?\s*억?|원)?(?![가-힣])", re.IGNORECASE)
+AMOUNT_RE = re.compile(r"\[?(?P<num>\d[\d,]*(?:\.\d+)?)\]?\s*(?P<unit>조\s*원|조원|억원|억|조(?![가-힣]))", re.IGNORECASE)
 DATE_RE = re.compile(r"(?P<year>20\d{2})[.\-/년]\s*(?P<month>\d{1,2})[.\-/월]\s*(?P<day>\d{1,2})")
 FILE_EXT_RE = re.compile(r"\.(pdf|hwp|hwpx|docx?|xlsx?|pptx?|zip)($|[?#&])", re.IGNORECASE)
 MONEY_CONTEXT_WINDOW = 44
@@ -143,6 +144,8 @@ NON_COMMITMENT_NOTICE_TERMS = [
     "논문",
     "투자유치",
     "크라우드펀딩",
+    "부킹 이벤트",
+    "회원 대상",
 ]
 GP_EXCLUSION_NAMES = {
     "국민연금기금",
@@ -283,6 +286,45 @@ def seed_lp_institutions(conn: sqlite3.Connection, path: Path) -> list[dict[str,
                 updated_at = excluded.updated_at
             """,
             [row.get(header, "") for header in headers] + [now_utc_iso()],
+        )
+    conn.commit()
+    return rows
+
+
+def seed_lp_profile_facts(conn: sqlite3.Connection, path: Path) -> list[dict[str, str]]:
+    if not path.exists():
+        return []
+    rows = read_csv_rows(path)
+    headers = [
+        "lp_code",
+        "section",
+        "label",
+        "value",
+        "as_of_date",
+        "source_name",
+        "source_url",
+        "confidence",
+        "notes",
+        "sort_order",
+        "public_visible",
+    ]
+    for row in rows:
+        values = [row.get(header, "") for header in headers]
+        conn.execute(
+            f"""
+            INSERT INTO lp_profile_fact ({", ".join(headers)}, updated_at)
+            VALUES ({", ".join("?" for _ in headers)}, ?)
+            ON CONFLICT(lp_code, section, label, source_url) DO UPDATE SET
+                value = excluded.value,
+                as_of_date = excluded.as_of_date,
+                source_name = excluded.source_name,
+                confidence = excluded.confidence,
+                notes = excluded.notes,
+                sort_order = excluded.sort_order,
+                public_visible = excluded.public_visible,
+                updated_at = excluded.updated_at
+            """,
+            values + [now_utc_iso()],
         )
     conn.commit()
     return rows
@@ -642,7 +684,11 @@ def extract_year(date_value: str, text: str, fallback_year: int) -> int | None:
     normalized = normalize_date(date_value)
     if normalized:
         return int(normalized[:4])
-    years = [int(match) for match in re.findall(r"20\d{2}", text)]
+    years = [
+        year
+        for year in [int(match) for match in re.findall(r"20\d{2}", text)]
+        if 2000 <= year <= fallback_year + 1
+    ]
     if years:
         return max(years)
     return fallback_year
@@ -663,6 +709,7 @@ def extract_announcement_date(text: str) -> str:
     for pattern in [
         r"(?:공고일|게시일|등록일|작성일)[^0-9]{0,20}(20\d{2}[.\-/년]\s*\d{1,2}[.\-/월]\s*\d{1,2})",
         r"(20\d{2}[.\-/년]\s*\d{1,2}[.\-/월]\s*\d{1,2})[^0-9]{0,20}(?:공고|게시|등록)",
+        r"(20\d{2}[.\-/년]\s*\d{1,2}[.\-/월]\s*\d{1,2})[^0-9]{0,20}(?:작성자|조회수)",
     ]:
         match = re.search(pattern, text)
         if match:
@@ -913,6 +960,77 @@ def parse_kbiz_listing(source: dict[str, str], allow_insecure_ssl: bool) -> list
     return rows
 
 
+def parse_ktcu_listing(source: dict[str, str], limit: int, allow_insecure_ssl: bool) -> list[dict[str, str]]:
+    locator = source.get("locator", "")
+    if not locator:
+        return []
+    search_terms = split_semicolon(source.get("must_contain", ""))
+    if not search_terms:
+        search_terms = ["위탁운용", "블라인드", "PEF", "VC", "골프장"]
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    def add_rows_from_html(html_text: str) -> None:
+        for item in re.findall(r"<li\b.*?</li>", html_text, flags=re.IGNORECASE | re.DOTALL):
+            action = re.search(r"fn_view\(['\"](?P<id>\d+)['\"]\)", item, flags=re.IGNORECASE)
+            title_match = re.search(
+                r"<span\b[^>]*class=[\"'][^\"']*tit[^\"']*[\"'][^>]*>.*?<a\b[^>]*>(?P<title>.*?)</a>",
+                item,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            date_matches = re.findall(
+                r"<span\b[^>]*class=[\"']date[\"'][^>]*>(?P<value>.*?)</span>",
+                item,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            if not action or not title_match:
+                continue
+            title = strip_html_tags(title_match.group("title"))
+            if not any(term.lower() in title.lower() for term in search_terms):
+                continue
+            notice_id = action.group("id")
+            link = urljoin(locator, f"/PPW-CSB-000101/{notice_id}")
+            if link in seen:
+                continue
+            seen.add(link)
+            rows.append(
+                {
+                    "title": title,
+                    "link": link,
+                    "announced_date": normalize_date(strip_html_tags(date_matches[0])) if date_matches else "",
+                    "contact_team": "",
+                }
+            )
+
+    try:
+        fetched = fetch_text(locator, verify_ssl=not allow_insecure_ssl)
+        add_rows_from_html(str(fetched.get("text") or ""))
+    except Exception as exc:
+        print(f"warning: ktcu_listing_fetch_failed url={locator} error={exc}")
+
+    for term in search_terms:
+        if len(rows) >= limit:
+            break
+        try:
+            html_text = fetch_form_text(
+                locator,
+                {
+                    "srchCtgry": "",
+                    "curPage": "1",
+                    "srchKey": "all",
+                    "srchText": term,
+                },
+                locator,
+                allow_insecure_ssl,
+            )
+        except Exception as exc:
+            print(f"warning: ktcu_listing_search_failed term={term} error={exc}")
+            continue
+        add_rows_from_html(html_text)
+
+    return rows[:limit]
+
+
 def selected_gp_names(title: str, excerpt: str, aliases: object, existing: str = "") -> str:
     names = [part.strip() for part in re.split(r"[,;]", existing or "") if part.strip()]
     for match in match_gp_entities(title, excerpt, "", aliases):
@@ -1023,7 +1141,7 @@ def load_official_candidates(
     rows: list[dict[str, object]] = []
     for source in sources:
         source_kind = source.get("source_kind", "")
-        if not parse_bool(source.get("is_active", "1")) or source_kind not in {"html_listing", "apfs_board", "kbiz_listing"}:
+        if not parse_bool(source.get("is_active", "1")) or source_kind not in {"html_listing", "apfs_board", "kbiz_listing", "ktcu_notice"}:
             continue
         locator = source.get("locator", "")
         if not locator:
@@ -1033,6 +1151,8 @@ def load_official_candidates(
                 links = parse_apfs_board_listing(source, limit_per_source, allow_insecure_ssl)
             elif source_kind == "kbiz_listing":
                 links = parse_kbiz_listing(source, allow_insecure_ssl)
+            elif source_kind == "ktcu_notice":
+                links = parse_ktcu_listing(source, limit_per_source, allow_insecure_ssl)
             else:
                 fetched = fetch_text(locator, verify_ssl=not allow_insecure_ssl)
                 links = parse_html_listing(
@@ -1291,6 +1411,75 @@ def clear_auto_candidates(conn: sqlite3.Connection) -> int:
     return int(cursor.rowcount or 0)
 
 
+def refresh_notice_links(conn: sqlite3.Connection, gp_aliases: object) -> tuple[int, int]:
+    conn.execute("DELETE FROM lp_notice_gp_link")
+    conn.execute("DELETE FROM lp_notice_news_link")
+
+    alias_by_name: dict[str, object] = {}
+    for alias in gp_aliases:
+        for value in [getattr(alias, "alias_name", ""), getattr(alias, "canonical_name", "")]:
+            key = normalize_whitespace(str(value or "")).lower()
+            if key and key not in alias_by_name:
+                alias_by_name[key] = alias
+
+    gp_links = 0
+    for notice_id, lp_code, selected_names in conn.execute(
+        """
+        SELECT notice_id, lp_code, selected_gp_names
+        FROM lp_commitment_notice
+        WHERE public_visible = 1
+          AND COALESCE(selected_gp_names, '') <> ''
+        """
+    ):
+        for name in split_semicolon(str(selected_names or "")):
+            alias = alias_by_name.get(normalize_whitespace(name).lower())
+            if alias is None:
+                continue
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO lp_notice_gp_link (
+                    notice_id, lp_code, source_gp_id, gp_name, matched_alias, link_source, confidence
+                )
+                VALUES (?, ?, ?, ?, ?, 'selected_gp_names', 'medium')
+                """,
+                (
+                    notice_id,
+                    lp_code,
+                    getattr(alias, "gp_id"),
+                    getattr(alias, "canonical_name"),
+                    getattr(alias, "alias_name"),
+                ),
+            )
+            gp_links += 1
+
+    news_links = 0
+    if table_exists(conn, "news_document"):
+        cursor = conn.execute(
+            """
+            SELECT lcn.notice_id, nd.news_id, lcn.lp_code
+            FROM lp_commitment_notice lcn
+            JOIN news_document nd
+              ON nd.normalized_source_url = lcn.normalized_notice_url
+            WHERE lcn.source_type = 'news'
+              AND lcn.public_visible = 1
+            """
+        )
+        for notice_id, news_id, lp_code in cursor.fetchall():
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO lp_notice_news_link (
+                    notice_id, news_id, lp_code, link_source, confidence
+                )
+                VALUES (?, ?, ?, 'url_match', 'high')
+                """,
+                (notice_id, news_id, lp_code),
+            )
+            news_links += 1
+
+    conn.commit()
+    return gp_links, news_links
+
+
 def export_monitor(conn: sqlite3.Connection, out_dir: Path, report_date: str) -> tuple[Path, Path, int]:
     cursor = conn.execute(
         """
@@ -1360,6 +1549,7 @@ def build(
     db_path: Path,
     schema_path: Path,
     institutions_path: Path,
+    profile_facts_path: Path,
     sources_path: Path,
     out_dir: Path,
     report_date: str,
@@ -1373,6 +1563,7 @@ def build(
     try:
         apply_schema(conn, schema_path)
         lp_rows = seed_lp_institutions(conn, institutions_path)
+        profile_fact_rows = seed_lp_profile_facts(conn, profile_facts_path)
         source_rows = seed_lp_sources(conn, sources_path)
         report_date = report_date or latest_report_date(conn)
         fallback_year = int(report_date[:4])
@@ -1391,17 +1582,21 @@ def build(
         candidates = dedupe_candidates(official_rows + news_rows)
         cleared = clear_auto_candidates(conn)
         upserted = upsert_notices(conn, candidates)
+        gp_links, news_links = refresh_notice_links(conn, gp_aliases)
         dated_path, latest_path, exported = export_monitor(conn, out_dir, report_date)
     finally:
         conn.close()
     return {
         "report_date": report_date,
         "lp_institutions": len(lp_rows),
+        "lp_profile_facts": len(profile_fact_rows),
         "lp_sources": len(source_rows) + 1,
         "official_candidates": len(official_rows),
         "news_candidates": len(news_rows),
         "cleared_auto_candidates": cleared,
         "upserted": upserted,
+        "gp_links": gp_links,
+        "news_links": news_links,
         "exported": exported,
         "dated_export": str(dated_path),
         "latest_export": str(latest_path),
@@ -1413,6 +1608,7 @@ def main() -> int:
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument("--schema", type=Path, default=DEFAULT_SCHEMA)
     parser.add_argument("--lp-institutions", type=Path, default=DEFAULT_LP_INSTITUTIONS)
+    parser.add_argument("--lp-profile-facts", type=Path, default=DEFAULT_LP_PROFILE_FACTS)
     parser.add_argument("--lp-sources", type=Path, default=DEFAULT_LP_SOURCES)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--date", default="")
@@ -1427,6 +1623,7 @@ def main() -> int:
         args.db,
         args.schema,
         args.lp_institutions,
+        args.lp_profile_facts,
         args.lp_sources,
         args.out_dir,
         args.date,
