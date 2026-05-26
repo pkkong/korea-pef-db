@@ -440,8 +440,6 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
     asset_mix_rows = render_ktcu_asset_mix(notices)
     general_rows = render_ktcu_fact_list(facts_in_section(facts, "general"))
     status_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_status"))
-    strategy_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_strategy"))
-    governance_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_governance"))
 
     asset = fact_value(facts, "2025년말 보유자산", fact_value(facts, "보유 자산"))
     alternatives = fact_value(facts, "2025년 투자자산")
@@ -617,15 +615,6 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
             <div class="ktcu-org-node"><span>기업투자2팀</span><strong>{html_escape(team_two)}</strong></div>
           </div>
         </div>
-      </section>
-
-      <section class="ktcu-panel">
-        <h2>투자전략과 의사결정</h2>
-        <p>운용 원칙과 투자 의사결정 기구를 분리해서 봅니다.</p>
-        <dl class="ktcu-facts">
-{strategy_rows}
-{governance_rows}
-        </dl>
       </section>
 
       <section class="ktcu-panel">
