@@ -32,11 +32,20 @@ LP_PROFILE_ALIASES = {
     "ktcu": ("ktcu.html",),
 }
 LP_PROFILE_SHORT_LABELS = {
+    "nps": "국민연금",
+    "kvic": "벤처투자",
+    "kgrowth": "성장금융",
+    "kafi": "농금원",
+    "kdb": "산은",
+    "koreapost": "우본",
+    "poba": "지방행공",
     "ktcu": "교공",
     "pmaa": "경공",
     "cu": "신협",
     "kfcc": "새마을금고",
     "kexim": "수은",
+    "kbiz": "중기중앙",
+    "ibk": "IBK",
 }
 KTCU_FACT_SECTION_LABELS = {
     "general": "일반현황",
@@ -222,6 +231,7 @@ def read_lp_profile_codes(db_path: Path = DEFAULT_DB) -> list[str]:
                 SELECT lp_code
                 FROM v_lp_profile_summary
                 WHERE fact_count > 0
+                   OR notice_count > 0
                 ORDER BY service_priority DESC, lp_name
                 """,
             )
@@ -403,17 +413,24 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
                 """
                 SELECT
                     notice_id,
+                    source_type,
+                    source_code,
                     event_date,
                     title,
                     notice_url,
                     document_url,
+                    announced_date,
                     application_deadline,
                     notice_year,
+                    event_type,
                     asset_class,
                     strategy,
                     allocation_amount_krw_100mn,
+                    amount_confidence,
                     selected_gp_names,
-                    confidence
+                    confidence,
+                    confidence_note,
+                    raw_excerpt
                 FROM v_lp_commitment_notice_public
                 WHERE lp_code = ?
                   AND public_visible = 1
@@ -471,9 +488,71 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
             if db_object_exists(conn, peer_source)
             else []
         )
+
+        gp_links = (
+            fetch_dicts(
+                conn,
+                """
+                SELECT
+                    lgl.notice_id,
+                    lgl.lp_code,
+                    lgl.source_gp_id,
+                    lgl.gp_name,
+                    lgl.matched_alias,
+                    lgl.confidence,
+                    lcn.event_type,
+                    lcn.source_type,
+                    lcn.event_date,
+                    lcn.title AS notice_title
+                FROM lp_notice_gp_link lgl
+                LEFT JOIN lp_commitment_notice lcn
+                  ON lcn.notice_id = lgl.notice_id
+                WHERE lgl.lp_code = ?
+                  AND COALESCE(lcn.public_visible, 1) = 1
+                ORDER BY
+                    CASE lgl.confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+                    COALESCE(lcn.event_date, lcn.announced_date, lcn.discovered_at) DESC,
+                    lgl.gp_name
+                LIMIT 16
+                """,
+                (lp_code,),
+            )
+            if db_object_exists(conn, "lp_notice_gp_link") and db_object_exists(conn, "lp_commitment_notice")
+            else []
+        )
+
+        related_news = (
+            fetch_dicts(
+                conn,
+                """
+                SELECT
+                    lnnl.notice_id,
+                    nd.news_id,
+                    nd.publisher,
+                    nd.title AS news_title,
+                    nd.source_url,
+                    nd.published_at,
+                    nd.discovered_at,
+                    lnnl.link_source,
+                    lnnl.confidence
+                FROM lp_notice_news_link lnnl
+                JOIN news_document nd
+                  ON nd.news_id = lnnl.news_id
+                JOIN lp_commitment_notice lcn
+                  ON lcn.notice_id = lnnl.notice_id
+                WHERE lnnl.lp_code = ?
+                  AND lcn.public_visible = 1
+                ORDER BY COALESCE(nd.published_at, nd.discovered_at) DESC, nd.news_id DESC
+                LIMIT 12
+                """,
+                (lp_code,),
+            )
+            if db_object_exists(conn, "lp_notice_news_link") and db_object_exists(conn, "news_document")
+            else []
+        )
     finally:
         conn.close()
-    return {"profile": profile, "facts": facts, "notices": notices, "yearly": yearly, "peers": peers}
+    return {"profile": profile, "facts": facts, "notices": notices, "yearly": yearly, "peers": peers, "gp_links": gp_links, "news": related_news}
 
 
 def render_ktcu_fact_section(section: str, rows: list[dict[str, object]]) -> str:
@@ -542,7 +621,7 @@ def render_ktcu_fact_list(rows: list[dict[str, object]]) -> str:
         source_url = str(row.get("source_url") or "")
         source_name = str(row.get("source_name") or "")
         as_of = str(row.get("as_of_date") or "")
-        confidence = str(row.get("confidence") or "")
+        confidence = confidence_label(row.get("confidence"))
         meta_parts = [part for part in [source_name, as_of, confidence] if part]
         meta = " · ".join(meta_parts)
         source_html = (
@@ -557,6 +636,14 @@ def render_ktcu_fact_list(rows: list[dict[str, object]]) -> str:
           </div>"""
         )
     return "\n".join(rendered)
+
+
+def confidence_label(value: object) -> str:
+    return {
+        "high": "공식 확인",
+        "medium": "보조 출처",
+        "low": "검증 필요",
+    }.get(str(value or ""), "")
 
 
 def render_ktcu_source_links(facts: list[dict[str, object]]) -> str:
@@ -623,7 +710,15 @@ def render_asset_chips(value: object) -> str:
 def render_lp_peer_rows(peers: list[dict[str, object]], active_code: str) -> str:
     if not peers:
         return """          <p class="ktcu-empty-note">비교할 LP 프로필이 아직 없습니다.</p>"""
-    rows: list[str] = []
+    rows: list[str] = [
+        """          <div class="ktcu-peer-row ktcu-peer-head">
+            <strong>LP</strong>
+            <span>유형</span>
+            <span>공고</span>
+            <span>규모</span>
+            <span>팩트/출처</span>
+          </div>"""
+    ]
     ordered_peers = sorted(
         peers,
         key=lambda row: (
@@ -637,19 +732,20 @@ def render_lp_peer_rows(peers: list[dict[str, object]], active_code: str) -> str
         active_class = " active" if lp_code == active_code else ""
         latest = str(row.get("latest_event_date") or "-")
         amount = public_amount_label(row.get("allocation_amount_krw_100mn"), fallback="-")
+        coverage = f"{int(row.get('fact_count') or 0)}/{int(row.get('source_count') or 0)}"
         rows.append(
             f"""          <a class="ktcu-peer-row{active_class}" href="lp-{html_escape(lp_code)}.html">
             <strong>{html_escape(str(row.get("lp_name") or lp_code))}</strong>
-            <span>{html_escape(str(row.get("lp_type") or "LP"))}</span>
-            <span>{html_escape(str(row.get("notice_count") or 0))}건</span>
-            <span>{html_escape(amount)}</span>
-            <span>{html_escape(latest)}</span>
+            <span data-label="유형">{html_escape(str(row.get("lp_type") or "LP"))}</span>
+            <span data-label="공고">{html_escape(str(row.get("notice_count") or 0))}건</span>
+            <span data-label="규모" title="최신 공고일 {html_escape(latest)}">{html_escape(amount)}</span>
+            <span data-label="팩트/출처">{html_escape(coverage)}</span>
           </a>"""
         )
     return "\n".join(rows)
 
 
-def render_profile_timeline(facts: list[dict[str, object]], notices: list[dict[str, object]], limit: int = 8) -> str:
+def render_profile_timeline(facts: list[dict[str, object]], notices: list[dict[str, object]], limit: int = 12) -> str:
     events: list[dict[str, str]] = []
     for notice in notices:
         amount = public_amount_label(notice.get("allocation_amount_krw_100mn"), fallback="")
@@ -665,7 +761,9 @@ def render_profile_timeline(facts: list[dict[str, object]], notices: list[dict[s
         events.append(
             {
                 "date": str(notice.get("event_date") or ""),
-                "tag": "공식 공고",
+                "tag": "뉴스 신호" if str(notice.get("source_type") or "") == "news" else "공식 공고",
+                "kind": str(notice.get("source_type") or "official"),
+                "asset": str(notice.get("asset_class") or ""),
                 "title": str(notice.get("title") or "공고"),
                 "detail": detail or "공식 공고",
                 "url": str(notice.get("notice_url") or ""),
@@ -679,6 +777,8 @@ def render_profile_timeline(facts: list[dict[str, object]], notices: list[dict[s
             {
                 "date": str(fact.get("as_of_date") or ""),
                 "tag": KTCU_FACT_SECTION_LABELS.get(section, "이벤트"),
+                "kind": section,
+                "asset": "",
                 "title": str(fact.get("label") or "이벤트"),
                 "detail": str(fact.get("value") or ""),
                 "url": str(fact.get("source_url") or ""),
@@ -692,8 +792,9 @@ def render_profile_timeline(facts: list[dict[str, object]], notices: list[dict[s
         title = html_escape(event.get("title") or "-")
         url = event.get("url") or ""
         title_html = f'<a href="{html_escape(url)}" target="_blank" rel="noreferrer">{title}</a>' if url else title
+        year = (event.get("date") or "")[:4]
         rows.append(
-            f"""          <article class="ktcu-timeline-item">
+            f"""          <article class="ktcu-timeline-item" data-kind="{html_escape(event.get("kind") or "")}" data-year="{html_escape(year)}" data-asset="{html_escape(event.get("asset") or "")}">
             <div>
               <time>{html_escape(event.get("date") or "-")}</time>
               <span>{html_escape(event.get("tag") or "이벤트")}</span>
@@ -705,8 +806,12 @@ def render_profile_timeline(facts: list[dict[str, object]], notices: list[dict[s
     return "\n".join(rows)
 
 
-def render_related_gp_signals(notices: list[dict[str, object]]) -> str:
+def render_related_gp_signals(notices: list[dict[str, object]], gp_links: list[dict[str, object]] | None = None) -> str:
     names: list[str] = []
+    for link in gp_links or []:
+        name = str(link.get("gp_name") or "").strip()
+        if name and name not in names:
+            names.append(name)
     for notice in notices:
         for name in re.split(r"[,;]", str(notice.get("selected_gp_names") or "")):
             clean_name = name.strip()
@@ -717,14 +822,34 @@ def render_related_gp_signals(notices: list[dict[str, object]]) -> str:
     return "\n".join(f"          <span>{html_escape(name)}</span>" for name in names[:10])
 
 
+def render_related_news_rows(news_rows: list[dict[str, object]]) -> str:
+    if not news_rows:
+        return """          <p class="ktcu-empty-note">뉴스레터와 직접 연결된 뉴스는 아직 없습니다.</p>"""
+    rows: list[str] = []
+    for row in news_rows:
+        title = html_escape(str(row.get("news_title") or "관련 뉴스"))
+        url = str(row.get("source_url") or "")
+        title_html = f'<a href="{html_escape(url)}" target="_blank" rel="noreferrer">{title}</a>' if url else title
+        rows.append(
+            f"""          <article class="ktcu-news-row">
+            <span>{html_escape(str(row.get("publisher") or "뉴스"))} · {html_escape(str(row.get("published_at") or row.get("discovered_at") or "")[:10])}</span>
+            <h3>{title_html}</h3>
+          </article>"""
+        )
+    return "\n".join(rows)
+
+
 def render_data_coverage(profile: dict[str, object], facts: list[dict[str, object]], notices: list[dict[str, object]]) -> str:
     fact_count = int(profile.get("fact_count") or len(facts) or 0)
     source_count = int(profile.get("source_count") or len({str(fact.get("source_url") or "") for fact in facts if fact.get("source_url")}) or 0)
     high_confidence = len([fact for fact in facts if str(fact.get("confidence") or "") == "high"])
+    medium_confidence = len([fact for fact in facts if str(fact.get("confidence") or "") == "medium"])
+    official_count = len([notice for notice in notices if str(notice.get("source_type") or "") == "official"])
+    news_count = len([notice for notice in notices if str(notice.get("source_type") or "") == "news"])
     return f"""          <div><span>프로필 팩트</span><strong>{fact_count}개</strong></div>
           <div><span>공개 출처</span><strong>{source_count}개</strong></div>
-          <div><span>공식 공고</span><strong>{len(notices)}건</strong></div>
-          <div><span>공식 확인</span><strong>{high_confidence}개</strong></div>"""
+          <div><span>공식/뉴스</span><strong>{official_count}/{news_count}건</strong></div>
+          <div><span>확인 수준</span><strong>{high_confidence}/{medium_confidence}</strong></div>"""
 
 
 def ktcu_year_amount(notices: list[dict[str, object]], year: int) -> float:
@@ -741,8 +866,12 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     notices = payload.get("notices") if isinstance(payload.get("notices"), list) else []
     yearly = payload.get("yearly") if isinstance(payload.get("yearly"), list) else []
     peers = payload.get("peers") if isinstance(payload.get("peers"), list) else []
+    gp_links = payload.get("gp_links") if isinstance(payload.get("gp_links"), list) else []
+    related_news = payload.get("news") if isinstance(payload.get("news"), list) else []
+    official_notices = [notice for notice in notices if str(notice.get("source_type") or "official") == "official"]
+    news_notices = [notice for notice in notices if str(notice.get("source_type") or "") == "news"]
 
-    notice_rows = "\n".join(render_ktcu_notice_row(row) for row in notices) or (
+    notice_rows = "\n".join(render_ktcu_notice_row(row) for row in official_notices) or (
         """        <p class="ktcu-empty-note">아직 공개 페이지에 표시할 공식 출자공고가 없습니다.</p>"""
     )
     max_yearly = max([float(row.get("allocation_amount_krw_100mn") or 0) for row in yearly] or [0])
@@ -750,7 +879,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
         """        <p class="ktcu-empty-note">연도별 공고 규모는 공고 데이터가 쌓이면 표시됩니다.</p>"""
     )
     source_rows = render_ktcu_source_links(facts) or "          <li>공개 출처가 아직 정리되지 않았습니다.</li>"
-    asset_mix_rows = render_ktcu_asset_mix(notices) or (
+    asset_mix_rows = render_ktcu_asset_mix(official_notices) or (
         """          <p class="ktcu-empty-note">자산군별 출자 패턴은 공식 공고가 추가되면 표시됩니다.</p>"""
     )
     general_rows = render_ktcu_fact_list(facts_in_section(facts, "general")) or (
@@ -795,13 +924,13 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
         focus_label,
     )
     investment_kpi = compact_alternative_amount(investment_status, focus_label)
-    notice_count = str(profile.get("notice_count") or len(notices))
+    notice_count = str(len(official_notices))
     total_amount = public_amount_label(profile.get("allocation_amount_krw_100mn"))
     latest = str(profile.get("latest_event_date") or "")
     highlight_year = int((latest or report_date)[:4])
-    highlight_count = len([notice for notice in notices if str(notice.get("event_date") or "").startswith(str(highlight_year))])
-    highlight_amount = public_amount_label(ktcu_year_amount(notices, highlight_year))
-    highlight_rows = render_ktcu_annual_highlights(notices, highlight_year) or (
+    highlight_count = len([notice for notice in official_notices if str(notice.get("event_date") or "").startswith(str(highlight_year))])
+    highlight_amount = public_amount_label(ktcu_year_amount(official_notices, highlight_year))
+    highlight_rows = render_ktcu_annual_highlights(official_notices, highlight_year) or (
         f"""          <p class="ktcu-empty-note">{highlight_year}년 공식 공고가 아직 정리되지 않았습니다.</p>"""
     )
     activity_phrase = (
@@ -812,9 +941,11 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     nav_html = render_lp_profile_nav(nav_items or [], lp_code)
     timeline_rows = render_profile_timeline(facts, notices)
     peer_rows = render_lp_peer_rows(peers, lp_code)
-    gp_signal_rows = render_related_gp_signals(notices)
+    gp_signal_rows = render_related_gp_signals(notices, gp_links)
+    related_news_rows = render_related_news_rows(related_news)
     data_coverage_rows = render_data_coverage(profile, facts, notices)
     asset_chips = render_asset_chips(profile.get("focus_asset_classes"))
+    news_signal_count = len(news_notices) + len(related_news)
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -846,6 +977,9 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-kpi strong {{ display: block; margin-top: 5px; color: var(--text); font-size: 22px; line-height: 1.15; overflow-wrap: anywhere; }}
     .ktcu-tabbar {{ display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }}
     .ktcu-tabbar a {{ border: 1px solid var(--separator); border-radius: 999px; padding: 7px 10px; background: #fff; color: var(--secondary); text-decoration: none; font-size: 12px; font-weight: 800; }}
+    .ktcu-profile-toolbar {{ display: grid; gap: 8px; margin-top: 10px; }}
+    .ktcu-profile-toolbar input {{ width: 100%; min-height: 40px; border: 1px solid var(--separator); border-radius: 8px; padding: 8px 11px; background: #fff; color: var(--text); font-size: 13px; }}
+    .ktcu-profile-toolbar p {{ margin: 0; color: var(--secondary); font-size: 12px; line-height: 1.45; }}
     .ktcu-intel-grid {{ display: grid; gap: 10px; margin-top: 10px; }}
     .ktcu-coverage {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
     .ktcu-coverage div {{ min-width: 0; border: 1px solid var(--separator); border-radius: 8px; padding: 10px; background: #fbfcfd; }}
@@ -897,6 +1031,12 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-timeline-item h3 {{ margin: 0; font-size: 14px; line-height: 1.4; }}
     .ktcu-timeline-item h3 a {{ color: var(--text); text-decoration: none; }}
     .ktcu-timeline-item p {{ margin: 0; color: var(--secondary); font-size: 12.5px; line-height: 1.45; }}
+    .ktcu-news-list {{ display: grid; gap: 9px; }}
+    .ktcu-news-row {{ border-top: 1px solid var(--separator); padding-top: 9px; }}
+    .ktcu-news-row:first-child {{ border-top: 0; padding-top: 0; }}
+    .ktcu-news-row span {{ color: var(--secondary); font-size: 11.5px; font-weight: 800; }}
+    .ktcu-news-row h3 {{ margin: 4px 0 0; color: var(--text); font-size: 13.5px; line-height: 1.4; }}
+    .ktcu-news-row a {{ color: inherit; text-decoration: none; }}
     .ktcu-notices {{ display: grid; gap: 8px; }}
     .ktcu-notice {{ display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; border-top: 1px solid var(--separator); padding-top: 10px; }}
     .ktcu-notice:first-child {{ border-top: 0; padding-top: 0; }}
@@ -919,6 +1059,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-evidence a {{ color: var(--secondary); font-size: 12px; text-decoration: none; }}
     .ktcu-peer-table {{ display: grid; gap: 7px; }}
     .ktcu-peer-row {{ display: grid; grid-template-columns: minmax(112px, 1.2fr) minmax(78px, 0.9fr) 44px 68px 74px; gap: 8px; align-items: center; border: 1px solid var(--separator); border-radius: 8px; padding: 9px; background: #fff; color: var(--text); text-decoration: none; font-size: 12px; }}
+    .ktcu-peer-head {{ background: #f7fafb; color: var(--secondary); font-weight: 800; }}
     .ktcu-peer-row.active {{ border-color: #1f6b63; background: #f0faf7; }}
     .ktcu-peer-row strong {{ min-width: 0; overflow-wrap: anywhere; font-size: 13px; }}
     .ktcu-peer-row span {{ min-width: 0; color: var(--secondary); overflow-wrap: anywhere; }}
@@ -934,8 +1075,11 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       .ktcu-lower {{ grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr); }}
     }}
     @media (max-width: 620px) {{
+      .ktcu-nav span, .ktcu-tabbar {{ flex-wrap: nowrap; overflow-x: auto; padding-bottom: 3px; }}
+      .ktcu-nav a, .ktcu-tabbar a {{ flex: 0 0 auto; }}
       .ktcu-peer-row {{ grid-template-columns: minmax(0, 1fr) 44px 64px; }}
       .ktcu-peer-row span:nth-of-type(1), .ktcu-peer-row span:nth-of-type(4) {{ display: none; }}
+      .ktcu-peer-head {{ display: none; }}
     }}
   </style>
 </head>
@@ -967,6 +1111,10 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
             <a href="#peers">Peers</a>
             <a href="#sources">Sources</a>
           </nav>
+          <div class="ktcu-profile-toolbar">
+            <input type="search" id="lpProfileSearch" placeholder="이 LP 페이지에서 공고, 뉴스, GP, 출처 검색">
+            <p>공식 공고 {html_escape(str(len(official_notices)))}건 · 뉴스 신호 {html_escape(str(news_signal_count))}건 · 공개 팩트 {html_escape(str(len(facts)))}개</p>
+          </div>
         </div>
         <div class="ktcu-kpis">
           <div class="ktcu-kpi"><span>{html_escape(asset_kpi_label)}</span><strong>{html_escape(asset)}</strong></div>
@@ -1071,6 +1219,13 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
 {gp_signal_rows}
         </div>
       </section>
+      <section class="ktcu-panel">
+        <h2>관련 뉴스</h2>
+        <p>뉴스레터 DB와 LP 이벤트가 직접 연결된 기사입니다.</p>
+        <div class="ktcu-news-list">
+{related_news_rows}
+        </div>
+      </section>
     </section>
 
     <section class="ktcu-panel ktcu-highlight-panel" id="peers" aria-label="LP 피어 비교">
@@ -1104,6 +1259,20 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
 
     <p class="ktcu-footer">기준일 {html_escape(report_date)} · 최신 공고일 {html_escape(latest or "-")} · 공개자료로 확인되지 않는 실무자명과 최종 선정 GP 히스토리는 추정하지 않습니다.</p>
   </main>
+  <script>
+    (() => {{
+      const input = document.getElementById("lpProfileSearch");
+      if (!input) return;
+      const targets = Array.from(document.querySelectorAll(".ktcu-panel, .ktcu-timeline-item, .ktcu-notice, .ktcu-peer-row:not(.ktcu-peer-head), .ktcu-news-row, .ktcu-gp-tags span"));
+      input.addEventListener("input", () => {{
+        const query = input.value.trim().toLowerCase();
+        targets.forEach((node) => {{
+          const visible = !query || node.innerText.toLowerCase().includes(query);
+          node.style.display = visible ? "" : "none";
+        }});
+      }});
+    }})();
+  </script>
 </body>
 </html>
 """
@@ -1150,8 +1319,14 @@ def render_lp_notices_page(report_date: str, notices: list[dict[str, object]], n
   <title>Korea PEF Intelligence LP Notices</title>
   <link rel="stylesheet" href="assets/service.css">
   <style>
+    body.lp-notices-page .content-area {{ display: block; width: min(1180px, calc(100% - 28px)); margin: 0 auto; }}
     .lp-profile-nav {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }}
     .lp-profile-nav a {{ display: inline-flex; min-height: 32px; align-items: center; border-radius: 999px; padding: 6px 10px; background: var(--surface-muted); color: var(--text); font-size: 12px; font-weight: 750; text-decoration: none; }}
+    .lp-notice-toolbar {{ display: grid; gap: 9px; margin-bottom: 12px; }}
+    .lp-notice-toolbar input {{ width: 100%; min-height: 42px; border: 1px solid var(--separator); border-radius: 8px; padding: 8px 11px; background: var(--surface); color: var(--text); font-size: 14px; }}
+    .lp-filter-row {{ display: flex; flex-wrap: wrap; gap: 7px; }}
+    .lp-filter-row button {{ border: 1px solid var(--separator); border-radius: 999px; padding: 7px 10px; background: var(--surface); color: var(--secondary); font-size: 12px; font-weight: 800; cursor: pointer; }}
+    .lp-filter-row button.active {{ border-color: #1f6b63; background: #e7f4f1; color: #164c46; }}
     .lp-page-list {{ display: grid; gap: 10px; }}
     .lp-page-card {{ display: grid; gap: 8px; padding: 14px; border: 1px solid var(--separator); border-radius: 14px; background: var(--surface); }}
     .lp-page-card h2 {{ margin: 0; font-size: 15px; line-height: 1.38; }}
@@ -1161,9 +1336,14 @@ def render_lp_notices_page(report_date: str, notices: list[dict[str, object]], n
     .lp-page-actions {{ display: flex; flex-wrap: wrap; gap: 8px; }}
     .lp-page-actions a {{ display: inline-flex; min-height: 32px; align-items: center; border-radius: 999px; padding: 6px 10px; background: var(--surface-muted); color: var(--text); font-size: 12px; font-weight: 650; text-decoration: none; }}
     @media (min-width: 960px) {{ .lp-page-list {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
+    @media (max-width: 620px) {{
+      .lp-profile-nav {{ flex-wrap: nowrap; overflow-x: auto; padding-bottom: 3px; }}
+      .lp-profile-nav a {{ flex: 0 0 auto; }}
+      .lp-page-card h2 {{ overflow-wrap: anywhere; }}
+    }}
   </style>
 </head>
-<body>
+<body class="lp-notices-page">
   <div class="app-shell newsletter-only">
     <header class="app-header">
       <div class="header-topline">
@@ -1183,6 +1363,16 @@ def render_lp_notices_page(report_date: str, notices: list[dict[str, object]], n
         {nav_html}
       </nav>
       <section class="section-block" aria-label="LP 공식 공고">
+        <div class="lp-notice-toolbar">
+          <input type="search" id="lpNoticeSearch" placeholder="LP, 자산군, 공고명, GP 검색">
+          <div class="lp-filter-row" aria-label="LP 공고 필터">
+            <button class="active" type="button" data-filter="all">전체</button>
+            <button type="button" data-filter="PEF">PEF</button>
+            <button type="button" data-filter="VC">VC</button>
+            <button type="button" data-filter="new_notice">신규</button>
+            <button type="button" data-filter="final_selection">선정</button>
+          </div>
+        </div>
         <div class="lp-page-list">
 {notice_cards}
         </div>
@@ -1204,6 +1394,31 @@ def render_lp_notices_page(report_date: str, notices: list[dict[str, object]], n
       </a>
     </nav>
   </div>
+  <script>
+    (() => {{
+      const input = document.getElementById("lpNoticeSearch");
+      const buttons = Array.from(document.querySelectorAll("[data-filter]"));
+      const cards = Array.from(document.querySelectorAll(".lp-page-card"));
+      let active = "all";
+      const apply = () => {{
+        const query = (input?.value || "").trim().toLowerCase();
+        cards.forEach((card) => {{
+          const haystack = (card.dataset.search || card.innerText).toLowerCase();
+          const filterHit = active === "all" || [card.dataset.asset, card.dataset.event, card.dataset.lp].includes(active);
+          const queryHit = !query || haystack.includes(query);
+          card.style.display = filterHit && queryHit ? "" : "none";
+        }});
+      }};
+      input?.addEventListener("input", apply);
+      buttons.forEach((button) => {{
+        button.addEventListener("click", () => {{
+          active = button.dataset.filter || "all";
+          buttons.forEach((item) => item.classList.toggle("active", item === button));
+          apply();
+        }});
+      }});
+    }})();
+  </script>
 </body>
 </html>
 """
@@ -1237,7 +1452,17 @@ def render_lp_notice_card(item: dict[str, object]) -> str:
         if url
         else html_escape(title)
     )
-    return f"""          <article class="lp-page-card">
+    search_blob = " ".join(
+        str(value or "")
+        for value in [
+            title,
+            item.get("lpName"),
+            item.get("assetClass"),
+            item.get("eventType"),
+            item.get("selectedGpNames"),
+        ]
+    )
+    return f"""          <article class="lp-page-card" data-search="{html_escape(search_blob)}" data-lp="{html_escape(str(item.get("lpCode") or ""))}" data-asset="{html_escape(str(item.get("assetClass") or ""))}" data-event="{html_escape(str(item.get("eventType") or ""))}" data-deadline="{html_escape(str(item.get("applicationDeadline") or ""))}">
             <h2>{linked_title}</h2>
             <div class="lp-page-meta">{meta}</div>
             <div class="lp-page-actions">{official_link}{document_link}</div>

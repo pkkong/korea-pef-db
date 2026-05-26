@@ -43,6 +43,7 @@ DEFAULT_SCHEMA = REPO_ROOT / "schema" / "lp_commitments.sql"
 DEFAULT_LP_INSTITUTIONS = REPO_ROOT / "data" / "lp_institutions.csv"
 DEFAULT_LP_PROFILE_FACTS = REPO_ROOT / "data" / "lp_profile_facts.csv"
 DEFAULT_LP_SOURCES = REPO_ROOT / "data" / "lp_commitment_sources.csv"
+DEFAULT_LP_REVIEWED_EVENTS = REPO_ROOT / "data" / "lp_reviewed_events.csv"
 DEFAULT_OUT_DIR = REPO_ROOT / "exports"
 NEWS_FEED_SOURCE_CODE = "daily_news_lp_feed"
 
@@ -1375,6 +1376,8 @@ def load_official_candidates(
             lp_code = infer_lp_code(title, lp_aliases, source.get("lp_code", "")) or infer_lp_code(text, lp_aliases, source.get("lp_code", ""))
             announced_date = link.get("announced_date", "")
             contact_team = link.get("contact_team", "")
+            stage_for_gp = infer_stage(f"{title} {detail_text}")
+            gp_text = detail_text[:3000] if stage_for_gp in {"selection_result", "shortlist"} else ""
             rows.append(
                 make_notice_row(
                     lp_code=lp_code,
@@ -1386,7 +1389,7 @@ def load_official_candidates(
                     fallback_year=fallback_year,
                     report_date=report_date,
                     text=text,
-                    gp_names=selected_gp_names(title, "", gp_aliases),
+                    gp_names=selected_gp_names(title, gp_text, gp_aliases),
                     raw_excerpt=f"{source.get('source_name', '')} 목록에서 발견",
                     contact_team=contact_team,
                     document_url=primary_document_url(attachments),
@@ -1469,6 +1472,91 @@ def load_news_candidates(
                 raw_excerpt=excerpt[:500],
             )
         )
+    return rows
+
+
+def csv_float(value: object) -> float | None:
+    text = str(value or "").replace(",", "").strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def load_reviewed_candidates(
+    path: Path,
+    fallback_year: int,
+    report_date: str,
+) -> list[dict[str, object]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, object]] = []
+    for item in read_csv_rows(path):
+        lp_code = item.get("lp_code", "")
+        notice_url = item.get("notice_url", "")
+        title = item.get("title", "")
+        if not lp_code or not notice_url or not title:
+            continue
+        selected_gp_names = item.get("selected_gp_names", "")
+        raw_excerpt = item.get("raw_excerpt", "")
+        text = " ".join(
+            part
+            for part in [
+                title,
+                item.get("program_name", ""),
+                item.get("asset_class", ""),
+                item.get("strategy", ""),
+                item.get("text", ""),
+                raw_excerpt,
+                selected_gp_names,
+                item.get("allocation_amount_krw_100mn", ""),
+            ]
+            if part
+        )
+        row = make_notice_row(
+            lp_code=lp_code,
+            source_code=item.get("source_code", "") or NEWS_FEED_SOURCE_CODE,
+            source_type=item.get("source_type", "") or "news",
+            notice_url=notice_url,
+            title=title,
+            announced_date=item.get("announced_date", ""),
+            fallback_year=fallback_year,
+            report_date=report_date,
+            text=text,
+            gp_names=selected_gp_names,
+            raw_excerpt=raw_excerpt,
+            document_url=item.get("document_url", ""),
+            attachment_names=item.get("attachment_names", ""),
+            attachment_urls=item.get("attachment_urls", ""),
+        )
+        for key in [
+            "event_type",
+            "event_date",
+            "program_name",
+            "round_name",
+            "notice_stage",
+            "asset_class",
+            "strategy",
+            "amount_type",
+            "amount_confidence",
+            "contact_team",
+            "confidence",
+            "confidence_note",
+            "monitor_status",
+        ]:
+            if item.get(key, ""):
+                row[key] = item[key]
+        for key in ["program_size_krw_100mn", "allocation_amount_krw_100mn", "commitment_amount_krw_100mn"]:
+            parsed = csv_float(item.get(key, ""))
+            if parsed is not None:
+                row[key] = parsed
+        if item.get("public_visible", "") != "":
+            row["public_visible"] = 1 if parse_bool(item.get("public_visible", "1")) else 0
+        if item.get("selected_gp_names", ""):
+            row["selected_gp_names"] = item["selected_gp_names"]
+        rows.append(row)
     return rows
 
 
@@ -1614,9 +1702,9 @@ def refresh_notice_links(conn: sqlite3.Connection, gp_aliases: object) -> tuple[
                 alias_by_name[key] = alias
 
     gp_links = 0
-    for notice_id, lp_code, selected_names in conn.execute(
+    for notice_id, lp_code, selected_names, source_type, event_type in conn.execute(
         """
-        SELECT notice_id, lp_code, selected_gp_names
+        SELECT notice_id, lp_code, selected_gp_names, source_type, event_type
         FROM lp_commitment_notice
         WHERE public_visible = 1
           AND COALESCE(selected_gp_names, '') <> ''
@@ -1626,12 +1714,13 @@ def refresh_notice_links(conn: sqlite3.Connection, gp_aliases: object) -> tuple[
             alias = alias_by_name.get(normalize_whitespace(name).lower())
             if alias is None:
                 continue
+            link_confidence = "high" if source_type == "official" and event_type in {"final_selection", "shortlist"} else "medium" if event_type in {"final_selection", "shortlist"} else "low"
             conn.execute(
                 """
                 INSERT OR IGNORE INTO lp_notice_gp_link (
                     notice_id, lp_code, source_gp_id, gp_name, matched_alias, link_source, confidence
                 )
-                VALUES (?, ?, ?, ?, ?, 'selected_gp_names', 'medium')
+                VALUES (?, ?, ?, ?, ?, 'selected_gp_names', ?)
                 """,
                 (
                     notice_id,
@@ -1639,6 +1728,7 @@ def refresh_notice_links(conn: sqlite3.Connection, gp_aliases: object) -> tuple[
                     getattr(alias, "gp_id"),
                     getattr(alias, "canonical_name"),
                     getattr(alias, "alias_name"),
+                    link_confidence,
                 ),
             )
             gp_links += 1
@@ -1742,6 +1832,7 @@ def build(
     institutions_path: Path,
     profile_facts_path: Path,
     sources_path: Path,
+    reviewed_events_path: Path,
     out_dir: Path,
     report_date: str,
     days: int,
@@ -1770,7 +1861,8 @@ def build(
             gp_aliases,
         )
         news_rows = load_news_candidates(conn, lp_aliases, fallback_year, report_date, days, gp_aliases)
-        candidates = dedupe_candidates(official_rows + news_rows)
+        reviewed_rows = load_reviewed_candidates(reviewed_events_path, fallback_year, report_date)
+        candidates = dedupe_candidates(official_rows + news_rows + reviewed_rows)
         cleared = clear_auto_candidates(conn)
         upserted = upsert_notices(conn, candidates)
         gp_links, news_links = refresh_notice_links(conn, gp_aliases)
@@ -1784,6 +1876,7 @@ def build(
         "lp_sources": len(source_rows) + 1,
         "official_candidates": len(official_rows),
         "news_candidates": len(news_rows),
+        "reviewed_candidates": len(reviewed_rows),
         "cleared_auto_candidates": cleared,
         "upserted": upserted,
         "gp_links": gp_links,
@@ -1801,6 +1894,7 @@ def main() -> int:
     parser.add_argument("--lp-institutions", type=Path, default=DEFAULT_LP_INSTITUTIONS)
     parser.add_argument("--lp-profile-facts", type=Path, default=DEFAULT_LP_PROFILE_FACTS)
     parser.add_argument("--lp-sources", type=Path, default=DEFAULT_LP_SOURCES)
+    parser.add_argument("--lp-reviewed-events", type=Path, default=DEFAULT_LP_REVIEWED_EVENTS)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--date", default="")
     parser.add_argument("--days", type=int, default=180)
@@ -1816,6 +1910,7 @@ def main() -> int:
         args.lp_institutions,
         args.lp_profile_facts,
         args.lp_sources,
+        args.lp_reviewed_events,
         args.out_dir,
         args.date,
         args.days,

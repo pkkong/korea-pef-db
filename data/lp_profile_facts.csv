@@ -22,6 +22,8 @@ ktcu,investment_governance,투자관리협의회,"금융, 대체, 전략 투자�
 ktcu,public_people,이사장,정갑윤,,KTCU 인사말,https://www.ktcu.or.kr/IN/IPW-INA-100101,high,공식 인사말 기준,10,1
 ktcu,public_people,기금운용이사/CIO,고재택,2025-02-01,KTCU 임원 관련 현황,https://www.ktcu.or.kr/IN/IPW-IND-300101,high,상임 이사/기금운용이사. 임기 2025-02-01~2028-01-31,20,1
 ktcu,notice_history,2025년 PEF 블라인드 공고,"총 7,000억원 이내·10개사 이내·펀드별 400억~1,000억원",2025-03-21,KTCU 2025 PEF 공고,https://www.ktcu.or.kr/PPW-CSB-000101/57104,high,공식 공고문 기준,10,1
+ktcu,notice_history,2025년 VC 블라인드 공고,"총 1,520억원 이내·10개사 이내",2025-05-09,KTCU 2025 VC 공고,https://www.ktcu.or.kr/PPW-CSB-000101/57425,high,공식 공고문 기준,20,1
+ktcu,notice_history,2025년 권역별 골프장 투자사업,"5,000억원 내외·부동산 펀드·1개 운용사",2025-07-02,KTCU 골프장 투자사업 공고,https://www.ktcu.or.kr/PPW-CSB-000101/57882,high,공식 공고문 기준,30,1
 ktcu,data_gap,기업투자부 실무자명,기업투자1팀·2팀 직급/업무/전화는 공개되지만 실명은 공개되지 않음,2026-05-26,KTCU 조직도 부서 조회,https://www.ktcu.or.kr/IN/IPW-INA-200101,high,실명은 빈 값으로 응답됨. 추정하지 않음,10,1
 ktcu,data_gap,선정 GP 히스토리,최종 선정 GP 히스토리는 공식 공고와 별도 자료를 대조해 추가 검증 필요,2026-05-26,KTCU 공지사항,https://www.ktcu.or.kr/PPW-CSB-000101,medium,LP-GP 연계의 다음 구현 대상,20,1
 pmaa,general,설립 목적,경찰공무원의 생활안정과 복지 증진,,경찰공제회 설립목적 및 연혁,https://www.pmaa.or.kr/www/1461128128029/content.do,high,공식 설립목적 기준,10,1
@@ -31,7 +33,11 @@ pmaa,general,회원 수,"135,869명",2025-12-31,경찰공제회 회원현황,htt
 pmaa,general,2025년말 총자산,"7조 6,243억원",2025-12-31,경찰공제회 기금현황,https://www.pmaa.or.kr/www/1461131080634/content.do,high,공식 경영공시 기준,50,1
 pmaa,investment_status,2025년 투자자산,"6조 8,242억원·대체투자 3조 4,771억원(51.0%)",2025-12-31,경찰공제회 투자현황,https://www.pmaa.or.kr/www/1461131407276/content.do,high,공식 자산운용현황 기준,10,1
 pmaa,investment_status,2026년 자산운용 목표,"투자자산 6조 3,787억원·목표수익률 5.0%·지급준비율 110.0%",2026,경찰공제회 자산운용 계획,https://www.pmaa.or.kr/www/1715236510528/content.do,high,공식 자산운용 계획 기준,20,1
+pmaa,investment_strategy,운용 원칙,안정성·수익성·유동성을 고려해 심의 절차 후 투자,,경찰공제회 자산운용 원칙,https://www.pmaa.or.kr/www/1461131355094/content.do,high,공식 자산운용 설명 기준,10,1
 pmaa,investment_org,PE 관련 핵심 부서,대체투자본부 기업투자팀: 국내외 PEF·PDF·VC 담당,2026-05-26,경찰공제회 조직도,https://www.pmaa.or.kr/www/1461128249370/orgcht.do,high,공식 조직도 기준,10,1
+pmaa,investment_governance,자산운용위원회,투자정책 방향·중장기 자산운용계획·전략적 자산배분 검토,,경찰공제회 자산운용위원회,https://www.pmaa.or.kr/www/1461131386517/content.do,high,공식 위원회 설명 기준,10,1
+pmaa,investment_governance,대체투자실무협의회,신규 대체투자의 안정성·수익성·위험성 사전 검토,,경찰공제회 자산운용위원회,https://www.pmaa.or.kr/www/1461131386517/content.do,high,공식 위원회 설명 기준,20,1
+pmaa,public_people,금융이사/CIO,공석,2026-05-26,경찰공제회 임원현황,https://www.pmaa.or.kr/www/1474439236504/content.do,high,공식 임원현황 기준,10,1
 pmaa,notice_history,2026년 국내 PE·VC 위탁운용사 선정,"총 1,800억원: PE 1,200억원(3개사)·VC 600억원(3개사)",2026-01-12,경찰공제회 입찰공고,https://www.pmaa.or.kr/www/1461128463820/bbs.do?bbs_idx=38984&recruitCd=&type=view,high,공식 공고 기준,10,1
 pmaa,data_gap,공개자료 한계,공식 페이지는 총량·대분류·공고 중심이며 선정 GP와 개별 펀드 성과 히스토리는 별도 검증 필요,2026-05-26,경찰공제회 입찰공고,https://www.pmaa.or.kr/www/1461128463820/bbs.do,medium,LP-GP 연계의 다음 구현 대상,10,1
 cu,general,회원조합,866개 조합,2024-12-31,신협중앙회 조직구성,https://cu.co.kr/cu/cm/cntnts/cntntsView.do?cntntsId=1009&mi=100026,high,공식 조직구성 기준,10,1
@@ -39,22 +45,27 @@ cu,general,주요 기능,지도·검사·교육·홍보 지원 및 공제업무,
 cu,general,자금운용 역할,조합 여유자금을 예탁받아 대출과 자금운용 시장에 참여,,신협중앙회 조직구성,https://cu.co.kr/cu/cm/cntnts/cntntsView.do?cntntsId=1009&mi=100026,high,공식 조직구성 기준,30,1
 cu,general,본부 소재지,대전광역시 서구 한밭대로 745,,신협중앙회 조직구성,https://cu.co.kr/cu/cm/cntnts/cntntsView.do?cntntsId=1009&mi=100026,high,공식 홈페이지 푸터 기준,40,1
 cu,investment_status,자금운용 역할,조합 여유자금 예탁·대출·자금운용 시장 참여,,신협중앙회 조직구성,https://cu.co.kr/cu/cm/cntnts/cntntsView.do?cntntsId=1009&mi=100026,high,공식 조직구성 기준,10,1
+cu,investment_status,2025년 VC 블라인드,"3개사·펀드당 200억원 이내·최소 결성규모 400억원 이상",2025-02-03,신협중앙회 2025 VC 공고,https://cu.co.kr/cu/na/ntt/selectNttInfo.do?nttSn=111261&mi=100007,high,공식 공고문 기준,20,1
+cu,investment_status,2025년 소형 PE 블라인드,"펀드당 300억원 이내·최소 결성규모 2,000억원 이상·AUM 2,000억 초과~8,000억원 이하",2025-06-09,신협중앙회 소형 PE PDF,https://cu.co.kr/upload/cu/na/bbs_1020/ntt_111581/img_e75d0c23-ab80-4640-bb8d-870a269fa30b1749631042594.pdf,high,공식 첨부 기준,30,1
+cu,investment_status,2025년 중형 PE 블라인드,"펀드당 500억원 이내·최소 결성규모 3,500억원 이상·AUM 8,000억 초과~20,000억원 이하",2025-07-14,신협중앙회 중형 PE PDF,https://cu.co.kr/upload/cu/na/bbs_1020/ntt_111681/img_a22ec225-2f86-4237-9acc-b970779303ce1753932413076.pdf,high,공식 첨부 기준,40,1
 cu,investment_org,핵심 의사결정 축,사업대표이사 산하 자금기획본부·유가증권운용본부·투자금융본부,2026-03-16,신협중앙회 조직구성,https://cu.co.kr/cu/cm/cntnts/cntntsView.do?cntntsId=1009&mi=100026,high,공식 조직도 기준,10,1
 cu,investment_org,투자금융본부,부동산금융팀·기업인프라금융팀·연계대출1팀·연계대출2팀,2026-03-16,신협중앙회 조직구성,https://cu.co.kr/cu/cm/cntnts/cntntsView.do?cntntsId=1009&mi=100026,high,공식 조직도 기준,20,1
 cu,investment_org,리스크관리부문,리스크전략팀·리스크관리팀·투자감리팀,2026-03-16,신협중앙회 조직구성,https://cu.co.kr/cu/cm/cntnts/cntntsView.do?cntntsId=1009&mi=100026,high,공식 조직도 기준,30,1
+cu,investment_governance,선정 절차,공고·접수→정량·정성평가→구술평가→우선협상대상운용사→실사→최종선정,2025-07-14,신협중앙회 중형 PE PDF,https://cu.co.kr/upload/cu/na/bbs_1020/ntt_111681/img_a22ec225-2f86-4237-9acc-b970779303ce1753932413076.pdf,high,공식 첨부 기준,10,1
 cu,notice_history,2025년 국내 VC 블라인드 공고,국내 VC 블라인드펀드 선정 공고,2025-02-03,신협중앙회 공지사항,https://cu.co.kr/cu/na/ntt/selectNttInfo.do?nttSn=111261&mi=100007,high,공식 공고 기준,10,1
 cu,notice_history,2025년 국내 기업형 블라인드 공고,소형PE·중형PE 위탁운용사 선정 공고,2025-07-14,신협중앙회 공지사항,https://cu.co.kr/cu/na/ntt/selectNttInfo.do?nttSn=111681&mi=100007,high,공식 공고 기준,20,1
 cu,data_gap,공개자료 한계,공식 조직도와 공고는 확인되나 자금운용 AUM·대체투자 잔액·선정 GP 히스토리는 별도 검증 필요,2026-05-26,신협중앙회 공지사항,https://cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007,medium,LP-GP 연계의 다음 구현 대상,10,1
 kfcc,general,설립 목적,새마을금고 경영 지원·감독과 공동이익 추구,,새마을금고중앙회 주요업무,https://www.kfcc.co.kr/cc/kfccMainRoles.do,high,공식 주요업무 기준,10,1
-kfcc,general,자산·거래자,"자산 약 280조원·거래자수 2,355만명",,새마을금고 Company Brief,https://www.kfcc.co.kr/cc/companyBrief.do,medium,공식 Company Brief 기준,20,1
+kfcc,general,자산·거래자,"자산 약 280조원·거래자수 2,355만명",,새마을금고 Company Brief,https://www.kfcc.co.kr/cc/companyBrief.do,high,공식 Company Brief 기준,20,1
 kfcc,general,금고 수,"1,300여개",,새마을금고 Company Brief,https://www.kfcc.co.kr/cc/companyBrief.do,medium,공식 Company Brief 기준,30,1
 kfcc,general,본부 소재지,서울특별시 강남구 봉은사로 114길 20,,새마을금고중앙회 위치안내,https://www.kfcc.co.kr/federation/fed0701.do,high,공식 위치안내 기준,40,1
 kfcc,general,조직 네트워크,본부와 전국 13개 지역본부 운영,,새마을금고중앙회 주요업무,https://www.kfcc.co.kr/cc/kfccMainRoles.do,high,공식 주요업무 기준,50,1
 kfcc,general,대표전화,02-2145-9114,,새마을금고중앙회 위치안내,https://www.kfcc.co.kr/federation/fed0701.do,high,공식 위치안내 기준,60,1
 kfcc,investment_status,중앙은행 역할,새마을금고 운용자금 조절과 안정적 자금 운용 지원,,새마을금고중앙회 주요업무,https://www.kfcc.co.kr/cc/kfccMainRoles.do,high,공식 주요업무 기준,10,1
 kfcc,investment_status,주요 금융 기능,신용사업·공제사업·예금자보호준비금 관리,,새마을금고중앙회 주요업무,https://www.kfcc.co.kr/cc/kfccMainRoles.do,high,공식 주요업무 기준,20,1
+kfcc,investment_status,신용사업 역할,안정적 자금 운용과 자금 수급조절을 위해 여·수신업무 수행,,새마을금고중앙회 신용사업,https://www.kfcc.co.kr/business/creditBusiness.do,high,공식 사업 설명 기준,30,1
 kfcc,investment_org,핵심 의사결정 축,신용공제대표이사 산하 자금운용부문(CIO)·대체운용본부,2026-05-26,새마을금고중앙회 조직현황,https://www.kfcc.co.kr/cc/organizationChart.do,high,공식 조직도 기준,10,1
-kfcc,investment_org,대체운용본부,투자관리부·부동산금융부·기업금융부·인프라금융부,2026-05-26,새마을금고중앙회 조직현황,https://www.kfcc.co.kr/cc/organizationChart.do,high,공식 조직도 기준,20,1
+kfcc,investment_org,대체운용본부,프로젝트운용부·기업운용부,2026-05-26,새마을금고중앙회 조직현황,https://www.kfcc.co.kr/cc/organizationChart.do,high,공식 조직도 기준,20,1
 kfcc,notice_history,2025년 PE·VC 위탁운용사 선정,"PEF·VC 대상 총 4,400억원 출자 계획 보도",2025-06-26,인베스트조선,https://www.investchosun.com/site/data/html_dir/2025/06/26/2025062680181.html,medium,뉴스 보도 기준으로 공식 선정 자료와 대조 필요,10,1
 kfcc,data_gap,공개자료 한계,공식 입찰공고는 일반 조달 공고와 투자 공고가 섞여 있어 PE/VC 공고만 선별 확인 필요,2026-05-26,새마을금고중앙회 입찰공고,https://www.kfcc.co.kr/noticeofTender/noticeofTenderList.do,medium,공식 공고 전용 필터 보강 대상,10,1
 kexim,general,기관 성격,수출입·해외투자 활동을 지원하는 정책금융기관,,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,high,공식 홈페이지 주요 서비스 기준,10,1
@@ -64,5 +75,7 @@ kexim,investment_status,주요 지원 프로그램,첨단전략산업·초대형
 kexim,investment_status,공급망안정화기금,공급망 안정화를 위한 핵심 산업 지원,,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,high,공식 홈페이지 공급망안정화기금 설명 기준,20,1
 kexim,investment_org,핵심 창구,공급망안정화기금과 기업금융 관련 조직·공고를 우선 추적,2026-05-26,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,medium,공식 조직도 세부 부서 연결은 추가 확인 대상,10,1
 kexim,notice_history,공급망안정화기금 공고,공식 홈페이지 공지사항에서 공급망안정화기금 관련 공고 확인,2026-05-26,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,medium,정책펀드성 공고와 순수 출자공고를 분리 관리해야 함,10,1
+kexim,notice_history,2026년 핵심광물·에너지 공급망안정화 펀드 선정,비엔더블유인베스트먼트·한국투자프라이빗에쿼티 각 500억원,2026-01-09,딜사이트,https://dealsite.co.kr/articles/154841,medium,뉴스 기반 선정 결과. 공식 공고 URL과 첨부파일 추가 확보 필요,20,1
 kexim,recent_news,2026년 상반기 핵심광물·에너지 공급망안정화 펀드,"출자 1,000억원·비엔더블유인베스트먼트 500억원·한국투자프라이빗에쿼티 500억원 선정 보도",2026-01-09,딜사이트,https://dealsite.co.kr/articles/154841,medium,뉴스 기반 선정 결과. 공식 공고 URL과 첨부파일 추가 확보 필요,10,1
+kexim,recent_news,2026년 지역주도성장 펀드 GP 선정,"총 2,500억원 출자·6개 GP·자펀드 1조2,500억원 목표",2026-04-10,딜사이트,https://dealsite.co.kr/articles/160028,medium,뉴스 기반 선정 결과. 정책금융형 펀드로 순수 LP 출자와 구분 관리,20,1
 kexim,data_gap,공개자료 한계,순수 LP 성격의 PE/VC 출자공고와 정책금융 프로그램 공고를 분리해서 축적 필요,2026-05-26,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,medium,정책금융형 LP 정규화의 다음 구현 대상,10,1
