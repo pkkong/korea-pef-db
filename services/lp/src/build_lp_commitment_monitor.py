@@ -479,6 +479,8 @@ def infer_event_type(text: str, stage: str, deadline: str, report_date: str) -> 
 
 def infer_asset_class(text: str) -> str:
     value = text.lower()
+    if ("pe" in value or "pef" in value or "사모펀드" in value) and ("vc" in value or "벤처" in value):
+        return "PEF/VC"
     if any(term in value for term in ["프라이빗크레딧", "private credit", "사모대출", "인수금융", "메자닌", "pc펀드"]):
         return "Private Credit"
     if any(term in value for term in ["벤처", "vc", "모태펀드", "한국벤처투자"]):
@@ -1031,6 +1033,78 @@ def parse_ktcu_listing(source: dict[str, str], limit: int, allow_insecure_ssl: b
     return rows[:limit]
 
 
+def parse_cu_listing(source: dict[str, str], limit: int, allow_insecure_ssl: bool) -> list[dict[str, str]]:
+    locator = source.get("locator", "")
+    if not locator:
+        return []
+    parsed = urlparse(locator)
+    query = parse_qs(parsed.query)
+    mi = query.get("mi", ["100007"])[0]
+    bbs_id = query.get("bbsId", ["1020"])[0]
+    list_url = urljoin(locator, "/cu/na/ntt/selectNttList.do")
+    search_terms = split_semicolon(source.get("must_contain", ""))
+    if not search_terms:
+        search_terms = ["블라인드", "위탁운용", "PE", "VC"]
+
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    def add_rows_from_html(html_text: str) -> None:
+        for row_html in re.findall(r"<tr\b.*?</tr>", html_text, flags=re.IGNORECASE | re.DOTALL):
+            anchor = re.search(
+                r"<a\b[^>]*href=[\"'](?P<href>[^\"']*selectNttInfo\.do[^\"']*)[\"'][^>]*>(?P<title>.*?)</a>",
+                row_html,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            if not anchor:
+                continue
+            title = normalize_whitespace(strip_html_tags(anchor.group("title")))
+            if not title:
+                continue
+            link = urljoin(locator, anchor.group("href").replace("&amp;", "&"))
+            if link in seen:
+                continue
+            date_match = re.search(
+                r"<td\b[^>]*data-table=[\"']date[\"'][^>]*>(?P<date>.*?)</td>",
+                row_html,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            seen.add(link)
+            rows.append(
+                {
+                    "title": title,
+                    "link": link,
+                    "announced_date": normalize_date(strip_html_tags(date_match.group("date"))) if date_match else "",
+                    "contact_team": "",
+                }
+            )
+
+    for term in search_terms:
+        if len(rows) >= limit:
+            break
+        try:
+            html_text = fetch_form_text(
+                list_url,
+                {
+                    "mi": mi,
+                    "bbsId": bbs_id,
+                    "nttSn": "",
+                    "currPage": "1",
+                    "listCo": str(max(10, min(limit, 50))),
+                    "searchType": "all",
+                    "searchValue": term,
+                },
+                locator,
+                allow_insecure_ssl,
+            )
+        except Exception as exc:
+            print(f"warning: cu_listing_search_failed term={term} error={exc}")
+            continue
+        add_rows_from_html(html_text)
+
+    return rows[:limit]
+
+
 def selected_gp_names(title: str, excerpt: str, aliases: object, existing: str = "") -> str:
     names = [part.strip() for part in re.split(r"[,;]", existing or "") if part.strip()]
     for match in match_gp_entities(title, excerpt, "", aliases):
@@ -1141,7 +1215,7 @@ def load_official_candidates(
     rows: list[dict[str, object]] = []
     for source in sources:
         source_kind = source.get("source_kind", "")
-        if not parse_bool(source.get("is_active", "1")) or source_kind not in {"html_listing", "apfs_board", "kbiz_listing", "ktcu_notice"}:
+        if not parse_bool(source.get("is_active", "1")) or source_kind not in {"html_listing", "apfs_board", "kbiz_listing", "ktcu_notice", "cu_notice"}:
             continue
         locator = source.get("locator", "")
         if not locator:
@@ -1153,6 +1227,8 @@ def load_official_candidates(
                 links = parse_kbiz_listing(source, allow_insecure_ssl)
             elif source_kind == "ktcu_notice":
                 links = parse_ktcu_listing(source, limit_per_source, allow_insecure_ssl)
+            elif source_kind == "cu_notice":
+                links = parse_cu_listing(source, limit_per_source, allow_insecure_ssl)
             else:
                 fetched = fetch_text(locator, verify_ssl=not allow_insecure_ssl)
                 links = parse_html_listing(

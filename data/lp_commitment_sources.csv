@@ -7,4 +7,4 @@ kbiz_notice,kbiz,중소기업중앙회 입찰·사업공고,kbiz_listing,https:/
 ktcu_notice,ktcu,한국교직원공제회 고객센터 공지사항,ktcu_notice,https://www.ktcu.or.kr/PPW-CSB-000101,https://www.ktcu.or.kr,fn_view,PEF;VC;블라인드;골프장;부동산;대체투자;인수금융;Private Credit,1,한국교직원공제회 공식 공지사항 내 대체투자/블라인드펀드 위탁운용사 선정공고
 vcs_investment_notice,,벤처투자종합포털 출자공고,html_listing,https://www.vcs.go.kr/web/portal/bbs/invtnotice/list?baCommSelec=false&baNotice=false&baOpenDay=false&baUse=true&bcId=invtnotice&pageSize=20,https://www.vcs.go.kr,/web/portal/bbs/invtnotice/,출자;위탁운용;PEF;VC;블라인드;모태펀드;선정계획,1,백업 소스: KVIC/성장금융/공제회/우정사업본부 등 출자공고 집계 포털
 kofia_notice_feed,,금융투자협회 안내사항,html_listing,https://www.kofia.or.kr/brd/m_212/list.do,https://www.kofia.or.kr,/brd/m_212/view\.do,출자;위탁운용;PEF;VC;블라인드;펀드,1,백업 소스: LP 공식 채널 누락 여부 확인용 금융투자협회 안내사항
-cu_notice,cu,신협중앙회 공지사항,html_listing,https://cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007,https://www.cu.co.kr,/cu/na/ntt/selectNttInfo\.do,출자;위탁운용;PEF;VC;블라인드,1,신협중앙회 공지사항 내 PE/VC 블라인드펀드 출자공고
+cu_notice,cu,신협중앙회 공지사항,cu_notice,https://cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007,https://www.cu.co.kr,/cu/na/ntt/selectNttInfo\.do,출자;위탁운용;PEF;VC;블라인드,1,신협중앙회 공지사항 내 PE/VC 블라인드펀드 출자공고

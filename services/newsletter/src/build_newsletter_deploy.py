@@ -26,6 +26,10 @@ DEFAULT_ARCHIVE_SEED_URL = os.environ.get(
 )
 
 KTCU_CODE = "ktcu"
+LP_PROFILE_CODES = ("ktcu", "pmaa", "cu")
+LP_PROFILE_ALIASES = {
+    "ktcu": ("ktcu.html",),
+}
 KTCU_FACT_SECTION_LABELS = {
     "general": "일반현황",
     "investment_status": "투자현황",
@@ -89,6 +93,7 @@ def write_health_file(site_dir: Path, result: dict[str, str]) -> None:
         "article_count": int(result.get("article_count", "0") or 0),
         "lp_monitor_count": int(result.get("lp_monitor_count", "0") or 0),
         "ktcu_fact_count": int(result.get("ktcu_fact_count", "0") or 0),
+        "lp_profile_fact_count": int(result.get("lp_profile_fact_count", result.get("ktcu_fact_count", "0")) or 0),
     }
     (site_dir / "health.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -156,6 +161,11 @@ def amount_short(value: object) -> str:
     return f"{round(parsed):,}억"
 
 
+def public_amount_label(value: object, fallback: str = "금액 확인중") -> str:
+    label = amount_short(value)
+    return fallback if label == "-" else label
+
+
 def fact_value(facts: list[dict[str, object]], label: str, fallback: str = "-") -> str:
     for fact in facts:
         if str(fact.get("label") or "") == label:
@@ -163,7 +173,28 @@ def fact_value(facts: list[dict[str, object]], label: str, fallback: str = "-") 
     return fallback
 
 
-def read_ktcu_payload(db_path: Path = DEFAULT_DB) -> dict[str, object]:
+def first_fact_pair(facts: list[dict[str, object]], labels: list[str], fallback: str = "-") -> tuple[str, str]:
+    for label in labels:
+        value = fact_value(facts, label, "")
+        if value:
+            return label, value
+    return "", fallback
+
+
+def compact_alternative_amount(value: str, fallback: str) -> str:
+    match = re.search(r"대체투자\s+([0-9,]+)억원", value)
+    if match:
+        return amount_short(match.group(1))
+    if "45조 4,724억원" in value:
+        return "45.5조"
+    return fallback or "-"
+
+
+def display_asset_classes(value: object) -> str:
+    return str(value or "").replace(";", " · ") or "-"
+
+
+def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE) -> dict[str, object]:
     if not db_path.exists():
         return {"profile": {}, "facts": [], "notices": [], "yearly": []}
     conn = sqlite3.connect(db_path)
@@ -211,7 +242,7 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB) -> dict[str, object]:
                 WHERE li.lp_code = ?
                 LIMIT 1
                 """,
-                (KTCU_CODE,),
+                (lp_code,),
             )
             profile = rows[0] if rows else {}
 
@@ -234,7 +265,7 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB) -> dict[str, object]:
                   AND public_visible = 1
                 ORDER BY section, sort_order, label
                 """,
-                (KTCU_CODE,),
+                (lp_code,),
             )
             if db_object_exists(conn, "lp_profile_fact")
             else []
@@ -269,7 +300,7 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB) -> dict[str, object]:
                   AND public_visible = 1
                 ORDER BY COALESCE(event_date, announced_date) DESC, notice_id DESC
                 """,
-                (KTCU_CODE,),
+                (lp_code,),
             )
             if db_object_exists(conn, "v_lp_commitment_notice_public")
             else []
@@ -287,7 +318,7 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB) -> dict[str, object]:
                 WHERE lp_code = ?
                 ORDER BY notice_year DESC
                 """,
-                (KTCU_CODE,),
+                (lp_code,),
             )
             if db_object_exists(conn, "v_lp_commitment_yearly_stats")
             else []
@@ -339,7 +370,7 @@ def render_ktcu_notice_row(row: dict[str, object]) -> str:
             <h3>{title_html}</h3>
             <p>{html_escape(meta or "공식 공고")}</p>
           </div>
-          <strong>{html_escape(amount_short(row.get("allocation_amount_krw_100mn")))}</strong>
+          <strong>{html_escape(public_amount_label(row.get("allocation_amount_krw_100mn")))}</strong>
         </article>"""
 
 
@@ -395,7 +426,7 @@ def render_ktcu_asset_mix(notices: list[dict[str, object]]) -> str:
     return "\n".join(
         f"""          <div class="ktcu-mix-row">
             <span>{html_escape(asset_class)}</span>
-            <strong>{html_escape(amount_short(totals[asset_class]))}</strong>
+            <strong>{html_escape(public_amount_label(totals[asset_class]))}</strong>
             <em>{counts[asset_class]}건</em>
           </div>"""
         for asset_class in rows
@@ -412,7 +443,7 @@ def render_ktcu_annual_highlights(notices: list[dict[str, object]], year: int) -
     return "\n".join(
         f"""          <div class="ktcu-highlight-row">
             <span>{html_escape(str(row.get("asset_class") or "출자"))}</span>
-            <strong>{html_escape(amount_short(row.get("allocation_amount_krw_100mn")))}</strong>
+            <strong>{html_escape(public_amount_label(row.get("allocation_amount_krw_100mn")))}</strong>
             <em>{html_escape(str(row.get("title") or ""))}</em>
           </div>"""
         for row in rows
@@ -440,26 +471,39 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
     asset_mix_rows = render_ktcu_asset_mix(notices)
     general_rows = render_ktcu_fact_list(facts_in_section(facts, "general"))
     status_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_status"))
+    org_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_org") + facts_in_section(facts, "public_people"))
+    gap_rows = render_ktcu_fact_list(facts_in_section(facts, "data_gap")) or (
+        """          <div><dt>선정 GP 히스토리</dt><dd>공개 공고와 별도 자료를 대조해 추가 검증해야 합니다.</dd></div>"""
+    )
 
-    asset = fact_value(facts, "2025년말 보유자산", fact_value(facts, "보유 자산"))
-    alternatives = fact_value(facts, "2025년 투자자산")
-    alternative_amount = "45.5조" if "45조 4,724억원" in alternatives else alternatives
-    target = fact_value(facts, "2026년 자산운용 목표")
-    chairman = fact_value(facts, "이사장")
-    cio = fact_value(facts, "기금운용이사/CIO")
-    team_one = fact_value(facts, "기업투자1팀")
-    team_two = fact_value(facts, "기업투자2팀")
-    pe_notice = fact_value(facts, "2025년 PEF 블라인드 공고")
-    gp_gap_public = "최종 선정 GP 히스토리는 공식 공고와 별도 자료를 대조해 추가 검증해야 합니다."
-    people_gap_public = "공개 조직도에서는 부서와 팀 역할까지 확인되며, 실무 담당자명은 확정하지 않습니다."
+    lp_name = str(profile.get("lp_name") or "LP")
+    lp_type = str(profile.get("lp_type") or "LP")
+    default_team = str(profile.get("default_team") or "투자 담당")
+    focus_label = display_asset_classes(profile.get("focus_asset_classes"))
+    asset_label, asset = first_fact_pair(
+        facts,
+        ["2025년말 보유자산", "2025년말 총자산", "총자산", "보유 자산", "회원조합"],
+    )
+    asset_kpi_label = "기관 규모" if asset_label == "회원조합" else "총자산"
+    _, investment_status = first_fact_pair(
+        facts,
+        ["2025년 투자자산", "2026년 자산운용 목표", "2026년 자산운용 계획", "자금운용 역할"],
+        focus_label,
+    )
+    investment_kpi = compact_alternative_amount(investment_status, focus_label)
     notice_count = str(profile.get("notice_count") or len(notices))
-    total_amount = amount_short(profile.get("allocation_amount_krw_100mn"))
+    total_amount = public_amount_label(profile.get("allocation_amount_krw_100mn"))
     latest = str(profile.get("latest_event_date") or "")
-    notices_2025 = [notice for notice in notices if str(notice.get("event_date") or "").startswith("2025")]
-    count_2025 = len(notices_2025)
-    amount_2025 = amount_short(ktcu_year_amount(notices, 2025))
-    highlight_rows_2025 = render_ktcu_annual_highlights(notices, 2025) or (
-        """          <p class="ktcu-empty-note">2025년 공식 공고가 아직 정리되지 않았습니다.</p>"""
+    highlight_year = int((latest or report_date)[:4])
+    highlight_count = len([notice for notice in notices if str(notice.get("event_date") or "").startswith(str(highlight_year))])
+    highlight_amount = public_amount_label(ktcu_year_amount(notices, highlight_year))
+    highlight_rows = render_ktcu_annual_highlights(notices, highlight_year) or (
+        f"""          <p class="ktcu-empty-note">{highlight_year}년 공식 공고가 아직 정리되지 않았습니다.</p>"""
+    )
+    activity_phrase = (
+        f"공식 공고 {highlight_count}건, 공고 기준 출자규모 {highlight_amount}입니다."
+        if highlight_amount != "금액 확인중"
+        else f"공식 공고 {highlight_count}건을 확인했습니다."
     )
 
     return f"""<!doctype html>
@@ -467,7 +511,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>한국교직원공제회 LP 프로필</title>
+  <title>{html_escape(lp_name)} LP 프로필</title>
   <link rel="stylesheet" href="assets/service.css">
   <style>
     body {{ background: #f7f8fa; }}
@@ -559,45 +603,48 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
         <span>
           <a href="index.html">Daily Brief</a>
           <a href="lp-notices.html">LP 공고</a>
+          <a href="lp-ktcu.html">교공</a>
+          <a href="lp-pmaa.html">경공</a>
+          <a href="lp-cu.html">신협</a>
         </span>
       </nav>
-      <section class="ktcu-hero" aria-label="한국교직원공제회 요약">
+      <section class="ktcu-hero" aria-label="{html_escape(lp_name)} 요약">
         <div class="ktcu-title">
           <span>LP Profile</span>
-          <h1>한국교직원공제회</h1>
-          <p>대형 공제회 LP의 투자 성향, 담당 조직, 출자공고 흐름을 한 화면에서 볼 수 있게 정리했습니다. PE 관점에서는 기금운용이사 산하 기업투자부의 블라인드 PEF·VC 출자 패턴과 대체투자 비중을 먼저 봅니다.</p>
+          <h1>{html_escape(lp_name)}</h1>
+          <p>{html_escape(lp_type)}의 투자 현황, 담당 조직, 출자공고 흐름을 공개자료 기준으로 정리했습니다. PE 관점에서는 {html_escape(default_team)}와 {html_escape(focus_label)} 출자 패턴을 먼저 봅니다.</p>
           <div class="ktcu-quick">
-            <div class="ktcu-quick-item"><strong>핵심 창구</strong>기업투자부가 PE·기업금융·벤처 투자를 담당합니다.</div>
-            <div class="ktcu-quick-item"><strong>2025년 활동</strong>공식 공고 {html_escape(str(count_2025))}건, 공고 기준 출자규모 {html_escape(amount_2025)}입니다.</div>
+            <div class="ktcu-quick-item"><strong>핵심 창구</strong>{html_escape(default_team)}</div>
+            <div class="ktcu-quick-item"><strong>{html_escape(str(highlight_year))}년 활동</strong>{html_escape(activity_phrase)}</div>
             <div class="ktcu-quick-item"><strong>검증 범위</strong>공고와 공식 조직은 확인됐고, 최종 선정 GP는 별도 검증 대상입니다.</div>
           </div>
         </div>
         <div class="ktcu-kpis">
-          <div class="ktcu-kpi"><span>보유자산</span><strong>{html_escape(asset)}</strong></div>
-          <div class="ktcu-kpi"><span>대체투자</span><strong>{html_escape(alternative_amount)}</strong></div>
+          <div class="ktcu-kpi"><span>{html_escape(asset_kpi_label)}</span><strong>{html_escape(asset)}</strong></div>
+          <div class="ktcu-kpi"><span>관심 자산군</span><strong>{html_escape(investment_kpi)}</strong></div>
           <div class="ktcu-kpi"><span>공식 공고</span><strong>{html_escape(notice_count)}건</strong></div>
           <div class="ktcu-kpi"><span>공고 기준 출자규모</span><strong>{html_escape(total_amount)}</strong></div>
         </div>
       </section>
     </header>
 
-    <section class="ktcu-panel ktcu-highlight-panel" aria-label="2025년 출자 하이라이트">
+    <section class="ktcu-panel ktcu-highlight-panel" aria-label="{html_escape(str(highlight_year))}년 출자 하이라이트">
       <div class="ktcu-panel-head">
         <div>
-          <h2>2025년 출자 하이라이트</h2>
+          <h2>{html_escape(str(highlight_year))}년 출자 하이라이트</h2>
           <p>공식 공고에 적힌 출자 예정·배정 규모입니다. 최종 선정 또는 실제 집행 금액과는 다를 수 있습니다.</p>
         </div>
-        <strong>{html_escape(str(count_2025))}건<br>{html_escape(amount_2025)}</strong>
+        <strong>{html_escape(str(highlight_count))}건<br>{html_escape(highlight_amount)}</strong>
       </div>
       <div class="ktcu-highlight-list">
-{highlight_rows_2025}
+{highlight_rows}
       </div>
     </section>
 
     <section class="ktcu-section-grid" aria-label="사용자용 LP 요약">
       <section class="ktcu-panel">
         <h2>투자 현황</h2>
-        <p>{html_escape(alternatives)} · {html_escape(target)}</p>
+        <p>{html_escape(investment_status)}</p>
         <dl class="ktcu-facts">
 {status_rows}
         </dl>
@@ -606,15 +653,9 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
       <section class="ktcu-panel">
         <h2>담당 조직</h2>
         <p>공식 조직도 기준으로 PE와 기업금융을 담당하는 축만 정리했습니다.</p>
-        <div class="ktcu-org">
-          <div class="ktcu-org-node"><span>이사장</span><strong>{html_escape(chairman)}</strong></div>
-          <div class="ktcu-org-node"><span>기금운용이사/CIO</span><strong>{html_escape(cio)}</strong></div>
-          <div class="ktcu-org-node"><span>핵심 부서</span><strong>기업투자부</strong></div>
-          <div class="ktcu-org-split">
-            <div class="ktcu-org-node"><span>기업투자1팀</span><strong>{html_escape(team_one)}</strong></div>
-            <div class="ktcu-org-node"><span>기업투자2팀</span><strong>{html_escape(team_two)}</strong></div>
-          </div>
-        </div>
+        <dl class="ktcu-facts">
+{org_rows}
+        </dl>
       </section>
 
       <section class="ktcu-panel">
@@ -652,11 +693,9 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
     <details class="ktcu-evidence">
       <summary>공개자료 한계</summary>
       <div class="ktcu-evidence-body">
-        <p>공개 공고와 공식 조직도 기준의 프로필입니다. 최종 선정 GP, 실제 약정·집행액, 기업투자부 실무 담당자명은 공개자료만으로 확정하지 않습니다.</p>
+        <p>공개 공고와 공식 조직도 기준의 프로필입니다. 최종 선정 GP, 실제 약정·집행액, 실무 담당자명은 공개자료만으로 확정하지 않습니다.</p>
         <dl class="ktcu-facts">
-          <div><dt>선정 GP 히스토리</dt><dd>{html_escape(gp_gap_public)}</dd></div>
-          <div><dt>2025년 대표 공고</dt><dd>{html_escape(pe_notice)}</dd></div>
-          <div><dt>실무자명</dt><dd>{html_escape(people_gap_public)}</dd></div>
+{gap_rows}
         </dl>
       </div>
     </details>
@@ -675,13 +714,20 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
 """
 
 
-def write_ktcu_page(site_dir: Path, report_date: str) -> int:
-    payload = read_ktcu_payload()
-    html = render_ktcu_page(report_date, payload)
-    (site_dir / "ktcu.html").write_text(html, encoding="utf-8")
-    (site_dir / "lp-ktcu.html").write_text(html, encoding="utf-8")
-    facts = payload.get("facts") if isinstance(payload.get("facts"), list) else []
-    return len(facts)
+def write_lp_profile_pages(site_dir: Path, report_date: str) -> int:
+    fact_count = 0
+    for lp_code in LP_PROFILE_CODES:
+        payload = read_ktcu_payload(lp_code=lp_code)
+        profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
+        facts = payload.get("facts") if isinstance(payload.get("facts"), list) else []
+        if not profile and not facts:
+            continue
+        html = render_ktcu_page(report_date, payload)
+        (site_dir / f"lp-{lp_code}.html").write_text(html, encoding="utf-8")
+        for alias in LP_PROFILE_ALIASES.get(lp_code, ()):
+            (site_dir / alias).write_text(html, encoding="utf-8")
+        fact_count += len(facts)
+    return fact_count
 
 
 def render_lp_notices_page(report_date: str, notices: list[dict[str, object]]) -> str:
@@ -700,6 +746,8 @@ def render_lp_notices_page(report_date: str, notices: list[dict[str, object]]) -
   <title>Korea PEF Intelligence LP Notices</title>
   <link rel="stylesheet" href="assets/service.css">
   <style>
+    .lp-profile-nav {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }}
+    .lp-profile-nav a {{ display: inline-flex; min-height: 32px; align-items: center; border-radius: 999px; padding: 6px 10px; background: var(--surface-muted); color: var(--text); font-size: 12px; font-weight: 750; text-decoration: none; }}
     .lp-page-list {{ display: grid; gap: 10px; }}
     .lp-page-card {{ display: grid; gap: 8px; padding: 14px; border: 1px solid var(--separator); border-radius: 14px; background: var(--surface); }}
     .lp-page-card h2 {{ margin: 0; font-size: 15px; line-height: 1.38; }}
@@ -727,6 +775,11 @@ def render_lp_notices_page(report_date: str, notices: list[dict[str, object]]) -
     </header>
 
     <main class="content-area">
+      <nav class="lp-profile-nav" aria-label="LP 프로필">
+        <a href="lp-ktcu.html">교직원공제회</a>
+        <a href="lp-pmaa.html">경찰공제회</a>
+        <a href="lp-cu.html">신협중앙회</a>
+      </nav>
       <section class="section-block" aria-label="LP 공식 공고">
         <div class="lp-page-list">
 {notice_cards}
@@ -884,6 +937,8 @@ def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
         site_dir / "lp-notices.html",
         site_dir / "ktcu.html",
         site_dir / "lp-ktcu.html",
+        site_dir / "lp-pmaa.html",
+        site_dir / "lp-cu.html",
         site_dir / "health.json",
         site_dir / "archive.json",
         site_dir / ".nojekyll",
@@ -933,7 +988,8 @@ def main() -> int:
             )
         )
     result["lp_monitor_count"] = str(write_lp_notices_page(site_dir, args.date))
-    result["ktcu_fact_count"] = str(write_ktcu_page(site_dir, args.date))
+    result["lp_profile_fact_count"] = str(write_lp_profile_pages(site_dir, args.date))
+    result["ktcu_fact_count"] = str(len(read_ktcu_payload(lp_code=KTCU_CODE).get("facts") or []))
     write_health_file(site_dir, result)
     write_static_support_files(site_dir)
     assert_newsletter_only(site_dir)
