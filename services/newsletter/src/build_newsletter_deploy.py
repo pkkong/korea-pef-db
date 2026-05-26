@@ -30,11 +30,11 @@ KTCU_FACT_SECTION_LABELS = {
     "general": "일반현황",
     "investment_status": "투자현황",
     "investment_strategy": "투자전략",
-    "investment_org": "PE 관련 조직",
+    "investment_org": "담당 조직",
     "investment_governance": "투자 의사결정",
-    "public_people": "공개 인물",
+    "public_people": "핵심 의사결정자",
     "notice_history": "출자공고 히스토리",
-    "data_gap": "확인 필요",
+    "data_gap": "공개자료 한계",
 }
 KTCU_FACT_SECTION_ORDER = {
     "general": 10,
@@ -152,7 +152,7 @@ def amount_short(value: object) -> str:
     if parsed <= 0:
         return "-"
     if parsed >= 10000:
-        return f"{parsed / 10000:,.1f}조"
+        return f"{parsed / 10000:,.2f}조"
     return f"{round(parsed):,}억"
 
 
@@ -258,6 +258,7 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB) -> dict[str, object]:
                     notice_url,
                     document_url,
                     application_deadline,
+                    notice_year,
                     asset_class,
                     strategy,
                     allocation_amount_krw_100mn,
@@ -352,64 +353,175 @@ def render_ktcu_year_bar(row: dict[str, object], max_amount: float) -> str:
         </div>"""
 
 
+def facts_in_section(facts: list[dict[str, object]], section: str) -> list[dict[str, object]]:
+    return [fact for fact in facts if str(fact.get("section") or "") == section]
+
+
+def render_ktcu_fact_list(rows: list[dict[str, object]]) -> str:
+    return "\n".join(
+        f"""          <div>
+            <dt>{html_escape(str(row.get("label") or "-"))}</dt>
+            <dd>{html_escape(str(row.get("value") or "-"))}</dd>
+          </div>"""
+        for row in rows
+    )
+
+
+def render_ktcu_source_links(facts: list[dict[str, object]]) -> str:
+    seen: set[str] = set()
+    links: list[str] = []
+    for fact in facts:
+        url = str(fact.get("source_url") or "")
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        name = str(fact.get("source_name") or "공개 출처")
+        links.append(
+            f'<a href="{html_escape(url)}" target="_blank" rel="noreferrer">{html_escape(name)}</a>'
+        )
+        if len(links) >= 9:
+            break
+    return "\n".join(f"          <li>{link}</li>" for link in links)
+
+
+def render_ktcu_asset_mix(notices: list[dict[str, object]]) -> str:
+    totals: dict[str, float] = {}
+    counts: dict[str, int] = {}
+    for notice in notices:
+        asset_class = str(notice.get("asset_class") or "기타")
+        totals[asset_class] = totals.get(asset_class, 0.0) + float(notice.get("allocation_amount_krw_100mn") or 0)
+        counts[asset_class] = counts.get(asset_class, 0) + 1
+    rows = sorted(totals, key=lambda key: (-totals[key], key))
+    return "\n".join(
+        f"""          <div class="ktcu-mix-row">
+            <span>{html_escape(asset_class)}</span>
+            <strong>{html_escape(amount_short(totals[asset_class]))}</strong>
+            <em>{counts[asset_class]}건</em>
+          </div>"""
+        for asset_class in rows
+    )
+
+
+def render_ktcu_annual_highlights(notices: list[dict[str, object]], year: int) -> str:
+    rows = [
+        notice
+        for notice in notices
+        if str(notice.get("event_date") or "").startswith(str(year))
+    ]
+    rows.sort(key=lambda row: float(row.get("allocation_amount_krw_100mn") or 0), reverse=True)
+    return "\n".join(
+        f"""          <div class="ktcu-highlight-row">
+            <span>{html_escape(str(row.get("asset_class") or "출자"))}</span>
+            <strong>{html_escape(amount_short(row.get("allocation_amount_krw_100mn")))}</strong>
+            <em>{html_escape(str(row.get("title") or ""))}</em>
+          </div>"""
+        for row in rows
+    )
+
+
+def ktcu_year_amount(notices: list[dict[str, object]], year: int) -> float:
+    return sum(
+        float(row.get("allocation_amount_krw_100mn") or 0)
+        for row in notices
+        if str(row.get("event_date") or "").startswith(str(year))
+    )
+
+
 def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
     profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
     facts = payload.get("facts") if isinstance(payload.get("facts"), list) else []
     notices = payload.get("notices") if isinstance(payload.get("notices"), list) else []
     yearly = payload.get("yearly") if isinstance(payload.get("yearly"), list) else []
 
-    facts_by_section: dict[str, list[dict[str, object]]] = {}
-    for fact in facts:
-        section = str(fact.get("section") or "other")
-        facts_by_section.setdefault(section, []).append(fact)
-    fact_sections = "\n".join(
-        render_ktcu_fact_section(section, rows)
-        for section, rows in sorted(
-            facts_by_section.items(),
-            key=lambda item: KTCU_FACT_SECTION_ORDER.get(item[0], 99),
-        )
-    )
     notice_rows = "\n".join(render_ktcu_notice_row(row) for row in notices)
     max_yearly = max([float(row.get("allocation_amount_krw_100mn") or 0) for row in yearly] or [0])
     yearly_rows = "\n".join(render_ktcu_year_bar(row, max_yearly) for row in yearly)
+    source_rows = render_ktcu_source_links(facts)
+    asset_mix_rows = render_ktcu_asset_mix(notices)
+    general_rows = render_ktcu_fact_list(facts_in_section(facts, "general"))
+    status_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_status"))
+    strategy_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_strategy"))
+    governance_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_governance"))
 
     asset = fact_value(facts, "2025년말 보유자산", fact_value(facts, "보유 자산"))
-    members = fact_value(facts, "회원 수")
+    alternatives = fact_value(facts, "2025년 투자자산")
+    alternative_amount = "45.5조" if "45조 4,724억원" in alternatives else alternatives
+    target = fact_value(facts, "2026년 자산운용 목표")
+    chairman = fact_value(facts, "이사장")
+    cio = fact_value(facts, "기금운용이사/CIO")
+    team_one = fact_value(facts, "기업투자1팀")
+    team_two = fact_value(facts, "기업투자2팀")
+    pe_notice = fact_value(facts, "2025년 PEF 블라인드 공고")
+    gp_gap_public = "최종 선정 GP 히스토리는 공식 공고와 별도 자료를 대조해 추가 검증해야 합니다."
+    people_gap_public = "공개 조직도에서는 부서와 팀 역할까지 확인되며, 실무 담당자명은 확정하지 않습니다."
     notice_count = str(profile.get("notice_count") or len(notices))
     total_amount = amount_short(profile.get("allocation_amount_krw_100mn"))
     latest = str(profile.get("latest_event_date") or "")
+    notices_2025 = [notice for notice in notices if str(notice.get("event_date") or "").startswith("2025")]
+    count_2025 = len(notices_2025)
+    amount_2025 = amount_short(ktcu_year_amount(notices, 2025))
+    highlight_rows_2025 = render_ktcu_annual_highlights(notices, 2025) or (
+        """          <p class="ktcu-empty-note">2025년 공식 공고가 아직 정리되지 않았습니다.</p>"""
+    )
 
     return f"""<!doctype html>
 <html lang="ko">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>한국교직원공제회 LP Intelligence</title>
+  <title>한국교직원공제회 LP 프로필</title>
   <link rel="stylesheet" href="assets/service.css">
   <style>
-    body {{ background: #f6f7f9; }}
-    .ktcu-shell {{ width: min(1160px, calc(100% - 28px)); margin: 0 auto; padding: 18px 0 42px; }}
-    .ktcu-top {{ display: grid; gap: 14px; padding: 18px 0 12px; }}
+    body {{ background: #f7f8fa; }}
+    .ktcu-shell {{ width: min(1180px, calc(100% - 28px)); margin: 0 auto; padding: 16px 0 44px; }}
+    .ktcu-top {{ display: grid; gap: 14px; padding: 14px 0 12px; }}
     .ktcu-nav {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }}
-    .ktcu-nav a {{ min-height: 34px; display: inline-flex; align-items: center; border: 1px solid var(--separator); border-radius: 999px; padding: 7px 11px; background: #fff; color: var(--text); text-decoration: none; font-size: 12px; font-weight: 700; }}
-    .ktcu-hero {{ display: grid; gap: 16px; border: 1px solid var(--separator); border-radius: 18px; padding: 18px; background: #fff; }}
-    .ktcu-title {{ display: grid; gap: 8px; }}
-    .ktcu-title span {{ width: fit-content; border-radius: 999px; padding: 5px 9px; background: #e7f0ff; color: #15407d; font-size: 12px; font-weight: 800; }}
-    .ktcu-title h1 {{ margin: 0; color: var(--text); font-size: clamp(30px, 5vw, 56px); line-height: 1.03; letter-spacing: 0; }}
-    .ktcu-title p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 14px; line-height: 1.65; }}
-    .ktcu-kpis {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
-    .ktcu-kpi {{ min-width: 0; border: 1px solid var(--separator); border-radius: 12px; padding: 12px; background: #fbfcfd; }}
+    .ktcu-nav strong {{ color: var(--text); font-size: 13px; }}
+    .ktcu-nav a {{ min-height: 34px; display: inline-flex; align-items: center; border: 1px solid var(--separator); border-radius: 8px; padding: 7px 11px; background: #fff; color: var(--text); text-decoration: none; font-size: 12px; font-weight: 700; }}
+    .ktcu-hero {{ display: grid; gap: 18px; padding: 18px 0 8px; }}
+    .ktcu-title {{ display: grid; gap: 10px; }}
+    .ktcu-title span {{ width: fit-content; border-left: 3px solid #2f6fbc; padding-left: 8px; color: #24598d; font-size: 12px; font-weight: 800; }}
+    .ktcu-title h1 {{ margin: 0; color: var(--text); font-size: clamp(32px, 5vw, 62px); line-height: 1.02; letter-spacing: 0; }}
+    .ktcu-title p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 15px; line-height: 1.68; }}
+    .ktcu-quick {{ display: grid; gap: 8px; }}
+    .ktcu-quick-item {{ border-left: 3px solid #d0a33c; padding-left: 10px; color: var(--text); font-size: 13px; line-height: 1.5; }}
+    .ktcu-quick-item strong {{ display: block; margin-bottom: 2px; font-size: 13px; }}
+    .ktcu-kpis {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }}
+    .ktcu-kpi {{ min-width: 0; border: 1px solid var(--separator); border-radius: 8px; padding: 12px; background: #fff; }}
     .ktcu-kpi span {{ display: block; color: var(--secondary); font-size: 11.5px; font-weight: 700; }}
     .ktcu-kpi strong {{ display: block; margin-top: 5px; color: var(--text); font-size: 22px; line-height: 1.15; overflow-wrap: anywhere; }}
-    .ktcu-grid {{ display: grid; gap: 10px; margin-top: 10px; }}
-    .ktcu-fact, .ktcu-panel {{ border: 1px solid var(--separator); border-radius: 14px; padding: 14px; background: #fff; }}
-    .ktcu-fact h2, .ktcu-panel h2 {{ margin: 0 0 11px; color: var(--text); font-size: 16px; line-height: 1.35; }}
-    .ktcu-fact dl {{ display: grid; gap: 9px; margin: 0; }}
-    .ktcu-fact dl div {{ min-width: 0; border-top: 1px solid var(--separator); padding-top: 9px; }}
-    .ktcu-fact dl div:first-child {{ border-top: 0; padding-top: 0; }}
-    .ktcu-fact dt {{ color: var(--secondary); font-size: 11.5px; font-weight: 800; }}
-    .ktcu-fact dd {{ display: grid; gap: 4px; margin: 4px 0 0; color: var(--text); font-size: 13px; font-weight: 750; line-height: 1.45; overflow-wrap: anywhere; }}
-    .ktcu-fact dd a {{ width: fit-content; color: var(--secondary); font-size: 11.5px; text-decoration: none; }}
+    .ktcu-highlight-panel {{ margin-top: 10px; }}
+    .ktcu-panel-head {{ display: flex; gap: 10px; align-items: start; justify-content: space-between; margin-bottom: 12px; }}
+    .ktcu-panel-head h2 {{ margin-bottom: 4px; }}
+    .ktcu-panel-head p {{ margin: 0; color: var(--secondary); font-size: 13px; line-height: 1.5; }}
+    .ktcu-panel-head > strong {{ flex: 0 0 auto; color: #15407d; font-size: 18px; line-height: 1.25; text-align: right; }}
+    .ktcu-highlight-list {{ display: grid; gap: 8px; }}
+    .ktcu-highlight-row {{ display: grid; grid-template-columns: minmax(86px, 0.28fr) minmax(74px, auto) minmax(0, 1fr); gap: 9px; align-items: center; border-top: 1px solid var(--separator); padding-top: 9px; font-size: 13px; }}
+    .ktcu-highlight-row:first-child {{ border-top: 0; padding-top: 0; }}
+    .ktcu-highlight-row span {{ color: var(--secondary); font-weight: 800; }}
+    .ktcu-highlight-row strong {{ color: #15407d; white-space: nowrap; }}
+    .ktcu-highlight-row em {{ color: var(--text); font-style: normal; font-weight: 700; line-height: 1.4; }}
+    .ktcu-empty-note {{ margin: 0; color: var(--secondary); font-size: 13px; }}
+    .ktcu-section-grid {{ display: grid; gap: 10px; margin-top: 12px; }}
+    .ktcu-panel {{ border: 1px solid var(--separator); border-radius: 8px; padding: 15px; background: #fff; }}
+    .ktcu-panel h2 {{ margin: 0 0 11px; color: var(--text); font-size: 17px; line-height: 1.35; }}
+    .ktcu-panel > p {{ margin: 0 0 12px; color: var(--secondary); font-size: 13px; line-height: 1.58; }}
+    .ktcu-facts {{ display: grid; gap: 9px; margin: 0; }}
+    .ktcu-facts div {{ min-width: 0; border-top: 1px solid var(--separator); padding-top: 9px; }}
+    .ktcu-facts div:first-child {{ border-top: 0; padding-top: 0; }}
+    .ktcu-facts dt {{ color: var(--secondary); font-size: 11.5px; font-weight: 800; }}
+    .ktcu-facts dd {{ margin: 4px 0 0; color: var(--text); font-size: 13px; font-weight: 750; line-height: 1.48; overflow-wrap: anywhere; }}
+    .ktcu-org {{ display: grid; gap: 8px; }}
+    .ktcu-org-node {{ border: 1px solid var(--separator); border-radius: 8px; padding: 10px; background: #fbfcfd; }}
+    .ktcu-org-node span {{ display: block; color: var(--secondary); font-size: 11.5px; font-weight: 800; }}
+    .ktcu-org-node strong {{ display: block; margin-top: 4px; color: var(--text); font-size: 14px; line-height: 1.35; }}
+    .ktcu-org-split {{ display: grid; gap: 8px; }}
+    .ktcu-mix {{ display: grid; gap: 8px; }}
+    .ktcu-mix-row {{ display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; border-top: 1px solid var(--separator); padding-top: 8px; font-size: 13px; }}
+    .ktcu-mix-row:first-child {{ border-top: 0; padding-top: 0; }}
+    .ktcu-mix-row span {{ font-weight: 800; }}
+    .ktcu-mix-row strong {{ color: #24598d; }}
+    .ktcu-mix-row em {{ color: var(--secondary); font-style: normal; }}
     .ktcu-lower {{ display: grid; gap: 10px; margin-top: 10px; }}
     .ktcu-notices {{ display: grid; gap: 8px; }}
     .ktcu-notice {{ display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; border-top: 1px solid var(--separator); padding-top: 10px; }}
@@ -425,12 +537,18 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
     .ktcu-year-row div {{ height: 9px; border-radius: 999px; background: #edf0f4; overflow: hidden; }}
     .ktcu-year-row i {{ display: block; height: 100%; border-radius: inherit; background: #2f6fbc; }}
     .ktcu-year-row strong {{ text-align: right; font-size: 12px; }}
+    .ktcu-evidence {{ margin-top: 10px; border: 1px solid var(--separator); border-radius: 8px; background: #fff; }}
+    .ktcu-evidence summary {{ cursor: pointer; padding: 12px 14px; color: var(--text); font-size: 13px; font-weight: 800; }}
+    .ktcu-evidence-body {{ padding: 0 14px 14px; }}
+    .ktcu-evidence-body p {{ margin: 0 0 10px; color: var(--secondary); font-size: 13px; line-height: 1.55; }}
+    .ktcu-evidence ul {{ display: grid; gap: 8px; margin: 0; padding: 0 14px 14px 28px; }}
+    .ktcu-evidence a {{ color: var(--secondary); font-size: 12px; text-decoration: none; }}
     .ktcu-footer {{ margin-top: 14px; color: var(--secondary); font-size: 11.5px; line-height: 1.45; }}
     @media (min-width: 760px) {{
-      .ktcu-shell {{ padding-top: 24px; }}
-      .ktcu-hero {{ grid-template-columns: minmax(0, 1.3fr) minmax(360px, 0.7fr); padding: 24px; }}
-      .ktcu-kpis {{ grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; }}
-      .ktcu-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .ktcu-shell {{ padding-top: 22px; }}
+      .ktcu-hero {{ grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr); align-items: end; }}
+      .ktcu-section-grid {{ grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }}
+      .ktcu-org-split {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .ktcu-lower {{ grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr); }}
     }}
   </style>
@@ -439,26 +557,92 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
   <main class="ktcu-shell">
     <header class="ktcu-top">
       <nav class="ktcu-nav" aria-label="페이지 이동">
-        <a href="index.html">Daily Brief</a>
-        <a href="lp-notices.html">LP 공고</a>
+        <strong>Korea PEF Intelligence</strong>
+        <span>
+          <a href="index.html">Daily Brief</a>
+          <a href="lp-notices.html">LP 공고</a>
+        </span>
       </nav>
       <section class="ktcu-hero" aria-label="한국교직원공제회 요약">
         <div class="ktcu-title">
-          <span>LP Intelligence Sample</span>
+          <span>LP Profile</span>
           <h1>한국교직원공제회</h1>
-          <p>공개자료 기준으로 기관 일반현황, 기금운용 조직, 투자현황, 출자공고 히스토리를 한 페이지에 모은 샘플입니다.</p>
+          <p>대형 공제회 LP의 투자 성향, 담당 조직, 출자공고 흐름을 한 화면에서 볼 수 있게 정리했습니다. PE 관점에서는 기금운용이사 산하 기업투자부의 블라인드 PEF·VC 출자 패턴과 대체투자 비중을 먼저 봅니다.</p>
+          <div class="ktcu-quick">
+            <div class="ktcu-quick-item"><strong>핵심 창구</strong>기업투자부가 PE·기업금융·벤처 투자를 담당합니다.</div>
+            <div class="ktcu-quick-item"><strong>2025년 활동</strong>공식 공고 {html_escape(str(count_2025))}건, 공고 기준 출자규모 {html_escape(amount_2025)}입니다.</div>
+            <div class="ktcu-quick-item"><strong>검증 범위</strong>공고와 공식 조직은 확인됐고, 최종 선정 GP는 별도 검증 대상입니다.</div>
+          </div>
         </div>
         <div class="ktcu-kpis">
-          <div class="ktcu-kpi"><span>보유 자산</span><strong>{html_escape(asset)}</strong></div>
-          <div class="ktcu-kpi"><span>회원 수</span><strong>{html_escape(members)}</strong></div>
-          <div class="ktcu-kpi"><span>포착 공고</span><strong>{html_escape(notice_count)}건</strong></div>
-          <div class="ktcu-kpi"><span>포착 출자규모</span><strong>{html_escape(total_amount)}</strong></div>
+          <div class="ktcu-kpi"><span>보유자산</span><strong>{html_escape(asset)}</strong></div>
+          <div class="ktcu-kpi"><span>대체투자</span><strong>{html_escape(alternative_amount)}</strong></div>
+          <div class="ktcu-kpi"><span>공식 공고</span><strong>{html_escape(notice_count)}건</strong></div>
+          <div class="ktcu-kpi"><span>공고 기준 출자규모</span><strong>{html_escape(total_amount)}</strong></div>
         </div>
       </section>
     </header>
 
-    <section class="ktcu-grid" aria-label="프로필 팩트">
-{fact_sections}
+    <section class="ktcu-panel ktcu-highlight-panel" aria-label="2025년 출자 하이라이트">
+      <div class="ktcu-panel-head">
+        <div>
+          <h2>2025년 출자 하이라이트</h2>
+          <p>공식 공고에 적힌 출자 예정·배정 규모입니다. 최종 선정 또는 실제 집행 금액과는 다를 수 있습니다.</p>
+        </div>
+        <strong>{html_escape(str(count_2025))}건<br>{html_escape(amount_2025)}</strong>
+      </div>
+      <div class="ktcu-highlight-list">
+{highlight_rows_2025}
+      </div>
+    </section>
+
+    <section class="ktcu-section-grid" aria-label="사용자용 LP 요약">
+      <section class="ktcu-panel">
+        <h2>투자 현황</h2>
+        <p>{html_escape(alternatives)} · {html_escape(target)}</p>
+        <dl class="ktcu-facts">
+{status_rows}
+        </dl>
+      </section>
+
+      <section class="ktcu-panel">
+        <h2>담당 조직</h2>
+        <p>공식 조직도 기준으로 PE와 기업금융을 담당하는 축만 정리했습니다.</p>
+        <div class="ktcu-org">
+          <div class="ktcu-org-node"><span>이사장</span><strong>{html_escape(chairman)}</strong></div>
+          <div class="ktcu-org-node"><span>기금운용이사/CIO</span><strong>{html_escape(cio)}</strong></div>
+          <div class="ktcu-org-node"><span>핵심 부서</span><strong>기업투자부</strong></div>
+          <div class="ktcu-org-split">
+            <div class="ktcu-org-node"><span>기업투자1팀</span><strong>{html_escape(team_one)}</strong></div>
+            <div class="ktcu-org-node"><span>기업투자2팀</span><strong>{html_escape(team_two)}</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="ktcu-panel">
+        <h2>투자전략과 의사결정</h2>
+        <p>운용 원칙과 투자 의사결정 기구를 분리해서 봅니다.</p>
+        <dl class="ktcu-facts">
+{strategy_rows}
+{governance_rows}
+        </dl>
+      </section>
+
+      <section class="ktcu-panel">
+        <h2>출자 패턴</h2>
+        <p>공개된 공식 공고의 자산군과 공고상 출자 규모를 기준으로 본 패턴입니다.</p>
+        <div class="ktcu-mix">
+{asset_mix_rows}
+        </div>
+      </section>
+
+      <section class="ktcu-panel">
+        <h2>기관 개요</h2>
+        <p>공식 기관소개와 경영공시에서 확인되는 기본 정보입니다.</p>
+        <dl class="ktcu-facts">
+{general_rows}
+        </dl>
+      </section>
     </section>
 
     <section class="ktcu-lower" aria-label="출자공고 히스토리">
@@ -469,12 +653,31 @@ def render_ktcu_page(report_date: str, payload: dict[str, object]) -> str:
         </div>
       </section>
       <section class="ktcu-panel">
-        <h2>연도별 포착 규모</h2>
+        <h2>연도별 공식 공고 규모</h2>
         <div class="ktcu-years">
 {yearly_rows}
         </div>
       </section>
     </section>
+
+    <details class="ktcu-evidence">
+      <summary>공개자료 한계</summary>
+      <div class="ktcu-evidence-body">
+        <p>공개 공고와 공식 조직도 기준의 프로필입니다. 최종 선정 GP, 실제 약정·집행액, 기업투자부 실무 담당자명은 공개자료만으로 확정하지 않습니다.</p>
+        <dl class="ktcu-facts">
+          <div><dt>선정 GP 히스토리</dt><dd>{html_escape(gp_gap_public)}</dd></div>
+          <div><dt>2025년 대표 공고</dt><dd>{html_escape(pe_notice)}</dd></div>
+          <div><dt>실무자명</dt><dd>{html_escape(people_gap_public)}</dd></div>
+        </dl>
+      </div>
+    </details>
+
+    <details class="ktcu-evidence">
+      <summary>공개 출처 보기</summary>
+      <ul>
+{source_rows}
+      </ul>
+    </details>
 
     <p class="ktcu-footer">기준일 {html_escape(report_date)} · 최신 공고일 {html_escape(latest or "-")} · 공개자료로 확인되지 않는 실무자명과 최종 선정 GP 히스토리는 추정하지 않습니다.</p>
   </main>
