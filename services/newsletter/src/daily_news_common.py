@@ -398,6 +398,14 @@ def normalize_url(value: str) -> str:
     scheme = parsed.scheme.lower() or "https"
     netloc = parsed.netloc.lower()
     path = parsed.path or "/"
+    if netloc in {"m.sedaily.com", "www.sedaily.com", "sedaily.com"}:
+        match = re.match(r"^/(?:amp)?article/([0-9A-Za-z]+)$", path, flags=re.IGNORECASE)
+        if match:
+            article_id = match.group(1)
+            if len(article_id) % 2 == 0 and article_id[: len(article_id) // 2] == article_id[len(article_id) // 2 :]:
+                article_id = article_id[: len(article_id) // 2]
+            netloc = "www.sedaily.com"
+            path = f"/article/{article_id}"
     if path != "/" and path.endswith("/"):
         path = path[:-1]
     query_pairs = [(key, val) for key, val in parse_qsl(parsed.query, keep_blank_values=True) if key.lower() not in TRACKING_PARAMS]

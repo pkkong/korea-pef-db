@@ -1513,6 +1513,7 @@ def group_export_rows(rows: list[dict[str, object]]) -> dict[str, list[dict[str,
 def normalize_title_key(title: str) -> str:
     value = clean_news_title(title)
     value = re.sub(r"\s+-\s+[^-]+$", "", value)
+    value = re.sub(r"\s*\[[^\]]*(?:\]|$)", "", value)
     value = re.sub(r"\.{2,}|…+", "", value)
     value = re.sub(r"[\[\]\"'‘’“”<>(){}|·:：,\s]+", "", value)
     return value.lower()[:42]

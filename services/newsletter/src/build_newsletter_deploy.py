@@ -88,6 +88,7 @@ from build_service_site import (  # noqa: E402
     render_app,
 )
 from daily_news_common import today_seoul  # noqa: E402
+from gp_service_pages import write_gp_pages  # noqa: E402
 
 
 ARCHIVE_SCRIPT_RE = re.compile(
@@ -114,6 +115,10 @@ def write_health_file(site_dir: Path, result: dict[str, str]) -> None:
         "ktcu_fact_count": int(result.get("ktcu_fact_count", "0") or 0),
         "lp_profile_fact_count": int(result.get("lp_profile_fact_count", result.get("ktcu_fact_count", "0")) or 0),
         "lp_profile_page_count": int(result.get("lp_profile_page_count", "0") or 0),
+        "gp_count": int(result.get("gp_count", "0") or 0),
+        "gp_active_count": int(result.get("active_gp_count", "0") or 0),
+        "gp_profile_page_count": int(result.get("top_gp_page_count", "0") or 0),
+        "gp_news_link_count": int(result.get("news_link_count", "0") or 0),
     }
     (site_dir / "health.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -276,6 +281,41 @@ def read_lp_profile_nav(db_path: Path = DEFAULT_DB, profile_codes: list[str] | N
         lp_name = str(row.get("lp_name") or LP_PROFILE_SHORT_LABELS.get(code, code))
         nav_items.append({"lp_code": code, "lp_name": lp_name, "label": lp_short_label(code, lp_name)})
     return nav_items
+
+
+def read_lp_directory_items(db_path: Path = DEFAULT_DB) -> list[dict[str, object]]:
+    if not db_path.exists():
+        return []
+    conn = sqlite3.connect(db_path)
+    try:
+        if not db_object_exists(conn, "v_lp_profile_summary"):
+            return []
+        return fetch_dicts(
+            conn,
+            """
+            SELECT
+                lp_code,
+                lp_name,
+                lp_type,
+                ownership_type,
+                homepage_url,
+                notice_url,
+                default_team,
+                focus_asset_classes,
+                service_priority,
+                notice_count,
+                allocation_amount_krw_100mn,
+                latest_event_date,
+                fact_count,
+                source_count
+            FROM v_lp_profile_summary
+            WHERE fact_count > 0
+               OR notice_count > 0
+            ORDER BY service_priority DESC, lp_name
+            """,
+        )
+    finally:
+        conn.close()
 
 
 def render_lp_profile_nav(nav_items: list[dict[str, str]], active_code: str = "") -> str:
@@ -946,6 +986,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     data_coverage_rows = render_data_coverage(profile, facts, notices)
     asset_chips = render_asset_chips(profile.get("focus_asset_classes"))
     news_signal_count = len(news_notices) + len(related_news)
+    peer_count = len(peers) or len(nav_items or [])
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -1125,9 +1166,9 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       </section>
     </header>
 
-    <section class="ktcu-intel-grid" aria-label="프로필 데이터 커버리지">
+    <section class="ktcu-intel-grid" aria-label="프로필 리서치 범위">
       <section class="ktcu-panel">
-        <h2>데이터 커버리지</h2>
+        <h2>리서치 범위</h2>
         <div class="ktcu-coverage">
 {data_coverage_rows}
         </div>
@@ -1232,7 +1273,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       <div class="ktcu-panel-head">
         <div>
           <h2>LP 피어 비교</h2>
-          <p>현재 구축 중인 5개 LP의 공개 공고 수, 공고 기준 출자규모, 최신 공고일을 같은 기준으로 비교합니다.</p>
+          <p>현재 구축 중인 {html_escape(str(peer_count))}개 LP의 공개 공고 수, 공고 기준 출자규모, 최신 공고일을 같은 기준으로 비교합니다.</p>
         </div>
       </div>
       <div class="ktcu-peer-table">
@@ -1302,7 +1343,55 @@ def write_lp_profile_pages(site_dir: Path, report_date: str) -> int:
     return fact_count
 
 
-def render_lp_notices_page(report_date: str, notices: list[dict[str, object]], nav_items: list[dict[str, str]] | None = None) -> str:
+def render_lp_directory_card(item: dict[str, object]) -> str:
+    lp_code = str(item.get("lp_code") or "")
+    lp_name = str(item.get("lp_name") or lp_code or "LP")
+    lp_type = str(item.get("lp_type") or "LP")
+    ownership = str(item.get("ownership_type") or "")
+    default_team = str(item.get("default_team") or "투자 담당")
+    focus = display_asset_classes(item.get("focus_asset_classes"))
+    notice_count = int(item.get("notice_count") or 0)
+    fact_count = int(item.get("fact_count") or 0)
+    source_count = int(item.get("source_count") or 0)
+    latest = str(item.get("latest_event_date") or "-")
+    amount = public_amount_label(item.get("allocation_amount_krw_100mn"), fallback="-")
+    homepage_url = str(item.get("homepage_url") or "")
+    notice_url = str(item.get("notice_url") or "")
+    profile_url = f"lp-{lp_code}.html" if lp_code else "lp-notices.html"
+    chips = render_asset_chips(item.get("focus_asset_classes"))
+    actions = [
+        f'<a href="{html_escape(profile_url)}">프로필 보기</a>',
+    ]
+    if notice_url:
+        actions.append(f'<a href="{html_escape(notice_url)}" target="_blank" rel="noreferrer">공식 공고 채널</a>')
+    elif homepage_url:
+        actions.append(f'<a href="{html_escape(homepage_url)}" target="_blank" rel="noreferrer">공식 홈페이지</a>')
+    search_blob = " ".join([lp_name, lp_type, ownership, default_team, focus])
+    return f"""          <article class="lp-directory-card" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(focus)}" data-kind="{html_escape(ownership)}">
+            <div class="lp-directory-card-head">
+              <span>{html_escape(lp_type)}</span>
+              <strong>{html_escape(lp_name)}</strong>
+            </div>
+            <p>{html_escape(default_team)} · {html_escape(focus)}</p>
+            <div class="lp-directory-chips">
+{chips}
+            </div>
+            <dl class="lp-directory-metrics">
+              <div><dt>공고</dt><dd>{notice_count}건</dd></div>
+              <div><dt>출자규모</dt><dd>{html_escape(amount)}</dd></div>
+              <div><dt>최신</dt><dd>{html_escape(latest)}</dd></div>
+              <div><dt>리서치</dt><dd>{fact_count}/{source_count}</dd></div>
+            </dl>
+            <div class="lp-page-actions">{"".join(actions)}</div>
+          </article>"""
+
+
+def render_lp_notices_page(
+    report_date: str,
+    notices: list[dict[str, object]],
+    nav_items: list[dict[str, str]] | None = None,
+    directory_items: list[dict[str, object]] | None = None,
+) -> str:
     if notices:
         notice_cards = "\n".join(render_lp_notice_card(item) for item in notices)
     else:
@@ -1310,6 +1399,17 @@ def render_lp_notices_page(report_date: str, notices: list[dict[str, object]], n
           <strong>표시할 공식 공고가 없습니다</strong>
           <span>LP 공고 모니터는 별도 서비스로 분리해 운영합니다.</span>
         </div>"""
+    directory_rows = directory_items or []
+    directory_cards = "\n".join(render_lp_directory_card(item) for item in directory_rows) or (
+        """          <div class="empty-state visible">
+            <strong>표시할 LP 프로필이 없습니다</strong>
+            <span>공개 프로필 데이터가 쌓이면 여기에 표시됩니다.</span>
+          </div>"""
+    )
+    tracked_count = len(directory_rows)
+    active_count = len([item for item in directory_rows if int(item.get("notice_count") or 0) > 0])
+    total_amount = sum(float(item.get("allocation_amount_krw_100mn") or 0) for item in directory_rows)
+    source_total = sum(int(item.get("source_count") or 0) for item in directory_rows)
     nav_html = render_lp_profile_nav(nav_items or [])
     return f"""<!doctype html>
 <html lang="ko">
@@ -1322,24 +1422,48 @@ def render_lp_notices_page(report_date: str, notices: list[dict[str, object]], n
     body.lp-notices-page .content-area {{ display: block; width: min(1180px, calc(100% - 28px)); margin: 0 auto; }}
     .lp-profile-nav {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }}
     .lp-profile-nav a {{ display: inline-flex; min-height: 32px; align-items: center; border-radius: 999px; padding: 6px 10px; background: var(--surface-muted); color: var(--text); font-size: 12px; font-weight: 750; text-decoration: none; }}
+    .lp-directory-hero {{ display: grid; gap: 14px; margin-bottom: 14px; padding: 6px 0 4px; }}
+    .lp-directory-hero h1 {{ margin: 0; color: var(--text); font-size: clamp(32px, 5vw, 58px); line-height: 1.02; letter-spacing: 0; }}
+    .lp-directory-hero p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 14px; line-height: 1.65; }}
+    .lp-directory-kpis {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
+    .lp-directory-kpis div {{ border: 1px solid var(--separator); border-radius: 8px; padding: 11px; background: var(--surface); }}
+    .lp-directory-kpis span {{ display: block; color: var(--secondary); font-size: 11.5px; font-weight: 800; }}
+    .lp-directory-kpis strong {{ display: block; margin-top: 4px; color: var(--text); font-size: 20px; line-height: 1.2; }}
+    .lp-directory-grid {{ display: grid; gap: 10px; margin-bottom: 16px; }}
+    .lp-directory-card {{ display: grid; gap: 10px; border: 1px solid var(--separator); border-radius: 8px; padding: 14px; background: var(--surface); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }}
+    .lp-directory-card-head {{ display: grid; gap: 4px; }}
+    .lp-directory-card-head span {{ width: fit-content; border-radius: 999px; padding: 4px 8px; background: #e7f4f1; color: #164c46; font-size: 11px; font-weight: 800; }}
+    .lp-directory-card-head strong {{ color: var(--text); font-size: 18px; line-height: 1.25; }}
+    .lp-directory-card p {{ margin: 0; color: var(--secondary); font-size: 13px; line-height: 1.5; }}
+    .lp-directory-chips {{ display: flex; flex-wrap: wrap; gap: 6px; }}
+    .lp-directory-chips span {{ border: 1px solid var(--separator); border-radius: 999px; padding: 5px 8px; background: #fbfcfd; color: var(--text); font-size: 11.5px; font-weight: 750; }}
+    .lp-directory-metrics {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin: 0; }}
+    .lp-directory-metrics div {{ min-width: 0; border-top: 1px solid var(--separator); padding-top: 8px; }}
+    .lp-directory-metrics dt {{ color: var(--secondary); font-size: 11px; font-weight: 800; }}
+    .lp-directory-metrics dd {{ margin: 3px 0 0; color: var(--text); font-size: 13px; font-weight: 800; overflow-wrap: anywhere; }}
     .lp-notice-toolbar {{ display: grid; gap: 9px; margin-bottom: 12px; }}
     .lp-notice-toolbar input {{ width: 100%; min-height: 42px; border: 1px solid var(--separator); border-radius: 8px; padding: 8px 11px; background: var(--surface); color: var(--text); font-size: 14px; }}
     .lp-filter-row {{ display: flex; flex-wrap: wrap; gap: 7px; }}
     .lp-filter-row button {{ border: 1px solid var(--separator); border-radius: 999px; padding: 7px 10px; background: var(--surface); color: var(--secondary); font-size: 12px; font-weight: 800; cursor: pointer; }}
     .lp-filter-row button.active {{ border-color: #1f6b63; background: #e7f4f1; color: #164c46; }}
     .lp-page-list {{ display: grid; gap: 10px; }}
-    .lp-page-card {{ display: grid; gap: 8px; padding: 14px; border: 1px solid var(--separator); border-radius: 14px; background: var(--surface); }}
+    .lp-page-card {{ display: grid; gap: 8px; padding: 14px; border: 1px solid var(--separator); border-radius: 8px; background: var(--surface); }}
     .lp-page-card h2 {{ margin: 0; font-size: 15px; line-height: 1.38; }}
     .lp-page-card h2 a {{ color: inherit; text-decoration: none; }}
     .lp-page-meta {{ display: flex; flex-wrap: wrap; gap: 6px; color: var(--secondary); font-size: 12px; line-height: 1.35; }}
     .lp-page-meta span + span::before {{ content: "·"; margin-right: 6px; color: var(--tertiary); }}
     .lp-page-actions {{ display: flex; flex-wrap: wrap; gap: 8px; }}
     .lp-page-actions a {{ display: inline-flex; min-height: 32px; align-items: center; border-radius: 999px; padding: 6px 10px; background: var(--surface-muted); color: var(--text); font-size: 12px; font-weight: 650; text-decoration: none; }}
-    @media (min-width: 960px) {{ .lp-page-list {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
+    @media (min-width: 760px) {{
+      .lp-directory-hero {{ grid-template-columns: minmax(0, 1fr) minmax(320px, 0.7fr); align-items: end; }}
+      .lp-directory-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+    }}
+    @media (min-width: 960px) {{ .lp-page-list {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} .lp-directory-grid {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }} }}
     @media (max-width: 620px) {{
       .lp-profile-nav {{ flex-wrap: nowrap; overflow-x: auto; padding-bottom: 3px; }}
       .lp-profile-nav a {{ flex: 0 0 auto; }}
       .lp-page-card h2 {{ overflow-wrap: anywhere; }}
+      .lp-directory-metrics {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
     }}
   </style>
 </head>
@@ -1349,30 +1473,51 @@ def render_lp_notices_page(report_date: str, notices: list[dict[str, object]], n
       <div class="header-topline">
         <div>
           <p>Korea PEF Intelligence</p>
-          <strong>LP 공고</strong>
+          <strong>LP Directory</strong>
         </div>
         <div class="header-actions">
           <a class="header-action" href="index.html" aria-label="뉴스 브리프 열기">브리프</a>
+          <a class="header-action" href="gps.html" aria-label="GP 디렉토리 열기">GP</a>
         </div>
       </div>
-      <div class="brief-meta">공식 공고 {len(notices)}건 · 기준일 {html_escape(report_date)}</div>
+      <div class="brief-meta">추적 LP {tracked_count}개 · 공식 공고 {len(notices)}건 · 기준일 {html_escape(report_date)}</div>
     </header>
 
     <main class="content-area">
+      <section class="lp-directory-hero" aria-label="LP 디렉토리 요약">
+        <div>
+          <h1>LP Directory</h1>
+          <p>국내 주요 출자기관의 기본 현황, 관심 자산군, 최근 출자공고를 한 곳에서 봅니다. 공식 공고와 공개자료를 우선 반영하고, 뉴스 기반 신호는 구분해 표시합니다.</p>
+        </div>
+        <div class="lp-directory-kpis">
+          <div><span>추적 기관</span><strong>{tracked_count}개</strong></div>
+          <div><span>최근 공고 보유</span><strong>{active_count}개</strong></div>
+          <div><span>공고 기준 규모</span><strong>{html_escape(public_amount_label(total_amount, fallback="-"))}</strong></div>
+          <div><span>공개 출처</span><strong>{source_total}개</strong></div>
+        </div>
+      </section>
       <nav class="lp-profile-nav" aria-label="LP 프로필">
         {nav_html}
       </nav>
-      <section class="section-block" aria-label="LP 공식 공고">
+      <section class="section-block" aria-label="LP 디렉토리">
         <div class="lp-notice-toolbar">
-          <input type="search" id="lpNoticeSearch" placeholder="LP, 자산군, 공고명, GP 검색">
-          <div class="lp-filter-row" aria-label="LP 공고 필터">
+          <input type="search" id="lpNoticeSearch" placeholder="LP명, 유형, 자산군, 공고명, GP 검색">
+          <div class="lp-filter-row" aria-label="LP 디렉토리 필터">
             <button class="active" type="button" data-filter="all">전체</button>
+            <button type="button" data-filter="public">공적 LP</button>
+            <button type="button" data-filter="mutual_aid">공제회</button>
             <button type="button" data-filter="PEF">PEF</button>
             <button type="button" data-filter="VC">VC</button>
-            <button type="button" data-filter="new_notice">신규</button>
+            <button type="button" data-filter="new_notice">신규 공고</button>
             <button type="button" data-filter="final_selection">선정</button>
           </div>
         </div>
+        <div class="lp-directory-grid">
+{directory_cards}
+        </div>
+      </section>
+      <section class="section-block" aria-label="LP 공식 공고">
+        <h2 class="section-title">최근 공식 공고</h2>
         <div class="lp-page-list">
 {notice_cards}
         </div>
@@ -1398,13 +1543,14 @@ def render_lp_notices_page(report_date: str, notices: list[dict[str, object]], n
     (() => {{
       const input = document.getElementById("lpNoticeSearch");
       const buttons = Array.from(document.querySelectorAll("[data-filter]"));
-      const cards = Array.from(document.querySelectorAll(".lp-page-card"));
+      const cards = Array.from(document.querySelectorAll(".lp-directory-card, .lp-page-card"));
       let active = "all";
       const apply = () => {{
         const query = (input?.value || "").trim().toLowerCase();
         cards.forEach((card) => {{
           const haystack = (card.dataset.search || card.innerText).toLowerCase();
-          const filterHit = active === "all" || [card.dataset.asset, card.dataset.event, card.dataset.lp].includes(active);
+          const fields = [card.dataset.asset, card.dataset.event, card.dataset.lp, card.dataset.kind].filter(Boolean);
+          const filterHit = active === "all" || fields.includes(active) || fields.some((field) => field.includes(active));
           const queryHit = !query || haystack.includes(query);
           card.style.display = filterHit && queryHit ? "" : "none";
         }});
@@ -1428,6 +1574,7 @@ def render_lp_notice_card(item: dict[str, object]) -> str:
     title = str(item.get("displayTitle") or item.get("title") or "공식 공고")
     url = str(item.get("url") or "")
     document_url = str(item.get("documentUrl") or "")
+    lp_code = str(item.get("lpCode") or "")
     amount = lp_amount_label(item.get("allocationAmount"))
     meta_values = [
         str(item.get("lpName") or "LP 미분류"),
@@ -1447,6 +1594,7 @@ def render_lp_notice_card(item: dict[str, object]) -> str:
         if document_url and document_url != url
         else ""
     )
+    profile_link = f'<a href="lp-{html_escape(lp_code)}.html">LP 프로필</a>' if lp_code else ""
     linked_title = (
         f'<a href="{html_escape(url)}" target="_blank" rel="noreferrer">{html_escape(title)}</a>'
         if url
@@ -1462,17 +1610,17 @@ def render_lp_notice_card(item: dict[str, object]) -> str:
             item.get("selectedGpNames"),
         ]
     )
-    return f"""          <article class="lp-page-card" data-search="{html_escape(search_blob)}" data-lp="{html_escape(str(item.get("lpCode") or ""))}" data-asset="{html_escape(str(item.get("assetClass") or ""))}" data-event="{html_escape(str(item.get("eventType") or ""))}" data-deadline="{html_escape(str(item.get("applicationDeadline") or ""))}">
+    return f"""          <article class="lp-page-card" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(str(item.get("assetClass") or ""))}" data-event="{html_escape(str(item.get("eventType") or ""))}" data-deadline="{html_escape(str(item.get("applicationDeadline") or ""))}">
             <h2>{linked_title}</h2>
             <div class="lp-page-meta">{meta}</div>
-            <div class="lp-page-actions">{official_link}{document_link}</div>
+            <div class="lp-page-actions">{profile_link}{official_link}{document_link}</div>
           </article>"""
 
 
 def write_lp_notices_page(site_dir: Path, report_date: str) -> int:
     notices = read_lp_monitor(DEFAULT_LP_COMMITMENT_MONITOR)
     (site_dir / "lp-notices.html").write_text(
-        render_lp_notices_page(report_date, notices, read_lp_profile_nav()),
+        render_lp_notices_page(report_date, notices, read_lp_profile_nav(), read_lp_directory_items()),
         encoding="utf-8",
     )
     return len(notices)
@@ -1566,13 +1714,16 @@ def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
         for path in site_dir.glob("lp-*.html")
         if path.name != "lp-notices.html"
     )
+    gp_profile_paths = sorted(site_dir.glob("gp-*.html"))
     alias_paths = [site_dir / alias for aliases in LP_PROFILE_ALIASES.values() for alias in aliases]
     include_paths = [
         site_dir / "index.html",
         site_dir / "daily-news.html",
         site_dir / "lp-notices.html",
+        site_dir / "gps.html",
         *alias_paths,
         *profile_paths,
+        *gp_profile_paths,
         site_dir / "health.json",
         site_dir / "archive.json",
         site_dir / ".nojekyll",
@@ -1625,6 +1776,7 @@ def main() -> int:
     result["lp_profile_fact_count"] = str(write_lp_profile_pages(site_dir, args.date))
     result["lp_profile_page_count"] = str(len([path for path in site_dir.glob("lp-*.html") if path.name != "lp-notices.html"]))
     result["ktcu_fact_count"] = str(len(read_ktcu_payload(lp_code=KTCU_CODE, profile_codes=read_lp_profile_codes()).get("facts") or []))
+    result.update({key: str(value) for key, value in write_gp_pages(site_dir, DEFAULT_DB, args.date).items()})
     write_health_file(site_dir, result)
     write_static_support_files(site_dir)
     assert_newsletter_only(site_dir)

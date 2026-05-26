@@ -435,6 +435,31 @@ def add_unique(items: list[str], value: str) -> None:
         items.append(value)
 
 
+def context_entry() -> dict[str, object]:
+    return {
+        "gpNames": [],
+        "searchTerms": [],
+        "peopleCount": 0,
+        "serviceActions": [],
+    }
+
+
+def service_context_keys(source_url: object = "", normalized_source_url: object = "") -> list[str]:
+    keys: list[str] = []
+    for value in [normalized_source_url, source_url]:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        for key in [normalize_url(text), text]:
+            if key and key not in keys:
+                keys.append(key)
+    return keys
+
+
+def split_context_names(value: object) -> list[str]:
+    return [part.strip() for part in re.split(r"[,;]", str(value or "")) if part.strip()]
+
+
 def service_action_label(action: str, context_action: str = "") -> str:
     text = f"{action} {context_action}"
     if "프로필 필수정보" in text:
@@ -459,15 +484,7 @@ def read_service_context(path: Path) -> dict[str, dict[str, object]]:
             url = normalize_url(str(row.get("latest_url") or "").strip())
             if not url:
                 continue
-            entry = context.setdefault(
-                url,
-                {
-                    "gpNames": [],
-                    "searchTerms": [],
-                    "peopleCount": 0,
-                    "serviceActions": [],
-                },
-            )
+            entry = context.setdefault(url, context_entry())
             gp_names = entry["gpNames"]
             search_terms = entry["searchTerms"]
             add_unique(gp_names, row.get("standard_gp_name", ""))
@@ -488,6 +505,37 @@ def read_service_context(path: Path) -> dict[str, dict[str, object]]:
         actions = entry.pop("serviceActions", [])
         entry["serviceAction"] = actions[0] if actions else ""
     return context
+
+
+def read_review_queue_context(out_dir: Path) -> dict[str, dict[str, object]]:
+    context: dict[str, dict[str, object]] = {}
+    for path in sorted(out_dir.glob("daily_news_review_queue_*.csv")):
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            for row in csv.DictReader(handle):
+                names = split_context_names(row.get("gp_names", ""))
+                if not names:
+                    continue
+                for key in service_context_keys(row.get("source_url", ""), row.get("normalized_source_url", "")):
+                    entry = context.setdefault(key, context_entry())
+                    gp_names = entry["gpNames"]
+                    search_terms = entry["searchTerms"]
+                    for name in names:
+                        add_unique(gp_names, name)
+                        add_unique(search_terms, name)
+    return context
+
+
+def merge_service_context(
+    base: dict[str, dict[str, object]],
+    extra: dict[str, dict[str, object]],
+) -> dict[str, dict[str, object]]:
+    for key, row in extra.items():
+        entry = base.setdefault(key, context_entry())
+        for name in row.get("gpNames", []):
+            add_unique(entry["gpNames"], str(name))
+        for term in row.get("searchTerms", []):
+            add_unique(entry["searchTerms"], str(term))
+    return base
 
 
 def lp_display_title(title: str) -> str:
@@ -598,6 +646,7 @@ def read_lp_monitor(path: Path, limit: int = 8) -> list[dict[str, object]]:
             purpose = row.get("strategy", "") or row.get("program_name", "") or row.get("round_name", "")
             item = {
                 "noticeId": row.get("notice_id", ""),
+                "lpCode": row.get("lp_code", ""),
                 "lpName": row.get("lp_name", "") or "LP 미분류",
                 "lpType": row.get("lp_type", ""),
                 "defaultTeam": row.get("default_team", ""),
@@ -737,7 +786,8 @@ def render_app(
     max_date = max(available_dates) if available_dates else report_date
     shell_class = "app-shell newsletter-only" if newsletter_only else "app-shell"
     header_db_link = (
-        '<a class="header-action" href="lp-notices.html" aria-label="LP 공식 공고 열기">공고</a>'
+        '<a class="header-action" href="lp-notices.html" aria-label="LP 디렉토리 열기">LP</a>'
+        '<a class="header-action" href="gps.html" aria-label="GP 디렉토리 열기">GP</a>'
         if newsletter_only
         else '<a class="header-action" href="db.html" aria-label="공개 GP·펀드 데이터베이스 열기">DB</a>'
     )
@@ -745,7 +795,11 @@ def render_app(
     bottom_db_link = (
         """      <a href="lp-notices.html">
         <span aria-hidden="true" class="nav-dot nav-icon-db"></span>
-        <strong>공고</strong>
+        <strong>LP</strong>
+      </a>
+      <a href="gps.html">
+        <span aria-hidden="true" class="nav-dot nav-icon-db"></span>
+        <strong>GP</strong>
       </a>"""
         if newsletter_only
         else """      <a href="db.html">
@@ -1584,7 +1638,7 @@ button, input { font: inherit; }
   background: rgba(249,249,249,0.88);
   backdrop-filter: blur(22px);
 }
-.newsletter-only .bottom-nav { grid-template-columns: repeat(3, 1fr); }
+.newsletter-only .bottom-nav { grid-template-columns: repeat(4, 1fr); }
 .bottom-nav button,
 .bottom-nav a {
   display: flex;
@@ -2408,7 +2462,10 @@ def build(
     markdown_path = out_dir / f"daily_news_brief_{compact_date(report_date)}.md"
     articles = parse_brief(markdown_path)
     basis_text = parse_brief_basis(markdown_path)
-    service_context = read_service_context(service_integration_worklist)
+    service_context = merge_service_context(
+        read_service_context(service_integration_worklist),
+        read_review_queue_context(out_dir),
+    )
     lp_monitor = read_lp_monitor(lp_commitment_monitor)
     archive_entries = build_archive_payload(out_dir, report_date, service_context, archive_limit)
     assets_dir = public_dir / "assets"

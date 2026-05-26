@@ -1,18 +1,28 @@
 standard_gp_name,alias_name,notes
 엠비케이파트너스,MBK,Short English brand
 엠비케이파트너스,MBK Partners,English brand
+엠비케이파트너스,엠비케이,Common Korean shorthand
 아이엠엠프라이빗에쿼티,IMM PE,Short English brand
 아이엠엠프라이빗에쿼티,IMM Private Equity,English brand
+아이엠엠프라이빗에쿼티,IMM프라이빗에쿼티,Common mixed shorthand
+아이엠엠프라이빗에쿼티,아이엠엠PE,Common mixed shorthand
 아이엠엠인베스트먼트,IMM Investment,English brand
 한앤컴퍼니,한앤,Common shorthand
+한앤컴퍼니,한앤코,Common shorthand
+한앤컴퍼니,Hahn & Company,English variant
+한앤컴퍼니,Hahn & Co,English shorthand
 한앤컴퍼니,Hahn and Company,English variant
 스틱인베스트먼트,STIC,Short English brand
 스틱인베스트먼트,STIC Investments,English brand
+스틱인베스트먼트,스틱,Common shorthand
 브이아이지파트너스,VIG,Short English brand
 브이아이지파트너스,VIG Partners,English brand
+브이아이지파트너스,브이아이지,Common shorthand
 제이케이엘파트너스,JKL,Short English brand
 제이케이엘파트너스,JKL Partners,English brand
+제이케이엘파트너스,제이케이엘,Common shorthand
 글랜우드프라이빗에쿼티,글랜우드PE,Common shorthand
+글랜우드프라이빗에쿼티,글랜우드,Common shorthand
 글랜우드프라이빗에쿼티,Glenwood PE,English shorthand
 글랜우드프라이빗에쿼티,Glenwood Private Equity,English brand
 센트로이드인베스트먼트파트너스,Centroid,Short English brand
@@ -20,6 +30,7 @@ standard_gp_name,alias_name,notes
 스카이레이크인베스트먼트,SkyLake,English brand
 스카이레이크인베스트먼트,SkyLake Investment,English brand
 스카이레이크에쿼티파트너스,SkyLake Equity Partners,English brand
+스카이레이크에쿼티파트너스,스카이레이크,Common shorthand
 이스트브릿지파트너스,EastBridge,Short English brand
 이스트브릿지파트너스,EastBridge Partners,English brand
 맥쿼리코리아오퍼튜니티즈운용,Macquarie Korea Opportunities,English shorthand
@@ -51,6 +62,7 @@ standard_gp_name,alias_name,notes
 제이앤프라이빗에쿼티,J& Private Equity,English brand
 큐리어스파트너스,Curious,Short English brand
 큐리어스파트너스,Curious Partners,English brand
+큐리어스파트너스,큐리어스,Common shorthand
 케이티비프라이빗에쿼티,KTB PE,Short English brand
 케이티비프라이빗에쿼티,KTB Private Equity,English brand
 제네시스프라이빗에쿼티,Genesis PE,Short English brand
@@ -58,3 +70,25 @@ standard_gp_name,alias_name,notes
 글랜우드크레딧,Glenwood Credit,English brand
 케이비자산운용,KB Asset Management,English brand
 신한대체투자운용,Shinhan Alternative Investment Management,English brand
+유씨케이파트너스,UCK,Short English brand
+유씨케이파트너스,UCK Partners,English brand
+유씨케이파트너스,유씨케이,Common shorthand
+프랙시스캐피탈파트너스,프랙시스,Common shorthand
+프랙시스캐피탈파트너스,Praxis,Short English brand
+프랙시스캐피탈파트너스,Praxis Capital,English brand
+스톤브릿지캐피탈,스톤브릿지,Common shorthand
+스톤브릿지캐피탈,Stonebridge,Short English brand
+스톤브릿지캐피탈,Stonebridge Capital,English brand
+헬리오스프라이빗에쿼티,헬리오스PE,Common shorthand
+헬리오스프라이빗에쿼티,헬리오스,Common shorthand
+헬리오스프라이빗에쿼티,Helios PE,English shorthand
+헬리오스프라이빗에쿼티,Helios Private Equity,English brand
+어펄마캐피탈매니져스코리아,어펄마,Common shorthand
+어펄마캐피탈매니져스코리아,어펄마캐피탈,Common shorthand
+어펄마캐피탈매니져스코리아,Affirma,Short English brand
+어펄마캐피탈매니져스코리아,Affirma Capital,English brand
+이앤에프프라이빗에퀴티,이앤에프PE,Common shorthand
+이앤에프프라이빗에퀴티,E&F,Short English brand
+오퍼스프라이빗에퀴티,오퍼스,Common shorthand
+오퍼스프라이빗에퀴티,오퍼스PE,Common shorthand
+오퍼스프라이빗에퀴티,Opus PE,English shorthand

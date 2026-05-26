@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -23,13 +24,22 @@ from run_daily_news_pipeline import (
     is_in_coverage_window,
     is_previous_export,
     load_previous_export_keys,
+    normalize_title_key,
     parse_google_news_batch_response,
     primary_section,
     render_markdown,
     select_brief_rows,
     should_export_row,
 )
-from daily_news_common import DEFAULT_RULES, load_rules, score_document, to_iso_datetime
+from daily_news_common import (
+    DEFAULT_RULES,
+    load_gp_aliases,
+    load_rules,
+    match_gp_entities,
+    normalize_url,
+    score_document,
+    to_iso_datetime,
+)
 
 
 def test_coverage_window() -> None:
@@ -93,6 +103,47 @@ def test_google_news_decode_helpers() -> None:
         [["wrb.fr", "Fbv4je", json.dumps(["garturlres", "https://example.com/original", 1]), None, None, None, ""]]
     )
     assert parse_google_news_batch_response(response) == "https://example.com/original"
+
+
+def test_sedaily_mobile_amp_url_normalizes_to_desktop_article() -> None:
+    assert normalize_url("https://m.sedaily.com/amparticle/20047971") == "https://www.sedaily.com/article/20047971"
+    assert normalize_url("https://m.sedaily.com/article/2004797120047971") == "https://www.sedaily.com/article/20047971"
+    assert normalize_url("https://www.sedaily.com/article/20047971?ref=naver") == "https://www.sedaily.com/article/20047971"
+
+
+def test_truncated_media_suffix_does_not_split_title_duplicates() -> None:
+    truncated = "대형 PEF, 롯데렌탈 눈독…공정위 기조·몸값 격차에 M&A는 안갯속[시그..."
+    full = "대형 PEF, 롯데렌탈 눈독…공정위 기조·몸값 격차에 M&A는 안갯속[시그널]"
+    assert normalize_title_key(truncated) == normalize_title_key(full)
+
+
+def test_gp_alias_overrides_cover_common_short_names() -> None:
+    with TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / "gp.db"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute("CREATE TABLE gp_house(gp_id INTEGER PRIMARY KEY, gp_name TEXT)")
+            conn.executemany(
+                "INSERT INTO gp_house(gp_id, gp_name) VALUES (?, ?)",
+                [
+                    (7987, "어펄마캐피탈매니져스코리아"),
+                    (6358, "헬리오스프라이빗에쿼티"),
+                ],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        aliases = load_gp_aliases(db_path)
+        matches = match_gp_entities(
+            "어펄마, 화성코스메틱 해외 매각 노린다",
+            "헬리오스PE는 서울전선 인수 우선협상대상자로 선정됐다.",
+            "",
+            aliases,
+        )
+        names = {str(match["entity_name"]) for match in matches}
+        assert "어펄마캐피탈매니져스코리아" in names
+        assert "헬리오스프라이빗에쿼티" in names
 
 
 def test_weak_context_quality_penalty() -> None:
@@ -363,6 +414,9 @@ def main() -> int:
         test_google_backtest_window_catches_weekend_on_monday,
         test_previous_export_keys_ignore_review_candidates,
         test_google_news_decode_helpers,
+        test_sedaily_mobile_amp_url_normalizes_to_desktop_article,
+        test_truncated_media_suffix_does_not_split_title_duplicates,
+        test_gp_alias_overrides_cover_common_short_names,
         test_weak_context_quality_penalty,
         test_strong_headline_quality,
         test_allocator_section_priority,
