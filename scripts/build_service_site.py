@@ -1848,9 +1848,9 @@ def service_js() -> str:
         const newsCount = Number.isFinite(counts.newsCount) ? counts.newsCount : filtered().length;
         if (showLpMonitor) {
           const noticeCount = Number.isFinite(counts.noticeCount) ? counts.noticeCount : filteredLpMonitor().length;
-          briefMeta.textContent = `검색 결과 뉴스 ${newsCount}건 · 공식공고 ${noticeCount}건`;
+          briefMeta.textContent = `전체 아카이브 검색 결과 뉴스 ${newsCount}건 · 공식공고 ${noticeCount}건`;
         } else {
-          briefMeta.textContent = `검색 결과 뉴스 ${newsCount}건`;
+          briefMeta.textContent = `전체 아카이브 검색 결과 뉴스 ${newsCount}건`;
         }
         return;
       }
@@ -1872,18 +1872,25 @@ def service_js() -> str:
     }
   };
 
+  const articleSearchValues = (article) => [
+    article.title,
+    article.source,
+    article.section,
+    article.subCategory,
+    article.rawSection,
+    article.visibleDate,
+    article.reportDate,
+    Array.isArray(article.gpNames) ? article.gpNames.join(" ") : "",
+    Array.isArray(article.searchTerms) ? article.searchTerms.join(" ") : ""
+  ];
+
+  const articleMatches = (article, query) => textMatches(articleSearchValues(article), query);
+
   const filtered = () => {
     const query = queryText();
-    if (!query) return articles;
-    return articles.filter((article) => textMatches([
-        article.title,
-        article.source,
-        article.section,
-        article.subCategory,
-        article.rawSection,
-        Array.isArray(article.gpNames) ? article.gpNames.join(" ") : "",
-        Array.isArray(article.searchTerms) ? article.searchTerms.join(" ") : ""
-      ], query));
+    const sourceRows = query ? allArchiveArticles() : articles;
+    if (!query) return sourceRows;
+    return sourceRows.filter((article) => articleMatches(article, query));
   };
 
   const filteredLpMonitor = () => {
@@ -2206,6 +2213,13 @@ def service_js() -> str:
     taxonomy.textContent = article.subCategory ? `${article.section} · ${article.subCategory}` : (article.section || "");
     const source = document.createElement("span");
     source.textContent = article.source || "출처 미확인";
+    const articleDate = article.visibleDate || article.reportDate || "";
+    if (articleDate && (queryText() || article.reportDate !== activeBrief.reportDate)) {
+      const date = document.createElement("span");
+      date.className = "article-date-meta";
+      date.textContent = articleDate;
+      meta.append(date);
+    }
     if (taxonomy.textContent) meta.append(taxonomy);
     meta.append(source);
     link.append(title, meta);
@@ -2267,9 +2281,17 @@ def service_js() -> str:
   };
 
   const renderSaved = () => {
-    const items = allArchiveArticles().filter((article) => saved.has(article.url));
+    const query = queryText();
+    const savedItems = allArchiveArticles().filter((article) => saved.has(article.url));
+    const items = query ? savedItems.filter((article) => articleMatches(article, query)) : savedItems;
     savedList.replaceChildren();
     savedEmpty.classList.toggle("visible", !items.length);
+    if (!items.length) {
+      const title = savedEmpty.querySelector("strong");
+      const body = savedEmpty.querySelector("span");
+      if (title) title.textContent = query && savedItems.length ? "저장한 기사 중 검색 결과가 없습니다" : "저장한 기사가 없습니다";
+      if (body) body.textContent = query && savedItems.length ? "검색어를 줄여 다시 확인합니다." : "나중에 볼 기사는 오른쪽 버튼으로 저장합니다.";
+    }
     if (items.length) renderGrouped(savedList, items);
   };
 
