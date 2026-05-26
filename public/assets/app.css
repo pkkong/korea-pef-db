@@ -617,21 +617,99 @@ a:hover {
   gap: 8px;
 }
 
-.lp-notice-panel {
+.lp-profile-panel {
   order: 1;
+}
+
+.lp-notice-panel {
+  order: 3;
 }
 
 .lp-institution-panel {
   order: 2;
 }
 
+.lp-profile-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.lp-profile-main {
+  display: grid;
+  gap: 12px;
+}
+
+.lp-profile-main h2 {
+  margin: 6px 0 4px;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.lp-profile-main p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.lp-profile-main dl {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin: 0;
+}
+
+.lp-profile-main dl div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
+
+.lp-profile-main dt {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.lp-profile-main dd {
+  margin: 4px 0 0;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.lp-profile-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lp-profile-links a {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: #fff;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .lp-card {
   display: grid;
   gap: 10px;
+  width: 100%;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
   padding: 13px;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.lp-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
 }
 
 .lp-card strong {
@@ -1017,6 +1095,10 @@ a:hover {
   }
 
   .lp-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .lp-profile-main dl {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 

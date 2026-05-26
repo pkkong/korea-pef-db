@@ -32,6 +32,7 @@ PUBLIC_KEYS = [
     "people_profile_summary",
     "people_roles",
     "people_education",
+    "lp_profiles",
     "lp_institutions",
     "lp_institution_stats",
     "lp_commitment_notices",
@@ -69,6 +70,63 @@ PROFILE_KEYS = [
     "service_ready",
 ]
 
+LP_PROFILE_KEYS = [
+    "lp_code",
+    "lp_name",
+    "lp_name_en",
+    "lp_type",
+    "ownership_type",
+    "homepage_url",
+    "notice_url",
+    "default_team",
+    "focus_asset_classes",
+    "service_priority",
+    "aliases",
+    "notes",
+    "notice_count",
+    "official_notice_count",
+    "news_notice_count",
+    "new_notice_count",
+    "deadline_soon_count",
+    "selection_event_count",
+    "allocation_amount_krw_100mn",
+    "commitment_amount_krw_100mn",
+    "latest_event_date",
+    "latest_announced_date",
+    "latest_discovered_at",
+    "latest_notice_title",
+    "latest_notice_url",
+    "latest_notice_event_type",
+]
+
+LP_NOTICE_KEYS = [
+    "notice_id",
+    "lp_code",
+    "lp_name",
+    "lp_type",
+    "default_team",
+    "source_code",
+    "source_type",
+    "event_type",
+    "event_date",
+    "title",
+    "notice_url",
+    "document_url",
+    "program_name",
+    "round_name",
+    "announced_date",
+    "notice_year",
+    "application_deadline",
+    "notice_stage",
+    "asset_class",
+    "strategy",
+    "allocation_amount_krw_100mn",
+    "amount_confidence",
+    "selected_gp_names",
+    "confidence",
+    "public_visible",
+]
+
 
 def project(row: dict[str, object], keys: list[str]) -> dict[str, object]:
     return {key: row.get(key, "") for key in keys}
@@ -86,6 +144,16 @@ def build_payload(data: dict[str, object]) -> dict[str, object]:
         project(row, PROFILE_KEYS)
         for row in data.get("gp_profiles", [])
         if isinstance(row, dict)
+    ]
+    payload["lp_profiles"] = [
+        project(row, LP_PROFILE_KEYS)
+        for row in data.get("lp_profiles", [])
+        if isinstance(row, dict)
+    ]
+    payload["lp_commitment_notices"] = [
+        project(row, LP_NOTICE_KEYS)
+        for row in data.get("lp_commitment_notices", [])
+        if isinstance(row, dict) and str(row.get("public_visible", "1")).strip().lower() not in {"0", "false", "no"}
     ]
     return payload
 

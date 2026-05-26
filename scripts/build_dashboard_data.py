@@ -109,6 +109,75 @@ def build_gp_cumulative(funds: list[dict[str, object]]) -> list[dict[str, object
     return rows
 
 
+def public_visible(row: dict[str, object]) -> bool:
+    return str(row.get("public_visible", "1")).strip().lower() not in {"0", "false", "no"}
+
+
+def numeric(value: object) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def build_lp_profiles(
+    institutions: list[dict[str, object]],
+    institution_stats: list[dict[str, object]],
+    notices: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    stats_by_code = {str(row.get("lp_code") or ""): row for row in institution_stats}
+    visible_notices = [row for row in notices if public_visible(row)]
+    notices_by_code: dict[str, list[dict[str, object]]] = {}
+    for row in visible_notices:
+        code = str(row.get("lp_code") or "").strip()
+        if not code:
+            continue
+        notices_by_code.setdefault(code, []).append(row)
+
+    profiles: list[dict[str, object]] = []
+    for institution in institutions:
+        code = str(institution.get("lp_code") or "").strip()
+        lp_notices = sorted(
+            notices_by_code.get(code, []),
+            key=lambda row: str(row.get("event_date") or row.get("announced_date") or row.get("discovered_at") or ""),
+            reverse=True,
+        )
+        event_counts: dict[str, int] = {}
+        source_counts: dict[str, int] = {}
+        for notice in lp_notices:
+            event_type = str(notice.get("event_type") or "candidate")
+            source_type = str(notice.get("source_type") or "official")
+            event_counts[event_type] = event_counts.get(event_type, 0) + 1
+            source_counts[source_type] = source_counts.get(source_type, 0) + 1
+        latest_notice = lp_notices[0] if lp_notices else {}
+        stats = stats_by_code.get(code, {})
+        allocation_amount = sum(numeric(row.get("allocation_amount_krw_100mn")) for row in lp_notices)
+        commitment_amount = sum(numeric(row.get("commitment_amount_krw_100mn")) for row in lp_notices)
+        profiles.append(
+            {
+                **institution,
+                "notice_count": len(lp_notices),
+                "official_notice_count": source_counts.get("official", 0),
+                "news_notice_count": source_counts.get("news", 0),
+                "new_notice_count": event_counts.get("new_notice", 0),
+                "deadline_soon_count": event_counts.get("deadline_soon", 0),
+                "selection_event_count": event_counts.get("shortlist", 0) + event_counts.get("final_selection", 0),
+                "allocation_amount_krw_100mn": round(allocation_amount, 4),
+                "commitment_amount_krw_100mn": round(commitment_amount, 4),
+                "latest_event_date": latest_notice.get("event_date") or stats.get("latest_event_date") or "",
+                "latest_announced_date": latest_notice.get("announced_date") or stats.get("latest_announced_date") or "",
+                "latest_discovered_at": latest_notice.get("discovered_at") or stats.get("latest_discovered_at") or "",
+                "latest_notice_title": latest_notice.get("title", ""),
+                "latest_notice_url": latest_notice.get("notice_url", ""),
+                "latest_notice_event_type": latest_notice.get("event_type", ""),
+            }
+        )
+    return sorted(
+        profiles,
+        key=lambda row: (-int(row.get("service_priority") or 0), str(row.get("lp_name") or "")),
+    )
+
+
 def build_payload(
     conn: sqlite3.Connection,
     news_gp_alias_overrides: Path = DEFAULT_NEWS_GP_ALIAS_OVERRIDES,
@@ -520,6 +589,7 @@ def build_payload(
             ORDER BY notice_year DESC, commitment_amount_krw_100mn DESC, notice_count DESC, lp_name
             """,
         )
+    lp_profiles = build_lp_profiles(lp_institutions, lp_institution_stats, lp_commitment_notices)
 
     return {
         "meta": {
@@ -542,6 +612,7 @@ def build_payload(
         "people_profile_summary": people_profile_summary,
         "people_roles": people_roles,
         "people_education": people_education,
+        "lp_profiles": lp_profiles,
         "lp_institutions": lp_institutions,
         "lp_institution_stats": lp_institution_stats,
         "lp_commitment_notices": lp_commitment_notices,
@@ -584,6 +655,7 @@ def main() -> int:
     print(f"people_current_gp={len(payload['people_current_gp'])}")
     print(f"people_roles={len(payload['people_roles'])}")
     print(f"people_education={len(payload['people_education'])}")
+    print(f"lp_profiles={len(payload['lp_profiles'])}")
     print(f"lp_institutions={len(payload['lp_institutions'])}")
     print(f"lp_commitment_notices={len(payload['lp_commitment_notices'])}")
     print(f"service_integration_queue={len(payload['service_integration_queue'])}")

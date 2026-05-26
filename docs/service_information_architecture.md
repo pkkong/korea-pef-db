@@ -268,8 +268,9 @@ Core data:
 
 Current status:
 
-- Not built.
-- Should be built after GP/Fund confidence layer is stable.
+- MVP built.
+- Public DB has an LP tab with institution profiles, official notice/news monitor events, and public-visible commitment stats.
+- Next work is source-backed profile confidence, amount validation, selected GP history, and LP-specific detail pages.
 
 ### 8. Wiki / Practical Guides
 

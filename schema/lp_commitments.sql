@@ -140,6 +140,7 @@ SELECT
 FROM lp_institution li
 LEFT JOIN lp_commitment_notice lcn
     ON lcn.lp_code = li.lp_code
+   AND lcn.public_visible = 1
 GROUP BY li.lp_code;
 
 DROP VIEW IF EXISTS v_lp_commitment_yearly_stats;
@@ -154,4 +155,5 @@ SELECT
     SUM(COALESCE(commitment_amount_krw_100mn, 0)) AS commitment_amount_krw_100mn
 FROM v_lp_commitment_notice_public
 WHERE notice_year IS NOT NULL
+  AND public_visible = 1
 GROUP BY notice_year, lp_code, lp_name;

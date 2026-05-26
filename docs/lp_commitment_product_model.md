@@ -19,6 +19,15 @@ LP는 GP Stat의 보조 필터가 아니라 별도 제품 축이다. 공개 서�
 - `v_lp_institution_stats`: LP별 공고/금액/최근 업데이트.
 - `v_lp_commitment_yearly_stats`: 연도별 LP 출자사업 합계.
 
+## LP 일반현황
+
+LP 화면은 GP 프로필처럼 먼저 기관의 일반현황을 보여준 뒤 출자 이벤트를 붙인다.
+최소 공개 필드는 `lp_name`, `lp_name_en`, `lp_type`, `ownership_type`, `default_team`,
+`focus_asset_classes`, `homepage_url`, `notice_url`, `aliases`, `notes`다. 통계 필드는
+공개 가능한 공고 기준으로 `notice_count`, `official_notice_count`, `news_notice_count`,
+`allocation_amount_krw_100mn`, `latest_event_date`, `latest_notice_title`을 병합한다.
+금액은 자동 추출값이므로 검증 전에는 참고값으로만 다룬다.
+
 ## 모니터 이벤트 타입
 
 출자사업 모니터는 아래 이벤트만 우선 노출한다.

@@ -16,6 +16,7 @@ const state = {
   fundSort: { key: "amount", dir: "desc" },
   profileFundSort: { key: "amount", dir: "desc" },
   profilePeopleSort: { key: "title", dir: "asc" },
+  selectedLpCode: null,
   lpNoticeStage: ""
 };
 
@@ -742,9 +743,9 @@ function renderFunds() {
 
 function lpInstitutionRows() {
   const q = normalize(byId("lpInstitutionSearch").value);
-  return (state.data.lp_institution_stats || [])
+  return lpProfiles()
     .filter((row) => {
-      const text = `${row.lp_name} ${row.lp_type} ${row.default_team} ${row.focus_asset_classes}`;
+      const text = `${row.lp_name} ${row.lp_name_en} ${row.lp_type} ${row.ownership_type} ${row.default_team} ${row.focus_asset_classes} ${row.aliases} ${row.notes}`;
       return !q || normalize(text).includes(q);
     });
 }
@@ -768,34 +769,94 @@ function gpSummary(value) {
   return names.length > 2 ? `${visible} 외 ${names.length - 2}` : visible;
 }
 
+function ownershipLabel(value) {
+  return {
+    public: "공공",
+    private: "민간",
+    mutual_aid: "공제회"
+  }[value] || value || "-";
+}
+
+function semicolonLabel(value) {
+  const values = splitNames(value);
+  return values.length ? values.join(" · ") : "-";
+}
+
+function lpProfiles() {
+  if (Array.isArray(state.data.lp_profiles) && state.data.lp_profiles.length) {
+    return state.data.lp_profiles;
+  }
+  const statsByCode = new Map((state.data.lp_institution_stats || []).map((row) => [row.lp_code, row]));
+  return (state.data.lp_institutions || []).map((row) => ({ ...row, ...(statsByCode.get(row.lp_code) || {}) }));
+}
+
+function selectLp(lpCode) {
+  if (!lpCode) return;
+  state.selectedLpCode = lpCode;
+  renderLp();
+}
+
 function renderLp() {
-  const institutions = state.data.lp_institutions || [];
+  const profiles = lpProfiles();
   const notices = state.data.lp_commitment_notices || [];
   const visibleNotices = notices.filter((row) => Number(row.public_visible) !== 0);
-  const amount = visibleNotices.reduce((sum, row) => sum + num(row.allocation_amount_krw_100mn), 0);
+  const officialNoticeCount = visibleNotices.filter((row) => row.source_type === "official").length;
   const gpSet = new Set();
   visibleNotices.forEach((row) => splitNames(row.selected_gp_names).forEach((name) => gpSet.add(name)));
 
-  byId("lpMetricInstitutions").textContent = fmtInt.format(institutions.length);
+  byId("lpMetricInstitutions").textContent = fmtInt.format(profiles.length);
   byId("lpMetricNotices").textContent = fmtInt.format(visibleNotices.length);
-  byId("lpMetricAmount").textContent = amount ? fmtAmount(amount) : "-";
+  byId("lpMetricAmount").textContent = fmtInt.format(officialNoticeCount);
   byId("lpMetricSelectedGps").textContent = fmtInt.format(gpSet.size);
 
   const lpRows = lpInstitutionRows();
+  if (lpRows.length && !lpRows.some((row) => row.lp_code === state.selectedLpCode)) {
+    state.selectedLpCode = lpRows[0]?.lp_code || profiles[0]?.lp_code || null;
+  } else if (!state.selectedLpCode || !profiles.some((row) => row.lp_code === state.selectedLpCode)) {
+    state.selectedLpCode = profiles[0]?.lp_code || null;
+  }
+  const selectedLp = profiles.find((row) => row.lp_code === state.selectedLpCode) || lpRows[0] || profiles[0];
+  byId("lpProfileSummary").innerHTML = selectedLp ? `
+    <div class="lp-profile-main">
+      <div>
+        <span class="status">${escapeHtml(ownershipLabel(selectedLp.ownership_type))}</span>
+        <h2>${escapeHtml(selectedLp.lp_name)}</h2>
+        <p>${escapeHtml(selectedLp.lp_name_en || selectedLp.notes || "-")}</p>
+      </div>
+      <dl>
+        <div><dt>기관 유형</dt><dd>${escapeHtml(selectedLp.lp_type || "-")}</dd></div>
+        <div><dt>담당 조직</dt><dd>${escapeHtml(selectedLp.default_team || "-")}</dd></div>
+        <div><dt>관심 자산군</dt><dd>${escapeHtml(semicolonLabel(selectedLp.focus_asset_classes))}</dd></div>
+        <div><dt>공개 이벤트</dt><dd>${fmtInt.format(num(selectedLp.notice_count))}건</dd></div>
+        <div><dt>공식 공고</dt><dd>${fmtInt.format(num(selectedLp.official_notice_count))}건</dd></div>
+        <div><dt>최근 업데이트</dt><dd>${escapeHtml(fmtDate(selectedLp.latest_event_date || selectedLp.latest_announced_date || selectedLp.latest_discovered_at))}</dd></div>
+      </dl>
+      <p>${escapeHtml(selectedLp.notes || "")}</p>
+      <div class="lp-profile-links">
+        ${selectedLp.homepage_url ? `<a href="${escapeAttr(selectedLp.homepage_url)}" target="_blank" rel="noreferrer">홈페이지</a>` : ""}
+        ${selectedLp.notice_url ? `<a href="${escapeAttr(selectedLp.notice_url)}" target="_blank" rel="noreferrer">공식 공고 채널</a>` : ""}
+        ${selectedLp.latest_notice_url ? `<a href="${escapeAttr(selectedLp.latest_notice_url)}" target="_blank" rel="noreferrer">최근 공고</a>` : ""}
+      </div>
+    </div>
+  ` : `<div class="empty">LP 프로필 데이터가 없습니다.</div>`;
+
   byId("lpInstitutionCards").innerHTML = lpRows.map((row) => `
-    <article class="lp-card">
+    <button class="lp-card ${row.lp_code === state.selectedLpCode ? "active" : ""}" type="button" data-lp-code="${escapeAttr(row.lp_code)}">
       <div>
         <strong>${escapeHtml(row.lp_name)}</strong>
-        <span>${escapeHtml(row.lp_type || "-")} · ${escapeHtml(row.default_team || "-")}</span>
+        <span>${escapeHtml(row.lp_type || "-")} · ${escapeHtml(ownershipLabel(row.ownership_type))}</span>
       </div>
       <dl>
         <div><dt>공고/뉴스</dt><dd>${fmtInt.format(num(row.notice_count))}</dd></div>
-        <div><dt>금액</dt><dd>${fmtAmount(row.allocation_amount_krw_100mn)}</dd></div>
+        <div><dt>공식</dt><dd>${fmtInt.format(num(row.official_notice_count))}건</dd></div>
         <div><dt>최근</dt><dd>${escapeHtml(fmtDate(row.latest_event_date || row.latest_announced_date || row.latest_discovered_at))}</dd></div>
       </dl>
-      <p>${escapeHtml(row.focus_asset_classes || "-")}</p>
-    </article>
+      <p>${escapeHtml(row.default_team || "-")} · ${escapeHtml(semicolonLabel(row.focus_asset_classes))}</p>
+    </button>
   `).join("") || `<div class="empty">검색 결과가 없습니다.</div>`;
+  byId("lpInstitutionCards").querySelectorAll("[data-lp-code]").forEach((button) => {
+    button.addEventListener("click", () => selectLp(button.dataset.lpCode));
+  });
 
   const rows = lpNoticeRows();
   byId("lpNoticeCards").innerHTML = rows.map((row) => `
