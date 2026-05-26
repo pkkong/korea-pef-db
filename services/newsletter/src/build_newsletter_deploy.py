@@ -235,8 +235,6 @@ def read_lp_profile_codes(db_path: Path = DEFAULT_DB) -> list[str]:
                 """
                 SELECT lp_code
                 FROM v_lp_profile_summary
-                WHERE fact_count > 0
-                   OR notice_count > 0
                 ORDER BY service_priority DESC, lp_name
                 """,
             )
@@ -309,8 +307,6 @@ def read_lp_directory_items(db_path: Path = DEFAULT_DB) -> list[dict[str, object
                 fact_count,
                 source_count
             FROM v_lp_profile_summary
-            WHERE fact_count > 0
-               OR notice_count > 0
             ORDER BY service_priority DESC, lp_name
             """,
         )

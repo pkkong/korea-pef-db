@@ -8,6 +8,8 @@ CSV monitor for downstream site builders.
 
 - Compatibility path: `python3 scripts/build_lp_commitment_monitor.py`
 - Service path: `python3 services/lp/src/build_lp_commitment_monitor.py`
+- Profile backlog: `python3 services/lp/src/build_lp_profile_backlog.py`
+- Background runner: `services/lp/scripts/run_lp_background_collector.sh`
 
 Both entrypoints call the same implementation in
 `services/lp/src/build_lp_commitment_monitor.py`.
@@ -23,6 +25,49 @@ python3 services/lp/src/build_lp_commitment_monitor.py --skip-source-fetch
 ```
 
 Run without `--skip-source-fetch` only when official source fetching is expected.
+
+## Profile Expansion Model
+
+The public LP service shows every tracked LP institution, even when a profile is
+still thin. Profile quality grows through a separate backlog instead of hiding
+unfilled LPs:
+
+- `profile_ready`: enough public facts and at least one notice signal
+- `profile_gap`: some public facts exist, but one or more target sections are missing
+- `notice_only`: official/news notices exist, but the profile facts are not built yet
+- `seed_only`: the LP is in the tracked universe, but facts and notices are still empty
+
+Build the profile backlog:
+
+```bash
+python3 services/lp/src/build_lp_profile_backlog.py
+```
+
+This writes `exports/lp_profile_backlog_latest.csv` and
+`exports/lp_profile_backlog_latest.json`. The queue should be used by a human
+reviewer or a research agent to add source-backed rows to
+`data/lp_profile_facts.csv`.
+
+## Background Job
+
+For continuous collection on the local Mac, install the LP collector:
+
+```bash
+services/lp/scripts/install_lp_background_collector_launchd.sh --interval-hours 6
+```
+
+The job runs:
+
+1. LP commitment notice monitor
+2. LP profile research backlog builder
+3. Newsletter/LP/GP static bundle rebuild
+4. GitHub Pages mirror publish, unless `LP_COLLECTOR_PUBLISH=0`
+
+Use `--no-push` on the runner for a validation pass:
+
+```bash
+services/lp/scripts/run_lp_background_collector.sh --no-push
+```
 
 ## CSV Review Queue
 

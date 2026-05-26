@@ -40,6 +40,7 @@ from daily_news_common import (
     score_document,
     to_iso_datetime,
 )
+from build_newsletter_deploy import read_lp_directory_items, read_lp_profile_codes
 
 
 def test_coverage_window() -> None:
@@ -144,6 +145,59 @@ def test_gp_alias_overrides_cover_common_short_names() -> None:
         names = {str(match["entity_name"]) for match in matches}
         assert "어펄마캐피탈매니져스코리아" in names
         assert "헬리오스프라이빗에쿼티" in names
+
+
+def test_lp_directory_includes_seed_only_profiles() -> None:
+    with TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / "lp.db"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                """
+                CREATE TABLE v_lp_profile_summary(
+                    lp_code TEXT,
+                    lp_name TEXT,
+                    lp_name_en TEXT,
+                    lp_type TEXT,
+                    ownership_type TEXT,
+                    homepage_url TEXT,
+                    notice_url TEXT,
+                    default_team TEXT,
+                    focus_asset_classes TEXT,
+                    service_priority INTEGER,
+                    aliases TEXT,
+                    notes TEXT,
+                    notice_count INTEGER,
+                    allocation_amount_krw_100mn REAL,
+                    commitment_amount_krw_100mn REAL,
+                    latest_event_date TEXT,
+                    latest_announced_date TEXT,
+                    fact_count INTEGER,
+                    source_count INTEGER
+                )
+                """
+            )
+            conn.executemany(
+                """
+                INSERT INTO v_lp_profile_summary(
+                    lp_code, lp_name, lp_type, ownership_type, homepage_url, notice_url,
+                    default_team, focus_asset_classes, service_priority, notice_count,
+                    allocation_amount_krw_100mn, latest_event_date, fact_count, source_count
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    ("seed", "Seed LP", "Mutual Aid", "mutual_aid", "", "", "대체투자", "PEF", 20, 0, 0, "", 0, 0),
+                    ("active", "Active LP", "Public Pension", "public", "", "", "대체투자", "PEF", 10, 1, 100, "2026-05-01", 3, 2),
+                ],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        assert read_lp_profile_codes(db_path) == ["seed", "active"]
+        directory_codes = [str(row["lp_code"]) for row in read_lp_directory_items(db_path)]
+        assert directory_codes == ["seed", "active"]
 
 
 def test_weak_context_quality_penalty() -> None:
@@ -417,6 +471,7 @@ def main() -> int:
         test_sedaily_mobile_amp_url_normalizes_to_desktop_article,
         test_truncated_media_suffix_does_not_split_title_duplicates,
         test_gp_alias_overrides_cover_common_short_names,
+        test_lp_directory_includes_seed_only_profiles,
         test_weak_context_quality_penalty,
         test_strong_headline_quality,
         test_allocator_section_priority,
