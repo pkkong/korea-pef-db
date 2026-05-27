@@ -28,6 +28,29 @@
 - Review subagent findings before turning them into implementation, user guidance, commits, or deployment decisions.
 - Explain outcomes in non-developer language when the user is making product or operating decisions.
 - Prefer durable operating docs when a repeated workflow, role split, or quality rule is established.
+- Treat repeated user corrections as instruction-management failures, not one-off feedback.
+- When a correction reveals a durable preference, quality bar, or workflow rule, update `AGENTS.md` or `docs/agent_operating_briefs.md` instead of relying on conversation memory.
+- Before assigning subagents, include the relevant durable rules and recent repeated-error lessons in their task prompt.
+
+## Instruction Maintenance
+
+- Maintain operating instructions as part of the work, not as an optional cleanup.
+- If the user repeats the same correction, immediately decide whether a durable rule, checklist item, owner boundary, or verifier check should be added.
+- Do not make the user restate known preferences such as team-based work, service separation, avoiding card-heavy wiki layouts, avoiding unnecessary tables, reducing visual clutter, or keeping generated artifacts out of commits.
+- Keep subagent instructions explicit enough that the same mistake is not reproduced by another agent.
+- If a subagent output violates the current instruction set or known user preference, reject or revise it before integration.
+
+## Subagent Assignment Template
+
+Every non-trivial subagent task should state:
+
+- Role: Explorer, Worker, Verifier, Documentation, or service-specific owner.
+- Objective: the concrete outcome expected.
+- Owned scope: files, modules, data sources, or screens the subagent may inspect or edit.
+- Forbidden scope: files, generated outputs, secrets, DBs, logs, or service areas the subagent must not touch.
+- Quality rules: relevant user preferences and durable project rules.
+- Verification: checks the subagent should run or evidence it should collect.
+- Output: changed files, findings, remaining risks, and whether it edited anything.
 
 ## Default Specialist Roles
 

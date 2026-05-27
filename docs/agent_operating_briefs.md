@@ -24,6 +24,13 @@
 - 통합은 메인 Codex가 담당한다. 서브에이전트 결과를 검토한 뒤 실제 반영 여부를 결정하고, 필요한 테스트·빌드·검증·공개 화면 확인을 완료 기준에 맞춰 수행한다.
 - 사용자 커뮤니케이션은 간결하게 한다. 시작·중간 보고에는 `Lead`, `Explorer`, `Worker`, `Verifier`, `Documentation` 중 누가 무엇을 맡는지 한두 문장으로 알리고, 최종 보고에는 변경 파일, 검증 결과, 남은 리스크만 남긴다.
 
+## 반복 오류 방지
+
+- 사용자가 같은 수정을 반복해서 지적하면 단순 작업 실수가 아니라 지시 관리 실패로 취급한다. Project Lead는 반복 지적을 durable docs에 반영하고, 이후 같은 유형의 작업에서 기본 운영 규칙으로 적용한다.
+- 반복 지적의 핵심 문장은 이후 서브에이전트 프롬프트에 명시한다. 특히 파일 범위, 금지 범위, 산출물 품질, 공개/배포 파일 취급, 사용자 선호와 관련된 correction은 누락하지 않는다.
+- 모든 서브에이전트 배정에는 `role`, `objective`, `owned files`, `forbidden files`, `quality rules`, `known user preferences`, `verification`, `expected output`을 포함한다.
+- 서브에이전트가 같은 실수를 반복하지 않도록 Project Lead는 배정 전 known user preferences와 금지 파일을 최신 지시와 대조하고, 완료 후 결과가 그 지시를 지켰는지 확인한다.
+
 ## 서비스별 기본 담당
 
 - `뉴스레터 데스크`: `services/newsletter/`, 뉴스 수집·분류·태그·검색·발행 화면·뉴스레터 배포 준비를 맡는다. LP/GP 원천 CSV와 People 입력 파일은 직접 대량 수정하지 않는다.
