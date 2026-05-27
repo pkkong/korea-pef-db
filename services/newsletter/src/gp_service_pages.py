@@ -953,14 +953,13 @@ def _fact_row(label: str, value: object, raw: bool = False) -> str:
 
 
 def _render_top_nav(active: str = "") -> str:
-    gps_class = "active" if active == "gps" else ""
-    return f"""    <nav class="gp-top-nav" aria-label="서비스 이동">
+    directory_class = "active" if active == "gps" else ""
+    return f"""    <nav class="gp-top-nav" aria-label="GP 내부 이동">
       <strong>Korea PEF Intelligence</strong>
       <span>
-        <a href="index.html">브리프</a>
-        <a href="lp-notices.html">LP</a>
-        <a class="{gps_class}" href="gps.html">GP</a>
-        <a href="pef-wiki.html">PEF Wiki</a>
+        <a class="{directory_class}" href="gps.html">디렉토리</a>
+        <a href="gps.html#gpDirectory">GP 목록</a>
+        <a href="gps.html#gpSearch">검색</a>
       </span>
     </nav>"""
 

@@ -47,6 +47,22 @@ LP_PROFILE_SHORT_LABELS = {
     "kbiz": "중기중앙",
     "ibk": "IBK",
 }
+LP_PROFILE_DISPLAY_LABELS = {
+    "nps": "국민연금기금",
+    "kvic": "한국벤처투자",
+    "kgrowth": "한국성장금융",
+    "kafi": "농업정책보험금융원",
+    "kdb": "한국산업은행",
+    "koreapost": "우정사업본부",
+    "poba": "대한지방행정공제회",
+    "ktcu": "한국교직원공제회",
+    "pmaa": "경찰공제회",
+    "cu": "신협중앙회",
+    "kfcc": "새마을금고중앙회",
+    "kexim": "한국수출입은행",
+    "kbiz": "중소기업중앙회",
+    "ibk": "IBK기업은행",
+}
 KTCU_FACT_SECTION_LABELS = {
     "general": "일반현황",
     "investment_status": "투자현황",
@@ -433,6 +449,10 @@ def lp_short_label(lp_code: str, lp_name: str) -> str:
     return LP_PROFILE_SHORT_LABELS.get(lp_code, lp_name)
 
 
+def lp_display_label(lp_code: str, lp_name: str) -> str:
+    return LP_PROFILE_DISPLAY_LABELS.get(lp_code, lp_name)
+
+
 def read_lp_profile_codes(db_path: Path = DEFAULT_DB) -> list[str]:
     fallback = list(LP_PROFILE_FALLBACK_CODES)
     if not db_path.exists():
@@ -461,7 +481,11 @@ def read_lp_profile_codes(db_path: Path = DEFAULT_DB) -> list[str]:
 def read_lp_profile_nav(db_path: Path = DEFAULT_DB, profile_codes: list[str] | None = None) -> list[dict[str, str]]:
     codes = profile_codes or read_lp_profile_codes(db_path)
     fallback = [
-        {"lp_code": code, "lp_name": LP_PROFILE_SHORT_LABELS.get(code, code), "label": LP_PROFILE_SHORT_LABELS.get(code, code)}
+        {
+            "lp_code": code,
+            "lp_name": LP_PROFILE_DISPLAY_LABELS.get(code, code),
+            "label": LP_PROFILE_DISPLAY_LABELS.get(code, code),
+        }
         for code in codes
     ]
     if not db_path.exists():
@@ -486,8 +510,8 @@ def read_lp_profile_nav(db_path: Path = DEFAULT_DB, profile_codes: list[str] | N
     nav_items: list[dict[str, str]] = []
     for code in codes:
         row = by_code.get(code, {})
-        lp_name = str(row.get("lp_name") or LP_PROFILE_SHORT_LABELS.get(code, code))
-        nav_items.append({"lp_code": code, "lp_name": lp_name, "label": lp_short_label(code, lp_name)})
+        lp_name = str(row.get("lp_name") or LP_PROFILE_DISPLAY_LABELS.get(code, code))
+        nav_items.append({"lp_code": code, "lp_name": lp_name, "label": lp_display_label(code, lp_name)})
     return nav_items
 
 
@@ -526,7 +550,11 @@ def read_lp_directory_items(db_path: Path = DEFAULT_DB) -> list[dict[str, object
 
 def render_lp_profile_nav(nav_items: list[dict[str, str]], active_code: str = "") -> str:
     rows = nav_items or [
-        {"lp_code": code, "lp_name": LP_PROFILE_SHORT_LABELS.get(code, code), "label": LP_PROFILE_SHORT_LABELS.get(code, code)}
+        {
+            "lp_code": code,
+            "lp_name": LP_PROFILE_DISPLAY_LABELS.get(code, code),
+            "label": LP_PROFILE_DISPLAY_LABELS.get(code, code),
+        }
         for code in LP_PROFILE_FALLBACK_CODES
     ]
     links = []
@@ -1208,7 +1236,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-top {{ display: grid; gap: 14px; padding: 14px 0 12px; }}
     .ktcu-nav {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }}
     .ktcu-nav strong {{ color: var(--text); font-size: 13px; }}
-    .ktcu-nav span {{ display: flex; flex-wrap: wrap; gap: 7px; }}
+    .ktcu-nav span {{ display: flex; flex-wrap: wrap; gap: 7px; color: var(--secondary); font-size: 12px; font-weight: 750; }}
     .ktcu-nav a {{ min-height: 34px; display: inline-flex; align-items: center; border: 1px solid var(--separator); border-radius: 8px; padding: 7px 11px; background: #fff; color: var(--text); text-decoration: none; font-size: 12px; font-weight: 700; }}
     .ktcu-nav a.active,
     .ktcu-profile-nav .ktcu-profile-link.active {{ border-color: #1f6b63; background: #e7f4f1; color: #164c46; }}
@@ -1337,14 +1365,9 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
 <body>
   <main class="ktcu-shell">
     <header class="ktcu-top">
-      <nav class="ktcu-nav" aria-label="페이지 이동">
+      <nav class="ktcu-nav" aria-label="LP 내부 이동">
         <strong>Korea PEF Intelligence</strong>
-        <span>
-          <a href="index.html">브리프</a>
-          <a class="active" href="lp-notices.html">LP</a>
-          <a href="gps.html">GP</a>
-          <a href="pef-wiki.html">PEF Wiki</a>
-        </span>
+        <span>LP Profile</span>
       </nav>
       <nav class="ktcu-profile-nav" aria-label="LP 프로필">
         {nav_html}
@@ -1714,10 +1737,8 @@ def render_lp_notices_page(
           <strong>LP Directory</strong>
         </div>
         <div class="header-actions">
-          <a class="header-action" href="index.html" aria-label="뉴스 브리프 열기">브리프</a>
-          <a class="header-action active" href="lp-notices.html" aria-label="LP 디렉토리 열기">LP</a>
-          <a class="header-action" href="gps.html" aria-label="GP 디렉토리 열기">GP</a>
-          <a class="header-action" href="pef-wiki.html" aria-label="PEF Wiki 열기">Wiki</a>
+          <a class="header-action active" href="#lpDirectory" aria-label="LP 프로필 목록으로 이동">프로필</a>
+          <a class="header-action" href="#lpNotices" aria-label="LP 공식 공고로 이동">공고</a>
         </div>
       </div>
       <div class="brief-meta">추적 LP {tracked_count}개 · 공식 공고 {len(notices)}건 · 기준일 {html_escape(report_date)}</div>
@@ -1739,7 +1760,7 @@ def render_lp_notices_page(
       <nav class="lp-profile-nav" aria-label="LP 프로필">
         {nav_html}
       </nav>
-      <section class="section-block" aria-label="LP 디렉토리">
+      <section class="section-block" id="lpDirectory" aria-label="LP 디렉토리">
         <div class="lp-notice-toolbar">
           <input type="search" id="lpNoticeSearch" placeholder="LP명, 유형, 자산군, 공고명, GP 검색">
           <div class="lp-filter-row" aria-label="LP 디렉토리 필터">
@@ -1756,7 +1777,7 @@ def render_lp_notices_page(
 {directory_cards}
         </div>
       </section>
-      <section class="section-block" aria-label="LP 공식 공고">
+      <section class="section-block" id="lpNotices" aria-label="LP 공식 공고">
         <h2 class="section-title">최근 공식 공고</h2>
         <div class="lp-page-list">
 {notice_cards}

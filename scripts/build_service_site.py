@@ -964,13 +964,7 @@ def render_app(
     min_date = min(available_dates) if available_dates else report_date
     max_date = max(available_dates) if available_dates else report_date
     shell_class = "app-shell newsletter-only" if newsletter_only else "app-shell"
-    header_db_link = (
-        '<a class="header-action" href="lp-notices.html" aria-label="LP 디렉토리 열기">LP</a>'
-        '<a class="header-action" href="gps.html" aria-label="GP 디렉토리 열기">GP</a>'
-        '<a class="header-action" href="pef-wiki.html" aria-label="PEF Wiki 열기">Wiki</a>'
-        if newsletter_only
-        else '<a class="header-action" href="db.html" aria-label="공개 GP·펀드 데이터베이스 열기">DB</a>'
-    )
+    header_db_link = "" if newsletter_only else '<a class="header-action" href="db.html" aria-label="공개 GP·펀드 데이터베이스 열기">DB</a>'
     lp_db_link = "" if newsletter_only else '<a href="db.html#lp">LP DB</a>'
     bottom_db_link = (
         """      <a href="lp-notices.html">
