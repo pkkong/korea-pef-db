@@ -26,7 +26,6 @@ REFERENCE_LINKS = {
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["general_vs_institutional", "gp", "lp"],
         "summary": "집합투자증권을 사모로 발행하고 투자자 총수가 100인 이하인 사모집합투자기구 중 기관전용 체계에 속하는 투자기구입니다.",
-        "checkpoints": ["투자자 범위와 투자자 수 기준", "GP·LP 사원 구조", "경영권 참여 외 운용전략 허용 여부"],
     },
     "capital_markets_act": {
         "label": "자본시장법",
@@ -36,7 +35,6 @@ REFERENCE_LINKS = {
         "source_url": SOURCE_URLS["law"],
         "related": ["fss_reporting", "gp"],
         "summary": "기관전용 사모집합투자기구의 정의, 투자자 수, 업무집행사원, 보고·감독 체계의 기본 근거가 되는 법률입니다.",
-        "checkpoints": ["제9조 정의 조항", "제249조의11 이하 기관전용 사모집합투자기구 조항", "시행령·감독규정 위임사항"],
     },
     "general_vs_institutional": {
         "label": "일반 사모 / 기관전용 사모",
@@ -54,17 +52,15 @@ REFERENCE_LINKS = {
         "source_url": SOURCE_URLS["fss"],
         "related": ["lp", "fss_reporting"],
         "summary": "펀드의 자금모집, 투자대상 발굴, 실사, 투자집행, 사후관리, 회수와 보고를 집행하는 사원입니다.",
-        "checkpoints": ["전문인력과 내부통제", "출자자 보고와 이해상충 관리", "GP 등록·변경보고 이력"],
     },
     "lp": {
         "label": "유한책임사원(LP)",
         "type": "역할",
-        "location": "제1장 제2절 · LP 출자공고 서비스",
+        "location": "제1장 제2절",
         "source_label": "KVCA 게시글",
         "source_url": SOURCE_URLS["kvca"],
         "related": ["gp", "institutional_private_fund"],
         "summary": "펀드에 출자약정을 제공하고 손익을 배분받는 투자자입니다. 운용은 GP가 담당하고 LP는 약정 범위에서 책임을 부담합니다.",
-        "checkpoints": ["출자약정액과 납입 조건", "투자자 적격성", "LPAC 등 운용 관여 범위"],
     },
     "fss_reporting": {
         "label": "설립·변경·해산 보고",
@@ -74,7 +70,6 @@ REFERENCE_LINKS = {
         "source_url": SOURCE_URLS["fss"],
         "related": ["capital_markets_act", "gp"],
         "summary": "기관전용 사모집합투자기구는 설립, 운용 중 주요 변경, 해산·청산 단계에서 감독당국 보고 체계를 따라야 합니다.",
-        "checkpoints": ["설립보고", "정관·사원·GP 변경보고", "해산 및 청산 보고"],
     },
     "special_purpose": {
         "label": "특수목적 기관전용 사모펀드",
@@ -92,7 +87,6 @@ REFERENCE_LINKS = {
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["investment", "gp", "lp"],
         "summary": "GP가 전문성과 위험감수능력을 갖춘 투자자에게 출자를 제안하고 출자약정을 확보하는 단계입니다.",
-        "checkpoints": ["약정총액", "출자자 구성", "납입 방식과 투자기간"],
     },
     "investment": {
         "label": "투자",
@@ -102,7 +96,6 @@ REFERENCE_LINKS = {
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["value_addition", "exit"],
         "summary": "투자대상기업의 구체적 정보를 확보하고 투자 타당성 검토 후 거래구조를 확정해 집행하는 단계입니다.",
-        "checkpoints": ["실사 범위", "SPC·인수금융 구조", "투자심의와 의사결정 기록"],
     },
     "value_addition": {
         "label": "기업가치 제고",
@@ -112,7 +105,6 @@ REFERENCE_LINKS = {
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["investment", "exit"],
         "summary": "투자 후 임원 파견, 경영·재무 자문, 사업구조 또는 지배구조 개선으로 기업가치를 높이는 단계입니다.",
-        "checkpoints": ["이사회 권한", "재무개선 계획", "사업재편과 내부통제"],
     },
     "exit": {
         "label": "매각·회수",
@@ -122,7 +114,6 @@ REFERENCE_LINKS = {
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["investment", "value_addition"],
         "summary": "지분 매각, 전략적·재무적 투자자 매각, 상장 등을 통해 투자자본을 회수하는 단계입니다.",
-        "checkpoints": ["회수 방식", "분배 구조", "해산·청산 일정"],
     },
     "gp_registration": {
         "label": "GP 등록제",
@@ -132,7 +123,6 @@ REFERENCE_LINKS = {
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["gp", "fss_reporting"],
         "summary": "업무집행사원의 전문성, 인력, 재무·내부통제 요건을 확인해 운용사 시장을 관리하는 장치입니다.",
-        "checkpoints": ["등록요건", "전문인력 요건", "변경보고와 검사 리스크"],
     },
     "leverage": {
         "label": "차입·재무보증",
@@ -142,7 +132,6 @@ REFERENCE_LINKS = {
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["capital_markets_act", "money_lending"],
         "summary": "2021년 제도개편 이후 기관전용 사모펀드는 펀드와 투자목적회사를 합산한 기준으로 차입·재무보증 한도를 봅니다.",
-        "checkpoints": ["합산 400% 한도", "SPC 포함 여부", "거래 실질 기준 산정"],
     },
     "money_lending": {
         "label": "금전대여 운용",
@@ -152,7 +141,6 @@ REFERENCE_LINKS = {
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["leverage", "capital_markets_act"],
         "summary": "대출 방식 운용이 허용됐지만 개인대출과 사행성 업종 관련 대출은 제한됩니다.",
-        "checkpoints": ["차주와 업종 제한", "펀드 문서상 투자전략", "리스크 관리와 LP 보고"],
     },
     "financial_group": {
         "label": "금융전업그룹",
@@ -170,7 +158,6 @@ REFERENCE_LINKS = {
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["lp", "general_vs_institutional"],
         "summary": "사모집합투자기구 투자자 수 기준은 최대 100인까지 확대됐고, 일반투자자 수 기준은 별도로 관리됩니다.",
-        "checkpoints": ["전체 투자자 수", "일반투자자 수", "특수관계·명의 기준 검토"],
     },
 }
 
@@ -180,6 +167,7 @@ CHAPTER_SECTIONS = [
     ("classification", "제2절 개요 및 분류", "정의·구조·유형"),
     ("market", "제3절 관련 현황", "시장·GP·회수"),
     ("history", "제4절 연혁", "제도 변화"),
+    ("terms", "용어", "정의"),
     ("rules", "법령·규정", "참조"),
     ("sources", "문서 기준", "기준 자료"),
 ]
@@ -202,11 +190,11 @@ def render_pef_wiki_page(report_date: str) -> str:
 <body>
   <main class="wiki-shell">
     {_render_top_nav()}
-    <header class="wiki-hero">
+    <header class="wiki-doc-header">
       <div>
-        <p class="wiki-kicker">PEF Wiki</p>
+        <p class="wiki-kicker">PEF Wiki · 제1장</p>
         <h1>기관전용 사모집합투자기구 실무안내</h1>
-        <p class="wiki-lede">제1장 개관</p>
+        <p class="wiki-lede">개관</p>
       </div>
       <form class="wiki-search" role="search">
         <label for="wikiSearch">문서 검색</label>
@@ -233,17 +221,6 @@ def render_pef_wiki_page(report_date: str) -> str:
       </article>
     </div>
   </main>
-  <aside class="wiki-ref-panel" id="wikiRefPanel" aria-label="참조 상세" aria-live="polite" hidden>
-    <button class="wiki-ref-close" type="button" aria-label="닫기"></button>
-    <span id="wikiRefType"></span>
-    <h2 id="wikiRefTitle"></h2>
-    <p id="wikiRefLocation"></p>
-    <p id="wikiRefSummary"></p>
-    <ul class="wiki-ref-checklist" id="wikiRefChecklist"></ul>
-    <div class="wiki-ref-related" id="wikiRefRelated"></div>
-    <a id="wikiRefSource" href="{html_escape(SOURCE_URLS["kvca_pdf"])}" target="_blank" rel="noreferrer">자료 열기</a>
-  </aside>
-  <div class="wiki-ref-backdrop" id="wikiRefBackdrop" hidden></div>
   {_render_bottom_nav()}
   <script>window.KPEF_WIKI_REFERENCES = {refs_json};</script>
   <script>{_page_script()}</script>
@@ -257,69 +234,40 @@ def _render_wiki_article() -> str:
         <section class="wiki-section" id="chapter" data-search="제1장 개관 기관전용 사모집합투자기구 실무안내 pef 목차">
           <p class="wiki-eyebrow">제1장</p>
           <h2>개관</h2>
-          <p class="wiki-paragraph">제1장은 사모투자전문회사 제도가 도입된 배경, 기관전용 사모집합투자기구의 정의와 분류, 국내 시장 규모와 GP 현황, 2004년 도입 이후 2021년 사모펀드 체계개편까지의 흐름을 연결합니다.</p>
-          <div class="wiki-subsection" id="chapter-fast-index">
-            <h3>바로 찾기</h3>
-            <table class="wiki-table wiki-wide-table">
-              <thead><tr><th>찾는 항목</th><th>이동</th><th>같이 볼 용어</th></tr></thead>
-              <tbody>
-                <tr><td>기관전용 사모펀드의 법적 정의</td><td><a href="#legal-definition">정의와 요건</a></td><td><button class="wiki-ref" type="button" data-ref="institutional_private_fund">기관전용 사모집합투자기구</button></td></tr>
-                <tr><td>GP·LP·SPC 역할</td><td><a href="#operating-structure">기본 운용구조</a></td><td><button class="wiki-ref" type="button" data-ref="gp">GP</button> · <button class="wiki-ref" type="button" data-ref="lp">LP</button></td></tr>
-                <tr><td>출자약정액·이행액·GP 수</td><td><a href="#market-scale">시장 규모 변화</a></td><td><button class="wiki-ref" type="button" data-ref="fund_raising">자금모집</button></td></tr>
-                <tr><td>2021년 제도개편</td><td><a href="#reform-2021">개편 전후 실무 포인트</a></td><td><button class="wiki-ref" type="button" data-ref="leverage">차입·재무보증</button> · <button class="wiki-ref" type="button" data-ref="investor_count">투자자 수</button></td></tr>
-              </tbody>
-            </table>
-          </div>
+          <p class="wiki-paragraph">제1장은 사모투자전문회사 제도 도입 배경, 기관전용 사모집합투자기구의 정의와 분류, 관련 현황, 연혁을 다룹니다.</p>
           <ol class="wiki-source-index">
             <li><a href="#background">제1절 사모투자전문회사 제도 도입 배경</a><span>도입 논리</span></li>
             <li><a href="#classification">제2절 기관전용 사모집합투자기구 개요 및 분류</a><span>정의·구조</span></li>
             <li><a href="#market">제3절 기관전용 사모집합투자기구 관련 현황</a><span>시장 현황</span></li>
             <li><a href="#history">제4절 연혁</a><span>제도 변화</span></li>
           </ol>
-          <div class="wiki-inline-tools" aria-label="주요 참조">
-            <button class="wiki-ref" type="button" data-ref="institutional_private_fund">기관전용 사모집합투자기구</button>
-            <button class="wiki-ref" type="button" data-ref="general_vs_institutional">일반 사모 / 기관전용 사모</button>
-            <button class="wiki-ref" type="button" data-ref="capital_markets_act">자본시장법</button>
-            <button class="wiki-ref" type="button" data-ref="gp_registration">GP 등록제</button>
-          </div>
         </section>
 
         <section class="wiki-section" id="background" data-search="도입 배경 외환위기 기업 구조조정 위험자본 buyout m&a crv crf crc">
           <p class="wiki-eyebrow">제1절</p>
           <h2>사모투자전문회사(PEF) 제도 도입 배경</h2>
-          <p class="wiki-paragraph">제도 도입의 출발점은 외환위기 이후 커진 기업 구조조정 수요와 장기 위험자본 공급 필요성입니다. 기존 구조조정 수단은 특정 목적과 대상에 묶여 있었고, 민간 자본이 기업 인수·경영개선·회수까지 일관되게 수행하기에는 운용 자율성이 부족했습니다.</p>
+          <p class="wiki-paragraph">사모투자전문회사 제도는 외환위기 이후 기업 구조조정 수요, 국내 장기 위험자본 육성 필요성, 기존 구조조정 제도의 한계를 배경으로 도입되었습니다.</p>
           <div class="wiki-subsection">
             <h3>제도 도입 배경 요인</h3>
             <table class="wiki-table wiki-wide-table">
-              <thead><tr><th>요인</th><th>내용</th><th>PEF 제도와의 연결</th></tr></thead>
+              <thead><tr><th>요인</th><th>내용</th><th>관련 내용</th></tr></thead>
               <tbody>
-                <tr><td>구조조정 수요</td><td>외환위기 이후 비효율적 지배구조와 취약한 경영능력을 가진 기업에 대한 대규모 구조조정 필요가 커졌습니다.</td><td>단순 채권정리나 청산 중심이 아니라 지배구조 개선과 기업가치 제고를 수행할 수 있는 투자기구가 필요했습니다.</td></tr>
-                <tr><td>국내 자본 육성</td><td>외국계 사모펀드가 국내 금융기관·기업 인수와 매각에서 적극적으로 움직이면서 국내 장기 위험자본 육성 필요가 부각됐습니다.</td><td>연기금과 기관투자자의 장기 자금을 기업 인수·개선·회수 구조로 연결하는 통로가 요구됐습니다.</td></tr>
-                <tr><td>기존 제도 한계</td><td>부실채권 정리, 워크아웃, 구조조정 부동산 등 목적별 제도는 있었지만 투자대상·투자방법·운용주체 자격이 좁았습니다.</td><td>자금조성부터 투자, 경영개선, 회수까지 폭넓은 재량을 가진 조합형 투자기구가 필요했습니다.</td></tr>
+                <tr><td>구조조정 수요</td><td>외환위기 이후 비효율적 지배구조와 취약한 경영능력을 가진 기업에 대한 대규모 구조조정 필요가 커졌습니다.</td><td>기업 인수, 경영개선, 회수를 수행하는 투자기구 필요</td></tr>
+                <tr><td>국내 자본 육성</td><td>외국계 사모펀드가 국내 금융기관·기업 인수와 매각에서 적극적으로 움직이면서 국내 장기 위험자본 육성 필요가 부각됐습니다.</td><td>기관투자자 자금을 기업 인수·개선·회수 구조로 연결</td></tr>
+                <tr><td>기존 제도 한계</td><td>부실채권 정리, 워크아웃, 구조조정 부동산 등 목적별 제도는 있었지만 투자대상·투자방법·운용주체 자격이 좁았습니다.</td><td>자금조성, 투자, 경영개선, 회수를 포괄하는 조합형 투자기구 필요</td></tr>
               </tbody>
             </table>
           </div>
           <div class="wiki-subsection">
             <h3>기존 기업구조조정 수단 비교</h3>
             <table class="wiki-table wiki-wide-table">
-              <thead><tr><th>구분</th><th>주요 목적</th><th>투자·운용 범위</th><th>PEF 도입 필요성과의 차이</th></tr></thead>
+              <thead><tr><th>구분</th><th>주요 목적</th><th>투자·운용 범위</th><th>한계</th></tr></thead>
               <tbody>
-                <tr><td>CRV</td><td>워크아웃 기업 정상화</td><td>금융기관이 보유한 부실자산과 구조조정 대상 기업 중심</td><td>부실 정리 목적이 강하고 범용 인수·경영개선 투자기구로 쓰기 어렵습니다.</td></tr>
-                <tr><td>CRF</td><td>중소기업 지원과 구조조정</td><td>중소기업 구조조정과 관련된 제한된 투자영역</td><td>자금모집과 운용 범위가 넓은 기관투자자형 펀드 구조와 다릅니다.</td></tr>
-                <tr><td>CRC</td><td>구조조정기업 인수·정리</td><td>구조조정 전문회사 중심의 기업 구조조정 업무</td><td>운용주체와 대상이 제한돼 다양한 기업 인수·개선 전략을 담기 어렵습니다.</td></tr>
-                <tr><td>사모 M&A 펀드</td><td>기업 인수·합병 활성화</td><td>M&A 목적 투자에 초점</td><td>기업가치 제고와 회수까지 포괄하는 장기 조합형 구조가 제한적입니다.</td></tr>
-                <tr><td>CR-REITs</td><td>구조조정 부동산 처분·운용</td><td>부동산 자산 중심</td><td>기업 지분 투자와 경영참여를 수행하는 PEF와 투자대상이 다릅니다.</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="wiki-subsection">
-            <h3>제도 도입의 결론</h3>
-            <table class="wiki-table wiki-wide-table">
-              <thead><tr><th>필요 기능</th><th>기존 수단의 한계</th><th>PEF 제도에서 기대한 역할</th></tr></thead>
-              <tbody>
-                <tr><td>자금조성</td><td>목적별 기구 중심이라 대규모 장기자금 모집에 제약</td><td>기관투자자 자금을 모아 기업 인수·개선에 투입</td></tr>
-                <tr><td>투자운용</td><td>투자대상과 방법이 법령·목적별로 세분화</td><td>지분투자, 경영참여, 구조개선 등 폭넓은 운용 허용</td></tr>
-                <tr><td>회수</td><td>청산 또는 특정 자산 처분 중심</td><td>기업가치 제고 후 매각·상장 등 다양한 회수 전략 사용</td></tr>
+                <tr><td>CRV</td><td>워크아웃 기업 정상화</td><td>금융기관이 보유한 부실자산과 구조조정 대상 기업 중심</td><td>부실 정리 목적 중심</td></tr>
+                <tr><td>CRF</td><td>중소기업 지원과 구조조정</td><td>중소기업 구조조정과 관련된 제한된 투자영역</td><td>제한된 투자영역</td></tr>
+                <tr><td>CRC</td><td>구조조정기업 인수·정리</td><td>구조조정 전문회사 중심의 기업 구조조정 업무</td><td>운용주체와 대상 제한</td></tr>
+                <tr><td>사모 M&A 펀드</td><td>기업 인수·합병 활성화</td><td>M&A 목적 투자에 초점</td><td>M&A 목적 투자 중심</td></tr>
+                <tr><td>CR-REITs</td><td>구조조정 부동산 처분·운용</td><td>부동산 자산 중심</td><td>부동산 자산 중심</td></tr>
               </tbody>
             </table>
           </div>
@@ -328,18 +276,18 @@ def _render_wiki_article() -> str:
         <section class="wiki-section" id="classification" data-search="개요 분류 일반 사모 기관전용 사모 GP LP 자본시장법 투자단계 자금모집 투자 회수">
           <p class="wiki-eyebrow">제2절</p>
           <h2>기관전용 사모집합투자기구 개요 및 분류</h2>
-          <p class="wiki-paragraph">2021년 10월 사모펀드 체계개편 이후 사모펀드는 운용목적이 아니라 투자자 범위를 기준으로 일반 사모와 기관전용 사모로 구분됩니다. 과거 PEF가 경영참여형 사모펀드로 출발했다는 역사와, 현재 기관전용 사모집합투자기구가 더 넓은 운용전략을 사용할 수 있다는 점을 구분해 읽어야 합니다.</p>
+          <p class="wiki-paragraph">2021년 10월 사모펀드 체계개편 이후 사모펀드는 운용목적 기준에서 투자자 범위 기준의 일반 사모와 기관전용 사모 체계로 재편되었습니다.</p>
           <div class="wiki-subsection" id="legal-definition">
             <h3>법적 정의와 성립 요건</h3>
             <table class="wiki-table wiki-wide-table">
-              <thead><tr><th>요소</th><th>내용</th><th>실무상 확인할 점</th></tr></thead>
+              <thead><tr><th>요소</th><th>내용</th><th>관련 사항</th></tr></thead>
               <tbody>
                 <tr><td>법적 근거</td><td><button class="wiki-ref" type="button" data-ref="capital_markets_act">자본시장법</button>상 사모집합투자기구 정의와 기관전용 사모집합투자기구 특례 조항</td><td>정관, 사원 구성, 투자자 수, GP 등록·보고 의무를 같은 체계에서 확인합니다.</td></tr>
                 <tr><td>모집 방식</td><td>집합투자증권을 사모로 발행</td><td>공모가 아니라 제한된 투자자에게 출자 참여를 제안합니다.</td></tr>
                 <tr><td>투자자 수</td><td>투자자 총수 100인 이하</td><td><button class="wiki-ref" type="button" data-ref="investor_count">투자자 수</button> 산정 기준과 일반투자자 포함 여부를 별도로 점검합니다.</td></tr>
                 <tr><td>사원 구조</td><td><button class="wiki-ref" type="button" data-ref="gp">업무집행사원</button>과 <button class="wiki-ref" type="button" data-ref="lp">유한책임사원</button>으로 구성되는 partnership 구조</td><td>운용 책임, 출자 책임, 운용 관여 제한, 보고권한을 사원별로 분리합니다.</td></tr>
                 <tr><td>회사 실체</td><td>상근 임직원이나 본점 외 영업소를 두지 않는 paper company 형태</td><td>펀드 자체보다 GP의 인력, 내부통제, 이해상충 관리 체계가 실질 심사 대상입니다.</td></tr>
-                <tr><td>운용전략</td><td>경영권 참여, 사업구조·지배구조 개선 투자에서 출발했으나 2021년 개편 이후 운용규제가 일반 사모와 일원화</td><td>현재 문서에서는 과거 PEF의 buy-out 성격과 현행 기관전용 사모의 허용전략을 분리해 봅니다.</td></tr>
+                <tr><td>운용전략</td><td>경영권 참여, 사업구조·지배구조 개선 투자에서 출발했으나 2021년 개편 이후 운용규제가 일반 사모와 일원화</td><td>2021년 개편 이후 기관전용 사모집합투자기구의 운용규제는 일반 사모집합투자기구와 일원화되었습니다.</td></tr>
               </tbody>
             </table>
           </div>
@@ -359,7 +307,7 @@ def _render_wiki_article() -> str:
           <div class="wiki-subsection">
             <h3>투자 단계</h3>
             <table class="wiki-table wiki-wide-table">
-              <thead><tr><th>단계</th><th>주요 업무</th><th>실무상 확인할 항목</th></tr></thead>
+              <thead><tr><th>단계</th><th>주요 업무</th><th>주요 항목</th></tr></thead>
               <tbody>
                 <tr><td><button class="wiki-ref" type="button" data-ref="fund_raising">자금모집</button></td><td>GP가 전문성과 위험감수능력을 갖춘 전문투자자에게 투자 참여를 제안하고 출자약정을 확보</td><td>출자자 구성, 약정총액, 납입조건, 투자기간, 관리보수·성과보수 구조</td></tr>
                 <tr><td><button class="wiki-ref" type="button" data-ref="investment">투자</button></td><td>투자대상기업 발굴, 실사, 투자 타당성 검토, 거래구조 설계와 투자 집행</td><td>인수 대상, 지분율, 인수금융, SPC 사용 여부, 투자심의 절차</td></tr>
@@ -371,12 +319,11 @@ def _render_wiki_article() -> str:
           <div class="wiki-subsection" id="general-vs-institutional">
             <h3>일반 사모와 기관전용 사모의 구분</h3>
             <table class="wiki-table wiki-wide-table">
-              <thead><tr><th>구분</th><th>일반 사모집합투자기구</th><th>기관전용 사모집합투자기구</th><th>실무상 차이</th></tr></thead>
+              <thead><tr><th>구분</th><th>일반 사모집합투자기구</th><th>기관전용 사모집합투자기구</th><th>차이</th></tr></thead>
               <tbody>
                 <tr><td>구분 기준</td><td>전문투자자와 일정 범위 일반투자자를 대상으로 하는 사모펀드</td><td>기관투자자 등 제한된 투자자를 중심으로 하는 사모펀드</td><td>2021년 개편 후 운용목적보다 투자자 범위가 핵심 구분 기준입니다.</td></tr>
                 <tr><td>운용 주체</td><td>일반 사모펀드 운용사</td><td><button class="wiki-ref" type="button" data-ref="gp">업무집행사원(GP)</button></td><td>GP 등록, 전문인력, 변경보고 이슈가 기관전용에서 중요합니다.</td></tr>
                 <tr><td>투자자 관리</td><td>일반투자자 보호 장치와 판매 규율이 중요</td><td><button class="wiki-ref" type="button" data-ref="lp">LP</button>의 전문성, 출자약정, 운용 관여 제한이 중요</td><td>LP 출자공고와 펀드 문서에서 투자자 지위가 명확해야 합니다.</td></tr>
-                <tr><td>데이터 연결</td><td>상품·판매·수탁 관련 데이터</td><td>GP, LP, 펀드, 투자대상회사, 회수성과 데이터</td><td>이 서비스에서는 기관전용 사모의 LP·GP·딜 데이터를 우선 연결합니다.</td></tr>
               </tbody>
             </table>
           </div>
@@ -404,20 +351,20 @@ def _render_wiki_article() -> str:
             <h3>시장 발전 단계</h3>
             <p class="wiki-paragraph">국내 기관전용 사모집합투자기구 산업은 준비기, 도약기를 거쳐 2012년부터 투자회수와 운용기간·운용능력 차별화가 진행되는 성장기에 진입한 것으로 제시됩니다.</p>
             <table class="wiki-table wiki-wide-table">
-              <thead><tr><th>단계</th><th>시기</th><th>시장 특징</th><th>실무상 의미</th></tr></thead>
+              <thead><tr><th>단계</th><th>시기</th><th>시장 특징</th><th>특징</th></tr></thead>
               <tbody>
-                <tr><td>준비기</td><td>제도 도입 초기</td><td>제도 활용 경험과 운용사 기반이 축적되는 단계</td><td>펀드 결성과 투자사례 형성이 중요했습니다.</td></tr>
-                <tr><td>도약기</td><td>초기 성장 단계</td><td>기관투자자 참여와 자금모집 규모가 확대되는 단계</td><td>GP별 전략과 운용능력 차이가 나타나기 시작했습니다.</td></tr>
-                <tr><td>성장기</td><td>2012년 이후</td><td>투자회수와 해산이 본격화되고 운용기간·성과 차별화가 진행되는 단계</td><td>LP는 단순 결성규모보다 회수성과와 사후관리 역량을 보게 됩니다.</td></tr>
+                <tr><td>준비기</td><td>제도 도입 초기</td><td>제도 활용 경험과 운용사 기반이 축적되는 단계</td><td>펀드 결성과 투자사례 형성</td></tr>
+                <tr><td>도약기</td><td>초기 성장 단계</td><td>기관투자자 참여와 자금모집 규모가 확대되는 단계</td><td>GP별 전략과 운용능력 차이 발생</td></tr>
+                <tr><td>성장기</td><td>2012년 이후</td><td>투자회수와 해산이 본격화되고 운용기간·성과 차별화가 진행되는 단계</td><td>회수성과와 사후관리 역량 차별화</td></tr>
               </tbody>
             </table>
           </div>
           <div class="wiki-subsection" id="market-scale">
             <h3>시장 규모</h3>
             <table class="wiki-table wiki-wide-table">
-              <thead><tr><th>항목</th><th>2004년말</th><th>2022년말</th><th>증가</th><th>의미</th></tr></thead>
+              <thead><tr><th>항목</th><th>2004년말</th><th>2022년말</th><th>증가</th><th>설명</th></tr></thead>
               <tbody>
-                <tr><td>펀드 수</td><td>2개</td><td>1,098개</td><td>1,096개 증가</td><td>기관전용 사모집합투자기구가 독립된 대체투자 시장으로 성장했음을 보여줍니다.</td></tr>
+                <tr><td>펀드 수</td><td>2개</td><td>1,098개</td><td>1,096개 증가</td><td>2004년말 2개에서 2022년말 1,098개로 증가</td></tr>
                 <tr><td>약정액</td><td>0.4조원</td><td>125.3조원</td><td>124.9조원 증가</td><td>LP가 펀드에 출자하기로 약속한 총 규모입니다.</td></tr>
                 <tr><td>이행액</td><td>0.3조원</td><td>97.1조원</td><td>96.8조원 증가</td><td>약정 이후 실제 납입·집행된 자금 규모입니다.</td></tr>
               </tbody>
@@ -426,7 +373,7 @@ def _render_wiki_article() -> str:
           </div>
           <div class="wiki-subsection" id="gp-status">
             <h3>업무집행사원(GP) 현황</h3>
-            <p class="wiki-paragraph">2022년 12월말 기준 기관전용 사모집합투자기구를 운용 중인 업무집행사원은 총 415사입니다. 성장기에는 투자실적 가시화와 운용능력 차별화가 진행되면서 전문운용사 위주의 산업으로 재편된 흐름이 나타납니다.</p>
+            <p class="wiki-paragraph">2022년 12월말 기준 기관전용 사모집합투자기구를 운용 중인 업무집행사원은 총 415사입니다. 이 중 전문운용사는 312사로 전체 업무집행사원의 75.2%입니다.</p>
             <table class="wiki-table wiki-wide-table">
               <thead><tr><th>GP 유형</th><th>2005년</th><th>2007년</th><th>2008년</th><th>2011년</th><th>2012년</th><th>2022년</th></tr></thead>
               <tbody>
@@ -441,18 +388,18 @@ def _render_wiki_article() -> str:
           <div class="wiki-subsection">
             <h3>자금모집·투자·회수</h3>
             <table class="wiki-table wiki-wide-table">
-              <thead><tr><th>항목</th><th>2022년말 기준</th><th>시장 흐름</th><th>서비스 데이터와의 연결</th></tr></thead>
+              <thead><tr><th>항목</th><th>2022년말 기준</th><th>내용</th></tr></thead>
               <tbody>
-                <tr><td><button class="wiki-ref" type="button" data-ref="fund_raising">자금모집</button></td><td>약정액 125.3조원</td><td>연기금 등 기관투자자 기반 확대 후 누적 자금모집 규모가 100조원을 넘어섰습니다.</td><td>LP 출자공고, 위탁운용사 선정, 펀드 결성 기사와 연결</td></tr>
-                <tr><td><button class="wiki-ref" type="button" data-ref="investment">투자</button></td><td>누적 투자규모 192.4조원</td><td>전문인력 보유 펀드는 전략적 투자, 금융회사 운용 펀드는 재무적 투자 성격이 강하게 나타납니다.</td><td>GP별 포트폴리오, M&A, 인수금융, 성장투자 뉴스와 연결</td></tr>
-                <tr><td><button class="wiki-ref" type="button" data-ref="exit">회수</button></td><td>누적 회수금액 108.5조원</td><td>투자 회수와 해산이 본격화되면서 성과 검증 가능성이 확대됐습니다.</td><td>매각, IPO, 배당, 세컨더리 거래, 청산 데이터와 연결</td></tr>
+                <tr><td><button class="wiki-ref" type="button" data-ref="fund_raising">자금모집</button></td><td>약정액 125.3조원</td><td>누적 자금모집 규모가 100조원을 초과했습니다.</td></tr>
+                <tr><td><button class="wiki-ref" type="button" data-ref="investment">투자</button></td><td>누적 투자규모 192.4조원</td><td>전문인력 보유 펀드와 금융회사 운용 펀드의 투자 성격이 구분됩니다.</td></tr>
+                <tr><td><button class="wiki-ref" type="button" data-ref="exit">회수</button></td><td>누적 회수금액 108.5조원</td><td>투자 회수와 해산이 본격화된 단계입니다.</td></tr>
               </tbody>
             </table>
           </div>
           <div class="wiki-subsection">
             <h3>시장 참여자 구조</h3>
             <table class="wiki-table wiki-wide-table">
-              <thead><tr><th>구성</th><th>주요 기능</th><th>관찰해야 할 데이터</th></tr></thead>
+              <thead><tr><th>구성</th><th>주요 기능</th><th>관련 정보</th></tr></thead>
               <tbody>
                 <tr><td>LP</td><td>펀드 출자와 위탁운용사 선정</td><td>출자공고, 선정결과, 약정규모, 출자조건, 운용사 평가</td></tr>
                 <tr><td>GP</td><td>펀드 결성, 투자집행, 사후관리, 회수</td><td>AUM, 펀드 히스토리, 투자전략, 핵심 인력, 포트폴리오, 회수성과</td></tr>
@@ -503,16 +450,23 @@ def _render_wiki_article() -> str:
             </table>
           </div>
           <div class="wiki-subsection" id="reform-2021">
-            <h3>개편 전후 실무 포인트</h3>
+            <h3>2021년 개편 전후 주요 변화</h3>
             <table class="wiki-table wiki-wide-table">
-              <thead><tr><th>항목</th><th>개편 전 실무상 초점</th><th>개편 후 실무상 초점</th></tr></thead>
+              <thead><tr><th>항목</th><th>개편 전</th><th>개편 후</th></tr></thead>
               <tbody>
                 <tr><td>펀드 구분</td><td>전문투자형과 경영참여형을 운용목적 중심으로 구분</td><td>일반 사모펀드와 기관전용 사모펀드를 투자자 범위 중심으로 구분</td></tr>
                 <tr><td>기관전용 운용</td><td>경영참여 목적 의무와 관련 제한이 핵심</td><td>기관투자자 중심 구조 안에서 일반 사모펀드와 유사한 운용규제 적용</td></tr>
                 <tr><td>감독 포인트</td><td>설립·운용 규제와 경영참여 요건 준수</td><td>GP 등록·보고·검사, 운용인력, 불건전행위 규율, 투자자 보호 장치 강화</td></tr>
-                <tr><td>서비스 연결</td><td>법령 변화와 펀드 결성 기사 중심 관찰</td><td>LP 출자조건, GP 등록·제재, 투자전략 변화, 회수성과 데이터까지 연결 필요</td></tr>
               </tbody>
             </table>
+          </div>
+        </section>
+
+        <section class="wiki-section" id="terms" data-search="용어 정의 GP LP SPC 업무집행사원 유한책임사원 투자자 수 자본시장법">
+          <p class="wiki-eyebrow">용어</p>
+          <h2>용어</h2>
+          <div class="wiki-term-list">
+            {_render_glossary_terms()}
           </div>
         </section>
 
@@ -522,7 +476,7 @@ def _render_wiki_article() -> str:
           <div class="wiki-subsection" id="law-map">
             <h3>주요 법령 조항 매핑</h3>
             <table class="wiki-table wiki-wide-table">
-              <thead><tr><th>주제</th><th>주요 근거</th><th>위키에서 연결되는 내용</th><th>실무 확인 포인트</th></tr></thead>
+              <thead><tr><th>주제</th><th>주요 근거</th><th>위키에서 연결되는 내용</th><th>관련 사항</th></tr></thead>
               <tbody>
                 <tr><td>정의</td><td>자본시장법 제9조</td><td><a href="#legal-definition">기관전용 사모집합투자기구 정의</a></td><td>사모집합투자기구, 기관전용, 일반 사모 구분</td></tr>
                 <tr><td>기관전용 사모 특례</td><td>자본시장법 제249조의11 이하</td><td><a href="#classification">개요 및 분류</a></td><td>GP·LP 구조, 투자자 범위, 운용 관련 특례</td></tr>
@@ -566,6 +520,32 @@ def _render_sidebar_links() -> str:
     )
 
 
+def _render_glossary_terms() -> str:
+    rows = []
+    for key, item in REFERENCE_LINKS.items():
+        summary = item.get("summary") or item.get("location") or ""
+        related = " · ".join(
+            f'<a href="#term-{html_escape(related_key)}">{html_escape(REFERENCE_LINKS[related_key]["label"])}</a>'
+            for related_key in item.get("related", [])
+            if related_key in REFERENCE_LINKS
+        )
+        source_url = html_escape(item.get("source_url") or SOURCE_URLS["kvca_pdf"])
+        source_label = html_escape(item.get("source_label") or "자료")
+        rows.append(
+            f"""<article class="wiki-term" id="term-{html_escape(key)}">
+              <h3>{html_escape(item["label"])}</h3>
+              <p>{html_escape(summary)}</p>
+              <dl>
+                <div><dt>구분</dt><dd>{html_escape(item.get("type", "용어"))}</dd></div>
+                <div><dt>위치</dt><dd>{html_escape(item.get("location", ""))}</dd></div>
+                <div><dt>관련</dt><dd>{related or "-"}</dd></div>
+                <div><dt>출처</dt><dd><a href="{source_url}" target="_blank" rel="noreferrer">{source_label}</a></dd></div>
+              </dl>
+            </article>"""
+        )
+    return "\n".join(rows)
+
+
 def _app_head_meta() -> str:
     return f"""  <meta name="theme-color" content="#111827">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -577,12 +557,20 @@ def _app_head_meta() -> str:
 
 
 def _render_top_nav() -> str:
-    return """    <nav class="wiki-top-nav" aria-label="Wiki 내부 이동">
+    return """    <nav class="wiki-service-nav" aria-label="서비스 이동">
+      <a href="index.html">브리프</a>
+      <a href="lp-notices.html">LP</a>
+      <a href="gps.html">GP</a>
+      <a class="active" href="pef-wiki.html">Wiki</a>
+      <a href="index.html#saved">저장</a>
+    </nav>
+    <nav class="wiki-top-nav" aria-label="Wiki 내부 이동">
       <a class="active" href="#chapter">개관</a>
       <a href="#background">도입 배경</a>
       <a href="#classification">분류</a>
       <a href="#market">현황</a>
       <a href="#history">연혁</a>
+      <a href="#terms">용어</a>
       <a href="#rules">법령·규정</a>
       <a href="#sources">문서 기준</a>
     </nav>"""
@@ -616,9 +604,9 @@ def _render_bottom_nav() -> str:
 def _page_styles() -> str:
     return """  <style>
     :root {
-      --wiki-bg: #f6f7f8;
+      --wiki-bg: #ffffff;
       --wiki-surface: #ffffff;
-      --wiki-soft: #f0f4f5;
+      --wiki-soft: #f6f8f9;
       --wiki-text: #17202a;
       --wiki-secondary: #52616f;
       --wiki-tertiary: #7a8793;
@@ -637,19 +625,36 @@ def _page_styles() -> str:
     }
     a { color: inherit; }
     .wiki-shell {
-      width: min(1220px, calc(100% - 28px));
+      width: min(1180px, calc(100% - 28px));
       margin: 0 auto;
       padding: 12px 0 calc(106px + env(safe-area-inset-bottom));
+    }
+    .wiki-service-nav {
+      display: none;
+      gap: 18px;
+      align-items: center;
+      min-height: 38px;
+      border-bottom: 1px solid var(--wiki-line);
+      color: var(--wiki-secondary);
+      font-size: 13px;
+      font-weight: 850;
+    }
+    .wiki-service-nav a {
+      color: inherit;
+      text-decoration: none;
+    }
+    .wiki-service-nav a.active {
+      color: var(--wiki-text);
     }
     .wiki-top-nav {
       position: sticky;
       top: 0;
       z-index: 24;
       display: flex;
-      gap: 6px;
+      gap: 16px;
       overflow-x: auto;
-      padding: 8px 0 10px;
-      background: rgba(246, 247, 248, 0.94);
+      padding: 7px 0 9px;
+      background: rgba(255, 255, 255, 0.94);
       backdrop-filter: blur(14px);
     }
     .wiki-top-nav a {
@@ -658,7 +663,7 @@ def _page_styles() -> str:
       display: inline-flex;
       align-items: center;
       border-bottom: 2px solid transparent;
-      padding: 7px 8px;
+      padding: 7px 0;
       color: var(--wiki-secondary);
       font-size: 12px;
       font-weight: 800;
@@ -668,11 +673,11 @@ def _page_styles() -> str:
       border-color: var(--wiki-accent);
       color: #164c46;
     }
-    .wiki-hero {
+    .wiki-doc-header {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
       gap: 14px;
-      padding: 14px 0 16px;
+      padding: 18px 0 14px;
       border-bottom: 1px solid var(--wiki-line);
     }
     .wiki-kicker {
@@ -681,12 +686,12 @@ def _page_styles() -> str:
       font-size: 12px;
       font-weight: 900;
     }
-    .wiki-hero h1 {
+    .wiki-doc-header h1 {
       max-width: 880px;
       margin: 0;
       color: var(--wiki-text);
-      font-size: clamp(28px, 4vw, 44px);
-      line-height: 1.08;
+      font-size: clamp(25px, 3vw, 34px);
+      line-height: 1.18;
       overflow-wrap: anywhere;
       word-break: keep-all;
     }
@@ -790,8 +795,8 @@ def _page_styles() -> str:
     .wiki-section td {
       margin: 0;
       color: var(--wiki-secondary);
-      font-size: 15px;
-      line-height: 1.75;
+      font-size: 14px;
+      line-height: 1.65;
     }
     .wiki-paragraph {
       max-width: 880px;
@@ -938,7 +943,7 @@ def _page_styles() -> str:
     .wiki-table th,
     .wiki-table td {
       border-bottom: 1px solid var(--wiki-line);
-      padding: 12px 8px;
+      padding: 10px 8px;
       text-align: left;
       vertical-align: top;
     }
@@ -997,6 +1002,57 @@ def _page_styles() -> str:
     .wiki-reference-row strong {
       font-size: 14px;
     }
+    .wiki-term-list {
+      display: grid;
+      gap: 0;
+      border-top: 1px solid var(--wiki-line);
+    }
+    .wiki-term {
+      display: grid;
+      gap: 8px;
+      border-bottom: 1px solid var(--wiki-line);
+      padding: 16px 0;
+      scroll-margin-top: 90px;
+    }
+    .wiki-term h3 {
+      margin: 0;
+      font-size: 17px;
+    }
+    .wiki-term p {
+      max-width: 820px;
+      margin: 0;
+    }
+    .wiki-term dl {
+      display: grid;
+      gap: 0;
+      margin: 2px 0 0;
+      border-top: 1px solid var(--wiki-line);
+    }
+    .wiki-term dl div {
+      display: grid;
+      grid-template-columns: 88px minmax(0, 1fr);
+      gap: 12px;
+      border-bottom: 1px solid var(--wiki-line);
+      padding: 8px 0;
+    }
+    .wiki-term dt {
+      color: var(--wiki-tertiary);
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .wiki-term dd {
+      margin: 0;
+      color: var(--wiki-secondary);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .wiki-term a {
+      color: #164c46;
+      font-weight: 850;
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
     .wiki-source-list {
       display: grid;
       gap: 8px;
@@ -1009,108 +1065,15 @@ def _page_styles() -> str:
       text-decoration: none;
     }
     .wiki-section[hidden] { display: none; }
-    .wiki-ref-panel {
-      position: fixed;
-      right: 14px;
-      bottom: calc(78px + env(safe-area-inset-bottom));
-      z-index: 42;
-      width: min(420px, calc(100vw - 28px));
-      border: 1px solid var(--wiki-line);
-      border-radius: 8px;
-      padding: 18px;
-      background: var(--wiki-surface);
-      box-shadow: 0 18px 60px rgba(15, 23, 42, 0.18);
-    }
-    .wiki-ref-close {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      width: 32px;
-      height: 32px;
-      border: 0;
-      border-radius: 999px;
-      background: var(--wiki-soft);
-      cursor: pointer;
-    }
-    .wiki-ref-close::before,
-    .wiki-ref-close::after {
-      content: "";
-      position: absolute;
-      left: 9px;
-      top: 15px;
-      width: 14px;
-      height: 2px;
-      border-radius: 2px;
-      background: var(--wiki-text);
-    }
-    .wiki-ref-close::before { transform: rotate(45deg); }
-    .wiki-ref-close::after { transform: rotate(-45deg); }
-    .wiki-ref-panel > span {
-      display: inline-flex;
-      border-radius: 999px;
-      padding: 4px 8px;
-      background: var(--wiki-accent-soft);
-      color: #164c46;
-      font-size: 11px;
-      font-weight: 900;
-    }
-    .wiki-ref-panel h2 {
-      margin: 10px 34px 8px 0;
-      color: var(--wiki-text);
-      font-size: 20px;
-      line-height: 1.25;
-    }
-    .wiki-ref-panel p {
-      margin: 0;
-      color: var(--wiki-secondary);
-      font-size: 14px;
-      line-height: 1.65;
-    }
-    .wiki-ref-checklist {
-      display: grid;
-      gap: 6px;
-      margin: 12px 0 0;
-      padding-left: 18px;
-      color: var(--wiki-secondary);
-      font-size: 13px;
-      line-height: 1.55;
-    }
-    .wiki-ref-checklist[hidden] { display: none; }
-    .wiki-ref-related {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 12px;
-    }
-    .wiki-ref-related button {
-      border: 1px solid var(--wiki-line);
-      border-radius: 999px;
-      padding: 5px 8px;
-      background: var(--wiki-soft);
-      color: var(--wiki-text);
-      font-size: 12px;
-      font-weight: 800;
-      cursor: pointer;
-    }
-    .wiki-ref-panel a {
-      display: inline-flex;
-      margin-top: 14px;
-      color: #164c46;
-      font-size: 13px;
-      font-weight: 900;
-      text-decoration: none;
-    }
-    .wiki-ref-backdrop {
-      display: none;
-    }
     .bottom-nav.newsletter-only {
       background: rgba(255, 255, 255, 0.98);
       box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.08);
     }
     @media (min-width: 860px) {
-      .wiki-hero {
+      .wiki-service-nav { display: flex; }
+      .wiki-doc-header {
         grid-template-columns: minmax(0, 1fr) minmax(320px, 0.45fr);
-        align-items: end;
+        align-items: start;
       }
       .wiki-doc-meta { grid-column: 1 / -1; }
       .wiki-layout {
@@ -1119,7 +1082,7 @@ def _page_styles() -> str:
       }
       .wiki-sidebar {
         position: sticky;
-        top: 62px;
+        top: 86px;
         display: grid;
         gap: 10px;
         max-height: calc(100vh - 132px);
@@ -1153,6 +1116,7 @@ def _page_styles() -> str:
         line-height: 1.35;
       }
       .wiki-document { padding: 0 8px 0 0; }
+      .bottom-nav.newsletter-only { display: none; }
       .wiki-definition-list div {
         grid-template-columns: 160px minmax(0, 1fr);
         gap: 16px;
@@ -1179,12 +1143,6 @@ def _page_styles() -> str:
         z-index: 1;
         background: var(--wiki-bg);
       }
-      .wiki-ref-panel {
-        left: 10px;
-        right: 10px;
-        bottom: calc(72px + env(safe-area-inset-bottom));
-        width: auto;
-      }
     }
   </style>"""
 
@@ -1192,68 +1150,20 @@ def _page_styles() -> str:
 def _page_script() -> str:
     return r"""
 (() => {
-  const refs = window.KPEF_WIKI_REFERENCES || {};
-  const panel = document.getElementById("wikiRefPanel");
-  const backdrop = document.getElementById("wikiRefBackdrop");
-  const refType = document.getElementById("wikiRefType");
-  const refTitle = document.getElementById("wikiRefTitle");
-  const refLocation = document.getElementById("wikiRefLocation");
-  const refSummary = document.getElementById("wikiRefSummary");
-  const refChecklist = document.getElementById("wikiRefChecklist");
-  const refRelated = document.getElementById("wikiRefRelated");
-  const refSource = document.getElementById("wikiRefSource");
-  const closeButton = panel?.querySelector(".wiki-ref-close");
   const search = document.getElementById("wikiSearch");
   const searchStatus = document.getElementById("wikiSearchStatus");
   const sections = Array.from(document.querySelectorAll(".wiki-section"));
   const topLinks = Array.from(document.querySelectorAll(".wiki-top-nav a"));
 
-  const openRef = (key) => {
-    const item = refs[key];
-    if (!item || !panel) return;
-    refType.textContent = item.type || "참조";
-    refTitle.textContent = item.label || key;
-    refLocation.textContent = item.location ? `위치: ${item.location}` : "";
-    refSummary.textContent = item.summary || "";
-    refSummary.hidden = !item.summary;
-    refChecklist.replaceChildren();
-    (item.checkpoints || []).forEach((checkpoint) => {
-      const li = document.createElement("li");
-      li.textContent = checkpoint;
-      refChecklist.append(li);
-    });
-    refChecklist.hidden = !refChecklist.childElementCount;
-    refSource.textContent = item.source_label ? `${item.source_label} 열기` : "자료 열기";
-    refSource.href = item.source_url || "#";
-    refRelated.replaceChildren();
-    (item.related || []).forEach((relatedKey) => {
-      if (!refs[relatedKey]) return;
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = refs[relatedKey].label || relatedKey;
-      button.addEventListener("click", () => openRef(relatedKey));
-      refRelated.append(button);
-    });
-    panel.hidden = false;
-    if (backdrop) backdrop.hidden = false;
-  };
-
-  const closeRef = () => {
-    if (panel) panel.hidden = true;
-    if (backdrop) backdrop.hidden = true;
-  };
-
   document.addEventListener("click", (event) => {
     const trigger = event.target.closest("[data-ref]");
     if (trigger) {
-      openRef(trigger.dataset.ref);
-      return;
+      const target = document.getElementById(`term-${trigger.dataset.ref}`);
+      if (!target) return;
+      event.preventDefault();
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      history.replaceState(null, "", `#${target.id}`);
     }
-  });
-  closeButton?.addEventListener("click", closeRef);
-  backdrop?.addEventListener("click", closeRef);
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeRef();
   });
 
   search?.addEventListener("input", () => {
