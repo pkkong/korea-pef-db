@@ -79,6 +79,7 @@ from build_service_site import (  # noqa: E402
     DEFAULT_LP_COMMITMENT_MONITOR,
     DEFAULT_SERVICE_INTEGRATION_WORKLIST,
     article_payload_rows,
+    app_head_meta,
     brief_count_label,
     build,
     compact_date,
@@ -1194,6 +1195,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{html_escape(lp_name)} LP 프로필</title>
+{app_head_meta()}
   <link rel="stylesheet" href="assets/service.css">
   <style>
     body {{ background: #f5f7fa; }}
@@ -1618,6 +1620,7 @@ def render_lp_notices_page(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Korea PEF Intelligence LP Notices</title>
+{app_head_meta()}
   <link rel="stylesheet" href="assets/service.css">
   <style>
     body.lp-notices-page .app-shell {{ width: min(100%, 1220px); }}
@@ -1935,6 +1938,8 @@ def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
         *gp_profile_paths,
         site_dir / "health.json",
         site_dir / "archive.json",
+        site_dir / "site.webmanifest",
+        site_dir / "apple-touch-icon.png",
         site_dir / ".nojekyll",
         site_dir / "robots.txt",
         site_dir / "404.html",

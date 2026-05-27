@@ -7,6 +7,8 @@ import argparse
 import csv
 import json
 import re
+import struct
+import zlib
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -16,6 +18,7 @@ DEFAULT_PUBLIC_DIR = REPO_ROOT / "public"
 DEFAULT_SERVICE_INTEGRATION_WORKLIST = REPO_ROOT / "exports" / "service_integration_worklist_latest.csv"
 DEFAULT_LP_COMMITMENT_MONITOR = REPO_ROOT / "exports" / "lp_commitment_monitor_latest.csv"
 DEFAULT_ARCHIVE_LIMIT = 30
+APP_ICON_FILE = "apple-touch-icon.png"
 SECTION_HEADER_RE = re.compile(r"^\[(?P<section>.+?)\]\s*$")
 ARTICLE_RE = re.compile(r"^- \[(?P<title>.+?)\]\((?P<url>https?://[^)]+)\)")
 EDITORIAL_SECTIONS = [
@@ -55,6 +58,131 @@ PUBLISHER_BADGES = {
     "뉴스톱": "톱",
     "뉴스토마토": "토",
 }
+
+
+def app_head_meta() -> str:
+    return f"""  <meta name="theme-color" content="#111827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="KPEF Brief">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="apple-touch-icon" href="{APP_ICON_FILE}">
+  <link rel="icon" type="image/png" href="{APP_ICON_FILE}">
+  <link rel="manifest" href="site.webmanifest">"""
+
+
+def app_web_manifest() -> str:
+    payload = {
+        "name": "Korea PEF Intelligence",
+        "short_name": "KPEF Brief",
+        "start_url": "./index.html",
+        "scope": "./",
+        "display": "standalone",
+        "background_color": "#f5f5f7",
+        "theme_color": "#111827",
+        "icons": [
+            {
+                "src": APP_ICON_FILE,
+                "sizes": "180x180",
+                "type": "image/png",
+                "purpose": "any",
+            }
+        ],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+
+def write_app_icon_assets(public_dir: Path) -> Path:
+    icon_path = public_dir / APP_ICON_FILE
+    icon_path.write_bytes(app_icon_png())
+    return icon_path
+
+
+def app_icon_png(size: int = 180) -> bytes:
+    background_top = (17, 24, 39)
+    background_bottom = (31, 107, 99)
+    pixels: list[list[tuple[int, int, int, int]]] = []
+    for y in range(size):
+        t = y / max(1, size - 1)
+        row = []
+        for x in range(size):
+            base = tuple(round(background_top[i] * (1 - t) + background_bottom[i] * t) for i in range(3))
+            row.append((base[0], base[1], base[2], 255))
+        pixels.append(row)
+
+    def set_px(x: int, y: int, color: tuple[int, int, int, int]) -> None:
+        if 0 <= x < size and 0 <= y < size:
+            pixels[y][x] = color
+
+    def rounded_rect(x0: int, y0: int, x1: int, y1: int, radius: int, color: tuple[int, int, int, int]) -> None:
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                dx = max(x0 + radius - x, 0, x - (x1 - radius - 1))
+                dy = max(y0 + radius - y, 0, y - (y1 - radius - 1))
+                if dx * dx + dy * dy <= radius * radius:
+                    set_px(x, y, color)
+
+    def rect(x0: int, y0: int, x1: int, y1: int, color: tuple[int, int, int, int]) -> None:
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                set_px(x, y, color)
+
+    rounded_rect(28, 28, 152, 152, 22, (248, 250, 252, 255))
+    rect(43, 46, 51, 132, (31, 107, 99, 255))
+    rect(62, 92, 132, 100, (229, 231, 235, 255))
+    rect(62, 112, 121, 120, (229, 231, 235, 255))
+    rect(62, 132, 104, 140, (229, 231, 235, 255))
+    rect(110, 113, 122, 140, (31, 107, 99, 255))
+    rect(126, 99, 138, 140, (215, 189, 120, 255))
+    rect(94, 126, 106, 140, (17, 24, 39, 255))
+    draw_block_text(pixels, "PEF", 61, 52, 5, (17, 24, 39, 255))
+
+    raw = b"".join(b"\x00" + bytes(channel for pixel in row for channel in pixel) for row in pixels)
+    return make_png(size, size, raw)
+
+
+def draw_block_text(
+    pixels: list[list[tuple[int, int, int, int]]],
+    text: str,
+    x: int,
+    y: int,
+    scale: int,
+    color: tuple[int, int, int, int],
+) -> None:
+    glyphs = {
+        "P": ("11110", "10001", "10001", "11110", "10000", "10000", "10000"),
+        "E": ("11111", "10000", "10000", "11110", "10000", "10000", "11111"),
+        "F": ("11111", "10000", "10000", "11110", "10000", "10000", "10000"),
+    }
+    cursor = x
+    height = len(pixels)
+    width = len(pixels[0]) if pixels else 0
+    for char in text:
+        glyph = glyphs.get(char.upper())
+        if not glyph:
+            cursor += scale * 3
+            continue
+        for gy, row in enumerate(glyph):
+            for gx, mark in enumerate(row):
+                if mark != "1":
+                    continue
+                for py in range(y + gy * scale, y + (gy + 1) * scale):
+                    for px in range(cursor + gx * scale, cursor + (gx + 1) * scale):
+                        if 0 <= px < width and 0 <= py < height:
+                            pixels[py][px] = color
+        cursor += (len(glyph[0]) + 1) * scale
+
+
+def make_png(width: int, height: int, raw_scanlines: bytes) -> bytes:
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        )
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(raw_scanlines, 9)) + chunk(b"IEND", b"")
 PRIMARY_LP_SOURCE_CODES = {
     "nps_manager_selection",
     "kafi_apfs_notice",
@@ -893,6 +1021,7 @@ def render_app(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Korea PEF Intelligence Daily</title>
+{app_head_meta()}
   <link rel="stylesheet" href="assets/service.css">
 </head>
 <body>
@@ -2580,17 +2709,22 @@ def build(
     daily_path = public_dir / "daily-news.html"
     css_path = assets_dir / "service.css"
     js_path = assets_dir / "service.js"
+    manifest_path = public_dir / "site.webmanifest"
+    icon_path = write_app_icon_assets(public_dir)
     html = render_app(report_date, articles, basis_text, service_context, archive_entries, lp_monitor, newsletter_only)
     home_path.write_text(html, encoding="utf-8")
     daily_path.write_text(html, encoding="utf-8")
     css_path.write_text(service_css(), encoding="utf-8")
     js_path.write_text(service_js(), encoding="utf-8")
+    manifest_path.write_text(app_web_manifest(), encoding="utf-8")
     return {
         "report_date": report_date,
         "home_path": str(home_path),
         "daily_path": str(daily_path),
         "css_path": str(css_path),
         "js_path": str(js_path),
+        "manifest_path": str(manifest_path),
+        "icon_path": str(icon_path),
         "article_count": str(len(articles)),
         "lp_monitor_count": str(len(lp_monitor)),
     }

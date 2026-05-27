@@ -46,6 +46,17 @@ DEAL_KEYWORDS = (
     "회수",
     "딜",
 )
+APP_ICON_FILE = "apple-touch-icon.png"
+
+
+def _app_head_meta() -> str:
+    return f"""  <meta name="theme-color" content="#111827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="KPEF Brief">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="apple-touch-icon" href="{APP_ICON_FILE}">
+  <link rel="icon" type="image/png" href="{APP_ICON_FILE}">
+  <link rel="manifest" href="site.webmanifest">"""
 
 
 def write_gp_pages(site_dir: Path, db_path: Path, report_date: str) -> dict[str, int]:
@@ -417,6 +428,7 @@ def _render_empty_directory(report_date: str, message: str) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Korea PEF GP Directory</title>
+{_app_head_meta()}
   {_base_styles()}
 </head>
 <body>
@@ -451,6 +463,7 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Korea PEF GP Directory</title>
+{_app_head_meta()}
   {_base_styles()}
 </head>
 <body>
@@ -652,6 +665,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{_e(name)} GP Profile</title>
+{_app_head_meta()}
   {_base_styles()}
 </head>
 <body>
