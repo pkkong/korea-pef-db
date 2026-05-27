@@ -313,7 +313,7 @@ def _page_styles() -> str:
       --wiki-text: #17202a;
       --wiki-secondary: #52616f;
       --wiki-tertiary: #7a8793;
-      --wiki-line: #d9e1e6;
+      --wiki-line: #e7edf1;
       --wiki-accent: #1f6b63;
       --wiki-accent-soft: #e7f4f1;
     }
@@ -346,7 +346,6 @@ def _page_styles() -> str:
       gap: 18px;
       align-items: center;
       min-height: 38px;
-      border-bottom: 1px solid var(--wiki-line);
       color: var(--wiki-secondary);
       font-size: 13px;
       font-weight: 850;
@@ -390,7 +389,6 @@ def _page_styles() -> str:
       grid-template-columns: minmax(0, 1fr);
       gap: 14px;
       padding: 18px 0 14px;
-      border-bottom: 1px solid var(--wiki-line);
     }
     .wiki-kicker {
       margin: 0 0 8px;
@@ -444,18 +442,17 @@ def _page_styles() -> str:
     .wiki-doc-meta {
       display: flex;
       flex-wrap: wrap;
-      gap: 7px;
+      gap: 14px;
       align-items: center;
       color: var(--wiki-secondary);
       font-size: 12px;
       font-weight: 850;
     }
     .wiki-doc-meta span {
-      min-height: 30px;
       display: inline-flex;
       align-items: center;
-      border-bottom: 1px solid var(--wiki-line);
-      padding: 5px 10px;
+      min-height: 0;
+      padding: 0;
     }
     .wiki-layout {
       display: grid;
@@ -472,14 +469,11 @@ def _page_styles() -> str:
     .wiki-section {
       display: grid;
       gap: 12px;
-      border-bottom: 1px solid var(--wiki-line);
-      padding: 0 0 26px;
-      margin-bottom: 26px;
+      padding: 0;
+      margin-bottom: 42px;
     }
     .wiki-section:last-child {
-      border-bottom: 0;
       margin-bottom: 0;
-      padding-bottom: 0;
     }
     .wiki-eyebrow {
       margin: 0;
@@ -535,15 +529,13 @@ def _page_styles() -> str:
     }
     .wiki-meta-list {
       display: grid;
-      gap: 0;
+      gap: 8px;
       margin: 2px 0 0;
-      border-top: 1px solid var(--wiki-line);
     }
     .wiki-meta-list div {
       display: grid;
       gap: 5px;
-      border-bottom: 1px solid var(--wiki-line);
-      padding: 11px 0;
+      padding: 3px 0;
     }
     .wiki-meta-list dt {
       color: var(--wiki-text);
@@ -560,27 +552,22 @@ def _page_styles() -> str:
     .wiki-definition-block {
       display: grid;
       gap: 7px;
-      border-top: 1px solid var(--wiki-line);
-      padding: 14px 0 4px;
+      padding: 7px 0 4px;
     }
     .wiki-definition-block p {
       max-width: 860px;
     }
     .wiki-stat-strip {
       display: grid;
-      gap: 0;
-      border-top: 1px solid var(--wiki-line);
-      border-bottom: 1px solid var(--wiki-line);
+      gap: 10px;
     }
     .wiki-stat-strip div {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 12px;
       align-items: center;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--wiki-line);
+      padding: 2px 0;
     }
-    .wiki-stat-strip div:last-child { border-bottom: 0; }
     .wiki-stat-strip span {
       color: var(--wiki-secondary);
       font-size: 13px;
@@ -594,19 +581,17 @@ def _page_styles() -> str:
     }
     .wiki-source-index {
       display: grid;
-      gap: 0;
+      gap: 8px;
       margin: 0;
       padding: 0;
       list-style: none;
-      border-top: 1px solid var(--wiki-line);
     }
     .wiki-source-index li {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 66px;
       gap: 12px;
       align-items: center;
-      border-bottom: 1px solid var(--wiki-line);
-      padding: 11px 0;
+      padding: 3px 0;
     }
     .wiki-source-index a {
       color: var(--wiki-text);
@@ -639,8 +624,6 @@ def _page_styles() -> str:
       flex-wrap: wrap;
       gap: 8px;
       align-items: center;
-      border-left: 3px solid var(--wiki-line);
-      padding-left: 10px;
     }
     .wiki-source-line span {
       color: var(--wiki-tertiary);
@@ -662,15 +645,13 @@ def _page_styles() -> str:
     }
     .wiki-definition-list {
       display: grid;
-      gap: 0;
+      gap: 8px;
       margin: 4px 0 0;
-      border-top: 1px solid var(--wiki-line);
     }
     .wiki-definition-list div {
       display: grid;
       gap: 6px;
-      border-bottom: 1px solid var(--wiki-line);
-      padding: 13px 0;
+      padding: 3px 0;
     }
     .wiki-definition-list dt {
       color: var(--wiki-text);
@@ -684,14 +665,12 @@ def _page_styles() -> str:
       margin: 0;
       padding: 0;
       list-style: none;
-      border-top: 1px solid var(--wiki-line);
     }
     .wiki-timeline li,
     .wiki-event-list li {
       display: grid;
       gap: 5px;
-      border-bottom: 1px solid var(--wiki-line);
-      padding: 13px 0;
+      padding: 7px 0;
     }
     .wiki-timeline strong,
     .wiki-event-list strong {
@@ -741,13 +720,12 @@ def _page_styles() -> str:
       }
       .wiki-sidebar nav {
         display: grid;
-        border-top: 1px solid var(--wiki-line);
+        gap: 12px;
       }
       .wiki-sidebar a {
         display: grid;
         gap: 3px;
-        border-bottom: 1px solid var(--wiki-line);
-        padding: 10px 0;
+        padding: 0;
         color: var(--wiki-text);
         text-decoration: none;
       }
