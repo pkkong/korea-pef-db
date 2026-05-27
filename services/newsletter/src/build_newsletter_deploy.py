@@ -78,9 +78,14 @@ from build_service_site import (  # noqa: E402
     DEFAULT_EXPORT_DIR,
     DEFAULT_LP_COMMITMENT_MONITOR,
     DEFAULT_SERVICE_INTEGRATION_WORKLIST,
+    article_payload_rows,
+    brief_count_label,
     build,
     compact_date,
+    display_date,
     html_escape,
+    merge_service_context,
+    normalize_url,
     parse_brief,
     parse_brief_basis,
     read_lp_monitor,
@@ -121,6 +126,205 @@ def write_health_file(site_dir: Path, result: dict[str, str]) -> None:
         "gp_news_link_count": int(result.get("news_link_count", "0") or 0),
     }
     (site_dir / "health.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def add_lp_article_context(
+    context: dict[str, dict[str, object]],
+    source_url: object,
+    normalized_source_url: object,
+    lp_code: object,
+    lp_name: object,
+    aliases: object = "",
+) -> None:
+    name = str(lp_name or lp_code or "").strip()
+    code = str(lp_code or "").strip()
+    if not name or not code:
+        return
+    keys = []
+    for value in [normalized_source_url, source_url]:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        for key in [normalize_url(text), text]:
+            if key and key not in keys:
+                keys.append(key)
+    for key in keys:
+        entry = context.setdefault(key, {"lpNames": [], "lpProfileLinks": [], "searchTerms": []})
+        lp_names = entry.setdefault("lpNames", [])
+        if name not in lp_names:
+            lp_names.append(name)
+        search_terms = entry.setdefault("searchTerms", [])
+        for term in [name, code, *[part.strip() for part in str(aliases or "").split(";") if part.strip()]]:
+            if term and term not in search_terms:
+                search_terms.append(term)
+        links = entry.setdefault("lpProfileLinks", [])
+        link = {"code": code, "name": lp_short_label(code, name), "url": f"lp-{code}.html"}
+        if not any(isinstance(item, dict) and item.get("code") == code for item in links):
+            links.append(link)
+
+
+def read_lp_article_context(db_path: Path = DEFAULT_DB) -> dict[str, dict[str, object]]:
+    if not db_path.exists():
+        return {}
+    conn = sqlite3.connect(db_path)
+    context: dict[str, dict[str, object]] = {}
+    try:
+        if db_object_exists(conn, "lp_notice_news_link") and db_object_exists(conn, "news_document"):
+            rows = fetch_dicts(
+                conn,
+                """
+                SELECT
+                    nd.source_url,
+                    nd.normalized_source_url,
+                    lnnl.lp_code,
+                    COALESCE(li.lp_name, lnnl.lp_code) AS lp_name,
+                    COALESCE(li.aliases, '') AS aliases
+                FROM lp_notice_news_link lnnl
+                JOIN news_document nd
+                  ON nd.news_id = lnnl.news_id
+                LEFT JOIN lp_institution li
+                  ON li.lp_code = lnnl.lp_code
+                """,
+            )
+            for row in rows:
+                add_lp_article_context(
+                    context,
+                    row.get("source_url"),
+                    row.get("normalized_source_url"),
+                    row.get("lp_code"),
+                    row.get("lp_name"),
+                    row.get("aliases"),
+                )
+        if db_object_exists(conn, "lp_commitment_notice"):
+            rows = fetch_dicts(
+                conn,
+                """
+                SELECT
+                    lcn.notice_url AS source_url,
+                    lcn.normalized_notice_url AS normalized_source_url,
+                    lcn.lp_code,
+                    COALESCE(li.lp_name, lcn.lp_code) AS lp_name,
+                    COALESCE(li.aliases, '') AS aliases
+                FROM lp_commitment_notice lcn
+                LEFT JOIN lp_institution li
+                  ON li.lp_code = lcn.lp_code
+                WHERE lcn.source_type = 'news'
+                  AND COALESCE(lcn.public_visible, 1) = 1
+                """,
+            )
+            for row in rows:
+                add_lp_article_context(
+                    context,
+                    row.get("source_url"),
+                    row.get("normalized_source_url"),
+                    row.get("lp_code"),
+                    row.get("lp_name"),
+                    row.get("aliases"),
+                )
+    finally:
+        conn.close()
+    return context
+
+
+def split_aliases(value: object) -> list[str]:
+    return [part.strip() for part in str(value or "").split(";") if part.strip()]
+
+
+def useful_lp_alias(alias: str) -> bool:
+    if not alias:
+        return False
+    if alias.upper() in {"LP", "CU"}:
+        return False
+    if re.fullmatch(r"[A-Za-z0-9&.-]+", alias) and len(alias) < 4:
+        return False
+    return len(alias) >= 2
+
+
+def read_lp_alias_patterns(db_path: Path = DEFAULT_DB) -> list[dict[str, object]]:
+    if not db_path.exists():
+        return []
+    conn = sqlite3.connect(db_path)
+    try:
+        if not db_object_exists(conn, "lp_institution"):
+            return []
+        rows = fetch_dicts(
+            conn,
+            """
+            SELECT lp_code, lp_name, aliases
+            FROM lp_institution
+            ORDER BY service_priority DESC, lp_name
+            """,
+        )
+    finally:
+        conn.close()
+    extras = {
+        "kdb": ["국민성장펀드", "국민참여형 국민성장펀드"],
+        "kvic": ["모태펀드", "한국모태펀드"],
+        "kgrowth": ["성장금융"],
+        "nps": ["국민연금"],
+        "poba": ["행정공제회"],
+    }
+    patterns: list[dict[str, object]] = []
+    for row in rows:
+        code = str(row.get("lp_code") or "")
+        name = str(row.get("lp_name") or code)
+        aliases = [name, lp_short_label(code, name), *split_aliases(row.get("aliases")), *extras.get(code, [])]
+        clean_aliases = sorted({alias for alias in aliases if useful_lp_alias(alias)}, key=len, reverse=True)
+        patterns.append({"lp_code": code, "lp_name": name, "aliases": clean_aliases})
+    return patterns
+
+
+def add_title_matched_lp_article_context(
+    context: dict[str, dict[str, object]],
+    archive_entries: list[dict[str, object]],
+    db_path: Path = DEFAULT_DB,
+) -> None:
+    patterns = read_lp_alias_patterns(db_path)
+    if not patterns:
+        return
+    seen_dates = {str(entry.get("reportDate") or "") for entry in archive_entries if entry.get("reportDate")}
+    for report_date in seen_dates:
+        markdown_path = DEFAULT_EXPORT_DIR / f"daily_news_brief_{compact_date(report_date)}.md"
+        if not markdown_path.exists():
+            continue
+        for row in parse_brief(markdown_path):
+            url = row.get("url", "")
+            haystack = " ".join([row.get("title", ""), row.get("section", ""), row.get("source", "")])
+            matched = 0
+            for pattern in patterns:
+                aliases = pattern.get("aliases") if isinstance(pattern.get("aliases"), list) else []
+                if any(str(alias) and str(alias) in haystack for alias in aliases):
+                    add_lp_article_context(
+                        context,
+                        url,
+                        normalize_url(url),
+                        pattern.get("lp_code"),
+                        pattern.get("lp_name"),
+                        ";".join(str(alias) for alias in aliases),
+                    )
+                    matched += 1
+                if matched >= 3:
+                    break
+
+
+def refresh_archive_entries_with_context(
+    archive_entries: list[dict[str, object]],
+    service_context: dict[str, dict[str, object]],
+) -> list[dict[str, object]]:
+    refreshed: list[dict[str, object]] = []
+    for entry in archive_entries:
+        report_date = str(entry.get("reportDate") or "")
+        markdown_path = DEFAULT_EXPORT_DIR / f"daily_news_brief_{compact_date(report_date)}.md"
+        if not report_date or not markdown_path.exists():
+            refreshed.append(entry)
+            continue
+        rows = parse_brief(markdown_path)
+        next_entry = dict(entry)
+        next_entry["visibleDate"] = str(next_entry.get("visibleDate") or display_date(report_date))
+        next_entry["countLabel"] = brief_count_label(len(rows))
+        next_entry["articles"] = article_payload_rows(rows, service_context, f"clip-{compact_date(report_date)}")
+        refreshed.append(next_entry)
+    return refreshed
 
 
 def write_static_support_files(site_dir: Path) -> None:
@@ -1127,7 +1331,8 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
         <strong>Korea PEF Intelligence</strong>
         <span>
           <a href="index.html">Daily Brief</a>
-          <a href="lp-notices.html">LP 공고</a>
+          <a href="lp-notices.html">LP Directory</a>
+          <a href="gps.html">GP Directory</a>
           {nav_html}
         </span>
       </nav>
@@ -1415,7 +1620,8 @@ def render_lp_notices_page(
   <title>Korea PEF Intelligence LP Notices</title>
   <link rel="stylesheet" href="assets/service.css">
   <style>
-    body.lp-notices-page .content-area {{ display: block; width: min(1180px, calc(100% - 28px)); margin: 0 auto; }}
+    body.lp-notices-page .app-shell {{ width: min(100%, 1220px); }}
+    body.lp-notices-page .content-area {{ display: block; width: min(1180px, 100%); margin: 0 auto; }}
     .lp-profile-nav {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }}
     .lp-profile-nav a {{ display: inline-flex; min-height: 32px; align-items: center; border-radius: 999px; padding: 6px 10px; background: var(--surface-muted); color: var(--text); font-size: 12px; font-weight: 750; text-decoration: none; }}
     .lp-directory-hero {{ display: grid; gap: 14px; margin-bottom: 14px; padding: 6px 0 4px; }}
@@ -1526,8 +1732,12 @@ def render_lp_notices_page(
         <strong>브리프</strong>
       </a>
       <a class="active" href="lp-notices.html">
-        <span aria-hidden="true" class="nav-dot nav-icon-db"></span>
-        <strong>공고</strong>
+        <span aria-hidden="true" class="nav-dot nav-icon-lp"></span>
+        <strong>LP</strong>
+      </a>
+      <a href="gps.html">
+        <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
+        <strong>GP</strong>
       </a>
       <a href="index.html#saved">
         <span aria-hidden="true" class="nav-dot nav-icon-saved"></span>
@@ -1683,6 +1893,9 @@ def rewrite_site_archive(site_dir: Path, report_date: str, archive_entries: list
     articles = parse_brief(markdown_path)
     basis_text = parse_brief_basis(markdown_path)
     service_context = read_service_context(DEFAULT_SERVICE_INTEGRATION_WORKLIST)
+    service_context = merge_service_context(service_context, read_lp_article_context())
+    add_title_matched_lp_article_context(service_context, archive_entries)
+    archive_entries = refresh_archive_entries_with_context(archive_entries, service_context)
     lp_monitor = read_lp_monitor(DEFAULT_LP_COMMITMENT_MONITOR)
     html = render_app(
         report_date,

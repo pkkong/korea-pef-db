@@ -461,6 +461,8 @@ def add_unique(items: list[str], value: str) -> None:
 def context_entry() -> dict[str, object]:
     return {
         "gpNames": [],
+        "lpNames": [],
+        "lpProfileLinks": [],
         "searchTerms": [],
         "peopleCount": 0,
         "serviceActions": [],
@@ -556,8 +558,32 @@ def merge_service_context(
         entry = base.setdefault(key, context_entry())
         for name in row.get("gpNames", []):
             add_unique(entry["gpNames"], str(name))
+        for name in row.get("lpNames", []):
+            add_unique(entry["lpNames"], str(name))
         for term in row.get("searchTerms", []):
             add_unique(entry["searchTerms"], str(term))
+        links = entry.setdefault("lpProfileLinks", [])
+        seen_links = {
+            (
+                str(item.get("code") or ""),
+                str(item.get("url") or ""),
+                str(item.get("name") or ""),
+            )
+            for item in links
+            if isinstance(item, dict)
+        }
+        for item in row.get("lpProfileLinks", []):
+            if not isinstance(item, dict):
+                continue
+            link = {
+                "code": str(item.get("code") or ""),
+                "name": str(item.get("name") or ""),
+                "url": str(item.get("url") or ""),
+            }
+            key_tuple = (link["code"], link["url"], link["name"])
+            if link["name"] and link["url"] and key_tuple not in seen_links:
+                links.append(link)
+                seen_links.add(key_tuple)
     return base
 
 
@@ -736,6 +762,8 @@ def article_payload_rows(
                 "url": row.get("url", ""),
                 "sectionOrder": section_sort_key(section),
                 "gpNames": context.get("gpNames", []),
+                "lpNames": context.get("lpNames", []),
+                "lpProfileLinks": context.get("lpProfileLinks", []),
                 "peopleCount": context.get("peopleCount", 0),
                 "searchTerms": context.get("searchTerms", []),
             }
@@ -817,11 +845,11 @@ def render_app(
     lp_db_link = "" if newsletter_only else '<a href="db.html#lp">LP DB</a>'
     bottom_db_link = (
         """      <a href="lp-notices.html">
-        <span aria-hidden="true" class="nav-dot nav-icon-db"></span>
+        <span aria-hidden="true" class="nav-dot nav-icon-lp"></span>
         <strong>LP</strong>
       </a>
       <a href="gps.html">
-        <span aria-hidden="true" class="nav-dot nav-icon-db"></span>
+        <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
         <strong>GP</strong>
       </a>"""
         if newsletter_only
@@ -958,10 +986,11 @@ def service_css() -> str:
   --shell: 520px;
 }
 * { box-sizing: border-box; }
-html { min-height: 100%; background: var(--bg); }
+html { min-height: 100%; overflow-x: hidden; background: var(--bg); }
 body {
   margin: 0;
   min-height: 100%;
+  overflow-x: hidden;
   color: var(--text);
   background: var(--bg);
   font-family: Pretendard, "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
@@ -970,9 +999,11 @@ body {
 a { color: inherit; text-decoration: none; }
 button, input { font: inherit; }
 .app-shell {
-  width: min(100%, var(--shell));
+  width: min(100vw, var(--shell));
+  max-width: 100vw;
   min-height: 100vh;
   margin: 0 auto;
+  overflow-x: hidden;
   background: var(--bg);
   padding: max(14px, env(safe-area-inset-top)) 14px calc(88px + env(safe-area-inset-bottom));
 }
@@ -1595,10 +1626,15 @@ button, input { font: inherit; }
   line-height: 1.2;
   font-weight: 560;
   cursor: pointer;
+  text-decoration: none;
 }
 .taxonomy-chip {
   background: #eef5ff;
   color: #0f5fb8;
+}
+.lp-chip {
+  background: #e7f4f1;
+  color: #164c46;
 }
 .context-chip:active { background: #e0e0e6; }
 .save-button {
@@ -1653,19 +1689,21 @@ button, input { font: inherit; }
   bottom: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  width: min(100%, var(--shell));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(100vw, var(--shell));
+  max-width: 100vw;
   transform: translateX(-50%);
   padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
   border-top: 1px solid rgba(0,0,0,0.08);
   background: rgba(249,249,249,0.88);
   backdrop-filter: blur(22px);
 }
-.newsletter-only .bottom-nav { grid-template-columns: repeat(4, 1fr); }
+.newsletter-only .bottom-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .bottom-nav button,
 .bottom-nav a {
   display: flex;
   min-width: 0;
+  overflow: hidden;
   flex-direction: column;
   align-items: center;
   gap: 4px;
@@ -1676,7 +1714,13 @@ button, input { font: inherit; }
   line-height: 1.1;
   cursor: pointer;
 }
-.bottom-nav strong { font-weight: 600; }
+.bottom-nav strong {
+  max-width: 100%;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .bottom-nav .active { color: var(--text); }
 .nav-dot {
   display: inline-flex;
@@ -1704,6 +1748,14 @@ button, input { font: inherit; }
   -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 6c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3Zm0 0v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 6c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3Zm0 0v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
+.nav-icon-lp::before {
+  -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 6.5h14M5 12h14M5 17.5h14M7 4.5v15M17 4.5v15' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 6.5h14M5 12h14M5 17.5h14M7 4.5v15M17 4.5v15' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.nav-icon-gp::before {
+  -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 18.5 9.5 13l3 3L20 7.5M14 7.5h6v6' fill='none' stroke='black' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 18.5 9.5 13l3 3L20 7.5M14 7.5h6v6' fill='none' stroke='black' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 .bottom-nav .active .nav-dot { opacity: 1; }
 .skeleton-list { display: grid; gap: 1px; overflow: hidden; border-radius: var(--radius); background: var(--surface); }
 .skeleton-list div {
@@ -1717,6 +1769,23 @@ button, input { font: inherit; }
   0% { background-position: 120% 0; }
   100% { background-position: -120% 0; }
 }
+@media (max-width: 430px) {
+  .date-control { gap: 6px; }
+  .date-control::before,
+  .date-control::after { flex-basis: 8px; }
+  .date-step {
+    width: 38px;
+    height: 38px;
+  }
+  .date-current {
+    min-width: min(154px, 42vw);
+    height: 42px;
+  }
+  .bottom-nav {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+}
 @media (min-width: 760px) {
   body { background: #ececf1; }
   .app-shell {
@@ -1728,6 +1797,7 @@ button, input { font: inherit; }
     overflow: hidden;
   }
   .header-topline { padding-right: 112px; }
+  .newsletter-only .header-topline { padding-right: 176px; }
   .header-action { display: inline-flex; }
   .bottom-nav { border-radius: 0 0 30px 30px; }
   .lp-detail-sheet {
@@ -1956,6 +2026,7 @@ def service_js() -> str:
     article.visibleDate,
     article.reportDate,
     Array.isArray(article.gpNames) ? article.gpNames.join(" ") : "",
+    Array.isArray(article.lpNames) ? article.lpNames.join(" ") : "",
     Array.isArray(article.searchTerms) ? article.searchTerms.join(" ") : ""
   ];
 
@@ -1999,7 +2070,8 @@ def service_js() -> str:
   const issueTokens = (article) => {
     const text = [
       article.title,
-      Array.isArray(article.gpNames) ? article.gpNames.join(" ") : ""
+      Array.isArray(article.gpNames) ? article.gpNames.join(" ") : "",
+      Array.isArray(article.lpNames) ? article.lpNames.join(" ") : ""
     ].join(" ");
     return new Set(
       text
@@ -2311,6 +2383,16 @@ def service_js() -> str:
       chip.textContent = label;
       chips.append(chip);
     };
+    const appendLinkChip = (label, href, extraClass = "") => {
+      if (!label || !href) return;
+      const chip = document.createElement("a");
+      chip.className = `context-chip ${extraClass}`.trim();
+      chip.href = href;
+      chip.textContent = label;
+      chips.append(chip);
+    };
+    const lpLinks = Array.isArray(article.lpProfileLinks) ? article.lpProfileLinks.filter((item) => item && item.name && item.url) : [];
+    lpLinks.forEach((item) => appendLinkChip(item.name, item.url, "lp-chip"));
     const gpNames = Array.isArray(article.gpNames) ? article.gpNames.filter(Boolean) : [];
     gpNames.forEach((name) => appendChip(name));
     if (chips.childElementCount) main.append(chips);
