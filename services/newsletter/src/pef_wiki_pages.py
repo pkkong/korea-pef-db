@@ -21,7 +21,7 @@ REFERENCE_LINKS = {
     "institutional_private_fund": {
         "label": "기관전용 사모집합투자기구",
         "type": "용어",
-        "location": "제1장 제2절 p.10",
+        "location": "제1장 제2절",
         "source_label": "KVCA 실무안내",
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["general_vs_institutional", "gp", "lp"],
@@ -37,7 +37,7 @@ REFERENCE_LINKS = {
     "general_vs_institutional": {
         "label": "일반 사모 / 기관전용 사모",
         "type": "분류",
-        "location": "제1장 제2절 p.10 · KDI 정책자료",
+        "location": "제1장 제2절 · KDI 정책자료",
         "source_label": "KDI 정책자료",
         "source_url": SOURCE_URLS["kdi"],
         "related": ["institutional_private_fund"],
@@ -45,7 +45,7 @@ REFERENCE_LINKS = {
     "gp": {
         "label": "업무집행사원(GP)",
         "type": "역할",
-        "location": "제1장 제2절 p.10 · 제3장 GP 등록 제도",
+        "location": "제1장 제2절 · 제3장 GP 등록 제도",
         "source_label": "금융감독원",
         "source_url": SOURCE_URLS["fss"],
         "related": ["lp", "fss_reporting"],
@@ -53,7 +53,7 @@ REFERENCE_LINKS = {
     "lp": {
         "label": "유한책임사원(LP)",
         "type": "역할",
-        "location": "제1장 제2절 p.10 · LP 출자공고 서비스",
+        "location": "제1장 제2절 · LP 출자공고 서비스",
         "source_label": "KVCA 게시글",
         "source_url": SOURCE_URLS["kvca"],
         "related": ["gp", "institutional_private_fund"],
@@ -77,7 +77,7 @@ REFERENCE_LINKS = {
     "fund_raising": {
         "label": "자금모집",
         "type": "투자 단계",
-        "location": "제1장 제2절 p.11",
+        "location": "제1장 제2절",
         "source_label": "KVCA 실무안내",
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["investment", "gp", "lp"],
@@ -85,7 +85,7 @@ REFERENCE_LINKS = {
     "investment": {
         "label": "투자",
         "type": "투자 단계",
-        "location": "제1장 제2절 p.11",
+        "location": "제1장 제2절",
         "source_label": "KVCA 실무안내",
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["value_addition", "exit"],
@@ -93,7 +93,7 @@ REFERENCE_LINKS = {
     "value_addition": {
         "label": "기업가치 제고",
         "type": "투자 단계",
-        "location": "제1장 제2절 p.11",
+        "location": "제1장 제2절",
         "source_label": "KVCA 실무안내",
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["investment", "exit"],
@@ -101,7 +101,7 @@ REFERENCE_LINKS = {
     "exit": {
         "label": "매각·회수",
         "type": "투자 단계",
-        "location": "제1장 제2절 p.11 · 제1장 제3절 p.17",
+        "location": "제1장 제2절 · 제1장 제3절",
         "source_label": "KVCA 실무안내",
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["investment", "value_addition"],
@@ -109,7 +109,7 @@ REFERENCE_LINKS = {
     "gp_registration": {
         "label": "GP 등록제",
         "type": "규정",
-        "location": "제1장 제4절 p.25",
+        "location": "제1장 제4절",
         "source_label": "KVCA 실무안내",
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["gp", "fss_reporting"],
@@ -117,7 +117,7 @@ REFERENCE_LINKS = {
     "leverage": {
         "label": "차입·재무보증",
         "type": "운용 규제",
-        "location": "제1장 제4절 p.33",
+        "location": "제1장 제4절",
         "source_label": "KVCA 실무안내",
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["capital_markets_act", "money_lending"],
@@ -125,7 +125,7 @@ REFERENCE_LINKS = {
     "money_lending": {
         "label": "금전대여 운용",
         "type": "운용 규제",
-        "location": "제1장 제4절 p.33",
+        "location": "제1장 제4절",
         "source_label": "KVCA 실무안내",
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["leverage", "capital_markets_act"],
@@ -133,7 +133,7 @@ REFERENCE_LINKS = {
     "financial_group": {
         "label": "금융전업그룹",
         "type": "규정",
-        "location": "제1장 제4절 p.28-p.29",
+        "location": "제1장 제4절",
         "source_label": "KVCA 실무안내",
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["capital_markets_act", "gp"],
@@ -141,7 +141,7 @@ REFERENCE_LINKS = {
     "investor_count": {
         "label": "투자자 수",
         "type": "투자자 범위",
-        "location": "제1장 제4절 p.36",
+        "location": "제1장 제4절",
         "source_label": "KVCA 실무안내",
         "source_url": SOURCE_URLS["kvca_pdf"],
         "related": ["lp", "general_vs_institutional"],
@@ -150,12 +150,12 @@ REFERENCE_LINKS = {
 
 CHAPTER_SECTIONS = [
     ("chapter", "제1장 개관", "목차"),
-    ("background", "제1절 도입 배경", "p.8"),
-    ("classification", "제2절 개요 및 분류", "p.10"),
-    ("market", "제3절 관련 현황", "p.13"),
-    ("history", "제4절 연혁", "p.18"),
+    ("background", "제1절 도입 배경", "제도 도입 논리"),
+    ("classification", "제2절 개요 및 분류", "정의·구조·유형"),
+    ("market", "제3절 관련 현황", "시장·GP·회수"),
+    ("history", "제4절 연혁", "제도 변화"),
     ("rules", "법령·규정", "참조"),
-    ("sources", "출처", "공식 링크"),
+    ("sources", "문서 기준", "기준 자료"),
 ]
 
 
@@ -188,7 +188,7 @@ def render_pef_wiki_page(report_date: str) -> str:
       </form>
       <div class="wiki-doc-meta" aria-label="문서 기준">
         <span>금융감독원 실무안내</span>
-        <span>제1장 p.8-p.36 본문</span>
+        <span>제1장 개관 본문</span>
         <span>기준일 {safe_date}</span>
       </div>
     </header>
@@ -212,7 +212,7 @@ def render_pef_wiki_page(report_date: str) -> str:
     <h2 id="wikiRefTitle"></h2>
     <p id="wikiRefLocation"></p>
     <div class="wiki-ref-related" id="wikiRefRelated"></div>
-    <a id="wikiRefSource" href="{html_escape(SOURCE_URLS["kvca_pdf"])}" target="_blank" rel="noreferrer">공식 출처 열기</a>
+    <a id="wikiRefSource" href="{html_escape(SOURCE_URLS["kvca_pdf"])}" target="_blank" rel="noreferrer">자료 열기</a>
   </aside>
   <div class="wiki-ref-backdrop" id="wikiRefBackdrop" hidden></div>
   {_render_bottom_nav()}
@@ -228,12 +228,12 @@ def _render_wiki_article() -> str:
         <section class="wiki-section" id="chapter" data-search="제1장 개관 기관전용 사모집합투자기구 실무안내 pef 목차">
           <p class="wiki-eyebrow">제1장</p>
           <h2>개관</h2>
-          <p class="wiki-paragraph">제1장은 사모투자전문회사(PEF) 제도의 도입 배경, 기관전용 사모집합투자기구의 정의와 투자 단계, 시장 성장 현황, 2004년 도입 이후 2021년 사모펀드 체계개편까지의 제도 변화를 한 흐름으로 다룹니다.</p>
+          <p class="wiki-paragraph">제1장은 사모투자전문회사 제도가 왜 도입됐는지, 기관전용 사모집합투자기구가 어떤 법적·실무적 구조를 갖는지, 국내 시장이 어떻게 성장했는지, 제도 개편이 어떤 방향으로 진행됐는지를 한 문서 안에서 연결합니다.</p>
           <ol class="wiki-source-index">
-            <li><a href="#background">제1절 사모투자전문회사(PEF) 제도 도입 배경</a><span>p.8</span></li>
-            <li><a href="#classification">제2절 기관전용 사모집합투자기구 개요 및 분류</a><span>p.10</span></li>
-            <li><a href="#market">제3절 기관전용 사모집합투자기구 관련 현황</a><span>p.13</span></li>
-            <li><a href="#history">제4절 연혁</a><span>p.18-p.36</span></li>
+            <li><a href="#background">제1절 사모투자전문회사 제도 도입 배경</a><span>도입 논리</span></li>
+            <li><a href="#classification">제2절 기관전용 사모집합투자기구 개요 및 분류</a><span>정의·구조</span></li>
+            <li><a href="#market">제3절 기관전용 사모집합투자기구 관련 현황</a><span>시장 현황</span></li>
+            <li><a href="#history">제4절 연혁</a><span>제도 변화</span></li>
           </ol>
           <div class="wiki-inline-tools" aria-label="주요 참조">
             <button class="wiki-ref" type="button" data-ref="institutional_private_fund">기관전용 사모집합투자기구</button>
@@ -244,119 +244,165 @@ def _render_wiki_article() -> str:
         </section>
 
         <section class="wiki-section" id="background" data-search="도입 배경 외환위기 기업 구조조정 위험자본 buyout m&a crv crf crc">
-          <p class="wiki-eyebrow">제1절 · p.8-p.9</p>
+          <p class="wiki-eyebrow">제1절</p>
           <h2>사모투자전문회사(PEF) 제도 도입 배경</h2>
+          <p class="wiki-paragraph">제도 도입의 출발점은 외환위기 이후 커진 기업 구조조정 수요와 장기 위험자본 공급 필요성입니다. 기존 구조조정 수단은 특정 목적과 대상에 묶여 있었고, 민간 자본이 기업 인수·경영개선·회수까지 일관되게 수행하기에는 운용 자율성이 부족했습니다.</p>
           <div class="wiki-subsection">
-            <h3>1. 기존 투자수단의 한계</h3>
-            <ul class="wiki-body-list">
-              <li>IMF 외환위기 이후 비효율적 지배구조와 경영능력이 취약한 기업에 대한 대규모 구조조정 수요가 커졌습니다.</li>
-              <li>국내 금융기관과 기업의 인수·매각을 통해 거래차익을 실현하려는 외국계 사모펀드, 국내자본 육성, 연기금 등의 대규모 장기 투자 수요가 동시에 확대됐습니다.</li>
-              <li>부실기업, 금융기관 부실채권 정리 등을 위해 여러 기업구조조정기구가 마련됐지만 투자대상, 투자방법, 운용주체 자격이 제한돼 범용 구조조정 수단으로 쓰기에는 한계가 있었습니다.</li>
-            </ul>
+            <h3>제도 도입 배경 요인</h3>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>요인</th><th>내용</th><th>PEF 제도와의 연결</th></tr></thead>
+              <tbody>
+                <tr><td>구조조정 수요</td><td>외환위기 이후 비효율적 지배구조와 취약한 경영능력을 가진 기업에 대한 대규모 구조조정 필요가 커졌습니다.</td><td>단순 채권정리나 청산 중심이 아니라 지배구조 개선과 기업가치 제고를 수행할 수 있는 투자기구가 필요했습니다.</td></tr>
+                <tr><td>국내 자본 육성</td><td>외국계 사모펀드가 국내 금융기관·기업 인수와 매각에서 적극적으로 움직이면서 국내 장기 위험자본 육성 필요가 부각됐습니다.</td><td>연기금과 기관투자자의 장기 자금을 기업 인수·개선·회수 구조로 연결하는 통로가 요구됐습니다.</td></tr>
+                <tr><td>기존 제도 한계</td><td>부실채권 정리, 워크아웃, 구조조정 부동산 등 목적별 제도는 있었지만 투자대상·투자방법·운용주체 자격이 좁았습니다.</td><td>자금조성부터 투자, 경영개선, 회수까지 폭넓은 재량을 가진 조합형 투자기구가 필요했습니다.</td></tr>
+              </tbody>
+            </table>
           </div>
           <div class="wiki-subsection">
-            <h3>2. 대체 투자수단 도입 필요성</h3>
-            <p class="wiki-paragraph">기존 구조조정기구와 달리 자금조성, 투자·운용 전반에 폭넓은 자율성을 부여하는 조합형 구조조정 펀드가 필요해졌고, 2004년 10월 「간접투자자산 운용업법」 개정을 통해 사모투자전문회사 제도의 법적 근거가 마련됐습니다.</p>
+            <h3>기존 기업구조조정 수단 비교</h3>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>구분</th><th>주요 목적</th><th>투자·운용 범위</th><th>PEF 도입 필요성과의 차이</th></tr></thead>
+              <tbody>
+                <tr><td>CRV</td><td>워크아웃 기업 정상화</td><td>금융기관이 보유한 부실자산과 구조조정 대상 기업 중심</td><td>부실 정리 목적이 강하고 범용 인수·경영개선 투자기구로 쓰기 어렵습니다.</td></tr>
+                <tr><td>CRF</td><td>중소기업 지원과 구조조정</td><td>중소기업 구조조정과 관련된 제한된 투자영역</td><td>자금모집과 운용 범위가 넓은 기관투자자형 펀드 구조와 다릅니다.</td></tr>
+                <tr><td>CRC</td><td>구조조정기업 인수·정리</td><td>구조조정 전문회사 중심의 기업 구조조정 업무</td><td>운용주체와 대상이 제한돼 다양한 기업 인수·개선 전략을 담기 어렵습니다.</td></tr>
+                <tr><td>사모 M&A 펀드</td><td>기업 인수·합병 활성화</td><td>M&A 목적 투자에 초점</td><td>기업가치 제고와 회수까지 포괄하는 장기 조합형 구조가 제한적입니다.</td></tr>
+                <tr><td>CR-REITs</td><td>구조조정 부동산 처분·운용</td><td>부동산 자산 중심</td><td>기업 지분 투자와 경영참여를 수행하는 PEF와 투자대상이 다릅니다.</td></tr>
+              </tbody>
+            </table>
           </div>
-          <table class="wiki-table">
-            <thead><tr><th>구분</th><th>제도상 목적</th><th>한계</th></tr></thead>
-            <tbody>
-              <tr><td>CRV</td><td>워크아웃 기업 정상화</td><td>금융기관 보유 부실자산 정리에 초점</td></tr>
-              <tr><td>CRF</td><td>중소기업 지원과 구조조정</td><td>투자대상과 운용 범위가 제한적</td></tr>
-              <tr><td>CRC / 사모 M&A 펀드</td><td>구조조정기업 투자와 M&A 활성화</td><td>목적과 투자방식이 특정 영역에 한정</td></tr>
-              <tr><td>CR-REITs</td><td>구조조정 부동산 처분·운용</td><td>부동산 투자 목적에 특화</td></tr>
-            </tbody>
-          </table>
+          <div class="wiki-subsection">
+            <h3>제도 도입의 결론</h3>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>필요 기능</th><th>기존 수단의 한계</th><th>PEF 제도에서 기대한 역할</th></tr></thead>
+              <tbody>
+                <tr><td>자금조성</td><td>목적별 기구 중심이라 대규모 장기자금 모집에 제약</td><td>기관투자자 자금을 모아 기업 인수·개선에 투입</td></tr>
+                <tr><td>투자운용</td><td>투자대상과 방법이 법령·목적별로 세분화</td><td>지분투자, 경영참여, 구조개선 등 폭넓은 운용 허용</td></tr>
+                <tr><td>회수</td><td>청산 또는 특정 자산 처분 중심</td><td>기업가치 제고 후 매각·상장 등 다양한 회수 전략 사용</td></tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section class="wiki-section" id="classification" data-search="개요 분류 일반 사모 기관전용 사모 GP LP 자본시장법 투자단계 자금모집 투자 회수">
-          <p class="wiki-eyebrow">제2절 · p.10-p.12</p>
+          <p class="wiki-eyebrow">제2절</p>
           <h2>기관전용 사모집합투자기구 개요 및 분류</h2>
           <p class="wiki-paragraph">2021년 10월 사모펀드 체계 개편으로 사모펀드는 운용목적이 아니라 투자자 기준으로 구분됩니다. 이 장은 그중 경영권 참여 목적의 기관전용 사모집합투자기구를 중심으로 설명합니다.</p>
-          <dl class="wiki-definition-list">
-            <div>
-              <dt><button class="wiki-ref" type="button" data-ref="institutional_private_fund">기관전용 사모집합투자기구</button></dt>
-              <dd>경영권 참여, 사업구조 또는 지배구조 개선 등을 위해 지분증권 등에 투자·운용하는 사모집합투자기구</dd>
-            </div>
-            <div>
-              <dt>사모 발행과 투자자 수</dt>
-              <dd>집합투자증권을 사모로 발행하며 투자자 총수는 100인 이하</dd>
-            </div>
-            <div>
-              <dt>투자 성격</dt>
-              <dd>투자기업에 적극적으로 경영 참여하고 구조개선 등을 통해 기업가치를 높이는 Buy-out 성격의 펀드</dd>
-            </div>
-            <div>
-              <dt>인적 회사 구조</dt>
-              <dd><button class="wiki-ref" type="button" data-ref="gp">무한책임사원</button>과 <button class="wiki-ref" type="button" data-ref="lp">유한책임사원</button>으로 구성되는 partnership</dd>
-            </div>
-            <div>
-              <dt>실체 운영</dt>
-              <dd>상근 임직원을 두거나 본점 외 영업소를 설치하지 않는 paper company 형태</dd>
-            </div>
-          </dl>
+          <div class="wiki-subsection">
+            <h3>정의 요소</h3>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>요소</th><th>내용</th><th>실무상 의미</th></tr></thead>
+              <tbody>
+                <tr><td>법적 성격</td><td>경영권 참여, 사업구조 또는 지배구조 개선 등을 위해 지분증권 등에 투자·운용하는 사모집합투자기구</td><td>단순 유가증권 운용보다 기업 인수·개선 목적이 중심입니다.</td></tr>
+                <tr><td>모집 방식</td><td>집합투자증권을 사모로 발행</td><td>공모가 아니라 제한된 투자자를 대상으로 자금을 모집합니다.</td></tr>
+                <tr><td>투자자 범위</td><td>투자자 총수 100인 이하</td><td>기관·전문투자자 중심의 제한된 투자자 기반을 전제로 합니다.</td></tr>
+                <tr><td>투자 성격</td><td>투자기업에 적극적으로 경영 참여하고 구조개선을 통해 기업가치를 높이는 Buy-out 성격</td><td>투자 후 방치가 아니라 지배구조·사업·재무 개선이 핵심 업무입니다.</td></tr>
+                <tr><td>사원 구조</td><td><button class="wiki-ref" type="button" data-ref="gp">업무집행사원</button>과 <button class="wiki-ref" type="button" data-ref="lp">유한책임사원</button>으로 구성</td><td>운용 책임과 출자 책임을 구분하는 partnership 구조입니다.</td></tr>
+                <tr><td>회사 실체</td><td>상근 임직원이나 본점 외 영업소를 두지 않는 paper company 형태</td><td>펀드 자체보다 GP의 운용 역량과 내부통제가 중요합니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="wiki-subsection">
+            <h3>기본 운용구조</h3>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>주체</th><th>역할</th><th>연결 관계</th></tr></thead>
+              <tbody>
+                <tr><td>LP</td><td>출자약정과 납입을 통해 펀드 자금을 공급하고 손익을 배분받는 투자자</td><td>GP와 사원 관계를 맺고 펀드 운용 결과를 부담합니다.</td></tr>
+                <tr><td>GP</td><td>투자대상 발굴, 실사, 투자집행, 사후관리, 회수 등 운용 업무 수행</td><td>무한책임사원으로 펀드 운용과 보고의 중심이 됩니다.</td></tr>
+                <tr><td>SPC</td><td>투자목적회사로 특정 투자대상에 대한 인수·투자 구조를 담는 중간 기구</td><td>필요 시 펀드와 투자대상회사 사이에 위치합니다.</td></tr>
+                <tr><td>투자대상회사</td><td>지분투자, 경영참여, 사업구조·지배구조 개선의 대상</td><td>기업가치 제고 후 매각 또는 상장 등을 통해 회수합니다.</td></tr>
+                <tr><td>감독·보고 체계</td><td>설립, 변경, 해산, GP 등록과 운용 관련 보고·감독</td><td>자본시장법과 금융감독원 보고 체계를 통해 관리됩니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
           <div class="wiki-subsection">
             <h3>투자 단계</h3>
-            <table class="wiki-table">
-              <thead><tr><th>단계</th><th>본문 내용</th></tr></thead>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>단계</th><th>주요 업무</th><th>실무상 확인할 항목</th></tr></thead>
               <tbody>
-                <tr><td><button class="wiki-ref" type="button" data-ref="fund_raising">자금모집</button></td><td>업무집행사원이 전문성과 위험감수능력을 갖춘 전문투자자에게 투자 참여를 제안해 자금을 모집</td></tr>
-                <tr><td><button class="wiki-ref" type="button" data-ref="investment">투자</button></td><td>투자대상기업 실사와 투자 타당성 검토 후 투자 집행</td></tr>
-                <tr><td><button class="wiki-ref" type="button" data-ref="value_addition">기업가치 제고</button></td><td>투자 후 임원 파견, 경영·재무 자문 등을 통해 기업가치 제고</td></tr>
-                <tr><td><button class="wiki-ref" type="button" data-ref="exit">매각·회수</button></td><td>지분 매각 또는 증권시장 상장 등을 통해 투자자본 회수</td></tr>
+                <tr><td><button class="wiki-ref" type="button" data-ref="fund_raising">자금모집</button></td><td>GP가 전문성과 위험감수능력을 갖춘 전문투자자에게 투자 참여를 제안하고 출자약정을 확보</td><td>출자자 구성, 약정총액, 납입조건, 투자기간, 관리보수·성과보수 구조</td></tr>
+                <tr><td><button class="wiki-ref" type="button" data-ref="investment">투자</button></td><td>투자대상기업 발굴, 실사, 투자 타당성 검토, 거래구조 설계와 투자 집행</td><td>인수 대상, 지분율, 인수금융, SPC 사용 여부, 투자심의 절차</td></tr>
+                <tr><td><button class="wiki-ref" type="button" data-ref="value_addition">기업가치 제고</button></td><td>임원 파견, 경영·재무 자문, 사업구조 또는 지배구조 개선을 통해 기업가치 제고</td><td>사후관리 계획, 이사회 권한, 재무개선, 사업재편, 내부통제</td></tr>
+                <tr><td><button class="wiki-ref" type="button" data-ref="exit">매각·회수</button></td><td>지분 매각, 전략적 투자자 매각, 재무적 투자자 매각, 상장 등을 통한 투자자본 회수</td><td>회수시점, 회수방식, 분배구조, 잔여자산 처리, 해산 절차</td></tr>
               </tbody>
             </table>
           </div>
           <div class="wiki-subsection">
             <h3>기관전용 사모집합투자기구의 분류</h3>
-            <table class="wiki-table">
-              <thead><tr><th>분류</th><th>근거 법률</th><th>도입 시기</th><th>투자 유형</th></tr></thead>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>분류</th><th>근거 법률</th><th>도입 시기</th><th>투자 유형</th><th>주요 목적</th></tr></thead>
               <tbody>
-                <tr><td>일반 기관전용 사모집합투자기구</td><td>자본시장법</td><td>2004년</td><td>경영권 참여 등</td></tr>
-                <tr><td>기업재무안정 기관전용 사모집합투자기구</td><td>자본시장법</td><td>2010년</td><td>재무구조개선기업 투자</td></tr>
-                <tr><td>창업·벤처전문 기관전용 사모집합투자기구</td><td>자본시장법</td><td>2016년</td><td>창업·벤처기업 투자</td></tr>
-                <tr><td>기업구조개선 기관전용 사모집합투자기구</td><td>산업발전법</td><td>2009년</td><td>구조조정대상기업 투자</td></tr>
-                <tr><td>해외자원개발투자전문회사</td><td>해외자원개발사업법</td><td>2006년</td><td>해외자원개발사업 투자</td></tr>
-                <tr><td>해외농업자원개발투자전문회사</td><td>해외농업·산림자원 개발협력법</td><td>2011년</td><td>해외농업·산림자원 개발사업 투자</td></tr>
-                <tr><td>해외건설 기관전용 사모집합투자기구</td><td>해외건설촉진법</td><td>2016년</td><td>해외건설공사 등 투자</td></tr>
+                <tr><td>일반 기관전용 사모집합투자기구</td><td>자본시장법</td><td>2004년</td><td>경영권 참여 등</td><td>일반 기업 인수·경영개선·회수</td></tr>
+                <tr><td>기업재무안정 기관전용 사모집합투자기구</td><td>자본시장법</td><td>2010년</td><td>재무구조개선기업 투자</td><td>재무구조 개선이 필요한 기업에 민간 자금 공급</td></tr>
+                <tr><td>창업·벤처전문 기관전용 사모집합투자기구</td><td>자본시장법</td><td>2016년</td><td>창업·벤처기업 투자</td><td>벤처·창업기업 성장자금 공급</td></tr>
+                <tr><td>기업구조개선 기관전용 사모집합투자기구</td><td>산업발전법</td><td>2009년</td><td>구조조정대상기업 투자</td><td>산업 구조조정과 기업구조개선 지원</td></tr>
+                <tr><td>해외자원개발투자전문회사</td><td>해외자원개발사업법</td><td>2006년</td><td>해외자원개발사업 투자</td><td>해외 자원개발 프로젝트 투자</td></tr>
+                <tr><td>해외농업자원개발투자전문회사</td><td>해외농업·산림자원 개발협력법</td><td>2011년</td><td>해외농업·산림자원 개발사업 투자</td><td>해외 농업·산림자원 개발 투자</td></tr>
+                <tr><td>해외건설 기관전용 사모집합투자기구</td><td>해외건설촉진법</td><td>2016년</td><td>해외건설공사 등 투자</td><td>해외건설사업 투자와 금융 지원</td></tr>
               </tbody>
             </table>
           </div>
         </section>
 
         <section class="wiki-section" id="market" data-search="관련 현황 시장 현황 LP GP 투자대상 감독당국 약정액 이행액 투자 회수">
-          <p class="wiki-eyebrow">제3절 · p.13-p.17</p>
+          <p class="wiki-eyebrow">제3절</p>
           <h2>기관전용 사모집합투자기구 관련 현황</h2>
           <div class="wiki-subsection">
-            <h3>1. 개황</h3>
+            <h3>시장 발전 단계</h3>
             <p class="wiki-paragraph">국내 기관전용 사모집합투자기구 산업은 준비기, 도약기를 거쳐 2012년부터 투자회수와 운용기간·운용능력 차별화가 진행되는 성장기에 진입한 것으로 제시됩니다.</p>
-            <div class="wiki-stat-strip">
-              <div><span>2022년말 펀드 수</span><strong>1,098개</strong></div>
-              <div><span>약정액</span><strong>125.3조원</strong></div>
-              <div><span>이행액</span><strong>97.1조원</strong></div>
-            </div>
-          </div>
-          <div class="wiki-subsection">
-            <h3>2. 업무집행사원(GP) 현황</h3>
-            <p class="wiki-paragraph">2022년 12월말 기준 기관전용 사모집합투자기구를 운용 중인 업무집행사원은 총 415사입니다. 성장기에는 투자실적 가시화와 운용능력 차별화가 진행되면서 전문운용사 위주의 산업으로 재편된 흐름이 나타납니다.</p>
-            <table class="wiki-table">
-              <thead><tr><th>GP 유형</th><th>2005년</th><th>2012년</th><th>2022년</th></tr></thead>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>단계</th><th>시기</th><th>시장 특징</th><th>실무상 의미</th></tr></thead>
               <tbody>
-                <tr><td>전문운용사</td><td>7사</td><td>69사</td><td>312사</td></tr>
-                <tr><td>금융회사</td><td>7사</td><td>46사</td><td>46사</td></tr>
-                <tr><td>창투계 회사</td><td>-</td><td>26사</td><td>57사</td></tr>
-                <tr><td>총계</td><td>14사</td><td>141사</td><td>415사</td></tr>
+                <tr><td>준비기</td><td>제도 도입 초기</td><td>제도 활용 경험과 운용사 기반이 축적되는 단계</td><td>펀드 결성과 투자사례 형성이 중요했습니다.</td></tr>
+                <tr><td>도약기</td><td>초기 성장 단계</td><td>기관투자자 참여와 자금모집 규모가 확대되는 단계</td><td>GP별 전략과 운용능력 차이가 나타나기 시작했습니다.</td></tr>
+                <tr><td>성장기</td><td>2012년 이후</td><td>투자회수와 해산이 본격화되고 운용기간·성과 차별화가 진행되는 단계</td><td>LP는 단순 결성규모보다 회수성과와 사후관리 역량을 보게 됩니다.</td></tr>
               </tbody>
             </table>
           </div>
           <div class="wiki-subsection">
-            <h3>3. 자금모집·투자·회수</h3>
-            <table class="wiki-table">
-              <thead><tr><th>항목</th><th>2022년 12월말 기준</th><th>본문상 흐름</th></tr></thead>
+            <h3>시장 규모</h3>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>항목</th><th>수치</th><th>의미</th></tr></thead>
               <tbody>
-                <tr><td><button class="wiki-ref" type="button" data-ref="fund_raising">자금모집</button></td><td>약정액 125.3조원</td><td>연기금 등 기관투자자 기반 확대 후 2021년 누적 자금모집 규모 100조원 돌파</td></tr>
-                <tr><td><button class="wiki-ref" type="button" data-ref="investment">투자</button></td><td>누적 투자규모 192.4조원</td><td>전문인력 보유 펀드는 전략적 투자, 금융회사 운용 펀드는 재무적 투자 중심</td></tr>
-                <tr><td><button class="wiki-ref" type="button" data-ref="exit">회수</button></td><td>누적 투자회수 금액 108.5조원</td><td>투자 회수와 해산이 본격화되면서 성과 검증 가능성이 확대</td></tr>
+                <tr><td>펀드 수</td><td>1,098개</td><td>기관전용 사모집합투자기구가 독립된 대체투자 시장으로 성장했음을 보여줍니다.</td></tr>
+                <tr><td>약정액</td><td>125.3조원</td><td>LP가 펀드에 출자하기로 약속한 총 규모입니다.</td></tr>
+                <tr><td>이행액</td><td>97.1조원</td><td>약정 이후 실제 납입·집행된 자금 규모입니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="wiki-subsection">
+            <h3>업무집행사원(GP) 현황</h3>
+            <p class="wiki-paragraph">2022년 12월말 기준 기관전용 사모집합투자기구를 운용 중인 업무집행사원은 총 415사입니다. 성장기에는 투자실적 가시화와 운용능력 차별화가 진행되면서 전문운용사 위주의 산업으로 재편된 흐름이 나타납니다.</p>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>GP 유형</th><th>2005년</th><th>2012년</th><th>2022년</th><th>해석</th></tr></thead>
+              <tbody>
+                <tr><td>전문운용사</td><td>7사</td><td>69사</td><td>312사</td><td>독립계·전문 GP 중심으로 시장 저변 확대</td></tr>
+                <tr><td>금융회사</td><td>7사</td><td>46사</td><td>46사</td><td>금융회사 계열 GP는 일정 규모를 유지</td></tr>
+                <tr><td>창투계 회사</td><td>-</td><td>26사</td><td>57사</td><td>벤처·성장투자 영역과의 접점 확대</td></tr>
+                <tr><td>총계</td><td>14사</td><td>141사</td><td>415사</td><td>운용사 수 증가로 LP의 선별 필요성 확대</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="wiki-subsection">
+            <h3>자금모집·투자·회수</h3>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>항목</th><th>2022년말 기준</th><th>시장 흐름</th><th>서비스 데이터와의 연결</th></tr></thead>
+              <tbody>
+                <tr><td><button class="wiki-ref" type="button" data-ref="fund_raising">자금모집</button></td><td>약정액 125.3조원</td><td>연기금 등 기관투자자 기반 확대 후 누적 자금모집 규모가 100조원을 넘어섰습니다.</td><td>LP 출자공고, 위탁운용사 선정, 펀드 결성 기사와 연결</td></tr>
+                <tr><td><button class="wiki-ref" type="button" data-ref="investment">투자</button></td><td>누적 투자규모 192.4조원</td><td>전문인력 보유 펀드는 전략적 투자, 금융회사 운용 펀드는 재무적 투자 성격이 강하게 나타납니다.</td><td>GP별 포트폴리오, M&A, 인수금융, 성장투자 뉴스와 연결</td></tr>
+                <tr><td><button class="wiki-ref" type="button" data-ref="exit">회수</button></td><td>누적 회수금액 108.5조원</td><td>투자 회수와 해산이 본격화되면서 성과 검증 가능성이 확대됐습니다.</td><td>매각, IPO, 배당, 세컨더리 거래, 청산 데이터와 연결</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="wiki-subsection">
+            <h3>시장 참여자 구조</h3>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>구성</th><th>주요 기능</th><th>관찰해야 할 데이터</th></tr></thead>
+              <tbody>
+                <tr><td>LP</td><td>펀드 출자와 위탁운용사 선정</td><td>출자공고, 선정결과, 약정규모, 출자조건, 운용사 평가</td></tr>
+                <tr><td>GP</td><td>펀드 결성, 투자집행, 사후관리, 회수</td><td>AUM, 펀드 히스토리, 투자전략, 핵심 인력, 포트폴리오, 회수성과</td></tr>
+                <tr><td>투자대상회사</td><td>인수·투자·구조개선의 대상</td><td>산업, 재무상태, 지배구조, 거래조건, 인수 후 변화</td></tr>
+                <tr><td>감독당국</td><td>등록, 보고, 검사, 제도개편</td><td>GP 등록, 변경보고, 검사 이슈, 법령·규정 개정</td></tr>
               </tbody>
             </table>
           </div>
@@ -368,30 +414,28 @@ def _render_wiki_article() -> str:
         </section>
 
         <section class="wiki-section" id="history" data-search="연혁 2004 2006 2007 2009 2010 2013 2015 2021 사모펀드 제도 개편">
-          <p class="wiki-eyebrow">제4절 · p.18-p.36</p>
+          <p class="wiki-eyebrow">제4절</p>
           <h2>연혁</h2>
           <div class="wiki-subsection">
-            <h3>1. 간접투자자산 운용업법 및 시행령</h3>
-            <ol class="wiki-event-list">
-              <li><strong>2004년 12월</strong><span>합자회사(Limited Partnership) 형태의 사모투자전문회사 제도 도입. 손익분배, 업무범위, 펀드운용 규제완화, 대기업집단 제한, 지주회사 규제 등에서 기존 사모 M&A 펀드와 구분되는 체계를 마련했습니다.</span></li>
-              <li><strong>2006년 4월</strong><span>유한책임사원의 최소 출자가액 완화, PEF 자산운용 범위 확대, 의무투자비율 완화가 반영됐습니다.</span></li>
-              <li><strong>2007년 12월</strong><span>국내 PEF가 해외 회사 또는 SPC 등을 통해 해외 자산에 투자할 수 있도록 규제가 정비됐고, 해외 부실채권 투자도 허용됐습니다.</span></li>
-            </ol>
+            <h3>제도 변화 흐름</h3>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>시점</th><th>법령·제도</th><th>주요 변화</th><th>의미</th></tr></thead>
+              <tbody>
+                <tr><td>2004년</td><td>간접투자자산 운용업법</td><td>합자회사 형태의 사모투자전문회사 제도 도입</td><td>국내 PEF 제도의 출발점</td></tr>
+                <tr><td>2006년</td><td>시행령 개정</td><td>유한책임사원 최소 출자가액 완화, 자산운용 범위 확대, 의무투자비율 완화</td><td>출자자 기반과 운용 재량 확대</td></tr>
+                <tr><td>2007년</td><td>해외투자 규제 정비</td><td>해외 회사 또는 SPC를 통한 해외자산 투자와 해외 부실채권 투자 허용</td><td>국내 PEF의 투자대상 확장</td></tr>
+                <tr><td>2009년</td><td>자본시장법 체계 전환</td><td>투자목적회사 범위, 등록 공고, 여유자금 운용, 대기업집단 관련 규제 정비</td><td>PEF 규율체계가 자본시장법 안으로 편입</td></tr>
+                <tr><td>2010년</td><td>기업재무안정 PEF 도입</td><td>재무구조개선기업 등에 대한 민간 자금 공급 통로 마련</td><td>위기·구조조정 자금 공급 기능 강화</td></tr>
+                <tr><td>2013년</td><td>규제 선진화</td><td>GP 등록제, 보고의무, 유한책임사원의 운용 관여 제한 명확화</td><td>운용사 관리와 LP-GP 역할 구분 강화</td></tr>
+                <tr><td>2015년</td><td>사모펀드 제도개편</td><td>적격투자자 범위, 업무집행사원 감독, 설립규제, 금융전업그룹 규제 합리화</td><td>사모펀드 시장 확대와 감독체계 정비</td></tr>
+                <tr><td>2021년</td><td>일반 사모·기관전용 사모 체계 개편</td><td>전문투자형·경영참여형 구분을 투자자 범위 기준 체계로 재편</td><td>기관전용 사모펀드의 운용범위 확대와 투자자 보호 강화</td></tr>
+              </tbody>
+            </table>
           </div>
           <div class="wiki-subsection">
-            <h3>2. 자본시장법 및 시행령</h3>
-            <ol class="wiki-event-list">
-              <li><strong>2009년 2월</strong><span>투자목적회사 주주·사원 범위 확대, PEF 등록 공고 의무, 여유자금 운용방법 확대, 상호출자제한기업집단 관련 제한 완화, 비금융주력자 보유제한 규정 삭제, 운용규제 합리화가 진행됐습니다.</span></li>
-              <li><strong>2010년 6월</strong><span><button class="wiki-ref" type="button" data-ref="special_purpose">기업재무안정 PEF</button> 제도가 도입돼 재무구조개선기업 등에 대한 민간 자금 공급 통로가 마련됐습니다.</span></li>
-              <li><strong>2013년 8월</strong><span>투자 가능한 주권 관련 사채권 범위 확대, <button class="wiki-ref" type="button" data-ref="gp_registration">업무집행사원 등록제</button> 도입, 유한책임사원의 재산운용 관여 금지 명확화, PEF 보고의무 신설 등 규제체계가 선진화됐습니다.</span></li>
-              <li><strong>2015년 10월</strong><span>사모펀드 규율체계 정비와 적격투자자 범위 설정, 업무집행사원 감독 강화, 설립규제 완화, <button class="wiki-ref" type="button" data-ref="financial_group">금융전업그룹</button> 규제 합리화, 운용규제 완화가 반영됐습니다.</span></li>
-              <li><strong>2021년 10월</strong><span>사모펀드 시장의 신뢰와 투자자 보호 장치를 강화하면서 전문투자형·경영참여형 체계를 일반 사모펀드와 기관전용 사모펀드 체계로 개편했습니다.</span></li>
-            </ol>
-          </div>
-          <div class="wiki-subsection">
-            <h3>3. 2021년 사모펀드 체계개편 주요 내용</h3>
-            <table class="wiki-table">
-              <thead><tr><th>주제</th><th>본문 내용</th></tr></thead>
+            <h3>2021년 사모펀드 체계개편 주요 내용</h3>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>주제</th><th>주요 내용</th></tr></thead>
               <tbody>
                 <tr><td>분류체계</td><td>운용목적 기준에서 투자자 범위 기준으로 변경. 전문투자자와 경영참여형의 구분은 일반 사모펀드와 기관전용 사모펀드 구분으로 재편</td></tr>
                 <tr><td>운용규제</td><td>기관전용 사모집합투자기구는 경영참여 목적 운용의무가 폐지되고 일반 사모펀드와 동일한 운용규제 적용</td></tr>
@@ -400,6 +444,18 @@ def _render_wiki_article() -> str:
                 <tr><td>경영참여목적 투자요건</td><td>경영참여 목적 투자 시 15년 내 처분의무 등 기존 의무투자기간 관련 규정 폐지</td></tr>
                 <tr><td>GP 관리·감독</td><td>투자운용전문인력 요건 강화, 재무제표 제출, 변경보고, 감독·검사, 불건전행위 규율 강화</td></tr>
                 <tr><td><button class="wiki-ref" type="button" data-ref="investor_count">투자자 수</button></td><td>사모집합투자기구 투자자 수 기준을 49인에서 최대 100인까지 확대. 일반투자자 수는 49인으로 유지</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="wiki-subsection">
+            <h3>개편 전후 실무 포인트</h3>
+            <table class="wiki-table wiki-wide-table">
+              <thead><tr><th>항목</th><th>개편 전 실무상 초점</th><th>개편 후 실무상 초점</th></tr></thead>
+              <tbody>
+                <tr><td>펀드 구분</td><td>전문투자형과 경영참여형을 운용목적 중심으로 구분</td><td>일반 사모펀드와 기관전용 사모펀드를 투자자 범위 중심으로 구분</td></tr>
+                <tr><td>기관전용 운용</td><td>경영참여 목적 의무와 관련 제한이 핵심</td><td>기관투자자 중심 구조 안에서 일반 사모펀드와 유사한 운용규제 적용</td></tr>
+                <tr><td>감독 포인트</td><td>설립·운용 규제와 경영참여 요건 준수</td><td>GP 등록·보고·검사, 운용인력, 불건전행위 규율, 투자자 보호 장치 강화</td></tr>
+                <tr><td>서비스 연결</td><td>법령 변화와 펀드 결성 기사 중심 관찰</td><td>LP 출자조건, GP 등록·제재, 투자전략 변화, 회수성과 데이터까지 연결 필요</td></tr>
               </tbody>
             </table>
           </div>
@@ -420,10 +476,10 @@ def _render_wiki_article() -> str:
           </div>
         </section>
 
-        <section class="wiki-section" id="sources" data-search="출처 kvca kdi 금융감독원 실무안내">
-          <p class="wiki-eyebrow">출처</p>
-          <h2>공식 출처</h2>
-          <p class="wiki-paragraph">기준 문서: 「기관전용 사모집합투자기구 실무안내」 제1장 p.8-p.36.</p>
+        <section class="wiki-section" id="sources" data-search="문서 기준 kvca kdi 금융감독원 실무안내">
+          <p class="wiki-eyebrow">기준 문서</p>
+          <h2>문서 기준</h2>
+          <p class="wiki-paragraph">기준 문서: 「기관전용 사모집합투자기구 실무안내」 제1장 개관.</p>
           <ul class="wiki-source-list">
             <li><a href="{html_escape(SOURCE_URLS["kvca_pdf"])}" target="_blank" rel="noreferrer">기관전용 사모집합투자기구 실무안내 전문</a></li>
             <li><a href="{html_escape(SOURCE_URLS["kvca"])}" target="_blank" rel="noreferrer">KVCA 일반자료실 게시글</a></li>
@@ -460,7 +516,7 @@ def _render_top_nav() -> str:
       <a href="#market">현황</a>
       <a href="#history">연혁</a>
       <a href="#rules">법령·규정</a>
-      <a href="#sources">출처</a>
+      <a href="#sources">문서 기준</a>
     </nav>"""
 
 
@@ -548,7 +604,7 @@ def _page_styles() -> str:
       display: grid;
       grid-template-columns: minmax(0, 1fr);
       gap: 14px;
-      padding: 18px 0 18px;
+      padding: 14px 0 16px;
       border-bottom: 1px solid var(--wiki-line);
     }
     .wiki-kicker {
@@ -561,8 +617,8 @@ def _page_styles() -> str:
       max-width: 880px;
       margin: 0;
       color: var(--wiki-text);
-      font-size: clamp(30px, 5vw, 58px);
-      line-height: 1.04;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.08;
       overflow-wrap: anywhere;
       word-break: keep-all;
     }
@@ -811,6 +867,8 @@ def _page_styles() -> str:
     }
     .wiki-table th:first-child,
     .wiki-table td:first-child { width: 112px; color: var(--wiki-text); font-weight: 850; }
+    .wiki-wide-table th:first-child,
+    .wiki-wide-table td:first-child { width: 150px; }
     .wiki-timeline,
     .wiki-event-list {
       display: grid;
@@ -1060,7 +1118,7 @@ def _page_script() -> str:
     refType.textContent = item.type || "참조";
     refTitle.textContent = item.label || key;
     refLocation.textContent = item.location ? `위치: ${item.location}` : "";
-    refSource.textContent = item.source_label ? `${item.source_label} 열기` : "공식 출처 열기";
+    refSource.textContent = item.source_label ? `${item.source_label} 열기` : "자료 열기";
     refSource.href = item.source_url || "#";
     refRelated.replaceChildren();
     (item.related || []).forEach((relatedKey) => {
