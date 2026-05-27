@@ -20,12 +20,19 @@ SECTION_HEADER_RE = re.compile(r"^\[(?P<section>.+?)\]\s*$")
 ARTICLE_RE = re.compile(r"^- \[(?P<title>.+?)\]\((?P<url>https?://[^)]+)\)")
 EDITORIAL_SECTIONS = [
     "AI & PE",
+    "국민성장펀드",
     "Deal",
     "LP",
     "GP",
     "Market",
 ]
 AI_SHORT_RE = re.compile(r"(?<![A-Za-z])AI(?![A-Za-z])", re.IGNORECASE)
+NATIONAL_GROWTH_FUND_KEYWORDS = [
+    "국민성장펀드",
+    "국민성장 펀드",
+    "150조 국민성장펀드",
+    "150조원 국민성장펀드",
+]
 PUBLISHER_BADGES = {
     "더벨": "더",
     "인베스트조선": "인",
@@ -298,10 +305,16 @@ def has_ai_theme(text: str) -> bool:
     return bool(AI_SHORT_RE.search(text)) or contains_any(text, AI_THEME_KEYWORDS)
 
 
+def has_national_growth_fund_theme(title_text: str, raw_section: str = "") -> bool:
+    return contains_any(f"{title_text} {raw_section}", NATIONAL_GROWTH_FUND_KEYWORDS)
+
+
 def legacy_section_to_current(raw_section: str, title_text: str) -> str:
     raw_text = raw_section or ""
     if "AI & PE" in raw_text:
         return "AI & PE"
+    if has_national_growth_fund_theme(title_text, raw_text):
+        return "국민성장펀드"
     if raw_text.strip() == "LP":
         return "LP"
     if raw_text.strip() == "GP":
@@ -328,6 +341,8 @@ def editorial_section(row: dict[str, str]) -> str:
     combined = f"{title_text} {raw_section}"
     if has_ai_theme(combined) and contains_any(combined, DEAL_SIGNAL_KEYWORDS + DEAL_FINANCING_KEYWORDS + LP_FOCUS_KEYWORDS + GP_FOCUS_KEYWORDS):
         return "AI & PE"
+    if has_national_growth_fund_theme(title_text, raw_section):
+        return "국민성장펀드"
     if contains_any(title_text, ["펀드 결성", "펀드레이징", "펀드 조성", "펀드 도전", "클로징", "약정총액", "목표액", "블라인드펀드"]):
         return "GP"
     if contains_any(title_text, DEAL_FINANCING_KEYWORDS + DEAL_SIGNAL_KEYWORDS + DEAL_OWNERSHIP_KEYWORDS + DEAL_ISSUE_KEYWORDS):
@@ -351,6 +366,14 @@ def editorial_subtype(row: dict[str, str], section: str) -> str:
         if contains_any(text, ["데이터센터", "data center", "GPU", "AI 반도체", "AI반도체", "인프라", "컴퓨트", "클라우드"]):
             return "AI 투자·인프라"
         return "AI 전략·운영"
+    if section == "국민성장펀드":
+        if contains_any(text, ["간접투자", "간접 투자", "선정", "출자사업", "출자 공고", "출자공고", "위탁운용"]):
+            return "출자·선정"
+        if contains_any(text, ["운용사", "GP", "결승", "숏리스트"]):
+            return "운용사 경쟁"
+        if contains_any(text, ["정책", "정부", "금융위", "산업", "성장"]):
+            return "정책펀드"
+        return "프로그램 동향"
     if section == "Deal":
         if contains_any(text, DEAL_FINANCING_KEYWORDS):
             return "Financing"

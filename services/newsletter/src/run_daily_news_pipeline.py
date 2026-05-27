@@ -743,13 +743,14 @@ def is_previous_export(row: dict[str, object], previous_keys: dict[str, set[str]
     return bool(title_key and title_key in previous_keys["titles"])
 
 
-SECTION_ORDER = ["AI_PE", "Deal", "LP", "GP", "Market"]
+SECTION_ORDER = ["AI_PE", "NationalGrowthFund", "Deal", "LP", "GP", "Market"]
 SECTION_DISPLAY_LIMIT = 12
-SECTION_MIN_SELECTION = {"AI_PE": 1, "LP": 2, "GP": 2}
+SECTION_MIN_SELECTION = {"AI_PE": 1, "NationalGrowthFund": 1, "LP": 2, "GP": 2}
 BRIEFING_CUTOFF_HOUR = 8
 BRIEFING_CUTOFF_MINUTE = 30
 SECTION_LABELS = {
     "AI_PE": "AI & PE",
+    "NationalGrowthFund": "국민성장펀드",
     "Deal": "Deal",
     "LP": "LP",
     "GP": "GP",
@@ -781,6 +782,10 @@ SECTION_LABEL_TO_CODE.update(
         "AI & PE": "AI_PE",
         "AI_PE": "AI_PE",
         "AI": "AI_PE",
+        "국민성장펀드": "NationalGrowthFund",
+        "국민성장 펀드": "NationalGrowthFund",
+        "National Growth Fund": "NationalGrowthFund",
+        "NGF": "NationalGrowthFund",
         "Fundraising": "GP",
         "Credit": "Deal",
         "Portfolio": "Deal",
@@ -833,6 +838,7 @@ VISIBLE_PE_KEYWORDS = [
     "엑시트",
     "출자",
     "출자사업",
+    "국민성장펀드",
     "위탁운용",
     "커밋먼트",
     "공제사업",
@@ -906,6 +912,7 @@ HIGH_VALUE_TITLE_KEYWORDS = [
     "생성형 AI",
     "데이터센터",
     "AI 인프라",
+    "국민성장펀드",
     "성장금융",
     "출자사업",
     "위탁운용",
@@ -938,6 +945,13 @@ HIGH_VALUE_TITLE_KEYWORDS = [
 ]
 
 SECTION_KEYWORDS = {
+    "NationalGrowthFund": [
+        "국민성장펀드",
+        "국민성장 펀드",
+        "150조 국민성장펀드",
+        "150조원 국민성장펀드",
+        "국민성장펀드 간접투자",
+    ],
     "Regulation": [
         "규제",
         "상법",
@@ -1236,6 +1250,20 @@ def has_ai_pe_theme(text: str) -> bool:
     )
 
 
+def has_national_growth_fund_theme(
+    title: str,
+    content: str,
+    raw_sections: list[str] | None = None,
+    topics: set[str] | None = None,
+) -> bool:
+    if contains_any_keyword(title, SECTION_KEYWORDS["NationalGrowthFund"]):
+        return True
+    raw_text = " ".join(raw_sections or [])
+    if contains_any_keyword(raw_text, SECTION_KEYWORDS["NationalGrowthFund"]):
+        return True
+    return bool(topics and ("NationalGrowthFund" in topics or "국민성장펀드" in topics))
+
+
 def has_lp_focus_signal(text: str) -> bool:
     return contains_any_keyword(text, SECTION_KEYWORDS["LP"] + LP_COMMITMENT_EVENT_KEYWORDS)
 
@@ -1276,6 +1304,8 @@ def primary_section(row: dict[str, object]) -> str:
     )
     if has_ai_pe_theme(content):
         return "AI_PE"
+    if has_national_growth_fund_theme(title, content, raw_sections, topics):
+        return "NationalGrowthFund"
     if contains_any_keyword(title, SECTION_KEYWORDS["Credit"]) and has_fundraising_title_signal(title):
         return "GP"
     if contains_any_keyword(title, SECTION_KEYWORDS["Credit"]):
@@ -1306,6 +1336,8 @@ def primary_section(row: dict[str, object]) -> str:
         return "LP"
     if has_gp_focus_signal(content):
         return "GP"
+    if "NationalGrowthFund" in topics or "국민성장펀드" in topics:
+        return "NationalGrowthFund"
     if "Fundraising" in topics:
         return "GP"
     if "Credit" in topics:
@@ -1383,11 +1415,17 @@ def editorial_quality(row: dict[str, object]) -> tuple[float, str]:
     elif has_fundraising_title_signal(title):
         score += 0.8
         reasons.append("fundraising headline")
+    elif contains_any_keyword(title, SECTION_KEYWORDS["NationalGrowthFund"]):
+        score += 0.8
+        reasons.append("national growth fund headline")
 
     section = primary_section(row)
     if section == "AI_PE" and signal_strength != "weak":
         score += 1.5
         reasons.append("AI & PE priority")
+    elif section == "NationalGrowthFund" and signal_strength != "weak":
+        score += 1.5
+        reasons.append("national growth fund priority")
     elif section == "Deal" and signal_strength != "weak":
         score += 1.0
         reasons.append("deal priority")
@@ -1398,7 +1436,7 @@ def editorial_quality(row: dict[str, object]) -> tuple[float, str]:
         score += 1.0
         reasons.append("GP priority")
 
-    if publisher in PUBLISHER_SAFETY_NET and signal_strength == "title" and section in {"AI_PE", "Deal", "LP", "GP"}:
+    if publisher in PUBLISHER_SAFETY_NET and signal_strength == "title" and section in {"AI_PE", "NationalGrowthFund", "Deal", "LP", "GP"}:
         score += 1.5
         reasons.append("publisher safety net")
 
@@ -1415,6 +1453,7 @@ def editorial_quality(row: dict[str, object]) -> tuple[float, str]:
         elif not contains_any_keyword(
             title,
             STRONG_DEAL_KEYWORDS
+            + SECTION_KEYWORDS["NationalGrowthFund"]
             + SECTION_KEYWORDS["LP"]
             + SECTION_KEYWORDS["Fundraising"]
             + SECTION_KEYWORDS["Credit"],

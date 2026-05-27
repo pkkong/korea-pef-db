@@ -60,6 +60,14 @@ SECTION_BY_INPUT.update(
         "AI": "AI_PE",
         "AI&PE": "AI_PE",
         "AI_PE": "AI_PE",
+        "국민성장펀드": "NationalGrowthFund",
+        "국민성장펀드섹션": "NationalGrowthFund",
+        "국민성장": "NationalGrowthFund",
+        "NationalGrowthFund": "NationalGrowthFund",
+        "NationalGrowth": "NationalGrowthFund",
+        "NationalGrowthFundSection": "NationalGrowthFund",
+        "NationalGrowth Fund": "NationalGrowthFund",
+        "NGF": "NationalGrowthFund",
     }
 )
 INCLUDE_ACTIONS = {"include", "keep", "y", "yes", "o", "포함", "유지"}

@@ -31,6 +31,7 @@ deal_bidding_competition,title_or_excerpt,contains,인수전,2,topic,Deal,인수
 lp_commitment,title_or_excerpt,contains,출자사업,3,topic,LP,LP 출자사업 관련 기사입니다.,1,LP commitment event; eligible for LP section
 lp_fund_of_funds,title_or_excerpt,contains,모태펀드,3,topic,LP,모태펀드와 연결됩니다.,1,LP commitment event/facet; section still decided by headline event
 lp_national_growth_fund,title_or_excerpt,contains,국민성장펀드,3,topic,LP,국민성장펀드 출자 또는 간접투자 기사입니다.,1,LP commitment event/facet
+lp_national_growth_fund_section,title_or_excerpt,contains,국민성장펀드,0,topic,NationalGrowthFund,국민성장펀드가 주제인 기사입니다.,1,National Growth Fund section signal
 lp_pension,title_or_excerpt,contains,연기금,1,topic,LP,연기금 LP 동향일 수 있습니다.,1,LP institution facet only; not primary section
 lp_mutual_aid,title_or_excerpt,contains,공제회,1,topic,LP,공제회 LP 동향일 수 있습니다.,1,LP institution facet only; not primary section
 lp_nps,title_or_excerpt,contains,국민연금,1,topic,LP,국민연금 LP 동향일 수 있습니다.,1,LP institution facet only; not primary section

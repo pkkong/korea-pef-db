@@ -13,6 +13,9 @@ SERVICE_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = SERVICE_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
+LEGACY_SCRIPTS_DIR = SERVICE_ROOT.parents[1] / "scripts"
+if str(LEGACY_SCRIPTS_DIR) not in sys.path:
+    sys.path.append(str(LEGACY_SCRIPTS_DIR))
 
 from run_daily_news_pipeline import (
     EXPORT_MIN_QUALITY_SCORE,
@@ -41,6 +44,8 @@ from daily_news_common import (
     to_iso_datetime,
 )
 from build_newsletter_deploy import read_lp_directory_items, read_lp_profile_codes
+from build_service_site import editorial_section
+from apply_daily_news_review import normalize_category
 
 
 def test_coverage_window() -> None:
@@ -198,6 +203,56 @@ def test_lp_directory_includes_seed_only_profiles() -> None:
         assert read_lp_profile_codes(db_path) == ["seed", "active"]
         directory_codes = [str(row["lp_code"]) for row in read_lp_directory_items(db_path)]
         assert directory_codes == ["seed", "active"]
+
+
+def test_national_growth_fund_has_dedicated_section() -> None:
+    row = {
+        "publisher": "딜사이트",
+        "title": "[150조 국민성장펀드] 간접투자 1차 결승만 남았다",
+        "summary_text": "국민성장펀드 출자사업에서 운용사 선정 절차가 진행 중이다.",
+        "relevance_score": 8,
+        "section_tags": "LP",
+        "topic_tags": "LP,NationalGrowthFund",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://dealsite.co.kr/articles/test",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "NationalGrowthFund"
+    score, reason = editorial_quality(row)
+    assert score >= EXPORT_MIN_QUALITY_SCORE, reason
+    assert "[국민성장펀드]" in render_markdown("2026-05-27", [row])
+
+
+def test_ai_pe_keeps_priority_over_national_growth_fund() -> None:
+    row = {
+        "publisher": "이데일리",
+        "title": "[GAIC 2026] 국민성장펀드도 AI 인프라 투자 기회 본다",
+        "summary_text": "사모펀드와 LP의 AI 인프라 투자 전략을 다뤘다.",
+        "relevance_score": 8,
+        "section_tags": "LP",
+        "topic_tags": "LP,NationalGrowthFund,AI_PE",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.edaily.co.kr/News/Read?newsId=test",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "AI_PE"
+
+
+def test_web_renderer_maps_national_growth_fund_section() -> None:
+    assert editorial_section(
+        {
+            "title": "[150조 국민성장펀드] UTC 업력에 포레스트의 패기",
+            "section": "LP",
+        }
+    ) == "국민성장펀드"
+
+
+def test_review_category_accepts_national_growth_fund_aliases() -> None:
+    assert normalize_category("국민성장펀드") == "NationalGrowthFund"
+    assert normalize_category("National Growth Fund") == "NationalGrowthFund"
+    assert normalize_category("NGF") == "NationalGrowthFund"
 
 
 def test_weak_context_quality_penalty() -> None:
@@ -472,6 +527,10 @@ def main() -> int:
         test_truncated_media_suffix_does_not_split_title_duplicates,
         test_gp_alias_overrides_cover_common_short_names,
         test_lp_directory_includes_seed_only_profiles,
+        test_national_growth_fund_has_dedicated_section,
+        test_ai_pe_keeps_priority_over_national_growth_fund,
+        test_web_renderer_maps_national_growth_fund_section,
+        test_review_category_accepts_national_growth_fund_aliases,
         test_weak_context_quality_penalty,
         test_strong_headline_quality,
         test_allocator_section_priority,
