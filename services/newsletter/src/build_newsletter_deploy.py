@@ -159,7 +159,7 @@ def add_lp_article_context(
             if term and term not in search_terms:
                 search_terms.append(term)
         links = entry.setdefault("lpProfileLinks", [])
-        link = {"code": code, "name": lp_short_label(code, name), "url": f"lp-{code}.html"}
+        link = {"code": code, "name": name, "url": f"lp-{code}.html"}
         if not any(isinstance(item, dict) and item.get("code") == code for item in links):
             links.append(link)
 
