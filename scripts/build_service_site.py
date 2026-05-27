@@ -1786,19 +1786,22 @@ button, input { font: inherit; }
 .context-chip:active { background: #e0e0e6; }
 .tag-toggle {
   display: inline-flex;
-  min-width: 36px;
+  min-width: 38px;
   min-height: 22px;
   align-items: center;
   justify-content: center;
-  border: 0;
+  border: 1px solid rgba(0,0,0,0.08);
   border-radius: 999px;
   padding: 3px 8px;
-  background: #111827;
-  color: #ffffff;
+  background: #eef1f4;
+  color: #374151;
   font-size: 11px;
   line-height: 1.2;
-  font-weight: 700;
+  font-weight: 720;
   cursor: pointer;
+}
+.tag-toggle[hidden] {
+  display: none;
 }
 .cell-tags.collapsed .tag-toggle {
   position: absolute;
@@ -1807,8 +1810,8 @@ button, input { font: inherit; }
   box-shadow: -10px 0 12px rgba(255,255,255,0.92);
 }
 .cell-tags.expanded .tag-toggle {
-  background: #e5e7eb;
-  color: #374151;
+  background: #f7f8fa;
+  color: #52616f;
 }
 .save-button {
   display: inline-flex;
@@ -2535,7 +2538,7 @@ def service_js() -> str:
     meta.className = "cell-meta";
     const taxonomy = document.createElement("span");
     taxonomy.className = "taxonomy-meta";
-    taxonomy.textContent = article.subCategory ? `${article.section} · ${article.subCategory}` : (article.section || "");
+    taxonomy.textContent = article.subCategory || "";
     const source = document.createElement("span");
     source.textContent = article.source || "출처 미확인";
     const articleDate = article.visibleDate || article.reportDate || "";
