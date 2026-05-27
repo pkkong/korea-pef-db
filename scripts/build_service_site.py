@@ -1739,7 +1739,21 @@ button, input { font: inherit; }
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+  position: relative;
+  align-items: center;
   margin-top: 7px;
+}
+.cell-tags.collapsible {
+  padding-right: 44px;
+}
+.cell-tags.collapsed {
+  max-height: 24px;
+  overflow: hidden;
+}
+.cell-tags.expanded {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
 }
 .context-chip {
   display: inline-flex;
@@ -1766,6 +1780,32 @@ button, input { font: inherit; }
   color: #164c46;
 }
 .context-chip:active { background: #e0e0e6; }
+.tag-toggle {
+  display: inline-flex;
+  min-width: 36px;
+  min-height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #111827;
+  color: #ffffff;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cell-tags.collapsed .tag-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  box-shadow: -10px 0 12px rgba(255,255,255,0.92);
+}
+.cell-tags.expanded .tag-toggle {
+  background: #e5e7eb;
+  color: #374151;
+}
 .save-button {
   display: inline-flex;
   width: 44px;
@@ -2524,7 +2564,15 @@ def service_js() -> str:
     lpLinks.forEach((item) => appendLinkChip(item.name, item.url, "lp-chip"));
     const gpNames = Array.isArray(article.gpNames) ? article.gpNames.filter(Boolean) : [];
     gpNames.forEach((name) => appendChip(name));
-    if (chips.childElementCount) main.append(chips);
+    if (chips.childElementCount) {
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "tag-toggle";
+      toggle.hidden = true;
+      toggle.setAttribute("aria-expanded", "false");
+      chips.append(toggle);
+      main.append(chips);
+    }
 
     const save = document.createElement("button");
     save.className = "save-button";
@@ -2540,6 +2588,35 @@ def service_js() -> str:
 
     item.append(mark, main, save);
     return item;
+  };
+
+  const updateTagGroup = (group) => {
+    const toggle = group.querySelector(".tag-toggle");
+    if (!toggle) return;
+    const chips = [...group.children].filter((child) => !child.classList.contains("tag-toggle"));
+    group.classList.remove("collapsible", "collapsed", "expanded");
+    group.style.maxHeight = "";
+    toggle.hidden = true;
+    if (chips.length < 2) {
+      group.dataset.expanded = "0";
+      return;
+    }
+    const firstTop = chips[0]?.offsetTop ?? 0;
+    const hiddenCount = chips.filter((chip) => chip.offsetTop > firstTop + 2).length;
+    if (hiddenCount <= 0) {
+      group.dataset.expanded = "0";
+      return;
+    }
+    const expanded = group.dataset.expanded === "1";
+    group.classList.add("collapsible", expanded ? "expanded" : "collapsed");
+    toggle.hidden = false;
+    toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+    toggle.textContent = expanded ? "접기" : `+${hiddenCount}`;
+    toggle.setAttribute("aria-label", expanded ? "태그 접기" : `숨긴 태그 ${hiddenCount}개 더 보기`);
+  };
+
+  const updateTagGroups = () => {
+    document.querySelectorAll(".cell-tags").forEach(updateTagGroup);
   };
 
   const renderGrouped = (target, items) => {
@@ -2566,6 +2643,7 @@ def service_js() -> str:
       block.append(title, list);
       target.append(block);
     });
+    requestAnimationFrame(updateTagGroups);
   };
 
   const renderSaved = () => {
@@ -2605,6 +2683,16 @@ def service_js() -> str:
     const dateButton = event.target.closest(".date-pill[data-date]");
     if (dateButton) {
       setActiveBrief(dateButton.dataset.date);
+      return;
+    }
+
+    const tagToggle = event.target.closest(".tag-toggle");
+    if (tagToggle) {
+      const group = tagToggle.closest(".cell-tags");
+      if (group) {
+        group.dataset.expanded = group.dataset.expanded === "1" ? "0" : "1";
+        updateTagGroup(group);
+      }
       return;
     }
 
@@ -2677,6 +2765,11 @@ def service_js() -> str:
   if (dateSelect) {
     dateSelect.addEventListener("change", () => setActiveBrief(dateSelect.value));
   }
+  let tagResizeTimer = 0;
+  window.addEventListener("resize", () => {
+    window.clearTimeout(tagResizeTimer);
+    tagResizeTimer = window.setTimeout(updateTagGroups, 90);
+  });
   render();
 })(); 
 """
