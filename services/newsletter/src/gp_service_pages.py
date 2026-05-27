@@ -433,7 +433,7 @@ def _render_empty_directory(report_date: str, message: str) -> str:
 </head>
 <body>
   <main class="gp-shell">
-    {_render_top_nav()}
+    {_render_top_nav(active="gps")}
     <section class="gp-empty">
       <span>GP Directory</span>
       <h1>국내 PEF GP 디렉토리</h1>
@@ -441,6 +441,7 @@ def _render_empty_directory(report_date: str, message: str) -> str:
       <small>기준일 {_e(report_date)} · 데이터가 준비되면 운용사 순위, 펀드 수, AUM proxy, 뉴스 링크를 이 페이지에 표시합니다.</small>
     </section>
   </main>
+  {_render_bottom_nav()}
 </body>
 </html>
 """
@@ -523,6 +524,7 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
       <p>AUM proxy는 금감원 PEF 공시/운용 현황의 약정액 기반 대용치이며 실제 순자산, 미실현 가치, co-GP 지분율을 의미하지 않습니다. 뉴스 링크는 자동 엔티티 매칭 결과라 동명이인·동명 법인 가능성이 있고, 회사 식별정보는 검증수준에 따라 신뢰도가 다릅니다.</p>
     </section>
   </main>
+  {_render_bottom_nav()}
   {_directory_script()}
 </body>
 </html>
@@ -758,6 +760,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
       <p>기준일 {_e(report_date)} · source_gp_id {_e(gp_id)} · 개별 페이지는 최신 순위/AUM/뉴스 기준 상위 {TOP_GP_PAGE_LIMIT:,}개 GP에 한해 생성됩니다.</p>
     </section>
   </main>
+  {_render_bottom_nav()}
 </body>
 </html>
 """
@@ -954,11 +957,37 @@ def _render_top_nav(active: str = "") -> str:
     return f"""    <nav class="gp-top-nav" aria-label="서비스 이동">
       <strong>Korea PEF Intelligence</strong>
       <span>
-        <a href="index.html">Daily Brief</a>
-        <a href="lp-notices.html">LP 공고</a>
-        <a class="{gps_class}" href="gps.html">GP Directory</a>
+        <a href="index.html">브리프</a>
+        <a href="lp-notices.html">LP</a>
+        <a class="{gps_class}" href="gps.html">GP</a>
+        <a href="pef-wiki.html">PEF Wiki</a>
       </span>
     </nav>"""
+
+
+def _render_bottom_nav() -> str:
+    return """  <nav class="bottom-nav" aria-label="하단 메뉴">
+    <a href="index.html">
+      <span aria-hidden="true" class="nav-dot nav-icon-brief"></span>
+      <strong>브리프</strong>
+    </a>
+    <a href="lp-notices.html">
+      <span aria-hidden="true" class="nav-dot nav-icon-lp"></span>
+      <strong>LP</strong>
+    </a>
+    <a class="active" href="gps.html">
+      <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
+      <strong>GP</strong>
+    </a>
+    <a href="pef-wiki.html">
+      <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
+      <strong>Wiki</strong>
+    </a>
+    <a href="index.html#saved">
+      <span aria-hidden="true" class="nav-dot nav-icon-saved"></span>
+      <strong>저장</strong>
+    </a>
+  </nav>"""
 
 
 def _directory_script() -> str:
@@ -1051,7 +1080,7 @@ def _base_styles() -> str:
     .gp-shell {
       width: min(1240px, calc(100% - 28px));
       margin: 0 auto;
-      padding: 18px 0 52px;
+      padding: 18px 0 calc(112px + env(safe-area-inset-bottom));
     }
     .gp-top-nav {
       position: sticky;
@@ -1086,6 +1115,82 @@ def _base_styles() -> str:
       background: var(--accent-soft);
       color: #164c46;
     }
+    .bottom-nav {
+      position: fixed;
+      left: 50%;
+      bottom: 0;
+      z-index: 30;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      width: min(100vw, 1240px);
+      max-width: 100vw;
+      transform: translateX(-50%);
+      border-top: 1px solid rgba(21, 32, 43, 0.12);
+      padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+      background: rgba(248, 250, 251, 0.92);
+      backdrop-filter: blur(22px);
+      box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.08);
+    }
+    .bottom-nav a {
+      display: flex;
+      min-width: 0;
+      min-height: 48px;
+      overflow: hidden;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      border: 0;
+      background: transparent;
+      color: var(--secondary);
+      font-size: 11px;
+      line-height: 1.1;
+      text-decoration: none;
+    }
+    .bottom-nav strong {
+      max-width: 100%;
+      overflow: hidden;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .bottom-nav .active { color: var(--text); }
+    .nav-dot {
+      display: inline-flex;
+      width: 24px;
+      height: 24px;
+      flex: 0 0 24px;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.72;
+    }
+    .nav-dot::before {
+      content: "";
+      width: 22px;
+      height: 22px;
+      background: currentColor;
+    }
+    .nav-icon-brief::before {
+      -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 5.5h16v13H4v-13Zm3 4h10M7 13h10M7 16h6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 5.5h16v13H4v-13Zm3 4h10M7 13h10M7 16h6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    .nav-icon-lp::before {
+      -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 6.5h14M5 12h14M5 17.5h14M7 4.5v15M17 4.5v15' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 6.5h14M5 12h14M5 17.5h14M7 4.5v15M17 4.5v15' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    .nav-icon-gp::before {
+      -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 18.5 9.5 13l3 3L20 7.5M14 7.5h6v6' fill='none' stroke='black' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 18.5 9.5 13l3 3L20 7.5M14 7.5h6v6' fill='none' stroke='black' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    .nav-icon-wiki::before {
+      -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 4.5h10.5A3.5 3.5 0 0 1 19 8v11.5H8.5A3.5 3.5 0 0 1 5 16V4.5Zm4 4h6M9 12h6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 4.5h10.5A3.5 3.5 0 0 1 19 8v11.5H8.5A3.5 3.5 0 0 1 5 16V4.5Zm4 4h6M9 12h6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    .nav-icon-saved::before {
+      -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    .bottom-nav .active .nav-dot { opacity: 1; }
     .gp-hero {
       display: grid;
       gap: 18px;
@@ -1656,7 +1761,11 @@ def _base_styles() -> str:
       .gp-directory { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
     @media (max-width: 620px) {
-      .gp-shell { width: min(100% - 20px, 1240px); padding-top: 12px; }
+      .gp-shell {
+        width: min(100% - 20px, 1240px);
+        padding-top: 12px;
+        padding-bottom: calc(116px + env(safe-area-inset-bottom));
+      }
       .gp-top-nav { align-items: start; flex-direction: column; }
       h1 { font-size: 30px; line-height: 1.08; }
       .gp-hero-copy p,
@@ -1677,6 +1786,23 @@ def _base_styles() -> str:
       .gp-signal-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .gp-peer-row { grid-template-columns: minmax(0, 1fr) 56px; }
       .gp-peer-row span:last-child { display: none; }
+      .bottom-nav {
+        padding-right: 6px;
+        padding-left: 6px;
+      }
+      .bottom-nav a {
+        min-height: 50px;
+        font-size: 10.5px;
+      }
+      .nav-dot {
+        width: 22px;
+        height: 22px;
+        flex-basis: 22px;
+      }
+      .nav-dot::before {
+        width: 20px;
+        height: 20px;
+      }
     }
   </style>"""
 

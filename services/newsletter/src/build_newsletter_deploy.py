@@ -95,6 +95,7 @@ from build_service_site import (  # noqa: E402
 )
 from daily_news_common import today_seoul  # noqa: E402
 from gp_service_pages import write_gp_pages  # noqa: E402
+from pef_wiki_pages import render_pef_wiki_page  # noqa: E402
 
 
 ARCHIVE_SCRIPT_RE = re.compile(
@@ -332,6 +333,10 @@ def write_static_support_files(site_dir: Path) -> None:
     (site_dir / ".nojekyll").write_text("", encoding="utf-8")
     (site_dir / "robots.txt").write_text("User-agent: *\nDisallow:\n", encoding="utf-8")
     (site_dir / "404.html").write_text((site_dir / "index.html").read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def write_pef_wiki_page(site_dir: Path, report_date: str) -> None:
+    (site_dir / "pef-wiki.html").write_text(render_pef_wiki_page(report_date), encoding="utf-8")
 
 
 def lp_event_label(value: object) -> str:
@@ -1199,13 +1204,16 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
   <link rel="stylesheet" href="assets/service.css">
   <style>
     body {{ background: #f5f7fa; }}
-    .ktcu-shell {{ width: min(1200px, calc(100% - 28px)); margin: 0 auto; padding: 16px 0 48px; }}
+    .ktcu-shell {{ width: min(1200px, calc(100% - 28px)); margin: 0 auto; padding: 16px 0 calc(100px + env(safe-area-inset-bottom)); }}
     .ktcu-top {{ display: grid; gap: 14px; padding: 14px 0 12px; }}
     .ktcu-nav {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }}
     .ktcu-nav strong {{ color: var(--text); font-size: 13px; }}
     .ktcu-nav span {{ display: flex; flex-wrap: wrap; gap: 7px; }}
     .ktcu-nav a {{ min-height: 34px; display: inline-flex; align-items: center; border: 1px solid var(--separator); border-radius: 8px; padding: 7px 11px; background: #fff; color: var(--text); text-decoration: none; font-size: 12px; font-weight: 700; }}
-    .ktcu-nav .ktcu-profile-link.active {{ border-color: #1f6b63; background: #e7f4f1; color: #164c46; }}
+    .ktcu-nav a.active,
+    .ktcu-profile-nav .ktcu-profile-link.active {{ border-color: #1f6b63; background: #e7f4f1; color: #164c46; }}
+    .ktcu-profile-nav {{ display: flex; flex-wrap: wrap; gap: 7px; }}
+    .ktcu-profile-nav a {{ min-height: 32px; display: inline-flex; align-items: center; border: 1px solid var(--separator); border-radius: 999px; padding: 6px 10px; background: #fff; color: var(--secondary); text-decoration: none; font-size: 12px; font-weight: 800; }}
     .ktcu-hero {{ display: grid; gap: 18px; padding: 18px 0 8px; }}
     .ktcu-title {{ display: grid; gap: 10px; }}
     .ktcu-title span {{ width: fit-content; border-left: 3px solid #1f6b63; padding-left: 8px; color: #164c46; font-size: 12px; font-weight: 800; }}
@@ -1318,8 +1326,8 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       .ktcu-lower {{ grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr); }}
     }}
     @media (max-width: 620px) {{
-      .ktcu-nav span, .ktcu-tabbar {{ flex-wrap: nowrap; overflow-x: auto; padding-bottom: 3px; }}
-      .ktcu-nav a, .ktcu-tabbar a {{ flex: 0 0 auto; }}
+      .ktcu-nav span, .ktcu-profile-nav, .ktcu-tabbar {{ flex-wrap: nowrap; overflow-x: auto; padding-bottom: 3px; }}
+      .ktcu-nav a, .ktcu-profile-nav a, .ktcu-tabbar a {{ flex: 0 0 auto; }}
       .ktcu-peer-row {{ grid-template-columns: minmax(0, 1fr) 44px 64px; }}
       .ktcu-peer-row span:nth-of-type(1), .ktcu-peer-row span:nth-of-type(4) {{ display: none; }}
       .ktcu-peer-head {{ display: none; }}
@@ -1332,11 +1340,14 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       <nav class="ktcu-nav" aria-label="페이지 이동">
         <strong>Korea PEF Intelligence</strong>
         <span>
-          <a href="index.html">Daily Brief</a>
-          <a href="lp-notices.html">LP Directory</a>
-          <a href="gps.html">GP Directory</a>
-          {nav_html}
+          <a href="index.html">브리프</a>
+          <a class="active" href="lp-notices.html">LP</a>
+          <a href="gps.html">GP</a>
+          <a href="pef-wiki.html">PEF Wiki</a>
         </span>
+      </nav>
+      <nav class="ktcu-profile-nav" aria-label="LP 프로필">
+        {nav_html}
       </nav>
       <section class="ktcu-hero" aria-label="{html_escape(lp_name)} 요약">
         <div class="ktcu-title">
@@ -1503,6 +1514,28 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
 
     <p class="ktcu-footer">기준일 {html_escape(report_date)} · 최신 공고일 {html_escape(latest or "-")} · 공개자료로 확인되지 않는 실무자명과 최종 선정 GP 히스토리는 추정하지 않습니다.</p>
   </main>
+  <nav class="bottom-nav newsletter-only" aria-label="하단 메뉴">
+    <a href="index.html">
+      <span aria-hidden="true" class="nav-dot nav-icon-brief"></span>
+      <strong>브리프</strong>
+    </a>
+    <a class="active" href="lp-notices.html">
+      <span aria-hidden="true" class="nav-dot nav-icon-lp"></span>
+      <strong>LP</strong>
+    </a>
+    <a href="gps.html">
+      <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
+      <strong>GP</strong>
+    </a>
+    <a href="pef-wiki.html">
+      <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
+      <strong>Wiki</strong>
+    </a>
+    <a href="index.html#saved">
+      <span aria-hidden="true" class="nav-dot nav-icon-saved"></span>
+      <strong>저장</strong>
+    </a>
+  </nav>
   <script>
     (() => {{
       const input = document.getElementById("lpProfileSearch");
@@ -1682,7 +1715,9 @@ def render_lp_notices_page(
         </div>
         <div class="header-actions">
           <a class="header-action" href="index.html" aria-label="뉴스 브리프 열기">브리프</a>
+          <a class="header-action active" href="lp-notices.html" aria-label="LP 디렉토리 열기">LP</a>
           <a class="header-action" href="gps.html" aria-label="GP 디렉토리 열기">GP</a>
+          <a class="header-action" href="pef-wiki.html" aria-label="PEF Wiki 열기">Wiki</a>
         </div>
       </div>
       <div class="brief-meta">추적 LP {tracked_count}개 · 공식 공고 {len(notices)}건 · 기준일 {html_escape(report_date)}</div>
@@ -1741,6 +1776,10 @@ def render_lp_notices_page(
       <a href="gps.html">
         <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
         <strong>GP</strong>
+      </a>
+      <a href="pef-wiki.html">
+        <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
+        <strong>Wiki</strong>
       </a>
       <a href="index.html#saved">
         <span aria-hidden="true" class="nav-dot nav-icon-saved"></span>
@@ -1933,6 +1972,7 @@ def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
         site_dir / "daily-news.html",
         site_dir / "lp-notices.html",
         site_dir / "gps.html",
+        site_dir / "pef-wiki.html",
         *alias_paths,
         *profile_paths,
         *gp_profile_paths,
@@ -1991,6 +2031,7 @@ def main() -> int:
     result["lp_profile_page_count"] = str(len([path for path in site_dir.glob("lp-*.html") if path.name != "lp-notices.html"]))
     result["ktcu_fact_count"] = str(len(read_ktcu_payload(lp_code=KTCU_CODE, profile_codes=read_lp_profile_codes()).get("facts") or []))
     result.update({key: str(value) for key, value in write_gp_pages(site_dir, DEFAULT_DB, args.date).items()})
+    write_pef_wiki_page(site_dir, args.date)
     write_health_file(site_dir, result)
     write_static_support_files(site_dir)
     assert_newsletter_only(site_dir)

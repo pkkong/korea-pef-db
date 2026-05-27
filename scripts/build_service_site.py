@@ -967,6 +967,7 @@ def render_app(
     header_db_link = (
         '<a class="header-action" href="lp-notices.html" aria-label="LP 디렉토리 열기">LP</a>'
         '<a class="header-action" href="gps.html" aria-label="GP 디렉토리 열기">GP</a>'
+        '<a class="header-action" href="pef-wiki.html" aria-label="PEF Wiki 열기">Wiki</a>'
         if newsletter_only
         else '<a class="header-action" href="db.html" aria-label="공개 GP·펀드 데이터베이스 열기">DB</a>'
     )
@@ -979,6 +980,10 @@ def render_app(
       <a href="gps.html">
         <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
         <strong>GP</strong>
+      </a>
+      <a href="pef-wiki.html">
+        <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
+        <strong>Wiki</strong>
       </a>"""
         if newsletter_only
         else """      <a href="db.html">
@@ -1085,11 +1090,11 @@ def render_app(
         <span aria-hidden="true" class="nav-dot nav-icon-brief"></span>
         <strong>브리프</strong>
       </button>
+{bottom_db_link}
       <button type="button" data-view="saved">
         <span aria-hidden="true" class="nav-dot nav-icon-saved"></span>
         <strong>저장</strong>
       </button>
-{bottom_db_link}
     </nav>
   </div>
   <script>window.KPEF_DAILY_ARCHIVE = {payload};</script>
@@ -1322,6 +1327,11 @@ button, input { font: inherit; }
   border-radius: 999px;
   font-size: 14px;
   font-weight: 650;
+}
+.header-action.active {
+  border-color: rgba(31, 107, 99, 0.32);
+  background: #e7f4f1;
+  color: #164c46;
 }
 .search-area {
   display: none;
@@ -1867,7 +1877,8 @@ button, input { font: inherit; }
   background: rgba(249,249,249,0.88);
   backdrop-filter: blur(22px);
 }
-.newsletter-only .bottom-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.newsletter-only .bottom-nav,
+.bottom-nav.newsletter-only { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .bottom-nav button,
 .bottom-nav a {
   display: flex;
@@ -1925,6 +1936,10 @@ button, input { font: inherit; }
   -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 18.5 9.5 13l3 3L20 7.5M14 7.5h6v6' fill='none' stroke='black' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 18.5 9.5 13l3 3L20 7.5M14 7.5h6v6' fill='none' stroke='black' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
+.nav-icon-wiki::before {
+  -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 4.5h9.5A3.5 3.5 0 0 1 18 8v11.5H8.5A3.5 3.5 0 0 0 5 23V4.5Zm0 0A3.5 3.5 0 0 1 8.5 1H19v18.5M8 7h6M8 10.5h5' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 4.5h9.5A3.5 3.5 0 0 1 18 8v11.5H8.5A3.5 3.5 0 0 0 5 23V4.5Zm0 0A3.5 3.5 0 0 1 8.5 1H19v18.5M8 7h6M8 10.5h5' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 .bottom-nav .active .nav-dot { opacity: 1; }
 .skeleton-list { display: grid; gap: 1px; overflow: hidden; border-radius: var(--radius); background: var(--surface); }
 .skeleton-list div {
@@ -1966,7 +1981,7 @@ button, input { font: inherit; }
     overflow: hidden;
   }
   .header-topline { padding-right: 112px; }
-  .newsletter-only .header-topline { padding-right: 176px; }
+  .newsletter-only .header-topline { padding-right: 252px; }
   .header-action { display: inline-flex; }
   .bottom-nav { border-radius: 0 0 30px 30px; }
   .lp-detail-sheet {
@@ -2075,7 +2090,7 @@ def service_js() -> str:
   };
   let articles = Array.isArray(activeBrief.articles) ? activeBrief.articles : [];
   let saved = loadSaved();
-  let currentView = "today";
+  let currentView = window.location.hash === "#saved" ? "saved" : "today";
 
   const persistSaved = () => {
     localStorage.setItem(storageKey, JSON.stringify([...saved]));
@@ -2771,6 +2786,7 @@ def service_js() -> str:
     tagResizeTimer = window.setTimeout(updateTagGroups, 90);
   });
   render();
+  setView(currentView);
 })(); 
 """
 
