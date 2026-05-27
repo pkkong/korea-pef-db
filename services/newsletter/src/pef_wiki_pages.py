@@ -9,21 +9,30 @@ PEF_WIKI_SOURCE_TITLE = "기관전용 사모집합투자기구 실무안내, 202
 SOURCE_URLS = {
     "fss": "https://www.fss.or.kr/",
     "law": "https://www.law.go.kr/",
+    "law_capital_markets_act": "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=277365",
+    "nts": "https://www.nts.go.kr/",
+    "tax_law": "https://taxlaw.nts.go.kr/",
+    "hometax": "https://www.hometax.go.kr/",
     "kdi": "https://eiec.kdi.re.kr/policy/materialView.do?num=240321",
     "kvca": "https://www.kvca.or.kr/Program/board/listbody.html?a_cd=12&a_gb=board&a_item=0&page=1&po_no=6352&sm=4_3&tm_num=3",
     "kvca_pdf": "https://www.kvca.or.kr/files/download.html?a_cd=12&a_gb=board&file=6352_1688103776.pdf&name=%EA%B8%B0%EA%B4%80%EC%A0%84%EC%9A%A9+%EC%82%AC%EB%AA%A8%EC%A7%91%ED%95%A9%ED%88%AC%EC%9E%90%EA%B8%B0%EA%B5%AC+%EC%8B%A4%EB%AC%B4%EC%95%88%EB%82%B4_230629.pdf",
 }
 APP_ICON_FILE = "apple-touch-icon.png"
 
-CHAPTER_SECTIONS = [
-    ("chapter", "문서 개요", "관리 정보"),
+WIKI_SECTIONS = [
+    ("wiki-index", "Wiki 구조", "법령·보고·세무·실무"),
+    ("chapter", "제1장 개요", "실무안내 본문"),
     ("background", "제도의 의의 및 도입 배경", "의의·경과"),
     ("reform", "사모펀드 체계 개편", "분류·투자자"),
     ("operations", "자산운용 규제", "운용 자율성"),
     ("actors", "주요 주체 및 용어", "GP·LP"),
     ("market", "관련 현황", "시장 규모"),
     ("history", "연혁", "제도 변화"),
-    ("sources", "문서 기준", "기준 자료"),
+    ("law-map", "관련 법률·규정", "조문·시행일"),
+    ("tax-filings", "세무신고", "신고·납부 원천"),
+    ("fss-reporting", "금감원 보고", "보고 이벤트"),
+    ("practice-checklists", "실무 체크리스트", "설립·운용·회수"),
+    ("sources", "출처 등록 기준", "공식 원천"),
 ]
 
 
@@ -35,7 +44,7 @@ def render_pef_wiki_page(report_date: str) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>PEF Wiki - 기관전용 사모집합투자기구 실무안내</title>
+  <title>PEF Wiki - 기관전용 사모집합투자기구 실무 지식베이스</title>
 {_app_head_meta()}
   <link rel="stylesheet" href="assets/service.css">
   {_page_styles()}
@@ -45,31 +54,31 @@ def render_pef_wiki_page(report_date: str) -> str:
     {_render_top_nav()}
     <header class="wiki-doc-header">
       <div>
-        <p class="wiki-kicker">PEF Wiki · 제1장</p>
-        <h1>기관전용 사모집합투자기구 실무안내</h1>
-        <p class="wiki-lede">개관</p>
+        <p class="wiki-kicker">PEF Wiki · 법령·보고·세무·실무안내</p>
+        <h1>기관전용 사모집합투자기구 실무 지식베이스</h1>
+        <p class="wiki-lede">원문 본문, 근거 법령, 신고·보고 업무, 체크리스트를 한 문서 구조로 연결합니다.</p>
       </div>
       <form class="wiki-search" role="search">
         <label for="wikiSearch">문서 검색</label>
-        <input id="wikiSearch" type="search" placeholder="예: GP, LP, 자본시장법, 보고">
+        <input id="wikiSearch" type="search" placeholder="예: GP, 세무, 설립 보고, 자본시장법">
         <p class="wiki-search-status" id="wikiSearchStatus" aria-live="polite"></p>
       </form>
       <div class="wiki-doc-meta" aria-label="문서 기준">
-        <span>금융감독원 실무안내</span>
-        <span>제1장 개관 본문</span>
+        <span>금융감독원 실무안내 제1장 수록</span>
+        <span>법령·세무·보고 구조 포함</span>
         <span>기준일 {safe_date}</span>
       </div>
     </header>
 
     <div class="wiki-layout">
       <aside class="wiki-sidebar" aria-label="문서 목차">
-        <strong>제1장 목차</strong>
+        <strong>Wiki 목차</strong>
         <nav>
 {_render_sidebar_links()}
         </nav>
       </aside>
 
-      <article class="wiki-document" aria-label="기관전용 사모집합투자기구 실무안내 제1장 본문">
+      <article class="wiki-document" aria-label="기관전용 사모집합투자기구 실무 지식베이스">
         {_render_wiki_article()}
       </article>
     </div>
@@ -83,13 +92,35 @@ def render_pef_wiki_page(report_date: str) -> str:
 
 def _render_wiki_article() -> str:
     return f"""
+        <section class="wiki-section" id="wiki-index" data-search="wiki 구조 정보구조 관련 법률 세무신고 금감원 보고 작성 실무 체크리스트 출처 앵커">
+          <p class="wiki-eyebrow">Wiki 홈</p>
+          <h2>PEF Wiki 구조</h2>
+          <p class="wiki-paragraph">기관전용 사모집합투자기구 업무를 원문 본문, 근거 법령, 신고·보고, 체크리스트로 나누어 관리합니다. 각 항목은 문서 앵커와 공식 출처를 함께 둡니다.</p>
+          <dl class="wiki-definition-list wiki-category-map" aria-label="Wiki 분류">
+            <div><dt><a class="wiki-inline-link" href="#chapter">실무안내 본문</a></dt><dd>금융감독원 실무안내를 장별 본문으로 전환합니다. 현재 수록 범위는 제1장 개관입니다.</dd></div>
+            <div><dt><a class="wiki-inline-link" href="#law-map">관련 법률·규정</a></dt><dd>자본시장법, 시행령, 감독규정, 특수 목적형 펀드 관련 법률을 조문 단위로 연결합니다.</dd></div>
+            <div><dt><a class="wiki-inline-link" href="#tax-filings">세무신고</a></dt><dd>펀드, GP, SPC, LP별 신고·납부·자료제출 쟁점을 업무 단계별로 묶습니다.</dd></div>
+            <div><dt><a class="wiki-inline-link" href="#fss-reporting">금감원 보고</a></dt><dd>설립, 변경, 운용 중, 해산·청산 보고를 이벤트, 제출 주체, 근거, 서식으로 관리합니다.</dd></div>
+            <div><dt><a class="wiki-inline-link" href="#practice-checklists">실무 체크리스트</a></dt><dd>설립, 투자, 운용, 분배, 회수 단계에서 확인할 항목을 업무 체크 목록으로 둡니다.</dd></div>
+          </dl>
+          <div class="wiki-subsection">
+            <h3>문서화 기준</h3>
+            <ol class="wiki-body-list">
+              <li>원문 내용은 위키 본문으로 옮기고, PDF·게시글 링크는 검증 출처로만 남깁니다.</li>
+              <li>법령·세무·보고 항목은 시행일, 제출기한, 담당기관, 원천 링크가 확인된 경우에만 업무 지침으로 확정합니다.</li>
+              <li>실무 체크리스트는 승인 절차, LP 동의, 제출 증빙, 보완요청 기록처럼 실제 업무에서 확인할 증거 단위로 작성합니다.</li>
+            </ol>
+          </div>
+        </section>
+
         <section class="wiki-section" id="chapter" data-search="문서 개요 기관전용 사모집합투자기구 실무안내 사내 위키 컴플라이언스 GP 운용 가이드">
-          <p class="wiki-eyebrow">사내 위키</p>
+          <p class="wiki-eyebrow">실무안내 본문</p>
           <h2>제1장 기관전용 사모집합투자기구 개요</h2>
           <dl class="wiki-meta-list" aria-label="문서 관리">
-            <div><dt>문서 분류</dt><dd>컴플라이언스 / GP 운용 가이드</dd></div>
+            <div><dt>문서 분류</dt><dd>실무안내 / 제도 개관</dd></div>
             <div><dt>관련 법령</dt><dd><a class="wiki-inline-link" href="#term-capital_markets_act">자본시장과 금융투자업에 관한 법률</a></dd></div>
             <div><dt>원문 출처</dt><dd>금융감독원 자산운용감독국 「기관전용 사모집합투자기구 실무안내」</dd></div>
+            <div><dt>Wiki 위치</dt><dd><a class="wiki-inline-link" href="#wiki-index">PEF Wiki 구조</a>의 실무안내 본문 영역</dd></div>
           </dl>
           <ul class="wiki-bullet-list">
             <li>이 장은 기관전용 사모집합투자기구의 의의, 도입 배경, 제도 개편, 운용규제, 주요 주체, 시장 현황과 연혁을 다룹니다.</li>
@@ -228,16 +259,95 @@ def _render_wiki_article() -> str:
           </ol>
         </section>
 
-        <section class="wiki-section" id="sources" data-search="문서 기준 kvca kdi 금융감독원 실무안내 국가법령정보센터">
-          <p class="wiki-eyebrow">문서 기준</p>
-          <h2>문서 기준</h2>
-          <p class="wiki-paragraph">기준 문서: 「기관전용 사모집합투자기구 실무안내」 제1장 개관.</p>
+        <section class="wiki-section" id="law-map" data-search="관련 법률 규정 자본시장법 시행령 감독규정 특수 목적형 기업재무안정 창업 벤처 기업구조개선 해외자원개발">
+          <p class="wiki-eyebrow">법령</p>
+          <h2>관련 법률·규정 지도</h2>
+          <p class="wiki-paragraph">법령 페이지는 조문, 시행일, 관계 업무를 같이 기록합니다. 조문 설명은 업무 판단으로 쓰기 전에 국가법령정보센터 기준 문구와 시행일을 확인합니다.</p>
+          <dl class="wiki-definition-list">
+            <div><dt>기본 법령</dt><dd><a class="wiki-inline-link" href="#term-capital_markets_act">자본시장법</a>은 기관전용 사모집합투자기구의 정의, 투자자 범위, 업무집행사원 등록, 설립·보고, 운용 기준의 기본 근거입니다.</dd></div>
+            <div><dt>하위 규정</dt><dd>시행령, 금융투자업규정, 별표·서식은 투자자 적격성, 운용인력, 보고서 첨부자료처럼 본문 조문만으로 결정하기 어려운 실무 항목을 확인할 때 사용합니다.</dd></div>
+            <div><dt>특수 목적형 펀드</dt><dd>기업재무안정, 창업·벤처, 기업구조개선, 해외자원개발, 해외농업·산림자원개발, 해외건설 관련 제도는 목적, 투자대상, 별도 요건을 독립 항목으로 관리합니다.</dd></div>
+            <div><dt>개정 이력</dt><dd>2021년 사모펀드 체계 개편처럼 운용 범위와 투자자 보호 장치가 바뀐 개정은 연혁, 조문, 실무 영향으로 나눠 연결합니다.</dd></div>
+          </dl>
+          <p class="wiki-source-note">기준 원천: 국가법령정보센터, 금융위원회·금융감독원 공지, 금융감독원 「기관전용 사모집합투자기구 실무안내」.</p>
+        </section>
+
+        <section class="wiki-section" id="tax-filings" data-search="세무신고 세무 신고 납부 국세청 홈택스 국세법령정보시스템 원천징수 지급명세서 법인세 소득세 분배 청산 spc lp gp">
+          <p class="wiki-eyebrow">세무</p>
+          <h2>세무신고·납부 업무 지도</h2>
+          <p class="wiki-paragraph">세무 페이지는 세목별 결론보다 업무 단계와 증빙 흐름을 먼저 둡니다. 펀드, GP, SPC, LP별로 신고·납부·자료제출 책임을 분리하고, 확정 문구는 국세청·홈택스·국세법령정보시스템 원천이 붙은 항목만 본문화합니다.</p>
+          <ol class="wiki-event-list">
+            <li><strong>주체 확인</strong><span>펀드, 업무집행사원, 투자목적회사, 국내외 유한책임사원, 투자대상회사별로 납세자, 원천징수의무자, 자료제출자를 구분합니다.</span></li>
+            <li><strong>거래 유형</strong><span>출자, 투자집행, 이자·배당 수취, 지분 양도, 분배, 청산 분배를 나눠 소득구분과 증빙자료를 연결합니다.</span></li>
+            <li><strong>신고 자료</strong><span>원천징수, 지급명세서, 법인세·소득세 관련 자료, 해외투자·외국납부세액 자료처럼 제출 주기와 보관 증빙이 다른 항목을 분리합니다.</span></li>
+            <li><strong>검토 기록</strong><span>세무대리인 검토, 예규·판례·질의회신, LP 요청자료, 보완신고 여부를 항목별로 남깁니다.</span></li>
+          </ol>
+          <p class="wiki-source-note">기준 원천: 국세청, 홈택스, 국세법령정보시스템. 세목별 판단은 최신 법령·예규·실무 검토가 확인된 항목부터 확정합니다.</p>
+        </section>
+
+        <section class="wiki-section" id="fss-reporting" data-search="금감원 보고 금융위원회 보고 작성 설립 보고 변경 보고 정기 보고 즉시 보고 해산 청산 GP 등록 기관전용 사모집합투자기구">
+          <p class="wiki-eyebrow">보고</p>
+          <h2>금감원·금융위원회 보고 작성 구조</h2>
+          <p class="wiki-paragraph">보고 업무는 이벤트, 제출 주체, 법정기한, 제출서식, 접수 증빙, 보완요청 기록으로 관리합니다. 보고서 문안은 실무안내 본문과 법령 근거가 확인된 단위로 분리합니다.</p>
+          <dl class="wiki-definition-list">
+            <div><dt>설립 보고</dt><dd>기관전용 사모집합투자기구 설립등기 후 금융위원회 보고가 필요한 이벤트로 관리합니다. 정관, 등기, GP 정보, LP 적격성, 출자약정 자료를 같은 항목에서 확인합니다.</dd></div>
+            <div><dt>GP 등록·변경</dt><dd>업무집행사원 등록, 운용전문인력, 대주주·임원·내부통제 변경은 근거 조문과 첨부 증빙을 함께 둡니다.</dd></div>
+            <div><dt>운용 중 보고</dt><dd>투자, 차입·채무보증, 투자목적회사, LP 변동, 법령상 즉시·수시 보고 사유는 이벤트별로 별도 체크리스트를 둡니다.</dd></div>
+            <div><dt>해산·청산</dt><dd>만기, 해산 결의, 자산 처분, 잔여재산 분배, 청산 등기와 보고 여부를 하나의 종료 흐름으로 관리합니다.</dd></div>
+          </dl>
+          <p class="wiki-source-note">기준 원천: 금융감독원 실무안내, 국가법령정보센터, 금융위원회·금융감독원 안내자료.</p>
+        </section>
+
+        <section class="wiki-section" id="practice-checklists" data-search="실무 체크리스트 설립 운용 투자 LP 동의 이해상충 출자약정 납입 분배 회수 청산 보고 제출 증빙">
+          <p class="wiki-eyebrow">체크리스트</p>
+          <h2>실무 체크리스트</h2>
+          <p class="wiki-paragraph">체크리스트는 검토자가 실제로 확인할 증거를 기준으로 씁니다. 승인 절차, LP 동의, 제출서류, 접수증, 보완요청, 사후 보관자료를 같은 단계 안에 둡니다.</p>
+          <details class="wiki-foldout" open>
+            <summary>설립·출자</summary>
+            <ul class="wiki-bullet-list">
+              <li>GP 등록 상태, 운용전문인력, 승인권자와 이해상충 검토를 확인합니다.</li>
+              <li>정관, 투자계약, 출자약정서, LP 적격성 증빙, 출자 납입 일정을 같은 폴더 기준으로 맞춥니다.</li>
+              <li>설립등기, 보고 제출일, 접수번호, 보완요청 여부를 보고 항목과 연결합니다.</li>
+            </ul>
+          </details>
+          <details class="wiki-foldout">
+            <summary>투자·운용</summary>
+            <ul class="wiki-bullet-list">
+              <li>투자대상 발굴, 실사, 투자심의, 거래구조, LP 자문위원회 또는 동의 필요 여부를 기록합니다.</li>
+              <li>차입·채무보증, 금전대여, 투자목적회사, 특수관계자 거래, 투자한도 점검 자료를 보관합니다.</li>
+              <li>운용 중 보고 사유와 LP 통지 사유가 발생하면 보고 근거와 발송 증빙을 같이 남깁니다.</li>
+            </ul>
+          </details>
+          <details class="wiki-foldout">
+            <summary>분배·회수·청산</summary>
+            <ul class="wiki-bullet-list">
+              <li>매각 승인, 회수 금액, 분배 기준일, 투자자별 배분표, 세무 검토 자료를 분리하지 않습니다.</li>
+              <li>원천징수, 지급명세서, 해외투자 관련 자료, LP별 세무 요청사항을 세무신고 항목과 연결합니다.</li>
+              <li>해산 결의, 청산 등기, 최종 보고, 문서 보존기간을 종료 단계 체크리스트로 닫습니다.</li>
+            </ul>
+          </details>
+        </section>
+
+        <section class="wiki-section" id="sources" data-search="문서 기준 출처 등록 kvca kdi 금융감독원 실무안내 국가법령정보센터 국세청 홈택스 국세법령정보시스템">
+          <p class="wiki-eyebrow">출처</p>
+          <h2>출처 등록 기준</h2>
+          <p class="wiki-paragraph">기준 문서: 「기관전용 사모집합투자기구 실무안내」 제1장 개관. 법령·세무·보고 항목은 공식 원천을 확인한 뒤 본문에 반영합니다.</p>
+          <dl class="wiki-definition-list">
+            <div><dt>본문 출처</dt><dd>원문 문장을 그대로 링크로 대체하지 않고, 업무자가 읽을 수 있는 위키 본문으로 전환합니다.</dd></div>
+            <div><dt>법령 출처</dt><dd>조문 링크, 시행일, 개정 이력을 함께 남깁니다. 시행 전·후 조문은 같은 항목에 섞지 않습니다.</dd></div>
+            <div><dt>세무 출처</dt><dd>국세청, 홈택스, 국세법령정보시스템, 예규·질의회신, 세무 검토 기록을 구분합니다.</dd></div>
+            <div><dt>보고 출처</dt><dd>금융감독원 실무안내, 금융위원회·금융감독원 공지, 제출서식, 접수 증빙을 연결합니다.</dd></div>
+          </dl>
           <ul class="wiki-source-list">
             <li><a href="{html_escape(SOURCE_URLS["kvca_pdf"])}" target="_blank" rel="noreferrer">기관전용 사모집합투자기구 실무안내 전문</a></li>
             <li><a href="{html_escape(SOURCE_URLS["kvca"])}" target="_blank" rel="noreferrer">KVCA 일반자료실 게시글</a></li>
             <li><a href="{html_escape(SOURCE_URLS["kdi"])}" target="_blank" rel="noreferrer">KDI 경제정보센터 정책자료</a></li>
+            <li><a href="{html_escape(SOURCE_URLS["law_capital_markets_act"])}" target="_blank" rel="noreferrer">국가법령정보센터 자본시장법 본문</a></li>
             <li><a href="{html_escape(SOURCE_URLS["fss"])}" target="_blank" rel="noreferrer">금융감독원</a></li>
             <li><a href="{html_escape(SOURCE_URLS["law"])}" target="_blank" rel="noreferrer">국가법령정보센터</a></li>
+            <li><a href="{html_escape(SOURCE_URLS["nts"])}" target="_blank" rel="noreferrer">국세청</a></li>
+            <li><a href="{html_escape(SOURCE_URLS["hometax"])}" target="_blank" rel="noreferrer">홈택스</a></li>
+            <li><a href="{html_escape(SOURCE_URLS["tax_law"])}" target="_blank" rel="noreferrer">국세법령정보시스템</a></li>
           </ul>
         </section>
 """
@@ -245,7 +355,7 @@ def _render_wiki_article() -> str:
 def _render_sidebar_links() -> str:
     return "\n".join(
         f'          <a href="#{html_escape(anchor)}"><span>{html_escape(label)}</span><small>{html_escape(description)}</small></a>'
-        for anchor, label, description in CHAPTER_SECTIONS
+        for anchor, label, description in WIKI_SECTIONS
     )
 
 
@@ -267,15 +377,18 @@ def _render_top_nav() -> str:
       <a class="active" href="pef-wiki.html">Wiki</a>
       <a href="index.html#saved">저장</a>
     </nav>
-    <nav class="wiki-top-nav" aria-label="Wiki 내부 이동">
-      <a class="active" href="#chapter">개요</a>
+    <nav class="wiki-top-nav" aria-label="Wiki 섹션 이동">
+      <a class="active" href="#wiki-index">구조</a>
+      <a href="#chapter">제1장</a>
       <a href="#background">도입 배경</a>
       <a href="#reform">체계 개편</a>
       <a href="#operations">운용 규제</a>
       <a href="#actors">주체·용어</a>
-      <a href="#market">현황</a>
-      <a href="#history">연혁</a>
-      <a href="#sources">문서 기준</a>
+      <a href="#law-map">법령</a>
+      <a href="#tax-filings">세무</a>
+      <a href="#fss-reporting">보고</a>
+      <a href="#practice-checklists">체크리스트</a>
+      <a href="#sources">출처</a>
     </nav>"""
 
 
@@ -687,6 +800,35 @@ def _page_styles() -> str:
       color: #164c46;
       font-weight: 850;
       text-decoration: none;
+    }
+    .wiki-foldout {
+      border-top: 1px solid var(--wiki-line);
+      padding: 10px 0;
+    }
+    .wiki-foldout:last-of-type {
+      border-bottom: 1px solid var(--wiki-line);
+    }
+    .wiki-foldout summary {
+      cursor: pointer;
+      color: var(--wiki-text);
+      font-size: 15px;
+      font-weight: 900;
+      list-style: none;
+    }
+    .wiki-foldout summary::-webkit-details-marker {
+      display: none;
+    }
+    .wiki-foldout summary::after {
+      content: "+";
+      float: right;
+      color: var(--wiki-tertiary);
+      font-weight: 900;
+    }
+    .wiki-foldout[open] summary {
+      margin-bottom: 8px;
+    }
+    .wiki-foldout[open] summary::after {
+      content: "-";
     }
     .wiki-section[hidden] { display: none; }
     .bottom-nav.newsletter-only {

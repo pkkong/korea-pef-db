@@ -43,7 +43,13 @@ from daily_news_common import (
     score_document,
     to_iso_datetime,
 )
-from build_newsletter_deploy import read_lp_directory_items, read_lp_profile_codes
+from build_newsletter_deploy import (
+    display_asset_classes,
+    public_coverage_label,
+    public_lp_type,
+    read_lp_directory_items,
+    read_lp_profile_codes,
+)
 from build_service_site import editorial_section
 from apply_daily_news_review import normalize_category
 
@@ -203,6 +209,13 @@ def test_lp_directory_includes_seed_only_profiles() -> None:
         assert read_lp_profile_codes(db_path) == ["seed", "active"]
         directory_codes = [str(row["lp_code"]) for row in read_lp_directory_items(db_path)]
         assert directory_codes == ["seed", "active"]
+
+
+def test_lp_public_labels_do_not_expose_internal_taxonomy() -> None:
+    assert public_lp_type("Policy Bank") == "정책금융기관"
+    assert public_lp_type("Mutual Aid Association") == "공제회"
+    assert display_asset_classes("PEF;VC;Private Credit;Real Estate;Mother Fund") == "PEF · VC · 사모대출 · 부동산 · 모태펀드"
+    assert public_coverage_label(0, 0) == "자료 없음"
 
 
 def test_national_growth_fund_has_dedicated_section() -> None:
@@ -549,6 +562,7 @@ def main() -> int:
         test_truncated_media_suffix_does_not_split_title_duplicates,
         test_gp_alias_overrides_cover_common_short_names,
         test_lp_directory_includes_seed_only_profiles,
+        test_lp_public_labels_do_not_expose_internal_taxonomy,
         test_national_growth_fund_has_dedicated_section,
         test_national_growth_fund_title_beats_ai_keyword,
         test_ai_pe_keeps_priority_when_national_growth_fund_is_body_context,

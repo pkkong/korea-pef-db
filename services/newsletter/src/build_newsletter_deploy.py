@@ -72,7 +72,7 @@ KTCU_FACT_SECTION_LABELS = {
     "public_people": "핵심 의사결정자",
     "notice_history": "출자공고 히스토리",
     "recent_news": "최근 동향",
-    "data_gap": "공개자료 한계",
+    "data_gap": "참고사항",
 }
 KTCU_FACT_SECTION_ORDER = {
     "general": 10,
@@ -441,8 +441,42 @@ def compact_alternative_amount(value: str, fallback: str) -> str:
     return fallback or "-"
 
 
+LP_TYPE_LABELS = {
+    "Public Pension": "공적연기금",
+    "Fund of Funds": "모태펀드",
+    "Policy Fund of Funds": "정책성 모태펀드",
+    "Policy Bank": "정책금융기관",
+    "Public Fund": "공공기금",
+    "Mutual Aid Association": "공제회",
+    "Mutual Finance": "상호금융",
+    "Mutual Aid/Industry Association": "공제/경제단체",
+}
+
+ASSET_CLASS_LABELS = {
+    "PEF": "PEF",
+    "VC": "VC",
+    "Private Credit": "사모대출",
+    "Real Estate": "부동산",
+    "Infrastructure": "인프라",
+    "Mother Fund": "모태펀드",
+    "Policy Fund": "정책펀드",
+    "Supply Chain": "공급망",
+}
+
+
+def public_lp_type(value: object) -> str:
+    text = str(value or "").strip()
+    return LP_TYPE_LABELS.get(text, text or "LP")
+
+
+def public_asset_class(value: object) -> str:
+    text = str(value or "").strip()
+    return ASSET_CLASS_LABELS.get(text, text or "기타")
+
+
 def display_asset_classes(value: object) -> str:
-    return str(value or "").replace(";", " · ") or "-"
+    parts = split_asset_classes(value)
+    return " · ".join(parts) if parts else "-"
 
 
 def lp_short_label(lp_code: str, lp_name: str) -> str:
@@ -835,7 +869,7 @@ def render_ktcu_fact_section(section: str, rows: list[dict[str, object]]) -> str
             <dt>{html_escape(str(row.get("label") or "-"))}</dt>
             <dd>
               <span>{html_escape(str(row.get("value") or "-"))}</span>
-              {f'<a href="{html_escape(str(row.get("source_url") or ""))}" target="_blank" rel="noreferrer">{html_escape(str(row.get("source_name") or "출처"))}</a>' if row.get("source_url") else ""}
+              {f'<a href="{html_escape(str(row.get("source_url") or ""))}" target="_blank" rel="noreferrer">{html_escape(str(row.get("source_name") or "자료 보기"))}</a>' if row.get("source_url") else ""}
             </dd>
           </div>"""
         for row in rows
@@ -859,7 +893,7 @@ def render_ktcu_notice_row(row: dict[str, object]) -> str:
     meta = " · ".join(
         value
         for value in [
-            str(row.get("asset_class") or ""),
+            public_asset_class(row.get("asset_class")) if row.get("asset_class") else "",
             str(row.get("strategy") or ""),
             f"마감 {row.get('application_deadline')}" if row.get("application_deadline") else "",
         ]
@@ -899,7 +933,7 @@ def render_ktcu_fact_list(rows: list[dict[str, object]]) -> str:
         meta_parts = [part for part in [source_name, as_of, confidence] if part]
         meta = " · ".join(meta_parts)
         source_html = (
-            f'<small><a href="{html_escape(source_url)}" target="_blank" rel="noreferrer">{html_escape(meta or "출처")}</a></small>'
+            f'<small><a href="{html_escape(source_url)}" target="_blank" rel="noreferrer">{html_escape(meta or "자료 보기")}</a></small>'
             if source_url
             else (f"<small>{html_escape(meta)}</small>" if meta else "")
         )
@@ -915,8 +949,8 @@ def render_ktcu_fact_list(rows: list[dict[str, object]]) -> str:
 def confidence_label(value: object) -> str:
     return {
         "high": "공식 확인",
-        "medium": "보조 출처",
-        "low": "검증 필요",
+        "medium": "참고 자료",
+        "low": "참고 자료",
     }.get(str(value or ""), "")
 
 
@@ -928,7 +962,7 @@ def render_ktcu_source_links(facts: list[dict[str, object]]) -> str:
         if not url or url in seen:
             continue
         seen.add(url)
-        name = str(fact.get("source_name") or "공개 출처")
+        name = str(fact.get("source_name") or "근거 자료")
         links.append(
             f'<a href="{html_escape(url)}" target="_blank" rel="noreferrer">{html_escape(name)}</a>'
         )
@@ -941,7 +975,7 @@ def render_ktcu_asset_mix(notices: list[dict[str, object]]) -> str:
     totals: dict[str, float] = {}
     counts: dict[str, int] = {}
     for notice in notices:
-        asset_class = str(notice.get("asset_class") or "기타")
+        asset_class = public_asset_class(notice.get("asset_class") or "기타")
         totals[asset_class] = totals.get(asset_class, 0.0) + float(notice.get("allocation_amount_krw_100mn") or 0)
         counts[asset_class] = counts.get(asset_class, 0) + 1
     rows = sorted(totals, key=lambda key: (-totals[key], key))
@@ -964,7 +998,7 @@ def render_ktcu_annual_highlights(notices: list[dict[str, object]], year: int) -
     rows.sort(key=lambda row: float(row.get("allocation_amount_krw_100mn") or 0), reverse=True)
     return "\n".join(
         f"""          <div class="ktcu-highlight-row">
-            <span>{html_escape(str(row.get("asset_class") or "출자"))}</span>
+            <span>{html_escape(public_asset_class(row.get("asset_class") or "출자"))}</span>
             <strong>{html_escape(public_amount_label(row.get("allocation_amount_krw_100mn")))}</strong>
             <em>{html_escape(str(row.get("title") or ""))}</em>
           </div>"""
@@ -973,8 +1007,9 @@ def render_ktcu_annual_highlights(notices: list[dict[str, object]], year: int) -
 
 
 def split_asset_classes(value: object) -> list[str]:
-    parts = [part.strip() for part in str(value or "").split(";") if part.strip()]
-    return parts or ["확인중"]
+    parts = [public_asset_class(part) for part in str(value or "").split(";") if part.strip()]
+    deduped = list(dict.fromkeys(parts))
+    return deduped or ["확인중"]
 
 
 def render_asset_chips(value: object) -> str:
@@ -990,7 +1025,7 @@ def render_lp_peer_rows(peers: list[dict[str, object]], active_code: str) -> str
             <span>유형</span>
             <span>공고</span>
             <span>규모</span>
-            <span>팩트/출처</span>
+            <span>자료</span>
           </div>"""
     ]
     ordered_peers = sorted(
@@ -1006,14 +1041,14 @@ def render_lp_peer_rows(peers: list[dict[str, object]], active_code: str) -> str
         active_class = " active" if lp_code == active_code else ""
         latest = str(row.get("latest_event_date") or "-")
         amount = public_amount_label(row.get("allocation_amount_krw_100mn"), fallback="-")
-        coverage = f"{int(row.get('fact_count') or 0)}/{int(row.get('source_count') or 0)}"
+        coverage = public_coverage_label(row.get("fact_count"), row.get("source_count"))
         rows.append(
             f"""          <a class="ktcu-peer-row{active_class}" href="lp-{html_escape(lp_code)}.html">
             <strong>{html_escape(str(row.get("lp_name") or lp_code))}</strong>
-            <span data-label="유형">{html_escape(str(row.get("lp_type") or "LP"))}</span>
+            <span data-label="유형">{html_escape(public_lp_type(row.get("lp_type") or "LP"))}</span>
             <span data-label="공고">{html_escape(str(row.get("notice_count") or 0))}건</span>
             <span data-label="규모" title="최신 공고일 {html_escape(latest)}">{html_escape(amount)}</span>
-            <span data-label="팩트/출처">{html_escape(coverage)}</span>
+            <span data-label="자료">{html_escape(coverage)}</span>
           </a>"""
         )
     return "\n".join(rows)
@@ -1026,7 +1061,7 @@ def render_profile_timeline(facts: list[dict[str, object]], notices: list[dict[s
         detail = " · ".join(
             part
             for part in [
-                str(notice.get("asset_class") or ""),
+                public_asset_class(notice.get("asset_class")) if notice.get("asset_class") else "",
                 str(notice.get("strategy") or ""),
                 amount,
             ]
@@ -1035,9 +1070,9 @@ def render_profile_timeline(facts: list[dict[str, object]], notices: list[dict[s
         events.append(
             {
                 "date": str(notice.get("event_date") or ""),
-                "tag": "뉴스 신호" if str(notice.get("source_type") or "") == "news" else "공식 공고",
+                "tag": "관련 뉴스" if str(notice.get("source_type") or "") == "news" else "공식 공고",
                 "kind": str(notice.get("source_type") or "official"),
-                "asset": str(notice.get("asset_class") or ""),
+                "asset": public_asset_class(notice.get("asset_class")) if notice.get("asset_class") else "",
                 "title": str(notice.get("title") or "공고"),
                 "detail": detail or "공식 공고",
                 "url": str(notice.get("notice_url") or ""),
@@ -1060,7 +1095,7 @@ def render_profile_timeline(facts: list[dict[str, object]], notices: list[dict[s
         )
     events.sort(key=lambda row: (row.get("date") or "0000-00-00", row.get("title") or ""), reverse=True)
     if not events:
-        return """          <p class="ktcu-empty-note">공식 공고와 최근 뉴스가 쌓이면 활동 타임라인으로 표시됩니다.</p>"""
+        return """          <p class="ktcu-empty-note">공식 공고와 최근 뉴스가 확인되면 활동 타임라인으로 표시됩니다.</p>"""
     rows: list[str] = []
     for event in events[:limit]:
         title = html_escape(event.get("title") or "-")
@@ -1098,7 +1133,7 @@ def render_related_gp_signals(notices: list[dict[str, object]], gp_links: list[d
 
 def render_related_news_rows(news_rows: list[dict[str, object]]) -> str:
     if not news_rows:
-        return """          <p class="ktcu-empty-note">뉴스레터와 직접 연결된 뉴스는 아직 없습니다.</p>"""
+        return """          <p class="ktcu-empty-note">직접 관련된 뉴스는 아직 없습니다.</p>"""
     rows: list[str] = []
     for row in news_rows:
         title = html_escape(str(row.get("news_title") or "관련 뉴스"))
@@ -1113,17 +1148,64 @@ def render_related_news_rows(news_rows: list[dict[str, object]]) -> str:
     return "\n".join(rows)
 
 
+def public_gap_text(value: object) -> str:
+    text = str(value or "")
+    if any(token in text for token in ["정규화", "notice_id", "중복 게시"]):
+        return "같은 공고가 여러 공식 채널에 게시될 수 있어 중복 여부를 구분해 봐야 합니다."
+    if any(token in text for token in ["구조화", "상세 첨부파일"]):
+        return "첨부파일과 최종 선정 결과는 공식 발표가 확인된 건만 반영합니다."
+    if "선정 GP" in text:
+        return "선정 GP와 개별 펀드 정보는 공식 발표가 확인된 건만 반영합니다."
+    if any(token in text for token in ["잔액", "AUM", "최신"]):
+        return "자산 규모와 대체투자 잔액은 최신 공식 자료가 확인된 항목만 반영합니다."
+    if any(token in text for token in ["조달 공고", "투자 공고"]):
+        return "입찰공고에는 조달·투자 공고가 함께 게시되므로 PE/VC 관련 공고만 표시합니다."
+    text = re.sub(r"(보강|검증|확인|구조화|정규화)\s*필요", "공식 발표 확인 전", text)
+    return text.replace("canonical notice_id", "공식 공고")
+
+
+def public_gap_label(value: object) -> str:
+    text = str(value or "")
+    if "공개자료 한계" in text:
+        return "참고사항"
+    if "보강" in text or "검증" in text:
+        return "확인 항목"
+    return text or "참고사항"
+
+
+def render_public_gap_rows(rows: list[dict[str, object]]) -> str:
+    public_rows: list[dict[str, object]] = []
+    for row in rows:
+        public_row = dict(row)
+        public_row["label"] = public_gap_label(row.get("label"))
+        public_row["value"] = public_gap_text(row.get("value"))
+        public_row["confidence"] = ""
+        public_rows.append(public_row)
+    return render_ktcu_fact_list(public_rows)
+
+
+def public_coverage_label(fact_count: object, source_count: object) -> str:
+    facts = int(fact_count or 0)
+    sources = int(source_count or 0)
+    if facts <= 0 and sources <= 0:
+        return "자료 없음"
+    if sources <= 0:
+        return f"{facts}개"
+    return f"{facts}개/{sources}곳"
+
+
 def render_data_coverage(profile: dict[str, object], facts: list[dict[str, object]], notices: list[dict[str, object]]) -> str:
     fact_count = int(profile.get("fact_count") or len(facts) or 0)
     source_count = int(profile.get("source_count") or len({str(fact.get("source_url") or "") for fact in facts if fact.get("source_url")}) or 0)
     high_confidence = len([fact for fact in facts if str(fact.get("confidence") or "") == "high"])
-    medium_confidence = len([fact for fact in facts if str(fact.get("confidence") or "") == "medium"])
     official_count = len([notice for notice in notices if str(notice.get("source_type") or "") == "official"])
     news_count = len([notice for notice in notices if str(notice.get("source_type") or "") == "news"])
-    return f"""          <div><span>프로필 팩트</span><strong>{fact_count}개</strong></div>
-          <div><span>공개 출처</span><strong>{source_count}개</strong></div>
-          <div><span>공식/뉴스</span><strong>{official_count}/{news_count}건</strong></div>
-          <div><span>확인 수준</span><strong>{high_confidence}/{medium_confidence}</strong></div>"""
+    confidence_text = f"{high_confidence}개" if high_confidence else "공개자료 기준"
+    activity_text = f"{official_count + news_count}건" if official_count + news_count else "자료 없음"
+    return f"""          <div><span>확인 항목</span><strong>{fact_count}개</strong></div>
+          <div><span>근거 자료</span><strong>{source_count}개</strong></div>
+          <div><span>공고·뉴스</span><strong>{activity_text}</strong></div>
+          <div><span>자료 성격</span><strong>{confidence_text}</strong></div>"""
 
 
 def ktcu_year_amount(notices: list[dict[str, object]], year: int) -> float:
@@ -1150,20 +1232,20 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     )
     max_yearly = max([float(row.get("allocation_amount_krw_100mn") or 0) for row in yearly] or [0])
     yearly_rows = "\n".join(render_ktcu_year_bar(row, max_yearly) for row in yearly) or (
-        """        <p class="ktcu-empty-note">연도별 공고 규모는 공고 데이터가 쌓이면 표시됩니다.</p>"""
+        """        <p class="ktcu-empty-note">연도별 공고 규모는 공식 공고가 확인되면 표시됩니다.</p>"""
     )
-    source_rows = render_ktcu_source_links(facts) or "          <li>공개 출처가 아직 정리되지 않았습니다.</li>"
+    source_rows = render_ktcu_source_links(facts) or "          <li>근거 자료가 아직 연결되지 않았습니다.</li>"
     asset_mix_rows = render_ktcu_asset_mix(official_notices) or (
         """          <p class="ktcu-empty-note">자산군별 출자 패턴은 공식 공고가 추가되면 표시됩니다.</p>"""
     )
     general_rows = render_ktcu_fact_list(facts_in_section(facts, "general")) or (
-        """          <div><dt>기관 개요</dt><dd>공개자료 정리 중입니다.</dd></div>"""
+        """          <div><dt>기관 개요</dt><dd>현재 공개자료에서 확인된 항목이 없습니다.</dd></div>"""
     )
     status_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_status")) or (
-        """          <div><dt>투자 현황</dt><dd>공개자료 정리 중입니다.</dd></div>"""
+        """          <div><dt>투자 현황</dt><dd>현재 공개자료에서 확인된 항목이 없습니다.</dd></div>"""
     )
     org_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_org") + facts_in_section(facts, "public_people")) or (
-        """          <div><dt>담당 조직</dt><dd>공식 조직도 기준으로 확인 중입니다.</dd></div>"""
+        """          <div><dt>담당 조직</dt><dd>공식 조직도에서 확인된 조직 정보가 없습니다.</dd></div>"""
     )
     news_rows = render_ktcu_fact_list(facts_in_section(facts, "recent_news"))
     news_panel = (
@@ -1178,13 +1260,13 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
         if news_rows.strip()
         else ""
     )
-    gap_rows = render_ktcu_fact_list(facts_in_section(facts, "data_gap")) or (
-        """          <div><dt>선정 GP 히스토리</dt><dd>공개 공고와 별도 자료를 대조해 추가 검증해야 합니다.</dd></div>"""
+    gap_rows = render_public_gap_rows(facts_in_section(facts, "data_gap")) or (
+        """          <div><dt>선정 GP 히스토리</dt><dd>공식 발표가 확인된 건만 반영합니다.</dd></div>"""
     )
 
     lp_code = str(profile.get("lp_code") or "")
     lp_name = str(profile.get("lp_name") or "LP")
-    lp_type = str(profile.get("lp_type") or "LP")
+    lp_type = public_lp_type(profile.get("lp_type") or "LP")
     default_team = str(profile.get("default_team") or "투자 담당")
     focus_label = display_asset_classes(profile.get("focus_asset_classes"))
     asset_label, asset = first_fact_pair(
@@ -1365,7 +1447,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
 <body>
   <main class="ktcu-shell">
     <header class="ktcu-top">
-      <nav class="ktcu-nav" aria-label="LP 내부 이동">
+      <nav class="ktcu-nav" aria-label="LP 섹션 이동">
         <strong>Korea PEF Intelligence</strong>
         <span>LP Profile</span>
       </nav>
@@ -1376,22 +1458,22 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
         <div class="ktcu-title">
           <span>LP Profile</span>
           <h1>{html_escape(lp_name)}</h1>
-          <p>{html_escape(lp_type)}의 투자 현황, 담당 조직, 출자공고 흐름을 공개자료 기준으로 정리했습니다. PE 관점에서는 {html_escape(default_team)}와 {html_escape(focus_label)} 출자 패턴을 먼저 봅니다.</p>
+          <p>{html_escape(lp_type)}의 투자 현황, 담당 조직, 출자공고 흐름을 공개자료 기준으로 정리했습니다. PE 관점에서는 핵심 창구({html_escape(default_team)})와 관심 자산군({html_escape(focus_label)})을 먼저 봅니다.</p>
           <div class="ktcu-quick">
             <div class="ktcu-quick-item"><strong>핵심 창구</strong>{html_escape(default_team)}</div>
             <div class="ktcu-quick-item"><strong>{html_escape(str(highlight_year))}년 활동</strong>{html_escape(activity_phrase)}</div>
-            <div class="ktcu-quick-item"><strong>공개자료 기준</strong>공식 조직과 공고를 먼저 반영하고, 최종 선정 GP는 출처가 확인되는 순서대로 추가합니다.</div>
+            <div class="ktcu-quick-item"><strong>공개자료 기준</strong>공식 조직과 공고를 먼저 반영하고, 최종 선정 GP는 공식 발표가 확인된 건부터 반영합니다.</div>
           </div>
           <nav class="ktcu-tabbar" aria-label="프로필 섹션">
             <a href="#overview">Overview</a>
             <a href="#activity">Activity</a>
             <a href="#relationships">Network</a>
             <a href="#peers">Peers</a>
-            <a href="#sources">Sources</a>
+            <a href="#sources">자료</a>
           </nav>
           <div class="ktcu-profile-toolbar">
-            <input type="search" id="lpProfileSearch" placeholder="이 LP 페이지에서 공고, 뉴스, GP, 출처 검색">
-            <p>공식 공고 {html_escape(str(len(official_notices)))}건 · 뉴스 신호 {html_escape(str(news_signal_count))}건 · 공개 팩트 {html_escape(str(len(facts)))}개</p>
+            <input type="search" id="lpProfileSearch" placeholder="이 LP 페이지에서 공고, 뉴스, GP, 근거자료 검색">
+            <p>공식 공고 {html_escape(str(len(official_notices)))}건 · 관련 뉴스 {html_escape(str(news_signal_count))}건 · 확인 항목 {html_escape(str(len(facts)))}개</p>
           </div>
         </div>
         <div class="ktcu-kpis">
@@ -1403,9 +1485,9 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       </section>
     </header>
 
-    <section class="ktcu-intel-grid" aria-label="프로필 리서치 범위">
+    <section class="ktcu-intel-grid" aria-label="프로필 자료 기준">
       <section class="ktcu-panel">
-        <h2>리서치 범위</h2>
+        <h2>자료 기준</h2>
         <div class="ktcu-coverage">
 {data_coverage_rows}
         </div>
@@ -1432,7 +1514,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       </div>
     </section>
 
-    <section class="ktcu-section-grid" id="overview" aria-label="사용자용 LP 요약">
+    <section class="ktcu-section-grid" id="overview" aria-label="LP 요약">
       <section class="ktcu-panel">
         <h2>투자 현황</h2>
         <p>{html_escape(investment_status)}</p>
@@ -1491,15 +1573,15 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
         </div>
       </section>
       <section class="ktcu-panel">
-        <h2>선정 GP 신호</h2>
-        <p>공개 공고나 뉴스에서 확인된 GP명만 표시합니다.</p>
+        <h2>선정 GP</h2>
+        <p>공식 공고와 관련 뉴스에서 확인된 GP명입니다.</p>
         <div class="ktcu-gp-tags">
 {gp_signal_rows}
         </div>
       </section>
       <section class="ktcu-panel">
         <h2>관련 뉴스</h2>
-        <p>뉴스레터 DB와 LP 이벤트가 직접 연결된 기사입니다.</p>
+        <p>LP 공고·기관 동향과 직접 관련된 기사입니다.</p>
         <div class="ktcu-news-list">
 {related_news_rows}
         </div>
@@ -1510,7 +1592,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       <div class="ktcu-panel-head">
         <div>
           <h2>LP 피어 비교</h2>
-          <p>현재 구축 중인 {html_escape(str(peer_count))}개 LP의 공개 공고 수, 공고 기준 출자규모, 최신 공고일을 같은 기준으로 비교합니다.</p>
+          <p>현재 제공하는 {html_escape(str(peer_count))}개 LP의 공개 공고 수, 공고 기준 출자규모, 최신 공고일을 같은 기준으로 비교합니다.</p>
         </div>
       </div>
       <div class="ktcu-peer-table">
@@ -1519,7 +1601,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     </section>
 
     <details class="ktcu-evidence" id="sources">
-      <summary>공개자료 한계</summary>
+      <summary>참고사항</summary>
       <div class="ktcu-evidence-body">
         <p>공개 공고와 공식 조직도 기준의 프로필입니다. 최종 선정 GP, 실제 약정·집행액, 실무 담당자명은 공개자료만으로 확정하지 않습니다.</p>
         <dl class="ktcu-facts">
@@ -1529,7 +1611,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     </details>
 
     <details class="ktcu-evidence">
-      <summary>공개 출처 보기</summary>
+      <summary>근거 자료 보기</summary>
       <ul>
 {source_rows}
       </ul>
@@ -1605,7 +1687,7 @@ def write_lp_profile_pages(site_dir: Path, report_date: str) -> int:
 def render_lp_directory_card(item: dict[str, object]) -> str:
     lp_code = str(item.get("lp_code") or "")
     lp_name = str(item.get("lp_name") or lp_code or "LP")
-    lp_type = str(item.get("lp_type") or "LP")
+    lp_type = public_lp_type(item.get("lp_type") or "LP")
     ownership = str(item.get("ownership_type") or "")
     default_team = str(item.get("default_team") or "투자 담당")
     focus = display_asset_classes(item.get("focus_asset_classes"))
@@ -1625,6 +1707,7 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
         actions.append(f'<a href="{html_escape(notice_url)}" target="_blank" rel="noreferrer">공식 공고 채널</a>')
     elif homepage_url:
         actions.append(f'<a href="{html_escape(homepage_url)}" target="_blank" rel="noreferrer">공식 홈페이지</a>')
+    coverage = public_coverage_label(fact_count, source_count)
     search_blob = " ".join([lp_name, lp_type, ownership, default_team, focus])
     return f"""          <article class="lp-directory-card" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(focus)}" data-kind="{html_escape(ownership)}">
             <div class="lp-directory-card-head">
@@ -1639,7 +1722,7 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
               <div><dt>공고</dt><dd>{notice_count}건</dd></div>
               <div><dt>출자규모</dt><dd>{html_escape(amount)}</dd></div>
               <div><dt>최신</dt><dd>{html_escape(latest)}</dd></div>
-              <div><dt>리서치</dt><dd>{fact_count}/{source_count}</dd></div>
+              <div><dt>자료</dt><dd>{html_escape(coverage)}</dd></div>
             </dl>
             <div class="lp-page-actions">{"".join(actions)}</div>
           </article>"""
@@ -1656,13 +1739,13 @@ def render_lp_notices_page(
     else:
         notice_cards = """        <div class="empty-state visible">
           <strong>표시할 공식 공고가 없습니다</strong>
-          <span>LP 공고 모니터는 별도 서비스로 분리해 운영합니다.</span>
+          <span>공식 공고가 확인되면 여기에 표시됩니다.</span>
         </div>"""
     directory_rows = directory_items or []
     directory_cards = "\n".join(render_lp_directory_card(item) for item in directory_rows) or (
         """          <div class="empty-state visible">
             <strong>표시할 LP 프로필이 없습니다</strong>
-            <span>공개 프로필 데이터가 쌓이면 여기에 표시됩니다.</span>
+            <span>공개자료가 확인되면 여기에 표시됩니다.</span>
           </div>"""
     )
     tracked_count = len(directory_rows)
@@ -1741,20 +1824,20 @@ def render_lp_notices_page(
           <a class="header-action" href="#lpNotices" aria-label="LP 공식 공고로 이동">공고</a>
         </div>
       </div>
-      <div class="brief-meta">추적 LP {tracked_count}개 · 공식 공고 {len(notices)}건 · 기준일 {html_escape(report_date)}</div>
+      <div class="brief-meta">대상 LP {tracked_count}개 · 공식 공고 {len(notices)}건 · 기준일 {html_escape(report_date)}</div>
     </header>
 
     <main class="content-area">
       <section class="lp-directory-hero" aria-label="LP 디렉토리 요약">
         <div>
           <h1>LP Directory</h1>
-          <p>국내 주요 출자기관의 기본 현황, 관심 자산군, 최근 출자공고를 한 곳에서 봅니다. 공식 공고와 공개자료를 우선 반영하고, 뉴스 기반 신호는 구분해 표시합니다.</p>
+          <p>국내 주요 출자기관의 기본 현황, 관심 자산군, 최근 출자공고를 한 곳에서 봅니다. 공식 공고와 공개자료를 우선 반영하고, 관련 뉴스는 구분해 표시합니다.</p>
         </div>
         <div class="lp-directory-kpis">
-          <div><span>추적 기관</span><strong>{tracked_count}개</strong></div>
-          <div><span>최근 공고 보유</span><strong>{active_count}개</strong></div>
+          <div><span>대상 기관</span><strong>{tracked_count}개</strong></div>
+          <div><span>최근 공고</span><strong>{active_count}개</strong></div>
           <div><span>공고 기준 규모</span><strong>{html_escape(public_amount_label(total_amount, fallback="-"))}</strong></div>
-          <div><span>공개 출처</span><strong>{source_total}개</strong></div>
+          <div><span>근거 자료</span><strong>{source_total}개</strong></div>
         </div>
       </section>
       <nav class="lp-profile-nav" aria-label="LP 프로필">
@@ -1845,10 +1928,11 @@ def render_lp_notice_card(item: dict[str, object]) -> str:
     document_url = str(item.get("documentUrl") or "")
     lp_code = str(item.get("lpCode") or "")
     amount = lp_amount_label(item.get("allocationAmount"))
+    asset_class = public_asset_class(item.get("assetClass")) if item.get("assetClass") else ""
     meta_values = [
         str(item.get("lpName") or "LP 미분류"),
         lp_event_label(item.get("eventType")),
-        str(item.get("assetClass") or ""),
+        asset_class,
         f"마감 {item.get('applicationDeadline')}" if item.get("applicationDeadline") else "",
         amount,
     ]
@@ -1874,12 +1958,12 @@ def render_lp_notice_card(item: dict[str, object]) -> str:
         for value in [
             title,
             item.get("lpName"),
-            item.get("assetClass"),
+            asset_class,
             item.get("eventType"),
             item.get("selectedGpNames"),
         ]
     )
-    return f"""          <article class="lp-page-card" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(str(item.get("assetClass") or ""))}" data-event="{html_escape(str(item.get("eventType") or ""))}" data-deadline="{html_escape(str(item.get("applicationDeadline") or ""))}">
+    return f"""          <article class="lp-page-card" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(asset_class)}" data-event="{html_escape(str(item.get("eventType") or ""))}" data-deadline="{html_escape(str(item.get("applicationDeadline") or ""))}">
             <h2>{linked_title}</h2>
             <div class="lp-page-meta">{meta}</div>
             <div class="lp-page-actions">{profile_link}{official_link}{document_link}</div>

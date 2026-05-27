@@ -591,8 +591,8 @@ def build_profile_rows(conn: sqlite3.Connection, limit: int, created_at: str) ->
                 "alias_names": alias_names.get(gp_id, ""),
                 "raw_name_variants": raw_variants.get(gp_id, ""),
                 "source_basis": (
-                    "FSS quarterly PEF status for GP name, fund linkage, and commitment AUM proxy only; "
-                    "legal identifiers require separate external evidence."
+                    "금감원 PEF 운용 현황에서 확인되는 운용사명, 펀드 연결, 약정액 기준 지표를 반영합니다. "
+                    "법인 식별정보는 별도 공개자료가 확인된 경우에만 표시합니다."
                 ),
                 "created_at": existing.get("created_at") or created_at,
                 "updated_at": created_at,
@@ -661,7 +661,7 @@ def build_source_rows(
                 "source_title": source_doc.get("title", ""),
                 "source_url": source_doc.get("source_url", ""),
                 "source_grade": "OFFICIAL_REGULATORY_SOURCE",
-                "evidence_scope": "GP name, fund linkage, first/last observed period, and commitment AUM proxy",
+                "evidence_scope": "운용사명, 펀드 연결, 최초/최근 반영 기간, 약정액 기준 지표",
                 "evidence_value": str(profile["standard_gp_name"]),
                 "evidence_date": profile.get("last_seen_date", ""),
                 "verification_status": "auto_extracted_from_fss",
