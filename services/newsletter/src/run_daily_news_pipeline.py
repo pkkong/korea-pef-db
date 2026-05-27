@@ -1250,18 +1250,11 @@ def has_ai_pe_theme(text: str) -> bool:
     )
 
 
-def has_national_growth_fund_theme(
-    title: str,
-    content: str,
-    raw_sections: list[str] | None = None,
-    topics: set[str] | None = None,
-) -> bool:
+def has_national_growth_fund_theme(title: str, raw_sections: list[str] | None = None) -> bool:
     if contains_any_keyword(title, SECTION_KEYWORDS["NationalGrowthFund"]):
         return True
     raw_text = " ".join(raw_sections or [])
-    if contains_any_keyword(raw_text, SECTION_KEYWORDS["NationalGrowthFund"]):
-        return True
-    return bool(topics and ("NationalGrowthFund" in topics or "국민성장펀드" in topics))
+    return contains_any_keyword(raw_text, SECTION_KEYWORDS["NationalGrowthFund"])
 
 
 def has_lp_focus_signal(text: str) -> bool:
@@ -1302,10 +1295,10 @@ def primary_section(row: dict[str, object]) -> str:
             str(row.get("gp_names", "")),
         ]
     )
+    if has_national_growth_fund_theme(title, raw_sections):
+        return "NationalGrowthFund"
     if has_ai_pe_theme(content):
         return "AI_PE"
-    if has_national_growth_fund_theme(title, content, raw_sections, topics):
-        return "NationalGrowthFund"
     if contains_any_keyword(title, SECTION_KEYWORDS["Credit"]) and has_fundraising_title_signal(title):
         return "GP"
     if contains_any_keyword(title, SECTION_KEYWORDS["Credit"]):

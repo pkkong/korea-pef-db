@@ -224,13 +224,29 @@ def test_national_growth_fund_has_dedicated_section() -> None:
     assert "[국민성장펀드]" in render_markdown("2026-05-27", [row])
 
 
-def test_ai_pe_keeps_priority_over_national_growth_fund() -> None:
+def test_national_growth_fund_title_beats_ai_keyword() -> None:
     row = {
-        "publisher": "이데일리",
-        "title": "[GAIC 2026] 국민성장펀드도 AI 인프라 투자 기회 본다",
-        "summary_text": "사모펀드와 LP의 AI 인프라 투자 전략을 다뤘다.",
+        "publisher": "뉴스톱",
+        "title": "[국민성장펀드] 중소형 GP도 각축...AI·코스닥 리그 승자는?",
+        "summary_text": "국민성장펀드 중소형·테마형 리그에서 AI·반도체와 코스닥 리그 경쟁이 이어진다.",
         "relevance_score": 8,
         "section_tags": "LP",
+        "topic_tags": "LP,NationalGrowthFund,AI_PE",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.newstopkorea.com/news/articleView.html?idxno=45146",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "NationalGrowthFund"
+
+
+def test_ai_pe_keeps_priority_when_national_growth_fund_is_body_context() -> None:
+    row = {
+        "publisher": "이데일리",
+        "title": "[GAIC 2026] AI 인프라 투자 기회 본다",
+        "summary_text": "사모펀드와 LP의 AI 인프라 투자 전략을 다루며 국민성장펀드도 언급했다.",
+        "relevance_score": 8,
+        "section_tags": "AI & PE",
         "topic_tags": "LP,NationalGrowthFund,AI_PE",
         "document_type_tags": "",
         "gp_names": "",
@@ -245,6 +261,12 @@ def test_web_renderer_maps_national_growth_fund_section() -> None:
         {
             "title": "[150조 국민성장펀드] UTC 업력에 포레스트의 패기",
             "section": "LP",
+        }
+    ) == "국민성장펀드"
+    assert editorial_section(
+        {
+            "title": "[국민성장펀드] 중소형 GP도 각축...AI·코스닥 리그 승자는?",
+            "section": "AI & PE",
         }
     ) == "국민성장펀드"
 
@@ -528,7 +550,8 @@ def main() -> int:
         test_gp_alias_overrides_cover_common_short_names,
         test_lp_directory_includes_seed_only_profiles,
         test_national_growth_fund_has_dedicated_section,
-        test_ai_pe_keeps_priority_over_national_growth_fund,
+        test_national_growth_fund_title_beats_ai_keyword,
+        test_ai_pe_keeps_priority_when_national_growth_fund_is_body_context,
         test_web_renderer_maps_national_growth_fund_section,
         test_review_category_accepts_national_growth_fund_aliases,
         test_weak_context_quality_penalty,

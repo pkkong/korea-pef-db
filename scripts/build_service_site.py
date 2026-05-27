@@ -339,10 +339,10 @@ def editorial_section(row: dict[str, str]) -> str:
     raw_section = row.get("section", "")
     title_text = title
     combined = f"{title_text} {raw_section}"
-    if has_ai_theme(combined) and contains_any(combined, DEAL_SIGNAL_KEYWORDS + DEAL_FINANCING_KEYWORDS + LP_FOCUS_KEYWORDS + GP_FOCUS_KEYWORDS):
-        return "AI & PE"
     if has_national_growth_fund_theme(title_text, raw_section):
         return "국민성장펀드"
+    if has_ai_theme(combined) and contains_any(combined, DEAL_SIGNAL_KEYWORDS + DEAL_FINANCING_KEYWORDS + LP_FOCUS_KEYWORDS + GP_FOCUS_KEYWORDS):
+        return "AI & PE"
     if contains_any(title_text, ["펀드 결성", "펀드레이징", "펀드 조성", "펀드 도전", "클로징", "약정총액", "목표액", "블라인드펀드"]):
         return "GP"
     if contains_any(title_text, DEAL_FINANCING_KEYWORDS + DEAL_SIGNAL_KEYWORDS + DEAL_OWNERSHIP_KEYWORDS + DEAL_ISSUE_KEYWORDS):
