@@ -78,7 +78,7 @@ def app_web_manifest() -> str:
         "scope": "./",
         "display": "standalone",
         "background_color": "#f5f5f7",
-        "theme_color": "#111827",
+        "theme_color": "#f5f7fa",
         "icons": [
             {
                 "src": APP_ICON_FILE,
@@ -985,7 +985,7 @@ def render_app(
         <strong>DB</strong>
       </a>"""
     )
-    search_placeholder = "뉴스·GP 검색" if newsletter_only else "뉴스·공식공고·GP 검색"
+    search_placeholder = "뉴스·기관·운용사 검색" if newsletter_only else "뉴스·공식공고·기관·운용사 검색"
     lp_monitor_section = (
         ""
         if newsletter_only
@@ -2623,7 +2623,7 @@ def service_js() -> str:
     group.classList.add("collapsible", expanded ? "expanded" : "collapsed");
     toggle.hidden = false;
     toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
-    toggle.textContent = expanded ? "접기" : `+${hiddenCount}`;
+    toggle.textContent = expanded ? "접기" : `더보기 ${hiddenCount}`;
     toggle.setAttribute("aria-label", expanded ? "태그 접기" : `숨긴 태그 ${hiddenCount}개 더 보기`);
   };
 
@@ -2639,7 +2639,7 @@ def service_js() -> str:
       empty.className = "empty-state visible";
       empty.innerHTML = queryText()
         ? "<strong>결과가 없습니다</strong><span>검색어를 줄여 다시 확인합니다.</span>"
-        : "<strong>선정된 뉴스가 없습니다</strong><span>이 날짜에는 공개 기준을 통과한 기사가 없습니다.</span>";
+        : "<strong>발행된 뉴스가 없습니다</strong><span>이 날짜에는 아직 표시할 뉴스가 없습니다.</span>";
       target.append(empty);
       return;
     }
