@@ -511,8 +511,17 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
       <p>상위 20 GP {len(top20):,}개 · 개별 프로필 {len(top_ids):,}개 · 공식 근거 {verified_count:,}개 · 기준일 {_e(report_date)}</p>
     </section>
 
-    <section class="gp-directory" id="gpDirectory" aria-label="GP 목록">
+    <section class="gp-directory-table" aria-label="GP 목록">
+      <div class="gp-directory-head" aria-hidden="true">
+        <span>운용사명</span>
+        <span>대표/홈페이지</span>
+        <span>운용 현황</span>
+        <span>뉴스·출자</span>
+        <span>확인 자료</span>
+      </div>
+      <div class="gp-directory" id="gpDirectory">
 {cards}
+      </div>
     </section>
 
     <section class="gp-disclaimer" aria-label="참고사항">
@@ -1083,16 +1092,17 @@ def _directory_script() -> str:
 def _base_styles() -> str:
     return """  <style>
     :root {
-      --bg: #f4f6f8;
+      --bg: #f7f7f8;
       --surface: #ffffff;
-      --surface-muted: #f8fafb;
-      --text: #15202b;
-      --secondary: #52616f;
-      --tertiary: #7c8792;
-      --line: #dce3e8;
-      --accent: #1f6b63;
-      --accent-soft: #e7f4f1;
-      --gold: #aa7b26;
+      --surface-muted: #f3f4f5;
+      --text: #202124;
+      --secondary: #6b6f76;
+      --tertiary: #9aa0a6;
+      --line: #e0e3e7;
+      --line-strong: #d3d7dc;
+      --accent: #8a6a52;
+      --accent-soft: #f3eee9;
+      --gold: #9a6a2f;
     }
     * { box-sizing: border-box; }
     body {
@@ -1104,7 +1114,7 @@ def _base_styles() -> str:
     }
     a { color: inherit; }
     .gp-shell {
-      width: min(1240px, calc(100% - 28px));
+      width: min(1440px, calc(100% - 44px));
       margin: 0 auto;
       padding: 18px 0 calc(112px + env(safe-area-inset-bottom));
     }
@@ -1118,7 +1128,7 @@ def _base_styles() -> str:
       justify-content: space-between;
       margin-bottom: 14px;
       padding: 8px 0;
-      background: rgba(244, 246, 248, 0.92);
+      background: rgba(247, 247, 248, 0.94);
       backdrop-filter: blur(14px);
     }
     .gp-top-nav strong { font-size: 13px; }
@@ -1139,7 +1149,7 @@ def _base_styles() -> str:
     .gp-top-nav a.active {
       border-color: var(--accent);
       background: var(--accent-soft);
-      color: #164c46;
+      color: #5f4636;
     }
     .bottom-nav {
       position: fixed;
@@ -1221,7 +1231,7 @@ def _base_styles() -> str:
       display: grid;
       gap: 18px;
       align-items: end;
-      margin: 10px 0 12px;
+      margin: 22px 0 18px;
     }
     .gp-hero-copy, .gp-detail-hero > div { display: grid; gap: 10px; }
     .gp-hero-copy > span,
@@ -1230,15 +1240,15 @@ def _base_styles() -> str:
       width: fit-content;
       border-left: 3px solid var(--accent);
       padding-left: 8px;
-      color: #164c46;
+      color: #5f4636;
       font-size: 12px;
       font-weight: 850;
     }
     h1 {
       margin: 0;
       color: var(--text);
-      font-size: clamp(34px, 5vw, 62px);
-      line-height: 1.04;
+      font-size: clamp(30px, 3.2vw, 44px);
+      line-height: 1.08;
       letter-spacing: 0;
     }
     .gp-hero-copy p,
@@ -1272,6 +1282,17 @@ def _base_styles() -> str:
     .gp-detail-kpis div {
       min-width: 0;
       padding: 12px;
+    }
+    .gp-detail-kpis {
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .gp-detail-kpis div {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      padding: 13px 0;
     }
     .gp-kpis span,
     .gp-detail-kpis span,
@@ -1339,7 +1360,7 @@ def _base_styles() -> str:
     .gp-filter-row button.active {
       border-color: var(--accent);
       background: var(--accent-soft);
-      color: #164c46;
+      color: #5f4636;
     }
     .gp-control-panel p {
       margin: 0;
@@ -1347,18 +1368,62 @@ def _base_styles() -> str:
       font-size: 12px;
       line-height: 1.45;
     }
+    .gp-directory-table {
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .gp-directory-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 132px;
+      gap: 10px;
+      align-items: center;
+      min-height: 44px;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line-strong);
+      background: #f0f1f2;
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 850;
+      text-align: right;
+    }
+    .gp-directory-head span:first-child { text-align: center; }
+    .gp-directory-head span:nth-child(2),
+    .gp-directory-head span:nth-child(4),
+    .gp-directory-head span:nth-child(5) {
+      display: none;
+    }
+    .gp-directory-head span:nth-child(3) {
+      font-size: 0;
+    }
+    .gp-directory-head span:nth-child(3)::after {
+      content: "순위 / 약정액";
+      font-size: 12px;
+    }
     .gp-directory {
       display: grid;
-      gap: 10px;
+      gap: 0;
     }
     .gp-card {
       display: grid;
-      gap: 9px;
-      padding: 12px;
+      grid-template-columns: minmax(0, 1fr) 132px;
+      gap: 10px;
+      align-items: center;
+      min-height: 82px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      padding: 12px 10px;
+      box-shadow: none;
     }
+    .gp-card:last-child { border-bottom: 0; }
     .gp-card[hidden] { display: none; }
     .gp-card-main {
       display: grid;
+      grid-column: 1;
+      grid-row: 1;
       gap: 8px;
     }
     .gp-card-title {
@@ -1382,7 +1447,7 @@ def _base_styles() -> str:
     .gp-card h2 a { text-decoration: none; }
     .gp-card h2 a:hover { color: var(--accent); }
     .gp-chips {
-      display: flex;
+      display: none;
       flex-wrap: wrap;
       gap: 6px;
     }
@@ -1390,8 +1455,8 @@ def _base_styles() -> str:
       border: 1px solid #d7e6e3;
       border-radius: 999px;
       padding: 4px 7px;
-      background: #f2faf8;
-      color: #164c46;
+      background: #f7f4f0;
+      color: #5f4636;
       font-size: 11px;
       font-weight: 850;
     }
@@ -1402,17 +1467,22 @@ def _base_styles() -> str:
     }
     .gp-metrics {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 7px;
+      grid-column: 2;
+      grid-row: 1;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
       margin: 0;
+      text-align: right;
     }
     .gp-metrics div {
       min-width: 0;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 7px 8px;
-      background: var(--surface-muted);
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      background: transparent;
     }
+    .gp-metrics div:nth-child(2),
+    .gp-metrics div:nth-child(4) { display: none; }
     .gp-metrics dt {
       color: var(--secondary);
       font-size: 10.5px;
@@ -1428,7 +1498,7 @@ def _base_styles() -> str:
       overflow-wrap: anywhere;
     }
     .gp-signal-strip {
-      display: grid;
+      display: none;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 6px;
     }
@@ -1449,7 +1519,7 @@ def _base_styles() -> str:
       font-size: 12px;
     }
     .gp-meta-line {
-      display: flex;
+      display: none;
       flex-wrap: wrap;
       gap: 7px;
       color: var(--secondary);
@@ -1468,6 +1538,7 @@ def _base_styles() -> str:
       gap: 6px;
     }
     .gp-card-extra {
+      display: none;
       border-top: 1px solid var(--line);
       padding-top: 8px;
     }
@@ -1561,7 +1632,11 @@ def _base_styles() -> str:
     .gp-detail-card {
       display: grid;
       gap: 7px;
-      padding: 14px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
       color: var(--secondary);
       font-size: 13px;
       line-height: 1.45;
@@ -1575,14 +1650,16 @@ def _base_styles() -> str:
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 8px;
       margin: 10px 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
     }
     .gp-signal-bar div {
       min-width: 0;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 11px;
-      background: var(--surface);
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+      border: 0;
+      border-radius: 0;
+      padding: 13px 0;
+      background: transparent;
+      box-shadow: none;
     }
     .gp-signal-bar span,
     .gp-signal-bar em {
@@ -1607,7 +1684,12 @@ def _base_styles() -> str:
     }
     .gp-panel {
       min-width: 0;
-      padding: 15px;
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-radius: 0;
+      padding: 18px 0;
+      background: transparent;
+      box-shadow: none;
     }
     .gp-fact-list {
       display: grid;
@@ -1777,14 +1859,166 @@ def _base_styles() -> str:
     @media (min-width: 720px) {
       .gp-hero { grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr); }
       .gp-controls { grid-template-columns: minmax(0, 1fr) 210px; }
-      .gp-directory { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .gp-card-main { grid-template-columns: minmax(0, 1fr); align-items: start; }
       .gp-detail-hero { grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr); }
       .gp-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .gp-detail-lower { grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr); }
     }
-    @media (min-width: 1120px) {
-      .gp-directory { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    @media (min-width: 960px) {
+      .gp-shell {
+        width: min(1460px, calc(100% - 56px));
+      }
+      .bottom-nav {
+        position: static;
+        width: min(720px, 100%);
+        max-width: 100%;
+        transform: none;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 4px;
+        margin: 28px auto 0;
+        border: 1px solid rgba(21, 32, 43, 0.10);
+        border-radius: 999px;
+        padding: 5px;
+        background: rgba(255,255,255,0.94);
+        box-shadow: 0 12px 34px rgba(15,23,42,0.12);
+      }
+      .bottom-nav a {
+        min-height: 34px;
+        flex-direction: row;
+        gap: 5px;
+        border-radius: 999px;
+        padding: 0 10px;
+        font-size: 12px;
+      }
+      .bottom-nav .active {
+        background: var(--accent-soft);
+        color: #5f4636;
+      }
+      .nav-dot {
+        display: none;
+      }
+      .gp-kpis,
+      .gp-detail-kpis {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .gp-control-panel {
+        margin: 16px 0;
+      }
+      .gp-directory-head {
+        display: grid;
+        grid-template-columns: minmax(240px, 1.2fr) minmax(130px, 0.62fr) minmax(340px, 1.45fr) minmax(190px, 0.82fr) minmax(150px, 0.62fr);
+        gap: 18px;
+        align-items: center;
+        min-height: 48px;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--line-strong);
+        background: #f0f1f2;
+        color: var(--secondary);
+        font-size: 12px;
+        font-weight: 850;
+        text-align: left;
+      }
+      .gp-directory-head span {
+        display: block;
+        font-size: 12px;
+      }
+      .gp-directory-head span:first-child {
+        text-align: left;
+      }
+      .gp-directory-head span:nth-child(3)::after {
+        content: none;
+      }
+      .gp-directory {
+        gap: 0;
+      }
+      .gp-directory-table {
+        border: 1px solid var(--line-strong);
+        background: var(--surface);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+      }
+      .gp-card {
+        grid-template-columns: minmax(240px, 1.2fr) minmax(130px, 0.62fr) minmax(340px, 1.45fr) minmax(190px, 0.82fr) minmax(150px, 0.62fr);
+        gap: 18px;
+        align-items: center;
+        border: 0;
+        border-radius: 0;
+        border-bottom: 1px solid var(--line);
+        padding: 16px 18px;
+        box-shadow: none;
+      }
+      .gp-card:last-child {
+        border-bottom: 0;
+      }
+      .gp-card-main {
+        grid-column: 1;
+        grid-row: 1;
+      }
+      .gp-meta-line {
+        grid-column: 2;
+        grid-row: 1;
+        display: grid;
+        gap: 4px;
+      }
+      .gp-metrics {
+        grid-column: 3;
+        grid-row: 1;
+      }
+      .gp-signal-strip {
+        grid-column: 4;
+        grid-row: 1;
+      }
+      .gp-card-extra {
+        grid-column: 5;
+        grid-row: 1;
+        border-top: 0;
+        padding-top: 0;
+      }
+      .gp-card h2 {
+        font-size: 16px;
+      }
+      .gp-card-title > span {
+        font-size: 10.5px;
+      }
+      .gp-chips span {
+        background: #f5f5f5;
+        border-color: #e3e3e3;
+        color: var(--secondary);
+      }
+      .gp-chips {
+        display: flex;
+      }
+      .gp-metrics {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        text-align: left;
+      }
+      .gp-metrics div:nth-child(2),
+      .gp-metrics div:nth-child(4) {
+        display: block;
+      }
+      .gp-signal-strip {
+        display: grid;
+      }
+      .gp-card-extra {
+        display: block;
+      }
+      .gp-metrics div,
+      .gp-signal-strip span {
+        border: 0;
+        border-radius: 0;
+        padding: 0;
+        background: transparent;
+      }
+      .gp-metrics dt,
+      .gp-signal-strip span {
+        font-size: 11px;
+      }
+      .gp-metrics dd {
+        font-size: 13px;
+      }
+      .gp-card-extra summary {
+        justify-content: flex-start;
+        gap: 8px;
+      }
     }
     @media (max-width: 620px) {
       .gp-shell {
@@ -1805,6 +2039,7 @@ def _base_styles() -> str:
       }
       .gp-top-nav a,
       .gp-filter-row button { flex: 0 0 auto; }
+      .gp-kpis { display: none; }
       .gp-kpis,
       .gp-detail-kpis,
       .gp-metrics,

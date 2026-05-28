@@ -1532,7 +1532,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
 {app_head_meta()}
   <link rel="stylesheet" href="assets/service.css?v={app_asset_version()}">
   <style>
-    body {{ background: #f5f7fa; }}
+    body {{ background: #f7f7f8; }}
     .ktcu-shell {{ width: min(1200px, calc(100% - 28px)); margin: 0 auto; padding: 16px 0 calc(100px + env(safe-area-inset-bottom)); }}
     .ktcu-top {{ display: grid; gap: 14px; padding: 14px 0 12px; }}
     .ktcu-nav {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }}
@@ -1546,13 +1546,14 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-hero {{ display: grid; gap: 18px; padding: 18px 0 8px; }}
     .ktcu-title {{ display: grid; gap: 10px; }}
     .ktcu-title span {{ width: fit-content; border-left: 3px solid #1f6b63; padding-left: 8px; color: #164c46; font-size: 12px; font-weight: 800; }}
-    .ktcu-title h1 {{ margin: 0; color: var(--text); font-size: clamp(32px, 5vw, 62px); line-height: 1.02; letter-spacing: 0; }}
+    .ktcu-title h1 {{ margin: 0; color: var(--text); font-size: clamp(30px, 3.2vw, 44px); line-height: 1.08; letter-spacing: 0; }}
     .ktcu-title p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 15px; line-height: 1.68; }}
     .ktcu-quick {{ display: grid; gap: 8px; }}
     .ktcu-quick-item {{ border-left: 3px solid #c6923b; padding-left: 10px; color: var(--text); font-size: 13px; line-height: 1.5; }}
     .ktcu-quick-item strong {{ display: block; margin-bottom: 2px; font-size: 13px; }}
     .ktcu-kpis {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }}
-    .ktcu-kpi {{ min-width: 0; border: 1px solid var(--separator); border-radius: 8px; padding: 12px; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }}
+    .ktcu-kpis {{ border-top: 1px solid var(--separator); border-bottom: 1px solid var(--separator); }}
+    .ktcu-kpi {{ min-width: 0; border: 0; border-radius: 0; padding: 13px 0; background: transparent; box-shadow: none; }}
     .ktcu-kpi span {{ display: block; color: var(--secondary); font-size: 11.5px; font-weight: 700; }}
     .ktcu-kpi strong {{ display: block; margin-top: 5px; color: var(--text); font-size: 22px; line-height: 1.15; overflow-wrap: anywhere; }}
     .ktcu-tabbar {{ display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }}
@@ -1580,7 +1581,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-highlight-row em {{ color: var(--text); font-style: normal; font-weight: 700; line-height: 1.4; }}
     .ktcu-empty-note {{ margin: 0; color: var(--secondary); font-size: 13px; }}
     .ktcu-section-grid {{ display: grid; gap: 10px; margin-top: 12px; }}
-    .ktcu-panel {{ border: 1px solid var(--separator); border-radius: 8px; padding: 16px; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }}
+    .ktcu-panel {{ border: 0; border-top: 1px solid var(--separator); border-radius: 0; padding: 18px 0; background: transparent; box-shadow: none; }}
     .ktcu-panel h2 {{ margin: 0 0 11px; color: var(--text); font-size: 17px; line-height: 1.35; }}
     .ktcu-panel > p {{ margin: 0 0 12px; color: var(--secondary); font-size: 13px; line-height: 1.58; }}
     .ktcu-facts {{ display: grid; gap: 9px; margin: 0; }}
@@ -1677,7 +1678,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
         <div class="ktcu-title">
           <span>출자기관 프로필</span>
           <h1>{html_escape(lp_name)}</h1>
-          <p>{html_escape(lp_type)}의 투자 현황, 담당 조직, 출자공고 흐름을 공개자료 기준으로 정리했습니다. PE 관점에서는 핵심 창구({html_escape(default_team)})와 관심 자산군({html_escape(focus_label)})을 먼저 봅니다.</p>
+          <p>{html_escape(lp_type)}의 일반현황, 투자현황, 담당 조직, 출자공고 흐름을 공개자료 기준으로 정리합니다.</p>
           <div class="ktcu-quick">
             <div class="ktcu-quick-item"><strong>핵심 창구</strong>{html_escape(default_team)}</div>
             <div class="ktcu-quick-item"><strong>{html_escape(str(highlight_year))}년 활동</strong>{html_escape(activity_phrase)}</div>
@@ -1911,6 +1912,7 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
     source_count = int(item.get("source_count") or 0)
     latest = str(item.get("latest_event_date") or "-") or "-"
     amount = public_amount_label(item.get("allocation_amount_krw_100mn"), fallback="-")
+    amount_sort = safe_float(item.get("allocation_amount_krw_100mn"))
     homepage_url = str(item.get("homepage_url") or "")
     notice_url = str(item.get("notice_url") or "")
     profile_url = f"lp-{lp_code}.html" if lp_code else "lp-notices.html"
@@ -1926,22 +1928,23 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
         actions.append(f'<a href="{html_escape(homepage_url)}" target="_blank" rel="noreferrer">공식 홈페이지</a>')
     coverage = public_coverage_label(fact_count, source_count)
     search_blob = " ".join([lp_name, lp_type, ownership, default_team, focus])
-    return f"""          <article class="lp-directory-card" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(focus)}" data-kind="{html_escape(ownership)}">
+    return f"""          <article class="lp-directory-card" data-search="{html_escape(search_blob)}" data-name="{html_escape(lp_name)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(focus)}" data-kind="{html_escape(' '.join([lp_type, ownership]))}" data-notices="{notice_count}" data-amount="{amount_sort:.4f}" data-latest="{html_escape(latest)}">
             <div class="lp-directory-card-head">
               <span>{html_escape(lp_type)}</span>
               <strong>{html_escape(lp_name)}</strong>
             </div>
-            <p>{html_escape(default_team)} · {html_escape(focus)}</p>
-            <div class="lp-directory-chips">
-{chips}
-            </div>
+            <span class="lp-directory-kind">{html_escape(lp_type)}</span>
+            <p class="lp-directory-focus">{html_escape(focus)}</p>
+            <span class="lp-directory-latest">{html_escape(latest)}</span>
             <dl class="lp-directory-metrics">
               <div><dt>표시 공고</dt><dd>{notice_count}건</dd></div>
               <div><dt>공고 규모</dt><dd>{html_escape(amount)}</dd></div>
-              <div><dt>최신</dt><dd>{html_escape(latest)}</dd></div>
               <div><dt>자료 항목</dt><dd>{html_escape(coverage)}</dd></div>
             </dl>
             <div class="lp-page-actions">{"".join(actions)}</div>
+            <div class="lp-directory-chips">
+{chips}
+            </div>
           </article>"""
 
 
@@ -1979,31 +1982,68 @@ def render_lp_notices_page(
 {app_head_meta()}
   <link rel="stylesheet" href="assets/service.css?v={app_asset_version()}">
   <style>
-    body.lp-notices-page .app-shell {{ width: min(100%, 1220px); }}
-    body.lp-notices-page .content-area {{ display: block; width: min(1180px, 100%); margin: 0 auto; }}
+    body.lp-notices-page {{ background: #f7f7f8; }}
+    body.lp-notices-page .app-shell {{ width: min(100%, 1460px); background: #f7f7f8; }}
+    body.lp-notices-page .content-area {{ display: block; width: min(1400px, 100%); margin: 0 auto; }}
+    body.lp-notices-page .app-header {{ width: min(1400px, 100%); margin: 0 auto; }}
     .lp-profile-nav {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }}
     .lp-profile-nav a {{ display: inline-flex; min-height: 32px; align-items: center; border-radius: 999px; padding: 6px 10px; background: var(--surface-muted); color: var(--text); font-size: 12px; font-weight: 750; text-decoration: none; }}
-    .lp-directory-hero {{ display: grid; gap: 14px; margin-bottom: 14px; padding: 6px 0 4px; }}
-    .lp-directory-hero h1 {{ margin: 0; color: var(--text); font-size: clamp(32px, 5vw, 58px); line-height: 1.02; letter-spacing: 0; }}
-    .lp-directory-hero p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 14px; line-height: 1.65; }}
+    .lp-directory-hero {{ display: grid; gap: 18px; margin: 18px 0 18px; padding: 6px 0 4px; }}
+    .lp-directory-hero h1 {{ margin: 0; color: var(--text); font-size: clamp(30px, 3.2vw, 44px); line-height: 1.08; letter-spacing: 0; }}
+    .lp-directory-hero p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 14px; line-height: 1.62; }}
     .lp-directory-kpis {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
     .lp-directory-kpis div {{ border: 1px solid var(--separator); border-radius: 8px; padding: 11px; background: var(--surface); }}
     .lp-directory-kpis span {{ display: block; color: var(--secondary); font-size: 11.5px; font-weight: 800; }}
     .lp-directory-kpis strong {{ display: block; margin-top: 4px; color: var(--text); font-size: 20px; line-height: 1.2; }}
-    .lp-directory-grid {{ display: grid; gap: 10px; margin-bottom: 16px; }}
-    .lp-directory-card {{ display: grid; gap: 10px; border: 1px solid var(--separator); border-radius: 8px; padding: 14px; background: var(--surface); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }}
+    .lp-directory-table,
+    .lp-notice-table {{ overflow: hidden; border: 1px solid var(--separator); border-radius: 8px; background: var(--surface); }}
+    .lp-directory-head {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 82px 74px;
+      gap: 8px;
+      align-items: center;
+      min-height: 44px;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--separator);
+      background: #f0f1f2;
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 850;
+      text-align: right;
+    }}
+    .lp-directory-head span:first-child {{ text-align: center; }}
+    .lp-directory-head span:nth-child(2),
+    .lp-directory-head span:nth-child(3),
+    .lp-directory-head span:nth-child(6) {{ display: none; }}
+    .lp-directory-head span:nth-child(5) {{ font-size: 0; }}
+    .lp-directory-head span:nth-child(5)::after {{ content: "표시 공고"; font-size: 12px; }}
+    .lp-notice-head {{ display: none; }}
+    .lp-directory-grid {{ display: grid; gap: 0; margin-bottom: 16px; }}
+    .lp-directory-card {{ display: grid; grid-template-columns: minmax(0, 1fr) 82px 74px; gap: 8px; align-items: center; min-height: 78px; border-bottom: 1px solid var(--separator); padding: 11px 10px; background: var(--surface); }}
+    .lp-directory-card:last-child {{ border-bottom: 0; }}
     .lp-directory-card-head {{ display: grid; gap: 4px; }}
     .lp-directory-card-head span {{ width: fit-content; border-radius: 999px; padding: 4px 8px; background: #e7f4f1; color: #164c46; font-size: 11px; font-weight: 800; }}
     .lp-directory-card-head strong {{ color: var(--text); font-size: 18px; line-height: 1.25; }}
-    .lp-directory-card p {{ margin: 0; color: var(--secondary); font-size: 13px; line-height: 1.5; }}
-    .lp-directory-chips {{ display: flex; flex-wrap: wrap; gap: 6px; }}
+    .lp-directory-kind,
+    .lp-directory-latest {{ color: var(--secondary); font-size: 13px; font-weight: 750; line-height: 1.45; }}
+    .lp-directory-kind,
+    .lp-directory-focus,
+    .lp-directory-card > .lp-page-actions,
+    .lp-directory-chips {{ display: none; }}
+    .lp-directory-latest {{ text-align: right; }}
+    .lp-directory-card p,
+    .lp-directory-focus {{ margin: 0; color: var(--secondary); font-size: 13px; line-height: 1.5; }}
+    .lp-directory-chips {{ flex-wrap: wrap; gap: 6px; }}
     .lp-directory-chips span {{ border: 1px solid var(--separator); border-radius: 999px; padding: 5px 8px; background: #fbfcfd; color: var(--text); font-size: 11.5px; font-weight: 750; }}
-    .lp-directory-metrics {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin: 0; }}
-    .lp-directory-metrics div {{ min-width: 0; border-top: 1px solid var(--separator); padding-top: 8px; }}
-    .lp-directory-metrics dt {{ color: var(--secondary); font-size: 11px; font-weight: 800; }}
-    .lp-directory-metrics dd {{ margin: 3px 0 0; color: var(--text); font-size: 13px; font-weight: 800; overflow-wrap: anywhere; }}
+    .lp-directory-metrics {{ display: block; margin: 0; text-align: right; }}
+    .lp-directory-metrics div:not(:first-child) {{ display: none; }}
+    .lp-directory-metrics dt {{ display: none; }}
+    .lp-directory-metrics dd {{ margin: 0; color: var(--text); font-size: 13px; font-weight: 800; overflow-wrap: anywhere; }}
     .lp-notice-toolbar {{ display: grid; gap: 9px; margin-bottom: 12px; }}
+    .lp-control-head {{ display: flex; gap: 10px; align-items: center; justify-content: space-between; color: var(--secondary); font-size: 12px; font-weight: 850; }}
+    .lp-control-line {{ display: grid; gap: 8px; }}
     .lp-notice-toolbar input {{ width: 100%; min-height: 42px; border: 1px solid var(--separator); border-radius: 8px; padding: 8px 11px; background: var(--surface); color: var(--text); font-size: 14px; }}
+    .lp-notice-toolbar select {{ width: 100%; min-height: 42px; border: 1px solid var(--separator); border-radius: 8px; padding: 8px 11px; background: var(--surface); color: var(--text); font-size: 14px; }}
     .lp-filter-row {{ display: flex; flex-wrap: wrap; gap: 7px; }}
     .lp-filter-row button {{ border: 1px solid var(--separator); border-radius: 999px; padding: 7px 10px; background: var(--surface); color: var(--secondary); font-size: 12px; font-weight: 800; cursor: pointer; }}
     .lp-filter-row button.active {{ border-color: #1f6b63; background: #e7f4f1; color: #164c46; }}
@@ -2016,11 +2056,126 @@ def render_lp_notices_page(
     .lp-page-actions {{ display: flex; flex-wrap: wrap; gap: 8px; }}
     .lp-page-actions a {{ display: inline-flex; min-height: 32px; align-items: center; border-radius: 999px; padding: 6px 10px; background: var(--surface-muted); color: var(--text); font-size: 12px; font-weight: 650; text-decoration: none; }}
     @media (min-width: 760px) {{
+      body.lp-notices-page .app-shell {{ margin-top: 0; margin-bottom: 0; min-height: 100vh; border-radius: 0; box-shadow: none; }}
       .lp-directory-hero {{ grid-template-columns: minmax(0, 1fr) minmax(320px, 0.7fr); align-items: end; }}
       .lp-directory-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .lp-control-line {{ grid-template-columns: minmax(0, 1fr) 210px; }}
     }}
-    @media (min-width: 960px) {{ .lp-page-list {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} .lp-directory-grid {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }} }}
+    @media (min-width: 960px) {{
+      body.lp-notices-page .bottom-nav {{
+        position: static;
+        width: min(720px, 100%);
+        max-width: 100%;
+        transform: none;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 4px;
+        margin: 28px auto 0;
+        border: 1px solid rgba(0,0,0,0.08);
+        border-radius: 999px;
+        padding: 5px;
+        background: rgba(255,255,255,0.94);
+        box-shadow: 0 12px 34px rgba(15,23,42,0.12);
+      }}
+      body.lp-notices-page .bottom-nav a {{
+        min-height: 34px;
+        flex-direction: row;
+        gap: 5px;
+        border-radius: 999px;
+        padding: 0 10px;
+        font-size: 12px;
+      }}
+      body.lp-notices-page .bottom-nav .active {{
+        background: #f3eee9;
+        color: #5f4636;
+      }}
+      body.lp-notices-page .nav-dot {{
+        display: none;
+      }}
+      .lp-directory-table,
+      .lp-notice-table {{ border: 1px solid var(--separator); background: var(--surface); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }}
+      .lp-directory-head {{
+        display: grid;
+        grid-template-columns: minmax(220px, 1.15fr) minmax(120px, 0.58fr) minmax(260px, 1.25fr) minmax(92px, 0.42fr) minmax(250px, 1.1fr) minmax(160px, 0.72fr);
+        gap: 18px;
+        align-items: center;
+        min-height: 48px;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--separator);
+        background: #f0f1f2;
+        color: var(--secondary);
+        font-size: 12px;
+        font-weight: 850;
+        text-align: left;
+      }}
+      .lp-directory-head span {{
+        display: block;
+      }}
+      .lp-directory-head span:first-child {{
+        text-align: left;
+      }}
+      .lp-directory-head span:nth-child(5) {{
+        font-size: 12px;
+      }}
+      .lp-directory-head span:nth-child(5)::after {{
+        content: none;
+      }}
+      .lp-directory-grid {{ grid-template-columns: minmax(0, 1fr); gap: 0; margin-bottom: 0; }}
+      .lp-directory-card {{
+        grid-template-columns: minmax(220px, 1.15fr) minmax(120px, 0.58fr) minmax(260px, 1.25fr) minmax(92px, 0.42fr) minmax(250px, 1.1fr) minmax(160px, 0.72fr);
+        gap: 18px;
+        align-items: center;
+        border: 0;
+        border-bottom: 1px solid var(--separator);
+        border-radius: 0;
+        padding: 16px 18px;
+        box-shadow: none;
+      }}
+      .lp-directory-card:last-child {{ border-bottom: 0; }}
+      .lp-directory-card-head span {{ background: #f5f5f5; color: var(--secondary); }}
+      .lp-directory-card-head strong {{ font-size: 16px; }}
+      .lp-directory-kind {{ display: inline; text-align: left; }}
+      .lp-directory-focus {{ color: var(--text); }}
+      .lp-directory-focus {{ display: block; }}
+      .lp-directory-metrics {{
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        text-align: left;
+      }}
+      .lp-directory-metrics div:not(:first-child) {{ display: block; }}
+      .lp-directory-metrics div {{ border-top: 0; padding-top: 0; }}
+      .lp-directory-metrics dt {{ display: block; }}
+      .lp-directory-card > .lp-page-actions {{ display: flex; }}
+      .lp-directory-chips {{ display: none; }}
+      .lp-notice-head {{
+        display: grid;
+        grid-template-columns: minmax(360px, 1.4fr) minmax(320px, 1fr) minmax(160px, 0.42fr);
+        gap: 18px;
+        align-items: center;
+        min-height: 48px;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--separator);
+        background: #f0f1f2;
+        color: var(--secondary);
+        font-size: 12px;
+        font-weight: 850;
+      }}
+      .lp-page-list {{ grid-template-columns: minmax(0, 1fr); gap: 0; }}
+      .lp-page-card {{
+        grid-template-columns: minmax(360px, 1.4fr) minmax(320px, 1fr) minmax(160px, 0.42fr);
+        gap: 18px;
+        align-items: center;
+        border: 0;
+        border-bottom: 1px solid var(--separator);
+        border-radius: 0;
+        padding: 15px 18px;
+      }}
+      .lp-page-card:last-child {{ border-bottom: 0; }}
+      .lp-page-card h2 {{ font-size: 14px; }}
+    }}
     @media (max-width: 620px) {{
+      .lp-directory-hero {{ margin: 10px 0 14px; }}
+      .lp-directory-kpis {{ display: none; }}
       .lp-profile-nav {{ flex-wrap: nowrap; overflow-x: auto; padding-bottom: 3px; }}
       .lp-profile-nav a {{ flex: 0 0 auto; }}
       .lp-page-card h2 {{ overflow-wrap: anywhere; }}
@@ -2062,25 +2217,54 @@ def render_lp_notices_page(
       </nav>
       <section class="section-block" id="lpDirectory" aria-label="출자기관 목록">
         <div class="lp-notice-toolbar">
-          <input type="search" id="lpNoticeSearch" placeholder="LP명, 유형, 자산군, 공고명, GP 검색">
+          <div class="lp-control-head">
+            <label for="lpNoticeSearch">출자기관 검색</label>
+            <span id="lpVisibleCount">{tracked_count}개 표시</span>
+          </div>
+          <div class="lp-control-line">
+            <input type="search" id="lpNoticeSearch" placeholder="LP명, 유형, 자산군, 공고명, GP 검색">
+            <select id="lpSort" aria-label="정렬">
+              <option value="latest">최근 공고일순</option>
+              <option value="amount">공고 규모순</option>
+              <option value="notices">표시 공고 많은 순</option>
+              <option value="name">기관명순</option>
+            </select>
+          </div>
           <div class="lp-filter-row" aria-label="LP 디렉토리 필터">
             <button class="active" type="button" data-filter="all">전체</button>
-            <button type="button" data-filter="public">공적 LP</button>
-            <button type="button" data-filter="mutual_aid">공제회</button>
+            <button type="button" data-filter="공공">공공 LP</button>
+            <button type="button" data-filter="공제">공제회</button>
             <button type="button" data-filter="PEF">PEF</button>
             <button type="button" data-filter="VC">VC</button>
             <button type="button" data-filter="new_notice">신규 공고</button>
             <button type="button" data-filter="final_selection">선정</button>
           </div>
         </div>
-        <div class="lp-directory-grid">
+        <div class="lp-directory-table">
+          <div class="lp-directory-head" aria-hidden="true">
+            <span>출자기관명</span>
+            <span>유형</span>
+            <span>주요 자산군</span>
+            <span>최근 공고</span>
+            <span>표시 공고</span>
+            <span>이동</span>
+          </div>
+          <div class="lp-directory-grid">
 {directory_cards}
+          </div>
         </div>
       </section>
       <section class="section-block" id="lpNotices" aria-label="LP 공식 공고">
         <h2 class="section-title">최근 공식 공고</h2>
-        <div class="lp-page-list">
+        <div class="lp-notice-table">
+          <div class="lp-notice-head" aria-hidden="true">
+            <span>공고명</span>
+            <span>기관/조건</span>
+            <span>이동</span>
+          </div>
+          <div class="lp-page-list">
 {notice_cards}
+          </div>
         </div>
       </section>
     </main>
@@ -2111,20 +2295,46 @@ def render_lp_notices_page(
   <script>
     (() => {{
       const input = document.getElementById("lpNoticeSearch");
+      const sort = document.getElementById("lpSort");
+      const directory = document.querySelector(".lp-directory-grid");
+      const visible = document.getElementById("lpVisibleCount");
       const buttons = Array.from(document.querySelectorAll("[data-filter]"));
-      const cards = Array.from(document.querySelectorAll(".lp-directory-card, .lp-page-card"));
+      const directoryCards = Array.from(document.querySelectorAll(".lp-directory-card"));
+      const noticeCards = Array.from(document.querySelectorAll(".lp-page-card"));
+      const cards = [...directoryCards, ...noticeCards];
       let active = "all";
+      const num = (card, key) => {{
+        const value = Number(card.dataset[key]);
+        return Number.isFinite(value) ? value : 0;
+      }};
+      const applySort = () => {{
+        const mode = sort?.value || "latest";
+        const sorted = [...directoryCards].sort((a, b) => {{
+          if (mode === "amount") return num(b, "amount") - num(a, "amount");
+          if (mode === "notices") return num(b, "notices") - num(a, "notices");
+          if (mode === "name") return (a.dataset.name || "").localeCompare(b.dataset.name || "", "ko");
+          return (b.dataset.latest || "").localeCompare(a.dataset.latest || "");
+        }});
+        sorted.forEach((card) => directory?.appendChild(card));
+      }};
       const apply = () => {{
         const query = (input?.value || "").trim().toLowerCase();
+        let count = 0;
         cards.forEach((card) => {{
           const haystack = (card.dataset.search || card.innerText).toLowerCase();
           const fields = [card.dataset.asset, card.dataset.event, card.dataset.lp, card.dataset.kind].filter(Boolean);
           const filterHit = active === "all" || fields.includes(active) || fields.some((field) => field.includes(active));
           const queryHit = !query || haystack.includes(query);
           card.style.display = filterHit && queryHit ? "" : "none";
+          if (card.classList.contains("lp-directory-card") && filterHit && queryHit) count += 1;
         }});
+        if (visible) visible.textContent = `${{count.toLocaleString("ko-KR")}}개 표시`;
       }};
       input?.addEventListener("input", apply);
+      sort?.addEventListener("change", () => {{
+        applySort();
+        apply();
+      }});
       buttons.forEach((button) => {{
         button.addEventListener("click", () => {{
           active = button.dataset.filter || "all";
@@ -2132,6 +2342,8 @@ def render_lp_notices_page(
           apply();
         }});
       }});
+      applySort();
+      apply();
     }})();
   </script>
 </body>
