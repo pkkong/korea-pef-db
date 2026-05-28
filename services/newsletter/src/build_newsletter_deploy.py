@@ -103,6 +103,7 @@ from build_service_site import (  # noqa: E402
     article_payload_rows,
     app_asset_version,
     app_head_meta,
+    brief_markdown_path,
     brief_count_label,
     build,
     compact_date,
@@ -322,7 +323,7 @@ def add_title_matched_lp_article_context(
         return
     seen_dates = {str(entry.get("reportDate") or "") for entry in archive_entries if entry.get("reportDate")}
     for report_date in seen_dates:
-        markdown_path = DEFAULT_EXPORT_DIR / f"daily_news_brief_{compact_date(report_date)}.md"
+        markdown_path = brief_markdown_path(DEFAULT_EXPORT_DIR, report_date)
         if not markdown_path.exists():
             continue
         for row in parse_brief(markdown_path):
@@ -369,7 +370,7 @@ def refresh_archive_entries_with_context(
     refreshed: list[dict[str, object]] = []
     for entry in archive_entries:
         report_date = str(entry.get("reportDate") or "")
-        markdown_path = DEFAULT_EXPORT_DIR / f"daily_news_brief_{compact_date(report_date)}.md"
+        markdown_path = brief_markdown_path(DEFAULT_EXPORT_DIR, report_date)
         if not report_date or not markdown_path.exists():
             refreshed.append(entry)
             continue
@@ -2252,7 +2253,7 @@ def archive_article_count(archive_entries: list[dict[str, object]], report_date:
 
 
 def rewrite_site_archive(site_dir: Path, report_date: str, archive_entries: list[dict[str, object]]) -> None:
-    markdown_path = DEFAULT_EXPORT_DIR / f"daily_news_brief_{compact_date(report_date)}.md"
+    markdown_path = brief_markdown_path(DEFAULT_EXPORT_DIR, report_date)
     articles = parse_brief(markdown_path)
     basis_text = parse_brief_basis(markdown_path)
     service_context = read_service_context(DEFAULT_SERVICE_INTEGRATION_WORKLIST)

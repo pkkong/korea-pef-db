@@ -278,8 +278,8 @@ def weekday_label(report_date: str) -> str:
 
 def latest_report_date(out_dir: Path, fallback: str) -> str:
     candidates: list[str] = []
-    for path in out_dir.glob("daily_news_brief_*.md"):
-        match = re.fullmatch(r"daily_news_brief_(\d{8})\.md", path.name)
+    for path in [*out_dir.glob("daily_news_final_*.md"), *out_dir.glob("daily_news_brief_*.md")]:
+        match = re.fullmatch(r"daily_news_(?:final|brief)_(\d{8})\.md", path.name)
         if match:
             raw = match.group(1)
             candidates.append(f"{raw[:4]}-{raw[4:6]}-{raw[6:]}")
@@ -288,13 +288,21 @@ def latest_report_date(out_dir: Path, fallback: str) -> str:
 
 def report_dates(out_dir: Path) -> list[str]:
     dates: list[str] = []
-    for path in out_dir.glob("daily_news_brief_*.md"):
-        match = re.fullmatch(r"daily_news_brief_(\d{8})\.md", path.name)
+    for path in [*out_dir.glob("daily_news_final_*.md"), *out_dir.glob("daily_news_brief_*.md")]:
+        match = re.fullmatch(r"daily_news_(?:final|brief)_(\d{8})\.md", path.name)
         if not match:
             continue
         raw = match.group(1)
         dates.append(f"{raw[:4]}-{raw[4:6]}-{raw[6:]}")
     return sorted(set(dates), reverse=True)
+
+
+def brief_markdown_path(out_dir: Path, report_date: str) -> Path:
+    compact = compact_date(report_date)
+    final_path = out_dir / f"daily_news_final_{compact}.md"
+    if final_path.exists():
+        return final_path
+    return out_dir / f"daily_news_brief_{compact}.md"
 
 
 def parse_brief(markdown_path: Path) -> list[dict[str, str]]:
@@ -303,6 +311,7 @@ def parse_brief(markdown_path: Path) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     current_section = ""
     last_row: dict[str, str] | None = None
+    is_finalized = markdown_path.name.startswith("daily_news_final_")
     for raw_line in markdown_path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         section_match = SECTION_HEADER_RE.match(line)
@@ -317,6 +326,7 @@ def parse_brief(markdown_path: Path) -> list[dict[str, str]]:
                 "title": clean_news_title(article_match.group("title")),
                 "url": article_match.group("url"),
                 "source": "",
+                "finalized": "1" if is_finalized else "",
             }
             rows.append(last_row)
             continue
@@ -590,6 +600,8 @@ def legacy_section_to_current(raw_section: str, title_text: str) -> str:
 def editorial_section(row: dict[str, str]) -> str:
     title = row.get("title", "")
     raw_section = row.get("section", "")
+    if row.get("finalized") == "1" and raw_section in EDITORIAL_SECTIONS:
+        return raw_section
     title_text = title
     combined = f"{title_text} {raw_section}"
     if has_national_growth_fund_theme(title_text, raw_section):
@@ -1071,7 +1083,7 @@ def build_archive_payload(
         dates = dates[:archive_limit]
     payload: list[dict[str, object]] = []
     for report_date in dates:
-        markdown_path = out_dir / f"daily_news_brief_{compact_date(report_date)}.md"
+        markdown_path = brief_markdown_path(out_dir, report_date)
         rows = parse_brief(markdown_path)
         payload.append(
             {
@@ -2954,7 +2966,7 @@ def build(
 ) -> dict[str, str]:
     if not report_date:
         report_date = latest_report_date(out_dir, today_seoul())
-    markdown_path = out_dir / f"daily_news_brief_{compact_date(report_date)}.md"
+    markdown_path = brief_markdown_path(out_dir, report_date)
     articles = parse_brief(markdown_path)
     basis_text = parse_brief_basis(markdown_path)
     service_context = merge_service_context(

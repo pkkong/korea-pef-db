@@ -563,6 +563,58 @@ def test_private_credit_market_commentary_is_market() -> None:
         assert editorial_section({"title": str(row["title"]), "section": str(row["section_tags"])}) == "Market"
 
 
+def test_private_credit_conference_is_market_not_lp() -> None:
+    row = {
+        "publisher": "한국경제",
+        "title": "먼로캐피탈 \"자산유동화대출은 일시적 유행 아닌 대체투자 핵심 대안\"[ASK 2026]",
+        "summary_text": (
+            "먼로캐피탈 매니징 디렉터가 자산 담보 대출과 사모대출 시장을 설명하고 "
+            "글로벌 운용사의 저신용자 소비자금융 투자를 경계해야 한다고 말했다."
+        ),
+        "relevance_score": 7,
+        "section_tags": "Credit",
+        "topic_tags": "Credit,LP,Market,daily,private_credit",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://marketinsight.hankyung.com/article/202605271565r",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "Market"
+
+
+def test_gp_named_venture_mother_fund_start_is_gp() -> None:
+    row = {
+        "publisher": "딜사이트",
+        "title": "키움인베 600억 벤처모펀드 출격",
+        "summary_text": "12개 GP에 600억 중 400억 출자하고 프로젝트펀드에도 자금을 배정한다.",
+        "relevance_score": 6,
+        "section_tags": "Market",
+        "topic_tags": "GP,LP,daily,publisher_watch",
+        "document_type_tags": "",
+        "gp_names": "키움인베스트먼트",
+        "source_url": "https://dealsite.co.kr/articles/162594",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "GP"
+
+
+def test_finalized_markdown_section_is_preserved_for_public_site() -> None:
+    assert editorial_section(
+        {
+            "title": "먼로캐피탈 \"자산유동화대출은 일시적 유행 아닌 대체투자 핵심 대안\"[ASK 2026]",
+            "section": "Market",
+            "finalized": "1",
+        }
+    ) == "Market"
+    assert editorial_section(
+        {
+            "title": "키움인베 600억 벤처모펀드 출격",
+            "section": "GP",
+            "finalized": "1",
+        }
+    ) == "GP"
+
+
 def test_company_gap_titles_keep_expected_sections_and_quality() -> None:
     cases = [
         (
@@ -1275,6 +1327,9 @@ def main() -> int:
         test_gp_fundraising_and_deal_financing_sections,
         test_specific_credit_transaction_stays_deal,
         test_private_credit_market_commentary_is_market,
+        test_private_credit_conference_is_market_not_lp,
+        test_gp_named_venture_mother_fund_start_is_gp,
+        test_finalized_markdown_section_is_preserved_for_public_site,
         test_company_gap_titles_keep_expected_sections_and_quality,
         test_company_gap_keyword_rules_cover_ai_fund_lp_scope_and_private_debt,
         test_render_markdown_uses_canonical_article_url,

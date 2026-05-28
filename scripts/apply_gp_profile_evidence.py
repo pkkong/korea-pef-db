@@ -126,6 +126,42 @@ def validate_row(row: dict[str, str]) -> None:
         raise ValueError(f"Missing source_grade for {field_name}: {row}")
 
 
+def validate_no_conflicting_values(
+    resolved_rows: list[tuple[int, str, str, dict[str, str]]],
+) -> None:
+    values_by_field: dict[tuple[int, str], dict[str, set[str]]] = {}
+    names_by_gp_id: dict[int, str] = {}
+    for gp_id, _gp_profile_id, standard_gp_name, row in resolved_rows:
+        field_name = row["field_name"]
+        field_value = row["field_value"]
+        names_by_gp_id[gp_id] = standard_gp_name
+        source_titles = values_by_field.setdefault((gp_id, field_name), {}).setdefault(
+            field_value,
+            set(),
+        )
+        source_titles.add(row.get("source_title", ""))
+
+    conflicts: list[str] = []
+    for (gp_id, field_name), values in sorted(values_by_field.items()):
+        if len(values) <= 1:
+            continue
+        value_list = "; ".join(
+            f"{value} [{', '.join(sorted(title for title in titles if title))}]"
+            for value, titles in sorted(values.items())
+        )
+        conflicts.append(
+            f"source_gp_id={gp_id} standard_gp_name={names_by_gp_id.get(gp_id, '')} "
+            f"field_name={field_name}: {value_list}"
+        )
+    if conflicts:
+        raise ValueError(
+            "Conflicting active GP profile evidence rows found. "
+            "Mark superseded rows with skip=1 or move imprecise firm facts "
+            "to firm_founded_* fields:\n"
+            + "\n".join(conflicts)
+        )
+
+
 def value_for_db(field_name: str, field_value: str) -> object:
     if field_name == "firm_founded_year":
         return int(field_value)
@@ -330,6 +366,7 @@ def apply(db_path: Path, evidence_path: Path) -> dict[str, int]:
             resolved_rows.append((gp_id, gp_profile_id, standard_gp_name, row))
 
         touched_gp_ids = sorted({gp_id for gp_id, _, _, _ in resolved_rows})
+        validate_no_conflicting_values(resolved_rows)
         clear_existing_manual_data(conn, touched_gp_ids, applied_at)
 
         for gp_id, gp_profile_id, standard_gp_name, row in resolved_rows:

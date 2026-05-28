@@ -1132,6 +1132,7 @@ SECTION_KEYWORDS = {
         "프라이빗크레딧",
         "private credit",
         "사모대출",
+        "자산유동화대출",
         "대출펀드",
         "인수금융",
         "리캡",
@@ -1435,7 +1436,48 @@ def has_ai_pe_theme(title: str, text: str) -> bool:
 
 
 def title_has_non_ai_lp_priority(title: str) -> bool:
-    return has_explicit_lp_focus_signal(title) and not has_ai_signal(title)
+    if has_ai_signal(title):
+        return False
+    return contains_any_keyword(
+        title,
+        [
+            "LP",
+            "LP들",
+            "Limited Partner",
+            "출자자",
+            "기관투자가",
+            "연기금",
+            "공제회",
+            "국민연금",
+            "사학연금",
+            "교직원공제",
+            "행정공제",
+            "군인공제",
+            "새마을금고",
+            "중소기업중앙회",
+            "노란우산공제",
+            "KIC",
+            "한국투자공사",
+            "국부펀드",
+            "CIO",
+            "자산운용본부",
+            "자산운용본부장",
+            "출자사업",
+            "출자공고",
+            "위탁운용",
+            "운용사 선정",
+            "출자확약",
+            "커밋먼트",
+            "RFP",
+            "mandate",
+            "앵커 출자",
+            "모태펀드",
+            "민간모펀드",
+            "벤처모펀드",
+            "성장금융",
+            "한국벤처투자",
+        ],
+    )
 
 
 def has_national_growth_fund_theme(title: str, raw_sections: list[str] | None = None) -> bool:
@@ -1583,6 +1625,15 @@ def primary_section(row: dict[str, object]) -> str:
     )
     if has_national_growth_fund_theme(title, raw_sections):
         return "NationalGrowthFund"
+    if has_fundraising_title_signal(title) and (
+        str(row.get("gp_names", "")).strip() or "GP" in topics or has_gp_focus_signal(title)
+    ):
+        return "GP"
+    if has_credit_signal(title) and (
+        has_market_commentary_signal(content)
+        or contains_any_keyword(content, ["ASK 2026", "GAIC 2026", "컨퍼런스", "콘퍼런스"])
+    ):
+        return "Market"
     if has_explicit_lp_focus_signal(title) and contains_any_keyword(title, ["LP", "LP들", "KIC", "한국투자공사", "국부펀드", "CIO"]):
         return "LP"
     if title_has_non_ai_lp_priority(title):

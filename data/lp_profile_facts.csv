@@ -117,3 +117,12 @@ poba,investment_org,투자전략실,기업투자팀·크레딧투자팀·주식�
 poba,investment_governance,운영위원회,전략적 자산배분과 대체투자 단위사업당 투자한도 초과집행 등을 심의·의결,,대한지방행정공제회 자산운용 관련 위원회,https://poba.or.kr/mno/mno01/mno0105/mno010501?menuseq=149,high,공식 위원회 설명 기준,10,1
 poba,investment_governance,투자심의위원회,대체투자와 파생상품 투자 등에 관한 의사결정 기구,,대한지방행정공제회 자산운용 관련 위원회,https://poba.or.kr/mno/mno01/mno0105/mno010501?menuseq=149,high,공식 위원회 설명 기준,20,1
 poba,data_gap,공개자료 한계,세부 자산운용 계획은 운용업무 공정성 및 금융시장 안정 우려로 공개 제한,2026-05-27,대한지방행정공제회 자산운용 계획,https://poba.or.kr/mno/mno01/mno0105/mno010501?menuseq=149,medium,공식 공개 제한 문구 기준,10,1
+kafi,general,기관 목적,정부 농업 정책자금을 효율적으로 운용·관리·감독해 농식품산업 발전에 기여,,농식품 투자정보 플랫폼 ASSIST 농금원 안내,https://assist.apfs.kr/usr/inform/intro/openAPFS.do,high,공식 농금원 안내 기준,10,1
+kafi,general,주요 사업,농업재해보험 사업관리·농림수산식품모태펀드관리·농림수산정책자금관리,,농식품 투자정보 플랫폼 ASSIST 농금원 안내,https://assist.apfs.kr/usr/inform/intro/openAPFS.do,high,공식 농금원 안내 기준,20,1
+kafi,general,소재지,"서울특별시 영등포구 여의공원로 101, 2층 201호",,농식품 투자정보 플랫폼 ASSIST 농금원 안내,https://assist.apfs.kr/usr/inform/intro/openAPFS.do,high,공식 찾아오시는 길 기준,30,1
+kafi,investment_status,모태펀드 사업목적,농림수산식품 모태펀드 조성 및 출자를 통해 농어업 분야 투자재원을 마련,,농식품 투자정보 플랫폼 ASSIST 농금원 안내,https://assist.apfs.kr/usr/inform/intro/openAPFS.do,high,공식 모태펀드관리 사업목적 기준,10,1
+kafi,investment_org,모태펀드 주요 업무,출자계획 수립·경영체 지원·운용사 선정 및 사후관리·리스크관리,,농식품 투자정보 플랫폼 ASSIST 농금원 안내,https://assist.apfs.kr/usr/inform/intro/openAPFS.do,high,공식 모태펀드관리 주요 업무 기준,10,1
+kafi,investment_org,투자지원센터,가온누리 인베지움은 농림수산식품 모태펀드 투자 지원사업을 총괄하는 투자지원센터,,농식품 투자정보 플랫폼 ASSIST 농금원 안내,https://assist.apfs.kr/usr/inform/intro/openAPFS.do,high,공식 투자지원센터 소개 기준,20,1
+kafi,investment_governance,추진 체계,농식품부·해수부가 운용지침 마련 및 출자하고 농금원이 운용계획 수립·출자공고·투자조합 심사 및 선정을 담당,,농식품 투자정보 플랫폼 ASSIST 농금원 안내,https://assist.apfs.kr/usr/inform/intro/openAPFS.do,high,공식 사업 추진체계 기준,10,1
+kafi,notice_history,2023년 정기 출자사업,2023-02-20 공고·농식품 및 수산 계정 출자사업·제안서 접수마감 2023-03-17,2023-02-20,농업정책보험금융원 공지사항,https://www.apfs.kr/front/board/boardContentsView.do?boardId=10026&contId=13423&menuId=41,high,공식 출자사업 공고 기준,10,1
+kafi,data_gap,공개자료 한계,공식 APFS 공지와 VCS 백업 공고를 같은 notice_id로 묶는 정규화 및 첨부파일 추출 품질 점검 필요,2026-05-28,농업정책보험금융원 공지사항,https://www.apfs.kr/front/board/boardContentsListPage.do?boardId=10026&menuId=5386&selTab=1,medium,공식 채널과 백업 채널 중복 관리 대상,10,1
