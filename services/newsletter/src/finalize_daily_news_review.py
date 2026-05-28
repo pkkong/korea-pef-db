@@ -52,6 +52,14 @@ def include_row(row: dict[str, str]) -> bool:
     return row.get("include_in_brief", "").strip().upper() == "Y"
 
 
+def display_url(row: dict[str, str]) -> str:
+    normalized = (row.get("normalized_source_url") or "").strip()
+    source = (row.get("source_url") or "").strip()
+    if normalized and not normalized.startswith("https://news.google.com/"):
+        return normalized
+    return source
+
+
 def final_rows(review_file: Path) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     seen_urls: set[str] = set()
@@ -91,7 +99,7 @@ def render_markdown(report_date: str, rows: list[dict[str, str]]) -> str:
         lines.append(f"[{SECTION_LABELS.get(section, section)}]")
         for row in section_rows:
             title = row.get("title", "")
-            url = row.get("source_url", "")
+            url = display_url(row)
             publisher = row.get("publisher", "")
             lines.append(f"- [{title}]({url})")
             if publisher:
@@ -118,7 +126,7 @@ def render_html(report_date: str, rows: list[dict[str, str]]) -> str:
                   {source}
                 </li>
                 """.strip().format(
-                    url=html_escape(row.get("source_url", "")),
+                    url=html_escape(display_url(row)),
                     title=html_escape(row.get("title", "")),
                     source=f"<span class=\"source\">출처: {html_escape(publisher)}</span>" if publisher else "",
                 )

@@ -1174,7 +1174,7 @@ def test_company_clipping_keyword_gaps_are_scored() -> None:
         ("[카카오게임즈 매각] 3000억 수혈의 그늘…다가올 변수는", 3, "Deal"),
         ("[LP Scope] 李정부 발맞춘 IBK…하반기도 1500억 더 푼다", 4, "LP"),
         ("스톤브릿지 AI펀드 러브콜…3400억으로 70% 증액", 6, "GP"),
-        ("티케하우캐피탈 사모대출 시장 경고등…세컨더리 투자 주목해야", 3, "Market"),
+        ("티케하우캐피탈 사모대출 시장 경고등…세컨더리 투자 주목해야", 3, "Credit"),
     ]
     for title, minimum_score, expected_topic in cases:
         result = score_document(title, "", "", rules, [])

@@ -73,6 +73,7 @@ gp_kcgi_asset_management,title_or_excerpt,contains,KCGI자산운용,3,topic,GP,K
 gp_opus_nh_pe,title_or_excerpt,contains,오퍼스-NH PE,4,topic,GP,오퍼스-NH PE 관련 GP 기사입니다.,1,Named GP safety net
 lp_asset_management_head,title_or_excerpt,contains,자산운용본부장,4,topic,LP,LP 자산운용 조직 인사 또는 채용 기사입니다.,1,LP personnel and allocator operations keyword
 lp_cio,title_or_excerpt,contains,CIO,2,topic,LP,LP 또는 금융사 투자책임자 인사 기사일 수 있습니다.,1,LP people and allocator operations keyword
+lp_cio_recruitment,title_or_excerpt,regex,CIO.*공개모집|공개모집.*CIO,3,topic,LP,LP 투자책임자 공개모집 기사입니다.,1,LP people and governance keyword
 lp_mutual_aid_chair,title_or_excerpt,contains,공제회 신임 이사장,3,topic,LP,공제회 거버넌스 또는 자산운용 의사결정권자 인사입니다.,1,LP people and governance keyword
 lp_big_money_leadership,title_or_excerpt,contains,큰손 사령탑,2,topic,LP,연기금·공제회 등 대형 LP 리더십 교체 기사입니다.,1,LP people and governance keyword
 lp_kbiz,title_or_excerpt,contains,중소기업중앙회,2,topic,LP,중소기업중앙회/노란우산공제 자금 운용 기사입니다.,1,LP institution keyword
