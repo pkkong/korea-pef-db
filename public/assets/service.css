@@ -624,10 +624,6 @@ button, input { font: inherit; }
   line-height: 1.2;
 }
 .cell-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.taxonomy-meta {
-  color: var(--text);
-  font-weight: 650;
-}
 .cell-meta span + span::before {
   content: "·";
   margin-right: 6px;

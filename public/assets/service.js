@@ -482,12 +482,8 @@
 
     const meta = document.createElement("span");
     meta.className = "cell-meta";
-    const taxonomy = document.createElement("span");
-    taxonomy.className = "taxonomy-meta";
-    taxonomy.textContent = article.subCategory ? `${article.section} · ${article.subCategory}` : (article.section || "");
     const source = document.createElement("span");
     source.textContent = article.source || "출처 미확인";
-    if (taxonomy.textContent) meta.append(taxonomy);
     meta.append(source);
     link.append(title, meta);
     main.append(link);

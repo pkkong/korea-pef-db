@@ -1884,10 +1884,6 @@ button, input { font: inherit; }
   line-height: 1.2;
 }
 .cell-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.taxonomy-meta {
-  color: var(--text);
-  font-weight: 650;
-}
 .cell-meta span + span::before {
   content: "·";
   margin-right: 6px;
@@ -2690,9 +2686,6 @@ def service_js() -> str:
 
     const meta = document.createElement("span");
     meta.className = "cell-meta";
-    const taxonomy = document.createElement("span");
-    taxonomy.className = "taxonomy-meta";
-    taxonomy.textContent = article.subCategory || "";
     const source = document.createElement("span");
     source.textContent = article.source || "출처 미확인";
     const articleDate = article.visibleDate || article.reportDate || "";
@@ -2702,7 +2695,6 @@ def service_js() -> str:
       date.textContent = articleDate;
       meta.append(date);
     }
-    if (taxonomy.textContent) meta.append(taxonomy);
     meta.append(source);
     link.append(title, meta);
     main.append(link);
