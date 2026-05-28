@@ -117,6 +117,7 @@ from build_service_site import (  # noqa: E402
     read_lp_monitor,
     read_service_context,
     render_app,
+    render_public_product_header,
 )
 from daily_news_common import today_seoul  # noqa: E402
 from gp_service_pages import write_gp_pages  # noqa: E402
@@ -640,6 +641,17 @@ def lp_short_label(lp_code: str, lp_name: str) -> str:
 
 def lp_display_label(lp_code: str, lp_name: str) -> str:
     return LP_PROFILE_DISPLAY_LABELS.get(lp_code, lp_name)
+
+
+def directory_avatar_label(value: object, fallback: str = "K") -> str:
+    text = re.sub(r"\s+", "", str(value or "").strip())
+    if not text:
+        return fallback
+    korean = "".join(re.findall(r"[가-힣]", text))
+    if korean:
+        return korean[:2]
+    letters = re.findall(r"[A-Za-z0-9]", text)
+    return "".join(letters[:2]).upper() or fallback
 
 
 def read_lp_profile_codes(db_path: Path = DEFAULT_DB) -> list[str]:
@@ -1516,7 +1528,6 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
         if highlight_count > 0 and highlight_amount != "-"
         else (f"공식 공고 {highlight_count}건을 표시합니다." if highlight_count > 0 else "표시할 공식 공고가 없습니다.")
     )
-    nav_html = render_lp_profile_nav(nav_items or [], lp_code)
     timeline_rows = render_profile_timeline(facts, notices)
     peer_rows = render_lp_peer_rows(peers, lp_code)
     gp_signal_rows = render_related_gp_signals(notices, gp_links)
@@ -1537,16 +1548,13 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
   <style>
     body {{ background: #f7f7f8; }}
     .ktcu-shell {{ width: min(1200px, calc(100% - 28px)); margin: 0 auto; padding: 16px 0 calc(100px + env(safe-area-inset-bottom)); }}
-    .ktcu-top {{ display: grid; gap: 14px; padding: 14px 0 12px; }}
-    .ktcu-nav {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }}
-    .ktcu-nav strong {{ color: var(--text); font-size: 13px; }}
-    .ktcu-nav span {{ display: flex; flex-wrap: wrap; gap: 7px; color: var(--secondary); font-size: 12px; font-weight: 750; }}
-    .ktcu-nav a {{ min-height: 34px; display: inline-flex; align-items: center; border: 1px solid var(--separator); border-radius: 8px; padding: 7px 11px; background: #fff; color: var(--text); text-decoration: none; font-size: 12px; font-weight: 700; }}
-    .ktcu-nav a.active,
+    .ktcu-shell .kpef-product-header {{ margin: -16px calc((100vw - min(1200px, calc(100vw - 28px))) / -2) 0; padding-left: max(16px, calc((100vw - 1200px) / 2 + 16px)); padding-right: max(16px, calc((100vw - 1200px) / 2 + 16px)); }}
+    .ktcu-shell .kpef-service-tabs {{ margin: 0 calc((100vw - min(1200px, calc(100vw - 28px))) / -2) 14px; padding-left: max(0px, calc((100vw - 1200px) / 2)); padding-right: max(0px, calc((100vw - 1200px) / 2)); }}
+    .ktcu-top {{ display: grid; gap: 14px; padding: 8px 0 12px; }}
     .ktcu-profile-nav .ktcu-profile-link.active {{ border-color: var(--accent); background: var(--surface-muted); color: var(--text); }}
     .ktcu-profile-nav {{ display: flex; flex-wrap: wrap; gap: 7px; }}
     .ktcu-profile-nav a {{ min-height: 32px; display: inline-flex; align-items: center; border: 1px solid var(--separator); border-radius: 999px; padding: 6px 10px; background: #fff; color: var(--secondary); text-decoration: none; font-size: 12px; font-weight: 800; }}
-    .ktcu-hero {{ display: grid; gap: 18px; padding: 18px 0 8px; }}
+    .ktcu-hero {{ display: grid; gap: 18px; padding: 8px 0 8px; }}
     .ktcu-title {{ display: grid; gap: 10px; }}
     .ktcu-title span {{ width: fit-content; border-left: 3px solid var(--accent); padding-left: 8px; color: var(--text); font-size: 12px; font-weight: 800; }}
     .ktcu-title h1 {{ margin: 0; color: var(--text); font-size: clamp(30px, 3.2vw, 44px); line-height: 1.08; letter-spacing: 0; }}
@@ -1652,15 +1660,23 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-footer {{ margin-top: 14px; color: var(--secondary); font-size: 11.5px; line-height: 1.45; }}
     @media (min-width: 760px) {{
       .ktcu-shell {{ padding-top: 22px; }}
+      .ktcu-shell .kpef-product-header {{ margin-top: -22px; }}
       .ktcu-hero {{ grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr); align-items: end; }}
       .ktcu-intel-grid {{ grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr); }}
       .ktcu-section-grid {{ grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }}
       .ktcu-org-split {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .ktcu-lower {{ grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr); }}
+      .ktcu-facts div {{
+        display: grid;
+        grid-template-columns: 132px minmax(0, 1fr);
+        gap: 14px;
+        align-items: start;
+      }}
+      .ktcu-facts dd {{ margin-top: 0; }}
     }}
     @media (max-width: 620px) {{
-      .ktcu-nav span, .ktcu-profile-nav, .ktcu-tabbar {{ flex-wrap: nowrap; overflow-x: auto; padding-bottom: 3px; }}
-      .ktcu-nav a, .ktcu-profile-nav a, .ktcu-tabbar a {{ flex: 0 0 auto; }}
+      .ktcu-profile-nav, .ktcu-tabbar {{ flex-wrap: nowrap; overflow-x: auto; padding-bottom: 3px; }}
+      .ktcu-profile-nav a, .ktcu-tabbar a {{ flex: 0 0 auto; }}
       .ktcu-peer-row {{ grid-template-columns: minmax(0, 1fr) 44px 64px; }}
       .ktcu-peer-row span:nth-of-type(1), .ktcu-peer-row span:nth-of-type(4) {{ display: none; }}
       .ktcu-peer-head {{ display: none; }}
@@ -1669,14 +1685,8 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
 </head>
 <body>
   <main class="ktcu-shell">
+    {render_public_product_header("lp", "#lpProfileSearch")}
     <header class="ktcu-top">
-      <nav class="ktcu-nav" aria-label="LP 섹션 이동">
-        <strong>Korea PEF Intelligence</strong>
-        <span>출자기관</span>
-      </nav>
-      <nav class="ktcu-profile-nav" aria-label="LP 프로필">
-        {nav_html}
-      </nav>
       <section class="ktcu-hero" aria-label="{html_escape(lp_name)} 요약">
         <div class="ktcu-title">
           <span>출자기관 프로필</span>
@@ -1919,6 +1929,7 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
     homepage_url = str(item.get("homepage_url") or "")
     notice_url = str(item.get("notice_url") or "")
     profile_url = f"lp-{lp_code}.html" if lp_code else "lp-notices.html"
+    avatar_label = directory_avatar_label(lp_short_label(lp_code, lp_name), "LP")
     chips = render_asset_chips(item.get("focus_asset_classes"))
     actions = []
     if item.get("has_public_profile", True):
@@ -1932,6 +1943,7 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
     coverage = public_coverage_label(fact_count, source_count)
     search_blob = " ".join([lp_name, lp_type, ownership, default_team, focus])
     return f"""          <article class="lp-directory-card" data-search="{html_escape(search_blob)}" data-name="{html_escape(lp_name)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(focus)}" data-kind="{html_escape(' '.join([lp_type, ownership]))}" data-notices="{notice_count}" data-amount="{amount_sort:.4f}" data-latest="{html_escape(latest)}">
+            <span class="lp-directory-avatar" aria-hidden="true">{html_escape(avatar_label)}</span>
             <div class="lp-directory-card-head">
               <span>{html_escape(lp_type)}</span>
               <strong>{html_escape(lp_name)}</strong>
@@ -1994,7 +2006,7 @@ def render_lp_notices_page(
     .lp-directory-hero {{ display: grid; gap: 18px; margin: 18px 0 18px; padding: 6px 0 4px; }}
     .lp-directory-hero h1 {{ margin: 0; color: var(--text); font-size: clamp(30px, 3.2vw, 44px); line-height: 1.08; letter-spacing: 0; }}
     .lp-directory-hero p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 14px; line-height: 1.62; }}
-    .lp-directory-kpis {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
+    .lp-directory-kpis {{ display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
     .lp-directory-kpis div {{ border: 1px solid var(--separator); border-radius: 8px; padding: 11px; background: var(--surface); }}
     .lp-directory-kpis span {{ display: block; color: var(--secondary); font-size: 11.5px; font-weight: 800; }}
     .lp-directory-kpis strong {{ display: block; margin-top: 4px; color: var(--text); font-size: 20px; line-height: 1.2; }}
@@ -2002,7 +2014,7 @@ def render_lp_notices_page(
     .lp-notice-table {{ overflow: hidden; border: 1px solid var(--separator); border-radius: 8px; background: var(--surface); }}
     .lp-directory-head {{
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 82px 74px;
+      grid-template-columns: 44px minmax(0, 1fr) 82px 74px;
       gap: 8px;
       align-items: center;
       min-height: 44px;
@@ -2015,15 +2027,16 @@ def render_lp_notices_page(
       text-align: right;
     }}
     .lp-directory-head span:first-child {{ text-align: center; }}
-    .lp-directory-head span:nth-child(2),
     .lp-directory-head span:nth-child(3),
-    .lp-directory-head span:nth-child(6) {{ display: none; }}
-    .lp-directory-head span:nth-child(5) {{ font-size: 0; }}
-    .lp-directory-head span:nth-child(5)::after {{ content: "표시 공고"; font-size: 12px; }}
+    .lp-directory-head span:nth-child(4),
+    .lp-directory-head span:nth-child(7) {{ display: none; }}
+    .lp-directory-head span:nth-child(6) {{ font-size: 0; }}
+    .lp-directory-head span:nth-child(6)::after {{ content: "표시 공고"; font-size: 12px; }}
     .lp-notice-head {{ display: none; }}
     .lp-directory-grid {{ display: grid; gap: 0; margin-bottom: 16px; }}
-    .lp-directory-card {{ display: grid; grid-template-columns: minmax(0, 1fr) 82px 74px; gap: 8px; align-items: center; min-height: 78px; border-bottom: 1px solid var(--separator); padding: 11px 10px; background: var(--surface); }}
+    .lp-directory-card {{ display: grid; grid-template-columns: 44px minmax(0, 1fr) 82px 74px; gap: 8px; align-items: center; min-height: 76px; border-bottom: 1px solid var(--separator); padding: 10px; background: var(--surface); }}
     .lp-directory-card:last-child {{ border-bottom: 0; }}
+    .lp-directory-avatar {{ display: inline-grid; width: 38px; height: 38px; place-items: center; border: 1px solid var(--separator); border-radius: 50%; background: #fff; color: var(--text); font-size: 11px; font-weight: 900; letter-spacing: 0; }}
     .lp-directory-card-head {{ display: grid; gap: 4px; }}
     .lp-directory-card-head span {{ width: fit-content; border-radius: 999px; padding: 4px 8px; background: var(--surface-muted); color: var(--text); font-size: 11px; font-weight: 800; }}
     .lp-directory-card-head strong {{ color: var(--text); font-size: 18px; line-height: 1.25; }}
@@ -2098,7 +2111,7 @@ def render_lp_notices_page(
       .lp-notice-table {{ border: 1px solid var(--separator); background: var(--surface); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }}
       .lp-directory-head {{
         display: grid;
-        grid-template-columns: minmax(220px, 1.15fr) minmax(120px, 0.58fr) minmax(260px, 1.25fr) minmax(92px, 0.42fr) minmax(250px, 1.1fr) minmax(160px, 0.72fr);
+        grid-template-columns: 52px minmax(220px, 1.15fr) minmax(120px, 0.58fr) minmax(260px, 1.25fr) minmax(92px, 0.42fr) minmax(250px, 1.1fr) minmax(160px, 0.72fr);
         gap: 18px;
         align-items: center;
         min-height: 48px;
@@ -2113,18 +2126,18 @@ def render_lp_notices_page(
       .lp-directory-head span {{
         display: block;
       }}
-      .lp-directory-head span:first-child {{
+      .lp-directory-head span:nth-child(2) {{
         text-align: left;
       }}
-      .lp-directory-head span:nth-child(5) {{
+      .lp-directory-head span:nth-child(6) {{
         font-size: 12px;
       }}
-      .lp-directory-head span:nth-child(5)::after {{
+      .lp-directory-head span:nth-child(6)::after {{
         content: none;
       }}
       .lp-directory-grid {{ grid-template-columns: minmax(0, 1fr); gap: 0; margin-bottom: 0; }}
       .lp-directory-card {{
-        grid-template-columns: minmax(220px, 1.15fr) minmax(120px, 0.58fr) minmax(260px, 1.25fr) minmax(92px, 0.42fr) minmax(250px, 1.1fr) minmax(160px, 0.72fr);
+        grid-template-columns: 52px minmax(220px, 1.15fr) minmax(120px, 0.58fr) minmax(260px, 1.25fr) minmax(92px, 0.42fr) minmax(250px, 1.1fr) minmax(160px, 0.72fr);
         gap: 18px;
         align-items: center;
         border: 0;
@@ -2136,6 +2149,7 @@ def render_lp_notices_page(
       .lp-directory-card:last-child {{ border-bottom: 0; }}
       .lp-directory-card-head span {{ background: #f5f5f5; color: var(--secondary); }}
       .lp-directory-card-head strong {{ font-size: 16px; }}
+      .lp-directory-avatar {{ width: 42px; height: 42px; }}
       .lp-directory-kind {{ display: inline; text-align: left; }}
       .lp-directory-focus {{ color: var(--text); }}
       .lp-directory-focus {{ display: block; }}
@@ -2188,10 +2202,11 @@ def render_lp_notices_page(
 </head>
 <body class="lp-notices-page">
   <div class="app-shell newsletter-only">
+    {render_public_product_header("lp", "#lpNoticeSearch")}
     <header class="app-header">
       <div class="header-topline">
         <div>
-          <p>Korea PEF Intelligence</p>
+          <p>데이터룸</p>
           <strong>출자기관</strong>
         </div>
         <div class="header-actions">
@@ -2242,6 +2257,7 @@ def render_lp_notices_page(
         </div>
         <div class="lp-directory-table">
           <div class="lp-directory-head" aria-hidden="true">
+            <span></span>
             <span>출자기관명</span>
             <span>유형</span>
             <span>주요 자산군</span>

@@ -513,6 +513,7 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
 
     <section class="gp-directory-table" aria-label="GP 목록">
       <div class="gp-directory-head" aria-hidden="true">
+        <span></span>
         <span>운용사명</span>
         <span>대표/홈페이지</span>
         <span>운용 현황</span>
@@ -544,6 +545,7 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
 def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
     gp_id = str(gp["source_gp_id"])
     name = _gp_name(gp)
+    avatar_label = _avatar_label(name)
     latest_rank = _format_rank(gp.get("latest_primary_rank"))
     active_funds = _format_int(gp.get("latest_primary_active_fund_count"))
     aum = _format_krw_100mn(gp.get("latest_primary_aum_proxy_krw_100mn"))
@@ -637,6 +639,7 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
         data-cumulative="{cumulative_sort}"
         data-news-count="{news_sort}"
         data-signals="{signal_sort}">
+        <span class="gp-avatar" aria-hidden="true">{_e(avatar_label)}</span>
         <div class="gp-card-main">
           <div class="gp-card-title">
             {status_html}
@@ -981,6 +984,17 @@ def _render_chip(label: str, extra_class: str = "") -> str:
     return f"<span{class_attr}>{_e(label)}</span>"
 
 
+def _avatar_label(value: object, fallback: str = "GP") -> str:
+    text = re.sub(r"\s+", "", _clean(value))
+    if not text:
+        return fallback
+    korean = "".join(re.findall(r"[가-힣]", text))
+    if korean:
+        return korean[:2]
+    letters = re.findall(r"[A-Za-z0-9]", text)
+    return "".join(letters[:2]).upper() or fallback
+
+
 def _card_status_label(latest_rank: str, has_profile_page: bool) -> str:
     return ""
 
@@ -994,14 +1008,22 @@ def _fact_row(label: str, value: object, raw: bool = False) -> str:
 
 
 def _render_top_nav(active: str = "") -> str:
-    directory_class = "active" if active == "gps" else ""
-    return f"""    <nav class="gp-top-nav" aria-label="GP 페이지 이동">
-      <strong>Korea PEF Intelligence</strong>
-      <span>
-        <a class="{directory_class}" href="gps.html">디렉토리</a>
-        <a href="gps.html#gpDirectory">GP 목록</a>
-        <a href="gps.html#gpSearch">검색</a>
-      </span>
+    return """    <header class="kpef-product-header" aria-label="Korea PEF Intelligence">
+      <a class="kpef-product-brand" href="index.html">
+        <span class="kpef-brand-mark" aria-hidden="true">K</span>
+        <strong>Korea PEF Intelligence</strong>
+      </a>
+      <div class="kpef-product-actions">
+        <a class="kpef-icon-link kpef-icon-search" href="#gpSearch" aria-label="검색"></a>
+        <a class="kpef-icon-link kpef-icon-menu" href="index.html" aria-label="홈"></a>
+      </div>
+    </header>
+    <nav class="kpef-service-tabs" aria-label="서비스 메뉴">
+      <a href="index.html">브리프</a>
+      <a href="lp-notices.html">LP</a>
+      <a class="active" href="gps.html">GP</a>
+      <a href="pef-wiki.html">Wiki</a>
+      <a href="index.html#saved">저장</a>
     </nav>"""
 
 
@@ -1150,6 +1172,117 @@ def _base_styles() -> str:
       letter-spacing: 0;
     }
     a { color: inherit; }
+    .kpef-product-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      min-height: 58px;
+      margin: -18px calc((100vw - min(1440px, calc(100vw - 44px))) / -2) 0;
+      padding: calc(max(14px, env(safe-area-inset-top)) + 8px) max(16px, calc((100vw - 1440px) / 2 + 16px)) 12px;
+      background: #1d2130;
+      color: #fff;
+    }
+    .kpef-product-brand {
+      display: inline-flex;
+      min-width: 0;
+      align-items: center;
+      gap: 9px;
+      color: inherit;
+      text-decoration: none;
+    }
+    .kpef-product-brand strong {
+      overflow: hidden;
+      color: inherit;
+      font-size: 16px;
+      font-weight: 850;
+      line-height: 1.2;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .kpef-brand-mark {
+      display: inline-grid;
+      width: 28px;
+      height: 28px;
+      flex: 0 0 28px;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,0.24);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .kpef-product-actions {
+      display: flex;
+      flex: 0 0 auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .kpef-icon-link {
+      position: relative;
+      display: inline-grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: #fff;
+      cursor: pointer;
+    }
+    .kpef-icon-search::before {
+      content: "";
+      width: 16px;
+      height: 16px;
+      border: 2px solid currentColor;
+      border-radius: 50%;
+    }
+    .kpef-icon-search::after {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      width: 8px;
+      height: 2px;
+      border-radius: 2px;
+      background: currentColor;
+      content: "";
+      transform: rotate(45deg);
+    }
+    .kpef-icon-menu::before,
+    .kpef-icon-menu::after {
+      position: absolute;
+      left: 8px;
+      width: 18px;
+      height: 2px;
+      border-radius: 2px;
+      background: currentColor;
+      content: "";
+    }
+    .kpef-icon-menu::before { top: 11px; box-shadow: 0 6px 0 currentColor; }
+    .kpef-icon-menu::after { top: 23px; }
+    .kpef-service-tabs {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      margin: 0 calc((100vw - min(1440px, calc(100vw - 44px))) / -2) 18px;
+      padding: 0 max(0px, calc((100vw - 1440px) / 2));
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .kpef-service-tabs a {
+      display: grid;
+      min-height: 46px;
+      place-items: center;
+      border-bottom: 3px solid transparent;
+      color: var(--tertiary);
+      font-size: 13px;
+      font-weight: 850;
+      text-decoration: none;
+    }
+    .kpef-service-tabs a.active {
+      border-bottom-color: #8a6a52;
+      color: #6d543f;
+    }
     .gp-shell {
       width: min(1440px, calc(100% - 44px));
       margin: 0 auto;
@@ -1302,6 +1435,7 @@ def _base_styles() -> str:
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
     }
+    .gp-hero .gp-kpis { display: none; }
     .gp-kpis div,
     .gp-detail-kpis div,
     .gp-detail-card,
@@ -1352,7 +1486,13 @@ def _base_styles() -> str:
       display: grid;
       gap: 10px;
       margin: 12px 0;
-      padding: 14px;
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      padding: 14px 0;
+      background: transparent;
+      box-shadow: none;
     }
     .gp-control-head {
       display: flex;
@@ -1414,7 +1554,7 @@ def _base_styles() -> str:
     }
     .gp-directory-head {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 132px;
+      grid-template-columns: 44px minmax(0, 1fr) 132px;
       gap: 10px;
       align-items: center;
       min-height: 44px;
@@ -1427,15 +1567,15 @@ def _base_styles() -> str:
       text-align: right;
     }
     .gp-directory-head span:first-child { text-align: center; }
-    .gp-directory-head span:nth-child(2),
-    .gp-directory-head span:nth-child(4),
-    .gp-directory-head span:nth-child(5) {
+    .gp-directory-head span:nth-child(3),
+    .gp-directory-head span:nth-child(5),
+    .gp-directory-head span:nth-child(6) {
       display: none;
     }
-    .gp-directory-head span:nth-child(3) {
+    .gp-directory-head span:nth-child(4) {
       font-size: 0;
     }
-    .gp-directory-head span:nth-child(3)::after {
+    .gp-directory-head span:nth-child(4)::after {
       content: "순위 / 약정액";
       font-size: 12px;
     }
@@ -1445,7 +1585,7 @@ def _base_styles() -> str:
     }
     .gp-card {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 132px;
+      grid-template-columns: 44px minmax(0, 1fr) 132px;
       gap: 10px;
       align-items: center;
       min-height: 82px;
@@ -1455,11 +1595,25 @@ def _base_styles() -> str:
       padding: 12px 10px;
       box-shadow: none;
     }
+    .gp-avatar {
+      display: inline-grid;
+      width: 38px;
+      height: 38px;
+      grid-column: 1;
+      grid-row: 1;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: #fff;
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 900;
+    }
     .gp-card:last-child { border-bottom: 0; }
     .gp-card[hidden] { display: none; }
     .gp-card-main {
       display: grid;
-      grid-column: 1;
+      grid-column: 2;
       grid-row: 1;
       gap: 8px;
     }
@@ -1504,7 +1658,7 @@ def _base_styles() -> str:
     }
     .gp-metrics {
       display: grid;
-      grid-column: 2;
+      grid-column: 3;
       grid-row: 1;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
@@ -1934,6 +2088,13 @@ def _base_styles() -> str:
       .gp-detail-hero { grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr); }
       .gp-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .gp-detail-lower { grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr); }
+      .gp-fact-list div {
+        display: grid;
+        grid-template-columns: 132px minmax(0, 1fr);
+        gap: 14px;
+        align-items: start;
+      }
+      .gp-fact-list dd { margin-top: 0; }
     }
     @media (min-width: 960px) {
       .gp-shell {
@@ -1977,7 +2138,7 @@ def _base_styles() -> str:
       }
       .gp-directory-head {
         display: grid;
-        grid-template-columns: minmax(240px, 1.2fr) minmax(130px, 0.62fr) minmax(340px, 1.45fr) minmax(190px, 0.82fr) minmax(150px, 0.62fr);
+        grid-template-columns: 52px minmax(240px, 1.15fr) minmax(130px, 0.58fr) minmax(340px, 1.42fr) minmax(190px, 0.82fr) minmax(150px, 0.62fr);
         gap: 18px;
         align-items: center;
         min-height: 48px;
@@ -1993,10 +2154,10 @@ def _base_styles() -> str:
         display: block;
         font-size: 12px;
       }
-      .gp-directory-head span:first-child {
+      .gp-directory-head span:nth-child(2) {
         text-align: left;
       }
-      .gp-directory-head span:nth-child(3)::after {
+      .gp-directory-head span:nth-child(4)::after {
         content: none;
       }
       .gp-directory {
@@ -2008,7 +2169,7 @@ def _base_styles() -> str:
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
       }
       .gp-card {
-        grid-template-columns: minmax(240px, 1.2fr) minmax(130px, 0.62fr) minmax(340px, 1.45fr) minmax(190px, 0.82fr) minmax(150px, 0.62fr);
+        grid-template-columns: 52px minmax(240px, 1.15fr) minmax(130px, 0.58fr) minmax(340px, 1.42fr) minmax(190px, 0.82fr) minmax(150px, 0.62fr);
         gap: 18px;
         align-items: center;
         border: 0;
@@ -2021,25 +2182,29 @@ def _base_styles() -> str:
         border-bottom: 0;
       }
       .gp-card-main {
-        grid-column: 1;
+        grid-column: 2;
         grid-row: 1;
       }
+      .gp-avatar {
+        width: 42px;
+        height: 42px;
+      }
       .gp-meta-line {
-        grid-column: 2;
+        grid-column: 3;
         grid-row: 1;
         display: grid;
         gap: 4px;
       }
       .gp-metrics {
-        grid-column: 3;
-        grid-row: 1;
-      }
-      .gp-signal-strip {
         grid-column: 4;
         grid-row: 1;
       }
-      .gp-card-extra {
+      .gp-signal-strip {
         grid-column: 5;
+        grid-row: 1;
+      }
+      .gp-card-extra {
+        grid-column: 6;
         grid-row: 1;
         border-top: 0;
         padding-top: 0;
@@ -2096,6 +2261,16 @@ def _base_styles() -> str:
         width: min(100% - 20px, 1240px);
         padding-top: 12px;
         padding-bottom: calc(116px + env(safe-area-inset-bottom));
+      }
+      .kpef-product-header {
+        margin: -12px -10px 0;
+        padding-right: 16px;
+        padding-left: 16px;
+      }
+      .kpef-service-tabs {
+        margin-right: -10px;
+        margin-left: -10px;
+        padding: 0;
       }
       .gp-top-nav { align-items: start; flex-direction: column; }
       h1 { font-size: 30px; line-height: 1.08; }

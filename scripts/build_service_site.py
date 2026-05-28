@@ -1130,6 +1130,7 @@ def render_app(
     min_date = min(available_dates) if available_dates else report_date
     max_date = max(available_dates) if available_dates else report_date
     shell_class = "app-shell newsletter-only" if newsletter_only else "app-shell"
+    product_header = render_public_product_header("brief", "#clipSearch") if newsletter_only else ""
     header_db_link = "" if newsletter_only else '<a class="header-action" href="db.html" aria-label="공개 GP·펀드 데이터베이스 열기">DB</a>'
     lp_db_link = "" if newsletter_only else '<a href="db.html#lp">LP DB</a>'
     bottom_db_link = (
@@ -1192,10 +1193,11 @@ def render_app(
 </head>
 <body>
   <div class="{shell_class}">
+{product_header}
     <header class="app-header">
       <div class="header-topline">
         <div>
-          <p>Korea PEF Intelligence</p>
+          <p>뉴스레터</p>
           <strong>Daily Brief</strong>
         </div>
         <div class="header-actions">
@@ -1265,6 +1267,33 @@ def render_app(
 """
 
 
+def render_public_product_header(active: str, search_href: str = "#clipSearch") -> str:
+    items = [
+        ("brief", "index.html", "브리프"),
+        ("lp", "lp-notices.html", "LP"),
+        ("gp", "gps.html", "GP"),
+        ("wiki", "pef-wiki.html", "Wiki"),
+        ("saved", "index.html#saved", "저장"),
+    ]
+    nav = "\n".join(
+        f'      <a class="{"active" if key == active else ""}" href="{href}">{label}</a>'
+        for key, href, label in items
+    )
+    return f"""    <header class="kpef-product-header" aria-label="Korea PEF Intelligence">
+      <a class="kpef-product-brand" href="index.html">
+        <span class="kpef-brand-mark" aria-hidden="true">K</span>
+        <strong>Korea PEF Intelligence</strong>
+      </a>
+      <div class="kpef-product-actions">
+        <a class="kpef-icon-link kpef-icon-search" href="{html_escape(search_href)}" aria-label="검색"></a>
+        <a class="kpef-icon-link kpef-icon-menu" href="index.html" aria-label="홈"></a>
+      </div>
+    </header>
+    <nav class="kpef-service-tabs" aria-label="서비스 메뉴">
+{nav}
+    </nav>"""
+
+
 def service_css() -> str:
     return """@charset "utf-8";
 :root {
@@ -1293,6 +1322,116 @@ body {
 }
 a { color: inherit; text-decoration: none; }
 button, input { font: inherit; }
+.kpef-product-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 58px;
+  margin: calc(-1 * max(14px, env(safe-area-inset-top))) -14px 0;
+  padding: calc(max(14px, env(safe-area-inset-top)) + 8px) 16px 12px;
+  background: #1d2130;
+  color: #fff;
+}
+.kpef-product-brand {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  color: inherit;
+  text-decoration: none;
+}
+.kpef-product-brand strong {
+  overflow: hidden;
+  color: inherit;
+  font-size: 16px;
+  font-weight: 850;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kpef-brand-mark {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,0.24);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+}
+.kpef-product-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+  align-items: center;
+}
+.kpef-icon-link {
+  position: relative;
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+.kpef-icon-search::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+.kpef-icon-search::after {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 8px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  content: "";
+  transform: rotate(45deg);
+}
+.kpef-icon-menu::before,
+.kpef-icon-menu::after {
+  position: absolute;
+  left: 8px;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  content: "";
+}
+.kpef-icon-menu::before { top: 11px; box-shadow: 0 6px 0 currentColor; }
+.kpef-icon-menu::after { top: 23px; }
+.kpef-service-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0 -14px 14px;
+  border-bottom: 1px solid var(--separator);
+  background: var(--surface);
+}
+.kpef-service-tabs a {
+  display: grid;
+  min-height: 46px;
+  place-items: center;
+  border-bottom: 3px solid transparent;
+  color: var(--tertiary);
+  font-size: 13px;
+  font-weight: 850;
+  text-decoration: none;
+}
+.kpef-service-tabs a.active {
+  border-bottom-color: #8a6a52;
+  color: #6d543f;
+}
 .app-shell {
   width: min(100vw, var(--shell));
   max-width: 100vw;
@@ -2028,7 +2167,7 @@ button, input { font: inherit; }
   bottom: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   width: min(100vw, var(--shell));
   max-width: 100vw;
   transform: translateX(-50%);

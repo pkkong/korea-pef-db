@@ -398,27 +398,24 @@ def _app_head_meta() -> str:
 
 
 def _render_top_nav() -> str:
-    return """    <header class="wiki-app-header" aria-label="PEF Wiki">
-      <a class="wiki-brand" href="pef-wiki.html" aria-label="PEF Wiki 홈">
-        <span class="wiki-brand-mark" aria-hidden="true">P</span>
-        <span>PEF Wiki</span>
+    return """    <header class="kpef-product-header" aria-label="Korea PEF Intelligence">
+      <a class="kpef-product-brand" href="index.html">
+        <span class="kpef-brand-mark" aria-hidden="true">K</span>
+        <strong>Korea PEF Intelligence</strong>
       </a>
-      <nav class="wiki-service-nav" aria-label="서비스 이동">
-        <a href="index.html">브리프</a>
-        <a href="lp-notices.html">LP</a>
-        <a href="gps.html">GP</a>
-        <a class="active" href="pef-wiki.html">Wiki</a>
-        <a href="index.html#saved">저장</a>
-      </nav>
-      <div class="wiki-header-actions">
-        <button class="wiki-icon-button" type="button" data-focus-search aria-label="문서 검색">
-          <span class="wiki-search-icon" aria-hidden="true"></span>
-        </button>
-        <button class="wiki-icon-button" type="button" data-toggle-menu aria-label="문서 목차 열기" aria-expanded="false" aria-controls="wiki-mobile-drawer">
-          <span class="wiki-menu-icon" aria-hidden="true"></span>
+      <div class="kpef-product-actions">
+        <a class="kpef-icon-link kpef-icon-search" href="#wikiSearch" data-focus-search aria-label="문서 검색"></a>
+        <button class="kpef-icon-link kpef-icon-menu" type="button" data-toggle-menu aria-label="문서 목차 열기" aria-expanded="false" aria-controls="wiki-mobile-drawer">
         </button>
       </div>
     </header>
+    <nav class="kpef-service-tabs" aria-label="서비스 메뉴">
+      <a href="index.html">브리프</a>
+      <a href="lp-notices.html">LP</a>
+      <a href="gps.html">GP</a>
+      <a class="active" href="pef-wiki.html">Wiki</a>
+      <a href="index.html#saved">저장</a>
+    </nav>
     <nav class="wiki-top-nav" aria-label="Wiki 주제 이동">
       <a class="active" href="#chapter">제1장</a>
       <a href="#law-map">법령</a>
@@ -486,7 +483,7 @@ def _page_styles() -> str:
       margin: 0;
       background: var(--wiki-bg);
       color: var(--wiki-text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Pretendard, "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
       letter-spacing: 0;
     }
     html.wiki-menu-open {
@@ -506,6 +503,20 @@ def _page_styles() -> str:
       width: min(1180px, calc(100% - 28px));
       margin: 0 auto;
       padding: 0 0 calc(112px + env(safe-area-inset-bottom));
+    }
+    .wiki-shell .kpef-product-header {
+      width: 100vw;
+      max-width: 100vw;
+      margin: 0 calc(50% - 50vw);
+      padding-left: max(16px, calc((100vw - 1180px) / 2 + 16px));
+      padding-right: max(16px, calc((100vw - 1180px) / 2 + 16px));
+    }
+    .wiki-shell .kpef-service-tabs {
+      width: 100vw;
+      max-width: 100vw;
+      margin: 0 calc(50% - 50vw) 18px;
+      padding-left: max(0px, calc((100vw - 1180px) / 2));
+      padding-right: max(0px, calc((100vw - 1180px) / 2));
     }
     .wiki-app-header {
       position: sticky;
