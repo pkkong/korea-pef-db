@@ -58,6 +58,7 @@ from build_newsletter_deploy import (
 from build_service_site import editorial_section
 from build_service_site import article_payload_rows
 from apply_daily_news_review import normalize_category
+from lp_public_visibility import is_public_lp_notice_row
 
 
 def test_coverage_window() -> None:
@@ -239,6 +240,24 @@ def test_lp_public_labels_do_not_expose_internal_taxonomy() -> None:
     assert public_lp_type("Mutual Aid Association") == "공제회"
     assert display_asset_classes("PEF;VC;Private Credit;Real Estate;Mother Fund") == "PEF · VC · 사모대출 · 부동산 · 모태펀드"
     assert public_coverage_label(0, 0) == "0개"
+
+
+def test_official_lp_candidates_are_public_on_notice_surfaces() -> None:
+    official_candidate = {
+        "source_type": "official",
+        "event_type": "new_notice",
+        "monitor_status": "candidate",
+        "confidence": "medium",
+        "public_visible": "1",
+    }
+    assert is_public_lp_notice_row(official_candidate, require_official=True)
+    assert not is_public_lp_notice_row(official_candidate, require_official=False)
+    assert not is_public_lp_notice_row({**official_candidate, "confidence": "low"}, require_official=True)
+    assert not is_public_lp_notice_row({**official_candidate, "event_type": "candidate"}, require_official=True)
+    assert not is_public_lp_notice_row(
+        {**official_candidate, "source_type": "news", "monitor_status": "candidate"},
+        require_official=True,
+    )
 
 
 def test_article_payload_does_not_render_lp_as_gp_chip() -> None:
@@ -1241,6 +1260,7 @@ def main() -> int:
         test_gp_alias_overrides_cover_common_short_names,
         test_lp_directory_includes_seed_only_profiles_without_empty_profile_pages,
         test_lp_public_labels_do_not_expose_internal_taxonomy,
+        test_official_lp_candidates_are_public_on_notice_surfaces,
         test_article_payload_does_not_render_lp_as_gp_chip,
         test_kic_lp_alias_seed_feeds_article_context,
         test_context_only_lp_keeps_name_without_broken_profile_link,

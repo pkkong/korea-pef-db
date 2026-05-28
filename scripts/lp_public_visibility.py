@@ -21,10 +21,16 @@ def public_visible_value(value: object) -> bool:
 
 
 def is_public_lp_notice_row(row: dict[str, object], require_official: bool = False) -> bool:
-    """Return True only for reviewed public LP notice rows."""
+    """Return True for public LP notice rows.
+
+    News-derived candidates stay hidden until reviewed. Official-channel
+    candidates can be displayed on official-notice surfaces because the source
+    itself is the validation anchor.
+    """
     if not public_visible_value(row.get("public_visible", 1)):
         return False
-    if require_official and str(row.get("source_type") or "").strip() != "official":
+    source_type = str(row.get("source_type") or "").strip()
+    if require_official and source_type != "official":
         return False
     event_type = str(row.get("event_type") or "").strip().lower()
     if event_type in LP_NON_PUBLIC_EVENT_TYPES:
@@ -34,5 +40,7 @@ def is_public_lp_notice_row(row: dict[str, object], require_official: bool = Fal
         return False
     monitor_status = str(row.get("monitor_status") or "").strip().lower()
     if monitor_status in LP_NON_PUBLIC_MONITOR_STATUSES:
+        if require_official and source_type == "official" and monitor_status == "candidate":
+            return True
         return False
     return True
