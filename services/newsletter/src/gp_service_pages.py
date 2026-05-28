@@ -495,7 +495,7 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
           <option value="funds">운용 중 펀드순</option>
           <option value="cumulative">누적 펀드 수순</option>
           <option value="news">관련 뉴스 많은 순</option>
-          <option value="signals">관련 항목 많은 순</option>
+          <option value="signals">뉴스·출자 연결순</option>
         </select>
       </div>
       <div class="gp-filter-row" aria-label="빠른 필터">
@@ -634,7 +634,7 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
           </div>
         </div>
 {metrics_html}
-        <div class="gp-signal-strip" aria-label="관련 항목">
+        <div class="gp-signal-strip" aria-label="뉴스·출자 연결">
           <span>뉴스 <strong>{news_count:,}</strong></span>
           <span>딜 <strong>{deal_count:,}</strong></span>
           <span>LP <strong>{lp_count:,}</strong></span>
@@ -1962,20 +1962,27 @@ def _verification_label(value: object) -> str:
     if normalized_key == "MANUAL_VERIFIED":
         return "공개 출처"
     if normalized_key == "SUPPORTING_SOURCE_ONLY":
-        return "보조 출처"
+        return "공개자료"
     if normalized_key == "FSS" + "_NAME_ONLY":
-        return "금감원 운용 현황"
+        return "운용 현황"
     return ""
 
 
 def _category_label(value: object) -> str:
     labels = {
         "PE_HOUSE": "PE 운용사",
+        "PE_HOUSE_PUBLIC": "상장 PE 운용사",
         "ASSET_MANAGER": "자산운용",
         "SECURITIES": "증권",
         "FINANCIAL_GROUP": "금융그룹",
         "PE_HOUSE_FINANCIAL_GROUP_AFFILIATE": "금융계열 PE",
         "VC": "벤처캐피탈",
+        "VC_AND_PE_HOUSE": "PE·VC 운용사",
+        "PUBLIC_FINANCIAL_INSTITUTION": "정책금융기관",
+        "MULTI_ASSET_ALTERNATIVE_MANAGER": "대체투자 운용사",
+        "PRIVATE_CREDIT_MANAGER": "사모대출 운용사",
+        "BANK_PUBLIC": "은행",
+        "NPL_RESTRUCTURING_AND_PE_MANAGER": "구조조정·PE 운용사",
         "unknown": "",
     }
     key = _clean(value)

@@ -44,8 +44,9 @@ PUBLIC_KEYS = [
     "lp_commitment_yearly_stats",
 ]
 
-PROFILE_KEYS = [
-    "source_gp_id",
+PROFILE_KEY_MAP = [
+    ("gp_id", "source_gp_id"),
+    ("profile_id", "gp_profile_id"),
     "gp_name",
     "company_category",
     "display_name_ko",
@@ -58,21 +59,19 @@ PROFILE_KEYS = [
     "representative_name",
     "headquarters_address",
     "business_registration_number",
-    "verification_level",
-    "primary_source_url",
+    ("source_url", "primary_source_url"),
     "latest_primary_rank",
     "latest_primary_active_fund_count",
-    "latest_primary_aum_proxy_krw_100mn",
+    ("latest_primary_commitment_krw_100mn", "latest_primary_aum_proxy_krw_100mn"),
     "cumulative_primary_rank",
     "cumulative_primary_fund_count",
-    "cumulative_primary_commitment_proxy_krw_100mn",
+    ("cumulative_commitment_krw_100mn", "cumulative_primary_commitment_proxy_krw_100mn"),
     "first_seen_period",
     "first_seen_date",
     "last_seen_period",
     "last_seen_date",
     "active_in_latest_period",
     "alias_names",
-    "service_ready",
 ]
 
 LP_PROFILE_KEYS = [
@@ -182,9 +181,39 @@ LP_NOTICE_NEWS_LINK_KEYS = [
     "created_at",
 ]
 
+PUBLIC_KEY_RENAMES = {
+    "source_gp_id": "gp_id",
+    "verification_level": "source_confidence",
+    "commitment_aum_proxy_trn_krw": "commitment_trn_krw",
+    "latest_primary_aum_proxy_krw_100mn": "latest_primary_commitment_krw_100mn",
+    "cumulative_primary_commitment_proxy_krw_100mn": "cumulative_commitment_krw_100mn",
+}
+
 
 def project(row: dict[str, object], keys: list[str]) -> dict[str, object]:
     return {key: row.get(key, "") for key in keys}
+
+
+def sanitize_public_keys(value: object) -> object:
+    if isinstance(value, list):
+        return [sanitize_public_keys(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            PUBLIC_KEY_RENAMES.get(key, key): sanitize_public_keys(item)
+            for key, item in value.items()
+        }
+    return value
+
+
+def project_mapped(row: dict[str, object], keys: list[str | tuple[str, str]]) -> dict[str, object]:
+    projected: dict[str, object] = {}
+    for item in keys:
+        if isinstance(item, tuple):
+            public_key, source_key = item
+            projected[public_key] = row.get(source_key, "")
+        else:
+            projected[item] = row.get(item, "")
+    return projected
 
 
 def build_payload(data: dict[str, object]) -> dict[str, object]:
@@ -197,12 +226,12 @@ def build_payload(data: dict[str, object]) -> dict[str, object]:
     public_lp_notice_ids = {str(row.get("notice_id") or "") for row in public_lp_notice_rows if row.get("notice_id") not in {None, ""}}
     payload["meta"] = {
         "generated_at": data.get("meta", {}).get("generated_at", ""),
-        "aum_basis": "FSS 출자약정액 기준 AUM 프록시",
+        "aum_basis": "금감원 PEF 운용 현황의 출자약정액 기준 지표",
         "latest_period": data.get("meta", {}).get("latest_period", ""),
         "latest_as_of_date": data.get("meta", {}).get("latest_as_of_date", ""),
     }
     payload["gp_profiles"] = [
-        project(row, PROFILE_KEYS)
+        project_mapped(row, PROFILE_KEY_MAP)
         for row in data.get("gp_profiles", [])
         if isinstance(row, dict)
     ]
@@ -230,7 +259,7 @@ def build_payload(data: dict[str, object]) -> dict[str, object]:
         for row in data.get("lp_notice_news_links", [])
         if isinstance(row, dict) and str(row.get("notice_id") or "") in public_lp_notice_ids
     ]
-    return payload
+    return sanitize_public_keys(payload)
 
 
 def main() -> int:
