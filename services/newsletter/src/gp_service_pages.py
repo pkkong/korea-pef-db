@@ -517,12 +517,17 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
         <span>대표/홈페이지</span>
         <span>운용 현황</span>
         <span>뉴스·출자</span>
-        <span>확인 자료</span>
+        <span>자료</span>
       </div>
       <div class="gp-directory" id="gpDirectory">
 {cards}
       </div>
     </section>
+    <div class="gp-pagination" id="gpPagination" aria-label="GP 목록 페이지 이동">
+      <button type="button" id="gpPrevPage">이전</button>
+      <span id="gpPageState">1 / 1</span>
+      <button type="button" id="gpNextPage">다음</button>
+    </div>
 
     <section class="gp-disclaimer" aria-label="참고사항">
       <h2>참고사항</h2>
@@ -614,6 +619,8 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
         if metric_rows
         else ""
     )
+    status_label = _card_status_label(latest_rank, has_profile_page)
+    status_html = f"<span>{_e(status_label)}</span>" if status_label else ""
 
     return f"""      <article class="gp-card"
         data-search="{_e(search_blob)}"
@@ -632,7 +639,7 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
         data-signals="{signal_sort}">
         <div class="gp-card-main">
           <div class="gp-card-title">
-            <span>{_e(_card_status_label(latest_rank, has_profile_page))}</span>
+            {status_html}
             <h2>{title}</h2>
           </div>
           <div class="gp-chips">
@@ -651,7 +658,7 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
         </div>
 {meta_line_html}
         <details class="gp-card-extra">
-          <summary>확인 자료</summary>
+          <summary>자료</summary>
           <div class="gp-news-mini">
             <strong>관련 뉴스</strong>
             {news_html}
@@ -737,7 +744,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
         </dl>
       </article>
       <article class="gp-panel">
-        <h2>확인 자료</h2>
+        <h2>자료</h2>
         <dl class="gp-fact-list">
 {coverage_rows}
         </dl>
@@ -975,9 +982,7 @@ def _render_chip(label: str, extra_class: str = "") -> str:
 
 
 def _card_status_label(latest_rank: str, has_profile_page: bool) -> str:
-    if latest_rank and latest_rank != "-":
-        return f"{latest_rank} · 상세 프로필" if has_profile_page else latest_rank
-    return "상세 프로필" if has_profile_page else "공개 프로필"
+    return ""
 
 
 def _fact_row(label: str, value: object, raw: bool = False) -> str:
@@ -1032,9 +1037,16 @@ def _directory_script() -> str:
       const sort = document.getElementById("gpSort");
       const list = document.getElementById("gpDirectory");
       const visible = document.getElementById("gpVisibleCount");
+      const pagination = document.getElementById("gpPagination");
+      const prevPage = document.getElementById("gpPrevPage");
+      const nextPage = document.getElementById("gpNextPage");
+      const pageState = document.getElementById("gpPageState");
       const buttons = Array.from(document.querySelectorAll("[data-filter]"));
       const cards = Array.from(document.querySelectorAll(".gp-card"));
+      const pageSize = 60;
       let activeFilter = "all";
+      let currentPage = 1;
+      let orderedCards = [...cards];
 
       const num = (card, key, fallback = 0) => {
         const value = Number(card.dataset[key]);
@@ -1043,7 +1055,7 @@ def _directory_script() -> str:
 
       const applySort = () => {
         const mode = sort?.value || "rank";
-        const sorted = [...cards].sort((a, b) => {
+        orderedCards = [...cards].sort((a, b) => {
           if (mode === "aum") return num(b, "aum") - num(a, "aum");
           if (mode === "funds") return num(b, "funds") - num(a, "funds");
           if (mode === "cumulative") return num(b, "cumulative") - num(a, "cumulative");
@@ -1051,7 +1063,7 @@ def _directory_script() -> str:
           if (mode === "signals") return num(b, "signals") - num(a, "signals");
           return num(a, "rank", 999999) - num(b, "rank", 999999);
         });
-        sorted.forEach((card) => list?.appendChild(card));
+        orderedCards.forEach((card) => list?.appendChild(card));
       };
 
       const filterHit = (card) => {
@@ -1059,29 +1071,54 @@ def _directory_script() -> str:
         return card.dataset[activeFilter] === "1";
       };
 
-      const apply = () => {
+      const apply = (options = {}) => {
+        if (options.resetPage) currentPage = 1;
         const query = (input?.value || "").trim().toLowerCase();
-        let count = 0;
-        cards.forEach((card) => {
+        const matches = [];
+        orderedCards.forEach((card) => {
           const haystack = (card.dataset.search || card.innerText || "").toLowerCase();
           const show = filterHit(card) && (!query || haystack.includes(query));
-          card.hidden = !show;
-          if (show) count += 1;
+          if (show) matches.push(card);
+          card.hidden = true;
         });
-        if (visible) visible.textContent = `${count.toLocaleString("ko-KR")}개 표시`;
+        const totalPages = Math.max(1, Math.ceil(matches.length / pageSize));
+        currentPage = Math.min(Math.max(currentPage, 1), totalPages);
+        const start = (currentPage - 1) * pageSize;
+        const end = Math.min(start + pageSize, matches.length);
+        matches.slice(start, end).forEach((card) => {
+          card.hidden = false;
+        });
+        if (visible) {
+          const range = matches.length ? `${(start + 1).toLocaleString("ko-KR")}-${end.toLocaleString("ko-KR")}` : "0";
+          visible.textContent = `${matches.length.toLocaleString("ko-KR")}개 중 ${range}`;
+        }
+        if (pagination) pagination.hidden = matches.length <= pageSize;
+        if (pageState) pageState.textContent = `${currentPage.toLocaleString("ko-KR")} / ${totalPages.toLocaleString("ko-KR")}`;
+        if (prevPage) prevPage.disabled = currentPage <= 1;
+        if (nextPage) nextPage.disabled = currentPage >= totalPages;
       };
 
-      input?.addEventListener("input", apply);
+      input?.addEventListener("input", () => apply({ resetPage: true }));
       sort?.addEventListener("change", () => {
         applySort();
-        apply();
+        apply({ resetPage: true });
       });
       buttons.forEach((button) => {
         button.addEventListener("click", () => {
           activeFilter = button.dataset.filter || "all";
           buttons.forEach((item) => item.classList.toggle("active", item === button));
-          apply();
+          apply({ resetPage: true });
         });
+      });
+      prevPage?.addEventListener("click", () => {
+        currentPage -= 1;
+        apply();
+        list?.scrollIntoView({ block: "start", behavior: "smooth" });
+      });
+      nextPage?.addEventListener("click", () => {
+        currentPage += 1;
+        apply();
+        list?.scrollIntoView({ block: "start", behavior: "smooth" });
       });
       applySort();
       apply();
@@ -1100,16 +1137,16 @@ def _base_styles() -> str:
       --tertiary: #9aa0a6;
       --line: #e0e3e7;
       --line-strong: #d3d7dc;
-      --accent: #8a6a52;
-      --accent-soft: #f3eee9;
-      --gold: #9a6a2f;
+      --accent: #111111;
+      --accent-soft: #f2f2f7;
+      --gold: #111111;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Pretendard, "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
       letter-spacing: 0;
     }
     a { color: inherit; }
@@ -1149,7 +1186,7 @@ def _base_styles() -> str:
     .gp-top-nav a.active {
       border-color: var(--accent);
       background: var(--accent-soft);
-      color: #5f4636;
+      color: var(--text);
     }
     .bottom-nav {
       position: fixed;
@@ -1240,7 +1277,7 @@ def _base_styles() -> str:
       width: fit-content;
       border-left: 3px solid var(--accent);
       padding-left: 8px;
-      color: #5f4636;
+      color: var(--text);
       font-size: 12px;
       font-weight: 850;
     }
@@ -1360,7 +1397,7 @@ def _base_styles() -> str:
     .gp-filter-row button.active {
       border-color: var(--accent);
       background: var(--accent-soft);
-      color: #5f4636;
+      color: var(--text);
     }
     .gp-control-panel p {
       margin: 0;
@@ -1452,18 +1489,18 @@ def _base_styles() -> str:
       gap: 6px;
     }
     .gp-chips span {
-      border: 1px solid #d7e6e3;
+      border: 1px solid var(--line);
       border-radius: 999px;
       padding: 4px 7px;
-      background: #f7f4f0;
-      color: #5f4636;
+      background: var(--surface-muted);
+      color: var(--text);
       font-size: 11px;
       font-weight: 850;
     }
     .gp-chips span.strong {
-      border-color: #d7bd78;
-      background: #fff7dd;
-      color: #725313;
+      border-color: var(--line-strong);
+      background: var(--surface-muted);
+      color: var(--text);
     }
     .gp-metrics {
       display: grid;
@@ -1563,6 +1600,40 @@ def _base_styles() -> str:
     }
     .gp-card-extra[open] summary { margin-bottom: 8px; }
     .gp-card-extra[open] summary::after { transform: rotate(225deg) translateY(-2px); }
+    .gp-pagination {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      margin: 14px 0 4px;
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .gp-pagination[hidden] {
+      display: none;
+    }
+    .gp-pagination button {
+      min-width: 70px;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .gp-pagination button:disabled {
+      color: var(--tertiary);
+      background: var(--surface-muted);
+      cursor: default;
+    }
+    .gp-pagination span {
+      min-width: 72px;
+      text-align: center;
+    }
     .gp-news-mini > strong {
       color: var(--secondary);
       font-size: 11.5px;
@@ -1892,7 +1963,7 @@ def _base_styles() -> str:
       }
       .bottom-nav .active {
         background: var(--accent-soft);
-        color: #5f4636;
+        color: var(--text);
       }
       .nav-dot {
         display: none;

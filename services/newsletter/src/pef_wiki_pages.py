@@ -38,9 +38,10 @@ WIKI_SECTIONS = [
 ]
 
 
-def render_pef_wiki_page(report_date: str) -> str:
+def render_pef_wiki_page(report_date: str, asset_version: str = "") -> str:
     """Return a complete pef-wiki.html document."""
     safe_date = html_escape(report_date)
+    css_version = f"?v={html_escape(asset_version)}" if asset_version else ""
     return f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -48,7 +49,7 @@ def render_pef_wiki_page(report_date: str) -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>PEF Wiki - 기관전용 사모집합투자기구 실무 지식베이스</title>
 {_app_head_meta()}
-  <link rel="stylesheet" href="assets/service.css">
+  <link rel="stylesheet" href="assets/service.css{css_version}">
   {_page_styles()}
 </head>
 <body>
@@ -85,6 +86,7 @@ def render_pef_wiki_page(report_date: str) -> str:
       </article>
     </div>
   </main>
+  {_render_bottom_nav()}
   <script>{_page_script()}</script>
 </body>
 </html>
@@ -427,6 +429,31 @@ def _render_top_nav() -> str:
     </nav>"""
 
 
+def _render_bottom_nav() -> str:
+    return """  <nav class="bottom-nav newsletter-only" aria-label="하단 메뉴">
+    <a href="index.html">
+      <span aria-hidden="true" class="nav-dot nav-icon-brief"></span>
+      <strong>브리프</strong>
+    </a>
+    <a href="lp-notices.html">
+      <span aria-hidden="true" class="nav-dot nav-icon-lp"></span>
+      <strong>LP</strong>
+    </a>
+    <a href="gps.html">
+      <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
+      <strong>GP</strong>
+    </a>
+    <a class="active" href="pef-wiki.html">
+      <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
+      <strong>Wiki</strong>
+    </a>
+    <a href="index.html#saved">
+      <span aria-hidden="true" class="nav-dot nav-icon-saved"></span>
+      <strong>저장</strong>
+    </a>
+  </nav>"""
+
+
 def _render_mobile_drawer() -> str:
     return f"""    <div class="wiki-drawer-backdrop" data-close-menu hidden></div>
     <aside class="wiki-mobile-drawer" id="wiki-mobile-drawer" aria-label="문서 목차" hidden>
@@ -443,15 +470,15 @@ def _render_mobile_drawer() -> str:
 def _page_styles() -> str:
     return """  <style>
     :root {
-      --wiki-bg: #ffffff;
-      --wiki-surface: #ffffff;
-      --wiki-soft: #f6f8f9;
-      --wiki-text: #17202a;
-      --wiki-secondary: #52616f;
-      --wiki-tertiary: #7a8793;
-      --wiki-line: #e7edf1;
-      --wiki-accent: #1f6b63;
-      --wiki-accent-soft: #e7f4f1;
+      --wiki-bg: var(--bg, #f5f5f7);
+      --wiki-surface: var(--surface, #ffffff);
+      --wiki-soft: var(--surface-muted, #f2f2f7);
+      --wiki-text: var(--text, #111111);
+      --wiki-secondary: var(--secondary, #6e6e73);
+      --wiki-tertiary: var(--tertiary, #9a9aa0);
+      --wiki-line: var(--separator, #e5e5ea);
+      --wiki-accent: var(--accent, #111111);
+      --wiki-accent-soft: var(--surface-muted, #f2f2f7);
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; scroll-padding-top: 118px; }
@@ -467,8 +494,8 @@ def _page_styles() -> str:
     }
     a { color: inherit; }
     .wiki-inline-link {
-      border-bottom: 1px solid rgba(31, 107, 99, 0.4);
-      color: #164c46;
+      border-bottom: 1px solid rgba(17, 17, 17, 0.28);
+      color: var(--wiki-text);
       font-weight: 650;
       text-decoration: none;
     }
@@ -478,7 +505,7 @@ def _page_styles() -> str:
     .wiki-shell {
       width: min(1180px, calc(100% - 28px));
       margin: 0 auto;
-      padding: 0 0 calc(48px + env(safe-area-inset-bottom));
+      padding: 0 0 calc(112px + env(safe-area-inset-bottom));
     }
     .wiki-app-header {
       position: sticky;
@@ -511,7 +538,7 @@ def _page_styles() -> str:
       place-items: center;
       border: 1px solid #cfd8df;
       border-radius: 6px;
-      color: #164c46;
+      color: var(--wiki-text);
       font-size: 13px;
       font-weight: 700;
     }
@@ -623,9 +650,9 @@ def _page_styles() -> str:
       text-decoration: none;
     }
     .wiki-top-nav a.active {
-      border-color: #cfe4df;
+      border-color: var(--wiki-line);
       background: var(--wiki-accent-soft);
-      color: #164c46;
+      color: var(--wiki-text);
     }
     .wiki-doc-header {
       display: grid;
@@ -798,7 +825,7 @@ def _page_styles() -> str:
     }
     .wiki-anchor-list a:hover,
     .wiki-anchor-list a:focus-visible {
-      border-left-color: #8fc3b9;
+      border-left-color: var(--wiki-accent);
       outline: none;
     }
     .wiki-anchor-list strong {
@@ -818,8 +845,8 @@ def _page_styles() -> str:
       max-width: 880px;
     }
     .wiki-related-links a {
-      border-bottom: 1px solid rgba(31, 107, 99, 0.4);
-      color: #164c46;
+      border-bottom: 1px solid rgba(17, 17, 17, 0.28);
+      color: var(--wiki-text);
       font-weight: 650;
       text-decoration: none;
     }
@@ -922,7 +949,7 @@ def _page_styles() -> str:
       padding-left: 18px;
     }
     .wiki-source-list a {
-      color: #164c46;
+      color: var(--wiki-text);
       font-weight: 650;
       text-decoration: none;
     }
@@ -1055,6 +1082,7 @@ def _page_styles() -> str:
         line-height: 1.35;
       }
       .wiki-document { padding: 0 8px 0 0; }
+      .wiki-shell { padding-bottom: 140px; }
       .wiki-definition-list div {
         grid-template-columns: 160px minmax(0, 1fr);
         gap: 16px;
@@ -1138,7 +1166,7 @@ def _page_script() -> str:
       if (query && matched) matchCount += 1;
     });
     if (searchStatus) {
-      searchStatus.textContent = query ? `${matchCount}개 섹션 표시` : "";
+      searchStatus.textContent = query ? `검색 결과 ${matchCount}개` : "";
     }
   });
 

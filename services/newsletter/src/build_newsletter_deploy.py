@@ -390,7 +390,10 @@ def write_static_support_files(site_dir: Path) -> None:
 
 
 def write_pef_wiki_page(site_dir: Path, report_date: str) -> None:
-    (site_dir / "pef-wiki.html").write_text(render_pef_wiki_page(report_date), encoding="utf-8")
+    (site_dir / "pef-wiki.html").write_text(
+        render_pef_wiki_page(report_date, app_asset_version()),
+        encoding="utf-8",
+    )
 
 
 def lp_event_label(value: object) -> str:
@@ -1540,16 +1543,16 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-nav span {{ display: flex; flex-wrap: wrap; gap: 7px; color: var(--secondary); font-size: 12px; font-weight: 750; }}
     .ktcu-nav a {{ min-height: 34px; display: inline-flex; align-items: center; border: 1px solid var(--separator); border-radius: 8px; padding: 7px 11px; background: #fff; color: var(--text); text-decoration: none; font-size: 12px; font-weight: 700; }}
     .ktcu-nav a.active,
-    .ktcu-profile-nav .ktcu-profile-link.active {{ border-color: #1f6b63; background: #e7f4f1; color: #164c46; }}
+    .ktcu-profile-nav .ktcu-profile-link.active {{ border-color: var(--accent); background: var(--surface-muted); color: var(--text); }}
     .ktcu-profile-nav {{ display: flex; flex-wrap: wrap; gap: 7px; }}
     .ktcu-profile-nav a {{ min-height: 32px; display: inline-flex; align-items: center; border: 1px solid var(--separator); border-radius: 999px; padding: 6px 10px; background: #fff; color: var(--secondary); text-decoration: none; font-size: 12px; font-weight: 800; }}
     .ktcu-hero {{ display: grid; gap: 18px; padding: 18px 0 8px; }}
     .ktcu-title {{ display: grid; gap: 10px; }}
-    .ktcu-title span {{ width: fit-content; border-left: 3px solid #1f6b63; padding-left: 8px; color: #164c46; font-size: 12px; font-weight: 800; }}
+    .ktcu-title span {{ width: fit-content; border-left: 3px solid var(--accent); padding-left: 8px; color: var(--text); font-size: 12px; font-weight: 800; }}
     .ktcu-title h1 {{ margin: 0; color: var(--text); font-size: clamp(30px, 3.2vw, 44px); line-height: 1.08; letter-spacing: 0; }}
     .ktcu-title p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 15px; line-height: 1.68; }}
     .ktcu-quick {{ display: grid; gap: 8px; }}
-    .ktcu-quick-item {{ border-left: 3px solid #c6923b; padding-left: 10px; color: var(--text); font-size: 13px; line-height: 1.5; }}
+    .ktcu-quick-item {{ border-left: 3px solid var(--separator); padding-left: 10px; color: var(--text); font-size: 13px; line-height: 1.5; }}
     .ktcu-quick-item strong {{ display: block; margin-bottom: 2px; font-size: 13px; }}
     .ktcu-kpis {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }}
     .ktcu-kpis {{ border-top: 1px solid var(--separator); border-bottom: 1px solid var(--separator); }}
@@ -1567,17 +1570,17 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-coverage span {{ display: block; color: var(--secondary); font-size: 11.5px; font-weight: 800; }}
     .ktcu-coverage strong {{ display: block; margin-top: 4px; color: var(--text); font-size: 18px; line-height: 1.2; }}
     .ktcu-chips {{ display: flex; flex-wrap: wrap; gap: 7px; }}
-    .ktcu-chips span {{ border: 1px solid #cfe2de; border-radius: 999px; padding: 6px 9px; background: #f2faf8; color: #164c46; font-size: 12px; font-weight: 800; }}
+    .ktcu-chips span {{ border: 1px solid var(--separator); border-radius: 999px; padding: 6px 9px; background: #fbfcfd; color: var(--text); font-size: 12px; font-weight: 800; }}
     .ktcu-highlight-panel {{ margin-top: 10px; }}
     .ktcu-panel-head {{ display: flex; gap: 10px; align-items: start; justify-content: space-between; margin-bottom: 12px; }}
     .ktcu-panel-head h2 {{ margin-bottom: 4px; }}
     .ktcu-panel-head p {{ margin: 0; color: var(--secondary); font-size: 13px; line-height: 1.5; }}
-    .ktcu-panel-head > strong {{ flex: 0 0 auto; color: #164c46; font-size: 18px; line-height: 1.25; text-align: right; }}
+    .ktcu-panel-head > strong {{ flex: 0 0 auto; color: var(--text); font-size: 18px; line-height: 1.25; text-align: right; }}
     .ktcu-highlight-list {{ display: grid; gap: 8px; }}
     .ktcu-highlight-row {{ display: grid; grid-template-columns: minmax(86px, 0.28fr) minmax(74px, auto) minmax(0, 1fr); gap: 9px; align-items: center; border-top: 1px solid var(--separator); padding-top: 9px; font-size: 13px; }}
     .ktcu-highlight-row:first-child {{ border-top: 0; padding-top: 0; }}
     .ktcu-highlight-row span {{ color: var(--secondary); font-weight: 800; }}
-    .ktcu-highlight-row strong {{ color: #164c46; white-space: nowrap; }}
+    .ktcu-highlight-row strong {{ color: var(--text); white-space: nowrap; }}
     .ktcu-highlight-row em {{ color: var(--text); font-style: normal; font-weight: 700; line-height: 1.4; }}
     .ktcu-empty-note {{ margin: 0; color: var(--secondary); font-size: 13px; }}
     .ktcu-section-grid {{ display: grid; gap: 10px; margin-top: 12px; }}
@@ -1600,7 +1603,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-mix-row {{ display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; border-top: 1px solid var(--separator); padding-top: 8px; font-size: 13px; }}
     .ktcu-mix-row:first-child {{ border-top: 0; padding-top: 0; }}
     .ktcu-mix-row span {{ font-weight: 800; }}
-    .ktcu-mix-row strong {{ color: #164c46; }}
+    .ktcu-mix-row strong {{ color: var(--text); }}
     .ktcu-mix-row em {{ color: var(--secondary); font-style: normal; }}
     .ktcu-lower {{ display: grid; gap: 10px; margin-top: 10px; }}
     .ktcu-timeline {{ display: grid; gap: 9px; }}
@@ -1608,7 +1611,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-timeline-item:first-child {{ border-top: 0; padding-top: 0; }}
     .ktcu-timeline-item div {{ display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }}
     .ktcu-timeline-item time {{ color: var(--secondary); font-size: 11.5px; font-weight: 800; }}
-    .ktcu-timeline-item span {{ border-radius: 999px; padding: 3px 7px; background: #edf4f2; color: #164c46; font-size: 11px; font-weight: 800; }}
+    .ktcu-timeline-item span {{ border-radius: 999px; padding: 3px 7px; background: var(--surface-muted); color: var(--text); font-size: 11px; font-weight: 800; }}
     .ktcu-timeline-item h3 {{ margin: 0; font-size: 14px; line-height: 1.4; }}
     .ktcu-timeline-item h3 a {{ color: var(--text); text-decoration: none; }}
     .ktcu-timeline-item p {{ margin: 0; color: var(--secondary); font-size: 12.5px; line-height: 1.45; }}
@@ -1625,12 +1628,12 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-notice h3 {{ margin: 4px 0; font-size: 14px; line-height: 1.42; }}
     .ktcu-notice h3 a {{ color: var(--text); text-decoration: none; }}
     .ktcu-notice p {{ margin: 0; color: var(--secondary); font-size: 12px; line-height: 1.4; }}
-    .ktcu-notice strong {{ white-space: nowrap; color: #164c46; font-size: 14px; }}
+    .ktcu-notice strong {{ white-space: nowrap; color: var(--text); font-size: 14px; }}
     .ktcu-years {{ display: grid; gap: 8px; }}
     .ktcu-year-row {{ display: grid; grid-template-columns: 44px minmax(0, 1fr) 68px; gap: 8px; align-items: center; font-size: 12px; }}
     .ktcu-year-row span {{ color: var(--secondary); font-weight: 800; }}
     .ktcu-year-row div {{ height: 9px; border-radius: 999px; background: #edf0f4; overflow: hidden; }}
-    .ktcu-year-row i {{ display: block; height: 100%; border-radius: inherit; background: #1f6b63; }}
+    .ktcu-year-row i {{ display: block; height: 100%; border-radius: inherit; background: var(--accent); }}
     .ktcu-year-row strong {{ text-align: right; font-size: 12px; }}
     .ktcu-detail {{ margin-top: 10px; border: 1px solid var(--separator); border-radius: 8px; background: #fff; }}
     .ktcu-detail summary {{ cursor: pointer; padding: 12px 14px; color: var(--text); font-size: 13px; font-weight: 800; }}
@@ -1641,7 +1644,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-peer-table {{ display: grid; gap: 7px; }}
     .ktcu-peer-row {{ display: grid; grid-template-columns: minmax(112px, 1.2fr) minmax(78px, 0.9fr) 44px 68px 74px; gap: 8px; align-items: center; border: 1px solid var(--separator); border-radius: 8px; padding: 9px; background: #fff; color: var(--text); text-decoration: none; font-size: 12px; }}
     .ktcu-peer-head {{ background: #f7fafb; color: var(--secondary); font-weight: 800; }}
-    .ktcu-peer-row.active {{ border-color: #1f6b63; background: #f0faf7; }}
+    .ktcu-peer-row.active {{ border-color: var(--accent); background: var(--surface-muted); }}
     .ktcu-peer-row strong {{ min-width: 0; overflow-wrap: anywhere; font-size: 13px; }}
     .ktcu-peer-row span {{ min-width: 0; color: var(--secondary); overflow-wrap: anywhere; }}
     .ktcu-gp-tags {{ display: flex; flex-wrap: wrap; gap: 7px; }}
@@ -1678,11 +1681,11 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
         <div class="ktcu-title">
           <span>출자기관 프로필</span>
           <h1>{html_escape(lp_name)}</h1>
-          <p>{html_escape(lp_type)}의 일반현황, 투자현황, 담당 조직, 출자공고 흐름을 공개자료 기준으로 정리합니다.</p>
+          <p>{html_escape(lp_type)}의 일반현황, 투자현황, 담당 조직, 출자공고 흐름을 한 화면에서 봅니다.</p>
           <div class="ktcu-quick">
             <div class="ktcu-quick-item"><strong>핵심 창구</strong>{html_escape(default_team)}</div>
             <div class="ktcu-quick-item"><strong>{html_escape(str(highlight_year))}년 활동</strong>{html_escape(activity_phrase)}</div>
-            <div class="ktcu-quick-item"><strong>공개자료 기준</strong>공식 조직과 공고를 먼저 반영하고, 최종 선정 GP는 공식 발표가 확인된 건부터 반영합니다.</div>
+            <div class="ktcu-quick-item"><strong>출자 이력</strong>공식 공고와 최종 선정 발표를 기준으로 정리합니다.</div>
           </div>
           <nav class="ktcu-tabbar" aria-label="프로필 섹션">
             <a href="#overview">개요</a>
@@ -1824,7 +1827,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     <details class="ktcu-detail" id="notes">
       <summary>참고사항</summary>
       <div class="ktcu-detail-body">
-        <p>공개 공고와 공식 조직도 기준의 프로필입니다. 최종 선정 GP, 실제 약정·집행액, 실무 담당자명은 공개자료만으로 확정하지 않습니다.</p>
+        <p>공식 공고, 최종 선정 발표, 기관 조직도에 기반한 프로필입니다. 실제 약정·집행액과 실무 담당자명은 확인되는 항목만 표시합니다.</p>
         <dl class="ktcu-facts">
 {gap_rows}
         </dl>
@@ -1833,7 +1836,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
 
 {source_details}
 
-    <p class="ktcu-footer">기준일 {html_escape(report_date)} · 최신 공고일 {html_escape(latest or "-")} · 공개자료로 확인되지 않는 실무자명과 최종 선정 GP 히스토리는 추정하지 않습니다.</p>
+    <p class="ktcu-footer">기준일 {html_escape(report_date)} · 최신 공고일 {html_escape(latest or "-")} · 실무자명과 최종 선정 GP 히스토리는 확인되는 항목만 표시합니다.</p>
   </main>
   <nav class="bottom-nav newsletter-only" aria-label="하단 메뉴">
     <a href="index.html">
@@ -2022,7 +2025,7 @@ def render_lp_notices_page(
     .lp-directory-card {{ display: grid; grid-template-columns: minmax(0, 1fr) 82px 74px; gap: 8px; align-items: center; min-height: 78px; border-bottom: 1px solid var(--separator); padding: 11px 10px; background: var(--surface); }}
     .lp-directory-card:last-child {{ border-bottom: 0; }}
     .lp-directory-card-head {{ display: grid; gap: 4px; }}
-    .lp-directory-card-head span {{ width: fit-content; border-radius: 999px; padding: 4px 8px; background: #e7f4f1; color: #164c46; font-size: 11px; font-weight: 800; }}
+    .lp-directory-card-head span {{ width: fit-content; border-radius: 999px; padding: 4px 8px; background: var(--surface-muted); color: var(--text); font-size: 11px; font-weight: 800; }}
     .lp-directory-card-head strong {{ color: var(--text); font-size: 18px; line-height: 1.25; }}
     .lp-directory-kind,
     .lp-directory-latest {{ color: var(--secondary); font-size: 13px; font-weight: 750; line-height: 1.45; }}
@@ -2046,7 +2049,7 @@ def render_lp_notices_page(
     .lp-notice-toolbar select {{ width: 100%; min-height: 42px; border: 1px solid var(--separator); border-radius: 8px; padding: 8px 11px; background: var(--surface); color: var(--text); font-size: 14px; }}
     .lp-filter-row {{ display: flex; flex-wrap: wrap; gap: 7px; }}
     .lp-filter-row button {{ border: 1px solid var(--separator); border-radius: 999px; padding: 7px 10px; background: var(--surface); color: var(--secondary); font-size: 12px; font-weight: 800; cursor: pointer; }}
-    .lp-filter-row button.active {{ border-color: #1f6b63; background: #e7f4f1; color: #164c46; }}
+    .lp-filter-row button.active {{ border-color: var(--accent); background: var(--surface-muted); color: var(--text); }}
     .lp-page-list {{ display: grid; gap: 10px; }}
     .lp-page-card {{ display: grid; gap: 8px; padding: 14px; border: 1px solid var(--separator); border-radius: 8px; background: var(--surface); }}
     .lp-page-card h2 {{ margin: 0; font-size: 15px; line-height: 1.38; }}
@@ -2085,8 +2088,8 @@ def render_lp_notices_page(
         font-size: 12px;
       }}
       body.lp-notices-page .bottom-nav .active {{
-        background: #f3eee9;
-        color: #5f4636;
+        background: var(--surface-muted);
+        color: var(--text);
       }}
       body.lp-notices-page .nav-dot {{
         display: none;
@@ -2196,25 +2199,22 @@ def render_lp_notices_page(
           <a class="header-action" href="#lpNotices" aria-label="LP 공식 공고로 이동">공고</a>
         </div>
       </div>
-      <div class="brief-meta">대상 LP {tracked_count}개 · 공개 프로필 {profile_count}개 · 표시 공고 {visible_notice_count}건 · 기준일 {html_escape(report_date)}</div>
+      <div class="brief-meta">대상 LP {tracked_count}개 · 기관 프로필 {profile_count}개 · 표시 공고 {visible_notice_count}건 · 기준일 {html_escape(report_date)}</div>
     </header>
 
     <main class="content-area">
       <section class="lp-directory-hero" aria-label="LP 디렉토리 요약">
         <div>
           <h1>출자기관</h1>
-          <p>국내 주요 출자기관의 기본 현황, 관심 자산군, 최근 출자공고를 한 곳에서 봅니다. 공개자료로 표시 가능한 항목을 우선 반영하고, 관련 뉴스는 구분해 표시합니다.</p>
+          <p>국내 주요 출자기관의 기본 현황, 관심 자산군, 최근 출자공고를 한 곳에서 봅니다. 공고와 관련 뉴스는 구분해 표시합니다.</p>
         </div>
         <div class="lp-directory-kpis">
           <div><span>대상 기관</span><strong>{tracked_count}개</strong></div>
-          <div><span>공개 프로필</span><strong>{profile_count}개</strong></div>
+          <div><span>기관 프로필</span><strong>{profile_count}개</strong></div>
           <div><span>공고 기준 규모</span><strong>{html_escape(public_amount_label(total_amount, fallback="-"))}</strong></div>
           <div><span>표시 공고</span><strong>{visible_notice_count}건</strong></div>
         </div>
       </section>
-      <nav class="lp-profile-nav" aria-label="LP 프로필">
-        {nav_html}
-      </nav>
       <section class="section-block" id="lpDirectory" aria-label="출자기관 목록">
         <div class="lp-notice-toolbar">
           <div class="lp-control-head">
