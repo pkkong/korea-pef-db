@@ -20,7 +20,6 @@ SOURCE_URLS = {
 APP_ICON_FILE = "apple-touch-icon.png"
 
 WIKI_SECTIONS = [
-    ("wiki-index", "업무별 바로가기", "법령·보고·세무·실무"),
     ("chapter", "제1장 개요", "실무안내 본문"),
     ("meaning", "제도의 의의", "정의·기능"),
     ("background", "도입 배경", "구조조정·위험자본"),
@@ -54,11 +53,12 @@ def render_pef_wiki_page(report_date: str) -> str:
 <body>
   <main class="wiki-shell">
     {_render_top_nav()}
+    {_render_mobile_drawer()}
     <header class="wiki-doc-header">
       <div>
-        <p class="wiki-kicker">PEF Wiki · 법령·보고·세무·실무안내</p>
-        <h1>기관전용 사모집합투자기구 실무 지식베이스</h1>
-        <p class="wiki-lede">기관전용 사모집합투자기구의 제도 개요, 근거 법령, 신고·보고 업무, 실무 체크 항목을 한곳에서 확인합니다.</p>
+        <p class="wiki-kicker">PEF Wiki</p>
+        <h1>기관전용 사모집합투자기구</h1>
+        <p class="wiki-lede">실무안내 제1장 개관을 시작으로 제도 개요, 관련 법령, 보고, 세무, 체크리스트를 문서 단위로 연결합니다.</p>
       </div>
       <form class="wiki-search" role="search">
         <label for="wikiSearch">문서 검색</label>
@@ -66,15 +66,14 @@ def render_pef_wiki_page(report_date: str) -> str:
         <p class="wiki-search-status" id="wikiSearchStatus" aria-live="polite"></p>
       </form>
       <div class="wiki-doc-meta" aria-label="문서 기준">
-        <span>제1장 개관 기준</span>
-        <span>법령·세무·보고 연결</span>
+        <span>원문: {html_escape(PEF_WIKI_SOURCE_TITLE)}</span>
         <span>기준일 {safe_date}</span>
       </div>
     </header>
 
     <div class="wiki-layout">
-      <aside class="wiki-sidebar" aria-label="문서 목차">
-        <strong>Wiki 목차</strong>
+      <aside class="wiki-sidebar" id="wiki-nav" aria-label="문서 목차">
+        <strong>문서 목차</strong>
         <nav>
 {_render_sidebar_links()}
         </nav>
@@ -85,7 +84,6 @@ def render_pef_wiki_page(report_date: str) -> str:
       </article>
     </div>
   </main>
-  {_render_bottom_nav()}
   <script>{_page_script()}</script>
 </body>
 </html>
@@ -94,39 +92,18 @@ def render_pef_wiki_page(report_date: str) -> str:
 
 def _render_wiki_article() -> str:
     return f"""
-        <section class="wiki-section" id="wiki-index" data-search="wiki 업무별 바로가기 정보구조 관련 법률 세무신고 금감원 보고 작성 실무 체크리스트 출처 앵커">
-          <p class="wiki-eyebrow">Wiki 홈</p>
-          <h2>업무별 바로가기</h2>
-          <p class="wiki-paragraph">기관전용 사모집합투자기구 업무를 제도 개요, 근거 법령, 신고·보고, 세무, 체크리스트로 나눠 찾을 수 있습니다. 각 항목은 본문 앵커와 공식 출처를 함께 둡니다.</p>
-          <nav class="wiki-anchor-list" aria-label="업무별 바로가기">
-            <a href="#chapter"><strong>제1장 개요</strong><span>제도의 의의, 도입 배경, 체계 개편, 주요 주체를 한 흐름으로 봅니다.</span></a>
-            <a href="#law-map"><strong>관련 법률·규정</strong><span>자본시장법, 시행령, 감독규정, 특수 목적형 펀드 관련 법률을 조문 단위로 연결합니다.</span></a>
-            <a href="#fss-reporting"><strong>금감원·금융위원회 보고</strong><span>설립, 변경, 운용 중, 해산·청산 보고를 이벤트, 제출 주체, 근거, 서식으로 확인합니다.</span></a>
-            <a href="#tax-filings"><strong>세무신고·납부</strong><span>펀드, GP, SPC, LP별 신고·납부·자료제출 쟁점을 업무 단계별로 묶습니다.</span></a>
-            <a href="#practice-checklists"><strong>실무 체크리스트</strong><span>설립, 투자, 운용, 분배, 회수 단계에서 확인할 증빙을 업무 목록으로 둡니다.</span></a>
-          </nav>
-          <div class="wiki-subsection">
-            <h3>확인 기준</h3>
-            <ol class="wiki-body-list">
-              <li>원천 문서와 게시글은 검증 출처로 확인하고, 기본 설명은 위키 본문에서 읽습니다.</li>
-              <li>법령·세무·보고 항목은 시행일, 제출기한, 담당기관, 원천 링크가 확인된 경우에만 업무 기준으로 사용합니다.</li>
-              <li>실무 체크리스트는 승인 절차, LP 동의, 제출 증빙, 보완요청 기록처럼 실제 업무에서 확인할 증거 단위로 봅니다.</li>
-            </ol>
-          </div>
-        </section>
-
-        <section class="wiki-section" id="chapter" data-search="문서 개요 기관전용 사모집합투자기구 실무안내 사내 위키 컴플라이언스 GP 운용 가이드">
+        <section class="wiki-section" id="chapter" data-search="문서 개요 기관전용 사모집합투자기구 실무안내 법령 보고 세무 체크리스트">
           <p class="wiki-eyebrow">실무안내 본문</p>
           <h2>제1장 기관전용 사모집합투자기구 개요</h2>
           <p class="wiki-paragraph">제1장은 기관전용 사모집합투자기구가 어떤 제도인지, 왜 도입됐는지, 2021년 체계 개편 후 어떤 기준으로 운용되는지를 확인하는 출발점입니다.</p>
-          <nav class="wiki-anchor-list" aria-label="제1장 바로가기">
+          <nav class="wiki-anchor-list" aria-label="이 문서의 주요 항목">
             <a href="#meaning"><strong>제도의 의의</strong><span>기관전용 사모펀드의 정의와 GP가 수행하는 기능을 확인합니다.</span></a>
             <a href="#background"><strong>도입 배경</strong><span>외환위기 이후 구조조정 수요와 국내 장기 위험자본 육성 필요성을 봅니다.</span></a>
             <a href="#reform"><strong>체계 개편</strong><span>전문투자형·경영참여형 구분에서 일반 사모·기관전용 사모 체계로 바뀐 내용을 정리합니다.</span></a>
             <a href="#investors"><strong>투자자 범위</strong><span>LP로 참여할 수 있는 기관투자자 범위와 일반 개인투자자 제한을 확인합니다.</span></a>
             <a href="#operations"><strong>운용 규제</strong><span>경영참여 의무 폐지, 금전대여, 차입·채무보증 한도를 연결해 봅니다.</span></a>
           </nav>
-          <p class="wiki-source-note">기준 원천: 금융감독원 자산운용감독국 「기관전용 사모집합투자기구 실무안내」 제1장. 조문 판단은 <a class="wiki-inline-link" href="#law-map">관련 법률·규정</a>에서 시행일과 원천 링크를 함께 확인합니다.</p>
+          <p class="wiki-source-note">출처: <a href="{html_escape(SOURCE_URLS["kvca_guide_file"])}" target="_blank" rel="noreferrer">기관전용 사모집합투자기구 실무안내</a>. 조문 판단은 <a class="wiki-inline-link" href="#law-map">관련 법률·규정</a>에서 시행일과 원천 링크를 함께 확인합니다.</p>
         </section>
 
         <section class="wiki-section" id="meaning" data-search="제도의 의의 기관전용 사모집합투자기구 정의 GP 운용 경영권 참여 구조조정 성장자본 모험자본">
@@ -308,7 +285,7 @@ def _render_wiki_article() -> str:
             <li><strong>주체 확인</strong><span>펀드, 업무집행사원, 투자목적회사, 국내외 유한책임사원, 투자대상회사별로 납세자, 원천징수의무자, 자료제출자를 구분합니다.</span></li>
             <li><strong>거래 유형</strong><span>출자, 투자집행, 이자·배당 수취, 지분 양도, 분배, 청산 분배를 나눠 소득구분과 증빙자료를 연결합니다.</span></li>
             <li><strong>신고 자료</strong><span>원천징수, 지급명세서, 법인세·소득세 관련 자료, 해외투자·외국납부세액 자료처럼 제출 주기와 보관 증빙이 다른 항목을 분리합니다.</span></li>
-            <li><strong>검토 기록</strong><span>세무대리인 검토, 예규·판례·질의회신, LP 요청자료, 보완신고 여부를 항목별로 남깁니다.</span></li>
+            <li><strong>검토 기록</strong><span>세무대리인 검토, 예규·판례·질의회신, LP 요청자료, 정정신고 여부를 항목별로 남깁니다.</span></li>
           </ol>
           <p class="wiki-source-note">기준 원천: 국세청, 홈택스, 국세법령정보시스템. 세목별 판단은 최신 법령·예규·실무 검토가 확인된 항목부터 확정합니다.</p>
           <p class="wiki-related-links">관련 항목: <a href="#actors">주요 주체 및 핵심 용어</a>, <a href="#practice-checklists">분배·회수·청산 체크리스트</a>, <a href="#sources">공식 출처</a></p>
@@ -317,7 +294,7 @@ def _render_wiki_article() -> str:
         <section class="wiki-section" id="fss-reporting" data-search="금감원 보고 금융위원회 보고 작성 설립 보고 변경 보고 정기 보고 즉시 보고 해산 청산 GP 등록 기관전용 사모집합투자기구">
           <p class="wiki-eyebrow">보고</p>
           <h2>금감원·금융위원회 보고 작성 구조</h2>
-          <p class="wiki-paragraph">보고 업무는 이벤트, 제출 주체, 법정기한, 제출서식, 접수 증빙, 보완요청 기록으로 관리합니다. 보고서 문안은 실무안내 본문과 법령 근거가 확인된 단위로 분리합니다.</p>
+          <p class="wiki-paragraph">보고 업무는 이벤트, 제출 주체, 법정기한, 제출서식, 접수 증빙, 추가 제출 요청 기록으로 관리합니다. 보고서 문안은 실무안내 본문과 법령 근거가 확인된 단위로 분리합니다.</p>
           <dl class="wiki-definition-list">
             <div><dt>설립 보고</dt><dd>기관전용 사모집합투자기구 설립등기 후 금융위원회 보고가 필요한 이벤트로 관리합니다. 정관, 등기, GP 정보, LP 적격성, 출자약정 자료를 같은 항목에서 확인합니다.</dd></div>
             <div><dt>GP 등록·변경</dt><dd>업무집행사원 등록, 운용전문인력, 대주주·임원·내부통제 변경은 근거 조문과 첨부 증빙을 함께 둡니다.</dd></div>
@@ -331,13 +308,13 @@ def _render_wiki_article() -> str:
         <section class="wiki-section" id="practice-checklists" data-search="실무 체크리스트 설립 운용 투자 LP 동의 이해상충 출자약정 납입 분배 회수 청산 보고 제출 증빙">
           <p class="wiki-eyebrow">체크리스트</p>
           <h2>실무 체크리스트</h2>
-          <p class="wiki-paragraph">체크리스트는 검토자가 실제로 확인할 증거를 기준으로 씁니다. 승인 절차, LP 동의, 제출서류, 접수증, 보완요청, 사후 보관자료를 같은 단계 안에 둡니다.</p>
+          <p class="wiki-paragraph">체크리스트는 승인 절차, LP 동의, 제출서류, 접수증, 추가 제출 요청, 사후 보관자료처럼 실제 확인 항목을 기준으로 정리합니다.</p>
           <details class="wiki-foldout" open>
             <summary>설립·출자</summary>
             <ul class="wiki-bullet-list">
               <li>GP 등록 상태, 운용전문인력, 승인권자와 이해상충 검토를 확인합니다.</li>
               <li>정관, 투자계약, 출자약정서, LP 적격성 증빙, 출자 납입 일정을 같은 폴더 기준으로 맞춥니다.</li>
-              <li>설립등기, 보고 제출일, 접수번호, 보완요청 여부를 보고 항목과 연결합니다.</li>
+              <li>설립등기, 보고 제출일, 접수번호, 추가 제출 요청 여부를 보고 항목과 연결합니다.</li>
             </ul>
           </details>
           <details class="wiki-foldout">
@@ -401,54 +378,48 @@ def _app_head_meta() -> str:
 
 
 def _render_top_nav() -> str:
-    return """    <nav class="wiki-service-nav" aria-label="서비스 이동">
-      <a href="index.html">브리프</a>
-      <a href="lp-notices.html">LP</a>
-      <a href="gps.html">GP</a>
-      <a class="active" href="pef-wiki.html">Wiki</a>
-      <a href="index.html#saved">저장</a>
-    </nav>
-    <nav class="wiki-top-nav" aria-label="Wiki 섹션 이동">
-      <a class="active" href="#wiki-index">바로가기</a>
-      <a href="#chapter">제1장</a>
-      <a href="#meaning">의의</a>
-      <a href="#background">도입 배경</a>
-      <a href="#reform">체계 개편</a>
-      <a href="#investors">투자자</a>
-      <a href="#operations">운용 규제</a>
-      <a href="#actors">주체·용어</a>
-      <a href="#market">현황</a>
+    return """    <header class="wiki-app-header" aria-label="PEF Wiki">
+      <a class="wiki-brand" href="pef-wiki.html" aria-label="PEF Wiki 홈">
+        <span class="wiki-brand-mark" aria-hidden="true">P</span>
+        <span>PEF Wiki</span>
+      </a>
+      <nav class="wiki-service-nav" aria-label="서비스 이동">
+        <a href="index.html">브리프</a>
+        <a href="lp-notices.html">LP</a>
+        <a href="gps.html">GP</a>
+        <a class="active" href="pef-wiki.html">Wiki</a>
+        <a href="index.html#saved">저장</a>
+      </nav>
+      <div class="wiki-header-actions">
+        <button class="wiki-icon-button" type="button" data-focus-search aria-label="문서 검색">
+          <span class="wiki-search-icon" aria-hidden="true"></span>
+        </button>
+        <button class="wiki-icon-button" type="button" data-toggle-menu aria-label="문서 목차 열기" aria-expanded="false" aria-controls="wiki-mobile-drawer">
+          <span class="wiki-menu-icon" aria-hidden="true"></span>
+        </button>
+      </div>
+    </header>
+    <nav class="wiki-top-nav" aria-label="Wiki 주제 이동">
+      <a class="active" href="#chapter">제1장</a>
       <a href="#law-map">법령</a>
-      <a href="#tax-filings">세무</a>
       <a href="#fss-reporting">보고</a>
+      <a href="#tax-filings">세무</a>
       <a href="#practice-checklists">체크리스트</a>
       <a href="#sources">출처</a>
     </nav>"""
 
 
-def _render_bottom_nav() -> str:
-    return """  <nav class="bottom-nav newsletter-only" aria-label="하단 메뉴">
-    <a href="index.html">
-      <span aria-hidden="true" class="nav-dot nav-icon-brief"></span>
-      <strong>브리프</strong>
-    </a>
-    <a href="lp-notices.html">
-      <span aria-hidden="true" class="nav-dot nav-icon-lp"></span>
-      <strong>LP</strong>
-    </a>
-    <a href="gps.html">
-      <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
-      <strong>GP</strong>
-    </a>
-    <a class="active" href="pef-wiki.html">
-      <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
-      <strong>Wiki</strong>
-    </a>
-    <a href="index.html#saved">
-      <span aria-hidden="true" class="nav-dot nav-icon-saved"></span>
-      <strong>저장</strong>
-    </a>
-  </nav>"""
+def _render_mobile_drawer() -> str:
+    return f"""    <div class="wiki-drawer-backdrop" data-close-menu hidden></div>
+    <aside class="wiki-mobile-drawer" id="wiki-mobile-drawer" aria-label="문서 목차" hidden>
+      <div class="wiki-drawer-header">
+        <strong>문서 목차</strong>
+        <button class="wiki-icon-button" type="button" data-close-menu aria-label="문서 목차 닫기">×</button>
+      </div>
+      <nav>
+{_render_sidebar_links()}
+      </nav>
+    </aside>"""
 
 
 def _page_styles() -> str:
@@ -465,7 +436,7 @@ def _page_styles() -> str:
       --wiki-accent-soft: #e7f4f1;
     }
     * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; scroll-padding-top: 74px; }
+    html { scroll-behavior: smooth; scroll-padding-top: 118px; }
     body {
       margin: 0;
       background: var(--wiki-bg);
@@ -473,11 +444,14 @@ def _page_styles() -> str:
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       letter-spacing: 0;
     }
+    html.wiki-menu-open {
+      overflow: hidden;
+    }
     a { color: inherit; }
     .wiki-inline-link {
       border-bottom: 1px solid rgba(31, 107, 99, 0.4);
       color: #164c46;
-      font-weight: 850;
+      font-weight: 650;
       text-decoration: none;
     }
     .wiki-inline-link:hover {
@@ -486,7 +460,42 @@ def _page_styles() -> str:
     .wiki-shell {
       width: min(1180px, calc(100% - 28px));
       margin: 0 auto;
-      padding: 12px 0 calc(106px + env(safe-area-inset-bottom));
+      padding: 0 0 calc(48px + env(safe-area-inset-bottom));
+    }
+    .wiki-app-header {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 56px;
+      border-bottom: 1px solid var(--wiki-line);
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(14px);
+    }
+    .wiki-brand {
+      display: inline-flex;
+      gap: 9px;
+      align-items: center;
+      min-width: 0;
+      color: var(--wiki-text);
+      font-size: 15px;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .wiki-brand-mark {
+      display: inline-grid;
+      width: 26px;
+      height: 26px;
+      place-items: center;
+      border: 1px solid #cfd8df;
+      border-radius: 6px;
+      color: #164c46;
+      font-size: 13px;
+      font-weight: 700;
     }
     .wiki-service-nav {
       display: none;
@@ -495,7 +504,7 @@ def _page_styles() -> str:
       min-height: 38px;
       color: var(--wiki-secondary);
       font-size: 13px;
-      font-weight: 850;
+      font-weight: 500;
     }
     .wiki-service-nav a {
       color: inherit;
@@ -504,50 +513,120 @@ def _page_styles() -> str:
     .wiki-service-nav a.active {
       color: var(--wiki-text);
     }
+    .wiki-header-actions {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .wiki-icon-button {
+      display: inline-grid;
+      width: 36px;
+      height: 36px;
+      place-items: center;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--wiki-text);
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .wiki-icon-button:hover,
+    .wiki-icon-button:focus-visible {
+      background: var(--wiki-soft);
+      outline: none;
+    }
+    .wiki-search-icon {
+      position: relative;
+      width: 16px;
+      height: 16px;
+      border: 2px solid currentColor;
+      border-radius: 50%;
+    }
+    .wiki-search-icon::after {
+      position: absolute;
+      right: -6px;
+      bottom: -4px;
+      width: 8px;
+      height: 2px;
+      background: currentColor;
+      border-radius: 2px;
+      content: "";
+      transform: rotate(45deg);
+      transform-origin: left center;
+    }
+    .wiki-menu-icon,
+    .wiki-menu-icon::before,
+    .wiki-menu-icon::after {
+      display: block;
+      width: 18px;
+      height: 2px;
+      border-radius: 2px;
+      background: currentColor;
+      content: "";
+    }
+    .wiki-menu-icon {
+      position: relative;
+    }
+    .wiki-menu-icon::before {
+      position: absolute;
+      top: -6px;
+    }
+    .wiki-menu-icon::after {
+      position: absolute;
+      top: 6px;
+    }
     .wiki-top-nav {
       position: sticky;
-      top: 0;
+      top: 56px;
       z-index: 24;
       display: flex;
-      gap: 16px;
+      gap: 6px;
       overflow-x: auto;
-      padding: 7px 0 9px;
+      border-bottom: 1px solid var(--wiki-line);
+      padding: 8px 0;
       background: rgba(255, 255, 255, 0.94);
       backdrop-filter: blur(14px);
+      scrollbar-width: none;
+    }
+    .wiki-top-nav::-webkit-scrollbar {
+      display: none;
     }
     .wiki-top-nav a {
       flex: 0 0 auto;
-      min-height: 34px;
+      min-height: 32px;
       display: inline-flex;
       align-items: center;
-      border-bottom: 2px solid transparent;
-      padding: 7px 0;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 7px 11px;
       color: var(--wiki-secondary);
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 500;
       text-decoration: none;
     }
     .wiki-top-nav a.active {
-      border-color: var(--wiki-accent);
+      border-color: #cfe4df;
+      background: var(--wiki-accent-soft);
       color: #164c46;
     }
     .wiki-doc-header {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
-      gap: 14px;
-      padding: 18px 0 14px;
+      gap: 16px;
+      padding: 34px 0 24px;
+      border-bottom: 1px solid var(--wiki-line);
     }
     .wiki-kicker {
       margin: 0 0 8px;
       color: var(--wiki-accent);
       font-size: 12px;
-      font-weight: 900;
+      font-weight: 600;
     }
     .wiki-doc-header h1 {
       max-width: 880px;
       margin: 0;
       color: var(--wiki-text);
-      font-size: clamp(25px, 3vw, 34px);
+      font-size: 32px;
       line-height: 1.18;
       overflow-wrap: anywhere;
       word-break: keep-all;
@@ -555,8 +634,9 @@ def _page_styles() -> str:
     .wiki-lede {
       margin: 10px 0 0;
       color: var(--wiki-secondary);
-      font-size: 15px;
-      font-weight: 800;
+      font-size: 17px;
+      font-weight: 400;
+      line-height: 1.55;
     }
     .wiki-search {
       display: grid;
@@ -566,7 +646,7 @@ def _page_styles() -> str:
     .wiki-search label {
       color: var(--wiki-secondary);
       font-size: 12px;
-      font-weight: 850;
+      font-weight: 600;
     }
     .wiki-search input {
       width: 100%;
@@ -584,7 +664,7 @@ def _page_styles() -> str:
       margin: 0;
       color: var(--wiki-tertiary);
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 400;
     }
     .wiki-doc-meta {
       display: flex;
@@ -593,7 +673,7 @@ def _page_styles() -> str:
       align-items: center;
       color: var(--wiki-secondary);
       font-size: 12px;
-      font-weight: 850;
+      font-weight: 400;
     }
     .wiki-doc-meta span {
       display: inline-flex;
@@ -608,6 +688,39 @@ def _page_styles() -> str:
     }
     .wiki-sidebar {
       display: none;
+    }
+    .wiki-sidebar strong {
+      color: var(--wiki-secondary);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .wiki-sidebar nav {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .wiki-sidebar nav::-webkit-scrollbar {
+      display: none;
+    }
+    .wiki-sidebar a {
+      flex: 0 0 min(220px, 78vw);
+      display: grid;
+      gap: 3px;
+      border-left: 2px solid var(--wiki-line);
+      padding: 2px 0 2px 10px;
+      color: var(--wiki-text);
+      text-decoration: none;
+    }
+    .wiki-sidebar span {
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .wiki-sidebar small {
+      color: var(--wiki-secondary);
+      font-size: 12px;
+      line-height: 1.35;
     }
     .wiki-document {
       min-width: 0;
@@ -626,12 +739,12 @@ def _page_styles() -> str:
       margin: 0;
       color: var(--wiki-accent);
       font-size: 12px;
-      font-weight: 900;
+      font-weight: 600;
     }
     .wiki-section h2 {
       margin: 0;
       color: var(--wiki-text);
-      font-size: clamp(22px, 3vw, 32px);
+      font-size: 26px;
       line-height: 1.2;
       word-break: keep-all;
     }
@@ -647,8 +760,8 @@ def _page_styles() -> str:
     .wiki-section dd {
       margin: 0;
       color: var(--wiki-secondary);
-      font-size: 14px;
-      line-height: 1.65;
+      font-size: 15px;
+      line-height: 1.72;
     }
     .wiki-paragraph {
       max-width: 880px;
@@ -670,7 +783,7 @@ def _page_styles() -> str:
     .wiki-anchor-list strong {
       color: var(--wiki-text);
       font-size: 14px;
-      font-weight: 900;
+      font-weight: 650;
     }
     .wiki-anchor-list span {
       color: var(--wiki-secondary);
@@ -686,7 +799,7 @@ def _page_styles() -> str:
     .wiki-related-links a {
       border-bottom: 1px solid rgba(31, 107, 99, 0.4);
       color: #164c46;
-      font-weight: 850;
+      font-weight: 650;
       text-decoration: none;
     }
     .wiki-subsection {
@@ -708,7 +821,7 @@ def _page_styles() -> str:
     }
     .wiki-bullet-list strong {
       color: var(--wiki-text);
-      font-weight: 900;
+      font-weight: 650;
     }
     .wiki-meta-list {
       display: grid;
@@ -723,14 +836,14 @@ def _page_styles() -> str:
     .wiki-meta-list dt {
       color: var(--wiki-text);
       font-size: 13px;
-      font-weight: 900;
+      font-weight: 650;
     }
     .wiki-meta-list dd {
       margin: 0;
     }
     .wiki-stat-list dd {
       color: var(--wiki-text);
-      font-weight: 780;
+      font-weight: 500;
     }
     .wiki-definition-block {
       display: grid;
@@ -744,7 +857,7 @@ def _page_styles() -> str:
       margin: 0;
       color: var(--wiki-tertiary);
       font-size: 12px;
-      font-weight: 780;
+      font-weight: 400;
       line-height: 1.55;
     }
     .wiki-definition-list {
@@ -760,7 +873,7 @@ def _page_styles() -> str:
     .wiki-definition-list dt {
       color: var(--wiki-text);
       font-size: 14px;
-      font-weight: 900;
+      font-weight: 650;
     }
     .wiki-timeline,
     .wiki-event-list {
@@ -789,7 +902,7 @@ def _page_styles() -> str:
     }
     .wiki-source-list a {
       color: #164c46;
-      font-weight: 850;
+      font-weight: 650;
       text-decoration: none;
     }
     .wiki-foldout {
@@ -803,7 +916,7 @@ def _page_styles() -> str:
       cursor: pointer;
       color: var(--wiki-text);
       font-size: 15px;
-      font-weight: 900;
+      font-weight: 650;
       list-style: none;
     }
     .wiki-foldout summary::-webkit-details-marker {
@@ -813,7 +926,7 @@ def _page_styles() -> str:
       content: "+";
       float: right;
       color: var(--wiki-tertiary);
-      font-weight: 900;
+      font-weight: 600;
     }
     .wiki-foldout[open] summary {
       margin-bottom: 8px;
@@ -822,12 +935,63 @@ def _page_styles() -> str:
       content: "-";
     }
     .wiki-section[hidden] { display: none; }
-    .bottom-nav.newsletter-only {
-      background: rgba(255, 255, 255, 0.98);
-      box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.08);
+    .wiki-drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      background: rgba(23, 32, 42, 0.16);
+    }
+    .wiki-drawer-backdrop[hidden],
+    .wiki-mobile-drawer[hidden] {
+      display: none;
+    }
+    .wiki-mobile-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 70;
+      width: min(86vw, 360px);
+      overflow: auto;
+      border-left: 1px solid var(--wiki-line);
+      background: #ffffff;
+      padding: calc(18px + env(safe-area-inset-top)) 18px calc(24px + env(safe-area-inset-bottom));
+      box-shadow: -20px 0 50px rgba(15, 23, 42, 0.12);
+    }
+    .wiki-drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .wiki-drawer-header strong {
+      font-size: 17px;
+      font-weight: 700;
+    }
+    .wiki-mobile-drawer nav {
+      display: grid;
+      gap: 14px;
+    }
+    .wiki-mobile-drawer a {
+      display: grid;
+      gap: 4px;
+      border-left: 2px solid var(--wiki-line);
+      padding-left: 12px;
+      color: var(--wiki-text);
+      text-decoration: none;
+    }
+    .wiki-mobile-drawer a span {
+      font-size: 15px;
+      font-weight: 650;
+    }
+    .wiki-mobile-drawer a small {
+      color: var(--wiki-secondary);
+      font-size: 13px;
+      line-height: 1.4;
     }
     @media (min-width: 860px) {
       .wiki-service-nav { display: flex; }
+      .wiki-doc-header h1 { font-size: 40px; }
       .wiki-doc-header {
         grid-template-columns: minmax(0, 1fr) minmax(320px, 0.45fr);
         align-items: start;
@@ -839,9 +1003,10 @@ def _page_styles() -> str:
       }
       .wiki-sidebar {
         position: sticky;
-        top: 86px;
+        top: 118px;
         display: grid;
         gap: 10px;
+        border-bottom: 0;
         max-height: calc(100vh - 132px);
         overflow: auto;
         padding: 8px 0;
@@ -849,7 +1014,7 @@ def _page_styles() -> str:
       .wiki-sidebar strong {
         color: var(--wiki-secondary);
         font-size: 12px;
-        font-weight: 900;
+        font-weight: 600;
       }
       .wiki-sidebar nav {
         display: grid;
@@ -864,7 +1029,7 @@ def _page_styles() -> str:
       }
       .wiki-sidebar span {
         font-size: 13px;
-        font-weight: 900;
+        font-weight: 600;
       }
       .wiki-sidebar small {
         color: var(--wiki-secondary);
@@ -872,7 +1037,6 @@ def _page_styles() -> str:
         line-height: 1.35;
       }
       .wiki-document { padding: 0 8px 0 0; }
-      .bottom-nav.newsletter-only { display: none; }
       .wiki-definition-list div {
         grid-template-columns: 160px minmax(0, 1fr);
         gap: 16px;
@@ -902,6 +1066,49 @@ def _page_script() -> str:
   const searchStatus = document.getElementById("wikiSearchStatus");
   const sections = Array.from(document.querySelectorAll(".wiki-section"));
   const topLinks = Array.from(document.querySelectorAll(".wiki-top-nav a"));
+  const focusSearch = document.querySelector("[data-focus-search]");
+  const menuToggle = document.querySelector("[data-toggle-menu]");
+  const drawer = document.getElementById("wiki-mobile-drawer");
+  const drawerBackdrop = document.querySelector(".wiki-drawer-backdrop");
+  const drawerClosers = Array.from(document.querySelectorAll("[data-close-menu]"));
+  const topSectionMap = {
+    chapter: "chapter",
+    meaning: "chapter",
+    background: "chapter",
+    reform: "chapter",
+    investors: "chapter",
+    operations: "chapter",
+    actors: "chapter",
+    market: "chapter",
+    history: "chapter",
+    "law-map": "law-map",
+    "fss-reporting": "fss-reporting",
+    "tax-filings": "tax-filings",
+    "practice-checklists": "practice-checklists",
+    sources: "sources",
+  };
+
+  focusSearch?.addEventListener("click", () => {
+    search?.focus();
+    search?.scrollIntoView({ block: "center", behavior: "smooth" });
+  });
+
+  const setMenuOpen = (open) => {
+    if (!drawer || !drawerBackdrop || !menuToggle) return;
+    drawer.hidden = !open;
+    drawerBackdrop.hidden = !open;
+    menuToggle.setAttribute("aria-expanded", String(open));
+    document.documentElement.classList.toggle("wiki-menu-open", open);
+  };
+
+  menuToggle?.addEventListener("click", () => {
+    setMenuOpen(drawer?.hidden ?? true);
+  });
+  drawerClosers.forEach((closer) => closer.addEventListener("click", () => setMenuOpen(false)));
+  drawer?.addEventListener("click", (event) => {
+    const target = event.target;
+    if (target instanceof Element && target.closest("a")) setMenuOpen(false);
+  });
 
   search?.addEventListener("input", () => {
     const query = search.value.trim().toLowerCase();
@@ -923,7 +1130,8 @@ def _page_script() -> str:
       .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
     if (!visible) return;
     const id = visible.target.id;
-    topLinks.forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${id}`));
+    const topId = topSectionMap[id] || id;
+    topLinks.forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${topId}`));
   }, { rootMargin: "-80px 0px -55% 0px", threshold: [0.1, 0.3, 0.6] });
   sections.forEach((section) => observer.observe(section));
 })();
