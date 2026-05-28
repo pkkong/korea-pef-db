@@ -101,6 +101,7 @@ from build_service_site import (  # noqa: E402
     DEFAULT_LP_COMMITMENT_MONITOR,
     DEFAULT_SERVICE_INTEGRATION_WORKLIST,
     article_payload_rows,
+    app_asset_version,
     app_head_meta,
     brief_count_label,
     build,
@@ -1528,7 +1529,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{html_escape(lp_name)} LP 프로필</title>
 {app_head_meta()}
-  <link rel="stylesheet" href="assets/service.css">
+  <link rel="stylesheet" href="assets/service.css?v={app_asset_version()}">
   <style>
     body {{ background: #f5f7fa; }}
     .ktcu-shell {{ width: min(1200px, calc(100% - 28px)); margin: 0 auto; padding: 16px 0 calc(100px + env(safe-area-inset-bottom)); }}
@@ -1975,7 +1976,7 @@ def render_lp_notices_page(
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Korea PEF Intelligence LP Notices</title>
 {app_head_meta()}
-  <link rel="stylesheet" href="assets/service.css">
+  <link rel="stylesheet" href="assets/service.css?v={app_asset_version()}">
   <style>
     body.lp-notices-page .app-shell {{ width: min(100%, 1220px); }}
     body.lp-notices-page .content-area {{ display: block; width: min(1180px, 100%); margin: 0 auto; }}

@@ -1168,6 +1168,7 @@ def render_app(
 """
     )
     lp_monitor_script = "" if newsletter_only else f"  <script>window.KPEF_LP_MONITOR = {lp_payload};</script>\n"
+    asset_version = app_asset_version()
     return f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -1175,7 +1176,7 @@ def render_app(
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Korea PEF Intelligence Daily</title>
 {app_head_meta()}
-  <link rel="stylesheet" href="assets/service.css">
+  <link rel="stylesheet" href="assets/service.css?v={asset_version}">
 </head>
 <body>
   <div class="{shell_class}">
@@ -1246,7 +1247,7 @@ def render_app(
     </nav>
   </div>
   <script>window.KPEF_DAILY_ARCHIVE = {payload};</script>
-{lp_monitor_script}  <script src="assets/service.js"></script>
+{lp_monitor_script}  <script src="assets/service.js?v={asset_version}"></script>
 </body>
 </html>
 """
@@ -2935,6 +2936,11 @@ def service_js() -> str:
   setView(currentView);
 })(); 
 """
+
+
+def app_asset_version() -> str:
+    asset_payload = f"{service_css()}\n{service_js()}".encode("utf-8")
+    return f"{zlib.crc32(asset_payload) & 0xFFFFFFFF:08x}"
 
 
 def build(
