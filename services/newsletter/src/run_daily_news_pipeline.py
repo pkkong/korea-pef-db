@@ -1149,6 +1149,7 @@ STRONG_DEAL_KEYWORDS = [
     "M&A",
     "인수",
     "매각",
+    "품는",
     "품는다",
     "사들인다",
     "지분매각",
@@ -1191,6 +1192,23 @@ LP_COMMITMENT_EVENT_KEYWORDS = [
     "commitment",
     "RFP",
     "mandate",
+]
+
+LP_GOVERNANCE_KEYWORDS = [
+    "CIO",
+    "CIO인선",
+    "최고 운용",
+    "운용 총괄",
+    "운용총괄",
+    "기금운용본부",
+    "운용본부장",
+    "자산운용본부장",
+    "인선",
+    "임기",
+    "거취",
+    "독립성",
+    "의결권",
+    "중기 자산배분",
 ]
 
 GP_STRATEGY_EVENT_KEYWORDS = [
@@ -1262,6 +1280,28 @@ CREDIT_TRANSACTION_KEYWORDS = [
     "클로징",
 ]
 
+NATIONAL_GROWTH_FUND_MAIN_TOPIC_KEYWORDS = [
+    "간접투자",
+    "출자사업",
+    "출자 사업",
+    "위탁운용",
+    "운용사",
+    "GP 선정",
+    "GP 발표",
+    "최종 GP",
+    "숏리스트",
+    "명단",
+    "낙점",
+    "리그",
+    "마중물",
+    "국민참여형",
+    "완판",
+    "소진",
+    "출시",
+    "가입",
+    "수익률",
+]
+
 AI_THEME_KEYWORDS = [
     "A.I.",
     "인공지능",
@@ -1283,7 +1323,23 @@ AI_THEME_KEYWORDS = [
     "클라우드 인프라",
 ]
 
+AI_PE_BODY_CENTRAL_KEYWORDS = [
+    "AI 인프라",
+    "AI 데이터센터",
+    "AI 반도체",
+    "인공지능 인프라",
+    "인공지능 투자",
+    "AI 투자",
+    "AI 시대",
+    "AI 피해입는",
+    "AI 피해 입는",
+]
+
 AI_SHORT_RE = re.compile(r"(?<![A-Za-z])AI(?![A-Za-z])", re.IGNORECASE)
+EQUITY_STAKE_TRANSACTION_RE = re.compile(
+    r"(?:투자.*지분\s*\d+(?:\.\d+)?%|지분\s*\d+(?:\.\d+)?%.*확보)"
+)
+AMOUNTED_INVESTMENT_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:조|억|억원)\s*(?:규모\s*)?투자")
 
 
 def contains_any_keyword(text: str, keywords: list[str]) -> bool:
@@ -1305,10 +1361,10 @@ def has_ai_signal(text: str) -> bool:
     return bool(AI_SHORT_RE.search(text)) or contains_any_keyword(text, AI_THEME_KEYWORDS)
 
 
-def has_ai_pe_theme(text: str) -> bool:
+def has_ai_pe_theme(title: str, text: str) -> bool:
     if not has_ai_signal(text):
         return False
-    return contains_any_keyword(
+    has_pe_context = contains_any_keyword(
         text,
         VISIBLE_PE_KEYWORDS
         + STRONG_DEAL_KEYWORDS
@@ -1316,6 +1372,11 @@ def has_ai_pe_theme(text: str) -> bool:
         + SECTION_KEYWORDS["Fundraising"]
         + SECTION_KEYWORDS["GP"],
     )
+    if not has_pe_context:
+        return False
+    if has_ai_signal(title):
+        return True
+    return contains_any_keyword(text, AI_PE_BODY_CENTRAL_KEYWORDS)
 
 
 def title_has_non_ai_lp_priority(title: str) -> bool:
@@ -1323,10 +1384,18 @@ def title_has_non_ai_lp_priority(title: str) -> bool:
 
 
 def has_national_growth_fund_theme(title: str, raw_sections: list[str] | None = None) -> bool:
-    if contains_any_keyword(title, SECTION_KEYWORDS["NationalGrowthFund"]):
+    raw_sections = raw_sections or []
+    if "NationalGrowthFund" in raw_sections:
         return True
     raw_text = " ".join(raw_sections or [])
-    return contains_any_keyword(raw_text, SECTION_KEYWORDS["NationalGrowthFund"])
+    if not contains_any_keyword(title, SECTION_KEYWORDS["NationalGrowthFund"]):
+        return contains_any_keyword(raw_text, SECTION_KEYWORDS["NationalGrowthFund"])
+    if contains_any_keyword(raw_text, SECTION_KEYWORDS["NationalGrowthFund"]):
+        return True
+    stripped_title = title.lstrip()
+    if stripped_title.startswith("[") and contains_any_keyword(title, SECTION_KEYWORDS["NationalGrowthFund"]):
+        return True
+    return contains_any_keyword(title, NATIONAL_GROWTH_FUND_MAIN_TOPIC_KEYWORDS)
 
 
 def has_lp_focus_signal(text: str) -> bool:
@@ -1380,11 +1449,21 @@ def has_strong_lp_content_signal(text: str) -> bool:
     return has_lp_event_signal(text) and has_explicit_lp_focus_signal(text)
 
 
+def has_lp_governance_signal(text: str) -> bool:
+    return has_explicit_lp_focus_signal(text) and contains_any_keyword(text, LP_GOVERNANCE_KEYWORDS)
+
+
+def has_gp_strategy_keyword_signal(text: str) -> bool:
+    if contains_any_keyword(text, [keyword for keyword in GP_STRATEGY_EVENT_KEYWORDS if keyword != "파트너"]):
+        return True
+    return "파트너" in text.replace("파트너스", "")
+
+
 def has_gp_focus_signal(text: str) -> bool:
     return (
         has_fundraising_title_signal(text)
-        or contains_any_keyword(text, GP_STRATEGY_EVENT_KEYWORDS)
-        or contains_any_keyword(text, SECTION_KEYWORDS["GP"])
+        or has_gp_strategy_keyword_signal(text)
+        or contains_any_keyword(text, [keyword for keyword in SECTION_KEYWORDS["GP"] if keyword != "파트너"])
     )
 
 
@@ -1402,6 +1481,21 @@ def has_credit_signal(text: str) -> bool:
 
 def has_credit_transaction_signal(text: str) -> bool:
     return has_credit_signal(text) and contains_any_keyword(text, CREDIT_TRANSACTION_KEYWORDS)
+
+
+def has_specific_equity_transaction_signal(text: str) -> bool:
+    return bool(EQUITY_STAKE_TRANSACTION_RE.search(text)) or bool(AMOUNTED_INVESTMENT_RE.search(text))
+
+
+def has_gp_national_growth_fund_strategy_signal(title: str, content: str, raw_sections: list[str]) -> bool:
+    if has_national_growth_fund_theme(title, raw_sections):
+        return False
+    if not contains_any_keyword(title, SECTION_KEYWORDS["NationalGrowthFund"]):
+        return False
+    return contains_any_keyword(content, ["GP", "운용사", "PEF", "PE하우스", "프라이빗에쿼티"]) and contains_any_keyword(
+        content,
+        ["노리는", "드라이 파우더", "레버리지", "전략"],
+    )
 
 
 def section_override(row: dict[str, object]) -> str:
@@ -1432,10 +1526,12 @@ def primary_section(row: dict[str, object]) -> str:
     )
     if has_national_growth_fund_theme(title, raw_sections):
         return "NationalGrowthFund"
-    if has_ai_pe_theme(content) and not title_has_non_ai_lp_priority(title):
+    if has_ai_pe_theme(title, content) and not title_has_non_ai_lp_priority(title):
         return "AI_PE"
     if title_has_non_ai_lp_priority(title):
         return "LP"
+    if has_gp_national_growth_fund_strategy_signal(title, content, raw_sections):
+        return "GP"
     if has_market_structure_signal(title) or has_market_commentary_signal(title):
         return "Market"
     if contains_any_keyword(title, TITLE_RISK_KEYWORDS) or contains_any_keyword(title, SECTION_KEYWORDS["Regulation"]):
@@ -1446,12 +1542,14 @@ def primary_section(row: dict[str, object]) -> str:
         return "Deal" if has_credit_transaction_signal(title) else "Market"
     if has_fundraising_title_signal(title):
         return "GP"
-    if contains_any_keyword(title, STRONG_DEAL_KEYWORDS):
+    if contains_any_keyword(title, STRONG_DEAL_KEYWORDS) or has_specific_equity_transaction_signal(title):
         return "Deal"
     if contains_any_keyword(title, SECTION_KEYWORDS["Portfolio"]):
         return "Deal"
     if has_gp_focus_signal(title):
         return "GP"
+    if has_lp_governance_signal(content):
+        return "LP"
     if has_credit_signal(content) and has_fundraising_title_signal(title):
         return "GP"
     if contains_any_keyword(content, CONTENT_DEAL_KEYWORDS):
@@ -1465,7 +1563,7 @@ def primary_section(row: dict[str, object]) -> str:
         return "LP"
     if has_gp_focus_signal(content):
         return "GP"
-    if "NationalGrowthFund" in topics or "국민성장펀드" in topics:
+    if ("NationalGrowthFund" in topics or "국민성장펀드" in topics) and has_national_growth_fund_theme(title, raw_sections):
         return "NationalGrowthFund"
     if "Fundraising" in topics:
         return "GP"

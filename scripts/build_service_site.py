@@ -30,11 +30,36 @@ EDITORIAL_SECTIONS = [
     "Market",
 ]
 AI_SHORT_RE = re.compile(r"(?<![A-Za-z])AI(?![A-Za-z])", re.IGNORECASE)
+EQUITY_STAKE_TRANSACTION_RE = re.compile(
+    r"(?:투자.*지분\s*\d+(?:\.\d+)?%|지분\s*\d+(?:\.\d+)?%.*확보)"
+)
+AMOUNTED_INVESTMENT_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:조|억|억원)\s*(?:규모\s*)?투자")
 NATIONAL_GROWTH_FUND_KEYWORDS = [
     "국민성장펀드",
     "국민성장 펀드",
     "150조 국민성장펀드",
     "150조원 국민성장펀드",
+]
+NATIONAL_GROWTH_FUND_MAIN_TOPIC_KEYWORDS = [
+    "간접투자",
+    "출자사업",
+    "출자 사업",
+    "위탁운용",
+    "운용사",
+    "GP 선정",
+    "GP 발표",
+    "최종 GP",
+    "숏리스트",
+    "명단",
+    "낙점",
+    "리그",
+    "마중물",
+    "국민참여형",
+    "완판",
+    "소진",
+    "출시",
+    "가입",
+    "수익률",
 ]
 MARKET_STRUCTURE_KEYWORDS = [
     "GP 스테이크",
@@ -215,6 +240,18 @@ LP_EVENT_PRIORITY = {
     "performance_update": 6,
     "deadline_closed": 7,
 }
+LP_PUBLIC_FALSE_VALUES = {"0", "false", "no", "n"}
+LP_NON_PUBLIC_EVENT_TYPES = {"candidate"}
+LP_NON_PUBLIC_CONFIDENCE_VALUES = {"low"}
+LP_NON_PUBLIC_MONITOR_STATUSES = {
+    "candidate",
+    "review",
+    "review_pending",
+    "pending_review",
+    "needs_review",
+    "unvalidated",
+    "draft",
+}
 
 
 def html_escape(value: str) -> str:
@@ -226,6 +263,27 @@ def html_escape(value: str) -> str:
         .replace('"', "&quot;")
         .replace("'", "&#39;")
     )
+
+
+def public_visible_value(value: object) -> bool:
+    return str(value if value is not None else "1").strip().lower() not in LP_PUBLIC_FALSE_VALUES
+
+
+def is_public_lp_notice_row(row: dict[str, object], require_official: bool = False) -> bool:
+    if not public_visible_value(row.get("public_visible", 1)):
+        return False
+    if require_official and str(row.get("source_type") or "").strip() != "official":
+        return False
+    event_type = str(row.get("event_type") or "").strip().lower()
+    if event_type in LP_NON_PUBLIC_EVENT_TYPES:
+        return False
+    confidence = str(row.get("confidence") or "").strip().lower()
+    if confidence in LP_NON_PUBLIC_CONFIDENCE_VALUES:
+        return False
+    monitor_status = str(row.get("monitor_status") or "").strip().lower()
+    if monitor_status in LP_NON_PUBLIC_MONITOR_STATUSES:
+        return False
+    return True
 
 
 def compact_date(report_date: str) -> str:
@@ -340,6 +398,7 @@ DEAL_SIGNAL_KEYWORDS = [
     "M&A",
     "매각",
     "인수",
+    "품는",
     "품는다",
     "사들인다",
     "지분매각",
@@ -416,6 +475,22 @@ LP_FOCUS_KEYWORDS = [
     "분배금",
     "DPI",
 ]
+LP_GOVERNANCE_KEYWORDS = [
+    "CIO",
+    "CIO인선",
+    "최고 운용",
+    "운용 총괄",
+    "운용총괄",
+    "기금운용본부",
+    "운용본부장",
+    "자산운용본부장",
+    "인선",
+    "임기",
+    "거취",
+    "독립성",
+    "의결권",
+    "중기 자산배분",
+]
 GP_FOCUS_KEYWORDS = [
     "GP",
     "운용사",
@@ -488,7 +563,36 @@ def has_ai_theme(text: str) -> bool:
 
 
 def has_national_growth_fund_theme(title_text: str, raw_section: str = "") -> bool:
-    return contains_any(f"{title_text} {raw_section}", NATIONAL_GROWTH_FUND_KEYWORDS)
+    if "국민성장펀드" in raw_section or "NationalGrowthFund" in raw_section:
+        return True
+    if not contains_any(title_text, NATIONAL_GROWTH_FUND_KEYWORDS):
+        return contains_any(raw_section, NATIONAL_GROWTH_FUND_KEYWORDS)
+    stripped_title = title_text.lstrip()
+    if stripped_title.startswith("["):
+        return True
+    return contains_any(title_text, NATIONAL_GROWTH_FUND_MAIN_TOPIC_KEYWORDS)
+
+
+def has_specific_equity_transaction_signal(text: str) -> bool:
+    return bool(EQUITY_STAKE_TRANSACTION_RE.search(text)) or bool(AMOUNTED_INVESTMENT_RE.search(text))
+
+
+def has_gp_focus_signal(text: str) -> bool:
+    keywords = [keyword for keyword in GP_FOCUS_KEYWORDS if keyword != "파트너"]
+    return contains_any(text, keywords) or "파트너" in text.replace("파트너스", "")
+
+
+def has_gp_national_growth_fund_strategy_signal(title_text: str, raw_section: str) -> bool:
+    if has_national_growth_fund_theme(title_text, raw_section):
+        return False
+    if not contains_any(title_text, NATIONAL_GROWTH_FUND_KEYWORDS):
+        return False
+    if raw_section.strip() == "GP":
+        return True
+    return contains_any(title_text, ["운용사", "GP", "PEF", "PE하우스", "프라이빗에쿼티"]) and contains_any(
+        title_text,
+        ["노리는", "드라이 파우더", "레버리지", "전략"],
+    )
 
 
 def legacy_section_to_current(raw_section: str, title_text: str) -> str:
@@ -525,7 +629,11 @@ def editorial_section(row: dict[str, str]) -> str:
     combined = f"{title_text} {raw_section}"
     if has_national_growth_fund_theme(title_text, raw_section):
         return "국민성장펀드"
+    if has_gp_national_growth_fund_strategy_signal(title_text, raw_section):
+        return "GP"
     if contains_any(title_text, LP_FOCUS_KEYWORDS) and not has_ai_theme(title_text):
+        return "LP"
+    if raw_section == "LP" and contains_any(title_text, LP_GOVERNANCE_KEYWORDS):
         return "LP"
     if raw_section == "AI & PE":
         return "AI & PE"
@@ -537,11 +645,11 @@ def editorial_section(row: dict[str, str]) -> str:
         return "Market"
     if contains_any(title_text, ["펀드 결성", "펀드레이징", "펀드 조성", "펀드 도전", "클로징", "약정총액", "목표액", "블라인드펀드"]):
         return "GP"
-    if contains_any(title_text, DEAL_SIGNAL_KEYWORDS + DEAL_OWNERSHIP_KEYWORDS + DEAL_ISSUE_KEYWORDS):
+    if contains_any(title_text, DEAL_SIGNAL_KEYWORDS + DEAL_OWNERSHIP_KEYWORDS + DEAL_ISSUE_KEYWORDS) or has_specific_equity_transaction_signal(title_text):
         return "Deal"
     if contains_any(title_text, DEAL_FINANCING_KEYWORDS):
         return "Deal" if contains_any(title_text, CREDIT_TRANSACTION_KEYWORDS) else "Market"
-    if contains_any(title_text, GP_FOCUS_KEYWORDS):
+    if has_gp_focus_signal(title_text):
         return "GP"
     if contains_any(title_text, MARKET_KEYWORDS):
         return "Market"
@@ -677,18 +785,37 @@ def split_context_names(value: object) -> list[str]:
     return [part.strip() for part in re.split(r"[,;]", str(value or "")) if part.strip()]
 
 
+def entity_name_key(value: object) -> str:
+    return re.sub(r"[\s·ㆍ.,()\\[\\]{}'\"`]+", "", str(value or "").strip()).lower()
+
+
+def article_public_gp_names(context: dict[str, object]) -> list[str]:
+    lp_names = {entity_name_key(name) for name in context.get("lpNames", []) if entity_name_key(name)}
+    for item in context.get("lpProfileLinks", []):
+        if isinstance(item, dict):
+            key = entity_name_key(item.get("name", ""))
+            if key:
+                lp_names.add(key)
+    public_names: list[str] = []
+    for name in context.get("gpNames", []):
+        key = entity_name_key(name)
+        if key and key not in lp_names:
+            add_unique(public_names, str(name))
+    return public_names
+
+
 def service_action_label(action: str, context_action: str = "") -> str:
     text = f"{action} {context_action}"
     if "프로필 필수정보" in text:
-        return "프로필 보강"
+        return "프로필 확인"
     if "식별자" in text:
-        return "식별자 보강"
+        return "식별 정보"
     if "People 1차" in text:
-        return "인물 수집"
+        return "관련 인물"
     if "한글명" in text:
-        return "인물 검증"
+        return "인물 정보"
     if "GP 프로필" in text or "GP/People" in text:
-        return "DB 연결"
+        return "자료 연결"
     return ""
 
 
@@ -857,7 +984,7 @@ def merge_lp_item(primary: dict[str, object], secondary: dict[str, object]) -> d
     return merged
 
 
-def read_lp_monitor(path: Path, limit: int = 8) -> list[dict[str, object]]:
+def read_lp_monitor(path: Path, limit: int | None = 8) -> list[dict[str, object]]:
     if not path.exists():
         return []
     grouped: dict[tuple[str, str], dict[str, object]] = {}
@@ -867,11 +994,7 @@ def read_lp_monitor(path: Path, limit: int = 8) -> list[dict[str, object]]:
             notice_url = str(row.get("notice_url") or "").strip()
             if not title or not notice_url:
                 continue
-            if str(row.get("source_type") or "").strip() != "official":
-                continue
-            if str(row.get("public_visible") or "1").strip() in {"0", "false", "False"}:
-                continue
-            if row.get("event_type") == "candidate":
+            if not is_public_lp_notice_row(row, require_official=True):
                 continue
             attachment_names = split_semicolon(row.get("attachment_names", ""))
             attachment_urls = split_semicolon(row.get("attachment_urls", ""))
@@ -912,6 +1035,7 @@ def read_lp_monitor(path: Path, limit: int = 8) -> list[dict[str, object]]:
                 "programSize": row.get("program_size_krw_100mn", ""),
                 "amountConfidence": row.get("amount_confidence", ""),
                 "confidence": row.get("confidence", ""),
+                "monitorStatus": row.get("monitor_status", ""),
                 "selectedGpNames": split_semicolon(row.get("selected_gp_names", "")),
                 "attachments": attachments,
             }
@@ -923,7 +1047,7 @@ def read_lp_monitor(path: Path, limit: int = 8) -> list[dict[str, object]]:
                 grouped[dedupe_key] = merge_lp_item(current, item)
     rows = list(grouped.values())
     rows.sort(key=lp_public_sort_key)
-    return rows[:limit]
+    return rows[:limit] if limit and limit > 0 else rows
 
 
 def article_payload_rows(
@@ -939,6 +1063,7 @@ def article_payload_rows(
         article_url = row.get("url", "")
         context = service_context.get(normalize_url(article_url), service_context.get(article_url, {}))
         display_title, title_badges = split_news_title_badges(row.get("title", ""), row.get("source", ""))
+        gp_names = article_public_gp_names(context)
         payload.append(
             {
                 "id": f"{id_prefix}-{index}",
@@ -953,7 +1078,7 @@ def article_payload_rows(
                 "sourceIconUrl": source_icon_url(row.get("url", "")),
                 "url": row.get("url", ""),
                 "sectionOrder": section_sort_key(section),
-                "gpNames": context.get("gpNames", []),
+                "gpNames": gp_names,
                 "lpNames": context.get("lpNames", []),
                 "lpProfileLinks": context.get("lpProfileLinks", []),
                 "peopleCount": context.get("peopleCount", 0),
@@ -2373,7 +2498,7 @@ def service_js() -> str:
     revision: "정정",
     cancellation: "취소",
     performance_update: "성과"
-  }[value] || "후보");
+  }[value] || "공고");
 
   const amountLabel = (value) => {
     const parsed = Number(value);
@@ -2637,7 +2762,10 @@ def service_js() -> str:
       chips.append(chip);
     };
     const lpLinks = Array.isArray(article.lpProfileLinks) ? article.lpProfileLinks.filter((item) => item && item.name && item.url) : [];
+    const lpLinkedNames = new Set(lpLinks.map((item) => item.name));
     lpLinks.forEach((item) => appendLinkChip(item.name, item.url, "lp-chip"));
+    const lpNames = Array.isArray(article.lpNames) ? article.lpNames.filter(Boolean) : [];
+    lpNames.filter((name) => !lpLinkedNames.has(name)).forEach((name) => appendChip(name, "lp-chip"));
     const gpNames = Array.isArray(article.gpNames) ? article.gpNames.filter(Boolean) : [];
     gpNames.forEach((name) => appendChip(name));
     if (chips.childElementCount) {

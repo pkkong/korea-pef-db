@@ -63,6 +63,12 @@ LP_PROFILE_DISPLAY_LABELS = {
     "kbiz": "중소기업중앙회",
     "ibk": "IBK기업은행",
 }
+LP_CONTEXT_SEED_INSTITUTIONS = {
+    "kic": {
+        "lp_name": "한국투자공사",
+        "aliases": ("한국투자공사", "KIC", "Korea Investment Corporation"),
+    },
+}
 KTCU_FACT_SECTION_LABELS = {
     "general": "일반현황",
     "investment_status": "투자현황",
@@ -101,6 +107,7 @@ from build_service_site import (  # noqa: E402
     compact_date,
     display_date,
     html_escape,
+    is_public_lp_notice_row,
     merge_service_context,
     normalize_url,
     parse_brief,
@@ -251,6 +258,8 @@ def split_aliases(value: object) -> list[str]:
 def useful_lp_alias(alias: str) -> bool:
     if not alias:
         return False
+    if alias.upper() == "KIC":
+        return True
     if alias.upper() in {"LP", "CU"}:
         return False
     if re.fullmatch(r"[A-Za-z0-9&.-]+", alias) and len(alias) < 4:
@@ -282,6 +291,16 @@ def read_lp_alias_patterns(db_path: Path = DEFAULT_DB) -> list[dict[str, object]
         "nps": ["국민연금"],
         "poba": ["행정공제회"],
     }
+    rows_by_code = {str(row.get("lp_code") or ""): row for row in rows if row.get("lp_code")}
+    for code, seed in LP_CONTEXT_SEED_INSTITUTIONS.items():
+        if code not in rows_by_code:
+            rows.append(
+                {
+                    "lp_code": code,
+                    "lp_name": seed["lp_name"],
+                    "aliases": ";".join(seed["aliases"]),
+                }
+            )
     patterns: list[dict[str, object]] = []
     for row in rows:
         code = str(row.get("lp_code") or "")
@@ -323,6 +342,23 @@ def add_title_matched_lp_article_context(
                     matched += 1
                 if matched >= 3:
                     break
+
+
+def filter_service_context_profile_links(
+    service_context: dict[str, dict[str, object]],
+    profile_codes: set[str] | None = None,
+) -> dict[str, dict[str, object]]:
+    allowed_codes = profile_codes if profile_codes is not None else set(read_lp_profile_codes())
+    for entry in service_context.values():
+        links = entry.get("lpProfileLinks")
+        if not isinstance(links, list):
+            continue
+        entry["lpProfileLinks"] = [
+            link
+            for link in links
+            if isinstance(link, dict) and str(link.get("code") or "") in allowed_codes
+        ]
+    return service_context
 
 
 def refresh_archive_entries_with_context(
@@ -400,6 +436,78 @@ def fetch_dicts(conn: sqlite3.Connection, query: str, params: tuple[object, ...]
     return [dict(zip(headers, row)) for row in cursor.fetchall()]
 
 
+def safe_int(value: object) -> int:
+    try:
+        return int(float(str(value or "0").replace(",", "")))
+    except ValueError:
+        return 0
+
+
+def safe_float(value: object) -> float:
+    try:
+        return float(str(value or "0").replace(",", ""))
+    except ValueError:
+        return 0.0
+
+
+def lp_notice_stats(rows: list[dict[str, object]]) -> dict[str, dict[str, object]]:
+    stats: dict[str, dict[str, object]] = {}
+    for row in rows:
+        if not is_public_lp_notice_row(row, require_official=True):
+            continue
+        lp_code = str(row.get("lp_code") or "").strip()
+        if not lp_code:
+            continue
+        entry = stats.setdefault(
+            lp_code,
+            {"notice_count": 0, "allocation_amount_krw_100mn": 0.0, "latest_event_date": ""},
+        )
+        entry["notice_count"] = int(entry["notice_count"]) + 1
+        entry["allocation_amount_krw_100mn"] = float(entry["allocation_amount_krw_100mn"]) + safe_float(
+            row.get("allocation_amount_krw_100mn")
+        )
+        event_date = str(row.get("event_date") or row.get("announced_date") or "")
+        if event_date > str(entry.get("latest_event_date") or ""):
+            entry["latest_event_date"] = event_date
+    return stats
+
+
+def read_lp_notice_stats(conn: sqlite3.Connection) -> dict[str, dict[str, object]]:
+    if not db_object_exists(conn, "v_lp_commitment_notice_public"):
+        return {}
+    return lp_notice_stats(fetch_dicts(conn, "SELECT * FROM v_lp_commitment_notice_public WHERE public_visible = 1"))
+
+
+def merge_lp_notice_stats(row: dict[str, object], stats: dict[str, dict[str, object]]) -> dict[str, object]:
+    merged = dict(row)
+    lp_code = str(merged.get("lp_code") or "")
+    public_stats = stats.get(lp_code, {})
+    visible_notice_count = safe_int(public_stats.get("notice_count"))
+    merged["profile_notice_count"] = safe_int(merged.get("notice_count"))
+    merged["visible_notice_count"] = visible_notice_count
+    merged["notice_count"] = visible_notice_count
+    merged["allocation_amount_krw_100mn"] = safe_float(public_stats.get("allocation_amount_krw_100mn"))
+    merged["latest_event_date"] = str(public_stats.get("latest_event_date") or "")
+    merged["has_public_profile"] = bool(safe_int(merged.get("fact_count")) > 0 or visible_notice_count > 0)
+    return merged
+
+
+def yearly_stats_from_notices(notices: list[dict[str, object]]) -> list[dict[str, object]]:
+    by_year: dict[str, dict[str, object]] = {}
+    for notice in notices:
+        if str(notice.get("source_type") or "") != "official":
+            continue
+        year = str(notice.get("notice_year") or (str(notice.get("event_date") or "")[:4]))
+        if not re.fullmatch(r"20\d{2}", year):
+            continue
+        row = by_year.setdefault(year, {"notice_year": year, "notice_count": 0, "allocation_amount_krw_100mn": 0.0})
+        row["notice_count"] = int(row["notice_count"]) + 1
+        row["allocation_amount_krw_100mn"] = float(row["allocation_amount_krw_100mn"]) + safe_float(
+            notice.get("allocation_amount_krw_100mn")
+        )
+    return [by_year[year] for year in sorted(by_year, reverse=True)]
+
+
 def amount_short(value: object) -> str:
     try:
         parsed = float(str(value or "0").replace(",", ""))
@@ -412,7 +520,7 @@ def amount_short(value: object) -> str:
     return f"{round(parsed):,}억"
 
 
-def public_amount_label(value: object, fallback: str = "금액 확인중") -> str:
+def public_amount_label(value: object, fallback: str = "-") -> str:
     label = amount_short(value)
     return fallback if label == "-" else label
 
@@ -485,11 +593,16 @@ def clean_public_lp_text(value: object) -> str:
         return ""
     regex_replacements = [
         (r"작업\s*큐", ""),
-        (r"검토\s*대기", "확인 전"),
-        (r"보강\s*필요", "공식 발표 확인 전"),
-        (r"프로필\s*팩트", "프로필 항목"),
+        (r"검토\s*대기", "공개자료 기준"),
+        (r"자료\s*정리\s*중", ""),
+        (r"공개\s*신호\s*관측", "공개자료 기준"),
+        (r"출자\s+신호", "출자 동향"),
+        (r"뉴스\s+기반\s+출자\s+신호", "뉴스 기반 출자 동향"),
+        (r"보강\s*필요", "공개자료 기준"),
+        (r"검증\s*필요", "공개자료 기준"),
+        (r"프로필\s*팩트", "확인 항목"),
         (r"자동\s*매칭", "연결"),
-        (r"데이터\s*수집", "자료 확인"),
+        (r"데이터\s*수집", "자료 기준"),
         (r"관리\s*자", "서비스"),
         (r"source\s*/\s*[e]vidence", "자료"),
         (r"\bAUM\s+proxy\b", "운용자산 기준"),
@@ -499,7 +612,11 @@ def clean_public_lp_text(value: object) -> str:
     for pattern, replacement in regex_replacements:
         text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
     text = text.replace("canonical notice_id", "공식 공고")
-    text = re.sub(r"(보강|검증|확인|구조화|정규화)\s*필요", "공식 발표 확인 전", text)
+    text = re.sub(r"(보강|검증|구조화|정규화)\s*필요", "공개자료 기준", text)
+    text = re.sub(r"\b보강\b", "확인", text)
+    text = re.sub(r"\b검증\b", "확인", text)
+    text = re.sub(r"\b관측\b", "확인", text)
+    text = text.replace("신호", "동향")
     text = re.sub(r"\bAUM\b", "운용자산", text)
     return re.sub(r"\s+", " ", text).strip()
 
@@ -525,28 +642,39 @@ def read_lp_profile_codes(db_path: Path = DEFAULT_DB) -> list[str]:
     if not db_path.exists():
         return fallback
     conn = sqlite3.connect(db_path)
+    notice_stats: dict[str, dict[str, object]] = {}
+    has_summary = False
     try:
         if db_object_exists(conn, "v_lp_profile_summary"):
+            has_summary = True
             rows = fetch_dicts(
                 conn,
                 """
-                SELECT lp_code
+                SELECT lp_code, fact_count
                 FROM v_lp_profile_summary
                 ORDER BY service_priority DESC, lp_name
                 """,
             )
+            notice_stats = read_lp_notice_stats(conn)
         else:
             rows = []
     except sqlite3.OperationalError:
         rows = []
     finally:
         conn.close()
-    codes = [str(row.get("lp_code") or "") for row in rows if row.get("lp_code")]
-    return codes or fallback
+    codes = [
+        str(row.get("lp_code") or "")
+        for row in rows
+        if row.get("lp_code")
+        and (safe_int(row.get("fact_count")) > 0 or safe_int(notice_stats.get(str(row.get("lp_code") or ""), {}).get("notice_count")) > 0)
+    ]
+    return codes if has_summary else fallback
 
 
 def read_lp_profile_nav(db_path: Path = DEFAULT_DB, profile_codes: list[str] | None = None) -> list[dict[str, str]]:
     codes = profile_codes or read_lp_profile_codes(db_path)
+    if not codes:
+        return []
     fallback = [
         {
             "lp_code": code,
@@ -589,7 +717,7 @@ def read_lp_directory_items(db_path: Path = DEFAULT_DB) -> list[dict[str, object
     try:
         if not db_object_exists(conn, "v_lp_profile_summary"):
             return []
-        return fetch_dicts(
+        rows = fetch_dicts(
             conn,
             """
             SELECT
@@ -611,6 +739,8 @@ def read_lp_directory_items(db_path: Path = DEFAULT_DB) -> list[dict[str, object
             ORDER BY service_priority DESC, lp_name
             """,
         )
+        notice_stats = read_lp_notice_stats(conn)
+        return [merge_lp_notice_stats(row, notice_stats) for row in rows]
     finally:
         conn.close()
 
@@ -641,6 +771,7 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
     conn = sqlite3.connect(db_path)
     try:
         profile = {}
+        notice_stats = read_lp_notice_stats(conn)
         if db_object_exists(conn, "v_lp_profile_summary"):
             rows = fetch_dicts(
                 conn,
@@ -714,6 +845,8 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
                 (lp_code,),
             )
             profile = rows[0] if rows else {}
+        if profile:
+            profile = merge_lp_notice_stats(profile, notice_stats)
 
         fact_source = "v_lp_profile_fact_public" if db_object_exists(conn, "v_lp_profile_fact_public") else "lp_profile_fact"
         facts = (
@@ -771,6 +904,7 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
                     selected_gp_names,
                     confidence,
                     confidence_note,
+                    monitor_status,
                     raw_excerpt
                 FROM v_lp_commitment_notice_public
                 WHERE lp_code = ?
@@ -782,24 +916,9 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
             if db_object_exists(conn, "v_lp_commitment_notice_public")
             else []
         )
+        notices = [row for row in notices if is_public_lp_notice_row(row)]
 
-        yearly = (
-            fetch_dicts(
-                conn,
-                """
-                SELECT
-                    notice_year,
-                    notice_count,
-                    allocation_amount_krw_100mn
-                FROM v_lp_commitment_yearly_stats
-                WHERE lp_code = ?
-                ORDER BY notice_year DESC
-                """,
-                (lp_code,),
-            )
-            if db_object_exists(conn, "v_lp_commitment_yearly_stats")
-            else []
-        )
+        yearly = yearly_stats_from_notices(notices)
 
         peer_source = "v_lp_profile_peer_compare" if db_object_exists(conn, "v_lp_profile_peer_compare") else "v_lp_profile_summary"
         peer_codes = profile_codes or read_lp_profile_codes(db_path)
@@ -829,6 +948,7 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
             if db_object_exists(conn, peer_source)
             else []
         )
+        peers = [merge_lp_notice_stats(row, notice_stats) for row in peers]
 
         gp_links = (
             fetch_dicts(
@@ -841,6 +961,9 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
                     lgl.gp_name,
                     lgl.matched_alias,
                     lgl.confidence,
+                    lcn.confidence AS notice_confidence,
+                    lcn.public_visible,
+                    lcn.monitor_status,
                     lcn.event_type,
                     lcn.source_type,
                     lcn.event_date,
@@ -861,6 +984,20 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
             if db_object_exists(conn, "lp_notice_gp_link") and db_object_exists(conn, "lp_commitment_notice")
             else []
         )
+        gp_links = [
+            row
+            for row in gp_links
+            if is_public_lp_notice_row(
+                {
+                    "source_type": row.get("source_type"),
+                    "event_type": row.get("event_type"),
+                    "monitor_status": row.get("monitor_status"),
+                    "confidence": row.get("notice_confidence"),
+                    "public_visible": row.get("public_visible"),
+                },
+                require_official=True,
+            )
+        ]
 
         related_news = (
             fetch_dicts(
@@ -875,7 +1012,12 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
                     nd.published_at,
                     nd.discovered_at,
                     lnnl.link_source,
-                    lnnl.confidence
+                    lnnl.confidence,
+                    lcn.source_type,
+                    lcn.event_type,
+                    lcn.confidence AS notice_confidence,
+                    lcn.public_visible,
+                    lcn.monitor_status
                 FROM lp_notice_news_link lnnl
                 JOIN news_document nd
                   ON nd.news_id = lnnl.news_id
@@ -891,6 +1033,20 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
             if db_object_exists(conn, "lp_notice_news_link") and db_object_exists(conn, "news_document")
             else []
         )
+        related_news = [
+            row
+            for row in related_news
+            if is_public_lp_notice_row(
+                {
+                    "source_type": row.get("source_type"),
+                    "event_type": row.get("event_type"),
+                    "monitor_status": row.get("monitor_status"),
+                    "confidence": row.get("notice_confidence"),
+                    "public_visible": row.get("public_visible"),
+                },
+                require_official=True,
+            )
+        ]
     finally:
         conn.close()
     return {"profile": profile, "facts": facts, "notices": notices, "yearly": yearly, "peers": peers, "gp_links": gp_links, "news": related_news}
@@ -1055,7 +1211,7 @@ def render_ktcu_annual_highlights(notices: list[dict[str, object]], year: int) -
 def split_asset_classes(value: object) -> list[str]:
     parts = [public_asset_class(part) for part in str(value or "").split(";") if part.strip()]
     deduped = list(dict.fromkeys(parts))
-    return deduped or ["확인중"]
+    return deduped or ["자산군 미표시"]
 
 
 def render_asset_chips(value: object) -> str:
@@ -1069,7 +1225,7 @@ def render_lp_peer_rows(peers: list[dict[str, object]], active_code: str) -> str
         """          <div class="ktcu-peer-row ktcu-peer-head">
             <strong>LP</strong>
             <span>유형</span>
-            <span>공고</span>
+            <span>표시 공고</span>
             <span>규모</span>
             <span>항목</span>
           </div>"""
@@ -1092,7 +1248,7 @@ def render_lp_peer_rows(peers: list[dict[str, object]], active_code: str) -> str
             f"""          <a class="ktcu-peer-row{active_class}" href="lp-{html_escape(lp_code)}.html">
             <strong>{html_escape(str(row.get("lp_name") or lp_code))}</strong>
             <span data-label="유형">{html_escape(public_lp_type(row.get("lp_type") or "LP"))}</span>
-            <span data-label="공고">{html_escape(str(row.get("notice_count") or 0))}건</span>
+            <span data-label="표시 공고">{html_escape(str(row.get("visible_notice_count", row.get("notice_count") or 0)))}건</span>
             <span data-label="규모" title="최신 공고일 {html_escape(latest)}">{html_escape(amount)}</span>
             <span data-label="항목">{html_escape(coverage)}</span>
           </a>"""
@@ -1119,8 +1275,8 @@ def render_profile_timeline(facts: list[dict[str, object]], notices: list[dict[s
                 "tag": "관련 뉴스" if str(notice.get("source_type") or "") == "news" else "공식 공고",
                 "kind": str(notice.get("source_type") or "official"),
                 "asset": public_asset_class(notice.get("asset_class")) if notice.get("asset_class") else "",
-                "title": str(notice.get("title") or "공고"),
-                "detail": detail or "공식 공고",
+                "title": clean_public_lp_text(notice.get("title")) or "공고",
+                "detail": clean_public_lp_text(detail) or "공식 공고",
                 "url": str(notice.get("notice_url") or ""),
             }
         )
@@ -1217,7 +1373,7 @@ def public_gap_label(value: object) -> str:
     text = str(value or "")
     if "공개자료" in text and "한계" in text:
         return "공개자료 기준"
-    if any(token in text for token in ["보강", "검증", "정규화", "구조화", "수집"]):
+    if any(token in text for token in ["정규화", "구조화", "수집"]) or re.search(r"보강|검증", text):
         return "참고사항"
     return clean_public_lp_text(text) or "참고사항"
 
@@ -1341,18 +1497,19 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     investment_status = public_fact_value(investment_status) or focus_label
     investment_kpi = compact_alternative_amount(investment_status, focus_label)
     notice_count = str(len(official_notices))
-    total_amount = public_amount_label(profile.get("allocation_amount_krw_100mn"))
-    latest = str(profile.get("latest_event_date") or "")
+    total_amount_value = sum(safe_float(notice.get("allocation_amount_krw_100mn")) for notice in official_notices)
+    total_amount = public_amount_label(total_amount_value)
+    latest = max([str(notice.get("event_date") or notice.get("announced_date") or "") for notice in official_notices] or [""])
     highlight_year = int((latest or report_date)[:4])
     highlight_count = len([notice for notice in official_notices if str(notice.get("event_date") or "").startswith(str(highlight_year))])
     highlight_amount = public_amount_label(ktcu_year_amount(official_notices, highlight_year))
     highlight_rows = render_ktcu_annual_highlights(official_notices, highlight_year) or (
-        f"""          <p class="ktcu-empty-note">{highlight_year}년 공식 공고가 아직 정리되지 않았습니다.</p>"""
+        f"""          <p class="ktcu-empty-note">{highlight_year}년 표시할 공식 공고가 없습니다.</p>"""
     )
     activity_phrase = (
         f"공식 공고 {highlight_count}건, 공고 기준 출자규모 {highlight_amount}입니다."
-        if highlight_amount != "금액 확인중"
-        else f"공식 공고 {highlight_count}건을 확인했습니다."
+        if highlight_count > 0 and highlight_amount != "-"
+        else (f"공식 공고 {highlight_count}건을 표시합니다." if highlight_count > 0 else "표시할 공식 공고가 없습니다.")
     )
     nav_html = render_lp_profile_nav(nav_items or [], lp_code)
     timeline_rows = render_profile_timeline(facts, notices)
@@ -1747,21 +1904,23 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
     ownership = str(item.get("ownership_type") or "")
     default_team = str(item.get("default_team") or "투자 담당")
     focus = display_asset_classes(item.get("focus_asset_classes"))
-    notice_count = int(item.get("notice_count") or 0)
+    notice_count = safe_int(item.get("visible_notice_count", item.get("notice_count")))
     fact_count = int(item.get("fact_count") or 0)
     source_count = int(item.get("source_count") or 0)
-    latest = str(item.get("latest_event_date") or "-")
+    latest = str(item.get("latest_event_date") or "-") or "-"
     amount = public_amount_label(item.get("allocation_amount_krw_100mn"), fallback="-")
     homepage_url = str(item.get("homepage_url") or "")
     notice_url = str(item.get("notice_url") or "")
     profile_url = f"lp-{lp_code}.html" if lp_code else "lp-notices.html"
     chips = render_asset_chips(item.get("focus_asset_classes"))
-    actions = [
-        f'<a href="{html_escape(profile_url)}">프로필 보기</a>',
-    ]
+    actions = []
+    if item.get("has_public_profile", True):
+        actions.append(f'<a href="{html_escape(profile_url)}">프로필 보기</a>')
     if notice_url:
         actions.append(f'<a href="{html_escape(notice_url)}" target="_blank" rel="noreferrer">공식 공고 채널</a>')
     elif homepage_url:
+        actions.append(f'<a href="{html_escape(homepage_url)}" target="_blank" rel="noreferrer">공식 홈페이지</a>')
+    if not actions and homepage_url:
         actions.append(f'<a href="{html_escape(homepage_url)}" target="_blank" rel="noreferrer">공식 홈페이지</a>')
     coverage = public_coverage_label(fact_count, source_count)
     search_blob = " ".join([lp_name, lp_type, ownership, default_team, focus])
@@ -1775,10 +1934,10 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
 {chips}
             </div>
             <dl class="lp-directory-metrics">
-              <div><dt>공고</dt><dd>{notice_count}건</dd></div>
-              <div><dt>출자규모</dt><dd>{html_escape(amount)}</dd></div>
+              <div><dt>표시 공고</dt><dd>{notice_count}건</dd></div>
+              <div><dt>공고 규모</dt><dd>{html_escape(amount)}</dd></div>
               <div><dt>최신</dt><dd>{html_escape(latest)}</dd></div>
-              <div><dt>항목</dt><dd>{html_escape(coverage)}</dd></div>
+              <div><dt>자료 항목</dt><dd>{html_escape(coverage)}</dd></div>
             </dl>
             <div class="lp-page-actions">{"".join(actions)}</div>
           </article>"""
@@ -1805,9 +1964,9 @@ def render_lp_notices_page(
           </div>"""
     )
     tracked_count = len(directory_rows)
-    active_count = len([item for item in directory_rows if int(item.get("notice_count") or 0) > 0])
+    profile_count = len([item for item in directory_rows if item.get("has_public_profile")])
+    visible_notice_count = len(notices)
     total_amount = sum(float(item.get("allocation_amount_krw_100mn") or 0) for item in directory_rows)
-    source_total = sum(int(item.get("source_count") or 0) for item in directory_rows)
     nav_html = render_lp_profile_nav(nav_items or [])
     return f"""<!doctype html>
 <html lang="ko">
@@ -1880,20 +2039,20 @@ def render_lp_notices_page(
           <a class="header-action" href="#lpNotices" aria-label="LP 공식 공고로 이동">공고</a>
         </div>
       </div>
-      <div class="brief-meta">대상 LP {tracked_count}개 · 공식 공고 {len(notices)}건 · 기준일 {html_escape(report_date)}</div>
+      <div class="brief-meta">대상 LP {tracked_count}개 · 공개 프로필 {profile_count}개 · 표시 공고 {visible_notice_count}건 · 기준일 {html_escape(report_date)}</div>
     </header>
 
     <main class="content-area">
       <section class="lp-directory-hero" aria-label="LP 디렉토리 요약">
         <div>
           <h1>LP Directory</h1>
-          <p>국내 주요 출자기관의 기본 현황, 관심 자산군, 최근 출자공고를 한 곳에서 봅니다. 공식 공고와 공개자료를 우선 반영하고, 관련 뉴스는 구분해 표시합니다.</p>
+          <p>국내 주요 출자기관의 기본 현황, 관심 자산군, 최근 출자공고를 한 곳에서 봅니다. 공개자료로 표시 가능한 항목을 우선 반영하고, 관련 뉴스는 구분해 표시합니다.</p>
         </div>
         <div class="lp-directory-kpis">
           <div><span>대상 기관</span><strong>{tracked_count}개</strong></div>
-          <div><span>최근 공고</span><strong>{active_count}개</strong></div>
+          <div><span>공개 프로필</span><strong>{profile_count}개</strong></div>
           <div><span>공고 기준 규모</span><strong>{html_escape(public_amount_label(total_amount, fallback="-"))}</strong></div>
-          <div><span>자료 링크</span><strong>{source_total}개</strong></div>
+          <div><span>표시 공고</span><strong>{visible_notice_count}건</strong></div>
         </div>
       </section>
       <nav class="lp-profile-nav" aria-label="LP 프로필">
@@ -2027,7 +2186,7 @@ def render_lp_notice_card(item: dict[str, object]) -> str:
 
 
 def write_lp_notices_page(site_dir: Path, report_date: str) -> int:
-    notices = read_lp_monitor(DEFAULT_LP_COMMITMENT_MONITOR)
+    notices = read_lp_monitor(DEFAULT_LP_COMMITMENT_MONITOR, limit=None)
     (site_dir / "lp-notices.html").write_text(
         render_lp_notices_page(report_date, notices, read_lp_profile_nav(), read_lp_directory_items()),
         encoding="utf-8",
@@ -2098,6 +2257,7 @@ def rewrite_site_archive(site_dir: Path, report_date: str, archive_entries: list
     service_context = read_service_context(DEFAULT_SERVICE_INTEGRATION_WORKLIST)
     service_context = merge_service_context(service_context, read_lp_article_context())
     add_title_matched_lp_article_context(service_context, archive_entries)
+    filter_service_context_profile_links(service_context)
     archive_entries = refresh_archive_entries_with_context(archive_entries, service_context)
     lp_monitor = read_lp_monitor(DEFAULT_LP_COMMITMENT_MONITOR)
     html = render_app(

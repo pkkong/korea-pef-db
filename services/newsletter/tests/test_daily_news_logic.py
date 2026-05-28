@@ -46,12 +46,15 @@ from daily_news_common import (
 )
 from build_newsletter_deploy import (
     display_asset_classes,
+    filter_service_context_profile_links,
     public_coverage_label,
     public_lp_type,
     read_lp_directory_items,
+    read_lp_alias_patterns,
     read_lp_profile_codes,
 )
 from build_service_site import editorial_section
+from build_service_site import article_payload_rows
 from apply_daily_news_review import normalize_category
 
 
@@ -176,7 +179,7 @@ def test_gp_alias_overrides_cover_common_short_names() -> None:
         assert "도미누스인베스트먼트" in imm_names
 
 
-def test_lp_directory_includes_seed_only_profiles() -> None:
+def test_lp_directory_includes_seed_only_profiles_without_empty_profile_pages() -> None:
     with TemporaryDirectory() as tmp:
         db_path = Path(tmp) / "lp.db"
         conn = sqlite3.connect(db_path)
@@ -224,7 +227,7 @@ def test_lp_directory_includes_seed_only_profiles() -> None:
         finally:
             conn.close()
 
-        assert read_lp_profile_codes(db_path) == ["seed", "active"]
+        assert read_lp_profile_codes(db_path) == ["active"]
         directory_codes = [str(row["lp_code"]) for row in read_lp_directory_items(db_path)]
         assert directory_codes == ["seed", "active"]
 
@@ -234,6 +237,103 @@ def test_lp_public_labels_do_not_expose_internal_taxonomy() -> None:
     assert public_lp_type("Mutual Aid Association") == "공제회"
     assert display_asset_classes("PEF;VC;Private Credit;Real Estate;Mother Fund") == "PEF · VC · 사모대출 · 부동산 · 모태펀드"
     assert public_coverage_label(0, 0) == "0개"
+
+
+def test_article_payload_does_not_render_lp_as_gp_chip() -> None:
+    url = "https://dealsite.co.kr/articles/162599"
+    rows = [
+        {
+            "title": "국민성장펀드 2차 출자사업 개시",
+            "source": "딜사이트",
+            "url": url,
+            "section": "국민성장펀드",
+        }
+    ]
+    payload = article_payload_rows(
+        rows,
+        {
+            url: {
+                "gpNames": ["한국산업은행", "아이엠엠프라이빗에쿼티"],
+                "lpNames": ["한국산업은행"],
+                "lpProfileLinks": [{"code": "kdb", "name": "한국산업은행", "url": "lp-kdb.html"}],
+                "peopleCount": 0,
+                "searchTerms": [],
+            }
+        },
+    )
+    assert payload[0]["gpNames"] == ["아이엠엠프라이빗에쿼티"]
+    assert payload[0]["lpNames"] == ["한국산업은행"]
+
+
+def test_kic_lp_alias_seed_feeds_article_context() -> None:
+    with TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / "lp.db"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                """
+                CREATE TABLE lp_institution(
+                    lp_code TEXT,
+                    lp_name TEXT,
+                    aliases TEXT,
+                    service_priority INTEGER
+                )
+                """
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        patterns = read_lp_alias_patterns(db_path)
+
+    kic = next(pattern for pattern in patterns if pattern["lp_code"] == "kic")
+    assert kic["lp_name"] == "한국투자공사"
+    assert "KIC" in kic["aliases"]
+    assert "한국투자공사" in kic["aliases"]
+
+    url = "https://www.sedaily.com/article/test-kic"
+    payload = article_payload_rows(
+        [
+            {
+                "title": "KIC 첫 국내 출자 펀드, 내달 베일 벗는다[시그널]",
+                "source": "서울경제",
+                "url": url,
+                "section": "LP",
+            }
+        ],
+        {
+            url: {
+                "gpNames": ["도미누스인베스트먼트", "아이엠엠인베스트먼트"],
+                "lpNames": [kic["lp_name"]],
+                "lpProfileLinks": [{"code": "kic", "name": kic["lp_name"], "url": "lp-kic.html"}],
+                "peopleCount": 0,
+                "searchTerms": kic["aliases"],
+            }
+        },
+    )
+    assert payload[0]["lpNames"] == ["한국투자공사"]
+    assert payload[0]["gpNames"] == ["도미누스인베스트먼트", "아이엠엠인베스트먼트"]
+
+
+def test_context_only_lp_keeps_name_without_broken_profile_link() -> None:
+    context = {
+        "https://www.sedaily.com/article/test-kic": {
+            "lpNames": ["한국투자공사", "한국산업은행"],
+            "lpProfileLinks": [
+                {"code": "kic", "name": "한국투자공사", "url": "lp-kic.html"},
+                {"code": "kdb", "name": "한국산업은행", "url": "lp-kdb.html"},
+            ],
+            "gpNames": [],
+            "searchTerms": [],
+        }
+    }
+
+    filter_service_context_profile_links(context, {"kdb"})
+
+    assert context["https://www.sedaily.com/article/test-kic"]["lpNames"] == ["한국투자공사", "한국산업은행"]
+    assert context["https://www.sedaily.com/article/test-kic"]["lpProfileLinks"] == [
+        {"code": "kdb", "name": "한국산업은행", "url": "lp-kdb.html"}
+    ]
 
 
 def test_national_growth_fund_has_dedicated_section() -> None:
@@ -474,6 +574,26 @@ def test_ai_pe_section_priority() -> None:
     assert primary_section(row) == "AI_PE"
 
 
+def test_incidental_body_ai_does_not_promote_market_conference_to_ai_pe() -> None:
+    row = {
+        "publisher": "한국경제",
+        "title": "\"산업·자본흐름 자체가 바뀌는 시대 미래에도 살아남을 자산 찾아내야\"",
+        "summary_text": (
+            "ASK 2026 글로벌 대체투자 콘퍼런스에서 자산군별 선별투자가 중요하다고 논의했고 "
+            "AI 혁신 등으로 투자 공식이 바뀌고 있다고 언급했다."
+        ),
+        "relevance_score": 10,
+        "section_tags": "Market",
+        "topic_tags": "LP,PEF,daily,market_news",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.hankyung.com/article/2026052724941",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "Market"
+    assert editorial_section({"title": str(row["title"]), "section": "Market"}) == "Market"
+
+
 def test_lp_title_is_not_promoted_to_ai_by_body_context() -> None:
     row = {
         "publisher": "한국경제",
@@ -611,6 +731,75 @@ def test_gp_fundraising_beats_deal_word_when_title_is_fund_build() -> None:
         "review_status": "auto",
     }
     assert primary_section(row) == "GP"
+    assert editorial_section({"title": str(row["title"]), "section": "GP"}) == "GP"
+
+
+def test_national_growth_fund_named_in_gp_strategy_is_not_dedicated_section() -> None:
+    row = {
+        "publisher": "딜사이트",
+        "title": "국민성장펀드 노리는 IMM…레버리지는 없다",
+        "summary_text": "시지바이오·이화다이아몬드 인수에 금융 없는 에쿼티 구조를 쓴 드라이 파우더 전략이다.",
+        "relevance_score": 7,
+        "section_tags": "Deal",
+        "topic_tags": "Deal,GP,LP,NationalGrowthFund,PEF,daily,deal_watch",
+        "document_type_tags": "",
+        "gp_names": "아이엠엠프라이빗에쿼티",
+        "source_url": "https://dealsite.co.kr/articles/162427",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "GP"
+    assert editorial_section({"title": str(row["title"]), "section": "GP"}) == "GP"
+
+
+def test_partner_suffix_does_not_turn_specific_investment_into_gp() -> None:
+    row = {
+        "publisher": "이투데이",
+        "title": "VIG파트너스, 미니쉬테크놀로지에 300억 투자…지분 20% 확보",
+        "summary_text": "국내 사모펀드운용사 VIG파트너스가 미니쉬테크놀로지에 투자했다.",
+        "relevance_score": 8,
+        "section_tags": "Deal",
+        "topic_tags": "Deal,PEF,daily,deal_watch",
+        "document_type_tags": "press_release",
+        "gp_names": "브이아이지파트너스",
+        "source_url": "https://www.etoday.co.kr/news/view/2588431",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "Deal"
+    assert editorial_section({"title": str(row["title"]), "section": "Deal"}) == "Deal"
+
+
+def test_acquisition_profile_title_with_pumneun_stays_deal() -> None:
+    row = {
+        "publisher": "매일경제",
+        "title": "피자헛 품는 前 현대차 부사장…\"마케팅 경험 살려 승부할 것\"",
+        "summary_text": "조원홍 윈터골드PE 대표가 과거 브랜드 파워를 회복시키겠다는 포부를 밝혔다.",
+        "relevance_score": 14,
+        "section_tags": "Market",
+        "topic_tags": "Market,PEF,daily,market_news",
+        "document_type_tags": "",
+        "gp_names": "윈터골드",
+        "source_url": "https://www.mk.co.kr/news/stock/12059131",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "Deal"
+    assert editorial_section({"title": str(row["title"]), "section": "Deal"}) == "Deal"
+
+
+def test_allocator_cio_governance_is_lp_not_market() -> None:
+    row = {
+        "publisher": "파이낸셜뉴스",
+        "title": "'자본시장 큰손들' 거취 촉각…하반기 CIO인선 큰장 열린다",
+        "summary_text": "연기금·공제회 최고 운용 총괄 책임자들의 임기 만료와 후임 인선이 이어진다.",
+        "relevance_score": 7,
+        "section_tags": "LP",
+        "topic_tags": "LP,PEF,allocator,daily,lp_watch",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.fnnews.com/news/202605271026381801",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "LP"
+    assert editorial_section({"title": str(row["title"]), "section": "LP"}) == "LP"
 
 
 def test_court_investment_document_stays_market_not_lp() -> None:
@@ -794,8 +983,11 @@ def main() -> int:
         test_dealsite_category_suffix_url_normalizes_to_article,
         test_truncated_media_suffix_does_not_split_title_duplicates,
         test_gp_alias_overrides_cover_common_short_names,
-        test_lp_directory_includes_seed_only_profiles,
+        test_lp_directory_includes_seed_only_profiles_without_empty_profile_pages,
         test_lp_public_labels_do_not_expose_internal_taxonomy,
+        test_article_payload_does_not_render_lp_as_gp_chip,
+        test_kic_lp_alias_seed_feeds_article_context,
+        test_context_only_lp_keeps_name_without_broken_profile_link,
         test_national_growth_fund_has_dedicated_section,
         test_national_growth_fund_title_beats_ai_keyword,
         test_ai_pe_keeps_priority_when_national_growth_fund_is_body_context,
@@ -809,10 +1001,15 @@ def main() -> int:
         test_private_credit_market_commentary_is_market,
         test_ai_pe_strategy_is_not_demoted_by_opportunity_language,
         test_ai_pe_section_priority,
+        test_incidental_body_ai_does_not_promote_market_conference_to_ai_pe,
         test_lp_title_is_not_promoted_to_ai_by_body_context,
         test_ai_pe_reserved_in_brief_selection,
         test_lp_and_gp_reserved_in_full_brief_selection,
         test_gp_fundraising_beats_deal_word_when_title_is_fund_build,
+        test_national_growth_fund_named_in_gp_strategy_is_not_dedicated_section,
+        test_partner_suffix_does_not_turn_specific_investment_into_gp,
+        test_acquisition_profile_title_with_pumneun_stays_deal,
+        test_allocator_cio_governance_is_lp_not_market,
         test_court_investment_document_stays_market_not_lp,
         test_gp_stake_belongs_to_market_structure,
         test_pef_association_belongs_to_market_structure,

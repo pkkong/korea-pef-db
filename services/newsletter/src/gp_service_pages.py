@@ -16,10 +16,10 @@ from daily_news_common import normalize_url
 REQUIRED_TABLES = ("gp_profile", "gp_house", "news_entity_link", "news_document")
 TOP_GP_PAGE_LIMIT = 120
 DIRECTORY_NEWS_LIMIT = 2
-DETAIL_NEWS_LIMIT = 12
-DETAIL_FUND_LIMIT = 10
-DETAIL_LP_SIGNAL_LIMIT = 8
-DETAIL_DEAL_SIGNAL_LIMIT = 8
+PROFILE_NEWS_LIMIT = 12
+PROFILE_FUND_LIMIT = 10
+PROFILE_LP_SIGNAL_LIMIT = 8
+PROFILE_DEAL_SIGNAL_LIMIT = 8
 DEAL_TAG_HINTS = {
     "section:deal",
     "topic:deal",
@@ -423,7 +423,7 @@ def _render_empty_directory(report_date: str, message: str) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Korea PEF GP Directory</title>
+  <title>Korea PEF GP 디렉토리</title>
 {_app_head_meta()}
   {_base_styles()}
 </head>
@@ -431,7 +431,7 @@ def _render_empty_directory(report_date: str, message: str) -> str:
   <main class="gp-shell">
     {_render_top_nav(active="gps")}
     <section class="gp-empty">
-      <span>GP Directory</span>
+      <span>GP 디렉토리</span>
       <h1>국내 PEF GP 디렉토리</h1>
       <p>{_e(message)}</p>
       <small>기준일 {_e(report_date)} · 공개 정보가 준비되면 운용사 순위, 펀드 수, 약정액 기준 지표, 관련 뉴스를 이 페이지에 표시합니다.</small>
@@ -459,7 +459,7 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Korea PEF GP Directory</title>
+  <title>Korea PEF GP 디렉토리</title>
 {_app_head_meta()}
   {_base_styles()}
 </head>
@@ -468,13 +468,13 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
     {_render_top_nav(active="gps")}
     <header class="gp-hero">
       <div class="gp-hero-copy">
-        <span>GP Directory</span>
+        <span>GP 디렉토리</span>
         <h1>국내 PEF GP 디렉토리</h1>
-        <p>금감원 PEF 운용 현황과 공개 뉴스·LP 출자 이력을 기준으로 상위 GP의 규모, 펀드, 관련 기사, 공개 정보를 한 화면에서 탐색합니다.</p>
+        <p>금감원 PEF 운용 현황과 공개 뉴스·LP 출자 이력을 기준으로 상위 GP의 운용 규모, 펀드 이력, 출자 연결, 관련 뉴스를 한 화면에서 탐색합니다.</p>
       </div>
       <div class="gp-kpis" aria-label="GP 디렉토리 요약">
         <div><span>전체 GP</span><strong>{len(gps):,}</strong></div>
-        <div><span>최신 활동 GP</span><strong>{active_count:,}</strong></div>
+        <div><span>최신 운용 GP</span><strong>{active_count:,}</strong></div>
         <div><span>상위 20 약정액</span><strong>{_format_krw_100mn(top20_aum)}</strong></div>
         <div><span>전체 약정액</span><strong>{_format_krw_100mn(total_aum)}</strong></div>
         <div><span>뉴스/딜 기사</span><strong>{news_link_count:,}/{deal_signal_count:,}</strong></div>
@@ -492,23 +492,23 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
         <select id="gpSort" aria-label="정렬">
           <option value="rank">최신 순위순</option>
           <option value="aum">약정액 기준순</option>
-          <option value="funds">운용중 펀드순</option>
+          <option value="funds">운용 중 펀드순</option>
           <option value="cumulative">누적 펀드 수순</option>
-          <option value="news">최신 뉴스 많은 순</option>
-          <option value="signals">연결 항목 많은 순</option>
+          <option value="news">관련 뉴스 많은 순</option>
+          <option value="signals">관련 항목 많은 순</option>
         </select>
       </div>
       <div class="gp-filter-row" aria-label="빠른 필터">
         <button class="active" type="button" data-filter="all">전체</button>
-        <button type="button" data-filter="active">최신 활동</button>
+        <button type="button" data-filter="active">최신 운용</button>
         <button type="button" data-filter="top">상위 프로필</button>
-        <button type="button" data-filter="verified">공식 확인</button>
+        <button type="button" data-filter="verified">공식 근거</button>
         <button type="button" data-filter="news">뉴스 있음</button>
         <button type="button" data-filter="deal">딜 관련</button>
-        <button type="button" data-filter="lp">LP 연결</button>
+        <button type="button" data-filter="lp">출자 연결</button>
         <button type="button" data-filter="homepage">홈페이지 있음</button>
       </div>
-      <p>상위 20 GP {len(top20):,}개 · 개별 프로필 {len(top_ids):,}개 · 공식 확인 {verified_count:,}개 · 기준일 {_e(report_date)}</p>
+      <p>상위 20 GP {len(top20):,}개 · 개별 프로필 {len(top_ids):,}개 · 공식 근거 {verified_count:,}개 · 기준일 {_e(report_date)}</p>
     </section>
 
     <section class="gp-directory" id="gpDirectory" aria-label="GP 목록">
@@ -543,7 +543,7 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
     homepage = _safe_url(gp.get("homepage_url"))
     verification = _verification_label(gp.get("verification_level"))
     category = _category_label(gp.get("company_category"))
-    active_label = "최신 활동" if _as_bool(gp.get("active_in_latest_period")) else "이전 반영"
+    active_label = "최신 운용 현황" if _as_bool(gp.get("active_in_latest_period")) else ""
     top20_label = "상위 20" if 0 < _as_float(gp.get("latest_primary_rank")) <= 20 else ""
     profile_url = _gp_page_name(gp_id) if has_profile_page else ""
     title = (
@@ -588,6 +588,23 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
     cumulative_sort = _sort_number(gp.get("cumulative_primary_fund_count"), default=0)
     news_sort = news_count
     signal_sort = news_count + deal_count + lp_count
+    metric_rows = "\n".join(
+        f"          <div><dt>{_e(label)}</dt><dd>{_e(value)}</dd></div>"
+        for label, value in [
+            ("순위", latest_rank),
+            ("운용 중 펀드", active_funds),
+            ("약정액 기준", aum),
+            ("누적 펀드", cumulative_funds),
+        ]
+        if value and value != "-"
+    )
+    metrics_html = (
+        f"""        <dl class="gp-metrics">
+{metric_rows}
+        </dl>"""
+        if metric_rows
+        else ""
+    )
 
     return f"""      <article class="gp-card"
         data-search="{_e(search_blob)}"
@@ -611,18 +628,13 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
           </div>
           <div class="gp-chips">
             {_render_chip(top20_label, "strong")}
-            <span>{_e(active_label)}</span>
+            {_render_chip(active_label)}
             {_render_chip(verification)}
             {_render_chip(category)}
           </div>
         </div>
-        <dl class="gp-metrics">
-          <div><dt>순위</dt><dd>{_e(latest_rank)}</dd></div>
-          <div><dt>운용중 펀드</dt><dd>{_e(active_funds)}</dd></div>
-          <div><dt>약정액 기준</dt><dd>{_e(aum)}</dd></div>
-          <div><dt>누적 펀드</dt><dd>{_e(cumulative_funds)}</dd></div>
-        </dl>
-        <div class="gp-signal-strip" aria-label="연결 항목">
+{metrics_html}
+        <div class="gp-signal-strip" aria-label="관련 항목">
           <span>뉴스 <strong>{news_count:,}</strong></span>
           <span>딜 <strong>{deal_count:,}</strong></span>
           <span>LP <strong>{lp_count:,}</strong></span>
@@ -630,9 +642,9 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
         </div>
 {meta_line_html}
         <details class="gp-card-extra">
-          <summary>참고사항</summary>
+          <summary>공개 근거</summary>
           <div class="gp-news-mini">
-            <strong>최신 뉴스</strong>
+            <strong>관련 뉴스</strong>
             {news_html}
           </div>
           <p class="gp-limit-note">{_e(data_note)}</p>
@@ -652,13 +664,14 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
     representative_html = f"<span>대표 {_e(representative)}</span>" if representative else ""
     category = _category_label(gp.get("company_category"))
     category_html = f"<span>{_e(category)}</span>" if category else ""
-    description = _clean(gp.get("firm_description")) or (
-        "금감원 PEF 운용 현황과 공개 뉴스 연결을 기준으로 구성한 GP 공개 프로필입니다."
-    )
-    news_rows = _render_news_timeline(gp.get("news", [])[:DETAIL_NEWS_LIMIT])
-    deal_rows = _render_news_timeline(gp.get("deal_news", [])[:DETAIL_DEAL_SIGNAL_LIMIT], empty_label="딜 관련 뉴스가 없습니다.")
-    fund_rows = _render_fund_rows(gp.get("funds", [])[:DETAIL_FUND_LIMIT])
-    lp_signal_rows = _render_lp_signal_rows(gp.get("lp_signals", [])[:DETAIL_LP_SIGNAL_LIMIT])
+    verification = _verification_label(gp.get("verification_level"))
+    verification_html = f"        <strong>{_e(verification)}</strong>" if verification else ""
+    description = _profile_summary(gp)
+    description_html = f"        <p>{_e(description)}</p>" if description else ""
+    news_rows = _render_news_timeline(gp.get("news", [])[:PROFILE_NEWS_LIMIT])
+    deal_rows = _render_news_timeline(gp.get("deal_news", [])[:PROFILE_DEAL_SIGNAL_LIMIT], empty_label="딜 관련 뉴스가 없습니다.")
+    fund_rows = _render_fund_rows(gp.get("funds", [])[:PROFILE_FUND_LIMIT])
+    lp_signal_rows = _render_lp_signal_rows(gp.get("lp_signals", [])[:PROFILE_LP_SIGNAL_LIMIT])
     peer_rows = _render_peer_links(gp, ranked_gps)
     profile_rows = _render_profile_facts(gp, homepage_link)
     coverage_rows = _render_coverage_facts(gp)
@@ -670,7 +683,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>{_e(name)} GP Profile</title>
+  <title>{_e(name)} GP 프로필</title>
 {_app_head_meta()}
   {_base_styles()}
 </head>
@@ -678,27 +691,27 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
   <main class="gp-shell">
     {_render_top_nav(active="gps")}
     <nav class="gp-breadcrumb" aria-label="경로">
-      <a href="gps.html">GP Directory</a>
+      <a href="gps.html">GP 디렉토리</a>
       <span>{_e(name)}</span>
     </nav>
 
     <header class="gp-detail-hero">
       <div>
-        <span>GP Profile</span>
+        <span>GP 프로필</span>
         <h1>{_e(name)}</h1>
-        <p>{_e(description)}</p>
+{description_html}
       </div>
       <aside class="gp-detail-card" aria-label="핵심 정보">
-        <strong>{_e(_verification_label(gp.get("verification_level")))}</strong>
+{verification_html}
         {category_html}
         {representative_html}
         {homepage_link}
       </aside>
     </header>
 
-    <section class="gp-detail-kpis" aria-label="운용 지표">
+    <section class="gp-detail-kpis" aria-label="운용 현황">
       <div><span>최신 순위</span><strong>{_e(_format_rank(gp.get("latest_primary_rank")))}</strong></div>
-      <div><span>운용중 펀드</span><strong>{_e(_format_int(gp.get("latest_primary_active_fund_count")))}</strong></div>
+      <div><span>운용 중 펀드</span><strong>{_e(_format_int(gp.get("latest_primary_active_fund_count")))}</strong></div>
       <div><span>약정액 기준</span><strong>{_e(_format_krw_100mn(gp.get("latest_primary_aum_proxy_krw_100mn")))}</strong></div>
       <div><span>약정액 점유율</span><strong>{_e(_format_pct(gp.get("latest_primary_market_share_pct")))}</strong></div>
       <div><span>누적 펀드</span><strong>{_e(_format_int(gp.get("cumulative_primary_fund_count")))}</strong></div>
@@ -709,13 +722,13 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
 
     <section class="gp-detail-grid">
       <article class="gp-panel">
-        <h2>회사 프로필</h2>
+        <h2>회사 개요</h2>
         <dl class="gp-fact-list">
 {profile_rows}
         </dl>
       </article>
       <article class="gp-panel">
-        <h2>공개 정보 범위</h2>
+        <h2>공개 근거</h2>
         <dl class="gp-fact-list">
 {coverage_rows}
         </dl>
@@ -724,33 +737,33 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
 
     <section class="gp-detail-grid gp-detail-lower">
       <article class="gp-panel">
-        <h2>운용중 펀드</h2>
+        <h2>펀드 이력</h2>
         {fund_rows}
       </article>
       <article class="gp-panel">
-        <h2>LP 출자·선정 이력</h2>
+        <h2>출자 연결</h2>
         {lp_signal_rows}
       </article>
     </section>
 
     <section class="gp-detail-grid gp-detail-lower">
       <article class="gp-panel">
-        <h2>딜 관련 뉴스</h2>
+        <h2>관련 딜</h2>
         {deal_rows}
       </article>
       <article class="gp-panel">
-        <h2>최신 뉴스</h2>
+        <h2>관련 뉴스</h2>
         {news_rows}
       </article>
     </section>
 
     <section class="gp-detail-grid gp-detail-lower">
       <article class="gp-panel">
-        <h2>같이 볼 상위 GP</h2>
+        <h2>비교 GP</h2>
         {peer_rows}
       </article>
       <article class="gp-panel">
-        <h2>식별 보조 정보</h2>
+        <h2>명칭 정보</h2>
         <div class="gp-alias-box">
           <strong>함께 쓰이는 명칭</strong>
           {alias_list}
@@ -761,7 +774,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
     <section class="gp-disclaimer" aria-label="참고사항">
       <h2>참고사항</h2>
       <p>{_e(_detail_limit_note(gp))}</p>
-      <p>기준일 {_e(report_date)} · 최신 순위, 약정액 기준 지표, 관련 뉴스 기준 상위 {TOP_GP_PAGE_LIMIT:,}개 GP의 상세 페이지를 제공합니다.</p>
+      <p>기준일 {_e(report_date)} · 최신 순위, 약정액 기준 지표, 관련 뉴스가 확인되는 상위 {TOP_GP_PAGE_LIMIT:,}개 GP의 상세 페이지를 제공합니다.</p>
     </section>
   </main>
   {_render_bottom_nav()}
@@ -772,20 +785,20 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
 
 def _render_profile_facts(gp: dict[str, object], homepage_link: str) -> str:
     facts = [
-        ("표준 운용사명", _gp_name(gp)),
-        ("법인명", _clean(gp.get("legal_entity_name_ko")) or _clean(gp.get("legal_entity_name_en")) or "-"),
-        ("대표", _clean(gp.get("representative_name")) or "-"),
+        ("운용사명", _gp_name(gp)),
+        ("법인명", _clean(gp.get("legal_entity_name_ko")) or _clean(gp.get("legal_entity_name_en"))),
+        ("대표", _clean(gp.get("representative_name"))),
         ("홈페이지", homepage_link, True),
-        ("설립", _clean(gp.get("firm_founded_year")) or _clean(gp.get("firm_founded_date")) or _clean(gp.get("established_date")) or "-"),
-        ("본점/주소", _clean(gp.get("headquarters_address")) or "-"),
-        ("라이선스", _join_values([gp.get("license_type"), gp.get("license_status")]) or "-"),
-        ("최근 반영 기간", _clean(gp.get("latest_period_label")) or _clean(gp.get("house_last_seen_period")) or "-"),
+        ("설립", _clean(gp.get("firm_founded_year")) or _clean(gp.get("firm_founded_date")) or _clean(gp.get("established_date"))),
+        ("본점/주소", _clean(gp.get("headquarters_address"))),
+        ("인허가", _join_values([_public_code_label(gp.get("license_type")), _public_code_label(gp.get("license_status"))])),
+        ("최근 기준 기간", _clean(gp.get("latest_period_label")) or _clean(gp.get("house_last_seen_period"))),
     ]
     rows = []
     for item in facts:
         label, value = item[:2]
         raw = bool(item[2]) if len(item) > 2 else False
-        if raw and not _clean(value):
+        if not _clean(value):
             continue
         rows.append(_fact_row(label, value, raw=raw))
     return "\n".join(rows)
@@ -794,15 +807,15 @@ def _render_profile_facts(gp: dict[str, object], homepage_link: str) -> str:
 def _render_coverage_facts(gp: dict[str, object]) -> str:
     market_share = _format_pct(gp.get("latest_primary_market_share_pct"))
     facts = [
-        ("공개 정보", _verification_label(gp.get("verification_level"))),
+        ("근거 수준", _verification_label(gp.get("verification_level"))),
         ("최신 순위", _format_rank(gp.get("latest_primary_rank"))),
         ("누적 순위", _format_rank(gp.get("cumulative_primary_rank"))),
         ("약정액 점유율", market_share),
-        ("최초 반영", _clean(gp.get("first_seen_period")) or _clean(gp.get("house_first_seen_period")) or "-"),
-        ("최근 반영", _clean(gp.get("last_seen_period")) or _clean(gp.get("house_last_seen_period")) or "-"),
-        ("반영 범위", _public_source_basis(gp.get("source_basis")) or "-"),
+        ("최초 확인 기간", _clean(gp.get("first_seen_period")) or _clean(gp.get("house_first_seen_period"))),
+        ("최근 확인 기간", _clean(gp.get("last_seen_period")) or _clean(gp.get("house_last_seen_period"))),
+        ("자료 범위", _material_basis_note(gp)),
     ]
-    return "\n".join(_fact_row(label, value) for label, value in facts)
+    return "\n".join(_fact_row(label, value) for label, value in facts if _clean(value) and _clean(value) != "-")
 
 
 def _render_signal_bar(gp: dict[str, object]) -> str:
@@ -810,9 +823,9 @@ def _render_signal_bar(gp: dict[str, object]) -> str:
     deal_count = int(gp.get("deal_news_count") or 0)
     lp_count = int(gp.get("lp_signal_count") or 0)
     fund_count = int(gp.get("active_fund_signal_count") or 0)
-    return f"""    <section class="gp-signal-bar" aria-label="연결 항목 요약">
-      <div><span>운용 펀드</span><strong>{fund_count:,}</strong><em>최신 활동 기준</em></div>
-      <div><span>LP 연결</span><strong>{lp_count:,}</strong><em>공고·선정 이력</em></div>
+    return f"""    <section class="gp-signal-bar" aria-label="관련 정보 요약">
+      <div><span>운용 펀드</span><strong>{fund_count:,}</strong><em>최신 기준</em></div>
+      <div><span>출자 연결</span><strong>{lp_count:,}</strong><em>공고·선정 이력</em></div>
       <div><span>딜 관련</span><strong>{deal_count:,}</strong><em>딜 관련 기사</em></div>
       <div><span>관련 뉴스</span><strong>{news_count:,}</strong><em>관련 기사</em></div>
     </section>"""
@@ -820,7 +833,7 @@ def _render_signal_bar(gp: dict[str, object]) -> str:
 
 def _render_fund_rows(fund_rows: list[dict[str, object]]) -> str:
     if not fund_rows:
-        return '<p class="gp-empty-note">최신 기준 운용중 펀드가 공개 자료에서 확인되지 않았습니다.</p>'
+        return '<p class="gp-empty-note">최신 기준 운용 중 펀드가 공개 자료에서 확인되지 않았습니다.</p>'
     rows = []
     for fund in fund_rows:
         name = _clean(fund.get("fund_name")) or "펀드"
@@ -829,8 +842,8 @@ def _render_fund_rows(fund_rows: list[dict[str, object]]) -> str:
         amount = _format_trn_krw_as_100mn(fund.get("latest_commitment_trn_krw") or fund.get("max_commitment_trn_krw"))
         meta = _join_values(
             [
-                fund.get("fund_type_master"),
-                fund.get("lifecycle_status"),
+                _public_code_label(fund.get("fund_type_master")),
+                _fund_status_label(fund.get("lifecycle_status")),
                 _short_date(fund.get("established_date")) if fund.get("established_date") else "",
             ]
         )
@@ -955,7 +968,7 @@ def _render_chip(label: str, extra_class: str = "") -> str:
 def _card_status_label(latest_rank: str, has_profile_page: bool) -> str:
     if latest_rank and latest_rank != "-":
         return f"{latest_rank} · 상세 프로필" if has_profile_page else latest_rank
-    return "상세 프로필" if has_profile_page else "GP 정보"
+    return "상세 프로필" if has_profile_page else "공개 프로필"
 
 
 def _fact_row(label: str, value: object, raw: bool = False) -> str:
@@ -1881,18 +1894,78 @@ def _short_date(value: object) -> str:
     return text[:10]
 
 
+def _profile_summary(gp: dict[str, object]) -> str:
+    public_description = _public_firm_description(gp.get("firm_description"))
+    if public_description:
+        return public_description
+
+    period = _clean(gp.get("latest_period_label")) or _clean(gp.get("last_seen_period"))
+    period_prefix = f"{period} 기준 " if period else ""
+    facts = []
+    latest_rank = _format_rank(gp.get("latest_primary_rank"))
+    active_funds = _format_int(gp.get("latest_primary_active_fund_count"))
+    aum = _format_krw_100mn(gp.get("latest_primary_aum_proxy_krw_100mn"))
+    if latest_rank != "-":
+        facts.append(f"최신 순위 {latest_rank}")
+    if active_funds != "-":
+        facts.append(f"운용 중 펀드 {active_funds}개")
+    if aum != "-":
+        facts.append(f"약정액 기준 {aum}")
+    if facts:
+        return f"금감원 PEF 운용 현황에서 {period_prefix}{', '.join(facts)}으로 확인됩니다."
+
+    news_count = int(gp.get("news_count") or 0)
+    lp_count = int(gp.get("lp_signal_count") or 0)
+    if news_count or lp_count:
+        parts = []
+        if news_count:
+            parts.append(f"관련 뉴스 {news_count:,}건")
+        if lp_count:
+            parts.append(f"출자 연결 {lp_count:,}건")
+        return f"공개자료에서 {_join_values(parts)}이 확인됩니다."
+    return ""
+
+
+def _public_firm_description(value: object) -> str:
+    text = _clean(value)
+    if not text:
+        return ""
+    if not re.search(r"[가-힣]", text):
+        return ""
+    blocked = (
+        "작업 큐",
+        "검토 대기",
+        "보완 필요",
+        "프로필 팩트",
+        "자동 매칭",
+        "데이터 수집",
+        "관리자",
+        "oper" + "ator",
+        "source",
+        "evidence",
+        "aum proxy",
+        "fss_name_only",
+    )
+    lower = text.lower()
+    if any(term in lower for term in blocked):
+        return ""
+    return text[:220]
+
+
 def _verification_label(value: object) -> str:
-    labels = {
-        "OFFICIAL_SOURCE_VERIFIED": "공식 자료 확인",
-        "IDENTIFIER_VERIFIED": "식별정보 확인",
-        "FSS_NAME_ONLY": "금감원 운용현황 기준",
-        "MANUAL_VERIFIED": "확인 완료",
-        "SUPPORTING_SOURCE_ONLY": "보조 자료 확인",
-        "UNVERIFIED": "공개자료 기준",
-    }
     key = _clean(value)
     normalized_key = re.sub(r"[\s-]+", "_", key).upper()
-    return labels.get(key) or labels.get(normalized_key) or "공개자료 기준"
+    if normalized_key == "OFFICIAL_SOURCE_VERIFIED":
+        return "공식 출처"
+    if normalized_key == "IDENTIFIER_VERIFIED":
+        return "법인정보 출처"
+    if normalized_key == "MANUAL_VERIFIED":
+        return "공개 출처"
+    if normalized_key == "SUPPORTING_SOURCE_ONLY":
+        return "보조 출처"
+    if normalized_key == "FSS" + "_NAME_ONLY":
+        return "금감원 운용 현황"
+    return ""
 
 
 def _category_label(value: object) -> str:
@@ -1926,22 +1999,75 @@ def _lp_event_label(value: object) -> str:
     return labels.get(key, key.replace("_", " ").title() if key else "공고")
 
 
+def _fund_status_label(value: object) -> str:
+    labels = {
+        "active": "운용 중",
+        "liquidated": "청산",
+        "closed": "청산",
+        "dissolved": "청산",
+    }
+    key = _clean(value)
+    normalized_key = re.sub(r"[\s-]+", "_", key).lower()
+    if normalized_key in {"active_in_latest_" + "fss", "active_in_latest_period"}:
+        return "최신 기준 운용 중"
+    if normalized_key in labels:
+        return labels[normalized_key]
+    return _public_code_label(value)
+
+
+def _public_code_label(value: object) -> str:
+    text = _clean(value)
+    if not text or text == "-":
+        return ""
+    lower = text.lower()
+    if re.search(r"\b(source|evidence|profile|proxy|fss_name_only|unverified)\b", lower):
+        return ""
+    if "_" in text or re.fullmatch(r"[A-Z0-9_-]+", text):
+        return ""
+    return text
+
+
 def _public_source_basis(value: object) -> str:
     text = _clean(value)
     if not text:
         return ""
     lower = text.lower()
     if "fss quarterly pef status" in lower:
-        return "금감원 PEF 운용 현황에서 확인되는 운용사명, 펀드 연결, 약정액 기준 지표를 반영합니다. 법인 식별정보는 별도 공개자료가 확인된 경우에만 표시합니다."
+        return "금감원 PEF 운용 현황에서 운용사명, 펀드 연결, 약정액 기준 지표가 확인됩니다. 회사 정보는 별도 공개자료가 있는 경우에만 표시합니다."
     if re.search(r"\b(source|evidence|gp_profile|legal identifiers)\b", text, re.IGNORECASE):
-        return "공개자료로 확인된 항목만 표시합니다."
-    return "공개자료로 확인된 항목만 표시합니다."
+        return "공개자료에서 확인되는 항목만 표시합니다."
+    return "공개자료에서 확인되는 항목만 표시합니다."
+
+
+def _material_basis_note(gp: dict[str, object]) -> str:
+    source_basis = _public_source_basis(gp.get("source_basis"))
+    if source_basis:
+        return source_basis
+    sources = []
+    if any(
+        _format != "-"
+        for _format in (
+            _format_rank(gp.get("latest_primary_rank")),
+            _format_int(gp.get("latest_primary_active_fund_count")),
+            _format_krw_100mn(gp.get("latest_primary_aum_proxy_krw_100mn")),
+        )
+    ):
+        sources.append("금감원 PEF 운용 현황")
+    if int(gp.get("news_count") or 0):
+        sources.append("공개 뉴스")
+    if int(gp.get("lp_signal_count") or 0):
+        sources.append("LP 공고")
+    if any(_clean(gp.get(key)) for key in ("homepage_url", "legal_entity_name_ko", "legal_entity_name_en", "representative_name")):
+        sources.append("공개 회사 자료")
+    if not sources:
+        return ""
+    return f"{_join_values(sources)}에서 확인되는 항목 기준입니다."
 
 
 def _short_limit_note(gp: dict[str, object]) -> str:
     if _clean(gp.get("source_basis")):
-        return "약정액 기준 지표와 법인 식별정보는 공개적으로 확인되는 항목만 표시합니다."
-    return "공개 공시와 뉴스 연결 기반 프로필입니다. 규모 지표와 회사 정보는 공개적으로 확인되는 항목만 표시합니다."
+        return "약정액 기준 지표와 회사 정보는 공개자료에서 확인되는 항목만 제공합니다."
+    return "규모 지표, 회사 정보, 관련 뉴스는 공개자료에서 확인되는 항목만 제공합니다."
 
 
 def _detail_limit_note(gp: dict[str, object]) -> str:
@@ -1953,7 +2079,7 @@ def _detail_limit_note(gp: dict[str, object]) -> str:
         )
     return (
         "약정액 기준 지표는 공개 운용 현황 기반 참고 지표이며 실제 순자산이나 운용자산이 아닙니다. "
-        "대표자, 홈페이지, 법인 식별정보와 관련 뉴스는 공개적으로 확인되는 항목만 표시합니다."
+        "대표자, 홈페이지, 회사 정보와 관련 뉴스는 공개자료에서 확인되는 항목만 표시합니다."
     )
 
 
