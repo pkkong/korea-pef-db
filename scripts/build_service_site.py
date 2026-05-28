@@ -36,6 +36,16 @@ NATIONAL_GROWTH_FUND_KEYWORDS = [
     "150조 국민성장펀드",
     "150조원 국민성장펀드",
 ]
+MARKET_STRUCTURE_KEYWORDS = [
+    "GP 스테이크",
+    "GP스테이크",
+    "GP stake",
+    "GP stakes",
+    "운용사 지분",
+    "운용사 스테이크",
+    "PEF협의회",
+    "사모펀드협의회",
+]
 PUBLISHER_BADGES = {
     "더벨": "더",
     "인베스트조선": "인",
@@ -395,6 +405,8 @@ LP_FOCUS_KEYWORDS = [
     "연기금",
     "중소기업중앙회",
     "노란우산공제",
+    "KIC",
+    "한국투자공사",
     "자산운용본부",
     "자산운용본부장",
     "자산운용부서장",
@@ -444,7 +456,7 @@ def legacy_section_to_current(raw_section: str, title_text: str) -> str:
     if has_national_growth_fund_theme(title_text, raw_text):
         return "국민성장펀드"
     if raw_text.strip() == "LP":
-        return "LP"
+        return "LP" if contains_any(title_text, LP_FOCUS_KEYWORDS) else "Market"
     if raw_text.strip() == "GP":
         return "GP"
     if "Credit" in raw_text or "크레딧" in raw_text or "Portfolio" in raw_text or "포트폴리오" in raw_text:
@@ -469,14 +481,16 @@ def editorial_section(row: dict[str, str]) -> str:
     combined = f"{title_text} {raw_section}"
     if has_national_growth_fund_theme(title_text, raw_section):
         return "국민성장펀드"
+    if contains_any(title_text, LP_FOCUS_KEYWORDS) and not has_ai_theme(title_text):
+        return "LP"
     if has_ai_theme(combined) and contains_any(combined, DEAL_SIGNAL_KEYWORDS + DEAL_FINANCING_KEYWORDS + LP_FOCUS_KEYWORDS + GP_FOCUS_KEYWORDS):
         return "AI & PE"
+    if contains_any(title_text, MARKET_STRUCTURE_KEYWORDS):
+        return "Market"
     if contains_any(title_text, ["펀드 결성", "펀드레이징", "펀드 조성", "펀드 도전", "클로징", "약정총액", "목표액", "블라인드펀드"]):
         return "GP"
     if contains_any(title_text, DEAL_FINANCING_KEYWORDS + DEAL_SIGNAL_KEYWORDS + DEAL_OWNERSHIP_KEYWORDS + DEAL_ISSUE_KEYWORDS):
         return "Deal"
-    if contains_any(title_text, LP_FOCUS_KEYWORDS):
-        return "LP"
     if contains_any(title_text, GP_FOCUS_KEYWORDS):
         return "GP"
     if contains_any(title_text, MARKET_KEYWORDS):

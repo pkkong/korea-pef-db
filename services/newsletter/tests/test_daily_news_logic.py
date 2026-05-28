@@ -21,6 +21,7 @@ from run_daily_news_pipeline import (
     EXPORT_MIN_QUALITY_SCORE,
     coverage_window_label,
     editorial_quality,
+    event_dedupe_key,
     extract_google_news_decode_params,
     google_query_for_report_date,
     google_news_encoded_id,
@@ -123,6 +124,11 @@ def test_sedaily_mobile_amp_url_normalizes_to_desktop_article() -> None:
     assert normalize_url("https://www.sedaily.com/article/20047971?ref=naver") == "https://www.sedaily.com/article/20047971"
 
 
+def test_dealsite_category_suffix_url_normalizes_to_article() -> None:
+    assert normalize_url("https://dealsite.co.kr/articles/162589/075023") == "https://dealsite.co.kr/articles/162589"
+    assert normalize_url("https://www.dealsite.co.kr/articles/162589") == "https://dealsite.co.kr/articles/162589"
+
+
 def test_truncated_media_suffix_does_not_split_title_duplicates() -> None:
     truncated = "대형 PEF, 롯데렌탈 눈독…공정위 기조·몸값 격차에 M&A는 안갯속[시그..."
     full = "대형 PEF, 롯데렌탈 눈독…공정위 기조·몸값 격차에 M&A는 안갯속[시그널]"
@@ -138,6 +144,8 @@ def test_gp_alias_overrides_cover_common_short_names() -> None:
             conn.executemany(
                 "INSERT INTO gp_house(gp_id, gp_name) VALUES (?, ?)",
                 [
+                    (44, "아이엠엠인베스트먼트"),
+                    (45, "도미누스인베스트먼트"),
                     (7987, "어펄마캐피탈매니져스코리아"),
                     (6358, "헬리오스프라이빗에쿼티"),
                 ],
@@ -156,6 +164,16 @@ def test_gp_alias_overrides_cover_common_short_names() -> None:
         names = {str(match["entity_name"]) for match in matches}
         assert "어펄마캐피탈매니져스코리아" in names
         assert "헬리오스프라이빗에쿼티" in names
+
+        imm_matches = match_gp_entities(
+            "KIC 첫 국내 출자 펀드, 내달 베일 벗는다",
+            "KIC는 IMM인베스트먼트와 도미누스인베스트먼트와 손잡고 펀드 조성을 완료할 예정이다.",
+            "",
+            aliases,
+        )
+        imm_names = {str(match["entity_name"]) for match in imm_matches}
+        assert "아이엠엠인베스트먼트" in imm_names
+        assert "도미누스인베스트먼트" in imm_names
 
 
 def test_lp_directory_includes_seed_only_profiles() -> None:
@@ -215,7 +233,7 @@ def test_lp_public_labels_do_not_expose_internal_taxonomy() -> None:
     assert public_lp_type("Policy Bank") == "정책금융기관"
     assert public_lp_type("Mutual Aid Association") == "공제회"
     assert display_asset_classes("PEF;VC;Private Credit;Real Estate;Mother Fund") == "PEF · VC · 사모대출 · 부동산 · 모태펀드"
-    assert public_coverage_label(0, 0) == "자료 없음"
+    assert public_coverage_label(0, 0) == "0개"
 
 
 def test_national_growth_fund_has_dedicated_section() -> None:
@@ -387,6 +405,23 @@ def test_ai_pe_section_priority() -> None:
     assert primary_section(row) == "AI_PE"
 
 
+def test_lp_title_is_not_promoted_to_ai_by_body_context() -> None:
+    row = {
+        "publisher": "한국경제",
+        "title": "LP들 “시장 타이밍보다 선별투자”…해외 사모시장 공식 바뀐다",
+        "summary_text": "KIC와 국민연금, 군인공제회가 해외 사모시장 선별투자를 논의했고 AI 방어력도 일부 언급했다.",
+        "relevance_score": 8,
+        "section_tags": "LP",
+        "topic_tags": "LP,PEF",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.hankyung.com/article/202605272626r",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "LP"
+    assert editorial_section({"title": str(row["title"]), "section": "AI & PE"}) == "LP"
+
+
 def test_ai_pe_reserved_in_brief_selection() -> None:
     rows = [
         {
@@ -509,6 +544,134 @@ def test_gp_fundraising_beats_deal_word_when_title_is_fund_build() -> None:
     assert primary_section(row) == "GP"
 
 
+def test_court_investment_document_stays_market_not_lp() -> None:
+    row = {
+        "publisher": "서울경제",
+        "title": "법원, 고려아연에 원아시아 펀드 투자 문서 제출 명령 [시그널]",
+        "summary_text": "고려아연이 원아시아파트너스 펀드에 출자했지만 법원 문서제출 명령과 이해관계가 핵심이다.",
+        "relevance_score": 10,
+        "section_tags": "GP",
+        "topic_tags": "PEF,daily,gp_watch",
+        "document_type_tags": "",
+        "gp_names": "원아시아파트너스,엠비케이파트너스",
+        "source_url": "https://www.sedaily.com/article/20048680",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "Market"
+    assert editorial_section({"title": str(row["title"]), "section": "LP"}) == "Market"
+
+
+def test_gp_stake_belongs_to_market_structure() -> None:
+    row = {
+        "publisher": "한국경제",
+        "title": "보나코드 “GP 스테이크, 단순 자금 조달 넘어선 기업 성장 핵심 전략”",
+        "summary_text": "PEF 운용사 지분 투자와 GP 스테이크 시장 구조를 다룬다.",
+        "relevance_score": 6,
+        "section_tags": "Market",
+        "topic_tags": "PEF,daily,market_news",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.hankyung.com/article/202605272317r",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "Market"
+    assert editorial_section({"title": str(row["title"]), "section": "GP"}) == "Market"
+
+
+def test_pef_association_belongs_to_market_structure() -> None:
+    row = {
+        "publisher": "매일경제",
+        "title": "세 불리는 PEF협의회 … 웰투시 등 7곳 승선",
+        "summary_text": "사모펀드 업계 단체와 시장 네트워크 확대를 다룬다.",
+        "relevance_score": 7,
+        "section_tags": "GP",
+        "topic_tags": "GP,PEF",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.mk.co.kr/news/stock/12059126",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "Market"
+    assert editorial_section({"title": str(row["title"]), "section": "GP"}) == "Market"
+
+
+def test_same_publisher_near_duplicate_title_is_selected_once() -> None:
+    duplicate_a = {
+        "news_id": 11557,
+        "publisher": "매일경제",
+        "title": "국민성장펀드 대형 위탁운용사에 스카이레이크·에이티넘",
+        "summary_text": "국민성장펀드 운용사 선정 기사",
+        "quality_score": 22,
+        "relevance_score": 14,
+        "section_tags": "NationalGrowthFund",
+        "topic_tags": "NationalGrowthFund,LP,PEF",
+        "source_url": "https://www.mk.co.kr/news/stock/12059148",
+        "normalized_source_url": "https://www.mk.co.kr/news/stock/12059148",
+    }
+    duplicate_b = {
+        **duplicate_a,
+        "news_id": 11556,
+        "title": "국민성장펀드 대형 위탁운용사…스카이레이크·에이티넘 선정",
+        "source_url": "https://www.mk.co.kr/news/stock/12059233",
+        "normalized_source_url": "https://www.mk.co.kr/news/stock/12059233",
+    }
+    other = {
+        **duplicate_a,
+        "news_id": 1,
+        "publisher": "서울경제",
+        "title": "KIC 첫 국내 출자 펀드, 내달 베일 벗는다",
+        "summary_text": "LP 출자사업 기사",
+        "quality_score": 15,
+        "relevance_score": 10,
+        "section_tags": "LP",
+        "topic_tags": "LP,PEF",
+        "source_url": "https://www.sedaily.com/article/test",
+        "normalized_source_url": "https://www.sedaily.com/article/test",
+    }
+    selected = select_brief_rows([duplicate_a, duplicate_b, other], 3)
+    selected_titles = [str(row["title"]) for row in selected]
+    assert duplicate_a["title"] in selected_titles
+    assert duplicate_b["title"] not in selected_titles
+
+
+def test_same_national_growth_fund_selection_event_is_selected_once() -> None:
+    sedaily = {
+        "news_id": 11478,
+        "publisher": "서울경제",
+        "title": "국민성장펀드 간접투자 운용사 명단 확정…11곳 PE·VC 선정",
+        "summary_text": "국민성장펀드 간접투자 위탁운용사 11곳이 선정됐다.",
+        "quality_score": 25,
+        "relevance_score": 16,
+        "section_tags": "NationalGrowthFund",
+        "topic_tags": "NationalGrowthFund,LP,PEF",
+        "source_url": "https://www.sedaily.com/article/20048957",
+        "normalized_source_url": "https://www.sedaily.com/article/20048957",
+    }
+    dealsite = {
+        "news_id": 11840,
+        "publisher": "딜사이트",
+        "title": "[150조 국민성장펀드] [간접투자 1차] 2.4조 운용할 GP 선정…에이티넘·웰투시 등 11곳",
+        "summary_text": "국민성장펀드 1차 위탁운용사 11곳이 선정됐다.",
+        "quality_score": 22,
+        "relevance_score": 13,
+        "section_tags": "NationalGrowthFund",
+        "topic_tags": "NationalGrowthFund,LP,PEF",
+        "source_url": "https://dealsite.co.kr/articles/162589/075023",
+        "normalized_source_url": "https://dealsite.co.kr/articles/162589",
+    }
+    second_round = {
+        **dealsite,
+        "news_id": 11838,
+        "title": "[150조 국민성장펀드] [간접투자 2차] 1차 끝나자마자 1.6조 규모 출자사업 개시",
+        "summary_text": "국민성장펀드 2차 출자사업이 개시됐다.",
+        "source_url": "https://dealsite.co.kr/articles/162599/075023",
+        "normalized_source_url": "https://dealsite.co.kr/articles/162599",
+    }
+    assert event_dedupe_key(sedaily) == event_dedupe_key(dealsite)
+    selected = select_brief_rows([sedaily, dealsite, second_round], 3)
+    assert [int(row["news_id"]) for row in selected] == [11478, 11838]
+
+
 def test_company_clipping_keyword_gaps_are_scored() -> None:
     rules = load_rules(DEFAULT_RULES)
     cases = [
@@ -559,6 +722,7 @@ def main() -> int:
         test_previous_export_keys_ignore_review_candidates,
         test_google_news_decode_helpers,
         test_sedaily_mobile_amp_url_normalizes_to_desktop_article,
+        test_dealsite_category_suffix_url_normalizes_to_article,
         test_truncated_media_suffix_does_not_split_title_duplicates,
         test_gp_alias_overrides_cover_common_short_names,
         test_lp_directory_includes_seed_only_profiles,
@@ -573,9 +737,15 @@ def main() -> int:
         test_allocator_section_priority,
         test_gp_fundraising_and_deal_financing_sections,
         test_ai_pe_section_priority,
+        test_lp_title_is_not_promoted_to_ai_by_body_context,
         test_ai_pe_reserved_in_brief_selection,
         test_lp_and_gp_reserved_in_full_brief_selection,
         test_gp_fundraising_beats_deal_word_when_title_is_fund_build,
+        test_court_investment_document_stays_market_not_lp,
+        test_gp_stake_belongs_to_market_structure,
+        test_pef_association_belongs_to_market_structure,
+        test_same_publisher_near_duplicate_title_is_selected_once,
+        test_same_national_growth_fund_selection_event_is_selected_once,
         test_company_clipping_keyword_gaps_are_scored,
         test_dot_datetime_to_iso,
         test_google_news_redirect_not_auto_exported,

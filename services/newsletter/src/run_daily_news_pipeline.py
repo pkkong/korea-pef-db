@@ -12,6 +12,7 @@ import re
 import sqlite3
 import ssl
 import sys
+from difflib import SequenceMatcher
 from datetime import date, datetime, timedelta
 from html import unescape
 from pathlib import Path
@@ -449,10 +450,10 @@ def upsert_document(
     report_date: str,
     candidate: dict[str, object],
     min_score: float,
-) -> tuple[int, bool]:
+) -> tuple[int, bool, bool]:
     existing = conn.execute(
         """
-        SELECT news_id
+        SELECT news_id, relevance_score, review_status
         FROM news_document
         WHERE normalized_source_url = ?
         """,
@@ -461,6 +462,8 @@ def upsert_document(
     force_include = bool(candidate.get("force_include"))
     force_exclude = bool(candidate.get("force_exclude"))
     is_pe_relevant, relevance_label = choose_relevance_label(float(candidate["relevance_score"]), min_score, force_include, force_exclude)
+    previous_score = float(existing[1] or 0) if existing is not None else -1.0
+    should_replace_quality = existing is None or force_include or float(candidate["relevance_score"]) >= previous_score
     payload_json = json.dumps(candidate.get("raw_payload", {}), ensure_ascii=False)
     applied_at = now_utc_iso()
     conn.execute(
@@ -475,26 +478,26 @@ def upsert_document(
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(normalized_source_url) DO UPDATE SET
             run_id = excluded.run_id,
-            source_code = excluded.source_code,
-            source_url = excluded.source_url,
-            source_domain = excluded.source_domain,
-            publisher = excluded.publisher,
-            title = excluded.title,
+            source_code = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.source_code ELSE news_document.source_code END,
+            source_url = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.source_url ELSE news_document.source_url END,
+            source_domain = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.source_domain ELSE news_document.source_domain END,
+            publisher = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.publisher ELSE news_document.publisher END,
+            title = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.title ELSE news_document.title END,
             published_at = COALESCE(excluded.published_at, news_document.published_at),
             discovered_at = excluded.discovered_at,
             fetched_at = excluded.fetched_at,
-            document_type = excluded.document_type,
-            raw_html_path = excluded.raw_html_path,
-            meta_description = excluded.meta_description,
-            excerpt_text = excluded.excerpt_text,
-            body_text = excluded.body_text,
-            content_hash = excluded.content_hash,
-            relevance_score = excluded.relevance_score,
-            relevance_label = excluded.relevance_label,
-            comment_text = excluded.comment_text,
-            review_status = excluded.review_status,
-            is_pe_relevant = excluded.is_pe_relevant,
-            raw_payload_json = excluded.raw_payload_json,
+            document_type = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.document_type ELSE news_document.document_type END,
+            raw_html_path = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.raw_html_path ELSE news_document.raw_html_path END,
+            meta_description = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.meta_description ELSE news_document.meta_description END,
+            excerpt_text = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.excerpt_text ELSE news_document.excerpt_text END,
+            body_text = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.body_text ELSE news_document.body_text END,
+            content_hash = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.content_hash ELSE news_document.content_hash END,
+            relevance_score = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.relevance_score ELSE news_document.relevance_score END,
+            relevance_label = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.relevance_label ELSE news_document.relevance_label END,
+            comment_text = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.comment_text ELSE news_document.comment_text END,
+            review_status = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.review_status ELSE news_document.review_status END,
+            is_pe_relevant = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.is_pe_relevant ELSE news_document.is_pe_relevant END,
+            raw_payload_json = CASE WHEN excluded.review_status = 'force_include' OR excluded.relevance_score >= news_document.relevance_score THEN excluded.raw_payload_json ELSE news_document.raw_payload_json END,
             updated_at = excluded.updated_at
         """,
         (
@@ -535,7 +538,7 @@ def upsert_document(
     ).fetchone()
     if row is None:
         raise RuntimeError("Failed to read back upserted news_document row")
-    return int(row[0]), existing is None
+    return int(row[0]), existing is None, should_replace_quality
 
 
 def reuse_cached_document_for_run(
@@ -899,6 +902,10 @@ WEAK_CONTEXT_TITLE_KEYWORDS = [
     "실적",
 ]
 TITLE_RISK_KEYWORDS = [
+    "법원",
+    "제출 명령",
+    "문서 제출",
+    "가처분",
     "유탄",
     "리스크",
     "위법",
@@ -1197,6 +1204,18 @@ GP_STRATEGY_EVENT_KEYWORDS = [
     "플랫폼",
 ]
 
+MARKET_STRUCTURE_KEYWORDS = [
+    "GP 스테이크",
+    "GP스테이크",
+    "GP stake",
+    "GP stakes",
+    "GP Stakes",
+    "운용사 지분",
+    "운용사 스테이크",
+    "PEF협의회",
+    "사모펀드협의회",
+]
+
 AI_THEME_KEYWORDS = [
     "A.I.",
     "인공지능",
@@ -1236,9 +1255,12 @@ def has_fundraising_title_signal(title: str) -> bool:
     )
 
 
+def has_ai_signal(text: str) -> bool:
+    return bool(AI_SHORT_RE.search(text)) or contains_any_keyword(text, AI_THEME_KEYWORDS)
+
+
 def has_ai_pe_theme(text: str) -> bool:
-    has_ai_signal = bool(AI_SHORT_RE.search(text)) or contains_any_keyword(text, AI_THEME_KEYWORDS)
-    if not has_ai_signal:
+    if not has_ai_signal(text):
         return False
     return contains_any_keyword(
         text,
@@ -1248,6 +1270,10 @@ def has_ai_pe_theme(text: str) -> bool:
         + SECTION_KEYWORDS["Fundraising"]
         + SECTION_KEYWORDS["GP"],
     )
+
+
+def title_has_non_ai_lp_priority(title: str) -> bool:
+    return has_explicit_lp_focus_signal(title) and not has_ai_signal(title)
 
 
 def has_national_growth_fund_theme(title: str, raw_sections: list[str] | None = None) -> bool:
@@ -1261,12 +1287,63 @@ def has_lp_focus_signal(text: str) -> bool:
     return contains_any_keyword(text, SECTION_KEYWORDS["LP"] + LP_COMMITMENT_EVENT_KEYWORDS)
 
 
+def has_lp_event_signal(text: str) -> bool:
+    return contains_any_keyword(text, LP_COMMITMENT_EVENT_KEYWORDS)
+
+
+def has_explicit_lp_focus_signal(text: str) -> bool:
+    return contains_any_keyword(
+        text,
+        [
+            "LP",
+            "LP들",
+            "Limited Partner",
+            "출자자",
+            "기관투자가",
+            "연기금",
+            "공제회",
+            "국민연금",
+            "사학연금",
+            "교직원공제",
+            "행정공제",
+            "군인공제",
+            "새마을금고",
+            "중소기업중앙회",
+            "노란우산공제",
+            "KIC",
+            "한국투자공사",
+            "모태펀드",
+            "성장금융",
+            "한국벤처투자",
+            "출자사업",
+            "출자공고",
+            "위탁운용",
+            "운용사 선정",
+            "출자확약",
+            "커밋먼트",
+            "자산배분",
+            "대체투자",
+            "자산운용본부",
+            "자산운용본부장",
+            "공제사업",
+        ],
+    )
+
+
+def has_strong_lp_content_signal(text: str) -> bool:
+    return has_lp_event_signal(text) and has_explicit_lp_focus_signal(text)
+
+
 def has_gp_focus_signal(text: str) -> bool:
     return (
         has_fundraising_title_signal(text)
         or contains_any_keyword(text, GP_STRATEGY_EVENT_KEYWORDS)
         or contains_any_keyword(text, SECTION_KEYWORDS["GP"])
     )
+
+
+def has_market_structure_signal(text: str) -> bool:
+    return contains_any_keyword(text, MARKET_STRUCTURE_KEYWORDS)
 
 
 def section_override(row: dict[str, object]) -> str:
@@ -1297,8 +1374,12 @@ def primary_section(row: dict[str, object]) -> str:
     )
     if has_national_growth_fund_theme(title, raw_sections):
         return "NationalGrowthFund"
-    if has_ai_pe_theme(content):
+    if has_ai_pe_theme(content) and not title_has_non_ai_lp_priority(title):
         return "AI_PE"
+    if has_market_structure_signal(title):
+        return "Market"
+    if contains_any_keyword(title, TITLE_RISK_KEYWORDS) or contains_any_keyword(title, SECTION_KEYWORDS["Regulation"]):
+        return "Market"
     if contains_any_keyword(title, SECTION_KEYWORDS["Credit"]) and has_fundraising_title_signal(title):
         return "GP"
     if contains_any_keyword(title, SECTION_KEYWORDS["Credit"]):
@@ -1309,14 +1390,10 @@ def primary_section(row: dict[str, object]) -> str:
         return "Deal"
     if contains_any_keyword(title, SECTION_KEYWORDS["Portfolio"]):
         return "Deal"
-    if has_lp_focus_signal(title):
+    if has_explicit_lp_focus_signal(title):
         return "LP"
     if has_gp_focus_signal(title):
         return "GP"
-    if contains_any_keyword(title, TITLE_RISK_KEYWORDS):
-        return "Market"
-    if contains_any_keyword(title, SECTION_KEYWORDS["Regulation"]):
-        return "Market"
     if contains_any_keyword(content, SECTION_KEYWORDS["Credit"]) and has_fundraising_title_signal(title):
         return "GP"
     if contains_any_keyword(content, SECTION_KEYWORDS["Credit"]):
@@ -1325,7 +1402,8 @@ def primary_section(row: dict[str, object]) -> str:
         return "Deal"
     if contains_any_keyword(content, SECTION_KEYWORDS["Portfolio"]):
         return "Deal"
-    if has_lp_focus_signal(content):
+    has_lp_source_context = "LP" in topics or "LP Commitment" in topics or "LP" in raw_sections
+    if has_strong_lp_content_signal(content) or (has_lp_source_context and has_explicit_lp_focus_signal(title)):
         return "LP"
     if has_gp_focus_signal(content):
         return "GP"
@@ -1339,7 +1417,7 @@ def primary_section(row: dict[str, object]) -> str:
         return "Deal"
     if "Deal" in topics:
         return "Deal"
-    if "LP Commitment" in topics or "LP" in topics:
+    if ("LP Commitment" in topics or "LP" in topics) and has_strong_lp_content_signal(content):
         return "LP"
     if contains_any_keyword(content, SECTION_KEYWORDS["Regulation"]):
         return "Market"
@@ -1349,7 +1427,7 @@ def primary_section(row: dict[str, object]) -> str:
         return "GP"
     for section in SECTION_ORDER:
         if section in raw_sections:
-            if section == "LP" and not has_lp_focus_signal(content):
+            if section == "LP" and not has_strong_lp_content_signal(content):
                 continue
             return section
     return "Market"
@@ -1476,18 +1554,47 @@ def should_export_row(row: dict[str, object], allow_google_news_redirects: bool 
     return float(row.get("quality_score", 0) or 0) >= EXPORT_MIN_QUALITY_SCORE
 
 
+def event_dedupe_key(row: dict[str, object]) -> str:
+    title = str(row.get("title", ""))
+    summary = str(row.get("summary_text", ""))
+    text = f"{title} {summary}"
+    raw_sections = [SECTION_LABEL_TO_CODE.get(value, value) for value in split_csv_values(str(row.get("section_tags", "")))]
+    if has_national_growth_fund_theme(title, raw_sections):
+        if contains_any_keyword(title, ["2차", "두 번째"]) and contains_any_keyword(title, ["출자사업", "위탁운용", "운용사"]):
+            return "national_growth_fund:indirect_round_2_notice"
+        if contains_any_keyword(title, ["직원", "가입", "완판", "흥행", "수익률"]):
+            return "national_growth_fund:public_fund_sales"
+        if contains_any_keyword(title, ["노리는", "레버리지"]):
+            return ""
+        if contains_any_keyword(text, ["선정", "명단 확정", "낙점", "11곳", "2.4조", "위탁운용사", "GP 선정"]):
+            return "national_growth_fund:indirect_round_1_selection"
+    if contains_any_keyword(text, ["고려아연"]) and contains_any_keyword(text, ["원아시아"]) and contains_any_keyword(
+        text, ["법원", "제출 명령", "문서 제출"]
+    ):
+        return "korea_zinc_oneasia:court_document_order"
+    if contains_any_keyword(text, ["KIC", "한국투자공사"]) and contains_any_keyword(text, ["국내 출자", "출자 펀드"]):
+        return "kic:domestic_commitment_fund"
+    return ""
+
+
 def select_brief_rows(rows: list[dict[str, object]], brief_limit: int) -> list[dict[str, object]]:
     selected: list[dict[str, object]] = []
     section_counts = {section: 0 for section in SECTION_ORDER}
     seen_urls: set[str] = set()
     seen_titles: set[str] = set()
+    seen_title_rows: list[tuple[str, str]] = []
+    seen_events: set[str] = set()
 
     def add_row(row: dict[str, object]) -> bool:
         url_key = str(row.get("normalized_source_url") or row.get("source_url") or "")
         title_key = normalize_title_key(str(row.get("title", "")))
+        publisher = str(row.get("publisher", ""))
+        event_key = event_dedupe_key(row)
         if url_key and url_key in seen_urls:
             return False
-        if title_key and title_key in seen_titles:
+        if title_key and (title_key in seen_titles or is_near_duplicate_title_key(title_key, publisher, seen_title_rows)):
+            return False
+        if event_key and event_key in seen_events:
             return False
         section = primary_section(row)
         if section_counts.get(section, 0) >= SECTION_DISPLAY_LIMIT:
@@ -1496,6 +1603,9 @@ def select_brief_rows(rows: list[dict[str, object]], brief_limit: int) -> list[d
             seen_urls.add(url_key)
         if title_key:
             seen_titles.add(title_key)
+            seen_title_rows.append((title_key, publisher))
+        if event_key:
+            seen_events.add(event_key)
         section_counts[section] = section_counts.get(section, 0) + 1
         selected.append(row)
         return True
@@ -1524,17 +1634,26 @@ def group_export_rows(rows: list[dict[str, object]]) -> dict[str, list[dict[str,
     grouped = {section: [] for section in SECTION_ORDER}
     seen_urls: set[str] = set()
     seen_titles: set[str] = set()
+    seen_title_rows: list[tuple[str, str]] = []
+    seen_events: set[str] = set()
     for row in rows:
         url_key = str(row.get("normalized_source_url") or row.get("source_url") or "")
         title_key = normalize_title_key(str(row.get("title", "")))
+        publisher = str(row.get("publisher", ""))
+        event_key = event_dedupe_key(row)
         if url_key and url_key in seen_urls:
             continue
-        if title_key and title_key in seen_titles:
+        if title_key and (title_key in seen_titles or is_near_duplicate_title_key(title_key, publisher, seen_title_rows)):
+            continue
+        if event_key and event_key in seen_events:
             continue
         if url_key:
             seen_urls.add(url_key)
         if title_key:
             seen_titles.add(title_key)
+            seen_title_rows.append((title_key, publisher))
+        if event_key:
+            seen_events.add(event_key)
         section = primary_section(row)
         if len(grouped.setdefault(section, [])) >= SECTION_DISPLAY_LIMIT:
             continue
@@ -1549,6 +1668,26 @@ def normalize_title_key(title: str) -> str:
     value = re.sub(r"\.{2,}|…+", "", value)
     value = re.sub(r"[\[\]\"'‘’“”<>(){}|·:：,\s]+", "", value)
     return value.lower()[:42]
+
+
+def is_near_duplicate_title_key(
+    title_key: str,
+    publisher: str,
+    seen_title_rows: list[tuple[str, str]],
+) -> bool:
+    if not title_key:
+        return False
+    for seen_key, seen_publisher in seen_title_rows:
+        if not seen_key:
+            continue
+        if publisher and seen_publisher and publisher != seen_publisher:
+            continue
+        shorter = min(len(title_key), len(seen_key))
+        if shorter >= 18 and (title_key in seen_key or seen_key in title_key):
+            return True
+        if shorter >= 18 and SequenceMatcher(None, title_key, seen_key).ratio() >= 0.86:
+            return True
+    return False
 
 
 def clean_display_title(title: str, publisher: str = "") -> str:
@@ -2066,8 +2205,9 @@ def main() -> int:
                     "force_exclude": force_exclude,
                 }
 
-                news_id, created_now = upsert_document(conn, run_id, source, args.date, candidate, args.min_score)
-                replace_tags_and_links(conn, news_id, tags, entity_links)
+                news_id, created_now, should_replace_links = upsert_document(conn, run_id, source, args.date, candidate, args.min_score)
+                if should_replace_links:
+                    replace_tags_and_links(conn, news_id, tags, entity_links)
                 inserted_count += 1 if created_now else 0
                 is_relevant_now = choose_relevance_label(candidate["relevance_score"], args.min_score, force_include, force_exclude)[0]
                 relevant_count += 1 if is_relevant_now else 0

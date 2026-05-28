@@ -398,6 +398,11 @@ def normalize_url(value: str) -> str:
     scheme = parsed.scheme.lower() or "https"
     netloc = parsed.netloc.lower()
     path = parsed.path or "/"
+    if netloc in {"dealsite.co.kr", "www.dealsite.co.kr"}:
+        match = re.match(r"^/articles/(\d+)(?:/\d+)?$", path)
+        if match:
+            netloc = "dealsite.co.kr"
+            path = f"/articles/{match.group(1)}"
     if netloc in {"m.sedaily.com", "www.sedaily.com", "sedaily.com"}:
         match = re.match(r"^/(?:amp)?article/([0-9A-Za-z]+)$", path, flags=re.IGNORECASE)
         if match:

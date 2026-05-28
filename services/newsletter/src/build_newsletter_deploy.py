@@ -479,6 +479,39 @@ def display_asset_classes(value: object) -> str:
     return " · ".join(parts) if parts else "-"
 
 
+def clean_public_lp_text(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    regex_replacements = [
+        (r"작업\s*큐", ""),
+        (r"검토\s*대기", "확인 전"),
+        (r"보강\s*필요", "공식 발표 확인 전"),
+        (r"프로필\s*팩트", "프로필 항목"),
+        (r"자동\s*매칭", "연결"),
+        (r"데이터\s*수집", "자료 확인"),
+        (r"관리\s*자", "서비스"),
+        (r"source\s*/\s*[e]vidence", "자료"),
+        (r"\bAUM\s+proxy\b", "운용자산 기준"),
+        (r"근거\s*자료", "자료"),
+        (r"자료\s*없음", ""),
+    ]
+    for pattern, replacement in regex_replacements:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    text = text.replace("canonical notice_id", "공식 공고")
+    text = re.sub(r"(보강|검증|확인|구조화|정규화)\s*필요", "공식 발표 확인 전", text)
+    text = re.sub(r"\bAUM\b", "운용자산", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def public_fact_label(value: object) -> str:
+    return clean_public_lp_text(value)
+
+
+def public_fact_value(value: object) -> str:
+    return clean_public_lp_text(value)
+
+
 def lp_short_label(lp_code: str, lp_name: str) -> str:
     return LP_PROFILE_SHORT_LABELS.get(lp_code, lp_name)
 
@@ -864,16 +897,25 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
 
 
 def render_ktcu_fact_section(section: str, rows: list[dict[str, object]]) -> str:
-    items = "\n".join(
-        f"""          <div>
-            <dt>{html_escape(str(row.get("label") or "-"))}</dt>
+    rendered: list[str] = []
+    for row in rows:
+        label = public_fact_label(row.get("label"))
+        value = public_fact_value(row.get("value"))
+        if not label or not value:
+            continue
+        source_name = clean_public_lp_text(row.get("source_name")) or "자료 보기"
+        rendered.append(
+            f"""          <div>
+            <dt>{html_escape(label)}</dt>
             <dd>
-              <span>{html_escape(str(row.get("value") or "-"))}</span>
-              {f'<a href="{html_escape(str(row.get("source_url") or ""))}" target="_blank" rel="noreferrer">{html_escape(str(row.get("source_name") or "자료 보기"))}</a>' if row.get("source_url") else ""}
+              <span>{html_escape(value)}</span>
+              {f'<a href="{html_escape(str(row.get("source_url") or ""))}" target="_blank" rel="noreferrer">{html_escape(source_name)}</a>' if row.get("source_url") else ""}
             </dd>
           </div>"""
-        for row in rows
-    )
+        )
+    if not rendered:
+        return ""
+    items = "\n".join(rendered)
     return f"""      <section class="ktcu-fact">
         <h2>{html_escape(KTCU_FACT_SECTION_LABELS.get(section, section))}</h2>
         <dl>
@@ -927,7 +969,7 @@ def render_ktcu_fact_list(rows: list[dict[str, object]]) -> str:
     rendered: list[str] = []
     for row in rows:
         source_url = str(row.get("source_url") or "")
-        source_name = str(row.get("source_name") or "")
+        source_name = clean_public_lp_text(row.get("source_name"))
         as_of = str(row.get("as_of_date") or "")
         confidence = confidence_label(row.get("confidence"))
         meta_parts = [part for part in [source_name, as_of, confidence] if part]
@@ -937,10 +979,14 @@ def render_ktcu_fact_list(rows: list[dict[str, object]]) -> str:
             if source_url
             else (f"<small>{html_escape(meta)}</small>" if meta else "")
         )
+        label = public_fact_label(row.get("label"))
+        value = public_fact_value(row.get("value"))
+        if not label or not value:
+            continue
         rendered.append(
             f"""          <div>
-            <dt>{html_escape(str(row.get("label") or "-"))}</dt>
-            <dd>{html_escape(str(row.get("value") or "-"))}{source_html}</dd>
+            <dt>{html_escape(label)}</dt>
+            <dd>{html_escape(value)}{source_html}</dd>
           </div>"""
         )
     return "\n".join(rendered)
@@ -962,7 +1008,7 @@ def render_ktcu_source_links(facts: list[dict[str, object]]) -> str:
         if not url or url in seen:
             continue
         seen.add(url)
-        name = str(fact.get("source_name") or "근거 자료")
+        name = clean_public_lp_text(fact.get("source_name")) or "자료 보기"
         links.append(
             f'<a href="{html_escape(url)}" target="_blank" rel="noreferrer">{html_escape(name)}</a>'
         )
@@ -1025,7 +1071,7 @@ def render_lp_peer_rows(peers: list[dict[str, object]], active_code: str) -> str
             <span>유형</span>
             <span>공고</span>
             <span>규모</span>
-            <span>자료</span>
+            <span>항목</span>
           </div>"""
     ]
     ordered_peers = sorted(
@@ -1048,7 +1094,7 @@ def render_lp_peer_rows(peers: list[dict[str, object]], active_code: str) -> str
             <span data-label="유형">{html_escape(public_lp_type(row.get("lp_type") or "LP"))}</span>
             <span data-label="공고">{html_escape(str(row.get("notice_count") or 0))}건</span>
             <span data-label="규모" title="최신 공고일 {html_escape(latest)}">{html_escape(amount)}</span>
-            <span data-label="자료">{html_escape(coverage)}</span>
+            <span data-label="항목">{html_escape(coverage)}</span>
           </a>"""
         )
     return "\n".join(rows)
@@ -1082,14 +1128,18 @@ def render_profile_timeline(facts: list[dict[str, object]], notices: list[dict[s
         section = str(fact.get("section") or "")
         if section not in {"notice_history", "recent_news"}:
             continue
+        title = public_fact_label(fact.get("label"))
+        detail = public_fact_value(fact.get("value"))
+        if not title and not detail:
+            continue
         events.append(
             {
                 "date": str(fact.get("as_of_date") or ""),
                 "tag": KTCU_FACT_SECTION_LABELS.get(section, "이벤트"),
                 "kind": section,
                 "asset": "",
-                "title": str(fact.get("label") or "이벤트"),
-                "detail": str(fact.get("value") or ""),
+                "title": title or "이벤트",
+                "detail": detail,
                 "url": str(fact.get("source_url") or ""),
             }
         )
@@ -1160,17 +1210,16 @@ def public_gap_text(value: object) -> str:
         return "자산 규모와 대체투자 잔액은 최신 공식 자료가 확인된 항목만 반영합니다."
     if any(token in text for token in ["조달 공고", "투자 공고"]):
         return "입찰공고에는 조달·투자 공고가 함께 게시되므로 PE/VC 관련 공고만 표시합니다."
-    text = re.sub(r"(보강|검증|확인|구조화|정규화)\s*필요", "공식 발표 확인 전", text)
-    return text.replace("canonical notice_id", "공식 공고")
+    return clean_public_lp_text(text)
 
 
 def public_gap_label(value: object) -> str:
     text = str(value or "")
-    if "공개자료 한계" in text:
+    if "공개자료" in text and "한계" in text:
+        return "공개자료 기준"
+    if any(token in text for token in ["보강", "검증", "정규화", "구조화", "수집"]):
         return "참고사항"
-    if "보강" in text or "검증" in text:
-        return "확인 항목"
-    return text or "참고사항"
+    return clean_public_lp_text(text) or "참고사항"
 
 
 def render_public_gap_rows(rows: list[dict[str, object]]) -> str:
@@ -1186,12 +1235,9 @@ def render_public_gap_rows(rows: list[dict[str, object]]) -> str:
 
 def public_coverage_label(fact_count: object, source_count: object) -> str:
     facts = int(fact_count or 0)
-    sources = int(source_count or 0)
-    if facts <= 0 and sources <= 0:
-        return "자료 없음"
-    if sources <= 0:
-        return f"{facts}개"
-    return f"{facts}개/{sources}곳"
+    if facts <= 0:
+        return "0개"
+    return f"{facts}개"
 
 
 def render_data_coverage(profile: dict[str, object], facts: list[dict[str, object]], notices: list[dict[str, object]]) -> str:
@@ -1201,9 +1247,9 @@ def render_data_coverage(profile: dict[str, object], facts: list[dict[str, objec
     official_count = len([notice for notice in notices if str(notice.get("source_type") or "") == "official"])
     news_count = len([notice for notice in notices if str(notice.get("source_type") or "") == "news"])
     confidence_text = f"{high_confidence}개" if high_confidence else "공개자료 기준"
-    activity_text = f"{official_count + news_count}건" if official_count + news_count else "자료 없음"
+    activity_text = f"{official_count + news_count}건"
     return f"""          <div><span>확인 항목</span><strong>{fact_count}개</strong></div>
-          <div><span>근거 자료</span><strong>{source_count}개</strong></div>
+          <div><span>자료 링크</span><strong>{source_count}개</strong></div>
           <div><span>공고·뉴스</span><strong>{activity_text}</strong></div>
           <div><span>자료 성격</span><strong>{confidence_text}</strong></div>"""
 
@@ -1234,7 +1280,19 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     yearly_rows = "\n".join(render_ktcu_year_bar(row, max_yearly) for row in yearly) or (
         """        <p class="ktcu-empty-note">연도별 공고 규모는 공식 공고가 확인되면 표시됩니다.</p>"""
     )
-    source_rows = render_ktcu_source_links(facts) or "          <li>근거 자료가 아직 연결되지 않았습니다.</li>"
+    source_rows = render_ktcu_source_links(facts)
+    source_tab = '<a href="#sourceLinks">자료</a>' if source_rows.strip() else ""
+    source_details = (
+        f"""    <details class="ktcu-detail" id="sourceLinks">
+      <summary>자료 링크</summary>
+      <ul>
+{source_rows}
+      </ul>
+    </details>
+"""
+        if source_rows.strip()
+        else ""
+    )
     asset_mix_rows = render_ktcu_asset_mix(official_notices) or (
         """          <p class="ktcu-empty-note">자산군별 출자 패턴은 공식 공고가 추가되면 표시됩니다.</p>"""
     )
@@ -1273,12 +1331,14 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
         facts,
         ["2025년말 보유자산", "2025년말 총자산", "총자산", "보유 자산", "회원조합"],
     )
+    asset = public_fact_value(asset) or "-"
     asset_kpi_label = "기관 규모" if asset_label == "회원조합" else "총자산"
     _, investment_status = first_fact_pair(
         facts,
         ["2025년 투자자산", "2026년 자산운용 목표", "2026년 자산운용 계획", "자금운용 역할"],
         focus_label,
     )
+    investment_status = public_fact_value(investment_status) or focus_label
     investment_kpi = compact_alternative_amount(investment_status, focus_label)
     notice_count = str(len(official_notices))
     total_amount = public_amount_label(profile.get("allocation_amount_krw_100mn"))
@@ -1412,12 +1472,12 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-year-row div {{ height: 9px; border-radius: 999px; background: #edf0f4; overflow: hidden; }}
     .ktcu-year-row i {{ display: block; height: 100%; border-radius: inherit; background: #1f6b63; }}
     .ktcu-year-row strong {{ text-align: right; font-size: 12px; }}
-    .ktcu-evidence {{ margin-top: 10px; border: 1px solid var(--separator); border-radius: 8px; background: #fff; }}
-    .ktcu-evidence summary {{ cursor: pointer; padding: 12px 14px; color: var(--text); font-size: 13px; font-weight: 800; }}
-    .ktcu-evidence-body {{ padding: 0 14px 14px; }}
-    .ktcu-evidence-body p {{ margin: 0 0 10px; color: var(--secondary); font-size: 13px; line-height: 1.55; }}
-    .ktcu-evidence ul {{ display: grid; gap: 8px; margin: 0; padding: 0 14px 14px 28px; }}
-    .ktcu-evidence a {{ color: var(--secondary); font-size: 12px; text-decoration: none; }}
+    .ktcu-detail {{ margin-top: 10px; border: 1px solid var(--separator); border-radius: 8px; background: #fff; }}
+    .ktcu-detail summary {{ cursor: pointer; padding: 12px 14px; color: var(--text); font-size: 13px; font-weight: 800; }}
+    .ktcu-detail-body {{ padding: 0 14px 14px; }}
+    .ktcu-detail-body p {{ margin: 0 0 10px; color: var(--secondary); font-size: 13px; line-height: 1.55; }}
+    .ktcu-detail ul {{ display: grid; gap: 8px; margin: 0; padding: 0 14px 14px 28px; }}
+    .ktcu-detail a {{ color: var(--secondary); font-size: 12px; text-decoration: none; }}
     .ktcu-peer-table {{ display: grid; gap: 7px; }}
     .ktcu-peer-row {{ display: grid; grid-template-columns: minmax(112px, 1.2fr) minmax(78px, 0.9fr) 44px 68px 74px; gap: 8px; align-items: center; border: 1px solid var(--separator); border-radius: 8px; padding: 9px; background: #fff; color: var(--text); text-decoration: none; font-size: 12px; }}
     .ktcu-peer-head {{ background: #f7fafb; color: var(--secondary); font-weight: 800; }}
@@ -1469,10 +1529,11 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
             <a href="#activity">Activity</a>
             <a href="#relationships">Network</a>
             <a href="#peers">Peers</a>
-            <a href="#sources">자료</a>
+            <a href="#notes">참고</a>
+            {source_tab}
           </nav>
           <div class="ktcu-profile-toolbar">
-            <input type="search" id="lpProfileSearch" placeholder="이 LP 페이지에서 공고, 뉴스, GP, 근거자료 검색">
+            <input type="search" id="lpProfileSearch" placeholder="이 LP 페이지에서 공고, 뉴스, GP, 자료 검색">
             <p>공식 공고 {html_escape(str(len(official_notices)))}건 · 관련 뉴스 {html_escape(str(news_signal_count))}건 · 확인 항목 {html_escape(str(len(facts)))}개</p>
           </div>
         </div>
@@ -1600,9 +1661,9 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       </div>
     </section>
 
-    <details class="ktcu-evidence" id="sources">
+    <details class="ktcu-detail" id="notes">
       <summary>참고사항</summary>
-      <div class="ktcu-evidence-body">
+      <div class="ktcu-detail-body">
         <p>공개 공고와 공식 조직도 기준의 프로필입니다. 최종 선정 GP, 실제 약정·집행액, 실무 담당자명은 공개자료만으로 확정하지 않습니다.</p>
         <dl class="ktcu-facts">
 {gap_rows}
@@ -1610,12 +1671,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       </div>
     </details>
 
-    <details class="ktcu-evidence">
-      <summary>근거 자료 보기</summary>
-      <ul>
-{source_rows}
-      </ul>
-    </details>
+{source_details}
 
     <p class="ktcu-footer">기준일 {html_escape(report_date)} · 최신 공고일 {html_escape(latest or "-")} · 공개자료로 확인되지 않는 실무자명과 최종 선정 GP 히스토리는 추정하지 않습니다.</p>
   </main>
@@ -1722,7 +1778,7 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
               <div><dt>공고</dt><dd>{notice_count}건</dd></div>
               <div><dt>출자규모</dt><dd>{html_escape(amount)}</dd></div>
               <div><dt>최신</dt><dd>{html_escape(latest)}</dd></div>
-              <div><dt>자료</dt><dd>{html_escape(coverage)}</dd></div>
+              <div><dt>항목</dt><dd>{html_escape(coverage)}</dd></div>
             </dl>
             <div class="lp-page-actions">{"".join(actions)}</div>
           </article>"""
@@ -1837,7 +1893,7 @@ def render_lp_notices_page(
           <div><span>대상 기관</span><strong>{tracked_count}개</strong></div>
           <div><span>최근 공고</span><strong>{active_count}개</strong></div>
           <div><span>공고 기준 규모</span><strong>{html_escape(public_amount_label(total_amount, fallback="-"))}</strong></div>
-          <div><span>근거 자료</span><strong>{source_total}개</strong></div>
+          <div><span>자료 링크</span><strong>{source_total}개</strong></div>
         </div>
       </section>
       <nav class="lp-profile-nav" aria-label="LP 프로필">

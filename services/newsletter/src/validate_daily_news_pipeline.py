@@ -25,6 +25,7 @@ from run_daily_news_pipeline import (
     EXPORT_MIN_QUALITY_SCORE,
     SECTION_LABELS,
     coverage_window_label,
+    is_near_duplicate_title_key,
     normalize_title_key,
 )
 
@@ -90,7 +91,18 @@ def parse_env_file(path: Path) -> dict[str, str]:
 
 
 def markdown_links(markdown_text: str) -> list[dict[str, str]]:
-    return [match.groupdict() for match in MARKDOWN_LINK_RE.finditer(markdown_text)]
+    links: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    for line in markdown_text.splitlines():
+        match = MARKDOWN_LINK_RE.match(line)
+        if match:
+            current = match.groupdict()
+            current["publisher"] = ""
+            links.append(current)
+            continue
+        if current is not None and line.startswith("  출처:"):
+            current["publisher"] = line.split(":", 1)[1].strip()
+    return links
 
 
 def check_env_and_sources(result: Validation, env_path: Path, sources_path: Path) -> None:
@@ -143,16 +155,20 @@ def check_artifacts(result: Validation, out_dir: Path, report_date: str) -> None
         result.warning("brief markdown has no article links")
     url_keys: set[str] = set()
     title_keys: set[str] = set()
+    title_rows: list[tuple[str, str]] = []
     google_redirect_count = 0
     for link in links:
         url_key = normalize_url(link["url"])
         title_key = normalize_title_key(link["title"])
+        publisher_hint = link.get("publisher", "")
         if url_key in url_keys:
             result.error(f"duplicate URL in brief: {link['url']}")
-        if title_key and title_key in title_keys:
-            result.warning(f"duplicate-looking title in brief: {link['title']}")
+        if title_key and (title_key in title_keys or is_near_duplicate_title_key(title_key, publisher_hint, title_rows)):
+            result.error(f"duplicate-looking title in brief: {link['title']}")
         url_keys.add(url_key)
         title_keys.add(title_key)
+        if title_key:
+            title_rows.append((title_key, publisher_hint))
         if "news.google.com/" in link["url"]:
             google_redirect_count += 1
     if google_redirect_count:
