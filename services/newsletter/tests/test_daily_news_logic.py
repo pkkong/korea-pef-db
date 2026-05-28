@@ -386,7 +386,76 @@ def test_gp_fundraising_and_deal_financing_sections() -> None:
         "review_status": "auto",
     }
     assert primary_section(fundraising_row) == "GP"
-    assert primary_section(credit_row) == "Deal"
+    assert primary_section(credit_row) == "Market"
+
+
+def test_specific_credit_transaction_stays_deal() -> None:
+    row = {
+        "publisher": "조선비즈",
+        "title": "VAC, 회생기업 코다코에 500억 DIP 대출 집행",
+        "summary_text": "특정 기업에 대한 구조화 대출 집행 기사다.",
+        "relevance_score": 8,
+        "section_tags": "Credit",
+        "topic_tags": "Credit,PEF",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://biz.chosun.com/test",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "Deal"
+    assert editorial_section({"title": str(row["title"]), "section": "Credit"}) == "Deal"
+
+
+def test_private_credit_market_commentary_is_market() -> None:
+    rows = [
+        {
+            "publisher": "한국경제",
+            "title": "고금리 뉴노멀 시대…오크트리 \"위기 속 스페셜 시추에이션이 기회\"",
+            "summary_text": "사모크레딧 부실과 PEF 유동성 부족 등 시장 환경을 진단했다.",
+            "section_tags": "Market",
+            "topic_tags": "Deal,GP,LP,PEF,daily,market_news",
+        },
+        {
+            "publisher": "한국경제",
+            "title": "\"은행이 못 채운 공백, 사모대출이 메울 것\"",
+            "summary_text": "글로벌 운용사가 한국 사모대출 시장 기회를 설명했다.",
+            "section_tags": "Market",
+            "topic_tags": "LP,PEF,daily,market_news",
+        },
+        {
+            "publisher": "한국경제",
+            "title": "사모대출은 불안하다? 파트너스그룹 \"구조와 투자자를 봐야\"",
+            "summary_text": "기관 전용 사모대출 펀드와 BDC를 비교했다.",
+            "section_tags": "Market",
+            "topic_tags": "PEF,daily,market_news",
+        },
+        {
+            "publisher": "더벨",
+            "title": "샘 패짓 딜로이트 AP PE 총괄 “불확실성은 상수”",
+            "summary_text": "국내 PE 시장 전망 인터뷰다.",
+            "section_tags": "Market",
+            "topic_tags": "PEF,daily,publisher_watch",
+        },
+    ]
+    for row in rows:
+        assert primary_section({**row, "document_type_tags": "", "gp_names": "", "source_url": "https://example.com", "review_status": "auto"}) == "Market"
+        assert editorial_section({"title": str(row["title"]), "section": str(row["section_tags"])}) == "Market"
+
+
+def test_ai_pe_strategy_is_not_demoted_by_opportunity_language() -> None:
+    row = {
+        "publisher": "한국경제",
+        "title": "베인캐피탈 “유럽, 지금이 좋은 진입기회…AI·에너지·방위 등 메가트렌드”",
+        "summary_text": "글로벌 PE 운용사가 AI 투자 전략과 사모시장 진입 기회를 설명했다.",
+        "section_tags": "AI & PE",
+        "topic_tags": "AI,PEF,daily,market_news",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.hankyung.com/test",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "AI_PE"
+    assert editorial_section({"title": str(row["title"]), "section": "AI & PE"}) == "AI & PE"
 
 
 def test_ai_pe_section_priority() -> None:
@@ -736,6 +805,9 @@ def main() -> int:
         test_strong_headline_quality,
         test_allocator_section_priority,
         test_gp_fundraising_and_deal_financing_sections,
+        test_specific_credit_transaction_stays_deal,
+        test_private_credit_market_commentary_is_market,
+        test_ai_pe_strategy_is_not_demoted_by_opportunity_language,
         test_ai_pe_section_priority,
         test_lp_title_is_not_promoted_to_ai_by_body_context,
         test_ai_pe_reserved_in_brief_selection,

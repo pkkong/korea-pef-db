@@ -370,6 +370,7 @@ DEAL_FINANCING_KEYWORDS = [
     "프라이빗크레딧",
     "private credit",
     "메자닌",
+    "DIP",
     "전환사채",
     "CB",
     "대출",
@@ -439,6 +440,47 @@ GP_FOCUS_KEYWORDS = [
     "플랫폼",
 ]
 MARKET_KEYWORDS = ["규제", "금감원", "금융위", "금융감독원", "내부통제", "자본시장법", "세제", "과세", "시장", "전망", "동향", "트렌드"]
+MARKET_COMMENTARY_KEYWORDS = [
+    "뉴노멀",
+    "시장 공식",
+    "시장 전망",
+    "시장 동향",
+    "시장 구조",
+    "사모 시장",
+    "사모대출은",
+    "프라이빗크레딧 시장",
+    "은행이 못 채운 공백",
+    "불안하다",
+    "구조와 투자자를 봐야",
+    "메울 것",
+    "불확실성",
+    "고금리",
+    "스프레드",
+    "컨퍼런스",
+    "콘퍼런스",
+    "ASK 2026",
+    "GAIC 2026",
+    "딜로이트 AP PE 총괄",
+    "AP PE 총괄",
+    "설문",
+    "리포트",
+]
+CREDIT_TRANSACTION_KEYWORDS = [
+    "DIP",
+    "대출 집행",
+    "대출 실행",
+    "자금 집행",
+    "자금 납입",
+    "확보",
+    "조달",
+    "제공",
+    "주선",
+    "리파이낸싱 완료",
+    "리캡 완료",
+    "차환",
+    "약정",
+    "클로징",
+]
 
 
 def has_ai_theme(text: str) -> bool:
@@ -459,8 +501,10 @@ def legacy_section_to_current(raw_section: str, title_text: str) -> str:
         return "LP" if contains_any(title_text, LP_FOCUS_KEYWORDS) else "Market"
     if raw_text.strip() == "GP":
         return "GP"
-    if "Credit" in raw_text or "크레딧" in raw_text or "Portfolio" in raw_text or "포트폴리오" in raw_text:
+    if "Portfolio" in raw_text or "포트폴리오" in raw_text:
         return "Deal"
+    if "Credit" in raw_text or "크레딧" in raw_text:
+        return "Market"
     if "Deal" in raw_text or "딜" in raw_text or "엑시트" in raw_text or "거래" in raw_text:
         return "Deal"
     if "LP 출자" in raw_text or "LP / 출자자" in raw_text:
@@ -483,14 +527,20 @@ def editorial_section(row: dict[str, str]) -> str:
         return "국민성장펀드"
     if contains_any(title_text, LP_FOCUS_KEYWORDS) and not has_ai_theme(title_text):
         return "LP"
+    if raw_section == "AI & PE":
+        return "AI & PE"
     if has_ai_theme(combined) and contains_any(combined, DEAL_SIGNAL_KEYWORDS + DEAL_FINANCING_KEYWORDS + LP_FOCUS_KEYWORDS + GP_FOCUS_KEYWORDS):
         return "AI & PE"
     if contains_any(title_text, MARKET_STRUCTURE_KEYWORDS):
         return "Market"
+    if contains_any(title_text, MARKET_COMMENTARY_KEYWORDS):
+        return "Market"
     if contains_any(title_text, ["펀드 결성", "펀드레이징", "펀드 조성", "펀드 도전", "클로징", "약정총액", "목표액", "블라인드펀드"]):
         return "GP"
-    if contains_any(title_text, DEAL_FINANCING_KEYWORDS + DEAL_SIGNAL_KEYWORDS + DEAL_OWNERSHIP_KEYWORDS + DEAL_ISSUE_KEYWORDS):
+    if contains_any(title_text, DEAL_SIGNAL_KEYWORDS + DEAL_OWNERSHIP_KEYWORDS + DEAL_ISSUE_KEYWORDS):
         return "Deal"
+    if contains_any(title_text, DEAL_FINANCING_KEYWORDS):
+        return "Deal" if contains_any(title_text, CREDIT_TRANSACTION_KEYWORDS) else "Market"
     if contains_any(title_text, GP_FOCUS_KEYWORDS):
         return "GP"
     if contains_any(title_text, MARKET_KEYWORDS):

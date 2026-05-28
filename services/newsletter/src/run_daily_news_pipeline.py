@@ -771,9 +771,9 @@ SECTION_LABEL_TO_CODE.update(
         "펀드레이징 / 펀드 결성": "GP",
         "딜 / 엑시트": "Deal",
         "거래·엑시트": "Deal",
-        "크레딧 / 레버리지": "Deal",
-        "크레딧·레버리지": "Deal",
-        "크레딧·파이낸싱": "Deal",
+        "크레딧 / 레버리지": "Market",
+        "크레딧·레버리지": "Market",
+        "크레딧·파이낸싱": "Market",
         "포트폴리오 / 밸류업": "Deal",
         "포트폴리오·밸류업": "Deal",
         "규제 / 리스크": "Market",
@@ -790,7 +790,7 @@ SECTION_LABEL_TO_CODE.update(
         "National Growth Fund": "NationalGrowthFund",
         "NGF": "NationalGrowthFund",
         "Fundraising": "GP",
-        "Credit": "Deal",
+        "Credit": "Market",
         "Portfolio": "Deal",
         "Regulation": "Market",
     }
@@ -1104,6 +1104,7 @@ SECTION_KEYWORDS = {
         "leveraged loan",
         "unitranche",
         "CLO",
+        "DIP",
         "하이일드",
         "메자닌",
         "CB",
@@ -1154,7 +1155,9 @@ STRONG_DEAL_KEYWORDS = [
     "회수",
     "청산",
     "매물",
-    "딜",
+    "빅딜",
+    "딜 소싱",
+    "딜 성사",
     "엑시트",
     "상장폐지",
     "블록딜",
@@ -1214,6 +1217,49 @@ MARKET_STRUCTURE_KEYWORDS = [
     "운용사 스테이크",
     "PEF협의회",
     "사모펀드협의회",
+]
+
+MARKET_COMMENTARY_KEYWORDS = [
+    "뉴노멀",
+    "시장 공식",
+    "시장 전망",
+    "시장 동향",
+    "시장 구조",
+    "사모 시장",
+    "사모대출은",
+    "프라이빗크레딧 시장",
+    "은행이 못 채운 공백",
+    "불안하다",
+    "구조와 투자자를 봐야",
+    "메울 것",
+    "불확실성",
+    "고금리",
+    "스프레드",
+    "컨퍼런스",
+    "콘퍼런스",
+    "ASK 2026",
+    "GAIC 2026",
+    "딜로이트 AP PE 총괄",
+    "AP PE 총괄",
+    "설문",
+    "리포트",
+]
+
+CREDIT_TRANSACTION_KEYWORDS = [
+    "DIP",
+    "대출 집행",
+    "대출 실행",
+    "자금 집행",
+    "자금 납입",
+    "확보",
+    "조달",
+    "제공",
+    "주선",
+    "리파이낸싱 완료",
+    "리캡 완료",
+    "차환",
+    "약정",
+    "클로징",
 ]
 
 AI_THEME_KEYWORDS = [
@@ -1346,6 +1392,18 @@ def has_market_structure_signal(text: str) -> bool:
     return contains_any_keyword(text, MARKET_STRUCTURE_KEYWORDS)
 
 
+def has_market_commentary_signal(text: str) -> bool:
+    return contains_any_keyword(text, MARKET_COMMENTARY_KEYWORDS)
+
+
+def has_credit_signal(text: str) -> bool:
+    return contains_any_keyword(text, SECTION_KEYWORDS["Credit"])
+
+
+def has_credit_transaction_signal(text: str) -> bool:
+    return has_credit_signal(text) and contains_any_keyword(text, CREDIT_TRANSACTION_KEYWORDS)
+
+
 def section_override(row: dict[str, object]) -> str:
     for section in split_csv_values(str(row.get("section_override_tags", ""))):
         mapped = SECTION_LABEL_TO_CODE.get(section)
@@ -1376,30 +1434,30 @@ def primary_section(row: dict[str, object]) -> str:
         return "NationalGrowthFund"
     if has_ai_pe_theme(content) and not title_has_non_ai_lp_priority(title):
         return "AI_PE"
-    if has_market_structure_signal(title):
+    if title_has_non_ai_lp_priority(title):
+        return "LP"
+    if has_market_structure_signal(title) or has_market_commentary_signal(title):
         return "Market"
     if contains_any_keyword(title, TITLE_RISK_KEYWORDS) or contains_any_keyword(title, SECTION_KEYWORDS["Regulation"]):
         return "Market"
-    if contains_any_keyword(title, SECTION_KEYWORDS["Credit"]) and has_fundraising_title_signal(title):
+    if has_credit_signal(title) and has_fundraising_title_signal(title):
         return "GP"
-    if contains_any_keyword(title, SECTION_KEYWORDS["Credit"]):
-        return "Deal"
+    if has_credit_signal(title):
+        return "Deal" if has_credit_transaction_signal(title) else "Market"
     if has_fundraising_title_signal(title):
         return "GP"
     if contains_any_keyword(title, STRONG_DEAL_KEYWORDS):
         return "Deal"
     if contains_any_keyword(title, SECTION_KEYWORDS["Portfolio"]):
         return "Deal"
-    if has_explicit_lp_focus_signal(title):
-        return "LP"
     if has_gp_focus_signal(title):
         return "GP"
-    if contains_any_keyword(content, SECTION_KEYWORDS["Credit"]) and has_fundraising_title_signal(title):
+    if has_credit_signal(content) and has_fundraising_title_signal(title):
         return "GP"
-    if contains_any_keyword(content, SECTION_KEYWORDS["Credit"]):
-        return "Deal"
     if contains_any_keyword(content, CONTENT_DEAL_KEYWORDS):
         return "Deal"
+    if has_credit_signal(content):
+        return "Market"
     if contains_any_keyword(content, SECTION_KEYWORDS["Portfolio"]):
         return "Deal"
     has_lp_source_context = "LP" in topics or "LP Commitment" in topics or "LP" in raw_sections
@@ -1412,7 +1470,7 @@ def primary_section(row: dict[str, object]) -> str:
     if "Fundraising" in topics:
         return "GP"
     if "Credit" in topics:
-        return "Deal"
+        return "Market"
     if "Portfolio" in topics:
         return "Deal"
     if "Deal" in topics:
