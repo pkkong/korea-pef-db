@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "title": "PEF Wiki",
+  "content_status": "draft-source-skeleton",
+  "visible_renderer": "services/newsletter/src/pef_wiki_pages.py",
+  "pages": [
+    {
+      "id": "overview",
+      "title": "기관전용 사모집합투자기구 개요",
+      "source": "pages/01-overview.md",
+      "status": "skeleton",
+      "source_refs": ["fss_practical_guide"]
+    }
+  ],
+  "refs": {
+    "sources": "refs/source_refs.json",
+    "laws": "refs/law_refs.json",
+    "glossary": "refs/glossary_refs.json"
+  }
+}

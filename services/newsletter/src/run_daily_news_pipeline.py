@@ -429,6 +429,16 @@ PUBLISHER_BY_DOMAIN = {
     "donga.com": "동아일보",
     "pointdaily.co.kr": "포인트데일리",
     "it.chosun.com": "IT조선",
+    "yna.co.kr": "연합뉴스",
+    "news1.kr": "뉴스1",
+    "hani.co.kr": "한겨레",
+    "newsfreezone.co.kr": "뉴스프리존",
+    "g-enews.com": "글로벌이코노믹",
+    "medicopharma.co.kr": "메디코파마",
+    "biotimes.co.kr": "바이오타임즈",
+    "segyebiz.com": "세계비즈",
+    "mhj21.com": "문화저널21",
+    "seoul.co.kr": "서울신문",
 }
 
 
@@ -814,11 +824,17 @@ PUBLISHER_QUALITY_WEIGHT = {
     "매일경제": 1.2,
     "아시아경제": 1.0,
     "파이낸셜뉴스": 1.0,
+    "헤럴드경제": 0.8,
+    "연합뉴스": 0.8,
+    "한겨레": 0.8,
+    "DealSite경제TV": 0.8,
     "한국경제TV": 0.8,
     "뉴스핌": 0.8,
     "이투데이": 0.6,
+    "뉴스1": 0.6,
     "경기신문": 0.5,
     "뉴시스": 0.4,
+    "뉴스프리존": 0.3,
 }
 PUBLISHER_SAFETY_NET = {"뉴스톱", "뉴스토마토", "딜사이트", "블로터"}
 
@@ -836,6 +852,10 @@ VISIBLE_PE_KEYWORDS = [
     "LP",
     "출자자",
     "기관투자가",
+    "KIC",
+    "한국투자공사",
+    "국부펀드",
+    "CIO",
     "인수",
     "매각",
     "엑시트",
@@ -929,11 +949,18 @@ HIGH_VALUE_TITLE_KEYWORDS = [
     "대체투자",
     "자산운용본부",
     "공제사업",
+    "CIO",
+    "한국투자공사",
+    "KIC",
+    "국부펀드",
     "커밋먼트",
     "분배금",
     "DPI",
     "펀드 결성",
     "펀드레이징",
+    "펀드 시동",
+    "펀드 출격",
+    "벤처모펀드",
     "클로징",
     "최종 결성",
     "파이널 클로징",
@@ -1053,7 +1080,11 @@ SECTION_KEYWORDS = {
         "행정공제",
         "군인공제",
         "새마을금고",
+        "KIC",
+        "한국투자공사",
+        "국부펀드",
         "모태펀드",
+        "벤처모펀드",
         "성장금융",
         "한국벤처투자",
         "앵커",
@@ -1070,8 +1101,13 @@ SECTION_KEYWORDS = {
         "fundraise",
         "펀드 조성",
         "펀드 도전",
+        "펀드 시동",
+        "펀드 출격",
+        "펀드 증액",
+        "AI펀드",
         "약정총액",
         "목표액",
+        "증액",
         "1차 클로징",
         "첫 클로징",
         "최종 결성",
@@ -1197,6 +1233,7 @@ LP_COMMITMENT_EVENT_KEYWORDS = [
 LP_GOVERNANCE_KEYWORDS = [
     "CIO",
     "CIO인선",
+    "CIO 공개모집",
     "최고 운용",
     "운용 총괄",
     "운용총괄",
@@ -1204,8 +1241,11 @@ LP_GOVERNANCE_KEYWORDS = [
     "운용본부장",
     "자산운용본부장",
     "인선",
+    "공개모집",
     "임기",
     "거취",
+    "기금운용평가",
+    "수익률",
     "독립성",
     "의결권",
     "중기 자산배분",
@@ -1223,6 +1263,7 @@ GP_STRATEGY_EVENT_KEYWORDS = [
     "하우스 전략",
     "운용전략",
     "플랫폼",
+    "라이선스",
 ]
 
 MARKET_STRUCTURE_KEYWORDS = [
@@ -1353,7 +1394,7 @@ def split_csv_values(value: str) -> list[str]:
 
 def has_fundraising_title_signal(title: str) -> bool:
     return contains_any_keyword(title, SECTION_KEYWORDS["Fundraising"]) or (
-        "펀드" in title and contains_any_keyword(title, ["결성", "모집", "소진", "펀딩"])
+        "펀드" in title and contains_any_keyword(title, ["결성", "모집", "소진", "펀딩", "조성", "시동", "출격", "증액", "확보", "러브콜"])
     )
 
 
@@ -1428,6 +1469,7 @@ def has_explicit_lp_focus_signal(text: str) -> bool:
             "KIC",
             "한국투자공사",
             "모태펀드",
+            "벤처모펀드",
             "성장금융",
             "한국벤처투자",
             "출자사업",
@@ -1526,6 +1568,12 @@ def primary_section(row: dict[str, object]) -> str:
     )
     if has_national_growth_fund_theme(title, raw_sections):
         return "NationalGrowthFund"
+    if has_explicit_lp_focus_signal(title) and contains_any_keyword(title, ["LP", "LP들", "KIC", "한국투자공사", "국부펀드", "CIO"]):
+        return "LP"
+    if has_fundraising_title_signal(title) and (
+        "Fundraising" in raw_sections or "Fundraising" in topics or "GP" in topics
+    ):
+        return "GP"
     if has_ai_pe_theme(title, content) and not title_has_non_ai_lp_priority(title):
         return "AI_PE"
     if title_has_non_ai_lp_priority(title):
@@ -1855,6 +1903,14 @@ def display_source(row: dict[str, object]) -> str:
     return str(row.get("publisher", "")).strip()
 
 
+def display_url(row: dict[str, object]) -> str:
+    normalized = str(row.get("normalized_source_url") or "").strip()
+    source = str(row.get("source_url") or "").strip()
+    if normalized and not normalized.startswith("https://news.google.com/"):
+        return normalized
+    return source
+
+
 def coverage_window(report_date: str) -> tuple[datetime, datetime]:
     parsed = date.fromisoformat(report_date)
     end = datetime(
@@ -1924,7 +1980,7 @@ def render_markdown(report_date: str, rows: list[dict[str, object]]) -> str:
         for row in section_rows:
             title = clean_display_title(str(row.get("title", "")), str(row.get("publisher", "")))
             source = display_source(row)
-            lines.append(f"- [{title}]({row['source_url']})")
+            lines.append(f"- [{title}]({display_url(row)})")
             if source:
                 lines.append(f"  출처: {source}")
         lines.append("")
@@ -1949,7 +2005,7 @@ def render_html(report_date: str, rows: list[dict[str, object]]) -> str:
                   {meta}
                 </li>
                 """.strip().format(
-                    url=html_escape(str(row.get("source_url", ""))),
+                    url=html_escape(display_url(row)),
                     title=html_escape(clean_display_title(str(row.get("title", "")), str(row.get("publisher", "")))),
                     meta=f"<span class=\"source\">출처: {html_escape(source)}</span>" if source else "",
                 )
@@ -2057,7 +2113,7 @@ def build_review_rows(
                 "relevance_score": row.get("relevance_score", ""),
                 "gp_names": row.get("gp_names", ""),
                 "summary_text": row.get("summary_text", ""),
-                "source_url": row.get("source_url", ""),
+                "source_url": display_url(row),
                 "normalized_source_url": row.get("normalized_source_url", ""),
                 "notes": "",
             }
@@ -2069,19 +2125,28 @@ def select_review_rows(rows: list[dict[str, object]], review_limit: int) -> list
     selected: list[dict[str, object]] = []
     seen_urls: set[str] = set()
     seen_titles: set[str] = set()
+    seen_title_rows: list[tuple[str, str]] = []
+    seen_events: set[str] = set()
     for row in rows:
         if str(row.get("review_status", "")) == "force_exclude":
             continue
         url_key = str(row.get("normalized_source_url") or row.get("source_url") or "")
         title_key = normalize_title_key(str(row.get("title", "")))
+        publisher = str(row.get("publisher", ""))
+        event_key = event_dedupe_key(row)
         if url_key and url_key in seen_urls:
             continue
-        if title_key and title_key in seen_titles:
+        if title_key and (title_key in seen_titles or is_near_duplicate_title_key(title_key, publisher, seen_title_rows)):
+            continue
+        if event_key and event_key in seen_events:
             continue
         if url_key:
             seen_urls.add(url_key)
         if title_key:
             seen_titles.add(title_key)
+            seen_title_rows.append((title_key, publisher))
+        if event_key:
+            seen_events.add(event_key)
         selected.append(row)
         if len(selected) >= review_limit:
             break

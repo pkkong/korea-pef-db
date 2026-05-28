@@ -1,0 +1,17 @@
+{
+  "gp": {
+    "term": "업무집행사원",
+    "anchor": "term-gp",
+    "status": "pending-body-migration"
+  },
+  "lp": {
+    "term": "유한책임사원",
+    "anchor": "term-lp",
+    "status": "pending-body-migration"
+  },
+  "spc": {
+    "term": "투자목적회사",
+    "anchor": "term-spc",
+    "status": "pending-body-migration"
+  }
+}

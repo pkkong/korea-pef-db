@@ -22,6 +22,7 @@ from run_daily_news_pipeline import (
     coverage_window_label,
     editorial_quality,
     event_dedupe_key,
+    display_url,
     extract_google_news_decode_params,
     google_query_for_report_date,
     google_news_encoded_id,
@@ -33,6 +34,7 @@ from run_daily_news_pipeline import (
     primary_section,
     render_markdown,
     select_brief_rows,
+    select_review_rows,
     should_export_row,
 )
 from daily_news_common import (
@@ -542,6 +544,110 @@ def test_private_credit_market_commentary_is_market() -> None:
         assert editorial_section({"title": str(row["title"]), "section": str(row["section_tags"])}) == "Market"
 
 
+def test_company_gap_titles_keep_expected_sections_and_quality() -> None:
+    cases = [
+        (
+            {
+                "publisher": "딜사이트",
+                "title": "스톤브릿지 AI펀드 러브콜…3400억으로 70% 증액",
+                "summary_text": "교공 앵커 출자 이후 AI 분야 펀드레이징 수요가 늘었다.",
+                "relevance_score": 9,
+                "section_tags": "LP",
+                "topic_tags": "GP,LP,Market,allocator,daily,lp_watch",
+                "document_type_tags": "",
+                "gp_names": "스톤브릿지벤처스",
+                "source_url": "https://dealsite.co.kr/articles/162433",
+                "review_status": "auto",
+            },
+            "GP",
+        ),
+        (
+            {
+                "publisher": "딜사이트",
+                "title": "[LP Scope] 李정부 발맞춘 IBK…하반기도 1500억 더 푼다",
+                "summary_text": "정책금융 LP의 하반기 출자 계획과 운용사 선정 가능성을 다룬다.",
+                "relevance_score": 9,
+                "section_tags": "LP",
+                "topic_tags": "LP,PEF,allocator,daily,lp_watch",
+                "document_type_tags": "",
+                "gp_names": "",
+                "source_url": "https://dealsite.co.kr/articles/162555",
+                "review_status": "auto",
+            },
+            "LP",
+        ),
+        (
+            {
+                "publisher": "헤럴드경제",
+                "title": "사모펀드 VIG, 헬스테크기업 미니쉬에 300억 투자",
+                "summary_text": "VIG파트너스가 성장자본 투자로 지분을 확보했다.",
+                "relevance_score": 8,
+                "section_tags": "Deal",
+                "topic_tags": "Deal,PEF,daily,deal_watch",
+                "document_type_tags": "",
+                "gp_names": "브이아이지파트너스",
+                "source_url": "https://biz.heraldcorp.com/article/10757779",
+                "review_status": "auto",
+            },
+            "Deal",
+        ),
+        (
+            {
+                "publisher": "매일경제",
+                "title": "KIC, 새 CIO 뽑는다…다음달 11일까지 공개모집",
+                "summary_text": "한국투자공사가 투자운용부문장 공개모집에 들어갔다.",
+                "relevance_score": 7,
+                "section_tags": "LP",
+                "topic_tags": "LP,people,daily,lp_watch",
+                "document_type_tags": "",
+                "gp_names": "",
+                "source_url": "https://www.mk.co.kr/news/stock/12059723",
+                "review_status": "auto",
+            },
+            "LP",
+        ),
+    ]
+    for row, expected in cases:
+        assert primary_section(row) == expected
+        score, reason = editorial_quality(row)
+        assert score >= EXPORT_MIN_QUALITY_SCORE, reason
+
+
+def test_company_gap_keyword_rules_cover_ai_fund_lp_scope_and_private_debt() -> None:
+    rules = load_rules(DEFAULT_RULES)
+    samples = [
+        ("스톤브릿지 AI펀드 러브콜…3400억으로 70% 증액", "AI_PE"),
+        ("[LP Scope] 李정부 발맞춘 IBK…하반기도 1500억 더 푼다", "LP"),
+        ("금융권 해외 사모대출 30조원···당국 리스크 관리 가능한 수준", "Credit"),
+    ]
+    for title, expected_tag in samples:
+        scored = score_document(title, "", "", rules, [])
+        tags = {tag["tag_value"] for tag in scored["tags"]}
+        assert expected_tag in tags
+
+
+def test_render_markdown_uses_canonical_article_url() -> None:
+    rows = [
+        {
+            "publisher": "서울경제",
+            "title": "KIC 첫 국내 출자 펀드, 내달 베일 벗는다[시그널]",
+            "summary_text": "한국투자공사 국내 출자 펀드 기사다.",
+            "relevance_score": 10,
+            "quality_score": 15,
+            "section_tags": "LP",
+            "topic_tags": "LP,PEF",
+            "document_type_tags": "",
+            "gp_names": "",
+            "source_url": "https://www.sedaily.com/article/20048749?ref=naver",
+            "normalized_source_url": "https://www.sedaily.com/article/20048749",
+            "review_status": "auto",
+        }
+    ]
+    markdown = render_markdown("2026-05-28", rows)
+    assert "https://www.sedaily.com/article/20048749)" in markdown
+    assert "ref=naver" not in markdown
+
+
 def test_ai_pe_strategy_is_not_demoted_by_opportunity_language() -> None:
     row = {
         "publisher": "한국경제",
@@ -572,6 +678,24 @@ def test_ai_pe_section_priority() -> None:
         "review_status": "auto",
     }
     assert primary_section(row) == "AI_PE"
+
+
+def test_ai_fundraising_story_stays_gp() -> None:
+    row = {
+        "publisher": "딜사이트",
+        "title": "스톤브릿지 AI펀드 러브콜…3400억으로 70% 증액",
+        "summary_text": "스톤브릿지벤처스가 AI 글로벌 레벨업 펀드를 확대 조성하고 GP로 선정된 뒤 펀드레이징에 나섰다.",
+        "relevance_score": 8,
+        "section_tags": "Fundraising",
+        "topic_tags": "GP,AI_PE,PEF",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://dealsite.co.kr/articles/162433",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "GP"
+    score, reason = editorial_quality(row)
+    assert score >= EXPORT_MIN_QUALITY_SCORE, reason
 
 
 def test_incidental_body_ai_does_not_promote_market_conference_to_ai_pe() -> None:
@@ -609,6 +733,22 @@ def test_lp_title_is_not_promoted_to_ai_by_body_context() -> None:
     }
     assert primary_section(row) == "LP"
     assert editorial_section({"title": str(row["title"]), "section": "AI & PE"}) == "LP"
+
+
+def test_lp_ai_agent_title_stays_lp() -> None:
+    row = {
+        "publisher": "연합인포맥스",
+        "title": "LP들도 'AI 에이전트' 열공 모드",
+        "summary_text": "연기금과 공제회 등 LP들이 AI 에이전트 활용 방안을 논의했다.",
+        "relevance_score": 6,
+        "section_tags": "LP",
+        "topic_tags": "LP,AI_PE,daily",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://news.einfomax.co.kr/news/articleView.html?idxno=test",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "LP"
 
 
 def test_ai_pe_reserved_in_brief_selection() -> None:
@@ -836,6 +976,52 @@ def test_gp_stake_belongs_to_market_structure() -> None:
     assert editorial_section({"title": str(row["title"]), "section": "GP"}) == "Market"
 
 
+def test_new_gp_fund_start_is_export_quality_gp() -> None:
+    row = {
+        "publisher": "뉴스톱",
+        "title": "'고위드' 업은 고넥스PE, 500억 펀드 시동",
+        "summary_text": "신생 사모펀드 운용사가 기관전용 사모펀드 라이선스를 확보하고 펀드 조성에 나섰다.",
+        "relevance_score": 2,
+        "section_tags": "GP",
+        "topic_tags": "GP,PEF,fundraising",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.newstopkorea.com/news/articleView.html?idxno=45169",
+        "normalized_source_url": "https://www.newstopkorea.com/news/articleView.html?idxno=45169",
+        "review_status": "auto",
+    }
+    quality_score, _reason = editorial_quality(row)
+    assert primary_section(row) == "GP"
+    assert quality_score >= EXPORT_MIN_QUALITY_SCORE
+
+
+def test_kic_cio_people_story_is_lp() -> None:
+    row = {
+        "publisher": "매일경제",
+        "title": "KIC, 새 CIO 뽑는다…다음달 11일까지 공개모집",
+        "summary_text": "한국투자공사가 투자 책임자인 CIO 공개모집에 나섰다.",
+        "relevance_score": 4,
+        "section_tags": "LP",
+        "topic_tags": "LP,allocator,people",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.mk.co.kr/news/stock/12059723",
+        "normalized_source_url": "https://www.mk.co.kr/news/stock/12059723",
+        "review_status": "auto",
+    }
+    quality_score, _reason = editorial_quality(row)
+    assert primary_section(row) == "LP"
+    assert quality_score >= EXPORT_MIN_QUALITY_SCORE
+
+
+def test_display_url_prefers_normalized_clean_article_url() -> None:
+    row = {
+        "source_url": "https://www.sedaily.com/article/20048749?ref=naver&utm_source=naver",
+        "normalized_source_url": "https://www.sedaily.com/article/20048749",
+    }
+    assert display_url(row) == "https://www.sedaily.com/article/20048749"
+
+
 def test_pef_association_belongs_to_market_structure() -> None:
     row = {
         "publisher": "매일경제",
@@ -930,6 +1116,31 @@ def test_same_national_growth_fund_selection_event_is_selected_once() -> None:
     assert [int(row["news_id"]) for row in selected] == [11478, 11838]
 
 
+def test_review_selection_dedupes_event_and_google_redirect() -> None:
+    direct = {
+        "news_id": 11840,
+        "publisher": "딜사이트",
+        "title": "[150조 국민성장펀드] [간접투자 1차] 2.4조 운용할 GP 선정…에이티넘·웰투시 등 11곳",
+        "summary_text": "국민성장펀드 1차 위탁운용사 11곳이 선정됐다.",
+        "quality_score": 26,
+        "relevance_score": 16,
+        "section_tags": "NationalGrowthFund",
+        "topic_tags": "NationalGrowthFund,LP,PEF",
+        "source_url": "https://dealsite.co.kr/articles/162589/075023",
+        "normalized_source_url": "https://dealsite.co.kr/articles/162589",
+        "review_status": "auto",
+    }
+    google_redirect = {
+        **direct,
+        "news_id": 11841,
+        "quality_score": 13,
+        "source_url": "https://news.google.com/rss/articles/example",
+        "normalized_source_url": "https://news.google.com/rss/articles/example",
+    }
+    selected = select_review_rows([direct, google_redirect], 10)
+    assert [int(row["news_id"]) for row in selected] == [11840]
+
+
 def test_company_clipping_keyword_gaps_are_scored() -> None:
     rules = load_rules(DEFAULT_RULES)
     cases = [
@@ -939,6 +1150,13 @@ def test_company_clipping_keyword_gaps_are_scored() -> None:
         ("[150조 국민성장펀드] 그로쓰 투자 대가 도미누스", 3, "LP"),
         ("행정공제회 신임 이사장에 김기영 전 충남 행정부지사", 4, "LP"),
         ("KCGI자산운용, AUM 6조원 돌파", 3, "GP"),
+        ("'고위드' 업은 고넥스PE, 500억 펀드 시동", 7, "GP"),
+        ("키움인베 600억 벤처모펀드 출격", 3, "LP"),
+        ("KIC, 새 CIO 뽑는다…다음달 11일까지 공개모집", 6, "LP"),
+        ("[카카오게임즈 매각] 3000억 수혈의 그늘…다가올 변수는", 3, "Deal"),
+        ("[LP Scope] 李정부 발맞춘 IBK…하반기도 1500억 더 푼다", 4, "LP"),
+        ("스톤브릿지 AI펀드 러브콜…3400억으로 70% 증액", 6, "GP"),
+        ("티케하우캐피탈 사모대출 시장 경고등…세컨더리 투자 주목해야", 3, "Market"),
     ]
     for title, minimum_score, expected_topic in cases:
         result = score_document(title, "", "", rules, [])
@@ -971,6 +1189,26 @@ def test_render_markdown_coverage() -> None:
     assert "2026-04-29 08:30 ~ 2026-04-30 08:30" in text
 
 
+def test_render_markdown_uses_clean_display_url() -> None:
+    row = {
+        "publisher": "서울경제",
+        "title": "KIC 첫 국내 출자 펀드",
+        "summary_text": "한국투자공사 출자 펀드 기사",
+        "relevance_score": 10,
+        "section_tags": "LP",
+        "topic_tags": "LP,PEF",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.sedaily.com/article/20048749?ref=naver&utm_source=naver",
+        "normalized_source_url": "https://www.sedaily.com/article/20048749",
+        "quality_score": 12,
+        "review_status": "auto",
+    }
+    text = render_markdown("2026-05-28", [row])
+    assert "https://www.sedaily.com/article/20048749)" in text
+    assert "ref=naver" not in text
+
+
 def main() -> int:
     tests = [
         test_coverage_window,
@@ -1001,8 +1239,10 @@ def main() -> int:
         test_private_credit_market_commentary_is_market,
         test_ai_pe_strategy_is_not_demoted_by_opportunity_language,
         test_ai_pe_section_priority,
+        test_ai_fundraising_story_stays_gp,
         test_incidental_body_ai_does_not_promote_market_conference_to_ai_pe,
         test_lp_title_is_not_promoted_to_ai_by_body_context,
+        test_lp_ai_agent_title_stays_lp,
         test_ai_pe_reserved_in_brief_selection,
         test_lp_and_gp_reserved_in_full_brief_selection,
         test_gp_fundraising_beats_deal_word_when_title_is_fund_build,
@@ -1012,13 +1252,18 @@ def main() -> int:
         test_allocator_cio_governance_is_lp_not_market,
         test_court_investment_document_stays_market_not_lp,
         test_gp_stake_belongs_to_market_structure,
+        test_new_gp_fund_start_is_export_quality_gp,
+        test_kic_cio_people_story_is_lp,
+        test_display_url_prefers_normalized_clean_article_url,
         test_pef_association_belongs_to_market_structure,
         test_same_publisher_near_duplicate_title_is_selected_once,
         test_same_national_growth_fund_selection_event_is_selected_once,
+        test_review_selection_dedupes_event_and_google_redirect,
         test_company_clipping_keyword_gaps_are_scored,
         test_dot_datetime_to_iso,
         test_google_news_redirect_not_auto_exported,
         test_render_markdown_coverage,
+        test_render_markdown_uses_clean_display_url,
     ]
     for test in tests:
         test()
