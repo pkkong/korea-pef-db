@@ -626,6 +626,24 @@ def test_company_gap_keyword_rules_cover_ai_fund_lp_scope_and_private_debt() -> 
         assert expected_tag in tags
 
 
+def test_gpu_or_etf_text_does_not_match_gp_or_pe_tokens() -> None:
+    row = {
+        "publisher": "딜사이트",
+        "title": "엔비디아 GPU로 임대사업 투자…美ETF 나온다",
+        "summary_text": "GPU 임대가격 선물로 추종하는 ETF 구조를 설명한다.",
+        "relevance_score": 4,
+        "section_tags": "Deal",
+        "topic_tags": "Market,daily,deal_watch,publisher_watch",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://dealsite.co.kr/articles/162421",
+        "review_status": "auto",
+    }
+    score, reason = editorial_quality(row)
+    assert score < EXPORT_MIN_QUALITY_SCORE, reason
+    assert primary_section(row) != "AI_PE"
+
+
 def test_render_markdown_uses_canonical_article_url() -> None:
     rows = [
         {
@@ -1237,6 +1255,9 @@ def main() -> int:
         test_gp_fundraising_and_deal_financing_sections,
         test_specific_credit_transaction_stays_deal,
         test_private_credit_market_commentary_is_market,
+        test_company_gap_titles_keep_expected_sections_and_quality,
+        test_company_gap_keyword_rules_cover_ai_fund_lp_scope_and_private_debt,
+        test_render_markdown_uses_canonical_article_url,
         test_ai_pe_strategy_is_not_demoted_by_opportunity_language,
         test_ai_pe_section_priority,
         test_ai_fundraising_story_stays_gp,

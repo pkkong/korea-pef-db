@@ -882,6 +882,7 @@ VISIBLE_PE_KEYWORDS = [
     "블라인드",
     "프라이빗크레딧",
     "private credit",
+    "사모대출",
     "인수금융",
     "밸류업",
     "바이아웃",
@@ -967,6 +968,7 @@ HIGH_VALUE_TITLE_KEYWORDS = [
     "공동투자 펀드",
     "블라인드펀드",
     "프라이빗크레딧",
+    "사모대출",
     "인수금융",
     "리캡",
     "리캡탈라이제이션",
@@ -1384,8 +1386,20 @@ AMOUNTED_INVESTMENT_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:조|억|억원)\s*(?:�
 
 
 def contains_any_keyword(text: str, keywords: list[str]) -> bool:
-    lower_text = text.lower()
-    return any(keyword.lower() in lower_text for keyword in keywords)
+    value = text or ""
+    lower_text = value.lower()
+    for keyword in keywords:
+        if not keyword:
+            continue
+        token = keyword.strip()
+        if re.fullmatch(r"[A-Za-z][A-Za-z0-9&.\s+-]{0,5}", token):
+            pattern = rf"(?<![A-Za-z0-9]){re.escape(token)}(?![A-Za-z0-9])"
+            if re.search(pattern, value, flags=re.IGNORECASE):
+                return True
+            continue
+        if token.lower() in lower_text:
+            return True
+    return False
 
 
 def split_csv_values(value: str) -> list[str]:
@@ -1469,6 +1483,7 @@ def has_explicit_lp_focus_signal(text: str) -> bool:
             "KIC",
             "한국투자공사",
             "모태펀드",
+            "민간모펀드",
             "벤처모펀드",
             "성장금융",
             "한국벤처투자",
@@ -1570,14 +1585,14 @@ def primary_section(row: dict[str, object]) -> str:
         return "NationalGrowthFund"
     if has_explicit_lp_focus_signal(title) and contains_any_keyword(title, ["LP", "LP들", "KIC", "한국투자공사", "국부펀드", "CIO"]):
         return "LP"
+    if title_has_non_ai_lp_priority(title):
+        return "LP"
     if has_fundraising_title_signal(title) and (
         "Fundraising" in raw_sections or "Fundraising" in topics or "GP" in topics
     ):
         return "GP"
     if has_ai_pe_theme(title, content) and not title_has_non_ai_lp_priority(title):
         return "AI_PE"
-    if title_has_non_ai_lp_priority(title):
-        return "LP"
     if has_gp_national_growth_fund_strategy_signal(title, content, raw_sections):
         return "GP"
     if has_market_structure_signal(title) or has_market_commentary_signal(title):

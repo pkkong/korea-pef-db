@@ -88,7 +88,7 @@ lp_fund_management_eval,title_or_excerpt,contains,기금운용평가,2,topic,LP,
 ai_pe_gaic,title_or_excerpt,contains,GAIC,1,topic,AI_PE,AI와 PE 투자전략 관련 컨퍼런스 기사입니다.,1,AI & PE conference keyword
 credit_private_credit,title_or_excerpt,contains,프라이빗크레딧,3,topic,Credit,프라이빗크레딧 관련 기사입니다.,1,Deal financing keyword
 credit_private_credit_english,title_or_excerpt,contains,private credit,3,topic,Credit,Private credit 관련 기사입니다.,1,Deal financing keyword
-credit_private_debt_samo,title_or_excerpt,contains,사모대출,3,topic,Market,사모대출 시장 또는 투자전략 기사입니다.,1,Private debt market keyword
+credit_private_debt_samo,title_or_excerpt,contains,사모대출,3,topic,Credit,사모대출 시장 또는 투자전략 기사입니다.,1,Private debt market keyword
 credit_acquisition_finance,title_or_excerpt,contains,인수금융,2,topic,Credit,인수금융 또는 레버리지 조달 기사입니다.,1,Deal financing keyword
 credit_refinancing,title_or_excerpt,contains,리파이낸싱,2,topic,Credit,리파이낸싱 관련 기사입니다.,1,Deal financing keyword
 credit_mezzanine,title_or_excerpt,contains,메자닌,2,topic,Credit,메자닌 투자 또는 조달 기사입니다.,1,Deal financing keyword
@@ -110,8 +110,4 @@ doc_newsletter,any_text,contains,뉴스레터,1,document_type,newsletter,뉴스�
 doc_press_release,any_text,contains,보도자료,1,document_type,press_release,보도자료 형식 문서입니다.,1,Document type
 doc_report,any_text,contains,보고서,1,document_type,report,리포트 형식 문서입니다.,1,Document type
 ai_fund_title,title_or_excerpt,contains,AI펀드,3,topic,AI_PE,AI 펀드 또는 AI 분야 전용 펀드 기사입니다.,1,AI fund safety net
-lp_scope_series,title_or_excerpt,contains,LP Scope,4,topic,LP,LP Scope 기사로 출자자 조직·출자 흐름을 추적합니다.,1,DealSite LP Scope safety net
-lp_cio_public_recruitment,title_or_excerpt,contains,공개모집,2,topic,LP,CIO 또는 자산운용 책임자 공개모집 기사일 수 있습니다.,1,Allocator leadership search keyword
-lp_kic_acronym,title_or_excerpt,contains,KIC,2,topic,LP,한국투자공사 관련 출자 또는 운용 조직 기사입니다.,1,KIC LP keyword
-credit_private_debt_korean,title_or_excerpt,contains,사모대출,3,topic,Credit,사모대출 시장 또는 프라이빗크레딧 관련 기사입니다.,1,Private debt Korean keyword
 deal_asset_manager_acquisition,title_or_excerpt,contains,자산운용 인수,2,topic,Deal,자산운용사 인수 또는 지배구조 변경 기사입니다.,1,Asset manager M&A keyword
