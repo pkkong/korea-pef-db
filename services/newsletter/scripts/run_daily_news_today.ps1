@@ -13,7 +13,7 @@ $LogFile = Join-Path $LogDir "daily_news_$Timestamp.log"
 
 python services\newsletter\src\run_daily_news_pipeline.py `
     --date $ReportDate `
-    --limit-per-source 30 `
+    --limit-per-source 50 `
     --brief-limit 30 `
     --review-limit 80 `
     --allow-insecure-ssl *>&1 | Tee-Object -FilePath $LogFile

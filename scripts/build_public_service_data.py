@@ -11,6 +11,8 @@ import argparse
 import json
 from pathlib import Path
 
+from lp_public_visibility import is_public_lp_notice_row, public_visible_value
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_IN = ROOT / "dashboard" / "data" / "dashboard_data.json"
@@ -187,6 +189,12 @@ def project(row: dict[str, object], keys: list[str]) -> dict[str, object]:
 
 def build_payload(data: dict[str, object]) -> dict[str, object]:
     payload = {key: data.get(key, []) for key in PUBLIC_KEYS}
+    public_lp_notice_rows = [
+        row
+        for row in data.get("lp_commitment_notices", [])
+        if isinstance(row, dict) and is_public_lp_notice_row(row)
+    ]
+    public_lp_notice_ids = {str(row.get("notice_id") or "") for row in public_lp_notice_rows if row.get("notice_id") not in {None, ""}}
     payload["meta"] = {
         "generated_at": data.get("meta", {}).get("generated_at", ""),
         "aum_basis": "FSS 출자약정액 기준 AUM 프록시",
@@ -205,23 +213,22 @@ def build_payload(data: dict[str, object]) -> dict[str, object]:
     ]
     payload["lp_commitment_notices"] = [
         project(row, LP_NOTICE_KEYS)
-        for row in data.get("lp_commitment_notices", [])
-        if isinstance(row, dict) and str(row.get("public_visible", "1")).strip().lower() not in {"0", "false", "no"}
+        for row in public_lp_notice_rows
     ]
     payload["lp_profile_facts"] = [
         project(row, LP_FACT_KEYS)
         for row in data.get("lp_profile_facts", [])
-        if isinstance(row, dict) and str(row.get("public_visible", "1")).strip().lower() not in {"0", "false", "no"}
+        if isinstance(row, dict) and public_visible_value(row.get("public_visible", "1"))
     ]
     payload["lp_notice_gp_links"] = [
         project(row, LP_NOTICE_GP_LINK_KEYS)
         for row in data.get("lp_notice_gp_links", [])
-        if isinstance(row, dict)
+        if isinstance(row, dict) and str(row.get("notice_id") or "") in public_lp_notice_ids
     ]
     payload["lp_notice_news_links"] = [
         project(row, LP_NOTICE_NEWS_LINK_KEYS)
         for row in data.get("lp_notice_news_links", [])
-        if isinstance(row, dict)
+        if isinstance(row, dict) and str(row.get("notice_id") or "") in public_lp_notice_ids
     ]
     return payload
 
