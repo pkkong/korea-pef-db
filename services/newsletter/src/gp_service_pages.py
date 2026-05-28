@@ -557,6 +557,7 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
     representative = _clean(gp.get("representative_name"))
     representative_html = f"<span>대표 {_e(representative)}</span>" if representative else ""
     homepage = _safe_url(gp.get("homepage_url"))
+    avatar_markup = _avatar_markup(homepage, avatar_label, name)
     verification = _verification_label(gp.get("verification_level"))
     category = _category_label(gp.get("company_category"))
     active_label = "최신 운용 현황" if _as_bool(gp.get("active_in_latest_period")) else ""
@@ -639,7 +640,7 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
         data-cumulative="{cumulative_sort}"
         data-news-count="{news_sort}"
         data-signals="{signal_sort}">
-        <span class="gp-avatar" aria-hidden="true">{_e(avatar_label)}</span>
+        {avatar_markup}
         <div class="gp-card-main">
           <div class="gp-card-title">
             {status_html}
@@ -674,6 +675,15 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
 def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: list[dict[str, object]]) -> str:
     name = _gp_name(gp)
     homepage = _safe_url(gp.get("homepage_url"))
+    logo_url = _favicon_url(homepage)
+    avatar_label = _avatar_label(name)
+    avatar_tone = _identity_tone(name)
+    avatar_class = "gp-detail-logo has-logo" if logo_url else "gp-detail-logo"
+    avatar_logo = (
+        f'<img src="{logo_url}" alt="" loading="lazy" onerror="this.parentElement.classList.add(\'fallback-only\'); this.remove()">'
+        if logo_url
+        else ""
+    )
     homepage_link = (
         f'<a href="{_e(homepage)}" target="_blank" rel="noreferrer">{_e(_homepage_label(homepage))}</a>'
         if homepage
@@ -715,9 +725,12 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
     </nav>
 
     <header class="gp-detail-hero">
-      <div>
-        <span>GP 프로필</span>
-        <h1>{_e(name)}</h1>
+      <div class="gp-detail-title-head">
+        <span class="{avatar_class}" data-tone="{avatar_tone}" aria-hidden="true">{avatar_logo}<span>{_e(avatar_label)}</span></span>
+        <div>
+          <span>GP 프로필</span>
+          <h1>{_e(name)}</h1>
+        </div>
 {description_html}
       </div>
       <aside class="gp-detail-card" aria-label="핵심 정보">
@@ -995,6 +1008,33 @@ def _avatar_label(value: object, fallback: str = "GP") -> str:
     return "".join(letters[:2]).upper() or fallback
 
 
+def _identity_tone(value: object) -> int:
+    text = _clean(value)
+    if not text:
+        return 1
+    return (sum(ord(char) for char in text) % 6) + 1
+
+
+def _favicon_url(url: object) -> str:
+    safe = _safe_url(url)
+    if not safe:
+        return ""
+    domain = urlparse(safe).netloc.removeprefix("www.")
+    return f"https://www.google.com/s2/favicons?domain={_e(domain)}&sz=64"
+
+
+def _avatar_markup(homepage_url: object, label: str, seed: object) -> str:
+    tone = _identity_tone(seed or label)
+    logo_url = _favicon_url(homepage_url)
+    if logo_url:
+        return (
+            f'<span class="gp-avatar has-logo" data-tone="{tone}" aria-hidden="true">'
+            f'<img src="{logo_url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add(\'fallback-only\'); this.remove()">'
+            f'<span>{_e(label)}</span></span>'
+        )
+    return f'<span class="gp-avatar" data-tone="{tone}" aria-hidden="true"><span>{_e(label)}</span></span>'
+
+
 def _card_status_label(latest_rank: str, has_profile_page: bool) -> str:
     return ""
 
@@ -1166,6 +1206,7 @@ def _base_styles() -> str:
     * { box-sizing: border-box; }
     body {
       margin: 0;
+      overflow-x: hidden;
       background: var(--bg);
       color: var(--text);
       font-family: Pretendard, "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
@@ -1262,7 +1303,7 @@ def _base_styles() -> str:
     .kpef-icon-menu::before { top: 11px; box-shadow: 0 6px 0 currentColor; }
     .kpef-icon-menu::after { top: 23px; }
     .kpef-service-tabs {
-      display: grid;
+      display: none;
       grid-template-columns: repeat(5, minmax(0, 1fr));
       margin: 0 calc((100vw - min(1440px, calc(100vw - 44px))) / -2) 18px;
       padding: 0 max(0px, calc((100vw - 1440px) / 2));
@@ -1404,8 +1445,57 @@ def _base_styles() -> str:
       margin: 22px 0 18px;
     }
     .gp-hero-copy, .gp-detail-hero > div { display: grid; gap: 10px; }
+    .gp-detail-title-head {
+      display: grid;
+      grid-template-columns: 54px minmax(0, 1fr);
+      gap: 14px;
+      align-items: center;
+    }
+    .gp-detail-title-head p { grid-column: 1 / -1; }
+    .gp-detail-logo {
+      position: relative;
+      display: inline-grid;
+      width: 54px;
+      height: 54px;
+      place-items: center;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: #fff;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 900;
+      box-shadow: inset 0 0 0 4px #fff;
+    }
+    .gp-detail-logo::after {
+      position: absolute;
+      inset: 9px;
+      border: 1px solid currentColor;
+      border-radius: 50%;
+      opacity: 0.16;
+      content: "";
+    }
+    .gp-detail-logo > span {
+      position: relative;
+      z-index: 1;
+    }
+    .gp-detail-logo img {
+      position: relative;
+      z-index: 2;
+      max-width: 38px;
+      max-height: 38px;
+      object-fit: contain;
+    }
+    .gp-detail-logo.has-logo > span { display: none; }
+    .gp-detail-logo.fallback-only > span { display: inline; }
+    .gp-detail-logo[data-tone="1"] { border-color: #d7e0ef; background: #f6f8fc; color: #1f3a5f; }
+    .gp-detail-logo[data-tone="2"] { border-color: #d6e6df; background: #f5faf7; color: #1f5a45; }
+    .gp-detail-logo[data-tone="3"] { border-color: #e8ddca; background: #fbf8f2; color: #725a32; }
+    .gp-detail-logo[data-tone="4"] { border-color: #e1d9eb; background: #f8f5fb; color: #4b3b63; }
+    .gp-detail-logo[data-tone="5"] { border-color: #ead8d8; background: #fbf5f5; color: #704044; }
+    .gp-detail-logo[data-tone="6"] { border-color: #d9e3e7; background: #f5f9fa; color: #2d5361; }
     .gp-hero-copy > span,
-    .gp-detail-hero > div > span,
+    .gp-detail-title-head div > span,
     .gp-empty > span {
       width: fit-content;
       border-left: 3px solid var(--accent);
@@ -1417,8 +1507,9 @@ def _base_styles() -> str:
     h1 {
       margin: 0;
       color: var(--text);
-      font-size: clamp(30px, 3.2vw, 44px);
-      line-height: 1.08;
+      font-size: clamp(28px, 3vw, 38px);
+      font-weight: 850;
+      line-height: 1.12;
       letter-spacing: 0;
     }
     .gp-hero-copy p,
@@ -1596,19 +1687,50 @@ def _base_styles() -> str:
       box-shadow: none;
     }
     .gp-avatar {
+      position: relative;
       display: inline-grid;
-      width: 38px;
-      height: 38px;
+      width: 40px;
+      height: 40px;
       grid-column: 1;
       grid-row: 1;
       place-items: center;
+      overflow: hidden;
       border: 1px solid var(--line);
       border-radius: 50%;
       background: #fff;
       color: var(--text);
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 900;
+      letter-spacing: 0;
+      box-shadow: inset 0 0 0 3px #fff;
     }
+    .gp-avatar::after {
+      position: absolute;
+      inset: 7px;
+      border: 1px solid currentColor;
+      border-radius: 50%;
+      opacity: 0.16;
+      content: "";
+    }
+    .gp-avatar > span {
+      position: relative;
+      z-index: 1;
+    }
+    .gp-avatar img {
+      position: relative;
+      z-index: 2;
+      max-width: 27px;
+      max-height: 27px;
+      object-fit: contain;
+    }
+    .gp-avatar.has-logo > span { display: none; }
+    .gp-avatar.fallback-only > span { display: inline; }
+    .gp-avatar[data-tone="1"] { border-color: #d7e0ef; background: #f6f8fc; color: #1f3a5f; }
+    .gp-avatar[data-tone="2"] { border-color: #d6e6df; background: #f5faf7; color: #1f5a45; }
+    .gp-avatar[data-tone="3"] { border-color: #e8ddca; background: #fbf8f2; color: #725a32; }
+    .gp-avatar[data-tone="4"] { border-color: #e1d9eb; background: #f8f5fb; color: #4b3b63; }
+    .gp-avatar[data-tone="5"] { border-color: #ead8d8; background: #fbf5f5; color: #704044; }
+    .gp-avatar[data-tone="6"] { border-color: #d9e3e7; background: #f5f9fa; color: #2d5361; }
     .gp-card:last-child { border-bottom: 0; }
     .gp-card[hidden] { display: none; }
     .gp-card-main {
@@ -1630,7 +1752,7 @@ def _base_styles() -> str:
     .gp-card h2 {
       margin: 0;
       color: var(--text);
-      font-size: 18px;
+      font-size: 16px;
       line-height: 1.34;
       overflow-wrap: break-word;
       word-break: keep-all;
@@ -2096,37 +2218,19 @@ def _base_styles() -> str:
       }
       .gp-fact-list dd { margin-top: 0; }
     }
+    @media (min-width: 760px) {
+      .gp-shell { padding-bottom: 36px; }
+      .kpef-service-tabs { display: grid; }
+      .bottom-nav { display: none; }
+    }
     @media (min-width: 960px) {
       .gp-shell {
         width: min(1460px, calc(100% - 56px));
       }
+      .kpef-service-tabs {
+        display: grid;
+      }
       .bottom-nav {
-        position: static;
-        width: min(720px, 100%);
-        max-width: 100%;
-        transform: none;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 4px;
-        margin: 28px auto 0;
-        border: 1px solid rgba(21, 32, 43, 0.10);
-        border-radius: 999px;
-        padding: 5px;
-        background: rgba(255,255,255,0.94);
-        box-shadow: 0 12px 34px rgba(15,23,42,0.12);
-      }
-      .bottom-nav a {
-        min-height: 34px;
-        flex-direction: row;
-        gap: 5px;
-        border-radius: 999px;
-        padding: 0 10px;
-        font-size: 12px;
-      }
-      .bottom-nav .active {
-        background: var(--accent-soft);
-        color: var(--text);
-      }
-      .nav-dot {
         display: none;
       }
       .gp-kpis,
@@ -2260,7 +2364,7 @@ def _base_styles() -> str:
       .gp-shell {
         width: min(100% - 20px, 1240px);
         padding-top: 12px;
-        padding-bottom: calc(116px + env(safe-area-inset-bottom));
+        padding-bottom: calc(52px + env(safe-area-inset-bottom));
       }
       .kpef-product-header {
         margin: -12px -10px 0;
@@ -2270,18 +2374,18 @@ def _base_styles() -> str:
       .kpef-service-tabs {
         margin-right: -10px;
         margin-left: -10px;
-        padding: 0;
+        padding: 0 10px;
       }
       .gp-top-nav { align-items: start; flex-direction: column; }
-      h1 { font-size: 30px; line-height: 1.08; }
+      h1 { font-size: 28px; line-height: 1.12; }
       .gp-hero-copy p,
       .gp-detail-hero p { font-size: 14px; line-height: 1.58; }
       .gp-top-nav span,
       .gp-filter-row {
         width: 100%;
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        padding-bottom: 3px;
+        flex-wrap: wrap;
+        overflow-x: visible;
+        padding-bottom: 0;
       }
       .gp-top-nav a,
       .gp-filter-row button { flex: 0 0 auto; }

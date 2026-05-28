@@ -12,6 +12,7 @@ import sys
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 from urllib.request import urlopen
 
 
@@ -652,6 +653,56 @@ def directory_avatar_label(value: object, fallback: str = "K") -> str:
         return korean[:2]
     letters = re.findall(r"[A-Za-z0-9]", text)
     return "".join(letters[:2]).upper() or fallback
+
+
+def directory_avatar_tone(value: object) -> int:
+    text = str(value or "").strip()
+    if not text:
+        return 1
+    return (sum(ord(char) for char in text) % 6) + 1
+
+
+def directory_logo_url(url: object) -> str:
+    raw = str(url or "").strip()
+    if not raw:
+        return ""
+    parsed = urlparse(raw if re.match(r"^https?://", raw, re.I) else f"https://{raw}")
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return ""
+    domain = parsed.netloc.lower().removeprefix("www.")
+    return f"https://www.google.com/s2/favicons?domain={html_escape(domain)}&sz=64"
+
+
+def directory_avatar_markup(homepage_url: object, label: str, seed: object = "") -> str:
+    logo_url = directory_logo_url(homepage_url)
+    tone = directory_avatar_tone(seed or label)
+    if logo_url:
+        return (
+            f'<span class="lp-directory-avatar has-logo" data-tone="{tone}" aria-hidden="true">'
+            f'<img src="{logo_url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add(\'fallback-only\'); this.remove()">'
+            f'<span>{html_escape(label)}</span></span>'
+        )
+    return f'<span class="lp-directory-avatar" data-tone="{tone}" aria-hidden="true"><span>{html_escape(label)}</span></span>'
+
+
+def render_service_bottom_nav(active: str) -> str:
+    items = [
+        ("brief", "index.html", "브리프", "nav-icon-brief"),
+        ("lp", "lp-notices.html", "LP", "nav-icon-lp"),
+        ("gp", "gps.html", "GP", "nav-icon-gp"),
+        ("wiki", "pef-wiki.html", "Wiki", "nav-icon-wiki"),
+        ("saved", "index.html#saved", "저장", "nav-icon-saved"),
+    ]
+    links = "\n".join(
+        f"""    <a class="{'active' if key == active else ''}" href="{href}">
+      <span aria-hidden="true" class="nav-dot {icon}"></span>
+      <strong>{label}</strong>
+    </a>"""
+        for key, href, label, icon in items
+    )
+    return f"""  <nav class="bottom-nav newsletter-only" aria-label="하단 메뉴">
+{links}
+  </nav>"""
 
 
 def read_lp_profile_codes(db_path: Path = DEFAULT_DB) -> list[str]:
@@ -1498,6 +1549,15 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     lp_code = str(profile.get("lp_code") or "")
     lp_name = str(profile.get("lp_name") or "LP")
     lp_type = public_lp_type(profile.get("lp_type") or "LP")
+    lp_logo_url = directory_logo_url(profile.get("homepage_url"))
+    lp_avatar_label = directory_avatar_label(lp_short_label(lp_code, lp_name), "LP")
+    lp_avatar_tone = directory_avatar_tone(lp_code or lp_name)
+    lp_avatar_class = "ktcu-logo has-logo" if lp_logo_url else "ktcu-logo"
+    lp_avatar_logo = (
+        f'<img src="{lp_logo_url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add(\'fallback-only\'); this.remove()">'
+        if lp_logo_url
+        else ""
+    )
     default_team = str(profile.get("default_team") or "투자 담당")
     focus_label = display_asset_classes(profile.get("focus_asset_classes"))
     asset_label, asset = first_fact_pair(
@@ -1547,7 +1607,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
   <link rel="stylesheet" href="assets/service.css?v={app_asset_version()}">
   <style>
     body {{ background: #f7f7f8; }}
-    .ktcu-shell {{ width: min(1200px, calc(100% - 28px)); margin: 0 auto; padding: 16px 0 calc(100px + env(safe-area-inset-bottom)); }}
+    .ktcu-shell {{ width: min(1200px, calc(100% - 28px)); margin: 0 auto; padding: 16px 0 calc(112px + env(safe-area-inset-bottom)); }}
     .ktcu-shell .kpef-product-header {{ margin: -16px calc((100vw - min(1200px, calc(100vw - 28px))) / -2) 0; padding-left: max(16px, calc((100vw - 1200px) / 2 + 16px)); padding-right: max(16px, calc((100vw - 1200px) / 2 + 16px)); }}
     .ktcu-shell .kpef-service-tabs {{ margin: 0 calc((100vw - min(1200px, calc(100vw - 28px))) / -2) 14px; padding-left: max(0px, calc((100vw - 1200px) / 2)); padding-right: max(0px, calc((100vw - 1200px) / 2)); }}
     .ktcu-top {{ display: grid; gap: 14px; padding: 8px 0 12px; }}
@@ -1556,8 +1616,21 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-profile-nav a {{ min-height: 32px; display: inline-flex; align-items: center; border: 1px solid var(--separator); border-radius: 999px; padding: 6px 10px; background: #fff; color: var(--secondary); text-decoration: none; font-size: 12px; font-weight: 800; }}
     .ktcu-hero {{ display: grid; gap: 18px; padding: 8px 0 8px; }}
     .ktcu-title {{ display: grid; gap: 10px; }}
-    .ktcu-title span {{ width: fit-content; border-left: 3px solid var(--accent); padding-left: 8px; color: var(--text); font-size: 12px; font-weight: 800; }}
-    .ktcu-title h1 {{ margin: 0; color: var(--text); font-size: clamp(30px, 3.2vw, 44px); line-height: 1.08; letter-spacing: 0; }}
+    .ktcu-title-head {{ display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 14px; align-items: center; }}
+    .ktcu-logo {{ position: relative; display: inline-grid; width: 54px; height: 54px; place-items: center; overflow: hidden; border: 1px solid var(--separator); border-radius: 50%; background: #fff; color: var(--text); font-size: 12px; font-weight: 900; box-shadow: inset 0 0 0 4px #fff; }}
+    .ktcu-logo::after {{ position: absolute; inset: 9px; border: 1px solid currentColor; border-radius: 50%; opacity: 0.16; content: ""; }}
+    .ktcu-logo > span {{ position: relative; z-index: 1; }}
+    .ktcu-logo img {{ position: relative; z-index: 2; max-width: 38px; max-height: 38px; object-fit: contain; }}
+    .ktcu-logo.has-logo > span {{ display: none; }}
+    .ktcu-logo.fallback-only > span {{ display: inline; }}
+    .ktcu-logo[data-tone="1"] {{ border-color: #d7e0ef; background: #f6f8fc; color: #1f3a5f; }}
+    .ktcu-logo[data-tone="2"] {{ border-color: #d6e6df; background: #f5faf7; color: #1f5a45; }}
+    .ktcu-logo[data-tone="3"] {{ border-color: #e8ddca; background: #fbf8f2; color: #725a32; }}
+    .ktcu-logo[data-tone="4"] {{ border-color: #e1d9eb; background: #f8f5fb; color: #4b3b63; }}
+    .ktcu-logo[data-tone="5"] {{ border-color: #ead8d8; background: #fbf5f5; color: #704044; }}
+    .ktcu-logo[data-tone="6"] {{ border-color: #d9e3e7; background: #f5f9fa; color: #2d5361; }}
+    .ktcu-title-head div > span {{ width: fit-content; border-left: 3px solid var(--accent); padding-left: 8px; color: var(--text); font-size: 12px; font-weight: 800; }}
+    .ktcu-title h1 {{ margin: 0; color: var(--text); font-size: clamp(28px, 3vw, 38px); font-weight: 850; line-height: 1.12; letter-spacing: 0; }}
     .ktcu-title p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 15px; line-height: 1.68; }}
     .ktcu-quick {{ display: grid; gap: 8px; }}
     .ktcu-quick-item {{ border-left: 3px solid var(--separator); padding-left: 10px; color: var(--text); font-size: 13px; line-height: 1.5; }}
@@ -1659,7 +1732,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-gp-tags span {{ border: 1px solid var(--separator); border-radius: 999px; padding: 6px 9px; background: #fbfcfd; color: var(--text); font-size: 12px; font-weight: 800; }}
     .ktcu-footer {{ margin-top: 14px; color: var(--secondary); font-size: 11.5px; line-height: 1.45; }}
     @media (min-width: 760px) {{
-      .ktcu-shell {{ padding-top: 22px; }}
+      .ktcu-shell {{ padding-top: 22px; padding-bottom: 36px; }}
       .ktcu-shell .kpef-product-header {{ margin-top: -22px; }}
       .ktcu-hero {{ grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr); align-items: end; }}
       .ktcu-intel-grid {{ grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr); }}
@@ -1689,8 +1762,13 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     <header class="ktcu-top">
       <section class="ktcu-hero" aria-label="{html_escape(lp_name)} 요약">
         <div class="ktcu-title">
-          <span>출자기관 프로필</span>
-          <h1>{html_escape(lp_name)}</h1>
+          <div class="ktcu-title-head">
+            <span class="{lp_avatar_class}" data-tone="{lp_avatar_tone}" aria-hidden="true">{lp_avatar_logo}<span>{html_escape(lp_avatar_label)}</span></span>
+            <div>
+              <span>출자기관 프로필</span>
+              <h1>{html_escape(lp_name)}</h1>
+            </div>
+          </div>
           <p>{html_escape(lp_type)}의 일반현황, 투자현황, 담당 조직, 출자공고 흐름을 한 화면에서 봅니다.</p>
           <div class="ktcu-quick">
             <div class="ktcu-quick-item"><strong>핵심 창구</strong>{html_escape(default_team)}</div>
@@ -1848,28 +1926,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
 
     <p class="ktcu-footer">기준일 {html_escape(report_date)} · 최신 공고일 {html_escape(latest or "-")} · 실무자명과 최종 선정 GP 히스토리는 확인되는 항목만 표시합니다.</p>
   </main>
-  <nav class="bottom-nav newsletter-only" aria-label="하단 메뉴">
-    <a href="index.html">
-      <span aria-hidden="true" class="nav-dot nav-icon-brief"></span>
-      <strong>브리프</strong>
-    </a>
-    <a class="active" href="lp-notices.html">
-      <span aria-hidden="true" class="nav-dot nav-icon-lp"></span>
-      <strong>LP</strong>
-    </a>
-    <a href="gps.html">
-      <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
-      <strong>GP</strong>
-    </a>
-    <a href="pef-wiki.html">
-      <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
-      <strong>Wiki</strong>
-    </a>
-    <a href="index.html#saved">
-      <span aria-hidden="true" class="nav-dot nav-icon-saved"></span>
-      <strong>저장</strong>
-    </a>
-  </nav>
+  {render_service_bottom_nav("lp")}
   <script>
     (() => {{
       const input = document.getElementById("lpProfileSearch");
@@ -1930,6 +1987,7 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
     notice_url = str(item.get("notice_url") or "")
     profile_url = f"lp-{lp_code}.html" if lp_code else "lp-notices.html"
     avatar_label = directory_avatar_label(lp_short_label(lp_code, lp_name), "LP")
+    avatar_markup = directory_avatar_markup(homepage_url, avatar_label, lp_code or lp_name)
     chips = render_asset_chips(item.get("focus_asset_classes"))
     actions = []
     if item.get("has_public_profile", True):
@@ -1943,7 +2001,7 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
     coverage = public_coverage_label(fact_count, source_count)
     search_blob = " ".join([lp_name, lp_type, ownership, default_team, focus])
     return f"""          <article class="lp-directory-card" data-search="{html_escape(search_blob)}" data-name="{html_escape(lp_name)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(focus)}" data-kind="{html_escape(' '.join([lp_type, ownership]))}" data-notices="{notice_count}" data-amount="{amount_sort:.4f}" data-latest="{html_escape(latest)}">
-            <span class="lp-directory-avatar" aria-hidden="true">{html_escape(avatar_label)}</span>
+            {avatar_markup}
             <div class="lp-directory-card-head">
               <span>{html_escape(lp_type)}</span>
               <strong>{html_escape(lp_name)}</strong>
@@ -2004,7 +2062,7 @@ def render_lp_notices_page(
     .lp-profile-nav {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }}
     .lp-profile-nav a {{ display: inline-flex; min-height: 32px; align-items: center; border-radius: 999px; padding: 6px 10px; background: var(--surface-muted); color: var(--text); font-size: 12px; font-weight: 750; text-decoration: none; }}
     .lp-directory-hero {{ display: grid; gap: 18px; margin: 18px 0 18px; padding: 6px 0 4px; }}
-    .lp-directory-hero h1 {{ margin: 0; color: var(--text); font-size: clamp(30px, 3.2vw, 44px); line-height: 1.08; letter-spacing: 0; }}
+    .lp-directory-hero h1 {{ margin: 0; color: var(--text); font-size: clamp(28px, 3vw, 38px); font-weight: 850; line-height: 1.12; letter-spacing: 0; }}
     .lp-directory-hero p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 14px; line-height: 1.62; }}
     .lp-directory-kpis {{ display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
     .lp-directory-kpis div {{ border: 1px solid var(--separator); border-radius: 8px; padding: 11px; background: var(--surface); }}
@@ -2036,10 +2094,21 @@ def render_lp_notices_page(
     .lp-directory-grid {{ display: grid; gap: 0; margin-bottom: 16px; }}
     .lp-directory-card {{ display: grid; grid-template-columns: 44px minmax(0, 1fr) 82px 74px; gap: 8px; align-items: center; min-height: 76px; border-bottom: 1px solid var(--separator); padding: 10px; background: var(--surface); }}
     .lp-directory-card:last-child {{ border-bottom: 0; }}
-    .lp-directory-avatar {{ display: inline-grid; width: 38px; height: 38px; place-items: center; border: 1px solid var(--separator); border-radius: 50%; background: #fff; color: var(--text); font-size: 11px; font-weight: 900; letter-spacing: 0; }}
+    .lp-directory-avatar {{ position: relative; display: inline-grid; width: 40px; height: 40px; place-items: center; overflow: hidden; border: 1px solid var(--separator); border-radius: 50%; background: #fff; color: var(--text); font-size: 10px; font-weight: 900; letter-spacing: 0; box-shadow: inset 0 0 0 3px #fff; }}
+    .lp-directory-avatar::after {{ position: absolute; inset: 7px; border: 1px solid currentColor; border-radius: 50%; opacity: 0.16; content: ""; }}
+    .lp-directory-avatar > span {{ position: relative; z-index: 1; }}
+    .lp-directory-avatar img {{ position: relative; z-index: 2; max-width: 27px; max-height: 27px; object-fit: contain; }}
+    .lp-directory-avatar.has-logo > span {{ display: none; }}
+    .lp-directory-avatar.fallback-only > span {{ display: inline; }}
+    .lp-directory-avatar[data-tone="1"] {{ border-color: #d7e0ef; background: #f6f8fc; color: #1f3a5f; }}
+    .lp-directory-avatar[data-tone="2"] {{ border-color: #d6e6df; background: #f5faf7; color: #1f5a45; }}
+    .lp-directory-avatar[data-tone="3"] {{ border-color: #e8ddca; background: #fbf8f2; color: #725a32; }}
+    .lp-directory-avatar[data-tone="4"] {{ border-color: #e1d9eb; background: #f8f5fb; color: #4b3b63; }}
+    .lp-directory-avatar[data-tone="5"] {{ border-color: #ead8d8; background: #fbf5f5; color: #704044; }}
+    .lp-directory-avatar[data-tone="6"] {{ border-color: #d9e3e7; background: #f5f9fa; color: #2d5361; }}
     .lp-directory-card-head {{ display: grid; gap: 4px; }}
     .lp-directory-card-head span {{ width: fit-content; border-radius: 999px; padding: 4px 8px; background: var(--surface-muted); color: var(--text); font-size: 11px; font-weight: 800; }}
-    .lp-directory-card-head strong {{ color: var(--text); font-size: 18px; line-height: 1.25; }}
+    .lp-directory-card-head strong {{ color: var(--text); font-size: 16px; line-height: 1.28; }}
     .lp-directory-kind,
     .lp-directory-latest {{ color: var(--secondary); font-size: 13px; font-weight: 750; line-height: 1.45; }}
     .lp-directory-kind,
@@ -2078,33 +2147,10 @@ def render_lp_notices_page(
       .lp-control-line {{ grid-template-columns: minmax(0, 1fr) 210px; }}
     }}
     @media (min-width: 960px) {{
+      body.lp-notices-page .kpef-service-tabs {{
+        display: grid;
+      }}
       body.lp-notices-page .bottom-nav {{
-        position: static;
-        width: min(720px, 100%);
-        max-width: 100%;
-        transform: none;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 4px;
-        margin: 28px auto 0;
-        border: 1px solid rgba(0,0,0,0.08);
-        border-radius: 999px;
-        padding: 5px;
-        background: rgba(255,255,255,0.94);
-        box-shadow: 0 12px 34px rgba(15,23,42,0.12);
-      }}
-      body.lp-notices-page .bottom-nav a {{
-        min-height: 34px;
-        flex-direction: row;
-        gap: 5px;
-        border-radius: 999px;
-        padding: 0 10px;
-        font-size: 12px;
-      }}
-      body.lp-notices-page .bottom-nav .active {{
-        background: var(--surface-muted);
-        color: var(--text);
-      }}
-      body.lp-notices-page .nav-dot {{
         display: none;
       }}
       .lp-directory-table,
@@ -2285,28 +2331,7 @@ def render_lp_notices_page(
       </section>
     </main>
 
-    <nav class="bottom-nav" aria-label="하단 메뉴">
-      <a href="index.html">
-        <span aria-hidden="true" class="nav-dot nav-icon-brief"></span>
-        <strong>브리프</strong>
-      </a>
-      <a class="active" href="lp-notices.html">
-        <span aria-hidden="true" class="nav-dot nav-icon-lp"></span>
-        <strong>LP</strong>
-      </a>
-      <a href="gps.html">
-        <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
-        <strong>GP</strong>
-      </a>
-      <a href="pef-wiki.html">
-        <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
-        <strong>Wiki</strong>
-      </a>
-      <a href="index.html#saved">
-        <span aria-hidden="true" class="nav-dot nav-icon-saved"></span>
-        <strong>저장</strong>
-      </a>
-    </nav>
+    {render_service_bottom_nav("lp")}
   </div>
   <script>
     (() => {{

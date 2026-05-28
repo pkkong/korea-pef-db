@@ -1248,7 +1248,7 @@ def render_app(
     </main>
 
 {lp_detail_markup}
-    <nav class="bottom-nav" aria-label="하단 메뉴">
+    <nav class="bottom-nav{' newsletter-only' if newsletter_only else ''}" aria-label="하단 메뉴">
       <button class="active" type="button" data-view="today">
         <span aria-hidden="true" class="nav-dot nav-icon-brief"></span>
         <strong>브리프</strong>
@@ -1275,10 +1275,17 @@ def render_public_product_header(active: str, search_href: str = "#clipSearch") 
         ("wiki", "pef-wiki.html", "Wiki"),
         ("saved", "index.html#saved", "저장"),
     ]
-    nav = "\n".join(
-        f'      <a class="{"active" if key == active else ""}" href="{href}">{label}</a>'
-        for key, href, label in items
-    )
+    nav_parts = []
+    for key, href, label in items:
+        extra = ""
+        if active == "brief" and key == "brief":
+            href = "#today"
+            extra = ' data-view="today"'
+        elif active == "brief" and key == "saved":
+            href = "#saved"
+            extra = ' data-view="saved"'
+        nav_parts.append(f'      <a class="{"active" if key == active else ""}" href="{href}"{extra}>{label}</a>')
+    nav = "\n".join(nav_parts)
     return f"""    <header class="kpef-product-header" aria-label="Korea PEF Intelligence">
       <a class="kpef-product-brand" href="index.html">
         <span class="kpef-brand-mark" aria-hidden="true">K</span>
@@ -1412,7 +1419,7 @@ button, input { font: inherit; }
 .kpef-icon-menu::before { top: 11px; box-shadow: 0 6px 0 currentColor; }
 .kpef-icon-menu::after { top: 23px; }
 .kpef-service-tabs {
-  display: grid;
+  display: none;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   margin: 0 -14px 14px;
   border-bottom: 1px solid var(--separator);
@@ -2276,13 +2283,17 @@ button, input { font: inherit; }
     margin-bottom: 18px;
     min-height: calc(100vh - 36px);
     border-radius: 30px;
+    padding-bottom: 24px;
     box-shadow: 0 24px 80px rgba(0,0,0,0.08);
     overflow: hidden;
+  }
+  .kpef-service-tabs {
+    display: grid;
   }
   .header-topline { padding-right: 112px; }
   .newsletter-only .header-topline { padding-right: 252px; }
   .header-action { display: inline-flex; }
-  .bottom-nav { border-radius: 0 0 30px 30px; }
+  .bottom-nav { display: none; }
   .lp-detail-sheet {
     top: 50%;
     bottom: auto;
@@ -2300,6 +2311,9 @@ button, input { font: inherit; }
   }
   .app-shell.newsletter-only {
     width: min(calc(100vw - 48px), 1280px);
+  }
+  .newsletter-only .kpef-service-tabs {
+    display: grid;
   }
   .content-area {
     grid-template-columns: minmax(0, 1fr) 340px;
@@ -2361,12 +2375,7 @@ button, input { font: inherit; }
   }
   .newsletter-only .bottom-nav,
   .bottom-nav.newsletter-only {
-    bottom: 18px;
-    width: min(720px, calc(100vw - 96px));
-    border: 1px solid rgba(0,0,0,0.06);
-    border-radius: 999px;
-    background: rgba(255,255,255,0.94);
-    box-shadow: 0 18px 60px rgba(15,23,42,0.15);
+    display: none;
   }
 }
 """
@@ -2402,7 +2411,7 @@ def service_js() -> str:
   const lpDetailBody = document.getElementById("lpDetailBody");
   const lpDetailClose = document.getElementById("lpDetailClose");
   const skeleton = document.querySelector(".skeleton-list");
-  const navItems = [...document.querySelectorAll(".bottom-nav [data-view]")];
+  const navItems = [...document.querySelectorAll("[data-view]")];
   const showLpMonitor = lpMonitor.length > 0 && Boolean(lpMonitorPanel);
 
   const loadSaved = () => {
@@ -3026,6 +3035,10 @@ def service_js() -> str:
     if (view === "saved") renderSaved();
   };
 
+  const setViewFromHash = () => {
+    setView(window.location.hash === "#saved" ? "saved" : "today");
+  };
+
   document.addEventListener("click", (event) => {
     const dateButton = event.target.closest(".date-pill[data-date]");
     if (dateButton) {
@@ -3117,8 +3130,9 @@ def service_js() -> str:
     window.clearTimeout(tagResizeTimer);
     tagResizeTimer = window.setTimeout(updateTagGroups, 90);
   });
+  window.addEventListener("hashchange", setViewFromHash);
   render();
-  setView(currentView);
+  setViewFromHash();
 })(); 
 """
 

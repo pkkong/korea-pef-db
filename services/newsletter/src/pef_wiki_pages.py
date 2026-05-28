@@ -481,6 +481,7 @@ def _page_styles() -> str:
     html { scroll-behavior: smooth; scroll-padding-top: 118px; }
     body {
       margin: 0;
+      overflow-x: hidden;
       background: var(--wiki-bg);
       color: var(--wiki-text);
       font-family: Pretendard, "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
@@ -502,7 +503,7 @@ def _page_styles() -> str:
     .wiki-shell {
       width: min(1180px, calc(100% - 28px));
       margin: 0 auto;
-      padding: 0 0 calc(112px + env(safe-area-inset-bottom));
+      padding: 0 0 calc(56px + env(safe-area-inset-bottom));
     }
     .wiki-shell .kpef-product-header {
       width: 100vw;
@@ -512,6 +513,7 @@ def _page_styles() -> str:
       padding-right: max(16px, calc((100vw - 1180px) / 2 + 16px));
     }
     .wiki-shell .kpef-service-tabs {
+      display: none;
       width: 100vw;
       max-width: 100vw;
       margin: 0 calc(50% - 50vw) 18px;
@@ -681,8 +683,8 @@ def _page_styles() -> str:
       max-width: 880px;
       margin: 0;
       color: var(--wiki-text);
-      font-size: 32px;
-      line-height: 1.18;
+      font-size: 28px;
+      line-height: 1.2;
       overflow-wrap: anywhere;
       word-break: keep-all;
     }
@@ -1046,8 +1048,15 @@ def _page_styles() -> str:
       line-height: 1.4;
     }
     @media (min-width: 860px) {
+      .bottom-nav.newsletter-only { display: none; }
+      .wiki-shell {
+        padding-bottom: 36px;
+      }
+      .wiki-shell .kpef-service-tabs {
+        display: grid;
+      }
       .wiki-service-nav { display: flex; }
-      .wiki-doc-header h1 { font-size: 40px; }
+      .wiki-doc-header h1 { font-size: 36px; }
       .wiki-doc-header {
         grid-template-columns: minmax(0, 1fr) minmax(320px, 0.45fr);
         align-items: start;
@@ -1093,7 +1102,7 @@ def _page_styles() -> str:
         line-height: 1.35;
       }
       .wiki-document { padding: 0 8px 0 0; }
-      .wiki-shell { padding-bottom: 140px; }
+      .wiki-shell { padding-bottom: 72px; }
       .wiki-definition-list div {
         grid-template-columns: 160px minmax(0, 1fr);
         gap: 16px;
