@@ -2159,6 +2159,9 @@ button, input { font: inherit; }
     padding-right: 22px;
     padding-left: 22px;
   }
+  .app-shell.newsletter-only {
+    width: min(calc(100vw - 48px), 1280px);
+  }
   .content-area {
     grid-template-columns: minmax(0, 1fr) 340px;
     gap: 18px;
@@ -2194,6 +2197,37 @@ button, input { font: inherit; }
     min-height: 0;
     flex: initial;
     scroll-snap-align: none;
+  }
+  .newsletter-only .content-area {
+    display: block;
+  }
+  .newsletter-only #todayView,
+  .newsletter-only #savedView {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .newsletter-only #todayList,
+  .newsletter-only #savedList {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    align-items: start;
+  }
+  .newsletter-only #todayList > .section-block:only-child,
+  .newsletter-only #savedList > .section-block:only-child {
+    grid-column: 1 / -1;
+  }
+  .newsletter-only .section-block {
+    margin: 0;
+  }
+  .newsletter-only .bottom-nav,
+  .bottom-nav.newsletter-only {
+    bottom: 18px;
+    width: min(720px, calc(100vw - 96px));
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.94);
+    box-shadow: 0 18px 60px rgba(15,23,42,0.15);
   }
 }
 """
