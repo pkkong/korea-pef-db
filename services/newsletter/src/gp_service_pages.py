@@ -642,7 +642,7 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
         </div>
 {meta_line_html}
         <details class="gp-card-extra">
-          <summary>공개 근거</summary>
+          <summary>확인 자료</summary>
           <div class="gp-news-mini">
             <strong>관련 뉴스</strong>
             {news_html}
@@ -728,7 +728,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
         </dl>
       </article>
       <article class="gp-panel">
-        <h2>공개 근거</h2>
+        <h2>확인 자료</h2>
         <dl class="gp-fact-list">
 {coverage_rows}
         </dl>

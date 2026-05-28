@@ -804,8 +804,17 @@ def is_generic_aggregator_text(value: str) -> bool:
 
 
 def alias_is_short_ascii(value: str) -> bool:
+    if re.search(r"[가-힣]", value or ""):
+        return False
     cleaned = re.sub(r"[^A-Za-z0-9]", "", value or "")
     return bool(cleaned) and cleaned.isascii() and len(cleaned) <= 4
+
+
+def alias_is_punctuated_short_brand(value: str) -> bool:
+    cleaned = re.sub(r"[^A-Za-z0-9]", "", value or "")
+    if len(cleaned) < 2 or len(cleaned) > 4:
+        return False
+    return bool(re.search(r"[^A-Za-z0-9\s]", value or ""))
 
 
 def add_gp_alias(
@@ -816,7 +825,7 @@ def add_gp_alias(
 ) -> None:
     alias_name = normalize_whitespace(alias_name)
     alias_norm = normalize_for_match(alias_name)
-    if len(alias_norm) < 3:
+    if len(alias_norm) < 3 and not alias_is_punctuated_short_brand(alias_name):
         return
     aliases[(int(gp_id), alias_name)] = GpAlias(int(gp_id), canonical_name, alias_name, alias_norm)
 
@@ -913,7 +922,10 @@ def match_gp_entities(title: str, excerpt_text: str, body_text: str, aliases: li
         match_field = ""
         confidence = 0.0
         if alias_is_short_ascii(alias.alias_name):
-            alias_pattern = r"(?<![A-Za-z0-9])" + re.escape(alias.alias_name.lower()) + r"(?![A-Za-z0-9])"
+            if alias_is_punctuated_short_brand(alias.alias_name):
+                alias_pattern = r"(?<![A-Za-z0-9])" + re.escape(alias.alias_name.lower()) + r"(?![A-Za-z0-9])"
+            else:
+                alias_pattern = r"(?<![A-Za-z0-9가-힣])" + re.escape(alias.alias_name.lower()) + r"(?![A-Za-z0-9가-힣])"
             if re.search(alias_pattern, raw_fields["title"].lower()):
                 match_field = "title"
                 confidence = 0.97

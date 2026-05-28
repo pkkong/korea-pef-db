@@ -152,6 +152,10 @@ def test_gp_alias_overrides_cover_common_short_names() -> None:
                 [
                     (44, "아이엠엠인베스트먼트"),
                     (45, "도미누스인베스트먼트"),
+                    (46, "키움인베스트먼트"),
+                    (47, "에이치앤큐코리아파트너스"),
+                    (48, "이앤에프프라이빗에퀴티"),
+                    (49, "고넥스프라이빗에쿼티"),
                     (7987, "어펄마캐피탈매니져스코리아"),
                     (6358, "헬리오스프라이빗에쿼티"),
                 ],
@@ -173,13 +177,25 @@ def test_gp_alias_overrides_cover_common_short_names() -> None:
 
         imm_matches = match_gp_entities(
             "KIC 첫 국내 출자 펀드, 내달 베일 벗는다",
-            "KIC는 IMM인베스트먼트와 도미누스인베스트먼트와 손잡고 펀드 조성을 완료할 예정이다.",
+            "KIC는 IMM인베스트와 도미누스와 손잡고 펀드 조성을 완료할 예정이다.",
             "",
             aliases,
         )
         imm_names = {str(match["entity_name"]) for match in imm_matches}
         assert "아이엠엠인베스트먼트" in imm_names
         assert "도미누스인베스트먼트" in imm_names
+
+        named_gp_matches = match_gp_entities(
+            "키움인베 600억 벤처모펀드 출격",
+            "H&Q와 E&F프라이빗PE도 신규 블라인드펀드 전략을 검토한다.",
+            "'고위드' 업은 고넥스PE, 500억 펀드 시동",
+            aliases,
+        )
+        named_gp_names = {str(match["entity_name"]) for match in named_gp_matches}
+        assert "키움인베스트먼트" in named_gp_names
+        assert "에이치앤큐코리아파트너스" in named_gp_names
+        assert "이앤에프프라이빗에퀴티" in named_gp_names
+        assert "고넥스프라이빗에쿼티" in named_gp_names
 
 
 def test_lp_directory_includes_seed_only_profiles_without_empty_profile_pages() -> None:

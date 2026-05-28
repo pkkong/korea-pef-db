@@ -1668,14 +1668,14 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     <header class="ktcu-top">
       <nav class="ktcu-nav" aria-label="LP 섹션 이동">
         <strong>Korea PEF Intelligence</strong>
-        <span>LP Profile</span>
+        <span>출자기관</span>
       </nav>
       <nav class="ktcu-profile-nav" aria-label="LP 프로필">
         {nav_html}
       </nav>
       <section class="ktcu-hero" aria-label="{html_escape(lp_name)} 요약">
         <div class="ktcu-title">
-          <span>LP Profile</span>
+          <span>출자기관 프로필</span>
           <h1>{html_escape(lp_name)}</h1>
           <p>{html_escape(lp_type)}의 투자 현황, 담당 조직, 출자공고 흐름을 공개자료 기준으로 정리했습니다. PE 관점에서는 핵심 창구({html_escape(default_team)})와 관심 자산군({html_escape(focus_label)})을 먼저 봅니다.</p>
           <div class="ktcu-quick">
@@ -1684,10 +1684,10 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
             <div class="ktcu-quick-item"><strong>공개자료 기준</strong>공식 조직과 공고를 먼저 반영하고, 최종 선정 GP는 공식 발표가 확인된 건부터 반영합니다.</div>
           </div>
           <nav class="ktcu-tabbar" aria-label="프로필 섹션">
-            <a href="#overview">Overview</a>
-            <a href="#activity">Activity</a>
-            <a href="#relationships">Network</a>
-            <a href="#peers">Peers</a>
+            <a href="#overview">개요</a>
+            <a href="#activity">출자 활동</a>
+            <a href="#relationships">GP 관계</a>
+            <a href="#peers">기관 비교</a>
             <a href="#notes">참고</a>
             {source_tab}
           </nav>
@@ -2034,10 +2034,10 @@ def render_lp_notices_page(
       <div class="header-topline">
         <div>
           <p>Korea PEF Intelligence</p>
-          <strong>LP Directory</strong>
+          <strong>출자기관</strong>
         </div>
         <div class="header-actions">
-          <a class="header-action active" href="#lpDirectory" aria-label="LP 프로필 목록으로 이동">프로필</a>
+          <a class="header-action active" href="#lpDirectory" aria-label="출자기관 목록으로 이동">기관</a>
           <a class="header-action" href="#lpNotices" aria-label="LP 공식 공고로 이동">공고</a>
         </div>
       </div>
@@ -2047,7 +2047,7 @@ def render_lp_notices_page(
     <main class="content-area">
       <section class="lp-directory-hero" aria-label="LP 디렉토리 요약">
         <div>
-          <h1>LP Directory</h1>
+          <h1>출자기관</h1>
           <p>국내 주요 출자기관의 기본 현황, 관심 자산군, 최근 출자공고를 한 곳에서 봅니다. 공개자료로 표시 가능한 항목을 우선 반영하고, 관련 뉴스는 구분해 표시합니다.</p>
         </div>
         <div class="lp-directory-kpis">
@@ -2060,7 +2060,7 @@ def render_lp_notices_page(
       <nav class="lp-profile-nav" aria-label="LP 프로필">
         {nav_html}
       </nav>
-      <section class="section-block" id="lpDirectory" aria-label="LP 디렉토리">
+      <section class="section-block" id="lpDirectory" aria-label="출자기관 목록">
         <div class="lp-notice-toolbar">
           <input type="search" id="lpNoticeSearch" placeholder="LP명, 유형, 자산군, 공고명, GP 검색">
           <div class="lp-filter-row" aria-label="LP 디렉토리 필터">

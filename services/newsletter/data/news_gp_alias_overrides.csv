@@ -9,6 +9,7 @@ standard_gp_name,alias_name,notes
 아이엠엠인베스트먼트,IMM Investment,English brand
 아이엠엠인베스트먼트,IMM인베스트먼트,Common mixed shorthand
 아이엠엠인베스트먼트,IMM인베스트,Common mixed shorthand
+아이엠엠인베스트먼트,아이엠엠인베스트,Common Korean transliteration shorthand
 한앤컴퍼니,한앤,Common shorthand
 한앤컴퍼니,한앤코,Common shorthand
 한앤컴퍼니,Hahn & Company,English variant
@@ -37,7 +38,12 @@ standard_gp_name,alias_name,notes
 이스트브릿지파트너스,EastBridge Partners,English brand
 맥쿼리코리아오퍼튜니티즈운용,Macquarie Korea Opportunities,English shorthand
 맥쿼리코리아오퍼튜니티즈운용,Macquarie Korea Opportunities Management,English brand
+에이치앤큐코리아파트너스,H&Q Korea,English brand
+에이치앤큐코리아파트너스,H&Q Korea Partners,English brand
+에이치앤큐코리아파트너스,H&Q,Short English brand
+에이치앤큐코리아파트너스,에이치앤큐코리아,Common Korean shorthand
 도미누스인베스트먼트,Dominus Investment,English brand
+도미누스인베스트먼트,도미누스,Common Korean shorthand
 맥쿼리자산운용,Macquarie Asset Management,English brand
 맥쿼리자산운용,Macquarie Korea Asset Management,English brand
 에스케이에스프라이빗에쿼티,SKS PE,Short English brand
@@ -52,6 +58,8 @@ standard_gp_name,alias_name,notes
 브이아이지파트너스이호,VIG Partners II,English brand
 이앤에프프라이빗에퀴티,E&F PE,Short English brand
 이앤에프프라이빗에퀴티,E&F Private Equity,English brand
+이앤에프프라이빗에퀴티,E&F프라이빗에쿼티,Common mixed shorthand
+이앤에프프라이빗에퀴티,E&F프라이빗PE,Common mixed shorthand
 파인트리자산운용,PineTree,Short English brand
 파인트리자산운용,PineTree Asset Management,English brand
 케이디비인베스트먼트,KDB Investment,English brand
@@ -94,3 +102,8 @@ standard_gp_name,alias_name,notes
 오퍼스프라이빗에퀴티,오퍼스,Common shorthand
 오퍼스프라이빗에퀴티,오퍼스PE,Common shorthand
 오퍼스프라이빗에퀴티,Opus PE,English shorthand
+키움인베스트먼트,키움인베,Common Korean shorthand
+키움인베스트먼트,키움인베스트,Common Korean shorthand
+키움인베스트먼트,Kiwoom Investment,English brand
+고넥스프라이빗에쿼티,고넥스PE,Common Korean shorthand
+고넥스프라이빗에쿼티,GONEX PE,English shorthand
