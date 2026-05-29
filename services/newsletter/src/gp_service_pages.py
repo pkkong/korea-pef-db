@@ -428,7 +428,7 @@ def _render_empty_directory(report_date: str, message: str) -> str:
 </head>
 <body>
   <main class="gp-shell">
-    {_render_top_nav(active="gps")}
+    {_render_service_header()}
     <section class="gp-empty">
       <span>GP 디렉토리</span>
       <h1>국내 PEF GP 디렉토리</h1>
@@ -437,6 +437,7 @@ def _render_empty_directory(report_date: str, message: str) -> str:
     </section>
   </main>
   {_render_bottom_nav()}
+  {_service_header_script(redirect_search=True)}
 </body>
 </html>
 """
@@ -456,7 +457,7 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
 </head>
 <body>
   <main class="gp-shell">
-    {_render_top_nav(active="gps")}
+    {_render_service_header()}
     <header class="gp-hero">
       <div class="gp-hero-copy">
         <span>GP</span>
@@ -467,11 +468,10 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
 
     <section class="gp-control-panel" aria-label="GP 검색 및 필터">
       <div class="gp-control-head">
-        <label for="gpSearch">운용사 검색</label>
+        <span>표시 기준</span>
         <span id="gpVisibleCount">{len(gps):,}개 표시</span>
       </div>
       <div class="gp-controls">
-        <input id="gpSearch" type="search" placeholder="운용사명, 대표, 별칭, 뉴스 제목 검색">
         <select id="gpSort" aria-label="정렬">
           <option value="rank">최신 순위순</option>
           <option value="aum">약정액 기준순</option>
@@ -517,6 +517,7 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
   </main>
   {_render_bottom_nav()}
   {_directory_script()}
+  {_service_header_script()}
 </body>
 </html>
 """
@@ -692,7 +693,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
 </head>
 <body>
   <main class="gp-shell">
-    {_render_top_nav(active="gps")}
+    {_render_service_header()}
     <nav class="gp-breadcrumb" aria-label="경로">
       <a href="gps.html">GP</a>
       <span>{_e(name)}</span>
@@ -780,6 +781,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
     </section>
   </main>
   {_render_bottom_nav()}
+  {_service_header_script(redirect_search=True)}
 </body>
 </html>
 """
@@ -995,12 +997,26 @@ def _fact_row(label: str, value: object, raw: bool = False) -> str:
           </div>"""
 
 
-def _render_top_nav(active: str = "") -> str:
-    return """    <header class="kpef-product-header" aria-label="Korea PEF Intelligence">
-      <a class="kpef-product-brand" href="index.html">
-        <span class="kpef-brand-mark" aria-hidden="true">K</span>
-        <strong>Korea PEF Intelligence</strong>
-      </a>
+def _render_service_header() -> str:
+    return """    <header class="app-header gp-app-header">
+      <div class="service-bar">
+        <strong class="service-title">GP</strong>
+        <section class="search-area" id="searchArea" aria-label="GP 검색">
+          <label class="search-box">
+            <span aria-hidden="true"></span>
+            <input id="gpSearch" type="search" placeholder="운용사명, 대표, 별칭, 펀드명 검색" autocomplete="off">
+          </label>
+          <button class="search-close" id="searchClose" type="button" aria-label="검색 닫기"></button>
+        </section>
+        <div class="service-actions" aria-label="GP 도구">
+          <button class="header-icon search-toggle" id="searchToggle" type="button" aria-label="검색 열기" aria-expanded="false"></button>
+        </div>
+      </div>
+      <nav class="brief-section-tabs gp-section-tabs" aria-label="GP 메뉴">
+        <button class="brief-section-tab" type="button" disabled>MARKET</button>
+        <button class="brief-section-tab active" type="button" aria-current="page">GP</button>
+        <button class="brief-section-tab" type="button" disabled>PEOPLE</button>
+      </nav>
     </header>"""
 
 
@@ -1023,6 +1039,57 @@ def _render_bottom_nav() -> str:
       <strong>Wiki</strong>
     </a>
   </nav>"""
+
+
+def _service_header_script(redirect_search: bool = False) -> str:
+    redirect = "true" if redirect_search else "false"
+    return f"""  <script>
+    (() => {{
+      const serviceBar = document.querySelector(".service-bar");
+      const searchArea = document.getElementById("searchArea");
+      const searchInput = document.getElementById("gpSearch");
+      const searchToggle = document.getElementById("searchToggle");
+      const searchClose = document.getElementById("searchClose");
+      const redirectSearch = {redirect};
+
+      const openSearch = () => {{
+        serviceBar?.classList.add("search-open");
+        searchArea?.classList.add("active");
+        searchToggle?.setAttribute("aria-expanded", "true");
+        window.requestAnimationFrame(() => searchInput?.focus());
+      }};
+
+      const closeSearch = () => {{
+        if (searchInput) searchInput.value = "";
+        serviceBar?.classList.remove("search-open");
+        searchArea?.classList.remove("active");
+        searchToggle?.setAttribute("aria-expanded", "false");
+        if (!redirectSearch) searchInput?.dispatchEvent(new Event("input", {{ bubbles: true }}));
+      }};
+
+      searchToggle?.addEventListener("click", openSearch);
+      searchClose?.addEventListener("click", closeSearch);
+
+      if (searchInput && !redirectSearch) {{
+        const params = new URLSearchParams(window.location.search);
+        const query = params.get("q") || "";
+        if (query) {{
+          openSearch();
+          searchInput.value = query;
+          searchInput.dispatchEvent(new Event("input", {{ bubbles: true }}));
+        }}
+      }}
+
+      if (searchInput && redirectSearch) {{
+        searchInput.addEventListener("keydown", (event) => {{
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          const query = searchInput.value.trim();
+          window.location.href = query ? `gps.html?q=${{encodeURIComponent(query)}}` : "gps.html";
+        }});
+      }}
+    }})();
+  </script>"""
 
 
 def _directory_script() -> str:
@@ -1169,6 +1236,198 @@ def _base_styles() -> str:
       letter-spacing: 0;
     }
     a { color: inherit; }
+    button,
+    input {
+      font: inherit;
+    }
+    .app-header {
+      display: grid;
+      gap: 0;
+      padding: 2px 0 10px;
+    }
+    .service-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 40px;
+    }
+    .service-bar.search-open {
+      gap: 8px;
+    }
+    .service-bar.search-open .service-title,
+    .service-bar.search-open .service-actions {
+      display: none;
+    }
+    .service-title {
+      display: block;
+      min-width: 0;
+      margin: 0;
+      color: var(--text);
+      font-size: 21px;
+      line-height: 1.1;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+    .service-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .header-icon {
+      display: inline-flex;
+      position: relative;
+      width: 38px;
+      height: 38px;
+      flex: 0 0 38px;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .search-toggle::before {
+      width: 14px;
+      height: 14px;
+      border: 2px solid currentColor;
+      border-radius: 50%;
+      background: transparent;
+      content: "";
+    }
+    .search-toggle::after {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      width: 7px;
+      height: 2px;
+      border-radius: 2px;
+      background: currentColor;
+      content: "";
+      transform: rotate(45deg);
+    }
+    .search-area {
+      display: none;
+      min-width: 0;
+      flex: 1 1 auto;
+      gap: 8px;
+      padding: 0;
+      background: transparent;
+    }
+    .search-area.active {
+      display: flex;
+    }
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      height: 38px;
+      padding: 0 13px;
+      border-radius: 12px;
+      background: var(--surface-muted);
+    }
+    .search-box span {
+      position: relative;
+      width: 13px;
+      height: 13px;
+      flex: 0 0 auto;
+      border: 2px solid var(--tertiary);
+      border-radius: 50%;
+    }
+    .search-box span::after {
+      position: absolute;
+      right: -5px;
+      bottom: -3px;
+      width: 6px;
+      height: 2px;
+      border-radius: 2px;
+      background: var(--tertiary);
+      content: "";
+      transform: rotate(45deg);
+    }
+    .search-box input {
+      width: 100%;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text);
+      font-size: 16px;
+    }
+    .search-box input::placeholder {
+      color: #8e8e93;
+    }
+    .search-close {
+      display: inline-flex;
+      position: relative;
+      width: 38px;
+      height: 38px;
+      flex: 0 0 38px;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 50%;
+      background: var(--surface);
+      color: var(--secondary);
+      cursor: pointer;
+    }
+    .search-close::before,
+    .search-close::after {
+      position: absolute;
+      width: 16px;
+      height: 2px;
+      border-radius: 2px;
+      background: currentColor;
+      content: "";
+    }
+    .search-close::before {
+      transform: rotate(45deg);
+    }
+    .search-close::after {
+      transform: rotate(-45deg);
+    }
+    .brief-section-tabs {
+      display: flex;
+      min-height: 36px;
+      align-items: center;
+      gap: 18px;
+      margin: 0 -14px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .brief-section-tabs::after {
+      content: "";
+      flex: 1 1 auto;
+    }
+    .brief-section-tab {
+      display: inline-flex;
+      position: relative;
+      height: 36px;
+      align-items: center;
+      align-self: stretch;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      background: transparent;
+      color: var(--secondary);
+      font-size: 13px;
+      line-height: 1;
+      font-weight: 600;
+      letter-spacing: 0;
+      white-space: nowrap;
+      cursor: default;
+      -webkit-text-fill-color: currentColor;
+    }
+    .brief-section-tab.active {
+      border-bottom-color: var(--text);
+      color: var(--text);
+      font-weight: 800;
+    }
+    .brief-section-tab:disabled {
+      opacity: 1;
+      color: #b8b8bd;
+      -webkit-text-fill-color: currentColor;
+    }
     .kpef-product-header {
       display: flex;
       align-items: center;
@@ -2650,10 +2909,8 @@ def _base_styles() -> str:
         margin-bottom: 16px;
       }
       .gp-controls {
-        grid-template-columns: minmax(0, 1fr) 190px 140px;
-      }
-      .gp-controls input {
-        grid-column: auto;
+        grid-template-columns: 190px 140px;
+        justify-content: start;
       }
       .gp-directory-head {
         grid-template-columns: 48px minmax(230px, 1.15fr) minmax(130px, 0.56fr) minmax(300px, 1.34fr) minmax(170px, 0.74fr);

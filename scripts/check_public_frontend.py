@@ -91,6 +91,17 @@ def bottom_nav_labels(html: str) -> list[str]:
     return [strip_tags(item) for item in items if strip_tags(item)]
 
 
+def gp_service_tabs(html: str) -> list[str]:
+    match = re.search(r'<nav class="brief-section-tabs[^"]*"[^>]*>(.*?)</nav>', html, re.DOTALL)
+    if not match:
+        return []
+    return [
+        strip_tags(item)
+        for item in re.findall(r"<button\b[^>]*>(.*?)</button>", match.group(1), re.DOTALL)
+        if strip_tags(item)
+    ]
+
+
 def check_bottom_nav() -> list[str]:
     checked: list[str] = []
     for relative_path in PUBLIC_HTML_FILES:
@@ -185,6 +196,14 @@ def check_generated_gp_contract() -> list[str]:
     ]
     violations = [needle for needle in forbidden if needle in gps_html]
 
+    if '<header class="kpef-product-header' in gps_html:
+        violations.append("kpef-product-header")
+    if '<strong class="service-title">GP</strong>' not in gps_html:
+        raise CheckFailure("GP directory service title missing")
+    tabs = gp_service_tabs(gps_html)
+    if tabs != ["MARKET", "GP", "PEOPLE"]:
+        raise CheckFailure(f"GP service tabs mismatch: expected MARKET/GP/PEOPLE, got {tabs}")
+
     detail_paths = sorted(NEWSLETTER_SITE_DIR.glob("gp-*.html"))[:3]
     for detail_path in detail_paths:
         html = detail_path.read_text(encoding="utf-8")
@@ -196,6 +215,10 @@ def check_generated_gp_contract() -> list[str]:
         for needle in forbidden:
             if needle in html:
                 violations.append(f"{detail_path.name}:{needle}")
+        if '<header class="kpef-product-header' in html:
+            violations.append(f"{detail_path.name}:kpef-product-header")
+        if gp_service_tabs(html) != ["MARKET", "GP", "PEOPLE"]:
+            violations.append(f"{detail_path.name}:gp-service-tabs")
 
     if violations:
         raise CheckFailure(f"Forbidden generated GP wording/markup: {', '.join(violations)}")
