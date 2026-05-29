@@ -1968,9 +1968,19 @@ button, input { font: inherit; }
   margin: 0 0 28px;
 }
 .newsletter-only .section-block + .section-block {
+  position: relative;
   margin-top: 26px;
-  padding-top: 18px;
-  border-top: 8px solid #f7f7f8;
+  padding-top: 26px;
+}
+.newsletter-only .section-block + .section-block::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 100vw;
+  height: 8px;
+  transform: translateX(-50%);
+  background: #f7f7f8;
 }
 .section-title {
   display: flex;
@@ -1996,14 +2006,6 @@ button, input { font: inherit; }
   line-height: 1.2;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-.newsletter-only .section-title span {
-  min-height: 20px;
-  border-radius: 999px;
-  padding: 3px 7px;
-  background: #f7f7f8;
-  color: #77777c;
-  font-weight: 650;
 }
 .cell-list {
   margin: 0;
@@ -3090,9 +3092,6 @@ def service_js() -> str:
       const title = document.createElement("h2");
       title.className = "section-title";
       title.textContent = section || "뉴스";
-      const count = document.createElement("span");
-      count.textContent = `${groupItems.length.toLocaleString("ko-KR")}건`;
-      title.append(count);
       const list = document.createElement("ul");
       list.className = "cell-list";
       groupItems.forEach((article) => list.append(makeCell(article)));

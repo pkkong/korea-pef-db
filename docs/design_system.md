@@ -114,10 +114,11 @@ Use the newsletter screen as the reference for shared public UI polish.
   are low-contrast text tabs. The tab row uses a thin neutral baseline, and the
   selected tab uses a clearly visible black underline.
 - Date control: compact centered pill, no decorative horizontal side lines.
-- Section label: visible but restrained. Current reference is about 13px, 700
-  weight, with count at about 11.5px. When category separation is weak, prefer a
-  clearer section label, a small neutral count badge, and a quiet neutral band
-  between sections rather than wrapping each category in a card.
+- Section label: visible but restrained. Current reference is about 14px, 760
+  weight. When category separation is weak, prefer a
+  clearer section label and a quiet full-bleed neutral band between sections
+  rather than wrapping each category in a card. Do not show section count badges
+  in the public newsletter list.
 - Article title: about 15px, medium-bold, two-line clamp.
 - Publisher/meta: secondary information, visually lower than title.
 - Publisher icon: circular 30px slot.
