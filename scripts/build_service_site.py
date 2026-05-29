@@ -1212,7 +1212,6 @@ def render_app(
           <button class="search-close" id="searchClose" type="button" aria-label="검색 닫기"></button>
         </section>
         <div class="service-actions" aria-label="브리프 도구">
-          <button class="header-icon saved-toggle" type="button" data-view="saved" aria-label="저장한 기사 보기"></button>
           <button class="header-icon search-toggle" id="searchToggle" type="button" aria-label="검색 열기" aria-expanded="false"></button>
         </div>
       </div>
@@ -1245,13 +1244,6 @@ def render_app(
         <div id="todayList"></div>
       </section>
 
-      <section id="savedView" class="view" aria-label="저장한 기사">
-        <div class="empty-state" id="savedEmpty">
-          <strong>저장한 기사가 없습니다</strong>
-          <span>나중에 볼 기사는 오른쪽 버튼으로 저장합니다.</span>
-        </div>
-        <div id="savedList"></div>
-      </section>
     </main>
 
 {lp_detail_markup}
@@ -1551,9 +1543,9 @@ button, input { font: inherit; }
   justify-items: center;
   gap: 1px;
   border-radius: 999px;
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
+  background: var(--text);
+  color: var(--surface);
+  box-shadow: none;
 }
 .date-current span {
   font-size: 15px;
@@ -1561,7 +1553,7 @@ button, input { font: inherit; }
   font-weight: 680;
 }
 .date-current small {
-  color: var(--secondary);
+  color: rgba(255,255,255,0.66);
   font-size: 11px;
   line-height: 1.1;
   font-weight: 500;
@@ -1617,22 +1609,6 @@ button, input { font: inherit; }
   display: inline-flex;
   align-items: center;
   gap: 2px;
-}
-.saved-toggle {
-  color: var(--secondary);
-}
-.saved-toggle::before {
-  width: 15px;
-  height: 19px;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
-}
-.saved-toggle.active {
-  color: var(--text);
-}
-.saved-toggle.active::before {
-  -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='black'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='black'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 .search-toggle::before {
   width: 14px;
@@ -1965,12 +1941,12 @@ button, input { font: inherit; }
 .view.active { display: block; }
 .section-block { margin: 8px 0 18px; }
 .newsletter-only .section-block {
-  margin: 0 0 28px;
+  margin: 0 0 22px;
 }
 .newsletter-only .section-block + .section-block {
   position: relative;
-  margin-top: 26px;
-  padding-top: 26px;
+  margin-top: 18px;
+  padding-top: 20px;
 }
 .newsletter-only .section-block + .section-block::before {
   content: "";
@@ -2023,10 +1999,10 @@ button, input { font: inherit; }
 }
 .clip-cell {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 38px;
+  grid-template-columns: 32px minmax(0, 1fr);
   gap: 12px;
   min-height: 72px;
-  align-items: center;
+  align-items: start;
   padding: 10px 10px 10px 10px;
   border-bottom: 1px solid rgba(0,0,0,0.055);
 }
@@ -2041,9 +2017,10 @@ button, input { font: inherit; }
 .publisher-icon {
   display: inline-flex;
   position: relative;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   align-items: center;
+  align-self: start;
   justify-content: center;
   overflow: hidden;
   border: 1px solid rgba(0,0,0,0.12);
@@ -2053,10 +2030,11 @@ button, input { font: inherit; }
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0;
+  margin-top: 2px;
 }
 .publisher-icon img {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -2193,32 +2171,6 @@ button, input { font: inherit; }
 .cell-tags.expanded .tag-toggle {
   background: #f7f7f8;
   color: #5f6368;
-}
-.save-button {
-  display: inline-flex;
-  width: 38px;
-  height: 38px;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--tertiary);
-  cursor: pointer;
-}
-.save-button::before {
-  content: "";
-  width: 16px;
-  height: 20px;
-  background: currentColor;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
-}
-.save-button.saved { color: var(--blue); background: rgba(0, 122, 255, 0.09); }
-.save-button.saved::before {
-  content: "";
-  -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='black'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='black'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 .empty-state {
   display: none;
@@ -2432,8 +2384,7 @@ button, input { font: inherit; }
     gap: 18px;
     align-items: start;
   }
-  #todayView,
-  #savedView {
+  #todayView {
     grid-column: 1;
     grid-row: 1;
   }
@@ -2473,17 +2424,15 @@ button, input { font: inherit; }
     margin-right: auto;
     margin-left: auto;
   }
-  .newsletter-only #todayView,
-  .newsletter-only #savedView {
+  .newsletter-only #todayView {
     grid-column: auto;
     grid-row: auto;
   }
-  .newsletter-only #todayList,
-  .newsletter-only #savedList {
+  .newsletter-only #todayList {
     display: block;
   }
   .newsletter-only .section-block {
-    margin: 0 0 30px;
+    margin: 0 0 24px;
   }
   .newsletter-only .bottom-nav,
   .bottom-nav.newsletter-only {
@@ -2498,7 +2447,6 @@ def service_js() -> str:
   const archive = Array.isArray(window.KPEF_DAILY_ARCHIVE) ? window.KPEF_DAILY_ARCHIVE : [];
   const lpMonitor = Array.isArray(window.KPEF_LP_MONITOR) ? window.KPEF_LP_MONITOR : [];
   const legacyArticles = Array.isArray(window.KPEF_ARTICLES) ? window.KPEF_ARTICLES : [];
-  const storageKey = "kpef.saved.urls";
   const searchInput = document.getElementById("clipSearch");
   const searchArea = document.getElementById("searchArea");
   const searchToggle = document.getElementById("searchToggle");
@@ -2512,10 +2460,7 @@ def service_js() -> str:
   const dateNext = document.getElementById("dateNext");
   const dateRail = document.getElementById("briefDateRail");
   const todayList = document.getElementById("todayList");
-  const savedList = document.getElementById("savedList");
-  const savedEmpty = document.getElementById("savedEmpty");
   const todayView = document.getElementById("todayView");
-  const savedView = document.getElementById("savedView");
   const lpMonitorPanel = document.getElementById("lpMonitorPanel");
   const lpMonitorList = document.getElementById("lpMonitorList");
   const lpDetailBackdrop = document.getElementById("lpDetailBackdrop");
@@ -2526,14 +2471,6 @@ def service_js() -> str:
   const navItems = [...document.querySelectorAll("[data-view]")];
   const showLpMonitor = lpMonitor.length > 0 && Boolean(lpMonitorPanel);
 
-  const loadSaved = () => {
-    try {
-      return new Set(JSON.parse(localStorage.getItem(storageKey) || "[]"));
-    } catch {
-      return new Set();
-    }
-  };
-
   const queryDate = new URLSearchParams(window.location.search).get("date");
   const initialDate = queryDate || (dateSelect && dateSelect.value) || (dateInput && dateInput.value) || "";
   let activeBrief = archive.find((brief) => brief.reportDate === initialDate) || archive[0] || {
@@ -2543,12 +2480,6 @@ def service_js() -> str:
     articles: legacyArticles
   };
   let articles = Array.isArray(activeBrief.articles) ? activeBrief.articles : [];
-  let saved = loadSaved();
-  let currentView = window.location.hash === "#saved" ? "saved" : "today";
-
-  const persistSaved = () => {
-    localStorage.setItem(storageKey, JSON.stringify([...saved]));
-  };
 
   const setSearchOpen = (open) => {
     if (!searchArea) return;
@@ -3028,19 +2959,7 @@ def service_js() -> str:
       main.append(chips);
     }
 
-    const save = document.createElement("button");
-    save.className = "save-button";
-    save.type = "button";
-    save.dataset.url = article.url;
-    const updateSaveState = () => {
-      const isSaved = saved.has(article.url);
-      save.classList.toggle("saved", isSaved);
-      save.setAttribute("aria-label", isSaved ? "저장 해제" : "저장");
-      save.title = isSaved ? "저장 해제" : "저장";
-    };
-    updateSaveState();
-
-    item.append(mark, main, save);
+    item.append(mark, main);
     return item;
   };
 
@@ -3101,21 +3020,6 @@ def service_js() -> str:
     requestAnimationFrame(updateTagGroups);
   };
 
-  const renderSaved = () => {
-    const query = queryText();
-    const savedItems = allArchiveArticles().filter((article) => saved.has(article.url));
-    const items = query ? savedItems.filter((article) => articleMatches(article, query)) : savedItems;
-    savedList.replaceChildren();
-    savedEmpty.classList.toggle("visible", !items.length);
-    if (!items.length) {
-      const title = savedEmpty.querySelector("strong");
-      const body = savedEmpty.querySelector("span");
-      if (title) title.textContent = query && savedItems.length ? "저장한 기사 중 검색 결과가 없습니다" : "저장한 기사가 없습니다";
-      if (body) body.textContent = query && savedItems.length ? "검색어를 줄여 다시 확인합니다." : "나중에 볼 기사는 오른쪽 버튼으로 저장합니다.";
-    }
-    if (items.length) renderGrouped(savedList, items);
-  };
-
   const render = () => {
     if (skeleton) skeleton.classList.add("hidden");
     const newsItems = filtered();
@@ -3123,22 +3027,17 @@ def service_js() -> str:
     updateBriefChrome();
     renderLpMonitor(noticeItems);
     renderGrouped(todayList, newsItems);
-    renderSaved();
   };
 
   const setView = (view) => {
-    currentView = view;
-    todayView.classList.toggle("active", view === "today");
-    savedView.classList.toggle("active", view === "saved");
+    todayView.classList.toggle("active", true);
     navItems.forEach((item) => {
-      const isBriefTab = item.dataset.view === "today";
-      item.classList.toggle("active", item.dataset.view === view || (view === "saved" && isBriefTab));
+      item.classList.toggle("active", item.dataset.view === "today");
     });
-    if (view === "saved") renderSaved();
   };
 
   const setViewFromHash = () => {
-    setView(window.location.hash === "#saved" ? "saved" : "today");
+    setView("today");
   };
 
   document.addEventListener("click", (event) => {
@@ -3165,21 +3064,6 @@ def service_js() -> str:
       setView("today");
       render();
       searchInput.focus();
-      return;
-    }
-
-    const saveButton = event.target.closest(".save-button");
-    if (saveButton) {
-      const url = saveButton.dataset.url;
-      if (saved.has(url)) saved.delete(url);
-      else saved.add(url);
-      persistSaved();
-      document.querySelectorAll(`.save-button[data-url="${CSS.escape(url)}"]`).forEach((button) => {
-        button.classList.toggle("saved", saved.has(url));
-        button.setAttribute("aria-label", saved.has(url) ? "저장 해제" : "저장");
-        button.title = saved.has(url) ? "저장 해제" : "저장";
-      });
-      if (currentView === "saved") renderSaved();
       return;
     }
 

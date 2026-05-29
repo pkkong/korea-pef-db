@@ -113,7 +113,9 @@ Use the newsletter screen as the reference for shared public UI polish.
 - Top tabs: `Daily / Weekly / 출자공고` stay as future placeholders. Inactive tabs
   are low-contrast text tabs. The tab row uses a thin neutral baseline, and the
   selected tab uses a clearly visible black underline.
-- Date control: compact centered pill, no decorative horizontal side lines.
+- Date control: compact centered pill, no decorative horizontal side lines. On
+  the newsletter, the active date may be the single black emphasis element with
+  white text.
 - Section label: visible but restrained. Current reference is about 14px, 760
   weight. When category separation is weak, prefer a
   clearer section label and a quiet full-bleed neutral band between sections
@@ -121,13 +123,15 @@ Use the newsletter screen as the reference for shared public UI polish.
   in the public newsletter list.
 - Article title: about 15px, medium-bold, two-line clamp.
 - Publisher/meta: secondary information, visually lower than title.
-- Publisher icon: circular 30px slot.
+- Publisher icon: circular 32px slot, aligned toward the top of the article row
+  rather than vertically centered.
 - Tags: one-line by default. Use a small text-like `더보기 N` control when tags
   overflow. Do not use dark pill buttons for hidden tags.
 - Row dividers: sparse 1px neutral separators only between rows. Avoid stacked
   top borders, date separator lines, and last-row borders.
-- Article save is a local article action. The saved-list entry point is the
-  header bookmark, not the bottom nav.
+- Article-row bookmarks are not shown in the public newsletter list. Avoid
+  right-side save icons unless saved items become a cross-service feature with a
+  clear destination.
 
 ## LP And GP Application
 
