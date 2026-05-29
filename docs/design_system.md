@@ -196,6 +196,33 @@ Use the newsletter screen as the reference for shared public UI polish.
   operator-facing explanations.
 - Use page-local filters and sorting. Do not let a large list become endless
   unstructured scrolling.
+- GP directory rows should stay compact: circular logo, GP name, representative
+  or homepage on desktop, rank/commitment facts, and news/LP connection counts.
+  Do not add repeated `상세 프로필`, row-level accordions, or right-side utility
+  icons unless the action has a clear cross-service destination.
+- GP detail pages should use quiet fact matrices and linked history/news lists.
+  Keep the order as identity, operating facts, fund history, LP connections,
+  deal/news context, and peer links.
+
+## GP Reference Pattern
+
+- GP must reuse the newsletter public shell tokens: white page background,
+  neutral text, `#e5e5e5` dividers, circular CI/logo slots, and the unified
+  bottom nav.
+- GP directory rows should behave like a compact data table. Mobile keeps
+  logo/name/rank-or-amount visible; desktop may add representative/homepage,
+  fund metrics, news, deal, and LP counts.
+- Do not show repeated row actions such as `상세 프로필` or vague actions such as
+  `보기` when the GP name already links to the profile.
+- Avoid pill-heavy metadata in GP rows. Category, verification, and
+  public/private style attributes should be quiet filters or detail facts, not
+  prominent row badges.
+- GP detail pages should use a simple identity header, fact matrix, fund history,
+  LP connection, deal/news tables, and quiet disclaimer text.
+- Public GP screens must not expose internal labels such as `AI-generated`,
+  `operator`, `proxy`, `research`, `verification`, or `source/evidence`. AI as a
+  quoted news topic or industry term is allowed. Use public labels such as
+  `자료 확인`, `운용 현황`, `약정액 기준`, `출자 연결`, and `관련 뉴스`.
 
 ## Wiki Application
 

@@ -15,7 +15,6 @@ from daily_news_common import normalize_url
 
 REQUIRED_TABLES = ("gp_profile", "gp_house", "news_entity_link", "news_document")
 TOP_GP_PAGE_LIMIT = 120
-DIRECTORY_NEWS_LIMIT = 2
 PROFILE_NEWS_LIMIT = 12
 PROFILE_FUND_LIMIT = 10
 PROFILE_LP_SIGNAL_LIMIT = 8
@@ -444,14 +443,7 @@ def _render_empty_directory(report_date: str, message: str) -> str:
 
 
 def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_ids: set[str]) -> str:
-    active_count = sum(1 for gp in gps if _as_bool(gp.get("active_in_latest_period")))
     verified_count = sum(1 for gp in gps if _is_verified(gp.get("verification_level")))
-    news_link_count = sum(int(gp.get("news_count") or 0) for gp in gps)
-    deal_signal_count = sum(int(gp.get("deal_news_count") or 0) for gp in gps)
-    lp_signal_count = sum(int(gp.get("lp_signal_count") or 0) for gp in gps)
-    total_aum = sum(_as_float(gp.get("latest_primary_aum_proxy_krw_100mn")) for gp in gps)
-    top20 = [gp for gp in gps if 0 < _as_float(gp.get("latest_primary_rank")) <= 20]
-    top20_aum = sum(_as_float(gp.get("latest_primary_aum_proxy_krw_100mn")) for gp in top20)
     cards = "\n".join(_render_gp_card(gp, str(gp["source_gp_id"]) in top_ids) for gp in gps)
 
     return f"""<!doctype html>
@@ -468,17 +460,9 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
     {_render_top_nav(active="gps")}
     <header class="gp-hero">
       <div class="gp-hero-copy">
-        <span>GP 디렉토리</span>
-        <h1>국내 PEF GP 디렉토리</h1>
-        <p>금감원 PEF 운용 현황과 공개 뉴스·LP 출자 이력을 기준으로 상위 GP의 운용 규모, 펀드 이력, 출자 연결, 관련 뉴스를 한 화면에서 탐색합니다.</p>
-      </div>
-      <div class="gp-kpis" aria-label="GP 디렉토리 요약">
-        <div><span>전체 GP</span><strong>{len(gps):,}</strong></div>
-        <div><span>최신 운용 GP</span><strong>{active_count:,}</strong></div>
-        <div><span>상위 20 약정액</span><strong>{_format_krw_100mn(top20_aum)}</strong></div>
-        <div><span>전체 약정액</span><strong>{_format_krw_100mn(total_aum)}</strong></div>
-        <div><span>뉴스/딜 기사</span><strong>{news_link_count:,}/{deal_signal_count:,}</strong></div>
-        <div><span>LP 출자 이력</span><strong>{lp_signal_count:,}</strong></div>
+        <span>GP</span>
+        <h1>PEF 운용사</h1>
+        <p>운용 규모, 펀드 이력, 출자 연결, 관련 뉴스를 한 화면에서 봅니다.</p>
       </div>
     </header>
 
@@ -508,23 +492,22 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
         <button class="active" type="button" data-filter="all">전체</button>
         <button type="button" data-filter="active">최신 운용</button>
         <button type="button" data-filter="top">상위 프로필</button>
-        <button type="button" data-filter="verified">공식 근거</button>
+        <button type="button" data-filter="verified">자료 확인</button>
         <button type="button" data-filter="news">뉴스 있음</button>
         <button type="button" data-filter="deal">딜 관련</button>
         <button type="button" data-filter="lp">출자 연결</button>
         <button type="button" data-filter="homepage">홈페이지 있음</button>
       </div>
-      <p>상위 20 GP {len(top20):,}개 · 개별 프로필 {len(top_ids):,}개 · 공식 근거 {verified_count:,}개 · 기준일 {_e(report_date)}</p>
+      <p class="gp-control-meta">상위 프로필 {len(top_ids):,}개 · 자료 확인 {verified_count:,}개 · 기준일 {_e(report_date)}</p>
     </section>
 
     <section class="gp-directory-table" aria-label="GP 목록">
       <div class="gp-directory-head" aria-hidden="true">
         <span></span>
         <span>운용사명</span>
-        <span>대표/홈페이지</span>
-        <span>운용 현황</span>
-        <span>뉴스·출자</span>
-        <span>자료</span>
+        <span>기본 정보</span>
+        <span>순위 / 약정액</span>
+        <span>뉴스 / LP</span>
       </div>
       <div class="gp-directory" id="gpDirectory">
 {cards}
@@ -564,10 +547,8 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
     representative_html = f"<span>대표 {_e(representative)}</span>" if representative else ""
     homepage = _safe_url(gp.get("homepage_url"))
     avatar_markup = _avatar_markup(homepage, avatar_label, name)
-    verification = _verification_label(gp.get("verification_level"))
     category = _category_label(gp.get("company_category"))
-    active_label = "최신 운용 현황" if _as_bool(gp.get("active_in_latest_period")) else ""
-    top20_label = "상위 20" if 0 < _as_float(gp.get("latest_primary_rank")) <= 20 else ""
+    active_label = "운용 중" if _as_bool(gp.get("active_in_latest_period")) else ""
     profile_url = _gp_page_name(gp_id) if has_profile_page else ""
     title = (
         f'<a href="{_e(profile_url)}">{_e(name)}</a>'
@@ -587,10 +568,6 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
         if representative_html or homepage_link
         else ""
     )
-    news_html = _render_compact_news(gp.get("news", [])[:DIRECTORY_NEWS_LIMIT])
-    if not news_html:
-        news_html = '<p class="gp-no-news">최근 공개 뉴스가 없습니다.</p>'
-    data_note = _short_limit_note(gp)
     search_blob = " ".join(
         [
             name,
@@ -632,6 +609,7 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
     status_html = f"<span>{_e(status_label)}</span>" if status_label else ""
 
     return f"""      <article class="gp-card"
+        data-url="{_e(profile_url)}"
         data-search="{_e(search_blob)}"
         data-active="{1 if _as_bool(gp.get("active_in_latest_period")) else 0}"
         data-top="{1 if has_profile_page else 0}"
@@ -653,9 +631,7 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
             <h2>{title}</h2>
           </div>
           <div class="gp-chips">
-            {_render_chip(top20_label, "strong")}
             {_render_chip(active_label)}
-            {_render_chip(verification)}
             {_render_chip(category)}
           </div>
         </div>
@@ -667,14 +643,6 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
           <span>펀드 <strong>{fund_signal_count:,}</strong></span>
         </div>
 {meta_line_html}
-        <details class="gp-card-extra">
-          <summary>보기</summary>
-          <div class="gp-news-mini">
-            <strong>관련 뉴스</strong>
-            {news_html}
-          </div>
-          <p class="gp-limit-note">{_e(data_note)}</p>
-        </details>
       </article>"""
 
 
@@ -699,8 +667,6 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
     representative_html = f"<span>대표 {_e(representative)}</span>" if representative else ""
     category = _category_label(gp.get("company_category"))
     category_html = f"<span>{_e(category)}</span>" if category else ""
-    verification = _verification_label(gp.get("verification_level"))
-    verification_html = f"        <strong>{_e(verification)}</strong>" if verification else ""
     description = _profile_summary(gp)
     description_html = f"        <p>{_e(description)}</p>" if description else ""
     news_rows = _render_news_timeline(gp.get("news", [])[:PROFILE_NEWS_LIMIT])
@@ -740,7 +706,6 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
 {description_html}
       </div>
       <aside class="gp-detail-card" aria-label="핵심 정보">
-{verification_html}
         {category_html}
         {representative_html}
         {homepage_link}
@@ -766,7 +731,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
         </dl>
       </article>
       <article class="gp-panel">
-        <h2>자료</h2>
+        <h2>운용 정보</h2>
         <dl class="gp-fact-list">
 {coverage_rows}
         </dl>
@@ -845,7 +810,7 @@ def _render_profile_facts(gp: dict[str, object], homepage_link: str) -> str:
 def _render_coverage_facts(gp: dict[str, object]) -> str:
     market_share = _format_pct(gp.get("latest_primary_market_share_pct"))
     facts = [
-        ("근거 수준", _verification_label(gp.get("verification_level"))),
+        ("자료 확인", _verification_label(gp.get("verification_level"))),
         ("최신 순위", _format_rank(gp.get("latest_primary_rank"))),
         ("누적 순위", _format_rank(gp.get("cumulative_primary_rank"))),
         ("약정액 점유율", market_share),
@@ -860,9 +825,7 @@ def _render_signal_bar(gp: dict[str, object]) -> str:
     news_count = int(gp.get("news_count") or 0)
     deal_count = int(gp.get("deal_news_count") or 0)
     lp_count = int(gp.get("lp_signal_count") or 0)
-    fund_count = int(gp.get("active_fund_signal_count") or 0)
     return f"""    <section class="gp-signal-bar" aria-label="관련 정보 요약">
-      <div><span>운용 펀드</span><strong>{fund_count:,}</strong><em>최신 기준</em></div>
       <div><span>출자 연결</span><strong>{lp_count:,}</strong><em>공고·선정 이력</em></div>
       <div><span>딜 관련</span><strong>{deal_count:,}</strong><em>딜 관련 기사</em></div>
       <div><span>관련 뉴스</span><strong>{news_count:,}</strong><em>관련 기사</em></div>
@@ -924,25 +887,6 @@ def _render_lp_signal_rows(signal_rows: list[dict[str, object]]) -> str:
           </article>"""
         )
     return '<div class="gp-lp-list">\n' + "\n".join(rows) + "\n        </div>"
-
-
-def _render_compact_news(news_rows: list[dict[str, object]]) -> str:
-    if not news_rows:
-        return ""
-    items = []
-    for item in news_rows:
-        title = _clean(item.get("title")) or "뉴스"
-        url = _safe_url(item.get("source_url"))
-        publisher = _clean(item.get("publisher")) or _clean(item.get("source_domain")) or "언론"
-        date = _short_date(item.get("published_at") or item.get("discovered_at"))
-        linked_title = (
-            f'<a href="{_e(url)}" target="_blank" rel="noreferrer">{_e(title)}</a>'
-            if url
-            else _e(title)
-        )
-        meta = _join_values([publisher, date])
-        items.append(f"<p><span>{_e(meta)}</span>{linked_title}</p>")
-    return "\n".join(items)
 
 
 def _render_news_timeline(news_rows: list[dict[str, object]], empty_label: str = "최근 공개 뉴스가 없습니다.") -> str:
@@ -1059,15 +1003,11 @@ def _render_top_nav(active: str = "") -> str:
         <span class="kpef-brand-mark" aria-hidden="true">K</span>
         <strong>Korea PEF Intelligence</strong>
       </a>
-      <div class="kpef-product-actions">
-        <a class="kpef-icon-link kpef-icon-search" href="#gpSearch" aria-label="검색"></a>
-        <a class="kpef-icon-link kpef-icon-menu" href="index.html" aria-label="홈"></a>
-      </div>
     </header>"""
 
 
 def _render_bottom_nav() -> str:
-    return """  <nav class="bottom-nav" aria-label="하단 메뉴">
+    return """  <nav class="bottom-nav newsletter-only" aria-label="하단 메뉴">
     <a href="index.html">
       <span aria-hidden="true" class="nav-dot nav-icon-brief"></span>
       <strong>브리프</strong>
@@ -1176,6 +1116,21 @@ def _directory_script() -> str:
           apply({ resetPage: true });
         });
       });
+      cards.forEach((card) => {
+        const url = card.dataset.url || "";
+        if (!url) return;
+        card.tabIndex = 0;
+        card.setAttribute("role", "link");
+        card.addEventListener("click", (event) => {
+          if (event.target.closest("a, button, input, select")) return;
+          window.location.href = url;
+        });
+        card.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          window.location.href = url;
+        });
+      });
       prevPage?.addEventListener("click", () => {
         currentPage -= 1;
         apply();
@@ -1195,17 +1150,16 @@ def _directory_script() -> str:
 def _base_styles() -> str:
     return """  <style>
     :root {
-      --bg: #f7f7f8;
+      --bg: #ffffff;
       --surface: #ffffff;
-      --surface-muted: #f3f4f5;
-      --text: #202124;
-      --secondary: #6b6f76;
-      --tertiary: #9aa0a6;
-      --line: #e0e3e7;
-      --line-strong: #d3d7dc;
-      --accent: #111111;
-      --accent-soft: #f2f2f7;
-      --gold: #111111;
+      --surface-muted: #f7f7f8;
+      --text: #171717;
+      --secondary: #737373;
+      --tertiary: #a3a3a3;
+      --line: #e5e5e5;
+      --line-strong: #d4d4d4;
+      --accent: #171717;
+      --accent-soft: #f5f5f5;
     }
     * { box-sizing: border-box; }
     body {
@@ -1222,11 +1176,13 @@ def _base_styles() -> str:
       align-items: center;
       justify-content: space-between;
       gap: 14px;
-      min-height: 58px;
-      margin: -18px calc((100vw - min(1440px, calc(100vw - 44px))) / -2) 0;
-      padding: calc(max(14px, env(safe-area-inset-top)) + 8px) max(16px, calc((100vw - 1440px) / 2 + 16px)) 12px;
-      background: #1d2130;
-      color: #fff;
+      min-height: 54px;
+      margin: 0 calc(50% - 50vw);
+      padding: calc(max(10px, env(safe-area-inset-top)) + 7px) max(16px, calc((100vw - 1180px) / 2 + 16px)) 11px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.96);
+      color: var(--text);
+      backdrop-filter: blur(18px);
     }
     .kpef-product-brand {
       display: inline-flex;
@@ -1251,120 +1207,17 @@ def _base_styles() -> str:
       height: 28px;
       flex: 0 0 28px;
       place-items: center;
-      border: 1px solid rgba(255,255,255,0.24);
-      border-radius: 8px;
-      background: rgba(255,255,255,0.08);
-      color: #fff;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: var(--surface-muted);
+      color: var(--text);
       font-size: 13px;
       font-weight: 900;
     }
-    .kpef-product-actions {
-      display: flex;
-      flex: 0 0 auto;
-      gap: 10px;
-      align-items: center;
-    }
-    .kpef-icon-link {
-      position: relative;
-      display: inline-grid;
-      width: 34px;
-      height: 34px;
-      place-items: center;
-      border: 0;
-      border-radius: 8px;
-      background: transparent;
-      color: #fff;
-      cursor: pointer;
-    }
-    .kpef-icon-search::before {
-      content: "";
-      width: 16px;
-      height: 16px;
-      border: 2px solid currentColor;
-      border-radius: 50%;
-    }
-    .kpef-icon-search::after {
-      position: absolute;
-      right: 8px;
-      bottom: 8px;
-      width: 8px;
-      height: 2px;
-      border-radius: 2px;
-      background: currentColor;
-      content: "";
-      transform: rotate(45deg);
-    }
-    .kpef-icon-menu::before,
-    .kpef-icon-menu::after {
-      position: absolute;
-      left: 8px;
-      width: 18px;
-      height: 2px;
-      border-radius: 2px;
-      background: currentColor;
-      content: "";
-    }
-    .kpef-icon-menu::before { top: 11px; box-shadow: 0 6px 0 currentColor; }
-    .kpef-icon-menu::after { top: 23px; }
-    .kpef-service-tabs {
-      display: none;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      margin: 0 calc((100vw - min(1440px, calc(100vw - 44px))) / -2) 18px;
-      padding: 0 max(0px, calc((100vw - 1440px) / 2));
-      border-bottom: 1px solid var(--line);
-      background: var(--surface);
-    }
-    .kpef-service-tabs a {
-      display: grid;
-      min-height: 46px;
-      place-items: center;
-      border-bottom: 3px solid transparent;
-      color: var(--tertiary);
-      font-size: 13px;
-      font-weight: 850;
-      text-decoration: none;
-    }
-    .kpef-service-tabs a.active {
-      border-bottom-color: var(--accent);
-      color: var(--text);
-    }
     .gp-shell {
-      width: min(1440px, calc(100% - 44px));
+      width: min(1180px, calc(100% - 32px));
       margin: 0 auto;
-      padding: 18px 0 calc(112px + env(safe-area-inset-bottom));
-    }
-    .gp-top-nav {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 14px;
-      padding: 8px 0;
-      background: rgba(247, 247, 248, 0.94);
-      backdrop-filter: blur(14px);
-    }
-    .gp-top-nav strong { font-size: 13px; }
-    .gp-top-nav span { display: flex; flex-wrap: wrap; gap: 7px; }
-    .gp-top-nav a {
-      display: inline-flex;
-      min-height: 34px;
-      align-items: center;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 7px 11px;
-      background: var(--surface);
-      color: var(--text);
-      font-size: 12px;
-      font-weight: 750;
-      text-decoration: none;
-    }
-    .gp-top-nav a.active {
-      border-color: var(--accent);
-      background: var(--accent-soft);
-      color: var(--text);
+      padding: 0 0 calc(94px + env(safe-area-inset-bottom));
     }
     .bottom-nav {
       position: fixed;
@@ -1373,14 +1226,14 @@ def _base_styles() -> str:
       z-index: 30;
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      width: min(100vw, 1240px);
+      width: min(100vw, 1180px);
       max-width: 100vw;
       transform: translateX(-50%);
-      border-top: 1px solid rgba(21, 32, 43, 0.12);
+      border-top: 1px solid var(--line);
       padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-      background: rgba(248, 250, 251, 0.92);
+      background: rgba(255,255,255,0.94);
       backdrop-filter: blur(22px);
-      box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.08);
+      box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.04);
     }
     .bottom-nav a {
       display: flex;
@@ -1437,16 +1290,12 @@ def _base_styles() -> str:
       -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 4.5h10.5A3.5 3.5 0 0 1 19 8v11.5H8.5A3.5 3.5 0 0 1 5 16V4.5Zm4 4h6M9 12h6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
       mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 4.5h10.5A3.5 3.5 0 0 1 19 8v11.5H8.5A3.5 3.5 0 0 1 5 16V4.5Zm4 4h6M9 12h6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
     }
-    .nav-icon-saved::before {
-      -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
-      mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
-    }
     .bottom-nav .active .nav-dot { opacity: 1; }
     .gp-hero {
       display: grid;
-      gap: 18px;
+      gap: 8px;
       align-items: end;
-      margin: 22px 0 18px;
+      margin: 18px 0 12px;
     }
     .gp-hero-copy, .gp-detail-hero > div { display: grid; gap: 10px; }
     .gp-detail-title-head {
@@ -1492,28 +1341,21 @@ def _base_styles() -> str:
     }
     .gp-detail-logo.has-logo > span { display: none; }
     .gp-detail-logo.fallback-only > span { display: inline; }
-    .gp-detail-logo[data-tone="1"] { border-color: #d7e0ef; background: #f6f8fc; color: #1f3a5f; }
-    .gp-detail-logo[data-tone="2"] { border-color: #d6e6df; background: #f5faf7; color: #1f5a45; }
-    .gp-detail-logo[data-tone="3"] { border-color: #e8ddca; background: #fbf8f2; color: #725a32; }
-    .gp-detail-logo[data-tone="4"] { border-color: #e1d9eb; background: #f8f5fb; color: #4b3b63; }
-    .gp-detail-logo[data-tone="5"] { border-color: #ead8d8; background: #fbf5f5; color: #704044; }
-    .gp-detail-logo[data-tone="6"] { border-color: #d9e3e7; background: #f5f9fa; color: #2d5361; }
+    .gp-detail-logo[data-tone] { border-color: var(--line); background: var(--surface-muted); color: var(--text); }
     .gp-hero-copy > span,
     .gp-detail-title-head div > span,
     .gp-empty > span {
       width: fit-content;
-      border-left: 3px solid var(--accent);
-      padding-left: 8px;
-      color: var(--text);
-      font-size: 12px;
+      color: var(--secondary);
+      font-size: 12.5px;
       font-weight: 850;
     }
     h1 {
       margin: 0;
       color: var(--text);
-      font-size: 28px;
-      font-weight: 850;
-      line-height: 1.12;
+      font-size: 24px;
+      font-weight: 860;
+      line-height: 1.16;
       letter-spacing: 0;
     }
     .gp-hero-copy p,
@@ -1521,17 +1363,14 @@ def _base_styles() -> str:
       max-width: 780px;
       margin: 0;
       color: var(--secondary);
-      font-size: 15px;
-      line-height: 1.65;
+      font-size: 14px;
+      line-height: 1.55;
     }
-    .gp-kpis,
     .gp-detail-kpis {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
     }
-    .gp-hero .gp-kpis { display: none; }
-    .gp-kpis div,
     .gp-detail-kpis div,
     .gp-detail-card,
     .gp-control-panel,
@@ -1542,9 +1381,8 @@ def _base_styles() -> str:
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--surface);
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+      box-shadow: none;
     }
-    .gp-kpis div,
     .gp-detail-kpis div {
       min-width: 0;
       padding: 12px;
@@ -1560,7 +1398,6 @@ def _base_styles() -> str:
       box-shadow: none;
       padding: 13px 0;
     }
-    .gp-kpis span,
     .gp-detail-kpis span,
     .gp-fact-list dt {
       display: block;
@@ -1568,7 +1405,6 @@ def _base_styles() -> str:
       font-size: 11.5px;
       font-weight: 850;
     }
-    .gp-kpis strong,
     .gp-detail-kpis strong {
       display: block;
       margin-top: 5px;
@@ -1580,7 +1416,7 @@ def _base_styles() -> str:
     .gp-control-panel {
       display: grid;
       gap: 10px;
-      margin: 12px 0;
+      margin: 12px 0 14px;
       border: 0;
       border-top: 1px solid var(--line);
       border-bottom: 1px solid var(--line);
@@ -1596,7 +1432,7 @@ def _base_styles() -> str:
       justify-content: space-between;
       color: var(--secondary);
       font-size: 12px;
-      font-weight: 850;
+      font-weight: 800;
     }
     .gp-controls {
       display: grid;
@@ -1607,7 +1443,7 @@ def _base_styles() -> str:
       width: 100%;
       min-height: 42px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 6px;
       padding: 8px 11px;
       background: var(--surface);
       color: var(--text);
@@ -1622,17 +1458,17 @@ def _base_styles() -> str:
     .gp-filter-row button {
       border: 1px solid var(--line);
       border-radius: 999px;
-      padding: 7px 10px;
+      padding: 6px 10px;
       background: var(--surface);
       color: var(--secondary);
       font-size: 12px;
-      font-weight: 850;
+      font-weight: 800;
       cursor: pointer;
     }
     .gp-filter-row button.active {
       border-color: var(--accent);
-      background: var(--accent-soft);
-      color: var(--text);
+      background: var(--accent);
+      color: #fff;
     }
     .gp-control-panel p {
       margin: 0;
@@ -1643,19 +1479,19 @@ def _base_styles() -> str:
     .gp-directory-table {
       overflow: hidden;
       border: 1px solid var(--line-strong);
-      border-radius: 8px;
+      border-radius: 6px;
       background: var(--surface);
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+      box-shadow: none;
     }
     .gp-directory-head {
       display: grid;
       grid-template-columns: 44px minmax(0, 1fr) 132px;
       gap: 10px;
-      align-items: center;
+      align-items: start;
       min-height: 44px;
       padding: 0 10px;
       border-bottom: 1px solid var(--line-strong);
-      background: #f0f1f2;
+      background: var(--surface-muted);
       color: var(--secondary);
       font-size: 12px;
       font-weight: 850;
@@ -1664,8 +1500,7 @@ def _base_styles() -> str:
     }
     .gp-directory-head span:first-child { text-align: center; }
     .gp-directory-head span:nth-child(3),
-    .gp-directory-head span:nth-child(5),
-    .gp-directory-head span:nth-child(6) {
+    .gp-directory-head span:nth-child(5) {
       display: none;
     }
     .gp-directory-head span:nth-child(4) {
@@ -1730,12 +1565,7 @@ def _base_styles() -> str:
     }
     .gp-avatar.has-logo > span { display: none; }
     .gp-avatar.fallback-only > span { display: inline; }
-    .gp-avatar[data-tone="1"] { border-color: #d7e0ef; background: #f6f8fc; color: #1f3a5f; }
-    .gp-avatar[data-tone="2"] { border-color: #d6e6df; background: #f5faf7; color: #1f5a45; }
-    .gp-avatar[data-tone="3"] { border-color: #e8ddca; background: #fbf8f2; color: #725a32; }
-    .gp-avatar[data-tone="4"] { border-color: #e1d9eb; background: #f8f5fb; color: #4b3b63; }
-    .gp-avatar[data-tone="5"] { border-color: #ead8d8; background: #fbf5f5; color: #704044; }
-    .gp-avatar[data-tone="6"] { border-color: #d9e3e7; background: #f5f9fa; color: #2d5361; }
+    .gp-avatar[data-tone] { border-color: var(--line); background: var(--surface-muted); color: var(--text); }
     .gp-card:last-child { border-bottom: 0; }
     .gp-card[hidden] { display: none; }
     .gp-card-main {
@@ -1851,36 +1681,6 @@ def _base_styles() -> str:
       text-decoration: none;
       font-weight: 850;
     }
-    .gp-news-mini {
-      display: grid;
-      gap: 6px;
-    }
-    .gp-card-extra {
-      display: none;
-      border-top: 1px solid var(--line);
-      padding-top: 8px;
-    }
-    .gp-card-extra summary {
-      display: flex;
-      min-height: 28px;
-      align-items: center;
-      justify-content: space-between;
-      color: var(--secondary);
-      font-size: 11.5px;
-      font-weight: 850;
-      cursor: pointer;
-    }
-    .gp-card-extra summary::-webkit-details-marker { display: none; }
-    .gp-card-extra summary::after {
-      content: "";
-      width: 8px;
-      height: 8px;
-      border-right: 1.5px solid currentColor;
-      border-bottom: 1.5px solid currentColor;
-      transform: rotate(45deg) translateY(-2px);
-    }
-    .gp-card-extra[open] summary { margin-bottom: 8px; }
-    .gp-card-extra[open] summary::after { transform: rotate(225deg) translateY(-2px); }
     .gp-pagination {
       display: flex;
       gap: 8px;
@@ -1915,37 +1715,16 @@ def _base_styles() -> str:
       min-width: 72px;
       text-align: center;
     }
-    .gp-news-mini > strong {
-      color: var(--secondary);
-      font-size: 11.5px;
-      font-weight: 850;
-    }
-    .gp-news-mini p,
-    .gp-no-news,
-    .gp-limit-note,
     .gp-empty-note {
       margin: 0;
       color: var(--secondary);
       font-size: 12px;
       line-height: 1.45;
     }
-    .gp-news-mini p span {
-      display: block;
-      margin-bottom: 2px;
-      color: var(--tertiary);
-      font-size: 11px;
-      font-weight: 800;
-    }
-    .gp-news-mini a,
     .gp-news-row a {
       color: var(--text);
       text-decoration: none;
       font-weight: 800;
-    }
-    .gp-limit-note {
-      border-left: 3px solid #e4c88a;
-      padding-left: 8px;
-      margin-top: 8px;
     }
     .gp-disclaimer {
       margin-top: 12px;
@@ -2225,7 +2004,6 @@ def _base_styles() -> str:
     }
     @media (min-width: 760px) {
       .gp-shell { padding-bottom: calc(106px + env(safe-area-inset-bottom)); }
-      .kpef-service-tabs { display: none; }
       .bottom-nav {
         bottom: 18px;
         display: grid;
@@ -2266,7 +2044,6 @@ def _base_styles() -> str:
       .bottom-nav {
         display: grid;
       }
-      .gp-kpis,
       .gp-detail-kpis {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
@@ -2341,12 +2118,6 @@ def _base_styles() -> str:
         grid-column: 5;
         grid-row: 1;
       }
-      .gp-card-extra {
-        grid-column: 6;
-        grid-row: 1;
-        border-top: 0;
-        padding-top: 0;
-      }
       .gp-card h2 {
         font-size: 15px;
       }
@@ -2372,9 +2143,6 @@ def _base_styles() -> str:
       .gp-signal-strip {
         display: grid;
       }
-      .gp-card-extra {
-        display: block;
-      }
       .gp-metrics div,
       .gp-signal-strip span {
         border: 0;
@@ -2389,10 +2157,6 @@ def _base_styles() -> str:
       .gp-metrics dd {
         font-size: 12.5px;
       }
-      .gp-card-extra summary {
-        justify-content: flex-start;
-        gap: 8px;
-      }
     }
     @media (max-width: 620px) {
       .gp-shell {
@@ -2405,21 +2169,16 @@ def _base_styles() -> str:
         padding-right: 16px;
         padding-left: 16px;
       }
-      .gp-top-nav { align-items: start; flex-direction: column; }
       h1 { font-size: 28px; line-height: 1.12; }
       .gp-hero-copy p,
       .gp-detail-hero p { font-size: 14px; line-height: 1.58; }
-      .gp-top-nav span,
       .gp-filter-row {
         width: 100%;
         flex-wrap: wrap;
         overflow-x: visible;
         padding-bottom: 0;
       }
-      .gp-top-nav a,
       .gp-filter-row button { flex: 0 0 auto; }
-      .gp-kpis { display: none; }
-      .gp-kpis,
       .gp-detail-kpis,
       .gp-metrics,
       .gp-signal-strip,
@@ -2442,6 +2201,552 @@ def _base_styles() -> str:
       .nav-dot::before {
         width: 20px;
         height: 20px;
+      }
+    }
+
+    /* Newsletter-aligned GP public UI contract. Keep this block as the final
+       override so GP follows the shared public visual language. */
+    :root {
+      --bg: #ffffff;
+      --surface: #ffffff;
+      --surface-muted: #f7f7f8;
+      --text: #171717;
+      --secondary: #737373;
+      --tertiary: #a3a3a3;
+      --line: #e5e5e5;
+      --line-strong: #d4d4d4;
+      --accent: #171717;
+      --accent-soft: #f7f7f8;
+      --shell: 1080px;
+    }
+    html {
+      overflow-x: hidden;
+      background: var(--surface);
+    }
+    body {
+      background: var(--surface);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { text-decoration: none; }
+    .gp-shell {
+      width: min(calc(100% - 28px), var(--shell));
+      max-width: 100%;
+      padding: max(14px, env(safe-area-inset-top)) 0 calc(88px + env(safe-area-inset-bottom));
+    }
+    .kpef-product-header {
+      min-height: 58px;
+      margin: calc(-1 * max(14px, env(safe-area-inset-top))) -14px 0;
+      padding: calc(max(14px, env(safe-area-inset-top)) + 8px) 16px 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.96);
+      color: var(--text);
+      box-shadow: none;
+      backdrop-filter: blur(18px);
+    }
+    .kpef-product-brand strong {
+      font-size: 16px;
+      font-weight: 850;
+    }
+    .kpef-brand-mark {
+      border-color: var(--line);
+      border-radius: 50%;
+      background: var(--surface-muted);
+      color: var(--text);
+    }
+    .gp-hero,
+    .gp-detail-hero {
+      display: block;
+      margin: 18px 0 14px;
+    }
+    .gp-hero-copy,
+    .gp-detail-hero > div {
+      gap: 7px;
+    }
+    .gp-hero-copy > span,
+    .gp-detail-title-head div > span,
+    .gp-empty > span {
+      border: 0;
+      padding-left: 0;
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 820;
+      line-height: 1.14;
+    }
+    .gp-hero-copy p,
+    .gp-detail-hero p {
+      max-width: 720px;
+      color: var(--secondary);
+      font-size: 14px;
+      line-height: 1.58;
+    }
+    .gp-control-panel {
+      margin: 10px 0 12px;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 12px 0;
+    }
+    .gp-control-head {
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .gp-controls input,
+    .gp-controls select {
+      min-height: 42px;
+      border-color: var(--line);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      box-shadow: none;
+      outline-color: var(--accent);
+    }
+    .gp-filter-row {
+      gap: 6px;
+    }
+    .gp-filter-row button {
+      border-color: var(--line);
+      border-radius: 999px;
+      padding: 6px 9px;
+      background: var(--surface);
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: none;
+    }
+    .gp-filter-row button.active {
+      border-color: var(--text);
+      background: var(--surface);
+      color: var(--text);
+    }
+    .gp-control-meta,
+    .gp-control-panel p {
+      color: var(--secondary);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .gp-directory-table {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      box-shadow: none;
+    }
+    .gp-directory-head {
+      grid-template-columns: 40px minmax(0, 1fr) 90px;
+      min-height: 42px;
+      padding: 0 8px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-muted);
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 700;
+      text-align: right;
+    }
+    .gp-directory-head span:first-child {
+      grid-column: 1;
+    }
+    .gp-directory-head span:nth-child(2) {
+      grid-column: 2;
+      text-align: left;
+    }
+    .gp-directory-head span:nth-child(3),
+    .gp-directory-head span:nth-child(5) {
+      display: none;
+    }
+    .gp-directory-head span:nth-child(4) {
+      grid-column: 3;
+      display: block;
+      font-size: 12px;
+      text-align: right;
+    }
+    .gp-directory-head span:nth-child(4)::after {
+      content: none;
+    }
+    .gp-card {
+      grid-template-columns: 40px minmax(0, 1fr) 90px;
+      align-items: start;
+      min-height: 74px;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 8px;
+      background: var(--surface);
+    }
+    .gp-card:last-child { border-bottom: 0; }
+    .gp-avatar {
+      width: 34px;
+      height: 34px;
+      margin-top: 2px;
+      border-color: var(--line);
+      font-size: 10px;
+      box-shadow: inset 0 0 0 3px #fff;
+    }
+    .gp-avatar img {
+      max-width: 24px;
+      max-height: 24px;
+    }
+    .gp-card-title {
+      gap: 2px;
+    }
+    .gp-card-main {
+      grid-column: 2;
+      grid-row: 1;
+    }
+    .gp-card-title > span,
+    .gp-chips {
+      display: none !important;
+    }
+    .gp-card h2 {
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.36;
+      letter-spacing: 0;
+    }
+    .gp-metrics {
+      grid-column: 3;
+      grid-row: 1;
+      gap: 5px;
+      grid-template-columns: 1fr;
+      text-align: right;
+    }
+    .gp-metrics dt {
+      color: var(--secondary);
+      font-size: 10.5px;
+      font-weight: 650;
+    }
+    .gp-metrics dd {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 740;
+    }
+    .gp-signal-strip {
+      display: none !important;
+    }
+    .gp-meta-line {
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .gp-pagination {
+      margin: 12px 0 2px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .gp-pagination button {
+      min-height: 34px;
+      border-color: var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .gp-breadcrumb {
+      margin: 14px 0 12px;
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .gp-detail-title-head {
+      grid-template-columns: 50px minmax(0, 1fr);
+      gap: 12px;
+    }
+    .gp-detail-logo {
+      width: 50px;
+      height: 50px;
+      border-color: var(--line);
+      box-shadow: inset 0 0 0 4px #fff;
+    }
+    .gp-detail-logo img {
+      max-width: 35px;
+      max-height: 35px;
+    }
+    .gp-detail-card {
+      margin-top: 10px;
+      color: var(--secondary);
+      font-size: 13px;
+      font-weight: 650;
+    }
+    .gp-detail-kpis,
+    .gp-signal-bar {
+      gap: 0;
+      margin: 12px 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .gp-detail-kpis div,
+    .gp-signal-bar div {
+      padding: 12px 0;
+    }
+    .gp-detail-kpis span,
+    .gp-signal-bar span,
+    .gp-signal-bar em,
+    .gp-fact-list dt {
+      color: var(--secondary);
+      font-size: 11.5px;
+      font-weight: 650;
+    }
+    .gp-detail-kpis strong,
+    .gp-signal-bar strong {
+      margin-top: 4px;
+      color: var(--text);
+      font-size: 19px;
+      font-weight: 780;
+    }
+    .gp-panel,
+    .gp-disclaimer {
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+    .gp-panel {
+      padding: 17px 0;
+    }
+    .gp-panel h2,
+    .gp-disclaimer h2 {
+      margin-bottom: 10px;
+      font-size: 16px;
+      font-weight: 780;
+      line-height: 1.35;
+    }
+    .gp-fact-list div,
+    .gp-fund-row,
+    .gp-lp-row,
+    .gp-news-row {
+      border-top-color: var(--line);
+    }
+    .gp-fact-list dd {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 620;
+      line-height: 1.5;
+    }
+    .gp-fund-row h3,
+    .gp-lp-row h3,
+    .gp-news-row h3 {
+      font-size: 14px;
+      font-weight: 720;
+      line-height: 1.45;
+    }
+    .gp-fund-row span,
+    .gp-lp-row span,
+    .gp-news-row span,
+    .gp-news-row p,
+    .gp-empty-note {
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .gp-peer-row {
+      border-color: var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      box-shadow: none;
+    }
+    .gp-alias-box span {
+      border-color: var(--line);
+      background: var(--surface-muted);
+      font-weight: 650;
+    }
+    .gp-disclaimer {
+      margin-top: 6px;
+      padding: 16px 0 0;
+    }
+    .gp-disclaimer p {
+      color: var(--secondary);
+      font-size: 12.5px;
+      line-height: 1.58;
+    }
+    .bottom-nav {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      width: min(100vw, 520px);
+      padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
+      border-top: 1px solid rgba(0,0,0,0.08);
+      background: rgba(255,255,255,0.92);
+      box-shadow: none;
+      backdrop-filter: blur(18px);
+    }
+    .bottom-nav a {
+      min-height: auto;
+      gap: 3px;
+      color: var(--secondary);
+      font-size: 11px;
+      line-height: 1.1;
+    }
+    .bottom-nav strong {
+      font-weight: 620;
+    }
+    .bottom-nav .active {
+      color: var(--text);
+    }
+    .nav-dot {
+      width: 23px;
+      height: 23px;
+      flex-basis: 23px;
+      opacity: 0.68;
+    }
+    .nav-dot::before {
+      width: 21px;
+      height: 21px;
+    }
+    .bottom-nav .active .nav-dot { opacity: 1; }
+    @media (min-width: 760px) {
+      .gp-shell {
+        padding-bottom: calc(106px + env(safe-area-inset-bottom));
+      }
+      .bottom-nav {
+        bottom: 18px;
+        width: min(640px, calc(100vw - 96px));
+        border: 1px solid rgba(0,0,0,0.07);
+        border-radius: 999px;
+        padding: 5px;
+        background: rgba(255,255,255,0.96);
+        box-shadow: 0 8px 28px rgba(15,23,42,0.08);
+      }
+      .bottom-nav a {
+        min-height: 36px;
+        flex-direction: row;
+        justify-content: center;
+        gap: 6px;
+        border-radius: 999px;
+        font-size: 12px;
+      }
+      .bottom-nav .active {
+        background: var(--surface-muted);
+      }
+      .nav-dot {
+        width: 18px;
+        height: 18px;
+        flex-basis: 18px;
+      }
+      .nav-dot::before {
+        width: 17px;
+        height: 17px;
+      }
+    }
+    @media (min-width: 960px) {
+      .gp-shell {
+        width: min(calc(100% - 48px), var(--shell));
+      }
+      .kpef-product-header {
+        margin-right: calc((100vw - min(var(--shell), calc(100vw - 48px))) / -2);
+        margin-left: calc((100vw - min(var(--shell), calc(100vw - 48px))) / -2);
+        padding-right: max(22px, calc((100vw - var(--shell)) / 2 + 22px));
+        padding-left: max(22px, calc((100vw - var(--shell)) / 2 + 22px));
+      }
+      h1 {
+        font-size: 32px;
+      }
+      .gp-hero {
+        margin-top: 22px;
+        margin-bottom: 16px;
+      }
+      .gp-controls {
+        grid-template-columns: minmax(0, 1fr) 190px 140px;
+      }
+      .gp-directory-head {
+        grid-template-columns: 48px minmax(230px, 1.15fr) minmax(130px, 0.56fr) minmax(300px, 1.34fr) minmax(170px, 0.74fr);
+        gap: 16px;
+        min-height: 42px;
+        padding: 0 16px;
+        text-align: left;
+      }
+      .gp-directory-head span:nth-child(3),
+      .gp-directory-head span:nth-child(5) {
+        display: block;
+      }
+      .gp-card {
+        grid-template-columns: 48px minmax(230px, 1.15fr) minmax(130px, 0.56fr) minmax(300px, 1.34fr) minmax(170px, 0.74fr);
+        gap: 16px;
+        min-height: 72px;
+        padding: 12px 16px;
+      }
+      .gp-avatar {
+        width: 38px;
+        height: 38px;
+      }
+      .gp-avatar img {
+        max-width: 27px;
+        max-height: 27px;
+      }
+      .gp-meta-line {
+        display: grid;
+        grid-column: 3;
+        grid-row: 1;
+        gap: 4px;
+      }
+      .gp-metrics {
+        grid-column: 4;
+        grid-row: 1;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        text-align: left;
+      }
+      .gp-metrics div:nth-child(2),
+      .gp-metrics div:nth-child(4) {
+        display: block;
+      }
+      .gp-signal-strip {
+        display: grid !important;
+        grid-column: 5;
+        grid-row: 1;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 4px 8px;
+      }
+      .gp-signal-strip span {
+        border: 0;
+        border-radius: 0;
+        padding: 0;
+        background: transparent;
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 650;
+      }
+      .gp-signal-strip strong {
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 740;
+      }
+      .gp-detail-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(220px, 0.32fr);
+        gap: 22px;
+        align-items: end;
+      }
+      .gp-detail-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .gp-detail-lower {
+        grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
+      }
+      .gp-detail-kpis {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+      }
+      .gp-signal-bar {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 620px) {
+      .gp-shell {
+        width: calc(100% - 28px);
+        padding-top: max(14px, env(safe-area-inset-top));
+      }
+      .kpef-product-header {
+        margin-top: calc(-1 * max(14px, env(safe-area-inset-top)));
+        margin-right: -14px;
+        margin-left: -14px;
+      }
+      h1 {
+        font-size: 26px;
+      }
+      .gp-detail-kpis,
+      .gp-signal-bar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .gp-card h2 {
+        font-size: 15px;
       }
     }
   </style>"""
@@ -2570,11 +2875,11 @@ def _verification_label(value: object) -> str:
     key = _clean(value)
     normalized_key = re.sub(r"[\s-]+", "_", key).upper()
     if normalized_key == "OFFICIAL_SOURCE_VERIFIED":
-        return "공식 출처"
+        return "공식 자료"
     if normalized_key == "IDENTIFIER_VERIFIED":
-        return "법인정보 출처"
+        return "법인정보 확인"
     if normalized_key == "MANUAL_VERIFIED":
-        return "공개 출처"
+        return "공개자료 확인"
     if normalized_key == "SUPPORTING_SOURCE_ONLY":
         return "공개자료"
     if normalized_key == "FSS" + "_NAME_ONLY":
@@ -2683,12 +2988,6 @@ def _material_basis_note(gp: dict[str, object]) -> str:
     if not sources:
         return ""
     return f"{_join_values(sources)}에서 확인되는 항목 기준입니다."
-
-
-def _short_limit_note(gp: dict[str, object]) -> str:
-    if _clean(gp.get("source_basis")):
-        return "약정액 기준 지표와 회사 정보는 공개자료에서 확인되는 항목만 제공합니다."
-    return "규모 지표, 회사 정보, 관련 뉴스는 공개자료에서 확인되는 항목만 제공합니다."
 
 
 def _detail_limit_note(gp: dict[str, object]) -> str:
