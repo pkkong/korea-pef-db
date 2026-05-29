@@ -50,6 +50,9 @@ blocks, nested cards, and card-heavy directory screens.
 - Public rows should not expose internal enum values or pipeline terminology.
 - Newsletter article lists should use a white page background and flat row
   dividers, not a gray shell with rounded card containers.
+- Newsletter row dividers should be sparse and subtle; avoid stacking top
+  borders, date separator lines, and per-row dividers so the page does not read
+  as ruled paper.
 - Row logos and publisher marks should sit in circular logo slots, not rounded
   square containers.
 - Newsletter top tabs may remain as placeholders for planned views, but inactive

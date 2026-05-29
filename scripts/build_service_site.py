@@ -1511,10 +1511,8 @@ button, input { font: inherit; }
 }
 .date-control::before,
 .date-control::after {
+  display: none;
   content: "";
-  flex: 1 1 24px;
-  height: 1px;
-  background: var(--separator);
 }
 .date-step {
   display: inline-flex;
@@ -1522,7 +1520,7 @@ button, input { font: inherit; }
   height: 36px;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--separator);
+  border: 1px solid rgba(0,0,0,0.08);
   border-radius: 50%;
   background: var(--surface);
   color: var(--secondary);
@@ -1552,7 +1550,7 @@ button, input { font: inherit; }
   border-radius: 999px;
   background: var(--surface);
   color: var(--text);
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
 }
 .date-current span {
   font-size: 15px;
@@ -1948,16 +1946,16 @@ button, input { font: inherit; }
   justify-content: space-between;
   gap: 10px;
   margin: 0;
-  padding: 0 0 8px;
+  padding: 0 0 7px;
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.3;
-  font-weight: 780;
+  font-weight: 700;
 }
 .section-title span {
   flex: 0 0 auto;
   color: var(--secondary);
-  font-size: 11px;
+  font-size: 11.5px;
   line-height: 1.2;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1972,7 +1970,7 @@ button, input { font: inherit; }
 }
 .newsletter-only .cell-list {
   overflow: visible;
-  border-top: 1px solid var(--separator);
+  border-top: 0;
   border-radius: 0;
   background: transparent;
 }
@@ -1983,15 +1981,15 @@ button, input { font: inherit; }
   min-height: 72px;
   align-items: center;
   padding: 10px 10px 10px 10px;
-  border-bottom: 1px solid var(--separator);
+  border-bottom: 1px solid rgba(0,0,0,0.055);
 }
 .clip-cell:last-child { border-bottom: 0; }
 .newsletter-only .clip-cell {
-  min-height: 76px;
-  padding: 12px 0;
+  min-height: 74px;
+  padding: 11px 0;
 }
 .newsletter-only .clip-cell:last-child {
-  border-bottom: 1px solid var(--separator);
+  border-bottom: 0;
 }
 .publisher-icon {
   display: inline-flex;
@@ -2040,9 +2038,9 @@ button, input { font: inherit; }
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   color: var(--text);
-  font-size: 15.5px;
-  line-height: 1.36;
-  font-weight: 630;
+  font-size: 15px;
+  line-height: 1.38;
+  font-weight: 590;
   letter-spacing: 0;
 }
 .title-badge {
@@ -2276,7 +2274,7 @@ button, input { font: inherit; }
 .bottom-nav .active .nav-dot { opacity: 1; }
 .skeleton-list { display: grid; gap: 1px; overflow: hidden; border-radius: var(--radius); background: var(--surface); }
 .newsletter-only .skeleton-list {
-  border-top: 1px solid var(--separator);
+  border-top: 0;
   border-radius: 0;
   background: transparent;
 }
@@ -2287,7 +2285,7 @@ button, input { font: inherit; }
   animation: skeleton 1.4s ease-in-out infinite;
 }
 .newsletter-only .skeleton-list div {
-  border-bottom: 1px solid var(--separator);
+  border-bottom: 1px solid rgba(0,0,0,0.055);
 }
 .skeleton-list.hidden { display: none; }
 @keyframes skeleton {
