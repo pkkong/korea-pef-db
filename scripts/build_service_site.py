@@ -104,7 +104,7 @@ PUBLISHER_BADGES = {
 
 
 def app_head_meta() -> str:
-    return f"""  <meta name="theme-color" content="#111827">
+    return f"""  <meta name="theme-color" content="#ffffff">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="KPEF Brief">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -120,8 +120,8 @@ def app_web_manifest() -> str:
         "start_url": "./index.html",
         "scope": "./",
         "display": "standalone",
-        "background_color": "#f5f5f7",
-        "theme_color": "#f5f7fa",
+        "background_color": "#ffffff",
+        "theme_color": "#ffffff",
         "icons": [
             {
                 "src": APP_ICON_FILE,
@@ -1131,13 +1131,12 @@ def render_app(
     shell_class = "app-shell newsletter-only" if newsletter_only else "app-shell"
     body_class = ' class="newsletter-page"' if newsletter_only else ""
     product_header = ""
-    lp_db_link = "" if newsletter_only else '<a href="db.html#lp">LP 목록</a>'
-    bottom_db_link = (
-        """      <a href="db.html#lp">
+    lp_db_link = "" if newsletter_only else '<a href="lp-notices.html">LP 목록</a>'
+    bottom_db_link = """      <a href="lp-notices.html">
         <span aria-hidden="true" class="nav-dot nav-icon-lp"></span>
         <strong>LP</strong>
       </a>
-      <a href="db.html#profile">
+      <a href="gps.html">
         <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
         <strong>GP</strong>
       </a>
@@ -1145,20 +1144,6 @@ def render_app(
         <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
         <strong>Wiki</strong>
       </a>"""
-        if newsletter_only
-        else """      <a href="db.html#lp">
-        <span aria-hidden="true" class="nav-dot nav-icon-lp"></span>
-        <strong>LP</strong>
-      </a>
-      <a href="db.html#profile">
-        <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
-        <strong>GP</strong>
-      </a>
-      <a href="pef-wiki.html">
-        <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
-        <strong>Wiki</strong>
-      </a>"""
-    )
     search_placeholder = "뉴스·기관·운용사 검색" if newsletter_only else "뉴스·공식공고·기관·운용사 검색"
     lp_monitor_section = (
         ""
@@ -1274,15 +1259,14 @@ def render_public_product_header(active: str, search_href: str = "#clipSearch") 
 def service_css() -> str:
     return """@charset "utf-8";
 :root {
-  --bg: #f5f5f7;
+  --bg: #f7f7f8;
   --surface: #ffffff;
-  --surface-muted: #f2f2f7;
-  --text: #111111;
-  --secondary: #6e6e73;
-  --tertiary: #9a9aa0;
-  --separator: #e5e5ea;
-  --accent: #111111;
-  --blue: #007aff;
+  --surface-muted: #f7f7f8;
+  --text: #171717;
+  --secondary: #737373;
+  --tertiary: #a3a3a3;
+  --separator: #e5e5e5;
+  --accent: #171717;
   --radius: 18px;
   --shell: 520px;
 }
@@ -1480,7 +1464,7 @@ button, input { font: inherit; }
   color: var(--secondary);
   font-size: 13px;
   line-height: 1;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0;
   white-space: nowrap;
   cursor: default;
@@ -1503,11 +1487,6 @@ button, input { font: inherit; }
   justify-content: center;
   gap: 8px;
   margin-top: 8px;
-}
-.date-control::before,
-.date-control::after {
-  display: none;
-  content: "";
 }
 .date-step {
   display: inline-flex;
@@ -1550,7 +1529,7 @@ button, input { font: inherit; }
 .date-current span {
   font-size: 15px;
   line-height: 1.1;
-  font-weight: 680;
+  font-weight: 700;
 }
 .date-current small {
   color: rgba(255,255,255,0.66);
@@ -1645,7 +1624,7 @@ button, input { font: inherit; }
   height: 38px;
   padding: 0 13px;
   border-radius: 12px;
-  background: #f2f2f4;
+  background: var(--surface-muted);
 }
 .search-box span {
   width: 13px;
@@ -1973,15 +1952,7 @@ button, input { font: inherit; }
 .newsletter-only .section-title {
   padding-bottom: 10px;
   font-size: 14.5px;
-  font-weight: 760;
-}
-.section-title span {
-  flex: 0 0 auto;
-  color: var(--secondary);
-  font-size: 11.5px;
-  line-height: 1.2;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  font-weight: 700;
 }
 .cell-list {
   margin: 0;
@@ -2028,7 +1999,7 @@ button, input { font: inherit; }
   background: #fff;
   color: var(--secondary);
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0;
   margin-top: 2px;
 }
@@ -2065,7 +2036,7 @@ button, input { font: inherit; }
   color: var(--text);
   font-size: 15px;
   line-height: 1.38;
-  font-weight: 590;
+  font-weight: 600;
   letter-spacing: 0;
 }
 .title-badge {
@@ -2076,11 +2047,11 @@ button, input { font: inherit; }
   transform: translateY(-1px);
   border-radius: 5px;
   padding: 2px 5px;
-  background: #fff4d6;
-  color: #7a4b00;
+  background: var(--surface-muted);
+  color: #525252;
   font-size: 10px;
   line-height: 1.1;
-  font-weight: 650;
+  font-weight: 600;
 }
 .cell-meta {
   display: flex;
@@ -2130,17 +2101,13 @@ button, input { font: inherit; }
   color: #6f6f73;
   font-size: 11px;
   line-height: 1.2;
-  font-weight: 560;
+  font-weight: 500;
   cursor: pointer;
   text-decoration: none;
 }
-.taxonomy-chip {
-  background: #f4f6f8;
-  color: #5b6470;
-}
 .lp-chip {
-  background: #f1f6f5;
-  color: #526763;
+  background: var(--surface-muted);
+  color: #5f5f63;
 }
 .context-chip:active { background: #e0e0e6; }
 .tag-toggle {
@@ -2156,7 +2123,7 @@ button, input { font: inherit; }
   color: #5f6368;
   font-size: 11px;
   line-height: 1.2;
-  font-weight: 680;
+  font-weight: 600;
   cursor: pointer;
 }
 .tag-toggle[hidden] {
@@ -2181,6 +2148,10 @@ button, input { font: inherit; }
   text-align: center;
 }
 .empty-state.visible { display: block; }
+.newsletter-only .empty-state {
+  border-radius: 0;
+  background: transparent;
+}
 .empty-state strong {
   display: block;
   font-size: 16px;
@@ -2250,14 +2221,6 @@ button, input { font: inherit; }
   -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 5.5h16v13H4v-13Zm3 4h10M7 13h10M7 16h6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 5.5h16v13H4v-13Zm3 4h10M7 13h10M7 16h6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
-.nav-icon-saved::before {
-  -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
-}
-.nav-icon-db::before {
-  -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 6c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3Zm0 0v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 6c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3Zm0 0v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
-}
 .nav-icon-lp::before {
   -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 6.5h14M5 12h14M5 17.5h14M7 4.5v15M17 4.5v15' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 6.5h14M5 12h14M5 17.5h14M7 4.5v15M17 4.5v15' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
@@ -2293,8 +2256,6 @@ button, input { font: inherit; }
 }
 @media (max-width: 430px) {
   .date-control { gap: 6px; }
-  .date-control::before,
-  .date-control::after { flex-basis: 8px; }
   .date-step {
     width: 36px;
     height: 36px;
@@ -2446,7 +2407,6 @@ def service_js() -> str:
     return """(() => {
   const archive = Array.isArray(window.KPEF_DAILY_ARCHIVE) ? window.KPEF_DAILY_ARCHIVE : [];
   const lpMonitor = Array.isArray(window.KPEF_LP_MONITOR) ? window.KPEF_LP_MONITOR : [];
-  const legacyArticles = Array.isArray(window.KPEF_ARTICLES) ? window.KPEF_ARTICLES : [];
   const searchInput = document.getElementById("clipSearch");
   const searchArea = document.getElementById("searchArea");
   const searchToggle = document.getElementById("searchToggle");
@@ -2458,7 +2418,6 @@ def service_js() -> str:
   const weekdayLabel = document.getElementById("briefWeekday");
   const datePrev = document.getElementById("datePrev");
   const dateNext = document.getElementById("dateNext");
-  const dateRail = document.getElementById("briefDateRail");
   const todayList = document.getElementById("todayList");
   const todayView = document.getElementById("todayView");
   const lpMonitorPanel = document.getElementById("lpMonitorPanel");
@@ -2477,7 +2436,7 @@ def service_js() -> str:
     reportDate: "",
     visibleDate: "",
     basis: "",
-    articles: legacyArticles
+    articles: []
   };
   let articles = Array.isArray(activeBrief.articles) ? activeBrief.articles : [];
 
@@ -2506,7 +2465,7 @@ def service_js() -> str:
     const briefs = archive.length ? archive : [{
       reportDate: activeBrief.reportDate,
       visibleDate: activeBrief.visibleDate,
-      articles: legacyArticles
+      articles: []
     }];
     briefs.forEach((brief) => {
       const rows = Array.isArray(brief.articles) ? brief.articles : [];
@@ -2550,13 +2509,6 @@ def service_js() -> str:
     articles = Array.isArray(activeBrief.articles) ? activeBrief.articles : [];
     if (dateSelect) dateSelect.value = activeBrief.reportDate || "";
     updateDateControl();
-    if (dateRail) {
-      dateRail.querySelectorAll(".date-pill").forEach((button) => {
-        const active = button.dataset.date === activeBrief.reportDate;
-        button.classList.toggle("active", active);
-        if (active) button.scrollIntoView({ block: "nearest", inline: "center" });
-      });
-    }
   };
 
   const setActiveBrief = (reportDate, options = {}) => {
@@ -3041,12 +2993,6 @@ def service_js() -> str:
   };
 
   document.addEventListener("click", (event) => {
-    const dateButton = event.target.closest(".date-pill[data-date]");
-    if (dateButton) {
-      setActiveBrief(dateButton.dataset.date);
-      return;
-    }
-
     const tagToggle = event.target.closest(".tag-toggle");
     if (tagToggle) {
       const group = tagToggle.closest(".cell-tags");

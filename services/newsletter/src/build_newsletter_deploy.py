@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sqlite3
 import sys
 import zipfile
@@ -105,7 +106,6 @@ from build_service_site import (  # noqa: E402
     app_asset_version,
     app_head_meta,
     brief_markdown_path,
-    brief_count_label,
     build,
     compact_date,
     display_date,
@@ -134,8 +134,10 @@ ARCHIVE_SCRIPT_RE = re.compile(
 def assert_newsletter_only(site_dir: Path) -> None:
     for name in ["index.html", "daily-news.html"]:
         html = (site_dir / name).read_text(encoding="utf-8")
-        if 'href="db.html' in html or "db.html#" in html:
-            raise RuntimeError(f"{name} still contains DB navigation")
+        if 'href="db.html#lp"' in html or 'href="db.html#profile"' in html:
+            raise RuntimeError(f"{name} still contains obsolete DB-anchor navigation")
+    if (site_dir / "admin.html").exists():
+        raise RuntimeError("admin.html must not be included in the public deploy site")
 
 
 def write_health_file(site_dir: Path, result: dict[str, str]) -> None:
@@ -153,6 +155,7 @@ def write_health_file(site_dir: Path, result: dict[str, str]) -> None:
         "gp_active_count": int(result.get("active_gp_count", "0") or 0),
         "gp_profile_page_count": int(result.get("top_gp_page_count", "0") or 0),
         "gp_news_link_count": int(result.get("news_link_count", "0") or 0),
+        "public_db_page": (site_dir / "db.html").exists(),
     }
     (site_dir / "health.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -379,7 +382,6 @@ def refresh_archive_entries_with_context(
         rows = parse_brief(markdown_path)
         next_entry = dict(entry)
         next_entry["visibleDate"] = str(next_entry.get("visibleDate") or display_date(report_date))
-        next_entry["countLabel"] = brief_count_label(len(rows))
         next_entry["articles"] = article_payload_rows(rows, service_context, f"clip-{compact_date(report_date)}")
         refreshed.append(next_entry)
     return refreshed
@@ -396,6 +398,26 @@ def write_pef_wiki_page(site_dir: Path, report_date: str) -> None:
         render_pef_wiki_page(report_date, app_asset_version()),
         encoding="utf-8",
     )
+
+
+def write_public_db_page(site_dir: Path) -> None:
+    public_dir = REPO_ROOT / "public"
+    required = [
+        public_dir / "db.html",
+        public_dir / "assets" / "app.css",
+        public_dir / "assets" / "app.js",
+        public_dir / "data" / "service_data.json",
+    ]
+    missing = [str(path.relative_to(REPO_ROOT)) for path in required if not path.exists()]
+    if missing:
+        raise FileNotFoundError(f"Missing public DB files: {', '.join(missing)}")
+
+    (site_dir / "assets").mkdir(parents=True, exist_ok=True)
+    (site_dir / "data").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(public_dir / "db.html", site_dir / "db.html")
+    shutil.copy2(public_dir / "assets" / "app.css", site_dir / "assets" / "app.css")
+    shutil.copy2(public_dir / "assets" / "app.js", site_dir / "assets" / "app.js")
+    shutil.copy2(public_dir / "data" / "service_data.json", site_dir / "data" / "service_data.json")
 
 
 def lp_event_label(value: object) -> str:
@@ -709,166 +731,6 @@ def render_service_bottom_nav(active: str) -> str:
     return f"""  <nav class="bottom-nav newsletter-only" aria-label="하단 메뉴">
 {links}
   </nav>"""
-
-
-def render_admin_page(report_date: str) -> str:
-    section_options = [
-        ("AI & PE", "AI & PE"),
-        ("NationalGrowthFund", "국민성장펀드"),
-        ("Deal", "Deal"),
-        ("LP", "LP"),
-        ("GP", "GP"),
-        ("Market", "Market"),
-        ("ETC&People", "ETC&People"),
-    ]
-    options_html = "\n".join(
-        f'              <option value="{html_escape(value)}">{html_escape(label)}</option>'
-        for value, label in section_options
-    )
-    return f"""<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Korea PEF Intelligence 분류 보정</title>
-{app_head_meta()}
-  <link rel="stylesheet" href="assets/service.css?v={app_asset_version()}">
-  <style>
-    body.admin-page {{ background: #f7f7f8; }}
-    .admin-shell {{ width: min(980px, calc(100% - 28px)); margin: 0 auto; padding: 0 0 calc(112px + env(safe-area-inset-bottom)); }}
-    .admin-shell .kpef-product-header {{ margin: 0 calc(50% - 50vw); padding-left: max(16px, calc((100vw - 980px) / 2 + 16px)); padding-right: max(16px, calc((100vw - 980px) / 2 + 16px)); }}
-    .admin-hero {{ display: grid; gap: 10px; padding: 28px 0 18px; border-bottom: 1px solid var(--separator); }}
-    .admin-hero span {{ color: var(--secondary); font-size: 12px; font-weight: 850; }}
-    .admin-hero h1 {{ margin: 0; color: var(--text); font-size: 28px; line-height: 1.14; letter-spacing: 0; }}
-    .admin-hero p {{ max-width: 720px; margin: 0; color: var(--secondary); font-size: 14px; line-height: 1.62; }}
-    .admin-panel {{ display: grid; gap: 14px; margin-top: 18px; border: 1px solid var(--separator); border-radius: 8px; padding: 16px; background: var(--surface); }}
-    .admin-grid {{ display: grid; gap: 12px; }}
-    .admin-field {{ display: grid; gap: 6px; }}
-    .admin-field label {{ color: var(--secondary); font-size: 12px; font-weight: 850; }}
-    .admin-field input,
-    .admin-field select,
-    .admin-field textarea {{ width: 100%; min-height: 42px; border: 1px solid var(--separator); border-radius: 6px; padding: 9px 10px; background: #fff; color: var(--text); font: inherit; font-size: 14px; }}
-    .admin-field textarea {{ min-height: 74px; resize: vertical; }}
-    .admin-actions {{ display: flex; flex-wrap: wrap; gap: 8px; }}
-    .admin-actions button {{ min-height: 38px; border: 1px solid var(--separator); border-radius: 6px; padding: 0 12px; background: var(--surface-muted); color: var(--text); font-size: 13px; font-weight: 850; cursor: pointer; }}
-    .admin-actions button.primary {{ border-color: var(--accent); background: var(--accent); color: #fff; }}
-    .admin-output {{ display: grid; gap: 8px; margin-top: 6px; }}
-    .admin-output label {{ color: var(--secondary); font-size: 12px; font-weight: 850; }}
-    .admin-output textarea {{ width: 100%; min-height: 96px; border: 1px solid var(--separator); border-radius: 6px; padding: 10px; background: #fbfcfd; color: var(--text); font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }}
-    .admin-note {{ margin: 0; color: var(--secondary); font-size: 12px; line-height: 1.5; }}
-    @media (min-width: 760px) {{
-      .admin-shell {{ padding-bottom: calc(106px + env(safe-area-inset-bottom)); }}
-      .admin-shell .kpef-service-tabs {{ display: none; }}
-      .admin-page .bottom-nav {{ display: grid; }}
-      .admin-hero h1 {{ font-size: 36px; }}
-      .admin-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-      .admin-field.full {{ grid-column: 1 / -1; }}
-    }}
-  </style>
-</head>
-<body class="admin-page">
-  <main class="admin-shell">
-{render_public_product_header("brief")}
-    <section class="admin-hero" aria-label="분류 보정">
-      <span>기준일 {html_escape(report_date)}</span>
-      <h1>뉴스 분류 보정</h1>
-      <p>기사 URL과 보정값을 입력하면 수동 반영 파일에 넣을 CSV 한 줄을 만듭니다. 정적 사이트라 이 화면에서 바로 저장되지는 않습니다.</p>
-    </section>
-    <section class="admin-panel">
-      <div class="admin-grid">
-        <div class="admin-field full">
-          <label for="adminUrl">기사 URL</label>
-          <input id="adminUrl" type="url" placeholder="https://example.com/news/article...">
-        </div>
-        <div class="admin-field">
-          <label for="adminSection">섹션</label>
-          <select id="adminSection">
-{options_html}
-          </select>
-        </div>
-        <div class="admin-field">
-          <label for="adminStatus">상태</label>
-          <select id="adminStatus">
-            <option value="include">포함</option>
-            <option value="exclude">제외</option>
-            <option value="hold">보류</option>
-          </select>
-        </div>
-        <div class="admin-field full">
-          <label for="adminTags">추가 태그</label>
-          <input id="adminTags" placeholder="예: 한국산업은행; IMM인베스트먼트">
-        </div>
-        <div class="admin-field full">
-          <label for="adminComment">메모</label>
-          <textarea id="adminComment" placeholder="분류를 바꾸는 이유를 짧게 기록"></textarea>
-        </div>
-      </div>
-      <div class="admin-actions">
-        <button class="primary" type="button" id="adminBuild">CSV 만들기</button>
-        <button type="button" id="adminCopy">복사</button>
-      </div>
-      <div class="admin-output">
-        <label for="adminCsv">services/newsletter/data/news_manual_overrides.csv 추가 row</label>
-        <textarea id="adminCsv" readonly></textarea>
-        <p class="admin-note">헤더 순서: normalized_source_url, review_status, force_include, force_exclude, manual_tags, manual_comment, notes</p>
-      </div>
-    </section>
-  </main>
-  {render_service_bottom_nav("brief")}
-  <script>
-    (() => {{
-      const fields = {{
-        url: document.getElementById("adminUrl"),
-        section: document.getElementById("adminSection"),
-        status: document.getElementById("adminStatus"),
-        tags: document.getElementById("adminTags"),
-        comment: document.getElementById("adminComment"),
-        output: document.getElementById("adminCsv"),
-      }};
-      const csvCell = (value) => {{
-        const text = String(value || "");
-        return /[",\\n]/.test(text) ? `"${{text.replaceAll('"', '""')}}"` : text;
-      }};
-      const normalizedUrl = (value) => {{
-        try {{
-          const url = new URL(value.trim());
-          ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "OutLnkChk"].forEach((key) => url.searchParams.delete(key));
-          url.hash = "";
-          return url.toString();
-        }} catch {{
-          return value.trim();
-        }}
-      }};
-      const build = () => {{
-        const status = fields.status.value;
-        const forceInclude = status === "include" ? "1" : "";
-        const forceExclude = status === "exclude" ? "1" : "";
-        const reviewStatus = status === "hold" ? "hold" : "reviewed";
-        const tags = [fields.section.value, fields.tags.value].filter(Boolean).join(";");
-        const row = [
-          normalizedUrl(fields.url.value),
-          reviewStatus,
-          forceInclude,
-          forceExclude,
-          tags,
-          fields.comment.value.trim(),
-          `admin-page {html_escape(report_date)}`,
-        ];
-        fields.output.value = row.map(csvCell).join(",");
-      }};
-      document.getElementById("adminBuild").addEventListener("click", build);
-      document.getElementById("adminCopy").addEventListener("click", async () => {{
-        if (!fields.output.value) build();
-        try {{ await navigator.clipboard.writeText(fields.output.value); }} catch {{}}
-      }});
-    }})();
-  </script>
-</body>
-</html>"""
-
-
-def write_admin_page(site_dir: Path, report_date: str) -> None:
-    (site_dir / "admin.html").write_text(render_admin_page(report_date), encoding="utf-8")
 
 
 def read_lp_profile_codes(db_path: Path = DEFAULT_DB) -> list[str]:
@@ -2692,7 +2554,6 @@ def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
     include_paths = [
         site_dir / "index.html",
         site_dir / "daily-news.html",
-        site_dir / "admin.html",
         site_dir / "lp-notices.html",
         site_dir / "gps.html",
         site_dir / "pef-wiki.html",
@@ -2755,7 +2616,8 @@ def main() -> int:
     result["ktcu_fact_count"] = str(len(read_ktcu_payload(lp_code=KTCU_CODE, profile_codes=read_lp_profile_codes()).get("facts") or []))
     result.update({key: str(value) for key, value in write_gp_pages(site_dir, DEFAULT_DB, args.date).items()})
     write_pef_wiki_page(site_dir, args.date)
-    write_admin_page(site_dir, args.date)
+    write_public_db_page(site_dir)
+    (site_dir / "admin.html").unlink(missing_ok=True)
     write_health_file(site_dir, result)
     write_static_support_files(site_dir)
     assert_newsletter_only(site_dir)

@@ -35,22 +35,42 @@ typography, row density, icon treatment, and navigation hierarchy.
   for example `시장 / GP / 펀드 / LP / 비교` inside `db.html`.
 - The same bottom nav should appear on mobile and desktop.
 - `저장` is not a global tab until saved items work across news, LP profiles, GP
-  profiles, and Wiki documents. News-only saved articles stay as a Brief header
-  utility with a small bookmark icon.
+  profiles, and Wiki documents. Do not show news-only bookmark controls in the
+  public newsletter until there is a clear cross-service saved-items destination.
 
 ## Visual Rules
 
-- Background: `#ffffff`
+- Background: `#ffffff` for pages, `#f7f7f8` only for full-bleed separators or
+  muted controls.
 - Surface: `#ffffff`
-- Muted surface: `#fafafa`
+- Muted surface: `#f7f7f8`
 - Primary text: `#171717`
 - Secondary text: `#737373`
+- Tertiary text: `#a3a3a3`
 - Border: `#e5e5e5`
 - Strong border: `#d4d4d4`
-- Accent: black or neutral unless a color encodes status.
+- Accent: black/neutral unless a color encodes status.
 
 Use borders and whitespace before shadows. Avoid decorative gradients, large hero
 blocks, nested cards, and card-heavy directory screens.
+
+## Shared Tokens
+
+Use these values as the public UI baseline before introducing service-specific
+variants.
+
+- CSS variables: `--bg #f7f7f8`, `--surface #ffffff`,
+  `--surface-muted #f7f7f8`, `--text #171717`, `--secondary #737373`,
+  `--tertiary #a3a3a3`, `--separator #e5e5e5`, `--accent #171717`.
+- Mobile page gutter: `14-16px`.
+- Desktop reading/list width: `860-900px`.
+- Row divider: `1px solid #e5e5e5` or a lower-opacity equivalent when rows are
+  dense.
+- Section band: full-bleed `#f7f7f8`, about `8px` high, with compact vertical
+  spacing.
+- List icon/logo slot: circular `32px`, top-aligned for multi-line rows.
+- Bottom nav: fixed, same order everywhere, label about `11-12px`, icon about
+  `18-23px`, active state neutral.
 
 ## Typography
 
@@ -67,6 +87,17 @@ blocks, nested cards, and card-heavy directory screens.
 - Newsletter article titles should usually be about 15px with medium-bold weight,
   not hero-scale type.
 - Reserve large headings for true page titles only.
+
+## Public Shell
+
+- Header uses one compact title row with only necessary utility icons.
+- Search opens inside the header, not as a separate card or floating panel.
+- Page-local tabs use text tabs with a thin neutral baseline and a black active
+  underline. Disabled/future tabs stay low-contrast.
+- Bottom nav is the only global service navigation and must stay in the order
+  `브리프 / LP / GP / Wiki`.
+- Desktop keeps the same navigation hierarchy; it may render as a lighter centered
+  pill but should not become a different product shell.
 
 ## Directory Patterns
 
@@ -98,8 +129,28 @@ blocks, nested cards, and card-heavy directory screens.
   tabs should be low-contrast text tabs rather than heavy disabled controls.
 - Bottom navigation is reserved for primary service destinations. Keep it to
   Brief, LP, GP, and Wiki until saved items work across news, LP profiles, GP
-  profiles, and wiki documents. News-only saved articles should stay as a
-  newsletter header utility, not as a global bottom-tab destination.
+  profiles, and wiki documents. News-only saved/bookmark controls should stay
+  hidden from the public newsletter until that destination exists.
+
+## Row Anatomy
+
+- Rows use a circular 32px logo slot, primary title, secondary metadata, and
+  restrained contextual tags.
+- Multi-line rows align the logo slot near the top of the row.
+- Row titles should be strong enough to scan, but not headline-sized. Use about
+  `15-16px` and `590-650` weight depending on density.
+- Avoid right-side icons unless they are high-value actions with a visible
+  destination. Removing low-value actions is preferred to adding visual noise.
+- Tags stay one line by default; overflow uses a quiet text-like `더보기 N`
+  control.
+
+## Section Bands
+
+- Use full-bleed muted bands to separate large content groups without wrapping
+  each group in a card.
+- Do not pair full-bleed bands with excessive top/bottom whitespace.
+- Do not add section count badges unless the count materially changes user
+  behavior.
 
 ## Newsletter Reference Pattern
 
