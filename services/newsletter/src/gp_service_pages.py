@@ -497,6 +497,12 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
           <option value="news">관련 뉴스 많은 순</option>
           <option value="signals">뉴스·출자 연결순</option>
         </select>
+        <select id="gpPageSize" aria-label="페이지당 표시">
+          <option value="30">30개씩 보기</option>
+          <option value="50">50개씩 보기</option>
+          <option value="100">100개씩 보기</option>
+          <option value="all">전체 보기</option>
+        </select>
       </div>
       <div class="gp-filter-row" aria-label="빠른 필터">
         <button class="active" type="button" data-filter="all">전체</button>
@@ -662,7 +668,7 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
         </div>
 {meta_line_html}
         <details class="gp-card-extra">
-          <summary>자료</summary>
+          <summary>보기</summary>
           <div class="gp-news-mini">
             <strong>관련 뉴스</strong>
             {news_html}
@@ -1097,6 +1103,7 @@ def _directory_script() -> str:
     (() => {
       const input = document.getElementById("gpSearch");
       const sort = document.getElementById("gpSort");
+      const pageSizeSelect = document.getElementById("gpPageSize");
       const list = document.getElementById("gpDirectory");
       const visible = document.getElementById("gpVisibleCount");
       const pagination = document.getElementById("gpPagination");
@@ -1105,7 +1112,6 @@ def _directory_script() -> str:
       const pageState = document.getElementById("gpPageState");
       const buttons = Array.from(document.querySelectorAll("[data-filter]"));
       const cards = Array.from(document.querySelectorAll(".gp-card"));
-      const pageSize = 60;
       let activeFilter = "all";
       let currentPage = 1;
       let orderedCards = [...cards];
@@ -1133,6 +1139,13 @@ def _directory_script() -> str:
         return card.dataset[activeFilter] === "1";
       };
 
+      const getPageSize = (matchCount) => {
+        const value = pageSizeSelect?.value || "30";
+        if (value === "all") return Math.max(matchCount, 1);
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
+      };
+
       const apply = (options = {}) => {
         if (options.resetPage) currentPage = 1;
         const query = (input?.value || "").trim().toLowerCase();
@@ -1143,6 +1156,7 @@ def _directory_script() -> str:
           if (show) matches.push(card);
           card.hidden = true;
         });
+        const pageSize = getPageSize(matches.length);
         const totalPages = Math.max(1, Math.ceil(matches.length / pageSize));
         currentPage = Math.min(Math.max(currentPage, 1), totalPages);
         const start = (currentPage - 1) * pageSize;
@@ -1165,6 +1179,7 @@ def _directory_script() -> str:
         applySort();
         apply({ resetPage: true });
       });
+      pageSizeSelect?.addEventListener("change", () => apply({ resetPage: true }));
       buttons.forEach((button) => {
         button.addEventListener("click", () => {
           activeFilter = button.dataset.filter || "all";
@@ -1321,8 +1336,8 @@ def _base_styles() -> str:
       text-decoration: none;
     }
     .kpef-service-tabs a.active {
-      border-bottom-color: #8a6a52;
-      color: #6d543f;
+      border-bottom-color: var(--accent);
+      color: var(--text);
     }
     .gp-shell {
       width: min(1440px, calc(100% - 44px));
@@ -1507,7 +1522,7 @@ def _base_styles() -> str:
     h1 {
       margin: 0;
       color: var(--text);
-      font-size: clamp(28px, 3vw, 38px);
+      font-size: 28px;
       font-weight: 850;
       line-height: 1.12;
       letter-spacing: 0;
@@ -1656,6 +1671,7 @@ def _base_styles() -> str:
       font-size: 12px;
       font-weight: 850;
       text-align: right;
+      letter-spacing: 0;
     }
     .gp-directory-head span:first-child { text-align: center; }
     .gp-directory-head span:nth-child(3),
@@ -1679,18 +1695,18 @@ def _base_styles() -> str:
       grid-template-columns: 44px minmax(0, 1fr) 132px;
       gap: 10px;
       align-items: center;
-      min-height: 82px;
+      min-height: 76px;
       border: 0;
       border-bottom: 1px solid var(--line);
       border-radius: 0;
-      padding: 12px 10px;
+      padding: 10px;
       box-shadow: none;
     }
     .gp-avatar {
       position: relative;
       display: inline-grid;
-      width: 40px;
-      height: 40px;
+      width: 38px;
+      height: 38px;
       grid-column: 1;
       grid-row: 1;
       place-items: center;
@@ -1737,7 +1753,7 @@ def _base_styles() -> str:
       display: grid;
       grid-column: 2;
       grid-row: 1;
-      gap: 8px;
+      gap: 6px;
     }
     .gp-card-title {
       display: grid;
@@ -1752,7 +1768,7 @@ def _base_styles() -> str:
     .gp-card h2 {
       margin: 0;
       color: var(--text);
-      font-size: 16px;
+      font-size: 15px;
       line-height: 1.34;
       overflow-wrap: break-word;
       word-break: keep-all;
@@ -1783,7 +1799,7 @@ def _base_styles() -> str:
       grid-column: 3;
       grid-row: 1;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
+      gap: 7px;
       margin: 0;
       text-align: right;
     }
@@ -1881,7 +1897,7 @@ def _base_styles() -> str:
       gap: 8px;
       align-items: center;
       justify-content: center;
-      margin: 14px 0 4px;
+      margin: 12px 0 4px;
       color: var(--secondary);
       font-size: 12px;
       font-weight: 800;
@@ -2205,7 +2221,7 @@ def _base_styles() -> str:
     }
     @media (min-width: 720px) {
       .gp-hero { grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr); }
-      .gp-controls { grid-template-columns: minmax(0, 1fr) 210px; }
+      .gp-controls { grid-template-columns: minmax(0, 1fr) 210px 150px; }
       .gp-card-main { grid-template-columns: minmax(0, 1fr); align-items: start; }
       .gp-detail-hero { grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr); }
       .gp-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2227,6 +2243,9 @@ def _base_styles() -> str:
       .gp-shell {
         width: min(1460px, calc(100% - 56px));
       }
+      h1 {
+        font-size: 38px;
+      }
       .kpef-service-tabs {
         display: grid;
       }
@@ -2242,11 +2261,11 @@ def _base_styles() -> str:
       }
       .gp-directory-head {
         display: grid;
-        grid-template-columns: 52px minmax(240px, 1.15fr) minmax(130px, 0.58fr) minmax(340px, 1.42fr) minmax(190px, 0.82fr) minmax(150px, 0.62fr);
-        gap: 18px;
+        grid-template-columns: 48px minmax(230px, 1.18fr) minmax(128px, 0.56fr) minmax(320px, 1.36fr) minmax(184px, 0.78fr) minmax(126px, 0.5fr);
+        gap: 16px;
         align-items: center;
-        min-height: 48px;
-        padding: 0 18px;
+        min-height: 42px;
+        padding: 0 16px;
         border-bottom: 1px solid var(--line-strong);
         background: #f0f1f2;
         color: var(--secondary);
@@ -2273,13 +2292,14 @@ def _base_styles() -> str:
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
       }
       .gp-card {
-        grid-template-columns: 52px minmax(240px, 1.15fr) minmax(130px, 0.58fr) minmax(340px, 1.42fr) minmax(190px, 0.82fr) minmax(150px, 0.62fr);
-        gap: 18px;
+        grid-template-columns: 48px minmax(230px, 1.18fr) minmax(128px, 0.56fr) minmax(320px, 1.36fr) minmax(184px, 0.78fr) minmax(126px, 0.5fr);
+        gap: 16px;
         align-items: center;
         border: 0;
         border-radius: 0;
         border-bottom: 1px solid var(--line);
-        padding: 16px 18px;
+        min-height: 72px;
+        padding: 12px 16px;
         box-shadow: none;
       }
       .gp-card:last-child {
@@ -2290,8 +2310,8 @@ def _base_styles() -> str:
         grid-row: 1;
       }
       .gp-avatar {
-        width: 42px;
-        height: 42px;
+        width: 40px;
+        height: 40px;
       }
       .gp-meta-line {
         grid-column: 3;
@@ -2314,7 +2334,7 @@ def _base_styles() -> str:
         padding-top: 0;
       }
       .gp-card h2 {
-        font-size: 16px;
+        font-size: 15px;
       }
       .gp-card-title > span {
         font-size: 10.5px;
@@ -2350,10 +2370,10 @@ def _base_styles() -> str:
       }
       .gp-metrics dt,
       .gp-signal-strip span {
-        font-size: 11px;
+        font-size: 10.5px;
       }
       .gp-metrics dd {
-        font-size: 13px;
+        font-size: 12.5px;
       }
       .gp-card-extra summary {
         justify-content: flex-start;

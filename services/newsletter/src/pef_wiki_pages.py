@@ -54,13 +54,19 @@ def render_pef_wiki_page(report_date: str, asset_version: str = "") -> str:
 </head>
 <body>
   <main class="wiki-shell">
+    <a class="wiki-skip-link" href="#wiki-document">본문으로 이동</a>
     {_render_top_nav()}
     {_render_mobile_drawer()}
     <header class="wiki-doc-header">
+      <nav class="wiki-breadcrumb" aria-label="문서 위치">
+        <a href="index.html">Korea PEF Intelligence</a>
+        <span aria-hidden="true">/</span>
+        <span>PEF Wiki</span>
+      </nav>
       <div>
         <p class="wiki-kicker">PEF Wiki</p>
         <h1>기관전용 사모집합투자기구</h1>
-        <p class="wiki-lede">설립, LP 적격성, 운용 한도, 보고, 세무 확인에 바로 쓸 수 있도록 제도 설명과 원천 확인 경로를 한 문서에 묶었습니다.</p>
+        <p class="wiki-lede">설립, LP 적격성, 운용 한도, 보고, 세무 확인에 필요한 제도 설명과 원천 확인 경로를 한 문서 흐름으로 정리했습니다.</p>
       </div>
       <form class="wiki-search" role="search">
         <label for="wikiSearch">문서 검색</label>
@@ -81,7 +87,7 @@ def render_pef_wiki_page(report_date: str, asset_version: str = "") -> str:
         </nav>
       </aside>
 
-      <article class="wiki-document" aria-label="기관전용 사모집합투자기구 실무 지식베이스">
+      <article class="wiki-document" id="wiki-document" aria-label="기관전용 사모집합투자기구 실무 지식베이스">
         {_render_wiki_article()}
       </article>
     </div>
@@ -99,6 +105,10 @@ def _render_wiki_article() -> str:
           <p class="wiki-eyebrow">실무안내 본문</p>
           <h2>제1장 기관전용 사모집합투자기구 개요</h2>
           <p class="wiki-paragraph">처음 확인할 때는 정의보다 업무 이벤트를 먼저 잡는 편이 빠릅니다. 이 문서는 펀드 결성, LP 확인, 투자 집행, 보고, 세무, 청산 단계에서 다시 확인해야 하는 제도 항목을 한 흐름으로 연결합니다.</p>
+          <div class="wiki-callout" role="note">
+            <strong>읽는 순서</strong>
+            <p>처음 보는 경우에는 제도의 의의, 투자자 범위, 자산운용 규제, 보고 작성 구조 순서로 확인합니다. 특정 업무 중이라면 왼쪽 목차 또는 검색에서 바로 이동합니다.</p>
+          </div>
           <nav class="wiki-anchor-list" aria-label="이 문서의 주요 항목">
             <a href="#meaning"><strong>펀드 성격</strong><span>기관투자자 자금, GP 책임, 기업가치 제고 기능을 먼저 확인합니다.</span></a>
             <a href="#investors"><strong>LP 적격성</strong><span>참여 가능한 투자자, 개인 참여 제한, 양도 제한을 분리해 봅니다.</span></a>
@@ -500,6 +510,26 @@ def _page_styles() -> str:
     .wiki-inline-link:hover {
       background: var(--wiki-accent-soft);
     }
+    .wiki-skip-link {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 100;
+      transform: translateY(-140%);
+      border: 1px solid var(--wiki-line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      background: var(--wiki-surface);
+      color: var(--wiki-text);
+      font-size: 13px;
+      font-weight: 650;
+      text-decoration: none;
+    }
+    .wiki-skip-link:focus {
+      transform: translateY(0);
+      outline: 2px solid var(--wiki-text);
+      outline-offset: 2px;
+    }
     .wiki-shell {
       width: min(1180px, calc(100% - 28px));
       margin: 0 auto;
@@ -637,7 +667,7 @@ def _page_styles() -> str:
       position: sticky;
       top: 56px;
       z-index: 24;
-      display: flex;
+      display: none;
       gap: 6px;
       overflow-x: auto;
       border-bottom: 1px solid var(--wiki-line);
@@ -671,7 +701,26 @@ def _page_styles() -> str:
       display: grid;
       grid-template-columns: minmax(0, 1fr);
       gap: 16px;
-      padding: 34px 0 24px;
+      padding: 28px 0 22px;
+      border-bottom: 1px solid var(--wiki-line);
+    }
+    .wiki-breadcrumb {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      align-items: center;
+      color: var(--wiki-tertiary);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .wiki-breadcrumb a {
+      color: var(--wiki-secondary);
+      text-decoration: none;
+    }
+    .wiki-breadcrumb a:hover,
+    .wiki-breadcrumb a:focus-visible {
+      color: var(--wiki-text);
+      outline: none;
     }
     .wiki-kicker {
       margin: 0 0 8px;
@@ -694,6 +743,7 @@ def _page_styles() -> str:
       font-size: 17px;
       font-weight: 400;
       line-height: 1.55;
+      max-width: 760px;
     }
     .wiki-search {
       display: grid;
@@ -741,7 +791,7 @@ def _page_styles() -> str:
     .wiki-layout {
       display: grid;
       gap: 24px;
-      padding-top: 22px;
+      padding-top: 26px;
     }
     .wiki-sidebar {
       display: none;
@@ -770,6 +820,9 @@ def _page_styles() -> str:
       color: var(--wiki-text);
       text-decoration: none;
     }
+    .wiki-sidebar a.active {
+      border-left-color: var(--wiki-text);
+    }
     .wiki-sidebar span {
       font-size: 13px;
       font-weight: 600;
@@ -782,12 +835,14 @@ def _page_styles() -> str:
     .wiki-document {
       min-width: 0;
       padding: 0;
+      max-width: 900px;
     }
     .wiki-section {
       display: grid;
       gap: 14px;
       padding: 0;
-      margin-bottom: 46px;
+      margin-bottom: 52px;
+      scroll-margin-top: 132px;
     }
     .wiki-section:last-child {
       margin-bottom: 0;
@@ -802,7 +857,7 @@ def _page_styles() -> str:
       margin: 0;
       color: var(--wiki-text);
       font-size: 26px;
-      line-height: 1.2;
+      line-height: 1.25;
       word-break: keep-all;
     }
     .wiki-section h3 {
@@ -818,16 +873,35 @@ def _page_styles() -> str:
       margin: 0;
       color: var(--wiki-secondary);
       font-size: 15px;
-      line-height: 1.72;
+      line-height: 1.78;
     }
     .wiki-paragraph {
-      max-width: 880px;
+      max-width: 760px;
+    }
+    .wiki-callout {
+      display: grid;
+      gap: 5px;
+      max-width: 760px;
+      border-left: 3px solid var(--wiki-text);
+      padding: 2px 0 2px 13px;
+      background: transparent;
+    }
+    .wiki-callout strong {
+      color: var(--wiki-text);
+      font-size: 14px;
+      font-weight: 650;
+    }
+    .wiki-callout p {
+      margin: 0;
+      color: var(--wiki-secondary);
+      font-size: 14px;
+      line-height: 1.65;
     }
     .wiki-anchor-list {
       display: grid;
-      gap: 9px;
-      max-width: 920px;
-      margin: 4px 0 0;
+      gap: 10px;
+      max-width: 780px;
+      margin: 6px 0 0;
     }
     .wiki-anchor-list a {
       display: grid;
@@ -855,7 +929,9 @@ def _page_styles() -> str:
       display: flex;
       flex-wrap: wrap;
       gap: 6px 10px;
-      max-width: 880px;
+      max-width: 760px;
+      border-top: 1px solid var(--wiki-line);
+      padding-top: 10px;
     }
     .wiki-related-links a {
       border-bottom: 1px solid rgba(17, 17, 17, 0.28);
@@ -912,7 +988,7 @@ def _page_styles() -> str:
       padding: 4px 0;
     }
     .wiki-definition-block p {
-      max-width: 860px;
+      max-width: 760px;
     }
     .wiki-source-note {
       margin: 0;
@@ -1056,11 +1132,13 @@ def _page_styles() -> str:
         display: grid;
       }
       .wiki-service-nav { display: flex; }
+      .wiki-top-nav { display: flex; }
       .wiki-doc-header h1 { font-size: 36px; }
       .wiki-doc-header {
         grid-template-columns: minmax(0, 1fr) minmax(320px, 0.45fr);
         align-items: start;
       }
+      .wiki-breadcrumb { grid-column: 1 / -1; }
       .wiki-doc-meta { grid-column: 1 / -1; }
       .wiki-layout {
         grid-template-columns: 260px minmax(0, 1fr);
@@ -1088,7 +1166,8 @@ def _page_styles() -> str:
       .wiki-sidebar a {
         display: grid;
         gap: 3px;
-        padding: 0;
+        border-left: 2px solid transparent;
+        padding: 0 0 0 10px;
         color: var(--wiki-text);
         text-decoration: none;
       }
@@ -1132,6 +1211,7 @@ def _page_script() -> str:
   const searchStatus = document.getElementById("wikiSearchStatus");
   const sections = Array.from(document.querySelectorAll(".wiki-section"));
   const topLinks = Array.from(document.querySelectorAll(".wiki-top-nav a"));
+  const sidebarLinks = Array.from(document.querySelectorAll(".wiki-sidebar a, .wiki-mobile-drawer a"));
   const focusSearch = document.querySelector("[data-focus-search]");
   const menuToggle = document.querySelector("[data-toggle-menu]");
   const drawer = document.getElementById("wiki-mobile-drawer");
@@ -1198,6 +1278,7 @@ def _page_script() -> str:
     const id = visible.target.id;
     const topId = topSectionMap[id] || id;
     topLinks.forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${topId}`));
+    sidebarLinks.forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${id}`));
   }, { rootMargin: "-80px 0px -55% 0px", threshold: [0.1, 0.3, 0.6] });
   sections.forEach((section) => observer.observe(section));
 })();

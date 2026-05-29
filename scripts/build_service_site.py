@@ -1436,8 +1436,8 @@ button, input { font: inherit; }
   text-decoration: none;
 }
 .kpef-service-tabs a.active {
-  border-bottom-color: #8a6a52;
-  color: #6d543f;
+  border-bottom-color: var(--accent);
+  color: var(--text);
 }
 .app-shell {
   width: min(100vw, var(--shell));

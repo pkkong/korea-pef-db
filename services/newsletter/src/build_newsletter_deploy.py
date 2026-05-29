@@ -598,6 +598,13 @@ def clean_public_lp_text(value: object) -> str:
     text = str(value or "").strip()
     if not text:
         return ""
+    simple_labels = {
+        "public": "공공",
+        "private": "민간",
+        "policy": "정책",
+    }
+    if text.lower() in simple_labels:
+        return simple_labels[text.lower()]
     regex_replacements = [
         (r"작업\s*큐", ""),
         (r"검토\s*대기", "공개자료 기준"),
@@ -703,6 +710,166 @@ def render_service_bottom_nav(active: str) -> str:
     return f"""  <nav class="bottom-nav newsletter-only" aria-label="하단 메뉴">
 {links}
   </nav>"""
+
+
+def render_admin_page(report_date: str) -> str:
+    section_options = [
+        ("AI & PE", "AI & PE"),
+        ("NationalGrowthFund", "국민성장펀드"),
+        ("Deal", "Deal"),
+        ("LP", "LP"),
+        ("GP", "GP"),
+        ("Market", "Market"),
+        ("ETC&People", "ETC&People"),
+    ]
+    options_html = "\n".join(
+        f'              <option value="{html_escape(value)}">{html_escape(label)}</option>'
+        for value, label in section_options
+    )
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Korea PEF Intelligence 분류 보정</title>
+{app_head_meta()}
+  <link rel="stylesheet" href="assets/service.css?v={app_asset_version()}">
+  <style>
+    body.admin-page {{ background: #f7f7f8; }}
+    .admin-shell {{ width: min(980px, calc(100% - 28px)); margin: 0 auto; padding: 0 0 calc(112px + env(safe-area-inset-bottom)); }}
+    .admin-shell .kpef-product-header {{ margin: 0 calc(50% - 50vw); padding-left: max(16px, calc((100vw - 980px) / 2 + 16px)); padding-right: max(16px, calc((100vw - 980px) / 2 + 16px)); }}
+    .admin-hero {{ display: grid; gap: 10px; padding: 28px 0 18px; border-bottom: 1px solid var(--separator); }}
+    .admin-hero span {{ color: var(--secondary); font-size: 12px; font-weight: 850; }}
+    .admin-hero h1 {{ margin: 0; color: var(--text); font-size: 28px; line-height: 1.14; letter-spacing: 0; }}
+    .admin-hero p {{ max-width: 720px; margin: 0; color: var(--secondary); font-size: 14px; line-height: 1.62; }}
+    .admin-panel {{ display: grid; gap: 14px; margin-top: 18px; border: 1px solid var(--separator); border-radius: 8px; padding: 16px; background: var(--surface); }}
+    .admin-grid {{ display: grid; gap: 12px; }}
+    .admin-field {{ display: grid; gap: 6px; }}
+    .admin-field label {{ color: var(--secondary); font-size: 12px; font-weight: 850; }}
+    .admin-field input,
+    .admin-field select,
+    .admin-field textarea {{ width: 100%; min-height: 42px; border: 1px solid var(--separator); border-radius: 6px; padding: 9px 10px; background: #fff; color: var(--text); font: inherit; font-size: 14px; }}
+    .admin-field textarea {{ min-height: 74px; resize: vertical; }}
+    .admin-actions {{ display: flex; flex-wrap: wrap; gap: 8px; }}
+    .admin-actions button {{ min-height: 38px; border: 1px solid var(--separator); border-radius: 6px; padding: 0 12px; background: var(--surface-muted); color: var(--text); font-size: 13px; font-weight: 850; cursor: pointer; }}
+    .admin-actions button.primary {{ border-color: var(--accent); background: var(--accent); color: #fff; }}
+    .admin-output {{ display: grid; gap: 8px; margin-top: 6px; }}
+    .admin-output label {{ color: var(--secondary); font-size: 12px; font-weight: 850; }}
+    .admin-output textarea {{ width: 100%; min-height: 96px; border: 1px solid var(--separator); border-radius: 6px; padding: 10px; background: #fbfcfd; color: var(--text); font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }}
+    .admin-note {{ margin: 0; color: var(--secondary); font-size: 12px; line-height: 1.5; }}
+    @media (min-width: 760px) {{
+      .admin-shell {{ padding-bottom: 36px; }}
+      .admin-shell .kpef-service-tabs {{ display: grid; margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); padding-left: max(0px, calc((100vw - 980px) / 2)); padding-right: max(0px, calc((100vw - 980px) / 2)); }}
+      .admin-page .bottom-nav {{ display: none; }}
+      .admin-hero h1 {{ font-size: 36px; }}
+      .admin-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .admin-field.full {{ grid-column: 1 / -1; }}
+    }}
+  </style>
+</head>
+<body class="admin-page">
+  <main class="admin-shell">
+{render_public_product_header("brief")}
+    <section class="admin-hero" aria-label="분류 보정">
+      <span>기준일 {html_escape(report_date)}</span>
+      <h1>뉴스 분류 보정</h1>
+      <p>기사 URL과 보정값을 입력하면 수동 반영 파일에 넣을 CSV 한 줄을 만듭니다. 정적 사이트라 이 화면에서 바로 저장되지는 않습니다.</p>
+    </section>
+    <section class="admin-panel">
+      <div class="admin-grid">
+        <div class="admin-field full">
+          <label for="adminUrl">기사 URL</label>
+          <input id="adminUrl" type="url" placeholder="https://example.com/news/article...">
+        </div>
+        <div class="admin-field">
+          <label for="adminSection">섹션</label>
+          <select id="adminSection">
+{options_html}
+          </select>
+        </div>
+        <div class="admin-field">
+          <label for="adminStatus">상태</label>
+          <select id="adminStatus">
+            <option value="include">포함</option>
+            <option value="exclude">제외</option>
+            <option value="hold">보류</option>
+          </select>
+        </div>
+        <div class="admin-field full">
+          <label for="adminTags">추가 태그</label>
+          <input id="adminTags" placeholder="예: 한국산업은행; IMM인베스트먼트">
+        </div>
+        <div class="admin-field full">
+          <label for="adminComment">메모</label>
+          <textarea id="adminComment" placeholder="분류를 바꾸는 이유를 짧게 기록"></textarea>
+        </div>
+      </div>
+      <div class="admin-actions">
+        <button class="primary" type="button" id="adminBuild">CSV 만들기</button>
+        <button type="button" id="adminCopy">복사</button>
+      </div>
+      <div class="admin-output">
+        <label for="adminCsv">services/newsletter/data/news_manual_overrides.csv 추가 row</label>
+        <textarea id="adminCsv" readonly></textarea>
+        <p class="admin-note">헤더 순서: normalized_source_url, review_status, force_include, force_exclude, manual_tags, manual_comment, notes</p>
+      </div>
+    </section>
+  </main>
+  {render_service_bottom_nav("brief")}
+  <script>
+    (() => {{
+      const fields = {{
+        url: document.getElementById("adminUrl"),
+        section: document.getElementById("adminSection"),
+        status: document.getElementById("adminStatus"),
+        tags: document.getElementById("adminTags"),
+        comment: document.getElementById("adminComment"),
+        output: document.getElementById("adminCsv"),
+      }};
+      const csvCell = (value) => {{
+        const text = String(value || "");
+        return /[",\\n]/.test(text) ? `"${{text.replaceAll('"', '""')}}"` : text;
+      }};
+      const normalizedUrl = (value) => {{
+        try {{
+          const url = new URL(value.trim());
+          ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "OutLnkChk"].forEach((key) => url.searchParams.delete(key));
+          url.hash = "";
+          return url.toString();
+        }} catch {{
+          return value.trim();
+        }}
+      }};
+      const build = () => {{
+        const status = fields.status.value;
+        const forceInclude = status === "include" ? "1" : "";
+        const forceExclude = status === "exclude" ? "1" : "";
+        const reviewStatus = status === "hold" ? "hold" : "reviewed";
+        const tags = [fields.section.value, fields.tags.value].filter(Boolean).join(";");
+        const row = [
+          normalizedUrl(fields.url.value),
+          reviewStatus,
+          forceInclude,
+          forceExclude,
+          tags,
+          fields.comment.value.trim(),
+          `admin-page {html_escape(report_date)}`,
+        ];
+        fields.output.value = row.map(csvCell).join(",");
+      }};
+      document.getElementById("adminBuild").addEventListener("click", build);
+      document.getElementById("adminCopy").addEventListener("click", async () => {{
+        if (!fields.output.value) build();
+        try {{ await navigator.clipboard.writeText(fields.output.value); }} catch {{}}
+      }});
+    }})();
+  </script>
+</body>
+</html>"""
+
+
+def write_admin_page(site_dir: Path, report_date: str) -> None:
+    (site_dir / "admin.html").write_text(render_admin_page(report_date), encoding="utf-8")
 
 
 def read_lp_profile_codes(db_path: Path = DEFAULT_DB) -> list[str]:
@@ -1630,7 +1797,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-logo[data-tone="5"] {{ border-color: #ead8d8; background: #fbf5f5; color: #704044; }}
     .ktcu-logo[data-tone="6"] {{ border-color: #d9e3e7; background: #f5f9fa; color: #2d5361; }}
     .ktcu-title-head div > span {{ width: fit-content; border-left: 3px solid var(--accent); padding-left: 8px; color: var(--text); font-size: 12px; font-weight: 800; }}
-    .ktcu-title h1 {{ margin: 0; color: var(--text); font-size: clamp(28px, 3vw, 38px); font-weight: 850; line-height: 1.12; letter-spacing: 0; }}
+    .ktcu-title h1 {{ margin: 0; color: var(--text); font-size: 28px; font-weight: 850; line-height: 1.12; letter-spacing: 0; }}
     .ktcu-title p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 15px; line-height: 1.68; }}
     .ktcu-quick {{ display: grid; gap: 8px; }}
     .ktcu-quick-item {{ border-left: 3px solid var(--separator); padding-left: 10px; color: var(--text); font-size: 13px; line-height: 1.5; }}
@@ -1734,6 +1901,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     @media (min-width: 760px) {{
       .ktcu-shell {{ padding-top: 22px; padding-bottom: 36px; }}
       .ktcu-shell .kpef-product-header {{ margin-top: -22px; }}
+      .ktcu-title h1 {{ font-size: 38px; }}
       .ktcu-hero {{ grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr); align-items: end; }}
       .ktcu-intel-grid {{ grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr); }}
       .ktcu-section-grid {{ grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }}
@@ -1988,22 +2156,23 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
     profile_url = f"lp-{lp_code}.html" if lp_code else "lp-notices.html"
     avatar_label = directory_avatar_label(lp_short_label(lp_code, lp_name), "LP")
     avatar_markup = directory_avatar_markup(homepage_url, avatar_label, lp_code or lp_name)
-    chips = render_asset_chips(item.get("focus_asset_classes"))
+    secondary_label = clean_public_lp_text(ownership) or clean_public_lp_text(default_team)
+    secondary_html = f"<span>{html_escape(secondary_label)}</span>" if secondary_label else ""
     actions = []
     if item.get("has_public_profile", True):
-        actions.append(f'<a href="{html_escape(profile_url)}">프로필 보기</a>')
+        actions.append(f'<a href="{html_escape(profile_url)}">프로필</a>')
     if notice_url:
-        actions.append(f'<a href="{html_escape(notice_url)}" target="_blank" rel="noreferrer">공식 공고 채널</a>')
+        actions.append(f'<a href="{html_escape(notice_url)}" target="_blank" rel="noreferrer">공고 채널</a>')
     elif homepage_url:
-        actions.append(f'<a href="{html_escape(homepage_url)}" target="_blank" rel="noreferrer">공식 홈페이지</a>')
+        actions.append(f'<a href="{html_escape(homepage_url)}" target="_blank" rel="noreferrer">홈페이지</a>')
     if not actions and homepage_url:
-        actions.append(f'<a href="{html_escape(homepage_url)}" target="_blank" rel="noreferrer">공식 홈페이지</a>')
+        actions.append(f'<a href="{html_escape(homepage_url)}" target="_blank" rel="noreferrer">홈페이지</a>')
     coverage = public_coverage_label(fact_count, source_count)
     search_blob = " ".join([lp_name, lp_type, ownership, default_team, focus])
-    return f"""          <article class="lp-directory-card" data-search="{html_escape(search_blob)}" data-name="{html_escape(lp_name)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(focus)}" data-kind="{html_escape(' '.join([lp_type, ownership]))}" data-notices="{notice_count}" data-amount="{amount_sort:.4f}" data-latest="{html_escape(latest)}">
+    return f"""          <article class="lp-directory-card" aria-label="{html_escape(lp_name)}" data-search="{html_escape(search_blob)}" data-name="{html_escape(lp_name)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(focus)}" data-kind="{html_escape(' '.join([lp_type, ownership]))}" data-notices="{notice_count}" data-amount="{amount_sort:.4f}" data-latest="{html_escape(latest)}">
             {avatar_markup}
             <div class="lp-directory-card-head">
-              <span>{html_escape(lp_type)}</span>
+              {secondary_html}
               <strong>{html_escape(lp_name)}</strong>
             </div>
             <span class="lp-directory-kind">{html_escape(lp_type)}</span>
@@ -2015,9 +2184,6 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
               <div><dt>자료 항목</dt><dd>{html_escape(coverage)}</dd></div>
             </dl>
             <div class="lp-page-actions">{"".join(actions)}</div>
-            <div class="lp-directory-chips">
-{chips}
-            </div>
           </article>"""
 
 
@@ -2061,15 +2227,16 @@ def render_lp_notices_page(
     body.lp-notices-page .app-header {{ width: min(1400px, 100%); margin: 0 auto; }}
     .lp-profile-nav {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }}
     .lp-profile-nav a {{ display: inline-flex; min-height: 32px; align-items: center; border-radius: 999px; padding: 6px 10px; background: var(--surface-muted); color: var(--text); font-size: 12px; font-weight: 750; text-decoration: none; }}
-    .lp-directory-hero {{ display: grid; gap: 18px; margin: 18px 0 18px; padding: 6px 0 4px; }}
-    .lp-directory-hero h1 {{ margin: 0; color: var(--text); font-size: clamp(28px, 3vw, 38px); font-weight: 850; line-height: 1.12; letter-spacing: 0; }}
+    .lp-directory-hero {{ display: grid; gap: 18px; margin: 18px 0 16px; padding: 4px 0 2px; }}
+    .lp-directory-meta {{ margin: 0 0 8px; color: var(--secondary); font-size: 13px; font-weight: 750; line-height: 1.45; }}
+    .lp-directory-hero h1 {{ margin: 0; color: var(--text); font-size: 28px; font-weight: 850; line-height: 1.12; letter-spacing: 0; }}
     .lp-directory-hero p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 14px; line-height: 1.62; }}
     .lp-directory-kpis {{ display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
     .lp-directory-kpis div {{ border: 1px solid var(--separator); border-radius: 8px; padding: 11px; background: var(--surface); }}
     .lp-directory-kpis span {{ display: block; color: var(--secondary); font-size: 11.5px; font-weight: 800; }}
     .lp-directory-kpis strong {{ display: block; margin-top: 4px; color: var(--text); font-size: 20px; line-height: 1.2; }}
     .lp-directory-table,
-    .lp-notice-table {{ overflow: hidden; border: 1px solid var(--separator); border-radius: 8px; background: var(--surface); }}
+    .lp-notice-table {{ overflow: hidden; border: 1px solid var(--separator); border-radius: 6px; background: var(--surface); }}
     .lp-directory-head {{
       display: grid;
       grid-template-columns: 44px minmax(0, 1fr) 82px 74px;
@@ -2078,7 +2245,7 @@ def render_lp_notices_page(
       min-height: 44px;
       padding: 0 10px;
       border-bottom: 1px solid var(--separator);
-      background: #f0f1f2;
+      background: #f4f5f6;
       color: var(--secondary);
       font-size: 12px;
       font-weight: 850;
@@ -2089,10 +2256,11 @@ def render_lp_notices_page(
     .lp-directory-head span:nth-child(4),
     .lp-directory-head span:nth-child(7) {{ display: none; }}
     .lp-directory-head span:nth-child(6) {{ font-size: 0; }}
-    .lp-directory-head span:nth-child(6)::after {{ content: "표시 공고"; font-size: 12px; }}
+    .lp-directory-head span:nth-child(6)::after {{ content: "공고"; font-size: 12px; }}
     .lp-notice-head {{ display: none; }}
     .lp-directory-grid {{ display: grid; gap: 0; margin-bottom: 16px; }}
-    .lp-directory-card {{ display: grid; grid-template-columns: 44px minmax(0, 1fr) 82px 74px; gap: 8px; align-items: center; min-height: 76px; border-bottom: 1px solid var(--separator); padding: 10px; background: var(--surface); }}
+    .lp-directory-card {{ display: grid; grid-template-columns: 44px minmax(0, 1fr) 82px 74px; gap: 8px; align-items: center; min-height: 70px; border-bottom: 1px solid var(--separator); padding: 9px 10px; background: var(--surface); }}
+    .lp-directory-card:hover {{ background: #fbfcfd; }}
     .lp-directory-card:last-child {{ border-bottom: 0; }}
     .lp-directory-avatar {{ position: relative; display: inline-grid; width: 40px; height: 40px; place-items: center; overflow: hidden; border: 1px solid var(--separator); border-radius: 50%; background: #fff; color: var(--text); font-size: 10px; font-weight: 900; letter-spacing: 0; box-shadow: inset 0 0 0 3px #fff; }}
     .lp-directory-avatar::after {{ position: absolute; inset: 7px; border: 1px solid currentColor; border-radius: 50%; opacity: 0.16; content: ""; }}
@@ -2107,19 +2275,16 @@ def render_lp_notices_page(
     .lp-directory-avatar[data-tone="5"] {{ border-color: #ead8d8; background: #fbf5f5; color: #704044; }}
     .lp-directory-avatar[data-tone="6"] {{ border-color: #d9e3e7; background: #f5f9fa; color: #2d5361; }}
     .lp-directory-card-head {{ display: grid; gap: 4px; }}
-    .lp-directory-card-head span {{ width: fit-content; border-radius: 999px; padding: 4px 8px; background: var(--surface-muted); color: var(--text); font-size: 11px; font-weight: 800; }}
-    .lp-directory-card-head strong {{ color: var(--text); font-size: 16px; line-height: 1.28; }}
+    .lp-directory-card-head span {{ color: var(--secondary); font-size: 11.5px; font-weight: 750; line-height: 1.25; }}
+    .lp-directory-card-head strong {{ color: var(--text); font-size: 15px; line-height: 1.28; overflow-wrap: anywhere; }}
     .lp-directory-kind,
     .lp-directory-latest {{ color: var(--secondary); font-size: 13px; font-weight: 750; line-height: 1.45; }}
     .lp-directory-kind,
     .lp-directory-focus,
-    .lp-directory-card > .lp-page-actions,
-    .lp-directory-chips {{ display: none; }}
+    .lp-directory-card > .lp-page-actions {{ display: none; }}
     .lp-directory-latest {{ text-align: right; }}
     .lp-directory-card p,
     .lp-directory-focus {{ margin: 0; color: var(--secondary); font-size: 13px; line-height: 1.5; }}
-    .lp-directory-chips {{ flex-wrap: wrap; gap: 6px; }}
-    .lp-directory-chips span {{ border: 1px solid var(--separator); border-radius: 999px; padding: 5px 8px; background: #fbfcfd; color: var(--text); font-size: 11.5px; font-weight: 750; }}
     .lp-directory-metrics {{ display: block; margin: 0; text-align: right; }}
     .lp-directory-metrics div:not(:first-child) {{ display: none; }}
     .lp-directory-metrics dt {{ display: none; }}
@@ -2139,9 +2304,10 @@ def render_lp_notices_page(
     .lp-page-meta {{ display: flex; flex-wrap: wrap; gap: 6px; color: var(--secondary); font-size: 12px; line-height: 1.35; }}
     .lp-page-meta span + span::before {{ content: "·"; margin-right: 6px; color: var(--tertiary); }}
     .lp-page-actions {{ display: flex; flex-wrap: wrap; gap: 8px; }}
-    .lp-page-actions a {{ display: inline-flex; min-height: 32px; align-items: center; border-radius: 999px; padding: 6px 10px; background: var(--surface-muted); color: var(--text); font-size: 12px; font-weight: 650; text-decoration: none; }}
+    .lp-page-actions a {{ display: inline-flex; min-height: 30px; align-items: center; border-radius: 6px; padding: 5px 8px; background: var(--surface-muted); color: var(--text); font-size: 12px; font-weight: 700; text-decoration: none; }}
     @media (min-width: 760px) {{
       body.lp-notices-page .app-shell {{ margin-top: 0; margin-bottom: 0; min-height: 100vh; border-radius: 0; box-shadow: none; }}
+      .lp-directory-hero h1 {{ font-size: 38px; }}
       .lp-directory-hero {{ grid-template-columns: minmax(0, 1fr) minmax(320px, 0.7fr); align-items: end; }}
       .lp-directory-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .lp-control-line {{ grid-template-columns: minmax(0, 1fr) 210px; }}
@@ -2163,7 +2329,7 @@ def render_lp_notices_page(
         min-height: 48px;
         padding: 0 18px;
         border-bottom: 1px solid var(--separator);
-        background: #f0f1f2;
+        background: #f4f5f6;
         color: var(--secondary);
         font-size: 12px;
         font-weight: 850;
@@ -2193,8 +2359,7 @@ def render_lp_notices_page(
         box-shadow: none;
       }}
       .lp-directory-card:last-child {{ border-bottom: 0; }}
-      .lp-directory-card-head span {{ background: #f5f5f5; color: var(--secondary); }}
-      .lp-directory-card-head strong {{ font-size: 16px; }}
+      .lp-directory-card-head strong {{ font-size: 15px; }}
       .lp-directory-avatar {{ width: 42px; height: 42px; }}
       .lp-directory-kind {{ display: inline; text-align: left; }}
       .lp-directory-focus {{ color: var(--text); }}
@@ -2209,7 +2374,6 @@ def render_lp_notices_page(
       .lp-directory-metrics div {{ border-top: 0; padding-top: 0; }}
       .lp-directory-metrics dt {{ display: block; }}
       .lp-directory-card > .lp-page-actions {{ display: flex; }}
-      .lp-directory-chips {{ display: none; }}
       .lp-notice-head {{
         display: grid;
         grid-template-columns: minmax(360px, 1.4fr) minmax(320px, 1fr) minmax(160px, 0.42fr);
@@ -2218,7 +2382,7 @@ def render_lp_notices_page(
         min-height: 48px;
         padding: 0 18px;
         border-bottom: 1px solid var(--separator);
-        background: #f0f1f2;
+        background: #f4f5f6;
         color: var(--secondary);
         font-size: 12px;
         font-weight: 850;
@@ -2249,25 +2413,12 @@ def render_lp_notices_page(
 <body class="lp-notices-page">
   <div class="app-shell newsletter-only">
     {render_public_product_header("lp", "#lpNoticeSearch")}
-    <header class="app-header">
-      <div class="header-topline">
-        <div>
-          <p>데이터룸</p>
-          <strong>출자기관</strong>
-        </div>
-        <div class="header-actions">
-          <a class="header-action active" href="#lpDirectory" aria-label="출자기관 목록으로 이동">기관</a>
-          <a class="header-action" href="#lpNotices" aria-label="LP 공식 공고로 이동">공고</a>
-        </div>
-      </div>
-      <div class="brief-meta">대상 LP {tracked_count}개 · 기관 프로필 {profile_count}개 · 표시 공고 {visible_notice_count}건 · 기준일 {html_escape(report_date)}</div>
-    </header>
-
     <main class="content-area">
       <section class="lp-directory-hero" aria-label="LP 디렉토리 요약">
         <div>
+          <p class="lp-directory-meta">대상 LP {tracked_count}개 · 기관 프로필 {profile_count}개 · 표시 공고 {visible_notice_count}건 · 기준일 {html_escape(report_date)}</p>
           <h1>출자기관</h1>
-          <p>국내 주요 출자기관의 기본 현황, 관심 자산군, 최근 출자공고를 한 곳에서 봅니다. 공고와 관련 뉴스는 구분해 표시합니다.</p>
+          <p>국내 주요 출자기관의 기본 현황, 관심 자산군, 최근 출자공고를 한 곳에서 비교합니다.</p>
         </div>
         <div class="lp-directory-kpis">
           <div><span>대상 기관</span><strong>{tracked_count}개</strong></div>
@@ -2308,7 +2459,7 @@ def render_lp_notices_page(
             <span>유형</span>
             <span>주요 자산군</span>
             <span>최근 공고</span>
-            <span>표시 공고</span>
+            <span>공고</span>
             <span>이동</span>
           </div>
           <div class="lp-directory-grid">
@@ -2546,6 +2697,7 @@ def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
     include_paths = [
         site_dir / "index.html",
         site_dir / "daily-news.html",
+        site_dir / "admin.html",
         site_dir / "lp-notices.html",
         site_dir / "gps.html",
         site_dir / "pef-wiki.html",
@@ -2608,6 +2760,7 @@ def main() -> int:
     result["ktcu_fact_count"] = str(len(read_ktcu_payload(lp_code=KTCU_CODE, profile_codes=read_lp_profile_codes()).get("facts") or []))
     result.update({key: str(value) for key, value in write_gp_pages(site_dir, DEFAULT_DB, args.date).items()})
     write_pef_wiki_page(site_dir, args.date)
+    write_admin_page(site_dir, args.date)
     write_health_file(site_dir, result)
     write_static_support_files(site_dir)
     assert_newsletter_only(site_dir)
