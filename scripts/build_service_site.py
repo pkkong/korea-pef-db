@@ -1964,6 +1964,14 @@ button, input { font: inherit; }
 .view { display: none; }
 .view.active { display: block; }
 .section-block { margin: 8px 0 18px; }
+.newsletter-only .section-block {
+  margin: 0 0 28px;
+}
+.newsletter-only .section-block + .section-block {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 8px solid #f7f7f8;
+}
 .section-title {
   display: flex;
   align-items: center;
@@ -1976,6 +1984,11 @@ button, input { font: inherit; }
   line-height: 1.3;
   font-weight: 700;
 }
+.newsletter-only .section-title {
+  padding-bottom: 10px;
+  font-size: 14px;
+  font-weight: 760;
+}
 .section-title span {
   flex: 0 0 auto;
   color: var(--secondary);
@@ -1983,6 +1996,14 @@ button, input { font: inherit; }
   line-height: 1.2;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+.newsletter-only .section-title span {
+  min-height: 20px;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: #f7f7f8;
+  color: #77777c;
+  font-weight: 650;
 }
 .cell-list {
   margin: 0;
@@ -2460,7 +2481,7 @@ button, input { font: inherit; }
     display: block;
   }
   .newsletter-only .section-block {
-    margin: 0 0 24px;
+    margin: 0 0 30px;
   }
   .newsletter-only .bottom-nav,
   .bottom-nav.newsletter-only {
