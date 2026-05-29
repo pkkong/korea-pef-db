@@ -87,4 +87,4 @@ Every non-trivial subagent task should state:
 - Newsletter deployment publishes the generated static site to `pkkong/kpef-newsletter` on the `gh-pages` branch.
 - Local secrets are not committed. The local daily news env file is `config/daily_news.env`; GitHub Actions uses repository secrets.
 - Product and role-specific operating briefs are in `docs/agent_operating_briefs.md`.
-- Public UX/UI rules are also durable instructions: benchmark the public service against InnoForest-style data directories, keep a unified bottom nav order, use table-like rows for LP/GP directories, avoid card-heavy layouts, and remove operator/internal wording from public pages.
+- Public UX/UI rules are durable instructions in `docs/design_system.md`: benchmark the public service against InnoForest-style data directories, keep the unified `브리프 / LP / GP / Wiki` bottom nav, use table-like rows for LP/GP directories, avoid card-heavy layouts, and remove operator/internal wording from public pages.

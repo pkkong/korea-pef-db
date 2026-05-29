@@ -19,6 +19,24 @@ The corresponding entity data dictionary is maintained in `entity_data_model.md`
 - Make updates repeatable through source files, scripts, and evidence rows.
 - Avoid one-off manual edits that cannot be regenerated.
 
+## Current Public IA
+
+The public service has four primary user-facing destinations:
+
+- `브리프`: daily market/news reading. News-only saved articles are a local
+  brief utility, not a global destination.
+- `LP`: LP directory, official commitment notices, selected-GP evidence, and LP facts.
+- `GP`: GP directory/profile, current commitment amount, funds, people, and source evidence.
+- `Wiki`: practical guides and definitions linked from the public service.
+
+The global bottom navigation order is fixed as `브리프 / LP / GP / Wiki` on both
+mobile and desktop. Do not add a second top-level service nav. A global saved
+area can be added only after saved items work across news, LP, GP, and Wiki.
+
+Public data directories should use table-like rows. Cards are allowed for compact
+summary modules, detail panels, and mobile row collapse, but not as the dominant
+layout for LP/GP directories. Detailed visual rules live in `design_system.md`.
+
 ## Primary Navigation
 
 ### 1. Market
