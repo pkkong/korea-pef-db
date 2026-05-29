@@ -2156,8 +2156,6 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
     profile_url = f"lp-{lp_code}.html" if lp_code else "lp-notices.html"
     avatar_label = directory_avatar_label(lp_short_label(lp_code, lp_name), "LP")
     avatar_markup = directory_avatar_markup(homepage_url, avatar_label, lp_code or lp_name)
-    secondary_label = clean_public_lp_text(ownership) or clean_public_lp_text(default_team)
-    secondary_html = f"<span>{html_escape(secondary_label)}</span>" if secondary_label else ""
     actions = []
     if item.get("has_public_profile", True):
         actions.append(f'<a href="{html_escape(profile_url)}">프로필</a>')
@@ -2172,7 +2170,6 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
     return f"""          <article class="lp-directory-card" aria-label="{html_escape(lp_name)}" data-search="{html_escape(search_blob)}" data-name="{html_escape(lp_name)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(focus)}" data-kind="{html_escape(' '.join([lp_type, ownership]))}" data-notices="{notice_count}" data-amount="{amount_sort:.4f}" data-latest="{html_escape(latest)}">
             {avatar_markup}
             <div class="lp-directory-card-head">
-              {secondary_html}
               <strong>{html_escape(lp_name)}</strong>
             </div>
             <span class="lp-directory-kind">{html_escape(lp_type)}</span>
@@ -2275,7 +2272,6 @@ def render_lp_notices_page(
     .lp-directory-avatar[data-tone="5"] {{ border-color: #ead8d8; background: #fbf5f5; color: #704044; }}
     .lp-directory-avatar[data-tone="6"] {{ border-color: #d9e3e7; background: #f5f9fa; color: #2d5361; }}
     .lp-directory-card-head {{ display: grid; gap: 4px; }}
-    .lp-directory-card-head span {{ color: var(--secondary); font-size: 11.5px; font-weight: 750; line-height: 1.25; }}
     .lp-directory-card-head strong {{ color: var(--text); font-size: 15px; line-height: 1.28; overflow-wrap: anywhere; }}
     .lp-directory-kind,
     .lp-directory-latest {{ color: var(--secondary); font-size: 13px; font-weight: 750; line-height: 1.45; }}
