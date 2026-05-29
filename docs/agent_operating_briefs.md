@@ -30,6 +30,7 @@
 - 반복 지적의 핵심 문장은 이후 서브에이전트 프롬프트에 명시한다. 특히 파일 범위, 금지 범위, 산출물 품질, 공개/배포 파일 취급, 사용자 선호와 관련된 correction은 누락하지 않는다.
 - 모든 서브에이전트 배정에는 `role`, `objective`, `owned files`, `forbidden files`, `quality rules`, `known user preferences`, `verification`, `expected output`을 포함한다.
 - 서브에이전트가 같은 실수를 반복하지 않도록 Project Lead는 배정 전 known user preferences와 금지 파일을 최신 지시와 대조하고, 완료 후 결과가 그 지시를 지켰는지 확인한다.
+- 공개 UI 작업은 소스 수정, 생성 산출물 재생성, frontend checker, 390px/1280px 화면 확인, 클릭/키보드 이동 확인이 끝나기 전에는 완료로 보고하지 않는다. 못 한 검증은 완료가 아니라 미검증 리스크로 보고한다.
 
 ## 공개 화면 문구 원칙
 
@@ -57,7 +58,8 @@
 - LP의 `ownership_type` 같은 `public/private` 성격값은 이름 셀 아래에 노출하지 않는다. 해당 값은 필터와 정렬 데이터로만 활용하고, 목록 row에는 기관명과 핵심 숫자 위주로 표시한다.
 - `상세 프로필`, 중복 순위, 반복되는 자료/근거 문구처럼 모든 row에서 같은 의미를 되풀이하는 텍스트는 줄인다. 사용자에게 필요한 핵심 값만 표 컬럼과 row 안에 둔다.
 - GP 화면은 뉴스레터 UI를 기준 구현으로 삼는다. GP 목록은 흰 배경, 얇은 row divider, 원형 CI 슬롯, 표형 row, 모바일 우선 컬럼 구성을 사용하고, 큰 hero·카드형 KPI·강한 pill badge를 기본값으로 두지 않는다. GP 상세는 회사 식별 정보, 운용 현황, 펀드 이력, LP 연결, 관련 뉴스/딜을 조용한 fact matrix와 리스트로 정리한다.
-- GP 공개 화면에서 `proxy`, `research`, `verification`, `source/evidence`, `operator`, `AI-generated` 같은 내부 표현은 금지한다. 기사 제목이나 원문에 포함된 AI 산업 용어는 그대로 둔다. 필요한 경우 `자료 확인`, `운용 현황`, `약정액 기준`, `출자 연결`, `관련 뉴스`로 바꾼다.
+- GP 공개 화면에서 `proxy`, `research`, `verification`, `source/evidence`, `operator`, `AI-generated` 같은 내부 표현은 금지한다. 기사 제목이나 원문에 포함된 AI 산업 용어는 그대로 둔다. 필요한 경우 `운용 현황`, `약정액 기준`, `출자 연결`, `관련 뉴스`로 바꾼다.
+- GP 목록의 공개 필터는 짧고 사용자가 바로 이해할 수 있는 기준만 둔다. `상위 프로필`, `자료 확인`, profile page availability, 검증 상태, 빌드 coverage 같은 내부 기준은 화면에 노출하지 않는다.
 - 서비스별 임의 강조색을 쓰지 않는다. 기본은 흑백·회색·얇은 border 중심이고, 활성 상태도 공통 `var(--accent)`, `var(--surface-muted)`, `var(--separator)` 계열로 맞춘다.
 - 기사 row 오른쪽 책갈피처럼 목적지가 불분명한 저가치 아이콘은 공개 화면에서 제거한다. 저장 기능은 뉴스, LP, GP, Wiki 전체에 적용되는 명확한 저장함이 설계된 뒤 전역 기능으로 다룬다.
 

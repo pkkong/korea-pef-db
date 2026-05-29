@@ -443,7 +443,6 @@ def _render_empty_directory(report_date: str, message: str) -> str:
 
 
 def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_ids: set[str]) -> str:
-    verified_count = sum(1 for gp in gps if _is_verified(gp.get("verification_level")))
     cards = "\n".join(_render_gp_card(gp, str(gp["source_gp_id"]) in top_ids) for gp in gps)
 
     return f"""<!doctype html>
@@ -490,24 +489,21 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
       </div>
       <div class="gp-filter-row" aria-label="빠른 필터">
         <button class="active" type="button" data-filter="all">전체</button>
-        <button type="button" data-filter="active">최신 운용</button>
-        <button type="button" data-filter="top">상위 프로필</button>
-        <button type="button" data-filter="verified">자료 확인</button>
-        <button type="button" data-filter="news">뉴스 있음</button>
-        <button type="button" data-filter="deal">딜 관련</button>
-        <button type="button" data-filter="lp">출자 연결</button>
-        <button type="button" data-filter="homepage">홈페이지 있음</button>
+        <button type="button" data-filter="active">운용 중</button>
+        <button type="button" data-filter="news">뉴스</button>
+        <button type="button" data-filter="deal">딜</button>
+        <button type="button" data-filter="lp">출자</button>
       </div>
-      <p class="gp-control-meta">상위 프로필 {len(top_ids):,}개 · 자료 확인 {verified_count:,}개 · 기준일 {_e(report_date)}</p>
+      <p class="gp-control-meta">총 {len(gps):,}개 운용사 · 기준일 {_e(report_date)}</p>
     </section>
 
     <section class="gp-directory-table" aria-label="GP 목록">
       <div class="gp-directory-head" aria-hidden="true">
         <span></span>
         <span>운용사명</span>
-        <span>기본 정보</span>
-        <span>순위 / 약정액</span>
-        <span>뉴스 / LP</span>
+        <span>대표/홈페이지</span>
+        <span>순위/약정액</span>
+        <span>뉴스/출자</span>
       </div>
       <div class="gp-directory" id="gpDirectory">
 {cards}
@@ -518,11 +514,6 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
       <span id="gpPageState">1 / 1</span>
       <button type="button" id="gpNextPage">다음</button>
     </div>
-
-    <section class="gp-disclaimer" aria-label="참고사항">
-      <h2>참고사항</h2>
-      <p>약정액 기준 지표는 금감원 PEF 공시와 운용 현황을 바탕으로 한 참고 지표이며 실제 순자산, 미실현 가치, co-GP 지분율을 의미하지 않습니다. 관련 뉴스는 운용사명으로 연결해 동일·유사 명칭의 다른 법인이 포함될 수 있고, 회사 식별정보는 공개적으로 확인되는 항목만 표시합니다.</p>
-    </section>
   </main>
   {_render_bottom_nav()}
   {_directory_script()}
@@ -542,7 +533,6 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
     news_count = int(gp.get("news_count") or 0)
     deal_count = int(gp.get("deal_news_count") or 0)
     lp_count = int(gp.get("lp_signal_count") or 0)
-    fund_signal_count = int(gp.get("active_fund_signal_count") or 0)
     representative = _clean(gp.get("representative_name"))
     representative_html = f"<span>대표 {_e(representative)}</span>" if representative else ""
     homepage = _safe_url(gp.get("homepage_url"))
@@ -576,10 +566,8 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
             _clean(gp.get("legal_entity_name_ko")),
             representative,
             _clean(gp.get("alias_names")),
-            " ".join(_clean(item.get("title")) for item in gp.get("news", [])),
-            " ".join(_clean(item.get("title")) for item in gp.get("lp_signals", [])),
-            " ".join(_clean(item.get("lp_name")) for item in gp.get("lp_signals", [])),
-            " ".join(_clean(item.get("fund_name")) for item in gp.get("funds", [])),
+            " ".join(_clean(item.get("lp_name")) for item in gp.get("lp_signals", [])[:3]),
+            " ".join(_clean(item.get("fund_name")) for item in gp.get("funds", [])[:5]),
         ]
     )
     rank_sort = _sort_number(gp.get("latest_primary_rank"), default=999999)
@@ -607,17 +595,29 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
     )
     status_label = _card_status_label(latest_rank, has_profile_page)
     status_html = f"<span>{_e(status_label)}</span>" if status_label else ""
+    signal_items = [
+        ("뉴스", news_count),
+        ("딜", deal_count),
+        ("출자", lp_count),
+    ]
+    signal_strip_html = ""
+    if any(count for _, count in signal_items):
+        signal_rows = "\n".join(
+            f"          <span>{_e(label)} <strong>{count:,}</strong></span>"
+            for label, count in signal_items
+            if count
+        )
+        signal_strip_html = f"""        <div class="gp-signal-strip" aria-label="뉴스·출자 연결">
+{signal_rows}
+        </div>"""
 
     return f"""      <article class="gp-card"
         data-url="{_e(profile_url)}"
         data-search="{_e(search_blob)}"
         data-active="{1 if _as_bool(gp.get("active_in_latest_period")) else 0}"
-        data-top="{1 if has_profile_page else 0}"
-        data-verified="{1 if _is_verified(gp.get("verification_level")) else 0}"
         data-news="{1 if news_sort else 0}"
         data-deal="{1 if deal_count else 0}"
         data-lp="{1 if lp_count else 0}"
-        data-homepage="{1 if homepage else 0}"
         data-rank="{rank_sort}"
         data-aum="{aum_sort}"
         data-funds="{active_sort}"
@@ -636,12 +636,7 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
           </div>
         </div>
 {metrics_html}
-        <div class="gp-signal-strip" aria-label="뉴스·출자 연결">
-          <span>뉴스 <strong>{news_count:,}</strong></span>
-          <span>딜 <strong>{deal_count:,}</strong></span>
-          <span>LP <strong>{lp_count:,}</strong></span>
-          <span>펀드 <strong>{fund_signal_count:,}</strong></span>
-        </div>
+{signal_strip_html}
 {meta_line_html}
       </article>"""
 
@@ -669,8 +664,15 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
     category_html = f"<span>{_e(category)}</span>" if category else ""
     description = _profile_summary(gp)
     description_html = f"        <p>{_e(description)}</p>" if description else ""
-    news_rows = _render_news_timeline(gp.get("news", [])[:PROFILE_NEWS_LIMIT])
-    deal_rows = _render_news_timeline(gp.get("deal_news", [])[:PROFILE_DEAL_SIGNAL_LIMIT], empty_label="딜 관련 뉴스가 없습니다.")
+    deal_items = list(gp.get("deal_news", [])[:PROFILE_DEAL_SIGNAL_LIMIT])
+    deal_urls = {_safe_url(item.get("source_url")) for item in deal_items if _safe_url(item.get("source_url"))}
+    news_items = [
+        item
+        for item in gp.get("news", [])
+        if not _safe_url(item.get("source_url")) or _safe_url(item.get("source_url")) not in deal_urls
+    ][:PROFILE_NEWS_LIMIT]
+    news_rows = _render_news_timeline(news_items)
+    deal_rows = _render_news_timeline(deal_items, empty_label="딜 관련 뉴스가 없습니다.")
     fund_rows = _render_fund_rows(gp.get("funds", [])[:PROFILE_FUND_LIMIT])
     lp_signal_rows = _render_lp_signal_rows(gp.get("lp_signals", [])[:PROFILE_LP_SIGNAL_LIMIT])
     peer_rows = _render_peer_links(gp, ranked_gps)
@@ -684,7 +686,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>{_e(name)} GP 프로필</title>
+  <title>{_e(name)} - PEF 운용사</title>
 {_app_head_meta()}
   {_base_styles()}
 </head>
@@ -692,7 +694,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
   <main class="gp-shell">
     {_render_top_nav(active="gps")}
     <nav class="gp-breadcrumb" aria-label="경로">
-      <a href="gps.html">GP 디렉토리</a>
+      <a href="gps.html">GP</a>
       <span>{_e(name)}</span>
     </nav>
 
@@ -700,7 +702,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
       <div class="gp-detail-title-head">
         <span class="{avatar_class}" data-tone="{avatar_tone}" aria-hidden="true">{avatar_logo}<span>{_e(avatar_label)}</span></span>
         <div>
-          <span>GP 프로필</span>
+          <span>운용사</span>
           <h1>{_e(name)}</h1>
         </div>
 {description_html}
@@ -717,8 +719,6 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
       <div><span>운용 중 펀드</span><strong>{_e(_format_int(gp.get("latest_primary_active_fund_count")))}</strong></div>
       <div><span>약정액 기준</span><strong>{_e(_format_krw_100mn(gp.get("latest_primary_aum_proxy_krw_100mn")))}</strong></div>
       <div><span>약정액 점유율</span><strong>{_e(_format_pct(gp.get("latest_primary_market_share_pct")))}</strong></div>
-      <div><span>누적 펀드</span><strong>{_e(_format_int(gp.get("cumulative_primary_fund_count")))}</strong></div>
-      <div><span>누적 약정액</span><strong>{_e(_format_krw_100mn(gp.get("cumulative_primary_commitment_proxy_krw_100mn")))}</strong></div>
     </section>
 
     {signal_bar}
@@ -777,7 +777,6 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
     <section class="gp-disclaimer" aria-label="참고사항">
       <h2>참고사항</h2>
       <p>{_e(_detail_limit_note(gp))}</p>
-      <p>기준일 {_e(report_date)} · 최신 순위, 약정액 기준 지표, 관련 뉴스가 확인되는 상위 {TOP_GP_PAGE_LIMIT:,}개 GP의 상세 페이지를 제공합니다.</p>
     </section>
   </main>
   {_render_bottom_nav()}
@@ -810,7 +809,6 @@ def _render_profile_facts(gp: dict[str, object], homepage_link: str) -> str:
 def _render_coverage_facts(gp: dict[str, object]) -> str:
     market_share = _format_pct(gp.get("latest_primary_market_share_pct"))
     facts = [
-        ("자료 확인", _verification_label(gp.get("verification_level"))),
         ("최신 순위", _format_rank(gp.get("latest_primary_rank"))),
         ("누적 순위", _format_rank(gp.get("cumulative_primary_rank"))),
         ("약정액 점유율", market_share),
@@ -2294,33 +2292,40 @@ def _base_styles() -> str:
       font-size: 12px;
       font-weight: 700;
     }
+    .gp-controls {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .gp-controls input {
+      grid-column: 1 / -1;
+    }
     .gp-controls input,
     .gp-controls select {
-      min-height: 42px;
+      min-height: 40px;
       border-color: var(--line);
-      border-radius: 8px;
+      border-radius: 6px;
       color: var(--text);
-      font-size: 14px;
+      font-size: 13.5px;
       box-shadow: none;
       outline-color: var(--accent);
     }
     .gp-filter-row {
-      gap: 6px;
+      gap: 5px;
     }
     .gp-filter-row button {
       border-color: var(--line);
       border-radius: 999px;
-      padding: 6px 9px;
+      padding: 5px 9px;
       background: var(--surface);
       color: var(--secondary);
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 700;
       box-shadow: none;
     }
     .gp-filter-row button.active {
       border-color: var(--text);
-      background: var(--surface);
-      color: var(--text);
+      background: var(--text);
+      color: #fff;
     }
     .gp-control-meta,
     .gp-control-panel p {
@@ -2337,7 +2342,7 @@ def _base_styles() -> str:
     }
     .gp-directory-head {
       grid-template-columns: 40px minmax(0, 1fr) 90px;
-      min-height: 42px;
+      min-height: 38px;
       padding: 0 8px;
       border-bottom: 1px solid var(--line);
       background: var(--surface-muted);
@@ -2369,23 +2374,23 @@ def _base_styles() -> str:
     .gp-card {
       grid-template-columns: 40px minmax(0, 1fr) 90px;
       align-items: start;
-      min-height: 74px;
+      min-height: 68px;
       border-bottom: 1px solid var(--line);
-      padding: 10px 8px;
+      padding: 9px 8px;
       background: var(--surface);
     }
     .gp-card:last-child { border-bottom: 0; }
     .gp-avatar {
-      width: 34px;
-      height: 34px;
+      width: 32px;
+      height: 32px;
       margin-top: 2px;
       border-color: var(--line);
       font-size: 10px;
       box-shadow: inset 0 0 0 3px #fff;
     }
     .gp-avatar img {
-      max-width: 24px;
-      max-height: 24px;
+      max-width: 23px;
+      max-height: 23px;
     }
     .gp-card-title {
       gap: 2px;
@@ -2399,7 +2404,7 @@ def _base_styles() -> str:
       display: none !important;
     }
     .gp-card h2 {
-      font-size: 15px;
+      font-size: 14.5px;
       font-weight: 700;
       line-height: 1.36;
       letter-spacing: 0;
@@ -2418,7 +2423,7 @@ def _base_styles() -> str:
     }
     .gp-metrics dd {
       color: var(--text);
-      font-size: 13px;
+      font-size: 12.5px;
       font-weight: 740;
     }
     .gp-signal-strip {
@@ -2647,6 +2652,9 @@ def _base_styles() -> str:
       .gp-controls {
         grid-template-columns: minmax(0, 1fr) 190px 140px;
       }
+      .gp-controls input {
+        grid-column: auto;
+      }
       .gp-directory-head {
         grid-template-columns: 48px minmax(230px, 1.15fr) minmax(130px, 0.56fr) minmax(300px, 1.34fr) minmax(170px, 0.74fr);
         gap: 16px;
@@ -2722,7 +2730,7 @@ def _base_styles() -> str:
         grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
       }
       .gp-detail-kpis {
-        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
       }
       .gp-signal-bar {
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2991,15 +2999,9 @@ def _material_basis_note(gp: dict[str, object]) -> str:
 
 
 def _detail_limit_note(gp: dict[str, object]) -> str:
-    source_basis = _public_source_basis(gp.get("source_basis"))
-    if source_basis:
-        return (
-            f"{source_basis} 약정액 기준 지표는 실제 순자산이나 운용자산이 아니라 공개 운용 현황 기반 참고 지표입니다. "
-            "관련 뉴스는 운용사명으로 연결해 동일·유사 명칭의 다른 법인이 포함될 수 있습니다."
-        )
     return (
-        "약정액 기준 지표는 공개 운용 현황 기반 참고 지표이며 실제 순자산이나 운용자산이 아닙니다. "
-        "대표자, 홈페이지, 회사 정보와 관련 뉴스는 공개자료에서 확인되는 항목만 표시합니다."
+        "순위와 약정액은 공개 운용 현황 기준이며 실제 순자산이나 미실현 가치를 의미하지 않습니다. "
+        "관련 뉴스는 운용사명 기준으로 연결됩니다."
     )
 
 

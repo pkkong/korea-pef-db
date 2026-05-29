@@ -15,6 +15,7 @@ from urllib.request import Request, urlopen
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_DIR = REPO_ROOT / "public"
+NEWSLETTER_SITE_DIR = REPO_ROOT / "services" / "newsletter" / "deploy" / "site"
 REQUIRED_PUBLIC_FILES = [
     "index.html",
     "daily-news.html",
@@ -158,12 +159,60 @@ def check_brief_initial_date_guard() -> list[str]:
     return ["brief_initial_date_guard=ok"]
 
 
+def check_generated_gp_contract() -> list[str]:
+    gps_path = NEWSLETTER_SITE_DIR / "gps.html"
+    if not gps_path.exists():
+        return ["generated_gp_contract=skipped"]
+
+    gps_html = gps_path.read_text(encoding="utf-8")
+    labels = bottom_nav_labels(gps_html)
+    if labels != BOTTOM_NAV_LABELS:
+        raise CheckFailure(f"gps.html bottom nav mismatch: expected {BOTTOM_NAV_LABELS}, got {labels}")
+
+    forbidden = [
+        "상위 프로필",
+        "상위 120개",
+        "자료 확인",
+        "상세 프로필",
+        "gp-card-extra",
+        "kpef-service-tabs",
+        "gp-top-nav",
+        "source/evidence",
+        "AUM proxy",
+        "operator",
+        "verification",
+        "research",
+    ]
+    violations = [needle for needle in forbidden if needle in gps_html]
+
+    detail_paths = sorted(NEWSLETTER_SITE_DIR.glob("gp-*.html"))[:3]
+    for detail_path in detail_paths:
+        html = detail_path.read_text(encoding="utf-8")
+        detail_labels = bottom_nav_labels(html)
+        if detail_labels != BOTTOM_NAV_LABELS:
+            raise CheckFailure(
+                f"{detail_path.name} bottom nav mismatch: expected {BOTTOM_NAV_LABELS}, got {detail_labels}"
+            )
+        for needle in forbidden:
+            if needle in html:
+                violations.append(f"{detail_path.name}:{needle}")
+
+    if violations:
+        raise CheckFailure(f"Forbidden generated GP wording/markup: {', '.join(violations)}")
+    if 'data-url="gp-' not in gps_html:
+        raise CheckFailure("GP directory rows are missing clickable data-url links")
+    if "PEF 운용사" not in gps_html:
+        raise CheckFailure("GP directory public title missing")
+
+    return [f"generated_gp_contract=ok detail_pages_checked={len(detail_paths)}"]
+
+
 def check_remote(base_url: str) -> list[str]:
     if not base_url:
         return []
     base = base_url.rstrip("/") + "/"
     checked: list[str] = []
-    for relative_path in ["", "db.html", "pef-wiki.html"]:
+    for relative_path in ["", "gps.html", "db.html", "pef-wiki.html"]:
         url = base + relative_path
         request = Request(url, headers={"User-Agent": "kpef-public-frontend-check/1.0"})
         try:
@@ -187,6 +236,7 @@ def main() -> int:
         check_bottom_nav,
         check_visible_text,
         check_public_source_terms,
+        check_generated_gp_contract,
         check_public_db_amount_contract,
         check_brief_initial_date_guard,
     ]

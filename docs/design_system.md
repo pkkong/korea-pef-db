@@ -220,9 +220,15 @@ Use the newsletter screen as the reference for shared public UI polish.
 - GP detail pages should use a simple identity header, fact matrix, fund history,
   LP connection, deal/news tables, and quiet disclaimer text.
 - Public GP screens must not expose internal labels such as `AI-generated`,
-  `operator`, `proxy`, `research`, `verification`, or `source/evidence`. AI as a
-  quoted news topic or industry term is allowed. Use public labels such as
-  `자료 확인`, `운용 현황`, `약정액 기준`, `출자 연결`, and `관련 뉴스`.
+  `operator`, `proxy`, `research`, `verification`, `source/evidence`, `상위 프로필`,
+  or `자료 확인`. AI as a quoted news topic or industry term is allowed. Use public
+  labels such as `운용 현황`, `약정액 기준`, `출자 연결`, and `관련 뉴스`.
+- GP directory filters should stay short and user-facing. Prefer `전체`, `운용 중`,
+  `뉴스`, `딜`, and `출자`; do not expose build coverage, verification state, or
+  profile-page availability as visible filters.
+- GP CSS should be kept in a single canonical public style block over time.
+  Temporary override blocks, duplicate selector drift, and unused old card styles
+  should be removed when a screen is next edited.
 
 ## Wiki Application
 
@@ -255,6 +261,10 @@ Run this before publishing public frontend changes:
 ```bash
 python3 scripts/check_public_frontend.py
 ```
+
+Frontend work is not complete until the source renderer is changed, generated
+site output is rebuilt, this checker passes, and 390px/1280px views have been
+checked for overflow and menu consistency.
 
 Use the deployed smoke check when publishing to GitHub Pages:
 
