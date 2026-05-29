@@ -1268,24 +1268,6 @@ def render_app(
 
 
 def render_public_product_header(active: str, search_href: str = "#clipSearch") -> str:
-    items = [
-        ("brief", "index.html", "브리프"),
-        ("lp", "lp-notices.html", "LP"),
-        ("gp", "gps.html", "GP"),
-        ("wiki", "pef-wiki.html", "Wiki"),
-        ("saved", "index.html#saved", "저장"),
-    ]
-    nav_parts = []
-    for key, href, label in items:
-        extra = ""
-        if active == "brief" and key == "brief":
-            href = "#today"
-            extra = ' data-view="today"'
-        elif active == "brief" and key == "saved":
-            href = "#saved"
-            extra = ' data-view="saved"'
-        nav_parts.append(f'      <a class="{"active" if key == active else ""}" href="{href}"{extra}>{label}</a>')
-    nav = "\n".join(nav_parts)
     return f"""    <header class="kpef-product-header" aria-label="Korea PEF Intelligence">
       <a class="kpef-product-brand" href="index.html">
         <span class="kpef-brand-mark" aria-hidden="true">K</span>
@@ -1295,10 +1277,7 @@ def render_public_product_header(active: str, search_href: str = "#clipSearch") 
         <a class="kpef-icon-link kpef-icon-search" href="{html_escape(search_href)}" aria-label="검색"></a>
         <a class="kpef-icon-link kpef-icon-menu" href="index.html" aria-label="홈"></a>
       </div>
-    </header>
-    <nav class="kpef-service-tabs" aria-label="서비스 메뉴">
-{nav}
-    </nav>"""
+    </header>"""
 
 
 def service_css() -> str:
@@ -2283,17 +2262,47 @@ button, input { font: inherit; }
     margin-bottom: 18px;
     min-height: calc(100vh - 36px);
     border-radius: 30px;
-    padding-bottom: 24px;
+    padding-bottom: calc(106px + env(safe-area-inset-bottom));
     box-shadow: 0 24px 80px rgba(0,0,0,0.08);
     overflow: hidden;
   }
   .kpef-service-tabs {
-    display: grid;
+    display: none;
   }
   .header-topline { padding-right: 112px; }
   .newsletter-only .header-topline { padding-right: 252px; }
   .header-action { display: inline-flex; }
-  .bottom-nav { display: none; }
+  .bottom-nav {
+    bottom: 18px;
+    display: grid;
+    width: min(720px, calc(100vw - 96px));
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 999px;
+    padding: 5px;
+    background: rgba(255,255,255,0.94);
+    box-shadow: 0 18px 60px rgba(15,23,42,0.15);
+  }
+  .bottom-nav button,
+  .bottom-nav a {
+    min-height: 36px;
+    flex-direction: row;
+    justify-content: center;
+    gap: 6px;
+    border-radius: 999px;
+    font-size: 12px;
+  }
+  .bottom-nav .active {
+    background: var(--surface-muted);
+  }
+  .nav-dot {
+    width: 18px;
+    height: 18px;
+    flex-basis: 18px;
+  }
+  .nav-dot::before {
+    width: 17px;
+    height: 17px;
+  }
   .lp-detail-sheet {
     top: 50%;
     bottom: auto;
@@ -2313,7 +2322,7 @@ button, input { font: inherit; }
     width: min(calc(100vw - 48px), 1280px);
   }
   .newsletter-only .kpef-service-tabs {
-    display: grid;
+    display: none;
   }
   .content-area {
     grid-template-columns: minmax(0, 1fr) 340px;
@@ -2375,7 +2384,7 @@ button, input { font: inherit; }
   }
   .newsletter-only .bottom-nav,
   .bottom-nav.newsletter-only {
-    display: none;
+    display: grid;
   }
 }
 """

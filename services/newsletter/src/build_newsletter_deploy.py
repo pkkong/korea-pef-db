@@ -758,9 +758,9 @@ def render_admin_page(report_date: str) -> str:
     .admin-output textarea {{ width: 100%; min-height: 96px; border: 1px solid var(--separator); border-radius: 6px; padding: 10px; background: #fbfcfd; color: var(--text); font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }}
     .admin-note {{ margin: 0; color: var(--secondary); font-size: 12px; line-height: 1.5; }}
     @media (min-width: 760px) {{
-      .admin-shell {{ padding-bottom: 36px; }}
-      .admin-shell .kpef-service-tabs {{ display: grid; margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); padding-left: max(0px, calc((100vw - 980px) / 2)); padding-right: max(0px, calc((100vw - 980px) / 2)); }}
-      .admin-page .bottom-nav {{ display: none; }}
+      .admin-shell {{ padding-bottom: calc(106px + env(safe-area-inset-bottom)); }}
+      .admin-shell .kpef-service-tabs {{ display: none; }}
+      .admin-page .bottom-nav {{ display: grid; }}
       .admin-hero h1 {{ font-size: 36px; }}
       .admin-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .admin-field.full {{ grid-column: 1 / -1; }}
@@ -1899,7 +1899,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-gp-tags span {{ border: 1px solid var(--separator); border-radius: 999px; padding: 6px 9px; background: #fbfcfd; color: var(--text); font-size: 12px; font-weight: 800; }}
     .ktcu-footer {{ margin-top: 14px; color: var(--secondary); font-size: 11.5px; line-height: 1.45; }}
     @media (min-width: 760px) {{
-      .ktcu-shell {{ padding-top: 22px; padding-bottom: 36px; }}
+      .ktcu-shell {{ padding-top: 22px; padding-bottom: calc(106px + env(safe-area-inset-bottom)); }}
       .ktcu-shell .kpef-product-header {{ margin-top: -22px; }}
       .ktcu-title h1 {{ font-size: 38px; }}
       .ktcu-hero {{ grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr); align-items: end; }}
@@ -2310,10 +2310,10 @@ def render_lp_notices_page(
     }}
     @media (min-width: 960px) {{
       body.lp-notices-page .kpef-service-tabs {{
-        display: grid;
+        display: none;
       }}
       body.lp-notices-page .bottom-nav {{
-        display: none;
+        display: grid;
       }}
       .lp-directory-table,
       .lp-notice-table {{ border: 1px solid var(--separator); background: var(--surface); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }}

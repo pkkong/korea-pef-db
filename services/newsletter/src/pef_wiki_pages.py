@@ -418,22 +418,7 @@ def _render_top_nav() -> str:
         <button class="kpef-icon-link kpef-icon-menu" type="button" data-toggle-menu aria-label="문서 목차 열기" aria-expanded="false" aria-controls="wiki-mobile-drawer">
         </button>
       </div>
-    </header>
-    <nav class="kpef-service-tabs" aria-label="서비스 메뉴">
-      <a href="index.html">브리프</a>
-      <a href="lp-notices.html">LP</a>
-      <a href="gps.html">GP</a>
-      <a class="active" href="pef-wiki.html">Wiki</a>
-      <a href="index.html#saved">저장</a>
-    </nav>
-    <nav class="wiki-top-nav" aria-label="Wiki 주제 이동">
-      <a class="active" href="#chapter">제1장</a>
-      <a href="#law-map">법령</a>
-      <a href="#fss-reporting">보고</a>
-      <a href="#tax-filings">세무</a>
-      <a href="#practice-checklists">체크리스트</a>
-      <a href="#sources">출처</a>
-    </nav>"""
+    </header>"""
 
 
 def _render_bottom_nav() -> str:
@@ -1124,15 +1109,15 @@ def _page_styles() -> str:
       line-height: 1.4;
     }
     @media (min-width: 860px) {
-      .bottom-nav.newsletter-only { display: none; }
+      .bottom-nav.newsletter-only { display: grid; }
       .wiki-shell {
-        padding-bottom: 36px;
+        padding-bottom: calc(106px + env(safe-area-inset-bottom));
       }
       .wiki-shell .kpef-service-tabs {
-        display: grid;
+        display: none;
       }
       .wiki-service-nav { display: flex; }
-      .wiki-top-nav { display: flex; }
+      .wiki-top-nav { display: none; }
       .wiki-doc-header h1 { font-size: 36px; }
       .wiki-doc-header {
         grid-template-columns: minmax(0, 1fr) minmax(320px, 0.45fr);

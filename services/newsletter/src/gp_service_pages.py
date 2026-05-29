@@ -1063,14 +1063,7 @@ def _render_top_nav(active: str = "") -> str:
         <a class="kpef-icon-link kpef-icon-search" href="#gpSearch" aria-label="검색"></a>
         <a class="kpef-icon-link kpef-icon-menu" href="index.html" aria-label="홈"></a>
       </div>
-    </header>
-    <nav class="kpef-service-tabs" aria-label="서비스 메뉴">
-      <a href="index.html">브리프</a>
-      <a href="lp-notices.html">LP</a>
-      <a class="active" href="gps.html">GP</a>
-      <a href="pef-wiki.html">Wiki</a>
-      <a href="index.html#saved">저장</a>
-    </nav>"""
+    </header>"""
 
 
 def _render_bottom_nav() -> str:
@@ -2235,9 +2228,37 @@ def _base_styles() -> str:
       .gp-fact-list dd { margin-top: 0; }
     }
     @media (min-width: 760px) {
-      .gp-shell { padding-bottom: 36px; }
-      .kpef-service-tabs { display: grid; }
-      .bottom-nav { display: none; }
+      .gp-shell { padding-bottom: calc(106px + env(safe-area-inset-bottom)); }
+      .kpef-service-tabs { display: none; }
+      .bottom-nav {
+        bottom: 18px;
+        display: grid;
+        width: min(720px, calc(100vw - 96px));
+        border: 1px solid rgba(21, 32, 43, 0.10);
+        border-radius: 999px;
+        padding: 5px;
+        background: rgba(255,255,255,0.94);
+        box-shadow: 0 18px 60px rgba(15,23,42,0.15);
+      }
+      .bottom-nav a {
+        min-height: 36px;
+        flex-direction: row;
+        gap: 6px;
+        border-radius: 999px;
+        font-size: 12px;
+      }
+      .bottom-nav .active {
+        background: var(--surface-muted);
+      }
+      .nav-dot {
+        width: 18px;
+        height: 18px;
+        flex-basis: 18px;
+      }
+      .nav-dot::before {
+        width: 17px;
+        height: 17px;
+      }
     }
     @media (min-width: 960px) {
       .gp-shell {
@@ -2246,11 +2267,8 @@ def _base_styles() -> str:
       h1 {
         font-size: 38px;
       }
-      .kpef-service-tabs {
-        display: grid;
-      }
       .bottom-nav {
-        display: none;
+        display: grid;
       }
       .gp-kpis,
       .gp-detail-kpis {
@@ -2390,11 +2408,6 @@ def _base_styles() -> str:
         margin: -12px -10px 0;
         padding-right: 16px;
         padding-left: 16px;
-      }
-      .kpef-service-tabs {
-        margin-right: -10px;
-        margin-left: -10px;
-        padding: 0 10px;
       }
       .gp-top-nav { align-items: start; flex-direction: column; }
       h1 { font-size: 28px; line-height: 1.12; }
