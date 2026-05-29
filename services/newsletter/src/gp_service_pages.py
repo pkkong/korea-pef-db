@@ -460,16 +460,14 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
     {_render_service_header()}
     <header class="gp-hero">
       <div class="gp-hero-copy">
-        <span>GP</span>
         <h1>PEF 운용사</h1>
-        <p>운용 규모, 펀드 이력, 출자 연결, 관련 뉴스를 한 화면에서 봅니다.</p>
       </div>
     </header>
 
-    <section class="gp-control-panel" aria-label="GP 검색 및 필터">
+    <section class="gp-control-panel" aria-label="GP 필터">
       <div class="gp-control-head">
-        <span>표시 기준</span>
         <span id="gpVisibleCount">{len(gps):,}개 표시</span>
+        <span>기준일 {_e(report_date)}</span>
       </div>
       <div class="gp-controls">
         <select id="gpSort" aria-label="정렬">
@@ -494,7 +492,6 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
         <button type="button" data-filter="deal">딜</button>
         <button type="button" data-filter="lp">출자</button>
       </div>
-      <p class="gp-control-meta">총 {len(gps):,}개 운용사 · 기준일 {_e(report_date)}</p>
     </section>
 
     <section class="gp-directory-table" aria-label="GP 목록">
@@ -1427,49 +1424,6 @@ def _base_styles() -> str:
       opacity: 1;
       color: #b8b8bd;
       -webkit-text-fill-color: currentColor;
-    }
-    .kpef-product-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-      min-height: 54px;
-      margin: 0 calc(50% - 50vw);
-      padding: calc(max(10px, env(safe-area-inset-top)) + 7px) max(16px, calc((100vw - 1180px) / 2 + 16px)) 11px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(255,255,255,0.96);
-      color: var(--text);
-      backdrop-filter: blur(18px);
-    }
-    .kpef-product-brand {
-      display: inline-flex;
-      min-width: 0;
-      align-items: center;
-      gap: 9px;
-      color: inherit;
-      text-decoration: none;
-    }
-    .kpef-product-brand strong {
-      overflow: hidden;
-      color: inherit;
-      font-size: 16px;
-      font-weight: 850;
-      line-height: 1.2;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .kpef-brand-mark {
-      display: inline-grid;
-      width: 28px;
-      height: 28px;
-      flex: 0 0 28px;
-      place-items: center;
-      border: 1px solid var(--line);
-      border-radius: 50%;
-      background: var(--surface-muted);
-      color: var(--text);
-      font-size: 13px;
-      font-weight: 900;
     }
     .gp-shell {
       width: min(1180px, calc(100% - 32px));
@@ -2421,11 +2375,6 @@ def _base_styles() -> str:
         padding-top: 12px;
         padding-bottom: calc(52px + env(safe-area-inset-bottom));
       }
-      .kpef-product-header {
-        margin: -12px -10px 0;
-        padding-right: 16px;
-        padding-left: 16px;
-      }
       h1 { font-size: 28px; line-height: 1.12; }
       .gp-hero-copy p,
       .gp-detail-hero p { font-size: 14px; line-height: 1.58; }
@@ -2491,34 +2440,21 @@ def _base_styles() -> str:
       max-width: 100%;
       padding: max(14px, env(safe-area-inset-top)) 0 calc(88px + env(safe-area-inset-bottom));
     }
-    .kpef-product-header {
-      min-height: 58px;
-      margin: calc(-1 * max(14px, env(safe-area-inset-top))) -14px 0;
-      padding: calc(max(14px, env(safe-area-inset-top)) + 8px) 16px 12px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.96);
-      color: var(--text);
-      box-shadow: none;
-      backdrop-filter: blur(18px);
+    .gp-app-header {
+      max-width: 900px;
+      margin: 0 auto 2px;
     }
-    .kpef-product-brand strong {
-      font-size: 16px;
-      font-weight: 850;
+    .gp-hero {
+      display: block;
+      margin: 9px 0 7px;
     }
-    .kpef-brand-mark {
-      border-color: var(--line);
-      border-radius: 50%;
-      background: var(--surface-muted);
-      color: var(--text);
-    }
-    .gp-hero,
     .gp-detail-hero {
       display: block;
-      margin: 18px 0 14px;
+      margin: 12px 0 10px;
     }
     .gp-hero-copy,
     .gp-detail-hero > div {
-      gap: 7px;
+      gap: 6px;
     }
     .gp-hero-copy > span,
     .gp-detail-title-head div > span,
@@ -2534,6 +2470,16 @@ def _base_styles() -> str:
       font-weight: 820;
       line-height: 1.14;
     }
+    .gp-hero h1 {
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+    .gp-detail-title-head h1 {
+      font-size: 23px;
+      font-weight: 820;
+      line-height: 1.18;
+    }
     .gp-hero-copy p,
     .gp-detail-hero p {
       max-width: 720px;
@@ -2542,18 +2488,26 @@ def _base_styles() -> str:
       line-height: 1.58;
     }
     .gp-control-panel {
-      margin: 10px 0 12px;
-      border-top: 1px solid var(--line);
+      margin: 0 0 10px;
+      border-top: 0;
       border-bottom: 1px solid var(--line);
-      padding: 12px 0;
+      padding: 0 0 10px;
     }
     .gp-control-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+      color: var(--secondary);
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 650;
+      line-height: 1.35;
     }
     .gp-controls {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
+      margin-bottom: 8px;
     }
     .gp-controls input {
       grid-column: 1 / -1;
@@ -2570,6 +2524,7 @@ def _base_styles() -> str:
     }
     .gp-filter-row {
       gap: 5px;
+      margin-top: 0;
     }
     .gp-filter-row button {
       border-color: var(--line);
@@ -2727,21 +2682,21 @@ def _base_styles() -> str:
       max-height: 35px;
     }
     .gp-detail-card {
-      margin-top: 10px;
+      margin-top: 8px;
       color: var(--secondary);
-      font-size: 13px;
+      font-size: 12.5px;
       font-weight: 650;
     }
     .gp-detail-kpis,
     .gp-signal-bar {
       gap: 0;
-      margin: 12px 0;
+      margin: 10px 0;
       border-top: 1px solid var(--line);
       border-bottom: 1px solid var(--line);
     }
     .gp-detail-kpis div,
     .gp-signal-bar div {
-      padding: 12px 0;
+      padding: 10px 0;
     }
     .gp-detail-kpis span,
     .gp-signal-bar span,
@@ -2755,8 +2710,8 @@ def _base_styles() -> str:
     .gp-signal-bar strong {
       margin-top: 4px;
       color: var(--text);
-      font-size: 19px;
-      font-weight: 780;
+      font-size: 17px;
+      font-weight: 760;
     }
     .gp-panel,
     .gp-disclaimer {
@@ -2767,13 +2722,13 @@ def _base_styles() -> str:
       box-shadow: none;
     }
     .gp-panel {
-      padding: 17px 0;
+      padding: 15px 0;
     }
     .gp-panel h2,
     .gp-disclaimer h2 {
       margin-bottom: 10px;
-      font-size: 16px;
-      font-weight: 780;
+      font-size: 15px;
+      font-weight: 760;
       line-height: 1.35;
     }
     .gp-fact-list div,
@@ -2895,12 +2850,6 @@ def _base_styles() -> str:
       .gp-shell {
         width: min(calc(100% - 48px), var(--shell));
       }
-      .kpef-product-header {
-        margin-right: calc((100vw - min(var(--shell), calc(100vw - 48px))) / -2);
-        margin-left: calc((100vw - min(var(--shell), calc(100vw - 48px))) / -2);
-        padding-right: max(22px, calc((100vw - var(--shell)) / 2 + 22px));
-        padding-left: max(22px, calc((100vw - var(--shell)) / 2 + 22px));
-      }
       h1 {
         font-size: 32px;
       }
@@ -2997,11 +2946,6 @@ def _base_styles() -> str:
       .gp-shell {
         width: calc(100% - 28px);
         padding-top: max(14px, env(safe-area-inset-top));
-      }
-      .kpef-product-header {
-        margin-top: calc(-1 * max(14px, env(safe-area-inset-top)));
-        margin-right: -14px;
-        margin-left: -14px;
       }
       h1 {
         font-size: 26px;
