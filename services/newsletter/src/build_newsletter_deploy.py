@@ -2555,6 +2555,7 @@ def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
         site_dir / "index.html",
         site_dir / "daily-news.html",
         site_dir / "lp-notices.html",
+        site_dir / "market.html",
         site_dir / "gps.html",
         site_dir / "pef-wiki.html",
         *alias_paths,

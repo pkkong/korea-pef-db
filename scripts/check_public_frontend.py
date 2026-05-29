@@ -97,7 +97,7 @@ def gp_service_tabs(html: str) -> list[str]:
         return []
     return [
         strip_tags(item)
-        for item in re.findall(r"<button\b[^>]*>(.*?)</button>", match.group(1), re.DOTALL)
+        for item in re.findall(r"<(?:a|button)\b[^>]*>(.*?)</(?:a|button)>", match.group(1), re.DOTALL)
         if strip_tags(item)
     ]
 
@@ -172,13 +172,20 @@ def check_brief_initial_date_guard() -> list[str]:
 
 def check_generated_gp_contract() -> list[str]:
     gps_path = NEWSLETTER_SITE_DIR / "gps.html"
+    market_path = NEWSLETTER_SITE_DIR / "market.html"
     if not gps_path.exists():
         return ["generated_gp_contract=skipped"]
+    if not market_path.exists():
+        raise CheckFailure("market.html missing from generated newsletter site")
 
     gps_html = gps_path.read_text(encoding="utf-8")
+    market_html = market_path.read_text(encoding="utf-8")
     labels = bottom_nav_labels(gps_html)
     if labels != BOTTOM_NAV_LABELS:
         raise CheckFailure(f"gps.html bottom nav mismatch: expected {BOTTOM_NAV_LABELS}, got {labels}")
+    market_labels = bottom_nav_labels(market_html)
+    if market_labels != BOTTOM_NAV_LABELS:
+        raise CheckFailure(f"market.html bottom nav mismatch: expected {BOTTOM_NAV_LABELS}, got {market_labels}")
 
     forbidden = [
         "상위 프로필",
@@ -193,8 +200,11 @@ def check_generated_gp_contract() -> list[str]:
         "operator",
         "verification",
         "research",
+        "자동 생성",
+        "신호",
     ]
     violations = [needle for needle in forbidden if needle in gps_html]
+    violations.extend(f"market.html:{needle}" for needle in forbidden if needle in market_html)
 
     if '<header class="kpef-product-header' in gps_html:
         violations.append("kpef-product-header")
@@ -203,6 +213,20 @@ def check_generated_gp_contract() -> list[str]:
     tabs = gp_service_tabs(gps_html)
     if tabs != ["MARKET", "GP", "PEOPLE"]:
         raise CheckFailure(f"GP service tabs mismatch: expected MARKET/GP/PEOPLE, got {tabs}")
+    if gp_service_tabs(market_html) != ["MARKET", "GP", "PEOPLE"]:
+        raise CheckFailure("Market service tabs mismatch")
+    gps_text = strip_tags(gps_html)
+    if not re.search(r"\d[\d,]*개 PEF 운용사 \([0-9.]+ 기준\)", gps_text):
+        raise CheckFailure("GP directory count/date title missing")
+    for combined_label in ["대표/홈페이지", "순위/약정액", "뉴스/출자"]:
+        if combined_label in gps_html:
+            violations.append(f"gps.html:{combined_label}")
+    for row_badge_markup in ['<div class="gp-chips"', '<div class="gp-signal-strip"']:
+        if row_badge_markup in gps_html:
+            violations.append(f"gps.html:{row_badge_markup}")
+    for required in ["PEF 시장 통계", "분기별 시장 추이", "상위 GP", "연도별 신규 펀드"]:
+        if required not in market_html:
+            raise CheckFailure(f"market.html missing required section: {required}")
 
     detail_paths = sorted(NEWSLETTER_SITE_DIR.glob("gp-*.html"))[:3]
     for detail_path in detail_paths:
@@ -224,10 +248,8 @@ def check_generated_gp_contract() -> list[str]:
         raise CheckFailure(f"Forbidden generated GP wording/markup: {', '.join(violations)}")
     if 'data-url="gp-' not in gps_html:
         raise CheckFailure("GP directory rows are missing clickable data-url links")
-    if "PEF 운용사" not in gps_html:
-        raise CheckFailure("GP directory public title missing")
 
-    return [f"generated_gp_contract=ok detail_pages_checked={len(detail_paths)}"]
+    return [f"generated_gp_contract=ok detail_pages_checked={len(detail_paths)} market=ok"]
 
 
 def check_remote(base_url: str) -> list[str]:
@@ -235,7 +257,7 @@ def check_remote(base_url: str) -> list[str]:
         return []
     base = base_url.rstrip("/") + "/"
     checked: list[str] = []
-    for relative_path in ["", "gps.html", "db.html", "pef-wiki.html"]:
+    for relative_path in ["", "market.html", "gps.html", "db.html", "pef-wiki.html"]:
         url = base + relative_path
         request = Request(url, headers={"User-Agent": "kpef-public-frontend-check/1.0"})
         try:

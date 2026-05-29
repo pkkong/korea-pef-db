@@ -59,12 +59,16 @@ def _app_head_meta() -> str:
 
 
 def write_gp_pages(site_dir: Path, db_path: Path, report_date: str) -> dict[str, int]:
-    """Write gps.html and top-GP profile pages into a static site directory."""
+    """Write market, GP directory, and top-GP profile pages into a static site directory."""
     site_dir.mkdir(parents=True, exist_ok=True)
     _remove_stale_gp_pages(site_dir)
 
     zero_counts = _zero_counts()
     if not db_path.exists():
+        (site_dir / "market.html").write_text(
+            _render_empty_market(report_date, "시장 통계가 준비되는 중입니다."),
+            encoding="utf-8",
+        )
         (site_dir / "gps.html").write_text(
             _render_empty_directory(report_date, "GP 공개 정보가 준비되는 중입니다."),
             encoding="utf-8",
@@ -76,11 +80,21 @@ def write_gp_pages(site_dir: Path, db_path: Path, report_date: str) -> dict[str,
     try:
         missing_tables = [name for name in REQUIRED_TABLES if not _db_object_exists(conn, name)]
         if missing_tables:
+            (site_dir / "market.html").write_text(
+                _render_empty_market(report_date, "시장 통계가 준비되는 중입니다."),
+                encoding="utf-8",
+            )
             (site_dir / "gps.html").write_text(
                 _render_empty_directory(report_date, "GP 공개 정보가 준비되는 중입니다."),
                 encoding="utf-8",
             )
             return zero_counts
+
+        market_context = _read_market_context(conn)
+        (site_dir / "market.html").write_text(
+            _render_market_page(report_date, market_context),
+            encoding="utf-8",
+        )
 
         gps = _read_gp_profiles(conn)
         if not gps:
@@ -391,6 +405,147 @@ def _read_lp_signals(conn: sqlite3.Connection) -> dict[str, list[dict[str, objec
     return dict(signals_by_gp)
 
 
+def _read_market_context(conn: sqlite3.Connection) -> dict[str, object]:
+    periods = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT
+                period_label,
+                as_of_date,
+                regime,
+                fund_count,
+                primary_gp_count,
+                commitment_amount_krw_mn,
+                paid_in_amount_krw_mn
+            FROM v_period_summary
+            ORDER BY as_of_date
+            """
+        ).fetchall()
+    ] if _db_object_exists(conn, "v_period_summary") else []
+    latest = periods[-1] if periods else {}
+    latest_period = _clean(latest.get("period_label")) if latest else ""
+    safe_latest_period = re.sub(r"[^0-9A-Za-z_]+", "", latest_period)
+    ranking_table = f"analytics_gp_ranking_{safe_latest_period}" if safe_latest_period else ""
+    top_gps: list[dict[str, object]] = []
+    if ranking_table and _db_object_exists(conn, ranking_table):
+        top_gps = [
+            dict(row)
+            for row in conn.execute(
+                f"""
+                SELECT
+                    rank,
+                    gp_name,
+                    active_fund_count,
+                    commitment_aum_proxy_trn_krw,
+                    market_share_pct
+                FROM {ranking_table}
+                ORDER BY rank
+                LIMIT 20
+                """
+            ).fetchall()
+        ]
+    elif latest_period and _db_object_exists(conn, "v_gp_period_commitment"):
+        rows = [
+            dict(row)
+            for row in conn.execute(
+                """
+                WITH gp_amount AS (
+                    SELECT
+                        gp_name,
+                        fund_count AS active_fund_count,
+                        commitment_amount_krw_mn,
+                        SUM(commitment_amount_krw_mn) OVER () AS total_commitment
+                    FROM v_gp_period_commitment
+                    WHERE period_label = ?
+                      AND gp_name IS NOT NULL
+                )
+                SELECT
+                    ROW_NUMBER() OVER (ORDER BY commitment_amount_krw_mn DESC, gp_name) AS rank,
+                    gp_name,
+                    active_fund_count,
+                    ROUND(commitment_amount_krw_mn / 1000000.0, 6) AS commitment_aum_proxy_trn_krw,
+                    ROUND(commitment_amount_krw_mn / total_commitment * 100.0, 4) AS market_share_pct
+                FROM gp_amount
+                ORDER BY rank
+                LIMIT 20
+                """,
+                (latest_period,),
+            ).fetchall()
+        ]
+        top_gps = rows
+
+    new_by_year = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT year, new_fund_count, first_seen_commitment_trn_krw
+            FROM analytics_new_funds_by_year
+            ORDER BY year DESC
+            LIMIT 8
+            """
+        ).fetchall()
+    ] if _db_object_exists(conn, "analytics_new_funds_by_year") else []
+    new_by_quarter = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT established_quarter, new_fund_count, first_seen_commitment_trn_krw
+            FROM analytics_new_funds_by_quarter
+            ORDER BY established_quarter DESC
+            LIMIT 8
+            """
+        ).fetchall()
+    ] if _db_object_exists(conn, "analytics_new_funds_by_quarter") else []
+    disappeared = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT
+                absent_period,
+                COUNT(*) AS fund_count,
+                ROUND(SUM(commitment_amount_krw_mn) / 1000000.0, 6) AS commitment_trn_krw
+            FROM v_fund_disappeared_next_period
+            GROUP BY absent_period
+            ORDER BY absent_period DESC
+            LIMIT 6
+            """
+        ).fetchall()
+    ] if _db_object_exists(conn, "v_fund_disappeared_next_period") else []
+    sources = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT period_label, as_of_date, title, source_url
+            FROM source_document
+            WHERE document_type = 'quarterly_pef_status'
+            ORDER BY as_of_date DESC
+            LIMIT 6
+            """
+        ).fetchall()
+    ] if _db_object_exists(conn, "source_document") else []
+
+    prior_year = {}
+    if latest:
+        year = int(_as_float(str(latest_period)[:4])) if re.match(r"^\d{4}Q[1-4]$", latest_period) else 0
+        quarter = latest_period[-2:] if re.match(r"^\d{4}Q[1-4]$", latest_period) else ""
+        prior_label = f"{year - 1}{quarter}" if year and quarter else ""
+        prior_year = next((row for row in periods if row.get("period_label") == prior_label), {})
+
+    return {
+        "periods": periods,
+        "latest": latest,
+        "prior_year": prior_year,
+        "top_gps": top_gps,
+        "new_by_year": new_by_year,
+        "new_by_quarter": new_by_quarter,
+        "disappeared": disappeared,
+        "sources": sources,
+        "top10_share": sum(_as_float(row.get("market_share_pct")) for row in top_gps[:10]),
+        "top20_share": sum(_as_float(row.get("market_share_pct")) for row in top_gps[:20]),
+    }
+
+
 def _news_dedupe_keys(row: sqlite3.Row) -> list[str]:
     url = normalize_url(str(row["source_url"] or ""))
     title = re.sub(r"\s*\[[^\]]*(?:\]|$)", "", _clean(row["title"]))
@@ -428,7 +583,7 @@ def _render_empty_directory(report_date: str, message: str) -> str:
 </head>
 <body>
   <main class="gp-shell">
-    {_render_service_header()}
+    {_render_service_header("gp")}
     <section class="gp-empty">
       <span>GP 디렉토리</span>
       <h1>국내 PEF GP 디렉토리</h1>
@@ -443,8 +598,206 @@ def _render_empty_directory(report_date: str, message: str) -> str:
 """
 
 
+def _render_empty_market(report_date: str, message: str) -> str:
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Korea PEF Market</title>
+{_app_head_meta()}
+  {_base_styles()}
+</head>
+<body>
+  <main class="gp-shell">
+    {_render_service_header("market")}
+    <section class="gp-empty">
+      <span>Market</span>
+      <h1>PEF 시장 통계</h1>
+      <p>{_e(message)}</p>
+      <small>기준일 {_e(report_date)}</small>
+    </section>
+  </main>
+  {_render_bottom_nav()}
+  {_service_header_script(redirect_search=True)}
+</body>
+</html>
+"""
+
+
+def _render_market_page(report_date: str, context: dict[str, object]) -> str:
+    latest = context.get("latest") if isinstance(context.get("latest"), dict) else {}
+    prior_year = context.get("prior_year") if isinstance(context.get("prior_year"), dict) else {}
+    periods = list(context.get("periods") or [])
+    top_gps = list(context.get("top_gps") or [])
+    new_by_year = list(context.get("new_by_year") or [])
+    new_by_quarter = list(context.get("new_by_quarter") or [])
+    disappeared = list(context.get("disappeared") or [])
+    sources = list(context.get("sources") or [])
+    latest_period = _clean(latest.get("period_label")) or "-"
+    latest_date = _format_date_dot(latest.get("as_of_date")) or _e(report_date)
+    period_rows = list(reversed(periods[-10:]))
+    top10_share = _format_pct(context.get("top10_share"))
+    top20_share = _format_pct(context.get("top20_share"))
+
+    kpis = [
+        ("펀드 수", _format_int(latest.get("fund_count")), _format_delta(latest.get("fund_count"), prior_year.get("fund_count"), "개")),
+        ("운용 GP", _format_int(latest.get("primary_gp_count")), _format_delta(latest.get("primary_gp_count"), prior_year.get("primary_gp_count"), "개")),
+        ("출자약정액", _format_trn_krw_as_100mn(_as_float(latest.get("commitment_amount_krw_mn")) / 1000000), _format_delta_trn(latest.get("commitment_amount_krw_mn"), prior_year.get("commitment_amount_krw_mn"))),
+        ("상위 10개 비중", top10_share, f"상위 20개 {top20_share}" if top20_share != "-" else ""),
+    ]
+    kpi_html = "\n".join(
+        f"""        <div>
+          <span>{_e(label)}</span>
+          <strong>{_e(value)}</strong>
+          {f'<em>{_e(delta)}</em>' if delta else ''}
+        </div>"""
+        for label, value, delta in kpis
+    )
+    period_html = "\n".join(
+        f"""          <div class="market-row market-period-row">
+            <span>{_e(row.get("period_label"))}</span>
+            <span>{_e(_format_int(row.get("fund_count")))}</span>
+            <span>{_e(_format_int(row.get("primary_gp_count")))}</span>
+            <span>{_e(_format_trn_krw_as_100mn(_as_float(row.get("commitment_amount_krw_mn")) / 1000000))}</span>
+          </div>"""
+        for row in period_rows
+    ) or _empty_table_row("표시할 시장 추이가 없습니다.")
+    top_gp_html = "\n".join(
+        f"""          <div class="market-row market-gp-row">
+            <span>{_e(row.get("rank"))}</span>
+            <strong>{_e(row.get("gp_name"))}</strong>
+            <span>{_e(_format_trn_krw_as_100mn(row.get("commitment_aum_proxy_trn_krw")))}</span>
+            <span>{_e(_format_int(row.get("active_fund_count")))}</span>
+          </div>"""
+        for row in top_gps[:10]
+    ) or _empty_table_row("표시할 GP 순위가 없습니다.")
+    new_year_html = "\n".join(
+        f"""          <div class="market-row market-new-row">
+            <span>{_e(row.get("year"))}</span>
+            <span>{_e(_format_int(row.get("new_fund_count")))}</span>
+            <span>{_e(_format_trn_krw_as_100mn(row.get("first_seen_commitment_trn_krw")))}</span>
+          </div>"""
+        for row in new_by_year
+    ) or _empty_table_row("표시할 신규 결성 이력이 없습니다.")
+    new_quarter_html = "\n".join(
+        f"""          <div class="market-row market-new-row">
+            <span>{_e(row.get("established_quarter"))}</span>
+            <span>{_e(_format_int(row.get("new_fund_count")))}</span>
+            <span>{_e(_format_trn_krw_as_100mn(row.get("first_seen_commitment_trn_krw")))}</span>
+          </div>"""
+        for row in new_by_quarter
+    ) or _empty_table_row("표시할 분기별 결성 이력이 없습니다.")
+    disappeared_html = "\n".join(
+        f"""          <div class="market-row market-new-row">
+            <span>{_e(row.get("absent_period"))}</span>
+            <span>{_e(_format_int(row.get("fund_count")))}</span>
+            <span>{_e(_format_trn_krw_as_100mn(row.get("commitment_trn_krw")))}</span>
+          </div>"""
+        for row in disappeared
+    ) or _empty_table_row("표시할 이탈 추정 이력이 없습니다.")
+    source_html = "\n".join(
+        f"""          <li>
+            <a href="{_e(row.get("source_url"))}" target="_blank" rel="noreferrer">{_e(row.get("period_label"))}</a>
+            <span>{_e(_format_date_dot(row.get("as_of_date")))}</span>
+          </li>"""
+        for row in sources
+    ) or "          <li><span>기준 자료 없음</span></li>"
+
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Korea PEF Market</title>
+{_app_head_meta()}
+  {_base_styles()}
+</head>
+<body>
+  <main class="gp-shell">
+    {_render_service_header("market")}
+    <header class="gp-hero market-hero">
+      <div class="gp-hero-copy">
+        <h1>PEF 시장 통계</h1>
+        <p>{_e(latest_period)} · {latest_date} 기준</p>
+      </div>
+    </header>
+
+    <section class="market-kpis" aria-label="시장 핵심 지표">
+{kpi_html}
+    </section>
+
+    <section class="market-section" aria-label="분기별 시장 추이">
+      <div class="market-section-head">
+        <h2>분기별 시장 추이</h2>
+      </div>
+      <div class="market-table">
+        <div class="market-head market-period-row"><span>기준</span><span>펀드</span><span>GP</span><span>약정액</span></div>
+{period_html}
+      </div>
+    </section>
+
+    <section class="market-section" aria-label="상위 GP">
+      <div class="market-section-head">
+        <h2>상위 GP</h2>
+      </div>
+      <div class="market-table">
+        <div class="market-head market-gp-row"><span>순위</span><span>운용사</span><span>약정액</span><span>펀드</span></div>
+{top_gp_html}
+      </div>
+    </section>
+
+    <section class="market-grid">
+      <article class="market-section" aria-label="연도별 신규 펀드">
+        <div class="market-section-head">
+          <h2>연도별 신규 펀드</h2>
+        </div>
+        <div class="market-table">
+          <div class="market-head market-new-row"><span>연도</span><span>펀드</span><span>약정액</span></div>
+{new_year_html}
+        </div>
+      </article>
+      <article class="market-section" aria-label="분기별 신규 펀드">
+        <div class="market-section-head">
+          <h2>분기별 신규 펀드</h2>
+        </div>
+        <div class="market-table">
+          <div class="market-head market-new-row"><span>분기</span><span>펀드</span><span>약정액</span></div>
+{new_quarter_html}
+        </div>
+      </article>
+    </section>
+
+    <section class="market-section" aria-label="펀드 이탈 추정">
+      <div class="market-section-head">
+        <h2>다음 분기 미등장 펀드</h2>
+        <p>분기 자료 비교 기준이며 청산 확정을 의미하지 않습니다.</p>
+      </div>
+      <div class="market-table">
+        <div class="market-head market-new-row"><span>미등장 분기</span><span>펀드</span><span>약정액</span></div>
+{disappeared_html}
+      </div>
+    </section>
+
+    <section class="market-source-note" aria-label="기준 자료">
+      <strong>기준 자료</strong>
+      <ul>
+{source_html}
+      </ul>
+    </section>
+  </main>
+  {_render_bottom_nav()}
+  {_service_header_script(redirect_search=True)}
+</body>
+</html>
+"""
+
+
 def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_ids: set[str]) -> str:
     cards = "\n".join(_render_gp_card(gp, str(gp["source_gp_id"]) in top_ids) for gp in gps)
+    latest_date = _latest_gp_as_of_date(gps) or report_date
+    title_date = _format_date_dot(latest_date) or latest_date
+    active_count = sum(1 for gp in gps if _as_bool(gp.get("active_in_latest_period")))
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -457,40 +810,37 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
 </head>
 <body>
   <main class="gp-shell">
-    {_render_service_header()}
+    {_render_service_header("gp")}
     <header class="gp-hero">
       <div class="gp-hero-copy">
-        <h1>PEF 운용사</h1>
+        <h1 class="gp-directory-title"><strong>{len(gps):,}개</strong> <span>PEF 운용사</span> <em>({title_date} 기준)</em></h1>
       </div>
     </header>
 
     <section class="gp-control-panel" aria-label="GP 필터">
-      <div class="gp-control-head">
-        <span id="gpVisibleCount">{len(gps):,}개 표시</span>
-        <span>기준일 {_e(report_date)}</span>
-      </div>
       <div class="gp-controls">
-        <select id="gpSort" aria-label="정렬">
-          <option value="rank">최신 순위순</option>
-          <option value="aum">약정액 기준순</option>
-          <option value="funds">운용 중 펀드순</option>
-          <option value="cumulative">누적 펀드 수순</option>
-          <option value="news">관련 뉴스 많은 순</option>
-          <option value="signals">뉴스·출자 연결순</option>
-        </select>
-        <select id="gpPageSize" aria-label="페이지당 표시">
-          <option value="30">30개씩 보기</option>
-          <option value="50">50개씩 보기</option>
-          <option value="100">100개씩 보기</option>
-          <option value="all">전체 보기</option>
-        </select>
+        <label>
+          <span>정렬기준</span>
+          <select id="gpSort" aria-label="정렬기준">
+            <option value="aum" selected>약정액 높은순</option>
+            <option value="funds">펀드수 많은순</option>
+            <option value="rank">최신 순위순</option>
+            <option value="name">운용사명순</option>
+          </select>
+        </label>
+        <label>
+          <span>보기</span>
+          <select id="gpPageSize" aria-label="페이지당 표시">
+            <option value="30" selected>30개씩 보기</option>
+            <option value="50">50개씩 보기</option>
+            <option value="100">100개씩 보기</option>
+            <option value="all">전체 보기</option>
+          </select>
+        </label>
       </div>
-      <div class="gp-filter-row" aria-label="빠른 필터">
-        <button class="active" type="button" data-filter="all">전체</button>
-        <button type="button" data-filter="active">운용 중</button>
-        <button type="button" data-filter="news">뉴스</button>
-        <button type="button" data-filter="deal">딜</button>
-        <button type="button" data-filter="lp">출자</button>
+      <div class="gp-control-head">
+        <span id="gpVisibleCount">{len(gps):,}개 중 1-30</span>
+        <span>운용 중 {active_count:,}개</span>
       </div>
     </section>
 
@@ -498,9 +848,8 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
       <div class="gp-directory-head" aria-hidden="true">
         <span></span>
         <span>운용사명</span>
-        <span>대표/홈페이지</span>
-        <span>순위/약정액</span>
-        <span>뉴스/출자</span>
+        <span>약정액</span>
+        <span>펀드수</span>
       </div>
       <div class="gp-directory" id="gpDirectory">
 {cards}
@@ -524,37 +873,16 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
     gp_id = str(gp["source_gp_id"])
     name = _gp_name(gp)
     avatar_label = _avatar_label(name)
-    latest_rank = _format_rank(gp.get("latest_primary_rank"))
     active_funds = _format_int(gp.get("latest_primary_active_fund_count"))
     aum = _format_krw_100mn(gp.get("latest_primary_aum_proxy_krw_100mn"))
-    cumulative_funds = _format_int(gp.get("cumulative_primary_fund_count"))
-    news_count = int(gp.get("news_count") or 0)
-    deal_count = int(gp.get("deal_news_count") or 0)
-    lp_count = int(gp.get("lp_signal_count") or 0)
     representative = _clean(gp.get("representative_name"))
-    representative_html = f"<span>대표 {_e(representative)}</span>" if representative else ""
     homepage = _safe_url(gp.get("homepage_url"))
     avatar_markup = _avatar_markup(homepage, avatar_label, name)
-    category = _category_label(gp.get("company_category"))
-    active_label = "운용 중" if _as_bool(gp.get("active_in_latest_period")) else ""
     profile_url = _gp_page_name(gp_id) if has_profile_page else ""
     title = (
         f'<a href="{_e(profile_url)}">{_e(name)}</a>'
         if profile_url
         else _e(name)
-    )
-    homepage_link = (
-        f'<a href="{_e(homepage)}" target="_blank" rel="noreferrer">홈페이지</a>'
-        if homepage
-        else ""
-    )
-    meta_line_html = (
-        f"""        <div class="gp-meta-line">
-          {representative_html}
-          {homepage_link}
-        </div>"""
-        if representative_html or homepage_link
-        else ""
     )
     search_blob = " ".join(
         [
@@ -571,71 +899,25 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
     rank_sort = _sort_number(gp.get("latest_primary_rank"), default=999999)
     aum_sort = _sort_number(gp.get("latest_primary_aum_proxy_krw_100mn"), default=0)
     active_sort = _sort_number(gp.get("latest_primary_active_fund_count"), default=0)
-    cumulative_sort = _sort_number(gp.get("cumulative_primary_fund_count"), default=0)
-    news_sort = news_count
-    signal_sort = news_count + deal_count + lp_count
-    metric_rows = "\n".join(
-        f"          <div><dt>{_e(label)}</dt><dd>{_e(value)}</dd></div>"
-        for label, value in [
-            ("순위", latest_rank),
-            ("운용 중 펀드", active_funds),
-            ("약정액 기준", aum),
-            ("누적 펀드", cumulative_funds),
-        ]
-        if value and value != "-"
-    )
-    metrics_html = (
-        f"""        <dl class="gp-metrics">
-{metric_rows}
-        </dl>"""
-        if metric_rows
-        else ""
-    )
-    status_label = _card_status_label(latest_rank, has_profile_page)
-    status_html = f"<span>{_e(status_label)}</span>" if status_label else ""
-    signal_items = [
-        ("뉴스", news_count),
-        ("딜", deal_count),
-        ("출자", lp_count),
-    ]
-    signal_strip_html = ""
-    if any(count for _, count in signal_items):
-        signal_rows = "\n".join(
-            f"          <span>{_e(label)} <strong>{count:,}</strong></span>"
-            for label, count in signal_items
-            if count
-        )
-        signal_strip_html = f"""        <div class="gp-signal-strip" aria-label="뉴스·출자 연결">
-{signal_rows}
-        </div>"""
 
     return f"""      <article class="gp-card"
         data-url="{_e(profile_url)}"
         data-search="{_e(search_blob)}"
         data-active="{1 if _as_bool(gp.get("active_in_latest_period")) else 0}"
-        data-news="{1 if news_sort else 0}"
-        data-deal="{1 if deal_count else 0}"
-        data-lp="{1 if lp_count else 0}"
         data-rank="{rank_sort}"
         data-aum="{aum_sort}"
         data-funds="{active_sort}"
-        data-cumulative="{cumulative_sort}"
-        data-news-count="{news_sort}"
-        data-signals="{signal_sort}">
+        data-name="{_e(name)}">
         {avatar_markup}
         <div class="gp-card-main">
           <div class="gp-card-title">
-            {status_html}
             <h2>{title}</h2>
           </div>
-          <div class="gp-chips">
-            {_render_chip(active_label)}
-            {_render_chip(category)}
-          </div>
         </div>
-{metrics_html}
-{signal_strip_html}
-{meta_line_html}
+        <dl class="gp-metrics">
+          <div><dt>약정액</dt><dd>{_e(aum)}</dd></div>
+          <div><dt>펀드수</dt><dd>{_e(active_funds)}</dd></div>
+        </dl>
       </article>"""
 
 
@@ -690,7 +972,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
 </head>
 <body>
   <main class="gp-shell">
-    {_render_service_header()}
+    {_render_service_header("gp")}
     <nav class="gp-breadcrumb" aria-label="경로">
       <a href="gps.html">GP</a>
       <span>{_e(name)}</span>
@@ -994,8 +1276,12 @@ def _fact_row(label: str, value: object, raw: bool = False) -> str:
           </div>"""
 
 
-def _render_service_header() -> str:
-    return """    <header class="app-header gp-app-header">
+def _render_service_header(active_tab: str = "gp") -> str:
+    market_active = " active" if active_tab == "market" else ""
+    market_current = ' aria-current="page"' if active_tab == "market" else ""
+    gp_active = " active" if active_tab == "gp" else ""
+    gp_current = ' aria-current="page"' if active_tab == "gp" else ""
+    return f"""    <header class="app-header gp-app-header">
       <div class="service-bar">
         <strong class="service-title">GP</strong>
         <section class="search-area" id="searchArea" aria-label="GP 검색">
@@ -1010,8 +1296,8 @@ def _render_service_header() -> str:
         </div>
       </div>
       <nav class="brief-section-tabs gp-section-tabs" aria-label="GP 메뉴">
-        <button class="brief-section-tab" type="button" disabled>MARKET</button>
-        <button class="brief-section-tab active" type="button" aria-current="page">GP</button>
+        <a class="brief-section-tab{market_active}" href="market.html"{market_current}>MARKET</a>
+        <a class="brief-section-tab{gp_active}" href="gps.html"{gp_current}>GP</a>
         <button class="brief-section-tab" type="button" disabled>PEOPLE</button>
       </nav>
     </header>"""
@@ -1101,9 +1387,7 @@ def _directory_script() -> str:
       const prevPage = document.getElementById("gpPrevPage");
       const nextPage = document.getElementById("gpNextPage");
       const pageState = document.getElementById("gpPageState");
-      const buttons = Array.from(document.querySelectorAll("[data-filter]"));
       const cards = Array.from(document.querySelectorAll(".gp-card"));
-      let activeFilter = "all";
       let currentPage = 1;
       let orderedCards = [...cards];
 
@@ -1113,21 +1397,14 @@ def _directory_script() -> str:
       };
 
       const applySort = () => {
-        const mode = sort?.value || "rank";
+        const mode = sort?.value || "aum";
         orderedCards = [...cards].sort((a, b) => {
           if (mode === "aum") return num(b, "aum") - num(a, "aum");
           if (mode === "funds") return num(b, "funds") - num(a, "funds");
-          if (mode === "cumulative") return num(b, "cumulative") - num(a, "cumulative");
-          if (mode === "news") return num(b, "newsCount") - num(a, "newsCount");
-          if (mode === "signals") return num(b, "signals") - num(a, "signals");
+          if (mode === "name") return (a.dataset.name || "").localeCompare(b.dataset.name || "", "ko");
           return num(a, "rank", 999999) - num(b, "rank", 999999);
         });
         orderedCards.forEach((card) => list?.appendChild(card));
-      };
-
-      const filterHit = (card) => {
-        if (activeFilter === "all") return true;
-        return card.dataset[activeFilter] === "1";
       };
 
       const getPageSize = (matchCount) => {
@@ -1143,7 +1420,7 @@ def _directory_script() -> str:
         const matches = [];
         orderedCards.forEach((card) => {
           const haystack = (card.dataset.search || card.innerText || "").toLowerCase();
-          const show = filterHit(card) && (!query || haystack.includes(query));
+          const show = !query || haystack.includes(query);
           if (show) matches.push(card);
           card.hidden = true;
         });
@@ -1171,13 +1448,6 @@ def _directory_script() -> str:
         apply({ resetPage: true });
       });
       pageSizeSelect?.addEventListener("change", () => apply({ resetPage: true }));
-      buttons.forEach((button) => {
-        button.addEventListener("click", () => {
-          activeFilter = button.dataset.filter || "all";
-          buttons.forEach((item) => item.classList.toggle("active", item === button));
-          apply({ resetPage: true });
-        });
-      });
       cards.forEach((card) => {
         const url = card.dataset.url || "";
         if (!url) return;
@@ -2958,6 +3228,317 @@ def _base_styles() -> str:
         font-size: 15px;
       }
     }
+    .brief-section-tab {
+      text-decoration: none;
+    }
+    .market-hero .gp-hero-copy p {
+      margin-top: 3px;
+      color: var(--secondary);
+      font-size: 12.5px;
+      font-weight: 650;
+    }
+    .market-kpis {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0;
+      margin: 6px 0 14px;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .market-kpis div {
+      min-width: 0;
+      padding: 12px 0;
+    }
+    .market-kpis span,
+    .market-kpis em {
+      display: block;
+      color: var(--secondary);
+      font-size: 11.5px;
+      font-style: normal;
+      font-weight: 650;
+      line-height: 1.35;
+    }
+    .market-kpis strong {
+      display: block;
+      margin: 4px 0 3px;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 780;
+      line-height: 1.15;
+    }
+    .market-section {
+      margin-top: 16px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+    .market-section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .market-section h2 {
+      margin: 0;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 780;
+      line-height: 1.35;
+    }
+    .market-section-head p {
+      margin: 0;
+      color: var(--secondary);
+      font-size: 11.5px;
+      font-weight: 620;
+      line-height: 1.4;
+      text-align: right;
+    }
+    .market-table {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+    }
+    .market-head,
+    .market-row {
+      display: grid;
+      gap: 10px;
+      align-items: center;
+      min-height: 40px;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12.5px;
+      line-height: 1.35;
+    }
+    .market-head {
+      background: var(--surface-muted);
+      color: var(--secondary);
+      font-weight: 720;
+    }
+    .market-row {
+      color: var(--text);
+      font-weight: 650;
+    }
+    .market-row:last-child {
+      border-bottom: 0;
+    }
+    .market-period-row {
+      grid-template-columns: minmax(62px, 0.85fr) minmax(48px, 0.7fr) minmax(42px, 0.6fr) minmax(72px, 0.9fr);
+      text-align: right;
+    }
+    .market-period-row span:first-child {
+      text-align: left;
+    }
+    .market-gp-row {
+      grid-template-columns: 36px minmax(0, 1fr) minmax(72px, 0.72fr) minmax(44px, 0.52fr);
+      text-align: right;
+    }
+    .market-gp-row strong {
+      min-width: 0;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 760;
+      text-align: left;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+    .market-gp-row span:nth-child(1) {
+      text-align: center;
+    }
+    .market-new-row {
+      grid-template-columns: minmax(72px, 1fr) minmax(48px, 0.7fr) minmax(86px, 0.9fr);
+      text-align: right;
+    }
+    .market-new-row span:first-child {
+      text-align: left;
+    }
+    .market-empty-row {
+      display: block;
+      padding: 12px;
+      color: var(--secondary);
+    }
+    .market-grid {
+      display: grid;
+      gap: 0;
+    }
+    .market-source-note {
+      margin: 16px 0 0;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+      color: var(--secondary);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .market-source-note strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 760;
+    }
+    .market-source-note ul {
+      display: grid;
+      gap: 5px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .market-source-note li {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .market-source-note a {
+      color: var(--text);
+      font-weight: 650;
+    }
+    .gp-directory-title {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 6px;
+      font-size: 16px !important;
+      line-height: 1.35;
+    }
+    .gp-directory-title strong {
+      color: var(--text);
+      font-size: 17px;
+      font-weight: 820;
+    }
+    .gp-directory-title span {
+      color: var(--text);
+      font-weight: 760;
+    }
+    .gp-directory-title em {
+      color: var(--secondary);
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 620;
+    }
+    .gp-controls {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(128px, auto);
+      gap: 8px;
+      align-items: end;
+      margin: 0;
+    }
+    .gp-controls label {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+    .gp-controls label > span {
+      color: var(--secondary);
+      font-size: 11.5px;
+      font-weight: 650;
+    }
+    .gp-control-head {
+      margin: 8px 0 0;
+      font-size: 11.5px;
+      font-weight: 620;
+    }
+    .gp-directory-head,
+    .gp-card {
+      grid-template-columns: 40px minmax(0, 1fr) minmax(78px, 0.7fr) minmax(48px, 0.46fr) !important;
+      gap: 9px;
+      align-items: center;
+    }
+    .gp-directory-head {
+      min-height: 38px;
+      text-align: right;
+    }
+    .gp-directory-head span {
+      display: block !important;
+      grid-column: auto !important;
+      font-size: 12px !important;
+    }
+    .gp-directory-head span:nth-child(2) {
+      text-align: left;
+    }
+    .gp-directory-head span:nth-child(3),
+    .gp-directory-head span:nth-child(4) {
+      text-align: right;
+    }
+    .gp-card {
+      min-height: 64px;
+      align-items: center;
+    }
+    .gp-card-main {
+      grid-column: 2;
+    }
+    .gp-card h2 {
+      font-size: 14.5px;
+      font-weight: 720;
+      line-height: 1.36;
+    }
+    .gp-metrics {
+      display: contents;
+    }
+    .gp-metrics div {
+      display: block !important;
+      min-width: 0;
+      text-align: right;
+    }
+    .gp-metrics div:first-child {
+      grid-column: 3;
+    }
+    .gp-metrics div:last-child {
+      grid-column: 4;
+    }
+    .gp-metrics dt {
+      display: none;
+    }
+    .gp-metrics dd {
+      margin: 0;
+      color: var(--text);
+      font-size: 12.5px;
+      font-weight: 740;
+      line-height: 1.25;
+    }
+    .gp-filter-row,
+    .gp-chips,
+    .gp-signal-strip,
+    .gp-meta-line {
+      display: none !important;
+    }
+    @media (min-width: 760px) {
+      .market-kpis {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+      .market-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+      .market-section h2 {
+        font-size: 16px;
+      }
+      .market-head,
+      .market-row {
+        min-height: 44px;
+        padding: 0 14px;
+        font-size: 13px;
+      }
+      .gp-controls {
+        grid-template-columns: minmax(190px, 220px) 150px !important;
+        justify-content: space-between;
+      }
+      .gp-directory-head,
+      .gp-card {
+        grid-template-columns: 48px minmax(260px, 1fr) minmax(112px, 0.42fr) minmax(76px, 0.28fr) !important;
+        gap: 16px;
+        padding-right: 16px;
+        padding-left: 16px;
+      }
+      .gp-card {
+        min-height: 70px;
+      }
+      .gp-card h2 {
+        font-size: 15px;
+      }
+      .gp-metrics dd {
+        font-size: 13px;
+      }
+    }
   </style>"""
 
 
@@ -3015,11 +3596,53 @@ def _format_pct(value: object) -> str:
     return f"{parsed:.2f}%" if parsed > 0 else "-"
 
 
+def _format_date_dot(value: object) -> str:
+    text = _short_date(value)
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        return text.replace("-", ".")
+    return text
+
+
+def _format_delta(current: object, previous: object, suffix: str = "") -> str:
+    current_value = _as_float(current)
+    previous_value = _as_float(previous)
+    if not current_value or not previous_value:
+        return ""
+    delta = current_value - previous_value
+    if abs(delta) < 0.000001:
+        return "전년 동일"
+    sign = "+" if delta > 0 else "-"
+    return f"전년 대비 {sign}{abs(int(round(delta))):,}{suffix}"
+
+
+def _format_delta_trn(current_krw_mn: object, previous_krw_mn: object) -> str:
+    current_value = _as_float(current_krw_mn)
+    previous_value = _as_float(previous_krw_mn)
+    if not current_value or not previous_value:
+        return ""
+    delta_trn = (current_value - previous_value) / 1000000
+    if abs(delta_trn) < 0.05:
+        return "전년 동일"
+    sign = "+" if delta_trn > 0 else "-"
+    return f"전년 대비 {sign}{abs(delta_trn):,.1f}조"
+
+
 def _short_date(value: object) -> str:
     text = _clean(value)
     if not text:
         return ""
     return text[:10]
+
+
+def _latest_gp_as_of_date(gps: list[dict[str, object]]) -> str:
+    dates = sorted({_short_date(gp.get("latest_as_of_date")) for gp in gps if _short_date(gp.get("latest_as_of_date"))})
+    return dates[-1] if dates else ""
+
+
+def _empty_table_row(message: str) -> str:
+    return f"""          <div class="market-row market-empty-row">
+            <span>{_e(message)}</span>
+          </div>"""
 
 
 def _profile_summary(gp: dict[str, object]) -> str:
