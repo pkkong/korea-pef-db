@@ -1478,9 +1478,12 @@ button, input { font: inherit; }
 }
 .brief-section-tab {
   display: inline-flex;
+  position: relative;
   height: 36px;
   align-items: center;
+  align-self: stretch;
   border: 0;
+  border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--secondary);
   font-size: 13px;
@@ -1492,6 +1495,7 @@ button, input { font: inherit; }
   -webkit-text-fill-color: currentColor;
 }
 .brief-section-tab.active {
+  border-bottom-color: var(--text);
   color: var(--text);
   font-weight: 800;
 }

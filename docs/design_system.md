@@ -111,7 +111,8 @@ Use the newsletter screen as the reference for shared public UI polish.
 - PC reading width: about 860-900px.
 - Header: compact title row with utility icons. Search opens inside the header.
 - Top tabs: `Daily / Weekly / 출자공고` stay as future placeholders. Inactive tabs
-  are low-contrast text tabs.
+  are low-contrast text tabs. The tab row uses a thin neutral baseline, and the
+  selected tab uses a clearly visible black underline.
 - Date control: compact centered pill, no decorative horizontal side lines.
 - Section label: visible but restrained. Current reference is about 13px, 700
   weight, with count at about 11.5px.
