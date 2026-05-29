@@ -61,7 +61,7 @@ blocks, nested cards, and card-heavy directory screens.
 - Product/page title on mobile should usually be 21-28px. Use 32-38px on PC only
   for true page titles.
 - Service tabs should usually be 13px.
-- Section labels should usually be 12.5-14px.
+- Section labels should usually be 12.5-14.5px.
 - Data labels, counts, tags, and metadata should usually be 11-13px.
 - Directory row titles should usually be 15-16px.
 - Newsletter article titles should usually be about 15px with medium-bold weight,
@@ -116,7 +116,7 @@ Use the newsletter screen as the reference for shared public UI polish.
 - Date control: compact centered pill, no decorative horizontal side lines. On
   the newsletter, the active date may be the single black emphasis element with
   white text.
-- Section label: visible but restrained. Current reference is about 14px, 760
+- Section label: visible but restrained. Current reference is about 14.5px, 760
   weight. When category separation is weak, prefer a
   clearer section label and a quiet full-bleed neutral band between sections
   rather than wrapping each category in a card. Do not show section count badges

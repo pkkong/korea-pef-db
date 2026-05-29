@@ -1972,7 +1972,7 @@ button, input { font: inherit; }
 }
 .newsletter-only .section-title {
   padding-bottom: 10px;
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 760;
 }
 .section-title span {
