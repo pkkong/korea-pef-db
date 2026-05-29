@@ -8,12 +8,19 @@ import csv
 import json
 import re
 import struct
+import sys
 import zlib
 from pathlib import Path
 from urllib.parse import urlparse
 
 from daily_news_common import DEFAULT_EXPORT_DIR, REPO_ROOT, clean_news_title, normalize_url, normalize_whitespace, split_news_title_badges, today_seoul
 from lp_public_visibility import is_public_lp_notice_row
+
+NEWSLETTER_SRC = REPO_ROOT / "services" / "newsletter" / "src"
+if str(NEWSLETTER_SRC) not in sys.path:
+    sys.path.append(str(NEWSLETTER_SRC))
+
+from pef_wiki_pages import render_pef_wiki_page  # noqa: E402
 
 DEFAULT_PUBLIC_DIR = REPO_ROOT / "public"
 DEFAULT_SERVICE_INTEGRATION_WORKLIST = REPO_ROOT / "exports" / "service_integration_worklist_latest.csv"
@@ -338,10 +345,6 @@ def parse_brief(markdown_path: Path) -> list[dict[str, str]]:
 
 def parse_brief_basis(markdown_path: Path) -> str:
     return ""
-
-
-def brief_count_label(count: int) -> str:
-    return f"주요 뉴스 {count}건"
 
 
 def contains_any(text: str, keywords: list[str]) -> bool:
@@ -1090,7 +1093,6 @@ def build_archive_payload(
                 "reportDate": report_date,
                 "visibleDate": display_date(report_date),
                 "basis": "",
-                "countLabel": brief_count_label(len(rows)),
                 "articles": article_payload_rows(rows, service_context, f"clip-{compact_date(report_date)}"),
             }
         )
@@ -1111,15 +1113,12 @@ def render_app(
             "reportDate": report_date,
             "visibleDate": display_date(report_date),
             "basis": "",
-            "countLabel": brief_count_label(len(articles)),
             "articles": article_payload_rows(articles, service_context),
         }
     ]
     payload = json.dumps(archive_entries, ensure_ascii=False).replace("</", "<\\/")
     lp_payload = json.dumps(lp_monitor or [], ensure_ascii=False).replace("</", "<\\/")
     visible_date = display_date(report_date)
-    basis = html_escape(basis_text)
-    count_label = brief_count_label(len(articles))
     date_options = "\n".join(
         f'          <option value="{html_escape(str(entry.get("reportDate", "")))}"'
         f'{" selected" if entry.get("reportDate") == report_date else ""}>'
@@ -1130,15 +1129,15 @@ def render_app(
     min_date = min(available_dates) if available_dates else report_date
     max_date = max(available_dates) if available_dates else report_date
     shell_class = "app-shell newsletter-only" if newsletter_only else "app-shell"
-    product_header = render_public_product_header("brief", "#clipSearch") if newsletter_only else ""
-    header_db_link = "" if newsletter_only else '<a class="header-action" href="db.html" aria-label="공개 GP·펀드 데이터베이스 열기">DB</a>'
-    lp_db_link = "" if newsletter_only else '<a href="db.html#lp">LP DB</a>'
+    body_class = ' class="newsletter-page"' if newsletter_only else ""
+    product_header = ""
+    lp_db_link = "" if newsletter_only else '<a href="db.html#lp">LP 목록</a>'
     bottom_db_link = (
-        """      <a href="lp-notices.html">
+        """      <a href="db.html#lp">
         <span aria-hidden="true" class="nav-dot nav-icon-lp"></span>
         <strong>LP</strong>
       </a>
-      <a href="gps.html">
+      <a href="db.html#profile">
         <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
         <strong>GP</strong>
       </a>
@@ -1147,9 +1146,17 @@ def render_app(
         <strong>Wiki</strong>
       </a>"""
         if newsletter_only
-        else """      <a href="db.html">
-        <span aria-hidden="true" class="nav-dot nav-icon-db"></span>
-        <strong>DB</strong>
+        else """      <a href="db.html#lp">
+        <span aria-hidden="true" class="nav-dot nav-icon-lp"></span>
+        <strong>LP</strong>
+      </a>
+      <a href="db.html#profile">
+        <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
+        <strong>GP</strong>
+      </a>
+      <a href="pef-wiki.html">
+        <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
+        <strong>Wiki</strong>
       </a>"""
     )
     search_placeholder = "뉴스·기관·운용사 검색" if newsletter_only else "뉴스·공식공고·기관·운용사 검색"
@@ -1191,20 +1198,26 @@ def render_app(
 {app_head_meta()}
   <link rel="stylesheet" href="assets/service.css?v={asset_version}">
 </head>
-<body>
+<body{body_class}>
   <div class="{shell_class}">
 {product_header}
     <header class="app-header">
-      <div class="header-topline">
-        <div>
-          <p>뉴스레터</p>
-          <strong>Daily Brief</strong>
-        </div>
-        <div class="header-actions">
-          <button class="header-icon search-toggle" id="searchToggle" type="button" aria-label="검색 열기"></button>
-          {header_db_link}
-        </div>
+      <div class="service-bar">
+        <strong class="service-title">Daily Brief</strong>
+        <section class="search-area" id="searchArea" aria-label="기사 검색">
+          <label class="search-box">
+            <span aria-hidden="true"></span>
+            <input id="clipSearch" type="search" placeholder="{html_escape(search_placeholder)}" autocomplete="off">
+          </label>
+          <button class="search-close" id="searchClose" type="button" aria-label="검색 닫기"></button>
+        </section>
+        <button class="header-icon search-toggle" id="searchToggle" type="button" aria-label="검색 열기" aria-expanded="false"></button>
       </div>
+      <nav class="brief-section-tabs" aria-label="뉴스레터 메뉴">
+        <button class="brief-section-tab active" type="button" aria-current="page">Daily</button>
+        <button class="brief-section-tab" type="button" disabled>Weekly</button>
+        <button class="brief-section-tab" type="button" disabled>출자공고</button>
+      </nav>
       <div class="date-control" aria-label="브리프 날짜 탐색">
         <button class="date-step date-prev" id="datePrev" type="button" aria-label="이전 날짜"></button>
         <div class="date-current">
@@ -1218,16 +1231,7 @@ def render_app(
       <select class="date-select" id="briefDateSelect" aria-label="브리프 날짜 선택">
 {date_options}
       </select>
-      <div class="brief-meta" id="briefMeta">{html_escape(count_label)}</div>
     </header>
-
-    <section class="search-area" id="searchArea" aria-label="기사 검색">
-      <label class="search-box">
-        <span aria-hidden="true"></span>
-        <input id="clipSearch" type="search" placeholder="{html_escape(search_placeholder)}" autocomplete="off">
-      </label>
-      <button class="search-close" id="searchClose" type="button" aria-label="검색 닫기"></button>
-    </section>
 
     <main class="content-area">
 {lp_monitor_section}
@@ -1273,10 +1277,6 @@ def render_public_product_header(active: str, search_href: str = "#clipSearch") 
         <span class="kpef-brand-mark" aria-hidden="true">K</span>
         <strong>Korea PEF Intelligence</strong>
       </a>
-      <div class="kpef-product-actions">
-        <a class="kpef-icon-link kpef-icon-search" href="{html_escape(search_href)}" aria-label="검색"></a>
-        <a class="kpef-icon-link kpef-icon-menu" href="index.html" aria-label="홈"></a>
-      </div>
     </header>"""
 
 
@@ -1306,6 +1306,9 @@ body {
   font-family: Pretendard, "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+body.newsletter-page {
+  background: var(--surface);
+}
 a { color: inherit; text-decoration: none; }
 button, input { font: inherit; }
 .kpef-product-header {
@@ -1316,8 +1319,10 @@ button, input { font: inherit; }
   min-height: 58px;
   margin: calc(-1 * max(14px, env(safe-area-inset-top))) -14px 0;
   padding: calc(max(14px, env(safe-area-inset-top)) + 8px) 16px 12px;
-  background: #1d2130;
-  color: #fff;
+  border-bottom: 1px solid var(--separator);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--text);
+  backdrop-filter: blur(18px);
 }
 .kpef-product-brand {
   display: inline-flex;
@@ -1342,10 +1347,10 @@ button, input { font: inherit; }
   height: 28px;
   flex: 0 0 28px;
   place-items: center;
-  border: 1px solid rgba(255,255,255,0.24);
+  border: 1px solid var(--separator);
   border-radius: 8px;
-  background: rgba(255,255,255,0.08);
-  color: #fff;
+  background: var(--surface);
+  color: var(--text);
   font-size: 13px;
   font-weight: 900;
 }
@@ -1364,7 +1369,7 @@ button, input { font: inherit; }
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #fff;
+  color: var(--text);
   cursor: pointer;
 }
 .kpef-icon-search::before {
@@ -1427,42 +1432,82 @@ button, input { font: inherit; }
   background: var(--bg);
   padding: max(14px, env(safe-area-inset-top)) 14px calc(88px + env(safe-area-inset-bottom));
 }
+.newsletter-page .app-shell {
+  background: var(--surface);
+}
 .app-header {
   display: grid;
-  gap: 10px;
-  padding: 4px 2px 10px;
+  gap: 0;
+  padding: 2px 0 10px;
 }
-.header-topline {
-  position: relative;
+.service-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   min-height: 40px;
-  padding-right: 48px;
 }
-.header-topline > div { min-width: 0; }
-.app-header p {
-  margin: 0 0 2px;
+.service-bar.search-open {
+  gap: 8px;
+}
+.service-bar.search-open .service-title,
+.service-bar.search-open .search-toggle {
+  display: none;
+}
+.service-title {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  font-size: 21px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+.brief-section-tabs {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 18px;
+  margin: 0 -14px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--separator);
+}
+.brief-section-tabs::after {
+  content: "";
+  flex: 1 1 auto;
+}
+.brief-section-tab {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  border: 0;
+  background: transparent;
   color: var(--secondary);
   font-size: 13px;
-  line-height: 1.2;
-}
-.app-header strong {
-  display: block;
-  margin: 0;
-  font-size: 20px;
-  line-height: 1.2;
-  font-weight: 700;
+  line-height: 1;
+  font-weight: 650;
   letter-spacing: 0;
+  white-space: nowrap;
+  cursor: default;
+  -webkit-text-fill-color: currentColor;
+}
+.brief-section-tab.active {
+  color: var(--text);
+  font-weight: 800;
+}
+.brief-section-tab:disabled {
+  opacity: 1;
+  color: #b8b8bd;
+  -webkit-text-fill-color: currentColor;
 }
 .date-control {
   display: flex;
-  min-height: 44px;
+  min-height: 40px;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-top: 2px;
+  margin-top: 8px;
 }
 .date-control::before,
 .date-control::after {
@@ -1473,8 +1518,8 @@ button, input { font: inherit; }
 }
 .date-step {
   display: inline-flex;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--separator);
@@ -1499,8 +1544,8 @@ button, input { font: inherit; }
 .date-current {
   position: relative;
   display: grid;
-  min-width: 164px;
-  height: 44px;
+  min-width: 156px;
+  height: 40px;
   align-content: center;
   justify-items: center;
   gap: 1px;
@@ -1510,9 +1555,9 @@ button, input { font: inherit; }
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
 }
 .date-current span {
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.1;
-  font-weight: 650;
+  font-weight: 680;
 }
 .date-current small {
   color: var(--secondary);
@@ -1547,38 +1592,19 @@ button, input { font: inherit; }
 .date-select:focus {
   box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.16);
 }
-.brief-meta {
-  max-width: 390px;
-  margin-top: -1px;
-  color: var(--secondary);
-  font-size: 12px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-.header-actions {
-  display: flex;
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 2;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-}
-.header-icon,
-.header-action {
+.header-icon {
   display: inline-flex;
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(0,0,0,0.06);
-  border-radius: 50%;
-  background: var(--surface);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
   cursor: pointer;
-  box-shadow: 0 1px 8px rgba(0,0,0,0.03);
 }
 .header-icon::before {
   content: "";
@@ -1598,36 +1624,19 @@ button, input { font: inherit; }
   position: absolute;
   width: 7px;
   height: 2px;
-  right: 11px;
-  bottom: 11px;
+  right: 10px;
+  bottom: 10px;
   border-radius: 2px;
   background: currentColor;
   transform: rotate(45deg);
 }
-.header-action {
-  display: none;
-  flex: 0 0 56px;
-  width: 56px;
-  height: 34px;
-  white-space: nowrap;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 650;
-}
-.header-action.active {
-  border-color: rgba(31, 107, 99, 0.32);
-  background: #e7f4f1;
-  color: #164c46;
-}
 .search-area {
   display: none;
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  min-width: 0;
+  flex: 1 1 auto;
   gap: 8px;
-  padding: 4px 0 10px;
-  background: rgba(245,245,247,0.92);
-  backdrop-filter: blur(18px);
+  padding: 0;
+  background: transparent;
 }
 .search-area.active { display: flex; }
 .search-box {
@@ -1635,10 +1644,10 @@ button, input { font: inherit; }
   align-items: center;
   gap: 8px;
   width: 100%;
-  height: 42px;
+  height: 38px;
   padding: 0 13px;
-  border-radius: 14px;
-  background: #e9e9ee;
+  border-radius: 12px;
+  background: #f2f2f4;
 }
 .search-box span {
   width: 13px;
@@ -1671,9 +1680,9 @@ button, input { font: inherit; }
 .search-close {
   display: inline-flex;
   position: relative;
-  flex: 0 0 42px;
-  width: 42px;
-  height: 42px;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -1934,12 +1943,24 @@ button, input { font: inherit; }
 .view.active { display: block; }
 .section-block { margin: 8px 0 18px; }
 .section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   margin: 0;
-  padding: 0 4px 9px;
+  padding: 0 0 8px;
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.3;
-  font-weight: 650;
+  font-weight: 780;
+}
+.section-title span {
+  flex: 0 0 auto;
+  color: var(--secondary);
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .cell-list {
   margin: 0;
@@ -1949,41 +1970,68 @@ button, input { font: inherit; }
   border-radius: var(--radius);
   background: var(--surface);
 }
+.newsletter-only .cell-list {
+  overflow: visible;
+  border-top: 1px solid var(--separator);
+  border-radius: 0;
+  background: transparent;
+}
 .clip-cell {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 44px;
-  gap: 10px;
+  grid-template-columns: 30px minmax(0, 1fr) 38px;
+  gap: 12px;
   min-height: 72px;
   align-items: center;
-  padding: 10px 10px 10px 12px;
+  padding: 10px 10px 10px 10px;
   border-bottom: 1px solid var(--separator);
 }
 .clip-cell:last-child { border-bottom: 0; }
+.newsletter-only .clip-cell {
+  min-height: 76px;
+  padding: 12px 0;
+}
+.newsletter-only .clip-cell:last-child {
+  border-bottom: 1px solid var(--separator);
+}
 .publisher-icon {
   display: inline-flex;
   position: relative;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 1px solid rgba(0,0,0,0.06);
-  border-radius: 10px;
-  background: var(--surface-muted);
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 50%;
+  background: #fff;
   color: var(--secondary);
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0;
 }
 .publisher-icon img {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   object-fit: contain;
 }
-.publisher-fallback { display: none; }
+.publisher-fallback {
+  display: none;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 10px;
+  line-height: 1;
+}
 .publisher-icon.fallback img { display: none; }
 .publisher-icon.fallback .publisher-fallback,
-.publisher-icon.fallback-only .publisher-fallback { display: inline; }
+.publisher-icon.fallback-only .publisher-fallback { display: inline-flex; }
 .cell-main-wrap { min-width: 0; display: grid; gap: 0; }
 .cell-main { min-width: 0; display: block; }
 .cell-title {
@@ -1992,9 +2040,9 @@ button, input { font: inherit; }
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   color: var(--text);
-  font-size: 15px;
-  line-height: 1.38;
-  font-weight: 560;
+  font-size: 15.5px;
+  line-height: 1.36;
+  font-weight: 630;
   letter-spacing: 0;
 }
 .title-badge {
@@ -2016,9 +2064,9 @@ button, input { font: inherit; }
   min-width: 0;
   gap: 6px;
   align-items: center;
-  margin-top: 4px;
+  margin-top: 3px;
   color: var(--secondary);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.2;
 }
 .cell-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2030,10 +2078,10 @@ button, input { font: inherit; }
 .cell-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 4px;
   position: relative;
   align-items: center;
-  margin-top: 7px;
+  margin-top: 6px;
 }
 .cell-tags.collapsible {
   padding-right: 44px;
@@ -2050,13 +2098,13 @@ button, input { font: inherit; }
 .context-chip {
   display: inline-flex;
   max-width: 100%;
-  min-height: 22px;
+  min-height: 20px;
   align-items: center;
   border: 0;
   border-radius: 999px;
-  padding: 3px 7px;
-  background: var(--surface-muted);
-  color: var(--secondary);
+  padding: 2px 7px;
+  background: #f5f5f5;
+  color: #6f6f73;
   font-size: 11px;
   line-height: 1.2;
   font-weight: 560;
@@ -2064,28 +2112,28 @@ button, input { font: inherit; }
   text-decoration: none;
 }
 .taxonomy-chip {
-  background: #eef5ff;
-  color: #0f5fb8;
+  background: #f4f6f8;
+  color: #5b6470;
 }
 .lp-chip {
-  background: #e7f4f1;
-  color: #164c46;
+  background: #f1f6f5;
+  color: #526763;
 }
 .context-chip:active { background: #e0e0e6; }
 .tag-toggle {
   display: inline-flex;
   min-width: 38px;
-  min-height: 22px;
+  min-height: 20px;
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(0,0,0,0.08);
   border-radius: 999px;
-  padding: 3px 8px;
-  background: #eef1f4;
-  color: #374151;
+  padding: 2px 8px;
+  background: #f7f7f8;
+  color: #5f6368;
   font-size: 11px;
   line-height: 1.2;
-  font-weight: 720;
+  font-weight: 680;
   cursor: pointer;
 }
 .tag-toggle[hidden] {
@@ -2095,16 +2143,16 @@ button, input { font: inherit; }
   position: absolute;
   top: 0;
   right: 0;
-  box-shadow: -10px 0 12px rgba(255,255,255,0.92);
+  box-shadow: -10px 0 12px rgba(255,255,255,0.94);
 }
 .cell-tags.expanded .tag-toggle {
-  background: #f7f8fa;
-  color: #52616f;
+  background: #f7f7f8;
+  color: #5f6368;
 }
 .save-button {
   display: inline-flex;
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -2115,8 +2163,8 @@ button, input { font: inherit; }
 }
 .save-button::before {
   content: "";
-  width: 18px;
-  height: 22px;
+  width: 16px;
+  height: 20px;
   background: currentColor;
   -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
@@ -2157,10 +2205,10 @@ button, input { font: inherit; }
   width: min(100vw, var(--shell));
   max-width: 100vw;
   transform: translateX(-50%);
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
   border-top: 1px solid rgba(0,0,0,0.08);
-  background: rgba(249,249,249,0.88);
-  backdrop-filter: blur(22px);
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(18px);
 }
 .newsletter-only .bottom-nav,
 .bottom-nav.newsletter-only { grid-template-columns: repeat(5, minmax(0, 1fr)); }
@@ -2171,7 +2219,7 @@ button, input { font: inherit; }
   overflow: hidden;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   border: 0;
   background: transparent;
   color: var(--secondary);
@@ -2182,23 +2230,23 @@ button, input { font: inherit; }
 .bottom-nav strong {
   max-width: 100%;
   overflow: hidden;
-  font-weight: 600;
+  font-weight: 620;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .bottom-nav .active { color: var(--text); }
 .nav-dot {
   display: inline-flex;
-  width: 24px;
-  height: 24px;
+  width: 23px;
+  height: 23px;
   align-items: center;
   justify-content: center;
-  opacity: 0.72;
+  opacity: 0.68;
 }
 .nav-dot::before {
   content: "";
-  width: 22px;
-  height: 22px;
+  width: 21px;
+  height: 21px;
   background: currentColor;
 }
 .nav-icon-brief::before {
@@ -2227,11 +2275,19 @@ button, input { font: inherit; }
 }
 .bottom-nav .active .nav-dot { opacity: 1; }
 .skeleton-list { display: grid; gap: 1px; overflow: hidden; border-radius: var(--radius); background: var(--surface); }
+.newsletter-only .skeleton-list {
+  border-top: 1px solid var(--separator);
+  border-radius: 0;
+  background: transparent;
+}
 .skeleton-list div {
   height: 72px;
-  background: linear-gradient(90deg, #fff, #f1f1f4, #fff);
+  background: linear-gradient(90deg, #fff, #f5f5f5, #fff);
   background-size: 220% 100%;
   animation: skeleton 1.4s ease-in-out infinite;
+}
+.newsletter-only .skeleton-list div {
+  border-bottom: 1px solid var(--separator);
 }
 .skeleton-list.hidden { display: none; }
 @keyframes skeleton {
@@ -2243,12 +2299,12 @@ button, input { font: inherit; }
   .date-control::before,
   .date-control::after { flex-basis: 8px; }
   .date-step {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
   }
   .date-current {
-    min-width: min(154px, 42vw);
-    height: 42px;
+    min-width: min(150px, 42vw);
+    height: 40px;
   }
   .bottom-nav {
     padding-right: 8px;
@@ -2256,31 +2312,28 @@ button, input { font: inherit; }
   }
 }
 @media (min-width: 760px) {
-  body { background: #ececf1; }
+  body { background: var(--bg); }
   .app-shell {
-    margin-top: 18px;
-    margin-bottom: 18px;
+    margin-top: 0;
+    margin-bottom: 0;
     min-height: calc(100vh - 36px);
-    border-radius: 30px;
+    border-radius: 0;
     padding-bottom: calc(106px + env(safe-area-inset-bottom));
-    box-shadow: 0 24px 80px rgba(0,0,0,0.08);
-    overflow: hidden;
+    box-shadow: none;
+    overflow: visible;
   }
   .kpef-service-tabs {
     display: none;
   }
-  .header-topline { padding-right: 112px; }
-  .newsletter-only .header-topline { padding-right: 252px; }
-  .header-action { display: inline-flex; }
   .bottom-nav {
     bottom: 18px;
     display: grid;
-    width: min(720px, calc(100vw - 96px));
-    border: 1px solid rgba(0,0,0,0.08);
+    width: min(640px, calc(100vw - 96px));
+    border: 1px solid rgba(0,0,0,0.07);
     border-radius: 999px;
     padding: 5px;
-    background: rgba(255,255,255,0.94);
-    box-shadow: 0 18px 60px rgba(15,23,42,0.15);
+    background: rgba(255,255,255,0.96);
+    box-shadow: 0 8px 28px rgba(15,23,42,0.08);
   }
   .bottom-nav button,
   .bottom-nav a {
@@ -2292,7 +2345,7 @@ button, input { font: inherit; }
     font-size: 12px;
   }
   .bottom-nav .active {
-    background: var(--surface-muted);
+    background: #f7f7f8;
   }
   .nav-dot {
     width: 18px;
@@ -2323,6 +2376,11 @@ button, input { font: inherit; }
   }
   .newsletter-only .kpef-service-tabs {
     display: none;
+  }
+  .newsletter-only .app-header {
+    max-width: 900px;
+    margin-right: auto;
+    margin-left: auto;
   }
   .content-area {
     grid-template-columns: minmax(0, 1fr) 340px;
@@ -2359,9 +2417,16 @@ button, input { font: inherit; }
     min-height: 0;
     flex: initial;
     scroll-snap-align: none;
+    border-width: 0 0 1px;
+    border-radius: 0;
+    background: transparent;
+    padding: 12px 0;
   }
   .newsletter-only .content-area {
     display: block;
+    max-width: 900px;
+    margin-right: auto;
+    margin-left: auto;
   }
   .newsletter-only #todayView,
   .newsletter-only #savedView {
@@ -2370,17 +2435,10 @@ button, input { font: inherit; }
   }
   .newsletter-only #todayList,
   .newsletter-only #savedList {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
-    align-items: start;
-  }
-  .newsletter-only #todayList > .section-block:only-child,
-  .newsletter-only #savedList > .section-block:only-child {
-    grid-column: 1 / -1;
+    display: block;
   }
   .newsletter-only .section-block {
-    margin: 0;
+    margin: 0 0 24px;
   }
   .newsletter-only .bottom-nav,
   .bottom-nav.newsletter-only {
@@ -2400,6 +2458,7 @@ def service_js() -> str:
   const searchArea = document.getElementById("searchArea");
   const searchToggle = document.getElementById("searchToggle");
   const searchClose = document.getElementById("searchClose");
+  const serviceBar = document.querySelector(".service-bar");
   const dateSelect = document.getElementById("briefDateSelect");
   const dateInput = document.getElementById("briefDateInput");
   const dateLabel = document.getElementById("briefDateLabel");
@@ -2407,7 +2466,6 @@ def service_js() -> str:
   const datePrev = document.getElementById("datePrev");
   const dateNext = document.getElementById("dateNext");
   const dateRail = document.getElementById("briefDateRail");
-  const briefMeta = document.getElementById("briefMeta");
   const todayList = document.getElementById("todayList");
   const savedList = document.getElementById("savedList");
   const savedEmpty = document.getElementById("savedEmpty");
@@ -2432,11 +2490,11 @@ def service_js() -> str:
   };
 
   const queryDate = new URLSearchParams(window.location.search).get("date");
-  let activeBrief = archive.find((brief) => brief.reportDate === queryDate) || archive[0] || {
+  const initialDate = queryDate || (dateSelect && dateSelect.value) || (dateInput && dateInput.value) || "";
+  let activeBrief = archive.find((brief) => brief.reportDate === initialDate) || archive[0] || {
     reportDate: "",
     visibleDate: "",
     basis: "",
-    countLabel: `주요 뉴스 ${legacyArticles.length}건`,
     articles: legacyArticles
   };
   let articles = Array.isArray(activeBrief.articles) ? activeBrief.articles : [];
@@ -2451,6 +2509,7 @@ def service_js() -> str:
     if (!searchArea) return;
     const shouldOpen = Boolean(open || queryText());
     searchArea.classList.toggle("active", shouldOpen);
+    if (serviceBar) serviceBar.classList.toggle("search-open", shouldOpen);
     if (searchToggle) searchToggle.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
     if (shouldOpen) window.requestAnimationFrame(() => searchInput && searchInput.focus());
   };
@@ -2511,7 +2570,7 @@ def service_js() -> str:
     if (dateNext) dateNext.disabled = index <= 0;
   };
 
-  const updateBriefChrome = (counts = {}) => {
+  const updateBriefChrome = () => {
     articles = Array.isArray(activeBrief.articles) ? activeBrief.articles : [];
     if (dateSelect) dateSelect.value = activeBrief.reportDate || "";
     updateDateControl();
@@ -2521,21 +2580,6 @@ def service_js() -> str:
         button.classList.toggle("active", active);
         if (active) button.scrollIntoView({ block: "nearest", inline: "center" });
       });
-    }
-    if (briefMeta) {
-      const query = queryText();
-      if (query) {
-        const newsCount = Number.isFinite(counts.newsCount) ? counts.newsCount : filtered().length;
-        if (showLpMonitor) {
-          const noticeCount = Number.isFinite(counts.noticeCount) ? counts.noticeCount : filteredLpMonitor().length;
-          briefMeta.textContent = `전체 아카이브 검색 결과 뉴스 ${newsCount}건 · 공식공고 ${noticeCount}건`;
-        } else {
-          briefMeta.textContent = `전체 아카이브 검색 결과 뉴스 ${newsCount}건`;
-        }
-        return;
-      }
-      const countLabel = activeBrief.countLabel || `주요 뉴스 ${articles.length}건`;
-      briefMeta.textContent = countLabel;
     }
   };
 
@@ -2999,9 +3043,13 @@ def service_js() -> str:
     groups.forEach((groupItems, section) => {
       const block = document.createElement("section");
       block.className = "section-block";
+      block.dataset.sectionName = section || "뉴스";
       const title = document.createElement("h2");
       title.className = "section-title";
       title.textContent = section || "뉴스";
+      const count = document.createElement("span");
+      count.textContent = `${groupItems.length.toLocaleString("ko-KR")}건`;
+      title.append(count);
       const list = document.createElement("ul");
       list.className = "cell-list";
       groupItems.forEach((article) => list.append(makeCell(article)));
@@ -3030,7 +3078,7 @@ def service_js() -> str:
     if (skeleton) skeleton.classList.add("hidden");
     const newsItems = filtered();
     const noticeItems = filteredLpMonitor();
-    updateBriefChrome({ newsCount: newsItems.length, noticeCount: noticeItems.length });
+    updateBriefChrome();
     renderLpMonitor(noticeItems);
     renderGrouped(todayList, newsItems);
     renderSaved();
@@ -3115,9 +3163,7 @@ def service_js() -> str:
         setActiveBrief(next.reportDate);
         return;
       }
-      const missing = dateInput.value;
       updateDateControl();
-      if (briefMeta && missing) briefMeta.textContent = `${missing.replaceAll("-", ".")} 브리프가 아직 없습니다`;
     });
   }
   document.addEventListener("keydown", (event) => {
@@ -3179,6 +3225,7 @@ def build(
     css_path = assets_dir / "service.css"
     js_path = assets_dir / "service.js"
     manifest_path = public_dir / "site.webmanifest"
+    wiki_path = public_dir / "pef-wiki.html"
     icon_path = write_app_icon_assets(public_dir)
     html = render_app(report_date, articles, basis_text, service_context, archive_entries, lp_monitor, newsletter_only)
     home_path.write_text(html, encoding="utf-8")
@@ -3186,6 +3233,7 @@ def build(
     css_path.write_text(service_css(), encoding="utf-8")
     js_path.write_text(service_js(), encoding="utf-8")
     manifest_path.write_text(app_web_manifest(), encoding="utf-8")
+    wiki_path.write_text(render_pef_wiki_page(report_date, app_asset_version()), encoding="utf-8")
     return {
         "report_date": report_date,
         "home_path": str(home_path),
@@ -3193,6 +3241,7 @@ def build(
         "css_path": str(css_path),
         "js_path": str(js_path),
         "manifest_path": str(manifest_path),
+        "wiki_path": str(wiki_path),
         "icon_path": str(icon_path),
         "article_count": str(len(articles)),
         "lp_monitor_count": str(len(lp_monitor)),
