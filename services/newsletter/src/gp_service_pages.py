@@ -1084,10 +1084,6 @@ def _render_bottom_nav() -> str:
       <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
       <strong>Wiki</strong>
     </a>
-    <a href="index.html#saved">
-      <span aria-hidden="true" class="nav-dot nav-icon-saved"></span>
-      <strong>저장</strong>
-    </a>
   </nav>"""
 
 
@@ -1312,7 +1308,7 @@ def _base_styles() -> str:
     .kpef-icon-menu::after { top: 23px; }
     .kpef-service-tabs {
       display: none;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       margin: 0 calc((100vw - min(1440px, calc(100vw - 44px))) / -2) 18px;
       padding: 0 max(0px, calc((100vw - 1440px) / 2));
       border-bottom: 1px solid var(--line);
@@ -1376,7 +1372,7 @@ def _base_styles() -> str:
       bottom: 0;
       z-index: 30;
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       width: min(100vw, 1240px);
       max-width: 100vw;
       transform: translateX(-50%);

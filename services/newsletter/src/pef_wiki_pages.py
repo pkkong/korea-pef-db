@@ -439,10 +439,6 @@ def _render_bottom_nav() -> str:
       <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
       <strong>Wiki</strong>
     </a>
-    <a href="index.html#saved">
-      <span aria-hidden="true" class="nav-dot nav-icon-saved"></span>
-      <strong>저장</strong>
-    </a>
   </nav>"""
 
 

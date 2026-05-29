@@ -57,6 +57,10 @@ blocks, nested cards, and card-heavy directory screens.
   square containers.
 - Newsletter top tabs may remain as placeholders for planned views, but inactive
   tabs should be low-contrast text tabs rather than heavy disabled controls.
+- Bottom navigation is reserved for primary service destinations. Keep it to
+  Brief, LP, GP, and Wiki until saved items work across news, LP profiles, GP
+  profiles, and wiki documents. News-only saved articles should stay as a
+  newsletter header utility, not as a global bottom-tab destination.
 
 ## Verification
 

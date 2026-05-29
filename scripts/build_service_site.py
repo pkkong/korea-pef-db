@@ -1211,7 +1211,10 @@ def render_app(
           </label>
           <button class="search-close" id="searchClose" type="button" aria-label="검색 닫기"></button>
         </section>
-        <button class="header-icon search-toggle" id="searchToggle" type="button" aria-label="검색 열기" aria-expanded="false"></button>
+        <div class="service-actions" aria-label="브리프 도구">
+          <button class="header-icon saved-toggle" type="button" data-view="saved" aria-label="저장한 기사 보기"></button>
+          <button class="header-icon search-toggle" id="searchToggle" type="button" aria-label="검색 열기" aria-expanded="false"></button>
+        </div>
       </div>
       <nav class="brief-section-tabs" aria-label="뉴스레터 메뉴">
         <button class="brief-section-tab active" type="button" aria-current="page">Daily</button>
@@ -1258,10 +1261,6 @@ def render_app(
         <strong>브리프</strong>
       </button>
 {bottom_db_link}
-      <button type="button" data-view="saved">
-        <span aria-hidden="true" class="nav-dot nav-icon-saved"></span>
-        <strong>저장</strong>
-      </button>
     </nav>
   </div>
   <script>window.KPEF_DAILY_ARCHIVE = {payload};</script>
@@ -1451,7 +1450,7 @@ button, input { font: inherit; }
   gap: 8px;
 }
 .service-bar.search-open .service-title,
-.service-bar.search-open .search-toggle {
+.service-bar.search-open .service-actions {
   display: none;
 }
 .service-title {
@@ -1609,6 +1608,27 @@ button, input { font: inherit; }
   width: 18px;
   height: 18px;
   background: currentColor;
+}
+.service-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.saved-toggle {
+  color: var(--secondary);
+}
+.saved-toggle::before {
+  width: 15px;
+  height: 19px;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.saved-toggle.active {
+  color: var(--text);
+}
+.saved-toggle.active::before {
+  -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='black'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 3.75h12v17l-6-3.6-6 3.6v-17Z' fill='black'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 .search-toggle::before {
   width: 14px;
@@ -2199,7 +2219,7 @@ button, input { font: inherit; }
   bottom: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   width: min(100vw, var(--shell));
   max-width: 100vw;
   transform: translateX(-50%);
@@ -2209,7 +2229,7 @@ button, input { font: inherit; }
   backdrop-filter: blur(18px);
 }
 .newsletter-only .bottom-nav,
-.bottom-nav.newsletter-only { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.bottom-nav.newsletter-only { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .bottom-nav button,
 .bottom-nav a {
   display: flex;
@@ -3086,7 +3106,10 @@ def service_js() -> str:
     currentView = view;
     todayView.classList.toggle("active", view === "today");
     savedView.classList.toggle("active", view === "saved");
-    navItems.forEach((item) => item.classList.toggle("active", item.dataset.view === view));
+    navItems.forEach((item) => {
+      const isBriefTab = item.dataset.view === "today";
+      item.classList.toggle("active", item.dataset.view === view || (view === "saved" && isBriefTab));
+    });
     if (view === "saved") renderSaved();
   };
 
