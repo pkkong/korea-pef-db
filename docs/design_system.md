@@ -241,6 +241,10 @@ Use the newsletter screen as the reference for shared public UI polish.
   institution facts, investment status, official notices, related GP, related
   news, peer comparison, then source/reference links. Keep coverage counts and
   source diagnostics out of the top summary.
+- Profile fact rows should not print long source strings such as source name,
+  date, and confidence under every value. When a fact needs a public source
+  link, use a small icon-only link for homepage, document, article, or LinkedIn
+  and keep verbose source lists in the bottom reference section.
 - Avoid marketing hero layout, oversized titles, repeated KPI cards, and
   operator-facing explanations.
 - Use page-local filters and sorting. Do not let a large list become endless

@@ -1268,20 +1268,55 @@ def facts_in_section(facts: list[dict[str, object]], section: str) -> list[dict[
     return [fact for fact in facts if str(fact.get("section") or "") == section]
 
 
+def lp_source_icon(source_url: object, source_name: object) -> tuple[str, str]:
+    url = str(source_url or "")
+    name = str(source_name or "")
+    parsed = urlparse(url)
+    domain = parsed.netloc.lower().removeprefix("www.")
+    haystack = f"{domain} {name} {url}".lower()
+    if "linkedin.com" in haystack:
+        return "linkedin", "LinkedIn"
+    if (
+        urlparse(url).path.lower().endswith(".pdf")
+        or "getfile" in haystack
+        or "filety=attach" in haystack
+        or re.search(r"보고서|공시|공고|정관|규정|pdf", name, re.I)
+    ):
+        return "document", "자료"
+    if re.search(
+        r"뉴스|기사|신문|경제|일보|투데이|타임즈|데일리|thebell|dealsite|hankyung|mk\.co\.kr|sedaily|chosun|news",
+        haystack,
+        re.I,
+    ):
+        return "article", "기사"
+    return "home", "홈페이지"
+
+
+def render_lp_source_icon(source_url: object, source_name: object) -> str:
+    url = str(source_url or "")
+    if not url:
+        return ""
+    kind, label = lp_source_icon(url, source_name)
+    icon = {
+        "home": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5"/><path d="M6.5 10v9h11v-9"/><path d="M10 19v-5h4v5"/></svg>',
+        "document": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h7l3 3v13H7z"/><path d="M14 4v4h4"/><path d="M9.5 12h5"/><path d="M9.5 15.5h5"/></svg>',
+        "article": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5z"/><path d="M8 9h8"/><path d="M8 12h8"/><path d="M8 15h5"/></svg>',
+        "linkedin": '<span aria-hidden="true">in</span>',
+    }.get(kind, '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7"/><path d="M9 7h8v8"/></svg>')
+    return (
+        f'<a class="ktcu-source-icon ktcu-source-{html_escape(kind)}" '
+        f'href="{html_escape(url)}" target="_blank" rel="noreferrer" '
+        f'aria-label="출처: {html_escape(label)}" title="{html_escape(label)}">'
+        f'{icon}</a>'
+    )
+
+
 def render_ktcu_fact_list(rows: list[dict[str, object]]) -> str:
     rendered: list[str] = []
     for row in rows:
         source_url = str(row.get("source_url") or "")
         source_name = clean_public_lp_text(row.get("source_name"))
-        as_of = str(row.get("as_of_date") or "")
-        confidence = confidence_label(row.get("confidence"))
-        meta_parts = [part for part in [source_name, as_of, confidence] if part]
-        meta = " · ".join(meta_parts)
-        source_html = (
-            f'<small><a href="{html_escape(source_url)}" target="_blank" rel="noreferrer">{html_escape(meta or "자료 보기")}</a></small>'
-            if source_url
-            else (f"<small>{html_escape(meta)}</small>" if meta else "")
-        )
+        source_html = render_lp_source_icon(source_url, source_name)
         label = public_fact_label(row.get("label"))
         value = public_fact_value(row.get("value"))
         if not label or not value:
@@ -1289,7 +1324,7 @@ def render_ktcu_fact_list(rows: list[dict[str, object]]) -> str:
         rendered.append(
             f"""          <div>
             <dt>{html_escape(label)}</dt>
-            <dd>{html_escape(value)}{source_html}</dd>
+            <dd><span>{html_escape(value)}</span>{source_html}</dd>
           </div>"""
         )
     return "\n".join(rendered)
@@ -1773,9 +1808,12 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-facts div {{ min-width: 0; border-top: 1px solid var(--separator); padding-top: 9px; }}
     .ktcu-facts div:first-child {{ border-top: 0; padding-top: 0; }}
     .ktcu-facts dt {{ color: var(--secondary); font-size: 11.5px; font-weight: 800; }}
-    .ktcu-facts dd {{ margin: 4px 0 0; color: var(--text); font-size: 13px; font-weight: 750; line-height: 1.48; overflow-wrap: anywhere; }}
-    .ktcu-facts small {{ display: block; margin-top: 5px; color: var(--secondary); font-size: 11px; font-weight: 700; line-height: 1.35; }}
-    .ktcu-facts small a {{ color: var(--secondary); text-decoration: none; }}
+    .ktcu-facts dd {{ display: flex; min-width: 0; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 0; color: var(--text); font-size: 13px; font-weight: 750; line-height: 1.48; overflow-wrap: anywhere; }}
+    .ktcu-facts dd > span {{ min-width: 0; overflow-wrap: anywhere; }}
+    .ktcu-source-icon {{ display: inline-flex; width: 17px; height: 17px; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid var(--separator); border-radius: 50%; color: var(--secondary); text-decoration: none; transform: translateY(1px); }}
+    .ktcu-source-icon svg {{ width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }}
+    .ktcu-source-icon > span {{ font-size: 8.5px; font-weight: 900; line-height: 1; letter-spacing: 0; }}
+    .ktcu-source-icon:hover {{ border-color: var(--text); color: var(--text); }}
     .ktcu-org {{ display: grid; gap: 8px; }}
     .ktcu-org-node {{ border: 1px solid var(--separator); border-radius: 8px; padding: 10px; background: #fbfcfd; }}
     .ktcu-org-node span {{ display: block; color: var(--secondary); font-size: 11.5px; font-weight: 800; }}
