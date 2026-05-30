@@ -261,6 +261,61 @@ def check_generated_gp_contract() -> list[str]:
     return [f"generated_gp_contract=ok detail_pages_checked={len(detail_paths)} market=ok"]
 
 
+def check_generated_lp_wiki_contract() -> list[str]:
+    lp_path = NEWSLETTER_SITE_DIR / "lp-notices.html"
+    wiki_path = NEWSLETTER_SITE_DIR / "pef-wiki.html"
+    if not lp_path.exists() or not wiki_path.exists():
+        return ["generated_lp_wiki_contract=skipped"]
+
+    violations: list[str] = []
+    lp_html = lp_path.read_text(encoding="utf-8")
+    wiki_html = wiki_path.read_text(encoding="utf-8")
+
+    for name, html in [("lp-notices.html", lp_html), ("pef-wiki.html", wiki_html)]:
+        labels = bottom_nav_labels(html)
+        if labels != BOTTOM_NAV_LABELS:
+            raise CheckFailure(f"{name} bottom nav mismatch: expected {BOTTOM_NAV_LABELS}, got {labels}")
+        if '<header class="kpef-product-header' in html:
+            violations.append(f"{name}:kpef-product-header")
+        if 'font-variant-numeric: tabular-nums' not in html:
+            violations.append(f"{name}:tabular-nums")
+
+    if '<strong class="service-title">LP</strong>' not in lp_html:
+        raise CheckFailure("LP service title missing")
+    if gp_service_tabs(lp_html) != ["LP", "NOTICE", "PEOPLE"]:
+        raise CheckFailure(f"LP service tabs mismatch: got {gp_service_tabs(lp_html)}")
+    if re.search(r'data-kind="[^"]*\b(public|private|mutual_aid)\b', lp_html):
+        violations.append("lp-notices.html:raw ownership token")
+    if "출자기관 프로필" in lp_html:
+        violations.append("lp-notices.html:profile label in directory")
+
+    profile_paths = sorted(path for path in NEWSLETTER_SITE_DIR.glob("lp-*.html") if path.name != "lp-notices.html")[:3]
+    for profile_path in profile_paths:
+        html = profile_path.read_text(encoding="utf-8")
+        labels = bottom_nav_labels(html)
+        if labels != BOTTOM_NAV_LABELS:
+            raise CheckFailure(
+                f"{profile_path.name} bottom nav mismatch: expected {BOTTOM_NAV_LABELS}, got {labels}"
+            )
+        if '<header class="kpef-product-header' in html:
+            violations.append(f"{profile_path.name}:kpef-product-header")
+        if '<strong class="service-title">LP</strong>' not in html:
+            violations.append(f"{profile_path.name}:LP service title")
+        if 'font-variant-numeric: tabular-nums' not in html:
+            violations.append(f"{profile_path.name}:tabular-nums")
+
+    if '<strong class="service-title">Wiki</strong>' not in wiki_html:
+        raise CheckFailure("Wiki service title missing")
+    if gp_service_tabs(wiki_html) != ["개요", "법령", "보고", "세무", "체크리스트"]:
+        raise CheckFailure(f"Wiki topic tabs mismatch: got {gp_service_tabs(wiki_html)}")
+    if wiki_html.count('id="wikiSearch"') != 1:
+        violations.append("pef-wiki.html:duplicate wikiSearch")
+
+    if violations:
+        raise CheckFailure(f"Forbidden generated LP/Wiki wording/markup: {', '.join(violations)}")
+    return [f"generated_lp_wiki_contract=ok lp_profiles_checked={len(profile_paths)} wiki=ok"]
+
+
 def check_remote(base_url: str) -> list[str]:
     if not base_url:
         return []
@@ -291,6 +346,7 @@ def main() -> int:
         check_visible_text,
         check_public_source_terms,
         check_generated_gp_contract,
+        check_generated_lp_wiki_contract,
         check_public_db_amount_contract,
         check_brief_initial_date_guard,
     ]

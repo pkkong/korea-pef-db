@@ -68,15 +68,11 @@ def render_pef_wiki_page(report_date: str, asset_version: str = "") -> str:
         <h1>기관전용 사모집합투자기구</h1>
         <p class="wiki-lede">설립, LP 적격성, 운용 한도, 보고, 세무 확인에 필요한 제도 설명과 원천 확인 경로를 한 문서 흐름으로 정리했습니다.</p>
       </div>
-      <form class="wiki-search" role="search">
-        <label for="wikiSearch">문서 검색</label>
-        <input id="wikiSearch" type="search" placeholder="예: GP, 세무, 설립 보고, 자본시장법">
-        <p class="wiki-search-status" id="wikiSearchStatus" aria-live="polite"></p>
-      </form>
       <div class="wiki-doc-meta" aria-label="문서 기준">
         <span>원문: {html_escape(PEF_WIKI_SOURCE_TITLE)}</span>
         <span>기준일 {safe_date}</span>
       </div>
+      <p class="wiki-search-status" id="wikiSearchStatus" aria-live="polite"></p>
     </header>
 
     <div class="wiki-layout">
@@ -408,16 +404,28 @@ def _app_head_meta() -> str:
 
 
 def _render_top_nav() -> str:
-    return """    <header class="kpef-product-header" aria-label="Korea PEF Intelligence">
-      <a class="kpef-product-brand" href="index.html">
-        <span class="kpef-brand-mark" aria-hidden="true">K</span>
-        <strong>Korea PEF Intelligence</strong>
-      </a>
-      <div class="kpef-product-actions">
-        <a class="kpef-icon-link kpef-icon-search" href="#wikiSearch" data-focus-search aria-label="문서 검색"></a>
-        <button class="kpef-icon-link kpef-icon-menu" type="button" data-toggle-menu aria-label="문서 목차 열기" aria-expanded="false" aria-controls="wiki-mobile-drawer">
-        </button>
+    return """    <header class="app-header wiki-app-header">
+      <div class="service-bar">
+        <strong class="service-title">Wiki</strong>
+        <section class="search-area" id="searchArea" aria-label="문서 검색">
+          <label class="search-box">
+            <span aria-hidden="true"></span>
+            <input id="wikiSearch" type="search" placeholder="GP, 세무, 설립 보고, 자본시장법 검색" autocomplete="off">
+          </label>
+          <button class="search-close" id="searchClose" type="button" aria-label="검색 닫기"></button>
+        </section>
+        <div class="service-actions" aria-label="Wiki 도구">
+          <button class="header-icon search-toggle" id="searchToggle" type="button" aria-label="검색 열기" aria-expanded="false"></button>
+          <button class="header-icon wiki-menu-toggle" type="button" data-toggle-menu aria-label="문서 목차 열기" aria-expanded="false" aria-controls="wiki-mobile-drawer"></button>
+        </div>
       </div>
+      <nav class="brief-section-tabs wiki-section-tabs" aria-label="Wiki 메뉴">
+        <a class="brief-section-tab active" href="#chapter" aria-current="page">개요</a>
+        <a class="brief-section-tab" href="#law-map">법령</a>
+        <a class="brief-section-tab" href="#fss-reporting">보고</a>
+        <a class="brief-section-tab" href="#tax-filings">세무</a>
+        <a class="brief-section-tab" href="#practice-checklists">체크리스트</a>
+      </nav>
     </header>"""
 
 
@@ -458,7 +466,7 @@ def _render_mobile_drawer() -> str:
 def _page_styles() -> str:
     return """  <style>
     :root {
-      --wiki-bg: var(--bg, #f5f5f7);
+      --wiki-bg: #ffffff;
       --wiki-surface: var(--surface, #ffffff);
       --wiki-soft: var(--surface-muted, #f2f2f7);
       --wiki-text: var(--text, #111111);
@@ -476,7 +484,15 @@ def _page_styles() -> str:
       background: var(--wiki-bg);
       color: var(--wiki-text);
       font-family: Pretendard, "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1, "lnum" 1;
       letter-spacing: 0;
+    }
+    button,
+    input,
+    select {
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1, "lnum" 1;
     }
     html.wiki-menu-open {
       overflow: hidden;
@@ -515,6 +531,27 @@ def _page_styles() -> str:
       width: min(1180px, calc(100% - 28px));
       margin: 0 auto;
       padding: 0 0 calc(56px + env(safe-area-inset-bottom));
+    }
+    .wiki-shell .wiki-app-header {
+      display: grid;
+      gap: 0;
+      min-height: auto;
+      padding: 2px 0 10px;
+      border-bottom: 0;
+      background: #ffffff;
+      backdrop-filter: none;
+    }
+    .wiki-section-tabs {
+      margin-top: 0;
+    }
+    .wiki-menu-toggle::before {
+      display: block;
+      width: 21px;
+      height: 21px;
+      background: currentColor;
+      content: "";
+      -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 6h16M4 12h16M4 18h16' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 6h16M4 12h16M4 18h16' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
     }
     .wiki-shell .kpef-product-header {
       width: 100vw;
@@ -682,7 +719,7 @@ def _page_styles() -> str:
       display: grid;
       grid-template-columns: minmax(0, 1fr);
       gap: 16px;
-      padding: 28px 0 22px;
+      padding: 24px 0 20px;
       border-bottom: 1px solid var(--wiki-line);
     }
     .wiki-breadcrumb {
@@ -1190,10 +1227,13 @@ def _page_script() -> str:
 (() => {
   const search = document.getElementById("wikiSearch");
   const searchStatus = document.getElementById("wikiSearchStatus");
+  const serviceBar = document.querySelector(".service-bar");
+  const searchArea = document.getElementById("searchArea");
+  const searchToggle = document.getElementById("searchToggle");
+  const searchClose = document.getElementById("searchClose");
   const sections = Array.from(document.querySelectorAll(".wiki-section"));
-  const topLinks = Array.from(document.querySelectorAll(".wiki-top-nav a"));
+  const topLinks = Array.from(document.querySelectorAll(".wiki-section-tabs a"));
   const sidebarLinks = Array.from(document.querySelectorAll(".wiki-sidebar a, .wiki-mobile-drawer a"));
-  const focusSearch = document.querySelector("[data-focus-search]");
   const menuToggle = document.querySelector("[data-toggle-menu]");
   const drawer = document.getElementById("wiki-mobile-drawer");
   const drawerBackdrop = document.querySelector(".wiki-drawer-backdrop");
@@ -1215,9 +1255,21 @@ def _page_script() -> str:
     sources: "sources",
   };
 
-  focusSearch?.addEventListener("click", () => {
-    search?.focus();
-    search?.scrollIntoView({ block: "center", behavior: "smooth" });
+  const setSearchOpen = (open) => {
+    if (!serviceBar || !searchArea || !searchToggle) return;
+    serviceBar.classList.toggle("search-open", open);
+    searchArea.classList.toggle("visible", open);
+    searchToggle.setAttribute("aria-expanded", String(open));
+    if (open) search?.focus();
+  };
+
+  searchToggle?.addEventListener("click", () => setSearchOpen(true));
+  searchClose?.addEventListener("click", () => {
+    if (search) {
+      search.value = "";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    setSearchOpen(false);
   });
 
   const setMenuOpen = (open) => {
