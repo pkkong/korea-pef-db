@@ -216,17 +216,26 @@ def check_generated_gp_contract() -> list[str]:
     if gp_service_tabs(market_html) != ["MARKET", "GP", "PEOPLE"]:
         raise CheckFailure("Market service tabs mismatch")
     gps_text = strip_tags(gps_html)
-    if not re.search(r"\d[\d,]*개 PEF 운용사 \([0-9.]+ 기준\)", gps_text):
-        raise CheckFailure("GP directory count/date title missing")
+    if not re.search(r"\d[\d,]*개 PEF 운용사", gps_text):
+        raise CheckFailure("GP directory count title missing")
+    if re.search(r"\d[\d,]*개 PEF 운용사\s*\([0-9.]+ 기준\)", gps_text):
+        raise CheckFailure("GP directory title should not include 기준일")
+    for required_control in ['id="gpPeriod"', 'id="gpScope"', 'id="gpSort"', 'id="gpPageSize"']:
+        if required_control not in gps_html:
+            violations.append(f"gps.html:{required_control}")
     for combined_label in ["대표/홈페이지", "순위/약정액", "뉴스/출자"]:
         if combined_label in gps_html:
             violations.append(f"gps.html:{combined_label}")
     for row_badge_markup in ['<div class="gp-chips"', '<div class="gp-signal-strip"']:
         if row_badge_markup in gps_html:
             violations.append(f"gps.html:{row_badge_markup}")
-    for required in ["PEF 시장 통계", "분기별 시장 추이", "상위 GP", "연도별 신규 펀드"]:
+    for required in ["Overview", "분기별 시장 추이", "상위 GP", "연도별 신규 펀드"]:
         if required not in market_html:
             raise CheckFailure(f"market.html missing required section: {required}")
+    if "PEF 시장 통계" in market_html:
+        violations.append("market.html:PEF 시장 통계")
+    if 'font-variant-numeric: tabular-nums' not in gps_html:
+        violations.append("gps.html:tabular-nums")
 
     detail_paths = sorted(NEWSLETTER_SITE_DIR.glob("gp-*.html"))[:3]
     for detail_path in detail_paths:

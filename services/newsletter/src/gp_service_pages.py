@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import html
+import json
 import re
 import sqlite3
 from collections import defaultdict
@@ -107,6 +108,7 @@ def write_gp_pages(site_dir: Path, db_path: Path, report_date: str) -> dict[str,
         news_by_gp = _read_gp_news(conn)
         funds_by_gp = _read_gp_funds(conn)
         lp_signals_by_gp = _read_lp_signals(conn)
+        period_metrics_by_gp = _read_gp_period_metrics(conn)
         for gp in gps:
             gp_id = str(gp["source_gp_id"])
             gp["news"] = news_by_gp.get(gp_id, [])
@@ -117,6 +119,7 @@ def write_gp_pages(site_dir: Path, db_path: Path, report_date: str) -> dict[str,
             gp["active_fund_signal_count"] = len(gp["funds"])
             gp["lp_signals"] = lp_signals_by_gp.get(gp_id, [])
             gp["lp_signal_count"] = len(gp["lp_signals"])
+            gp["period_metrics"] = period_metrics_by_gp.get(gp_id, {})
 
         ranked_gps = sorted(gps, key=_gp_sort_key)
         top_gps = ranked_gps[:TOP_GP_PAGE_LIMIT]
@@ -405,6 +408,37 @@ def _read_lp_signals(conn: sqlite3.Connection) -> dict[str, list[dict[str, objec
     return dict(signals_by_gp)
 
 
+def _read_gp_period_metrics(conn: sqlite3.Connection) -> dict[str, dict[str, dict[str, object]]]:
+    if not _db_object_exists(conn, "v_gp_period_commitment"):
+        return {}
+    rows = conn.execute(
+        """
+        SELECT
+            gp_id,
+            period_label,
+            as_of_date,
+            fund_count,
+            ROUND(commitment_amount_krw_mn / 100.0, 2) AS commitment_krw_100mn
+        FROM v_gp_period_commitment
+        WHERE gp_id IS NOT NULL
+          AND period_label IS NOT NULL
+        ORDER BY as_of_date
+        """
+    ).fetchall()
+    metrics: dict[str, dict[str, dict[str, object]]] = defaultdict(dict)
+    for row in rows:
+        gp_id = str(row["gp_id"])
+        period = _clean(row["period_label"])
+        if not gp_id or not period:
+            continue
+        metrics[gp_id][period] = {
+            "asOf": _short_date(row["as_of_date"]),
+            "funds": int(_as_float(row["fund_count"])),
+            "aum100mn": round(_as_float(row["commitment_krw_100mn"]), 2),
+        }
+    return dict(metrics)
+
+
 def _read_market_context(conn: sqlite3.Connection) -> dict[str, object]:
     periods = [
         dict(row)
@@ -613,7 +647,7 @@ def _render_empty_market(report_date: str, message: str) -> str:
     {_render_service_header("market")}
     <section class="gp-empty">
       <span>Market</span>
-      <h1>PEF 시장 통계</h1>
+      <h1>Overview</h1>
       <p>{_e(message)}</p>
       <small>기준일 {_e(report_date)}</small>
     </section>
@@ -718,13 +752,15 @@ def _render_market_page(report_date: str, context: dict[str, object]) -> str:
     {_render_service_header("market")}
     <header class="gp-hero market-hero">
       <div class="gp-hero-copy">
-        <h1>PEF 시장 통계</h1>
+        <h1>Overview</h1>
         <p>{_e(latest_period)} · {latest_date} 기준</p>
       </div>
     </header>
 
-    <section class="market-kpis" aria-label="시장 핵심 지표">
+    <section class="market-section market-overview-section" aria-label="Overview">
+      <div class="market-kpis">
 {kpi_html}
+      </div>
     </section>
 
     <section class="market-section" aria-label="분기별 시장 추이">
@@ -747,8 +783,7 @@ def _render_market_page(report_date: str, context: dict[str, object]) -> str:
       </div>
     </section>
 
-    <section class="market-grid">
-      <article class="market-section" aria-label="연도별 신규 펀드">
+    <section class="market-section" aria-label="연도별 신규 펀드">
         <div class="market-section-head">
           <h2>연도별 신규 펀드</h2>
         </div>
@@ -756,8 +791,8 @@ def _render_market_page(report_date: str, context: dict[str, object]) -> str:
           <div class="market-head market-new-row"><span>연도</span><span>펀드</span><span>약정액</span></div>
 {new_year_html}
         </div>
-      </article>
-      <article class="market-section" aria-label="분기별 신규 펀드">
+    </section>
+    <section class="market-section" aria-label="분기별 신규 펀드">
         <div class="market-section-head">
           <h2>분기별 신규 펀드</h2>
         </div>
@@ -765,7 +800,6 @@ def _render_market_page(report_date: str, context: dict[str, object]) -> str:
           <div class="market-head market-new-row"><span>분기</span><span>펀드</span><span>약정액</span></div>
 {new_quarter_html}
         </div>
-      </article>
     </section>
 
     <section class="market-section" aria-label="펀드 이탈 추정">
@@ -779,7 +813,7 @@ def _render_market_page(report_date: str, context: dict[str, object]) -> str:
       </div>
     </section>
 
-    <section class="market-source-note" aria-label="기준 자료">
+    <section class="market-section market-source-note" aria-label="기준 자료">
       <strong>기준 자료</strong>
       <ul>
 {source_html}
@@ -796,8 +830,11 @@ def _render_market_page(report_date: str, context: dict[str, object]) -> str:
 def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_ids: set[str]) -> str:
     cards = "\n".join(_render_gp_card(gp, str(gp["source_gp_id"]) in top_ids) for gp in gps)
     latest_date = _latest_gp_as_of_date(gps) or report_date
-    title_date = _format_date_dot(latest_date) or latest_date
-    active_count = sum(1 for gp in gps if _as_bool(gp.get("active_in_latest_period")))
+    period_options = _gp_period_options(gps)
+    period_options_html = "\n".join(
+        f'            <option value="{_e(period)}"{ " selected" if index == 0 else ""}>{_e(period)} · {_e(_format_date_dot(as_of))}</option>'
+        for index, (period, as_of) in enumerate(period_options)
+    ) or f'            <option value="{_e(_clean(gps[0].get("latest_period_label")) if gps else "")}" selected>{_e(_format_date_dot(latest_date) or latest_date)}</option>'
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -813,18 +850,30 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
     {_render_service_header("gp")}
     <header class="gp-hero">
       <div class="gp-hero-copy">
-        <h1 class="gp-directory-title"><strong>{len(gps):,}개</strong> <span>PEF 운용사</span> <em>({title_date} 기준)</em></h1>
+        <h1 class="gp-directory-title"><strong>{len(gps):,}개</strong> <span>PEF 운용사</span></h1>
       </div>
     </header>
 
     <section class="gp-control-panel" aria-label="GP 필터">
       <div class="gp-controls">
         <label>
+          <span>기준일</span>
+          <select id="gpPeriod" aria-label="기준일">
+{period_options_html}
+          </select>
+        </label>
+        <label>
+          <span>누적/운용중</span>
+          <select id="gpScope" aria-label="누적 또는 운용중">
+            <option value="active" selected>운용중</option>
+            <option value="cumulative">누적</option>
+          </select>
+        </label>
+        <label>
           <span>정렬기준</span>
           <select id="gpSort" aria-label="정렬기준">
             <option value="aum" selected>약정액 높은순</option>
             <option value="funds">펀드수 많은순</option>
-            <option value="rank">최신 순위순</option>
             <option value="name">운용사명순</option>
           </select>
         </label>
@@ -840,7 +889,6 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
       </div>
       <div class="gp-control-head">
         <span id="gpVisibleCount">{len(gps):,}개 중 1-30</span>
-        <span>운용 중 {active_count:,}개</span>
       </div>
     </section>
 
@@ -899,6 +947,15 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
     rank_sort = _sort_number(gp.get("latest_primary_rank"), default=999999)
     aum_sort = _sort_number(gp.get("latest_primary_aum_proxy_krw_100mn"), default=0)
     active_sort = _sort_number(gp.get("latest_primary_active_fund_count"), default=0)
+    cumulative_aum = _format_krw_100mn(gp.get("cumulative_primary_commitment_proxy_krw_100mn"))
+    cumulative_funds = _format_int(gp.get("cumulative_primary_fund_count"))
+    cumulative_aum_sort = _sort_number(gp.get("cumulative_primary_commitment_proxy_krw_100mn"), default=0)
+    cumulative_fund_sort = _sort_number(gp.get("cumulative_primary_fund_count"), default=0)
+    period_metrics = gp.get("period_metrics") if isinstance(gp.get("period_metrics"), dict) else {}
+    period_metrics_json = html.escape(
+        json.dumps(period_metrics, ensure_ascii=False, separators=(",", ":")),
+        quote=True,
+    )
 
     return f"""      <article class="gp-card"
         data-url="{_e(profile_url)}"
@@ -907,6 +964,11 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
         data-rank="{rank_sort}"
         data-aum="{aum_sort}"
         data-funds="{active_sort}"
+        data-cumulative-aum="{cumulative_aum_sort}"
+        data-cumulative-funds="{cumulative_fund_sort}"
+        data-cumulative-aum-label="{_e(cumulative_aum)}"
+        data-cumulative-funds-label="{_e(cumulative_funds)}"
+        data-period-metrics="{period_metrics_json}"
         data-name="{_e(name)}">
         {avatar_markup}
         <div class="gp-card-main">
@@ -915,8 +977,8 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
           </div>
         </div>
         <dl class="gp-metrics">
-          <div><dt>약정액</dt><dd>{_e(aum)}</dd></div>
-          <div><dt>펀드수</dt><dd>{_e(active_funds)}</dd></div>
+          <div><dt>약정액</dt><dd data-gp-aum>{_e(aum)}</dd></div>
+          <div><dt>펀드수</dt><dd data-gp-funds>{_e(active_funds)}</dd></div>
         </dl>
       </article>"""
 
@@ -1379,6 +1441,8 @@ def _directory_script() -> str:
     return """  <script>
     (() => {
       const input = document.getElementById("gpSearch");
+      const periodSelect = document.getElementById("gpPeriod");
+      const scopeSelect = document.getElementById("gpScope");
       const sort = document.getElementById("gpSort");
       const pageSizeSelect = document.getElementById("gpPageSize");
       const list = document.getElementById("gpDirectory");
@@ -1396,11 +1460,58 @@ def _directory_script() -> str:
         return Number.isFinite(value) ? value : fallback;
       };
 
+      const formatAum100mn = (value) => {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed) || parsed <= 0) return "-";
+        if (parsed >= 10000) return `${(parsed / 10000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}조`;
+        return `${Math.round(parsed).toLocaleString("ko-KR")}억`;
+      };
+
+      const syncMetrics = () => {
+        const period = periodSelect?.value || "";
+        const scope = scopeSelect?.value || "active";
+        cards.forEach((card) => {
+          let aum = 0;
+          let funds = 0;
+          let aumLabel = "-";
+          let fundsLabel = "-";
+          let periodHit = true;
+          if (scope === "cumulative") {
+            aum = num(card, "cumulativeAum");
+            funds = num(card, "cumulativeFunds");
+            aumLabel = card.dataset.cumulativeAumLabel || formatAum100mn(aum);
+            fundsLabel = card.dataset.cumulativeFundsLabel || (funds ? Math.round(funds).toLocaleString("ko-KR") : "-");
+          } else {
+            let metrics = {};
+            try {
+              metrics = JSON.parse(card.dataset.periodMetrics || "{}");
+            } catch {
+              metrics = {};
+            }
+            const row = metrics[period];
+            periodHit = Boolean(row);
+            if (row) {
+              aum = Number(row.aum100mn) || 0;
+              funds = Number(row.funds) || 0;
+              aumLabel = formatAum100mn(aum);
+              fundsLabel = funds ? Math.round(funds).toLocaleString("ko-KR") : "-";
+            }
+          }
+          card.dataset.currentAum = String(aum);
+          card.dataset.currentFunds = String(funds);
+          card.dataset.periodHit = periodHit ? "1" : "0";
+          const aumNode = card.querySelector("[data-gp-aum]");
+          const fundsNode = card.querySelector("[data-gp-funds]");
+          if (aumNode) aumNode.textContent = aumLabel;
+          if (fundsNode) fundsNode.textContent = fundsLabel;
+        });
+      };
+
       const applySort = () => {
         const mode = sort?.value || "aum";
         orderedCards = [...cards].sort((a, b) => {
-          if (mode === "aum") return num(b, "aum") - num(a, "aum");
-          if (mode === "funds") return num(b, "funds") - num(a, "funds");
+          if (mode === "aum") return num(b, "currentAum") - num(a, "currentAum");
+          if (mode === "funds") return num(b, "currentFunds") - num(a, "currentFunds");
           if (mode === "name") return (a.dataset.name || "").localeCompare(b.dataset.name || "", "ko");
           return num(a, "rank", 999999) - num(b, "rank", 999999);
         });
@@ -1420,7 +1531,7 @@ def _directory_script() -> str:
         const matches = [];
         orderedCards.forEach((card) => {
           const haystack = (card.dataset.search || card.innerText || "").toLowerCase();
-          const show = !query || haystack.includes(query);
+          const show = card.dataset.periodHit !== "0" && (!query || haystack.includes(query));
           if (show) matches.push(card);
           card.hidden = true;
         });
@@ -1443,6 +1554,16 @@ def _directory_script() -> str:
       };
 
       input?.addEventListener("input", () => apply({ resetPage: true }));
+      periodSelect?.addEventListener("change", () => {
+        syncMetrics();
+        applySort();
+        apply({ resetPage: true });
+      });
+      scopeSelect?.addEventListener("change", () => {
+        syncMetrics();
+        applySort();
+        apply({ resetPage: true });
+      });
       sort?.addEventListener("change", () => {
         applySort();
         apply({ resetPage: true });
@@ -1473,6 +1594,7 @@ def _directory_script() -> str:
         apply();
         list?.scrollIntoView({ block: "start", behavior: "smooth" });
       });
+      syncMetrics();
       applySort();
       apply();
     })();
@@ -2704,6 +2826,13 @@ def _base_styles() -> str:
       color: var(--text);
       -webkit-font-smoothing: antialiased;
     }
+    body,
+    button,
+    input,
+    select {
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1, "lnum" 1;
+    }
     a { text-decoration: none; }
     .gp-shell {
       width: min(calc(100% - 28px), var(--shell));
@@ -3241,7 +3370,7 @@ def _base_styles() -> str:
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 0;
-      margin: 6px 0 14px;
+      margin: 0;
       border-top: 1px solid var(--line);
       border-bottom: 1px solid var(--line);
     }
@@ -3267,9 +3396,27 @@ def _base_styles() -> str:
       line-height: 1.15;
     }
     .market-section {
-      margin-top: 16px;
-      border-top: 1px solid var(--line);
-      padding-top: 12px;
+      position: relative;
+      margin: 0 0 18px;
+      border-top: 0;
+      padding-top: 0;
+    }
+    .market-section + .market-section {
+      margin-top: 18px;
+      padding-top: 20px;
+    }
+    .market-section + .market-section::before {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 100vw;
+      height: 8px;
+      transform: translateX(-50%);
+      background: #f7f7f8;
+      content: "";
+    }
+    .market-overview-section {
+      margin-top: 6px;
     }
     .market-section-head {
       display: flex;
@@ -3362,9 +3509,7 @@ def _base_styles() -> str:
       gap: 0;
     }
     .market-source-note {
-      margin: 16px 0 0;
-      border-top: 1px solid var(--line);
-      padding-top: 12px;
+      margin-bottom: 0;
       color: var(--secondary);
       font-size: 12px;
       line-height: 1.5;
@@ -3401,7 +3546,7 @@ def _base_styles() -> str:
       line-height: 1.35;
     }
     .gp-directory-title strong {
-      color: var(--text);
+      color: #8a6a56;
       font-size: 17px;
       font-weight: 820;
     }
@@ -3417,7 +3562,7 @@ def _base_styles() -> str:
     }
     .gp-controls {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(128px, auto);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
       align-items: end;
       margin: 0;
@@ -3519,8 +3664,8 @@ def _base_styles() -> str:
         font-size: 13px;
       }
       .gp-controls {
-        grid-template-columns: minmax(190px, 220px) 150px !important;
-        justify-content: space-between;
+        grid-template-columns: minmax(150px, 1fr) minmax(120px, 0.7fr) minmax(150px, 0.9fr) minmax(130px, 0.7fr) !important;
+        justify-content: stretch;
       }
       .gp-directory-head,
       .gp-card {
@@ -3637,6 +3782,24 @@ def _short_date(value: object) -> str:
 def _latest_gp_as_of_date(gps: list[dict[str, object]]) -> str:
     dates = sorted({_short_date(gp.get("latest_as_of_date")) for gp in gps if _short_date(gp.get("latest_as_of_date"))})
     return dates[-1] if dates else ""
+
+
+def _gp_period_options(gps: list[dict[str, object]]) -> list[tuple[str, str]]:
+    periods: dict[str, str] = {}
+    for gp in gps:
+        metrics = gp.get("period_metrics")
+        if isinstance(metrics, dict):
+            for period, values in metrics.items():
+                if not isinstance(values, dict):
+                    continue
+                as_of = _short_date(values.get("asOf"))
+                if period and as_of:
+                    periods[str(period)] = as_of
+        latest_period = _clean(gp.get("latest_period_label"))
+        latest_as_of = _short_date(gp.get("latest_as_of_date"))
+        if latest_period and latest_as_of:
+            periods[latest_period] = latest_as_of
+    return sorted(periods.items(), key=lambda item: (item[1], item[0]), reverse=True)
 
 
 def _empty_table_row(message: str) -> str:
