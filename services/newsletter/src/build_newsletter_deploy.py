@@ -2278,6 +2278,7 @@ def render_lp_notices_page(
       text-align: right;
     }}
     .lp-directory-head span:first-child {{ text-align: center; }}
+    .lp-directory-head span:nth-child(2) {{ text-align: left; }}
     .lp-directory-head span:nth-child(3),
     .lp-directory-head span:nth-child(4),
     .lp-directory-head span:nth-child(7) {{ display: none; }}
@@ -2483,12 +2484,6 @@ def render_lp_notices_page(
     .lp-directory-title strong {{
       color: #8a6a56;
       font-weight: 850;
-    }}
-    .lp-directory-hero p:not(.lp-directory-meta) {{
-      max-width: 760px;
-      color: var(--secondary);
-      font-size: 13.5px;
-      line-height: 1.58;
     }}
     .lp-directory-kpis,
     .lp-profile-nav {{
@@ -2734,11 +2729,6 @@ def render_lp_notices_page(
       font-weight: 620;
       line-height: 1.42;
     }}
-    .lp-directory-hero p:not(.lp-directory-meta) {{
-      font-size: 12.5px;
-      font-weight: 650;
-      line-height: 1.55;
-    }}
     .lp-control-head,
     .lp-controls label > span {{
       font-size: 11.5px;
@@ -2810,7 +2800,6 @@ def render_lp_notices_page(
         <div>
           <h1 class="lp-directory-title"><strong>{tracked_count}개</strong> 출자기관</h1>
           <p class="lp-directory-meta">기관 프로필 {profile_count}개 · 공식 공고 {visible_notice_count}건 · {html_escape(report_date)} 기준</p>
-          <p>국내 주요 출자기관의 기본 현황, 관심 자산군, 최근 출자공고를 한 곳에서 비교합니다.</p>
         </div>
         <div class="lp-directory-kpis">
           <div><span>대상 기관</span><strong>{tracked_count}개</strong></div>
