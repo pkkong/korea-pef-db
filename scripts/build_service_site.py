@@ -2165,14 +2165,16 @@ button, input { font: inherit; }
 }
 .bottom-nav {
   position: fixed;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: 0;
   z-index: 20;
   display: grid;
+  box-sizing: border-box;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  width: min(100vw, var(--shell));
-  max-width: 100vw;
-  transform: translateX(-50%);
+  width: 100%;
+  max-width: none;
+  transform: none;
   padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
   border-top: 1px solid rgba(0,0,0,0.08);
   background: rgba(255,255,255,0.92);
@@ -2284,9 +2286,12 @@ button, input { font: inherit; }
     display: none;
   }
   .bottom-nav {
+    left: 50%;
+    right: auto;
     bottom: 18px;
     display: grid;
     width: min(640px, calc(100vw - 96px));
+    transform: translateX(-50%);
     border: 1px solid rgba(0,0,0,0.07);
     border-radius: 999px;
     padding: 5px;

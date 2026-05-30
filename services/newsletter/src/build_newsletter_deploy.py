@@ -636,7 +636,7 @@ def clean_public_lp_text(value: object) -> str:
         (r"뉴스\s+기반\s+출자\s+신호", "뉴스 기반 출자 동향"),
         (r"보강\s*필요", "공개자료 기준"),
         (r"검증\s*필요", "공개자료 기준"),
-        (r"프로필\s*팩트", "확인 항목"),
+        (r"프로필\s*팩트", "프로필 항목"),
         (r"자동\s*매칭", "연결"),
         (r"데이터\s*수집", "자료 기준"),
         (r"관리\s*자", "서비스"),
@@ -654,6 +654,7 @@ def clean_public_lp_text(value: object) -> str:
     text = re.sub(r"\b관측\b", "확인", text)
     text = text.replace("신호", "동향")
     text = re.sub(r"\bAUM\b", "운용자산", text)
+    text = text.replace("실무자명", "담당자")
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -1550,7 +1551,7 @@ def render_data_coverage(profile: dict[str, object], facts: list[dict[str, objec
     news_count = len([notice for notice in notices if str(notice.get("source_type") or "") == "news"])
     confidence_text = f"{high_confidence}개" if high_confidence else "공개자료 기준"
     activity_text = f"{official_count + news_count}건"
-    return f"""          <div><span>확인 항목</span><strong>{fact_count}개</strong></div>
+    return f"""          <div><span>프로필 항목</span><strong>{fact_count}개</strong></div>
           <div><span>자료 링크</span><strong>{source_count}개</strong></div>
           <div><span>공고·뉴스</span><strong>{activity_text}</strong></div>
           <div><span>자료 성격</span><strong>{confidence_text}</strong></div>"""
@@ -1573,7 +1574,6 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     gp_links = payload.get("gp_links") if isinstance(payload.get("gp_links"), list) else []
     related_news = payload.get("news") if isinstance(payload.get("news"), list) else []
     official_notices = [notice for notice in notices if str(notice.get("source_type") or "official") == "official"]
-    news_notices = [notice for notice in notices if str(notice.get("source_type") or "") == "news"]
 
     notice_rows = "\n".join(render_ktcu_notice_row(row) for row in official_notices) or (
         """        <p class="ktcu-empty-note">아직 공개 페이지에 표시할 공식 출자공고가 없습니다.</p>"""
@@ -1595,6 +1595,16 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
         if source_rows.strip()
         else ""
     )
+    data_coverage_rows = render_data_coverage(profile, facts, notices)
+    source_summary = f"""    <details class="ktcu-detail" id="sourceSummary">
+      <summary>자료 기준</summary>
+      <div class="ktcu-detail-body">
+        <div class="ktcu-coverage ktcu-source-coverage">
+{data_coverage_rows}
+        </div>
+      </div>
+    </details>
+"""
     asset_mix_rows = render_ktcu_asset_mix(official_notices) or (
         """          <p class="ktcu-empty-note">자산군별 출자 패턴은 공식 공고가 추가되면 표시됩니다.</p>"""
     )
@@ -1670,10 +1680,9 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     peer_rows = render_lp_peer_rows(peers, lp_code)
     gp_signal_rows = render_related_gp_signals(notices, gp_links)
     related_news_rows = render_related_news_rows(related_news)
-    data_coverage_rows = render_data_coverage(profile, facts, notices)
     asset_chips = render_asset_chips(profile.get("focus_asset_classes"))
-    news_signal_count = len(news_notices) + len(related_news)
     peer_count = len(peers) or len(nav_items or [])
+    latest_label = latest or "-"
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -1717,6 +1726,11 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-title-head div > span {{ width: fit-content; border-left: 3px solid var(--accent); padding-left: 8px; color: var(--text); font-size: 12px; font-weight: 800; }}
     .ktcu-title h1 {{ margin: 0; color: var(--text); font-size: 28px; font-weight: 850; line-height: 1.12; letter-spacing: 0; }}
     .ktcu-title p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 15px; line-height: 1.68; }}
+    .ktcu-hero-facts {{ display: grid; border-top: 1px solid var(--separator); border-bottom: 1px solid var(--separator); }}
+    .ktcu-hero-fact {{ display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; align-items: start; border-top: 1px solid var(--separator); padding: 9px 0; }}
+    .ktcu-hero-fact:first-child {{ border-top: 0; }}
+    .ktcu-hero-fact span {{ color: var(--secondary); font-size: 11.5px; font-weight: 850; line-height: 1.35; }}
+    .ktcu-hero-fact strong {{ min-width: 0; color: var(--text); font-size: 13px; font-weight: 760; line-height: 1.42; overflow-wrap: anywhere; }}
     .ktcu-quick {{ display: grid; gap: 8px; }}
     .ktcu-quick-item {{ border-left: 3px solid var(--separator); padding-left: 10px; color: var(--text); font-size: 13px; line-height: 1.5; }}
     .ktcu-quick-item strong {{ display: block; margin-bottom: 2px; font-size: 13px; }}
@@ -1736,6 +1750,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-coverage div {{ min-width: 0; border: 1px solid var(--separator); border-radius: 8px; padding: 10px; background: #fbfcfd; }}
     .ktcu-coverage span {{ display: block; color: var(--secondary); font-size: 11.5px; font-weight: 800; }}
     .ktcu-coverage strong {{ display: block; margin-top: 4px; color: var(--text); font-size: 18px; line-height: 1.2; }}
+    .ktcu-source-coverage {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
     .ktcu-chips {{ display: flex; flex-wrap: wrap; gap: 7px; }}
     .ktcu-chips span {{ border: 1px solid var(--separator); border-radius: 999px; padding: 6px 9px; background: #fbfcfd; color: var(--text); font-size: 12px; font-weight: 800; }}
     .ktcu-highlight-panel {{ margin-top: 10px; }}
@@ -1806,6 +1821,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-detail summary {{ cursor: pointer; padding: 12px 14px; color: var(--text); font-size: 13px; font-weight: 800; }}
     .ktcu-detail-body {{ padding: 0 14px 14px; }}
     .ktcu-detail-body p {{ margin: 0 0 10px; color: var(--secondary); font-size: 13px; line-height: 1.55; }}
+    .ktcu-detail-body .ktcu-coverage {{ margin-top: 2px; }}
     .ktcu-detail ul {{ display: grid; gap: 8px; margin: 0; padding: 0 14px 14px 28px; }}
     .ktcu-detail a {{ color: var(--secondary); font-size: 12px; text-decoration: none; }}
     .ktcu-peer-table {{ display: grid; gap: 7px; }}
@@ -1821,7 +1837,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       .ktcu-shell {{ padding-top: 22px; padding-bottom: calc(106px + env(safe-area-inset-bottom)); }}
       .ktcu-shell .kpef-product-header {{ margin-top: -22px; }}
       .ktcu-title h1 {{ font-size: 38px; }}
-      .ktcu-hero {{ grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr); align-items: end; }}
+      .ktcu-hero {{ grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr); align-items: start; }}
       .ktcu-intel-grid {{ grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr); }}
       .ktcu-section-grid {{ grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }}
       .ktcu-org-split {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
@@ -1840,6 +1856,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       .ktcu-peer-row {{ grid-template-columns: minmax(0, 1fr) 44px 64px; }}
       .ktcu-peer-row span:nth-of-type(1), .ktcu-peer-row span:nth-of-type(4) {{ display: none; }}
       .ktcu-peer-head {{ display: none; }}
+      .ktcu-source-coverage {{ grid-template-columns: 1fr; }}
     }}
     .ktcu-title-head {{
       grid-template-columns: 50px minmax(0, 1fr);
@@ -1869,6 +1886,10 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       font-size: 12.5px;
       font-weight: 650;
       line-height: 1.58;
+    }}
+    .ktcu-hero-fact strong {{
+      font-size: 13px;
+      font-weight: 760;
     }}
     .ktcu-quick-item {{
       font-size: 12.5px;
@@ -1952,49 +1973,77 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
           <div class="ktcu-title-head">
             <span class="{lp_avatar_class}" data-tone="{lp_avatar_tone}" aria-hidden="true">{lp_avatar_logo}<span>{html_escape(lp_avatar_label)}</span></span>
             <div>
-              <span>출자기관 프로필</span>
+              <span>출자기관</span>
               <h1>{html_escape(lp_name)}</h1>
             </div>
           </div>
-          <p>{html_escape(lp_type)}의 일반현황, 투자현황, 담당 조직, 출자공고 흐름을 한 화면에서 봅니다.</p>
-          <div class="ktcu-quick">
-            <div class="ktcu-quick-item"><strong>핵심 창구</strong>{html_escape(default_team)}</div>
-            <div class="ktcu-quick-item"><strong>{html_escape(str(highlight_year))}년 활동</strong>{html_escape(activity_phrase)}</div>
-            <div class="ktcu-quick-item"><strong>출자 이력</strong>공식 공고와 최종 선정 발표를 기준으로 정리합니다.</div>
+          <p>{html_escape(lp_name)}의 기본 정보, 투자 현황, 공식 출자공고, 관련 GP와 뉴스를 정리합니다.</p>
+          <div class="ktcu-hero-facts" aria-label="핵심 정보">
+            <div class="ktcu-hero-fact"><span>유형</span><strong>{html_escape(lp_type)}</strong></div>
+            <div class="ktcu-hero-fact"><span>담당 조직</span><strong>{html_escape(default_team)}</strong></div>
+            <div class="ktcu-hero-fact"><span>최신 공고</span><strong>{html_escape(latest_label)}</strong></div>
           </div>
           <nav class="ktcu-tabbar" aria-label="프로필 섹션">
-            <a href="#overview">개요</a>
-            <a href="#activity">출자 활동</a>
-            <a href="#relationships">GP 관계</a>
+            <a href="#overview">기본 정보</a>
+            <a href="#investment">투자 현황</a>
+            <a href="#notices">출자공고</a>
+            <a href="#relationships">관련 GP</a>
+            <a href="#news">뉴스</a>
             <a href="#peers">기관 비교</a>
-            <a href="#notes">참고</a>
             {source_tab}
           </nav>
-          <div class="ktcu-profile-toolbar">
-            <p>공식 공고 {html_escape(str(len(official_notices)))}건 · 관련 뉴스 {html_escape(str(news_signal_count))}건 · 확인 항목 {html_escape(str(len(facts)))}개</p>
-          </div>
         </div>
         <div class="ktcu-kpis">
           <div class="ktcu-kpi"><span>{html_escape(asset_kpi_label)}</span><strong>{html_escape(asset)}</strong></div>
           <div class="ktcu-kpi"><span>관심 자산군</span><strong>{html_escape(investment_kpi)}</strong></div>
-          <div class="ktcu-kpi"><span>공식 공고</span><strong>{html_escape(notice_count)}건</strong></div>
-          <div class="ktcu-kpi"><span>공고 기준 출자규모</span><strong>{html_escape(total_amount)}</strong></div>
+          <div class="ktcu-kpi"><span>출자공고</span><strong>{html_escape(notice_count)}건</strong></div>
+          <div class="ktcu-kpi"><span>공고 규모</span><strong>{html_escape(total_amount)}</strong></div>
         </div>
       </section>
     </header>
 
-    <section class="ktcu-intel-grid" aria-label="프로필 자료 기준">
+    <section class="ktcu-section-grid" id="overview" aria-label="기본 정보">
       <section class="ktcu-panel">
-        <h2>자료 기준</h2>
-        <div class="ktcu-coverage">
-{data_coverage_rows}
-        </div>
+        <h2>기관 개요</h2>
+        <dl class="ktcu-facts">
+{general_rows}
+        </dl>
       </section>
+
+      <section class="ktcu-panel">
+        <h2>담당 조직</h2>
+        <dl class="ktcu-facts">
+{org_rows}
+        </dl>
+      </section>
+    </section>
+
+    <section class="ktcu-section-grid" id="investment" aria-label="투자 현황">
+      <section class="ktcu-panel">
+        <h2>투자 현황</h2>
+        <dl class="ktcu-facts">
+{status_rows}
+        </dl>
+      </section>
+
       <section class="ktcu-panel">
         <h2>관심 자산군</h2>
-        <p>공식 공고, 기관 소개, 공개 뉴스에서 반복적으로 확인되는 투자 영역입니다.</p>
         <div class="ktcu-chips">
 {asset_chips}
+        </div>
+      </section>
+
+      <section class="ktcu-panel">
+        <h2>출자 패턴</h2>
+        <div class="ktcu-mix">
+{asset_mix_rows}
+        </div>
+      </section>
+
+      <section class="ktcu-panel">
+        <h2>연도별 공고 규모</h2>
+        <div class="ktcu-years">
+{yearly_rows}
         </div>
       </section>
     </section>
@@ -2003,7 +2052,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       <div class="ktcu-panel-head">
         <div>
           <h2>{html_escape(str(highlight_year))}년 출자 하이라이트</h2>
-          <p>공식 공고에 적힌 출자 예정·배정 규모입니다. 최종 선정 또는 실제 집행 금액과는 다를 수 있습니다.</p>
+          <p>{html_escape(activity_phrase)}</p>
         </div>
         <strong>{html_escape(str(highlight_count))}건<br>{html_escape(highlight_amount)}</strong>
       </div>
@@ -2012,74 +2061,34 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       </div>
     </section>
 
-    <section class="ktcu-section-grid" id="overview" aria-label="LP 요약">
-      <section class="ktcu-panel">
-        <h2>투자 현황</h2>
-        <p>{html_escape(investment_status)}</p>
-        <dl class="ktcu-facts">
-{status_rows}
-        </dl>
-      </section>
-
-      <section class="ktcu-panel">
-        <h2>담당 조직</h2>
-        <p>공식 조직도 기준으로 PE와 기업금융을 담당하는 축만 정리했습니다.</p>
-        <dl class="ktcu-facts">
-{org_rows}
-        </dl>
-      </section>
-
-      <section class="ktcu-panel">
-        <h2>출자 패턴</h2>
-        <p>공개된 공식 공고의 자산군과 공고상 출자 규모를 기준으로 본 패턴입니다.</p>
-        <div class="ktcu-mix">
-{asset_mix_rows}
-        </div>
-      </section>
-
-      <section class="ktcu-panel">
-        <h2>기관 개요</h2>
-        <p>공식 기관소개와 경영공시에서 확인되는 기본 정보입니다.</p>
-        <dl class="ktcu-facts">
-{general_rows}
-        </dl>
-      </section>
-{news_panel}
-    </section>
-
-    <section class="ktcu-lower" id="activity" aria-label="LP 활동 타임라인">
+    <section class="ktcu-lower" id="notices" aria-label="출자공고">
       <section class="ktcu-panel">
         <h2>활동 타임라인</h2>
-        <p>공식 공고, 선정 히스토리, 최근 동향을 시간순으로 묶었습니다.</p>
         <div class="ktcu-timeline">
 {timeline_rows}
         </div>
       </section>
-      <section class="ktcu-panel">
-        <h2>연도별 공식 공고 규모</h2>
-        <div class="ktcu-years">
-{yearly_rows}
-        </div>
-      </section>
-    </section>
-
-    <section class="ktcu-lower" id="relationships" aria-label="공고와 GP 관계">
       <section class="ktcu-panel">
         <h2>과거 출자공고</h2>
         <div class="ktcu-notices">
 {notice_rows}
         </div>
       </section>
+    </section>
+
+    <section class="ktcu-section-grid" id="relationships" aria-label="관련 GP">
       <section class="ktcu-panel">
         <h2>선정 GP</h2>
-        <p>공식 공고와 관련 뉴스에서 확인된 GP명입니다.</p>
         <div class="ktcu-gp-tags">
 {gp_signal_rows}
         </div>
       </section>
+    </section>
+
+    <section class="ktcu-section-grid" id="news" aria-label="관련 뉴스">
+{news_panel}
       <section class="ktcu-panel">
         <h2>관련 뉴스</h2>
-        <p>LP 공고·기관 동향과 직접 관련된 기사입니다.</p>
         <div class="ktcu-news-list">
 {related_news_rows}
         </div>
@@ -2101,16 +2110,16 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     <details class="ktcu-detail" id="notes">
       <summary>참고사항</summary>
       <div class="ktcu-detail-body">
-        <p>공식 공고, 최종 선정 발표, 기관 조직도에 기반한 프로필입니다. 실제 약정·집행액과 실무 담당자명은 확인되는 항목만 표시합니다.</p>
         <dl class="ktcu-facts">
 {gap_rows}
         </dl>
       </div>
     </details>
 
+{source_summary}
 {source_details}
 
-    <p class="ktcu-footer">기준일 {html_escape(report_date)} · 최신 공고일 {html_escape(latest or "-")} · 실무자명과 최종 선정 GP 히스토리는 확인되는 항목만 표시합니다.</p>
+    <p class="ktcu-footer">기준일 {html_escape(report_date)} · 최신 공고일 {html_escape(latest_label)}</p>
   </main>
   {render_service_bottom_nav("lp")}
   <script>

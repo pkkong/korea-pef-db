@@ -237,6 +237,10 @@ Use the newsletter screen as the reference for shared public UI polish.
   latest/rank signal, key amount/count, and relevant connection.
 - Detail pages should use fact matrix, history/news tables, source-linked
   sections, and quiet typography.
+- LP detail pages follow this public reading order: identity header, basic
+  institution facts, investment status, official notices, related GP, related
+  news, peer comparison, then source/reference links. Keep coverage counts and
+  source diagnostics out of the top summary.
 - Avoid marketing hero layout, oversized titles, repeated KPI cards, and
   operator-facing explanations.
 - Use page-local filters and sorting. Do not let a large list become endless
