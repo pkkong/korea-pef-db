@@ -1841,6 +1841,106 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       .ktcu-peer-row span:nth-of-type(1), .ktcu-peer-row span:nth-of-type(4) {{ display: none; }}
       .ktcu-peer-head {{ display: none; }}
     }}
+    .ktcu-title-head {{
+      grid-template-columns: 50px minmax(0, 1fr);
+      gap: 12px;
+    }}
+    .ktcu-logo {{
+      width: 50px;
+      height: 50px;
+    }}
+    .ktcu-logo img {{
+      max-width: 35px;
+      max-height: 35px;
+    }}
+    .ktcu-title-head div > span {{
+      border-left: 0;
+      padding-left: 0;
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 650;
+    }}
+    .ktcu-title h1 {{
+      font-size: 23px;
+      font-weight: 820;
+      line-height: 1.18;
+    }}
+    .ktcu-title p {{
+      font-size: 12.5px;
+      font-weight: 650;
+      line-height: 1.58;
+    }}
+    .ktcu-quick-item {{
+      font-size: 12.5px;
+      line-height: 1.48;
+    }}
+    .ktcu-quick-item strong {{
+      font-size: 12.5px;
+      font-weight: 760;
+    }}
+    .ktcu-kpi span,
+    .ktcu-coverage span,
+    .ktcu-facts dt,
+    .ktcu-timeline-item time,
+    .ktcu-news-row span,
+    .ktcu-notice time {{
+      font-size: 11.5px;
+      font-weight: 850;
+    }}
+    .ktcu-kpi strong {{
+      font-size: 22px;
+      font-weight: 780;
+    }}
+    .ktcu-tabbar a {{
+      font-size: 13px;
+      font-weight: 650;
+    }}
+    .ktcu-tabbar a:first-child {{
+      font-weight: 800;
+    }}
+    .ktcu-profile-toolbar p,
+    .ktcu-footer {{
+      font-size: 11.5px;
+      font-weight: 620;
+      line-height: 1.45;
+    }}
+    .ktcu-panel h2 {{
+      font-size: 17px;
+      font-weight: 760;
+      line-height: 1.35;
+    }}
+    .ktcu-panel > p,
+    .ktcu-panel-head p {{
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.58;
+    }}
+    .ktcu-facts dd {{
+      font-size: 13px;
+      font-weight: 750;
+      line-height: 1.48;
+    }}
+    .ktcu-highlight-row,
+    .ktcu-mix-row {{
+      font-size: 13px;
+      line-height: 1.42;
+    }}
+    .ktcu-timeline-item h3,
+    .ktcu-notice h3 {{
+      font-size: 14px;
+      font-weight: 760;
+      line-height: 1.42;
+    }}
+    .ktcu-news-row h3 {{
+      font-size: 14px;
+      font-weight: 760;
+      line-height: 1.42;
+    }}
+    @media (min-width: 760px) {{
+      .ktcu-title h1 {{
+        font-size: 28px;
+      }}
+    }}
   </style>
 </head>
 <body>
@@ -2614,6 +2714,90 @@ def render_lp_notices_page(
       }}
       .lp-page-card {{
         grid-template-columns: minmax(360px, 1.35fr) minmax(320px, 1fr) minmax(160px, 0.42fr);
+      }}
+    }}
+    .lp-directory-title {{
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 6px;
+      font-size: 16px !important;
+      font-weight: 760;
+      line-height: 1.35;
+    }}
+    .lp-directory-title strong {{
+      font-size: 17px;
+      font-weight: 820;
+    }}
+    .lp-directory-meta {{
+      font-size: 12px;
+      font-weight: 620;
+      line-height: 1.42;
+    }}
+    .lp-directory-hero p:not(.lp-directory-meta) {{
+      font-size: 12.5px;
+      font-weight: 650;
+      line-height: 1.55;
+    }}
+    .lp-control-head,
+    .lp-controls label > span {{
+      font-size: 11.5px;
+      font-weight: 650;
+    }}
+    .lp-filter-row button {{
+      font-size: 12px;
+      font-weight: 650;
+    }}
+    .lp-filter-row button.active {{
+      font-weight: 800;
+    }}
+    .lp-directory-head {{
+      font-size: 12px;
+      font-weight: 720;
+    }}
+    .lp-directory-card-head strong,
+    .lp-directory-card-head a {{
+      font-size: 14.5px;
+      font-weight: 720;
+      line-height: 1.36;
+    }}
+    .lp-directory-latest,
+    .lp-directory-focus {{
+      font-size: 12.5px;
+      font-weight: 620;
+      line-height: 1.4;
+    }}
+    .lp-directory-metrics dd {{
+      font-size: 12.5px;
+      font-weight: 740;
+      line-height: 1.25;
+    }}
+    .section-title {{
+      font-size: 15px;
+      font-weight: 780;
+      line-height: 1.35;
+    }}
+    .lp-page-card h2 {{
+      font-size: 14px;
+      font-weight: 760;
+      line-height: 1.42;
+    }}
+    .lp-page-meta {{
+      font-size: 11.5px;
+      font-weight: 620;
+      line-height: 1.4;
+    }}
+    .lp-page-actions a {{
+      font-size: 12px;
+      font-weight: 650;
+    }}
+    @media (min-width: 760px) {{
+      .lp-directory-card-head strong,
+      .lp-directory-card-head a {{
+        font-size: 15px;
+      }}
+      .lp-directory-metrics dd {{
+        font-size: 13px;
       }}
     }}
   </style>
