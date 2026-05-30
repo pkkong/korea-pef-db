@@ -2015,7 +2015,6 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
               <h1>{html_escape(lp_name)}</h1>
             </div>
           </div>
-          <p>{html_escape(lp_name)}의 기본 정보, 투자 현황, 공식 출자공고, 관련 GP와 뉴스를 정리합니다.</p>
           <div class="ktcu-hero-facts" aria-label="핵심 정보">
             <div class="ktcu-hero-fact"><span>유형</span><strong>{html_escape(lp_type)}</strong></div>
             <div class="ktcu-hero-fact"><span>담당 조직</span><strong>{html_escape(default_team)}</strong></div>

@@ -241,6 +241,15 @@ Use the newsletter screen as the reference for shared public UI polish.
   institution facts, investment status, official notices, related GP, related
   news, peer comparison, then source/reference links. Keep coverage counts and
   source diagnostics out of the top summary.
+- LP detail headers should not use generic explanatory copy such as "we organize
+  basic information and news." Follow data services like Preqin, The VC, and
+  InnoForest: show the entity name, compact identity facts, tabs, and immediate
+  data sections.
+- LP profile data should prioritize: institution type and address, AUM/total
+  assets, current and target allocation, strategy or asset-class preferences,
+  historical commitments and official notices, known GP relationships,
+  decision-makers and consultants when public, resources/RFPs/minutes/reports,
+  and directly related news.
 - Profile fact rows should not print long source strings such as source name,
   date, and confidence under every value. When a fact needs a public source
   link, use a small icon-only link for homepage, document, article, or LinkedIn
