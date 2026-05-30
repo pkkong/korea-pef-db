@@ -753,8 +753,8 @@ def render_lp_service_header(active_tab: str, search_input_id: str, placeholder:
         </div>
       </div>
       <nav class="brief-section-tabs lp-section-tabs" aria-label="LP 메뉴">
-        <a class="brief-section-tab{lp_active}" href="lp-notices.html#lpDirectory"{lp_current}>LP</a>
-        <a class="brief-section-tab{notice_active}" href="lp-notices.html#lpNotices"{notice_current}>NOTICE</a>
+        <a class="brief-section-tab{lp_active}" href="lp-notices.html"{lp_current}>LP</a>
+        <a class="brief-section-tab{notice_active}" href="lp-official-notices.html"{notice_current}>NOTICE</a>
         <button class="brief-section-tab" type="button" disabled>PEOPLE</button>
       </nav>
     </header>"""
@@ -2137,8 +2137,9 @@ def write_lp_profile_pages(site_dir: Path, report_date: str) -> int:
     fact_count = 0
     profile_codes = read_lp_profile_codes()
     nav_items = read_lp_profile_nav(profile_codes=profile_codes)
+    service_pages = {"lp-notices.html", "lp-official-notices.html"}
     for path in site_dir.glob("lp-*.html"):
-        if path.name != "lp-notices.html":
+        if path.name not in service_pages:
             path.unlink()
     for alias in [site_dir / alias for aliases in LP_PROFILE_ALIASES.values() for alias in aliases]:
         if alias.exists():
@@ -2201,7 +2202,6 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
             <div class="lp-directory-card-head">
               <strong>{title_markup}</strong>
             </div>
-            <span class="lp-directory-kind">{html_escape(lp_type)}</span>
             <p class="lp-directory-focus">{html_escape(focus)}</p>
             <span class="lp-directory-latest">{html_escape(latest)}</span>
             <dl class="lp-directory-metrics">
@@ -2218,7 +2218,11 @@ def render_lp_notices_page(
     notices: list[dict[str, object]],
     nav_items: list[dict[str, str]] | None = None,
     directory_items: list[dict[str, object]] | None = None,
+    active_tab: str = "lp",
 ) -> str:
+    is_notice_view = active_tab == "notice"
+    search_input_id = "lpOfficialNoticeSearch" if is_notice_view else "lpDirectorySearch"
+    search_placeholder = "공고명, LP, GP 검색" if is_notice_view else "LP명, 자산군 검색"
     if notices:
         notice_cards = "\n".join(render_lp_notice_card(item) for item in notices)
     else:
@@ -2237,7 +2241,86 @@ def render_lp_notices_page(
     profile_count = len([item for item in directory_rows if item.get("has_public_profile")])
     visible_notice_count = len(notices)
     total_amount = sum(float(item.get("allocation_amount_krw_100mn") or 0) for item in directory_rows)
-    nav_html = render_lp_profile_nav(nav_items or [])
+    if is_notice_view:
+        hero_title = f'<h1 class="lp-directory-title"><strong>{visible_notice_count}건</strong> 공식 공고</h1>'
+        hero_meta = f'<p class="lp-directory-meta">출자기관 {tracked_count}개 · {html_escape(report_date)} 기준</p>'
+    else:
+        hero_title = f'<h1 class="lp-directory-title"><strong>{tracked_count}개</strong> 출자기관</h1>'
+        hero_meta = f'<p class="lp-directory-meta">기관 프로필 {profile_count}개 · 공식 공고 {visible_notice_count}건 · {html_escape(report_date)} 기준</p>'
+    directory_section = ""
+    if not is_notice_view:
+        directory_section = f"""
+      <section class="section-block" id="lpDirectory" aria-label="출자기관 목록">
+        <div class="lp-notice-toolbar">
+          <div class="lp-control-head">
+            <label for="{search_input_id}">출자기관 검색</label>
+            <span id="lpVisibleCount">{tracked_count}개 표시</span>
+          </div>
+          <div class="lp-control-line lp-directory-controls">
+            <select id="lpFilter" aria-label="필터">
+              <option value="all">전체</option>
+              <option value="공공">공공 LP</option>
+              <option value="공제">공제회</option>
+              <option value="PEF">PEF</option>
+              <option value="VC">VC</option>
+            </select>
+            <select id="lpSort" aria-label="정렬">
+              <option value="latest">최근 공고일순</option>
+              <option value="amount">공고 규모순</option>
+              <option value="notices">표시 공고 많은 순</option>
+              <option value="name">기관명순</option>
+            </select>
+          </div>
+        </div>
+        <div class="lp-directory-table">
+          <div class="lp-directory-head" aria-hidden="true">
+            <span></span>
+            <span>출자기관명</span>
+            <span>주요 자산군</span>
+            <span>최근 공고</span>
+            <span>표시 공고</span>
+            <span>공고 규모</span>
+          </div>
+          <div class="lp-directory-grid">
+{directory_cards}
+          </div>
+        </div>
+      </section>"""
+    notice_section = ""
+    if is_notice_view:
+        notice_section = f"""
+      <section class="section-block" id="lpNotices" aria-label="LP 공식 공고">
+        <div class="lp-notice-toolbar">
+          <div class="lp-control-head">
+            <label for="{search_input_id}">공고 검색</label>
+            <span id="lpNoticeVisibleCount">{visible_notice_count}건 표시</span>
+          </div>
+          <div class="lp-control-line lp-notice-controls">
+            <select id="lpNoticeFilter" aria-label="필터">
+              <option value="all">전체</option>
+              <option value="new_notice">신규 공고</option>
+              <option value="final_selection">선정</option>
+              <option value="PEF">PEF</option>
+              <option value="VC">VC</option>
+            </select>
+            <select id="lpNoticeSort" aria-label="정렬">
+              <option value="latest">최근 공고일순</option>
+              <option value="deadline">마감일순</option>
+              <option value="lp">기관명순</option>
+            </select>
+          </div>
+        </div>
+        <div class="lp-notice-table">
+          <div class="lp-notice-head" aria-hidden="true">
+            <span>공고명</span>
+            <span>기관/조건</span>
+            <span>이동</span>
+          </div>
+          <div class="lp-page-list">
+{notice_cards}
+          </div>
+        </div>
+      </section>"""
     return f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -2280,10 +2363,9 @@ def render_lp_notices_page(
     .lp-directory-head span:first-child {{ text-align: center; }}
     .lp-directory-head span:nth-child(2) {{ text-align: left; }}
     .lp-directory-head span:nth-child(3),
-    .lp-directory-head span:nth-child(4),
-    .lp-directory-head span:nth-child(7) {{ display: none; }}
-    .lp-directory-head span:nth-child(6) {{ font-size: 0; }}
-    .lp-directory-head span:nth-child(6)::after {{ content: "공고"; font-size: 12px; }}
+    .lp-directory-head span:nth-child(6) {{ display: none; }}
+    .lp-directory-head span:nth-child(5) {{ font-size: 0; }}
+    .lp-directory-head span:nth-child(5)::after {{ content: "공고"; font-size: 12px; }}
     .lp-notice-head {{ display: none; }}
     .lp-directory-grid {{ display: grid; gap: 0; margin-bottom: 16px; }}
     .lp-directory-card {{ display: grid; grid-template-columns: 44px minmax(0, 1fr) 82px 74px; gap: 8px; align-items: center; min-height: 70px; border-bottom: 1px solid var(--separator); padding: 9px 10px; background: var(--surface); }}
@@ -2303,9 +2385,7 @@ def render_lp_notices_page(
     .lp-directory-avatar[data-tone="6"] {{ border-color: #d9e3e7; background: #f5f9fa; color: #2d5361; }}
     .lp-directory-card-head {{ display: grid; gap: 4px; }}
     .lp-directory-card-head strong {{ color: var(--text); font-size: 15px; line-height: 1.28; overflow-wrap: anywhere; }}
-    .lp-directory-kind,
     .lp-directory-latest {{ color: var(--secondary); font-size: 13px; font-weight: 750; line-height: 1.45; }}
-    .lp-directory-kind,
     .lp-directory-focus,
     .lp-directory-card > .lp-page-actions {{ display: none; }}
     .lp-directory-latest {{ text-align: right; }}
@@ -2320,9 +2400,6 @@ def render_lp_notices_page(
     .lp-control-line {{ display: grid; gap: 8px; }}
     .lp-notice-toolbar input {{ width: 100%; min-height: 42px; border: 1px solid var(--separator); border-radius: 8px; padding: 8px 11px; background: var(--surface); color: var(--text); font-size: 14px; }}
     .lp-notice-toolbar select {{ width: 100%; min-height: 42px; border: 1px solid var(--separator); border-radius: 8px; padding: 8px 11px; background: var(--surface); color: var(--text); font-size: 14px; }}
-    .lp-filter-row {{ display: flex; flex-wrap: wrap; gap: 7px; }}
-    .lp-filter-row button {{ border: 1px solid var(--separator); border-radius: 999px; padding: 7px 10px; background: var(--surface); color: var(--secondary); font-size: 12px; font-weight: 800; cursor: pointer; }}
-    .lp-filter-row button.active {{ border-color: var(--accent); background: var(--surface-muted); color: var(--text); }}
     .lp-page-list {{ display: grid; gap: 10px; }}
     .lp-page-card {{ display: grid; gap: 8px; padding: 14px; border: 1px solid var(--separator); border-radius: 8px; background: var(--surface); }}
     .lp-page-card h2 {{ margin: 0; font-size: 15px; line-height: 1.38; }}
@@ -2349,7 +2426,7 @@ def render_lp_notices_page(
       .lp-notice-table {{ border: 1px solid var(--separator); background: var(--surface); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }}
       .lp-directory-head {{
         display: grid;
-        grid-template-columns: 52px minmax(220px, 1.15fr) minmax(120px, 0.58fr) minmax(260px, 1.25fr) minmax(92px, 0.42fr) minmax(250px, 1.1fr) minmax(160px, 0.72fr);
+        grid-template-columns: 52px minmax(220px, 1.15fr) minmax(260px, 1.25fr) minmax(110px, 0.55fr) minmax(120px, 0.6fr) minmax(140px, 0.65fr);
         gap: 18px;
         align-items: center;
         min-height: 48px;
@@ -2367,15 +2444,11 @@ def render_lp_notices_page(
       .lp-directory-head span:nth-child(2) {{
         text-align: left;
       }}
-      .lp-directory-head span:nth-child(6) {{
-        font-size: 12px;
-      }}
-      .lp-directory-head span:nth-child(6)::after {{
-        content: none;
-      }}
+      .lp-directory-head span:nth-child(5) {{ font-size: 12px; }}
+      .lp-directory-head span:nth-child(5)::after {{ content: none; }}
       .lp-directory-grid {{ grid-template-columns: minmax(0, 1fr); gap: 0; margin-bottom: 0; }}
       .lp-directory-card {{
-        grid-template-columns: 52px minmax(220px, 1.15fr) minmax(120px, 0.58fr) minmax(260px, 1.25fr) minmax(92px, 0.42fr) minmax(250px, 1.1fr) minmax(160px, 0.72fr);
+        grid-template-columns: 52px minmax(220px, 1.15fr) minmax(260px, 1.25fr) minmax(110px, 0.55fr) minmax(120px, 0.6fr) minmax(140px, 0.65fr);
         gap: 18px;
         align-items: center;
         border: 0;
@@ -2387,7 +2460,6 @@ def render_lp_notices_page(
       .lp-directory-card:last-child {{ border-bottom: 0; }}
       .lp-directory-card-head strong {{ font-size: 15px; }}
       .lp-directory-avatar {{ width: 42px; height: 42px; }}
-      .lp-directory-kind {{ display: inline; text-align: left; }}
       .lp-directory-focus {{ color: var(--text); }}
       .lp-directory-focus {{ display: block; }}
       .lp-directory-metrics {{
@@ -2518,6 +2590,10 @@ def render_lp_notices_page(
     .lp-control-line {{
       grid-template-columns: minmax(0, 1fr);
     }}
+    .lp-directory-controls,
+    .lp-notice-controls {{
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }}
     .lp-notice-toolbar input {{
       display: none;
     }}
@@ -2525,29 +2601,6 @@ def render_lp_notices_page(
       min-height: 38px;
       border-radius: 7px;
       font-size: 13px;
-    }}
-    .lp-filter-row {{
-      gap: 6px;
-      overflow-x: auto;
-      flex-wrap: nowrap;
-      padding-bottom: 2px;
-      scrollbar-width: none;
-    }}
-    .lp-filter-row::-webkit-scrollbar {{
-      display: none;
-    }}
-    .lp-filter-row button {{
-      flex: 0 0 auto;
-      border-radius: 999px;
-      padding: 6px 9px;
-      color: var(--secondary);
-      font-size: 12px;
-      background: #ffffff;
-    }}
-    .lp-filter-row button.active {{
-      border-color: var(--text);
-      background: #ffffff;
-      color: var(--text);
     }}
     .lp-directory-table,
     .lp-notice-table {{
@@ -2564,9 +2617,15 @@ def render_lp_notices_page(
       text-align: right;
     }}
     .lp-directory-head span:nth-child(3),
-    .lp-directory-head span:nth-child(4),
-    .lp-directory-head span:nth-child(7) {{
+    .lp-directory-head span:nth-child(6) {{
       display: none !important;
+    }}
+    .lp-directory-head span:nth-child(5) {{
+      font-size: 0;
+    }}
+    .lp-directory-head span:nth-child(5)::after {{
+      content: "공고";
+      font-size: 12px;
     }}
     .lp-directory-card {{
       grid-template-columns: 44px minmax(0, 1fr) 82px 72px;
@@ -2580,9 +2639,6 @@ def render_lp_notices_page(
       font-size: 15px;
       line-height: 1.3;
       text-decoration: none;
-    }}
-    .lp-directory-kind {{
-      display: none !important;
     }}
     .lp-directory-focus {{
       display: none;
@@ -2646,35 +2702,32 @@ def render_lp_notices_page(
       .lp-control-line {{
         grid-template-columns: 220px;
       }}
+      .lp-directory-controls,
+      .lp-notice-controls {{
+        grid-template-columns: 180px 180px;
+      }}
       .lp-directory-head {{
         grid-template-columns: 52px minmax(220px, 1.15fr) minmax(260px, 1.25fr) minmax(110px, 0.55fr) minmax(120px, 0.6fr) minmax(140px, 0.65fr);
         gap: 18px;
         text-align: left;
       }}
-      .lp-directory-head span:nth-child(4) {{
-        display: none !important;
-      }}
       .lp-directory-head span:nth-child(3),
+      .lp-directory-head span:nth-child(4),
       .lp-directory-head span:nth-child(5),
-      .lp-directory-head span:nth-child(6),
-      .lp-directory-head span:nth-child(7) {{
+      .lp-directory-head span:nth-child(6) {{
         display: block !important;
       }}
-      .lp-directory-head span:nth-child(3)::after {{
-        content: "주요 자산군";
-      }}
       .lp-directory-head span:nth-child(3) {{
-        font-size: 0;
+        font-size: inherit;
       }}
-      .lp-directory-head span:nth-child(3)::after,
-      .lp-directory-head span:nth-child(6)::after {{
-        font-size: 12px;
+      .lp-directory-head span:nth-child(3)::after {{
+        content: none;
       }}
-      .lp-directory-head span:nth-child(6) {{
-        font-size: 0;
+      .lp-directory-head span:nth-child(5) {{
+        font-size: inherit;
       }}
-      .lp-directory-head span:nth-child(6)::after {{
-        content: "표시 공고";
+      .lp-directory-head span:nth-child(5)::after {{
+        content: none;
       }}
       .lp-directory-card {{
         grid-template-columns: 52px minmax(220px, 1.15fr) minmax(260px, 1.25fr) minmax(110px, 0.55fr) minmax(120px, 0.6fr) minmax(140px, 0.65fr);
@@ -2734,13 +2787,6 @@ def render_lp_notices_page(
       font-size: 11.5px;
       font-weight: 650;
     }}
-    .lp-filter-row button {{
-      font-size: 12px;
-      font-weight: 650;
-    }}
-    .lp-filter-row button.active {{
-      font-weight: 800;
-    }}
     .lp-directory-head {{
       font-size: 12px;
       font-weight: 720;
@@ -2794,12 +2840,12 @@ def render_lp_notices_page(
 </head>
 <body class="lp-notices-page">
   <div class="app-shell newsletter-only">
-    {render_lp_service_header("lp", "lpNoticeSearch", "LP명, 자산군, 공고명, GP 검색")}
+    {render_lp_service_header(active_tab, search_input_id, search_placeholder)}
     <main class="content-area">
       <section class="lp-directory-hero" aria-label="LP 디렉토리 요약">
         <div>
-          <h1 class="lp-directory-title"><strong>{tracked_count}개</strong> 출자기관</h1>
-          <p class="lp-directory-meta">기관 프로필 {profile_count}개 · 공식 공고 {visible_notice_count}건 · {html_escape(report_date)} 기준</p>
+          {hero_title}
+          {hero_meta}
         </div>
         <div class="lp-directory-kpis">
           <div><span>대상 기관</span><strong>{tracked_count}개</strong></div>
@@ -2808,59 +2854,8 @@ def render_lp_notices_page(
           <div><span>표시 공고</span><strong>{visible_notice_count}건</strong></div>
         </div>
       </section>
-      <section class="section-block" id="lpDirectory" aria-label="출자기관 목록">
-        <div class="lp-notice-toolbar">
-          <div class="lp-control-head">
-            <label for="lpNoticeSearch">출자기관 검색</label>
-            <span id="lpVisibleCount">{tracked_count}개 표시</span>
-          </div>
-          <div class="lp-control-line">
-            <input type="search" id="lpNoticeSearch" placeholder="LP명, 유형, 자산군, 공고명, GP 검색">
-            <select id="lpSort" aria-label="정렬">
-              <option value="latest">최근 공고일순</option>
-              <option value="amount">공고 규모순</option>
-              <option value="notices">표시 공고 많은 순</option>
-              <option value="name">기관명순</option>
-            </select>
-          </div>
-          <div class="lp-filter-row" aria-label="LP 디렉토리 필터">
-            <button class="active" type="button" data-filter="all">전체</button>
-            <button type="button" data-filter="공공">공공 LP</button>
-            <button type="button" data-filter="공제">공제회</button>
-            <button type="button" data-filter="PEF">PEF</button>
-            <button type="button" data-filter="VC">VC</button>
-            <button type="button" data-filter="new_notice">신규 공고</button>
-            <button type="button" data-filter="final_selection">선정</button>
-          </div>
-        </div>
-        <div class="lp-directory-table">
-          <div class="lp-directory-head" aria-hidden="true">
-            <span></span>
-            <span>출자기관명</span>
-            <span>주요 자산군</span>
-            <span>주요 자산군</span>
-            <span>최근 공고</span>
-            <span>공고</span>
-            <span>공고 규모</span>
-          </div>
-          <div class="lp-directory-grid">
-{directory_cards}
-          </div>
-        </div>
-      </section>
-      <section class="section-block" id="lpNotices" aria-label="LP 공식 공고">
-        <h2 class="section-title">최근 공식 공고</h2>
-        <div class="lp-notice-table">
-          <div class="lp-notice-head" aria-hidden="true">
-            <span>공고명</span>
-            <span>기관/조건</span>
-            <span>이동</span>
-          </div>
-          <div class="lp-page-list">
-{notice_cards}
-          </div>
-        </div>
-      </section>
+{directory_section}
+{notice_section}
     </main>
 
     {render_service_bottom_nav("lp")}
@@ -2868,20 +2863,31 @@ def render_lp_notices_page(
   <script>
     (() => {{
 {lp_header_script()}
-      const input = document.getElementById("lpNoticeSearch");
+      const input = document.getElementById("{search_input_id}");
       const sort = document.getElementById("lpSort");
+      const filter = document.getElementById("lpFilter");
+      const noticeSort = document.getElementById("lpNoticeSort");
+      const noticeFilter = document.getElementById("lpNoticeFilter");
       const directory = document.querySelector(".lp-directory-grid");
+      const noticeList = document.querySelector(".lp-page-list");
       const visible = document.getElementById("lpVisibleCount");
-      const buttons = Array.from(document.querySelectorAll("[data-filter]"));
+      const noticeVisible = document.getElementById("lpNoticeVisibleCount");
       const directoryCards = Array.from(document.querySelectorAll(".lp-directory-card"));
       const noticeCards = Array.from(document.querySelectorAll(".lp-page-card"));
-      const cards = [...directoryCards, ...noticeCards];
-      let active = "all";
       const num = (card, key) => {{
         const value = Number(card.dataset[key]);
         return Number.isFinite(value) ? value : 0;
       }};
-      const applySort = () => {{
+      const fieldsMatch = (card, active) => {{
+        const fields = [card.dataset.asset, card.dataset.event, card.dataset.lp, card.dataset.kind].filter(Boolean);
+        return active === "all" || fields.includes(active) || fields.some((field) => field.includes(active));
+      }};
+      const queryMatch = (card) => {{
+        const query = (input?.value || "").trim().toLowerCase();
+        const haystack = (card.dataset.search || card.innerText).toLowerCase();
+        return !query || haystack.includes(query);
+      }};
+      const applyDirectorySort = () => {{
         const mode = sort?.value || "latest";
         const sorted = [...directoryCards].sort((a, b) => {{
           if (mode === "amount") return num(b, "amount") - num(a, "amount");
@@ -2891,33 +2897,53 @@ def render_lp_notices_page(
         }});
         sorted.forEach((card) => directory?.appendChild(card));
       }};
-      const apply = () => {{
-        const query = (input?.value || "").trim().toLowerCase();
+      const applyDirectory = () => {{
+        const active = filter?.value || "all";
         let count = 0;
-        cards.forEach((card) => {{
-          const haystack = (card.dataset.search || card.innerText).toLowerCase();
-          const fields = [card.dataset.asset, card.dataset.event, card.dataset.lp, card.dataset.kind].filter(Boolean);
-          const filterHit = active === "all" || fields.includes(active) || fields.some((field) => field.includes(active));
-          const queryHit = !query || haystack.includes(query);
-          card.style.display = filterHit && queryHit ? "" : "none";
-          if (card.classList.contains("lp-directory-card") && filterHit && queryHit) count += 1;
+        directoryCards.forEach((card) => {{
+          const visibleCard = fieldsMatch(card, active) && queryMatch(card);
+          card.style.display = visibleCard ? "" : "none";
+          if (visibleCard) count += 1;
         }});
         if (visible) visible.textContent = `${{count.toLocaleString("ko-KR")}}개 표시`;
       }};
-      input?.addEventListener("input", apply);
-      sort?.addEventListener("change", () => {{
-        applySort();
-        apply();
-      }});
-      buttons.forEach((button) => {{
-        button.addEventListener("click", () => {{
-          active = button.dataset.filter || "all";
-          buttons.forEach((item) => item.classList.toggle("active", item === button));
-          apply();
+      const applyNoticeSort = () => {{
+        const mode = noticeSort?.value || "latest";
+        const sorted = [...noticeCards].sort((a, b) => {{
+          if (mode === "deadline") return (a.dataset.deadline || "9999-99-99").localeCompare(b.dataset.deadline || "9999-99-99");
+          if (mode === "lp") return (a.dataset.lpName || "").localeCompare(b.dataset.lpName || "", "ko");
+          return (b.dataset.date || "").localeCompare(a.dataset.date || "");
         }});
+        sorted.forEach((card) => noticeList?.appendChild(card));
+      }};
+      const applyNotices = () => {{
+        const active = noticeFilter?.value || "all";
+        let count = 0;
+        noticeCards.forEach((card) => {{
+          const visibleCard = fieldsMatch(card, active) && queryMatch(card);
+          card.style.display = visibleCard ? "" : "none";
+          if (visibleCard) count += 1;
+        }});
+        if (noticeVisible) noticeVisible.textContent = `${{count.toLocaleString("ko-KR")}}건 표시`;
+      }};
+      input?.addEventListener("input", () => {{
+        applyDirectory();
+        applyNotices();
       }});
-      applySort();
-      apply();
+      sort?.addEventListener("change", () => {{
+        applyDirectorySort();
+        applyDirectory();
+      }});
+      filter?.addEventListener("change", applyDirectory);
+      noticeSort?.addEventListener("change", () => {{
+        applyNoticeSort();
+        applyNotices();
+      }});
+      noticeFilter?.addEventListener("change", applyNotices);
+      applyDirectorySort();
+      applyNoticeSort();
+      applyDirectory();
+      applyNotices();
     }})();
   </script>
 </body>
@@ -2930,10 +2956,12 @@ def render_lp_notice_card(item: dict[str, object]) -> str:
     url = str(item.get("url") or "")
     document_url = str(item.get("documentUrl") or "")
     lp_code = str(item.get("lpCode") or "")
+    lp_name = str(item.get("lpName") or "LP 미분류")
+    event_date = str(item.get("eventDate") or item.get("announcedDate") or "")
     amount = lp_amount_label(item.get("allocationAmount"))
     asset_class = public_asset_class(item.get("assetClass")) if item.get("assetClass") else ""
     meta_values = [
-        str(item.get("lpName") or "LP 미분류"),
+        lp_name,
         lp_event_label(item.get("eventType")),
         asset_class,
         f"마감 {item.get('applicationDeadline')}" if item.get("applicationDeadline") else "",
@@ -2960,13 +2988,13 @@ def render_lp_notice_card(item: dict[str, object]) -> str:
         str(value or "")
         for value in [
             title,
-            item.get("lpName"),
+            lp_name,
             asset_class,
             item.get("eventType"),
             item.get("selectedGpNames"),
         ]
     )
-    return f"""          <article class="lp-page-card" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(asset_class)}" data-event="{html_escape(str(item.get("eventType") or ""))}" data-deadline="{html_escape(str(item.get("applicationDeadline") or ""))}">
+    return f"""          <article class="lp-page-card" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-lp-name="{html_escape(lp_name)}" data-asset="{html_escape(asset_class)}" data-event="{html_escape(str(item.get("eventType") or ""))}" data-date="{html_escape(event_date)}" data-deadline="{html_escape(str(item.get("applicationDeadline") or ""))}">
             <h2>{linked_title}</h2>
             <div class="lp-page-meta">{meta}</div>
             <div class="lp-page-actions">{profile_link}{official_link}{document_link}</div>
@@ -2975,8 +3003,14 @@ def render_lp_notice_card(item: dict[str, object]) -> str:
 
 def write_lp_notices_page(site_dir: Path, report_date: str) -> int:
     notices = read_lp_monitor(DEFAULT_LP_COMMITMENT_MONITOR, limit=None)
+    nav_items = read_lp_profile_nav()
+    directory_items = read_lp_directory_items()
     (site_dir / "lp-notices.html").write_text(
-        render_lp_notices_page(report_date, notices, read_lp_profile_nav(), read_lp_directory_items()),
+        render_lp_notices_page(report_date, notices, nav_items, directory_items, active_tab="lp"),
+        encoding="utf-8",
+    )
+    (site_dir / "lp-official-notices.html").write_text(
+        render_lp_notices_page(report_date, notices, nav_items, directory_items, active_tab="notice"),
         encoding="utf-8",
     )
     return len(notices)
@@ -3069,10 +3103,11 @@ def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
     zip_path = deploy_dir / "kpef-newsletter-site.zip"
     if zip_path.exists():
         zip_path.unlink()
+    lp_service_pages = {"lp-notices.html", "lp-official-notices.html"}
     profile_paths = sorted(
         path
         for path in site_dir.glob("lp-*.html")
-        if path.name != "lp-notices.html"
+        if path.name not in lp_service_pages
     )
     gp_profile_paths = sorted(site_dir.glob("gp-*.html"))
     alias_paths = [site_dir / alias for aliases in LP_PROFILE_ALIASES.values() for alias in aliases]
@@ -3080,6 +3115,7 @@ def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
         site_dir / "index.html",
         site_dir / "daily-news.html",
         site_dir / "lp-notices.html",
+        site_dir / "lp-official-notices.html",
         site_dir / "market.html",
         site_dir / "gps.html",
         site_dir / "pef-wiki.html",
@@ -3138,7 +3174,8 @@ def main() -> int:
         )
     result["lp_monitor_count"] = str(write_lp_notices_page(site_dir, args.date))
     result["lp_profile_fact_count"] = str(write_lp_profile_pages(site_dir, args.date))
-    result["lp_profile_page_count"] = str(len([path for path in site_dir.glob("lp-*.html") if path.name != "lp-notices.html"]))
+    lp_service_pages = {"lp-notices.html", "lp-official-notices.html"}
+    result["lp_profile_page_count"] = str(len([path for path in site_dir.glob("lp-*.html") if path.name not in lp_service_pages]))
     result["ktcu_fact_count"] = str(len(read_ktcu_payload(lp_code=KTCU_CODE, profile_codes=read_lp_profile_codes()).get("facts") or []))
     result.update({key: str(value) for key, value in write_gp_pages(site_dir, DEFAULT_DB, args.date).items()})
     write_pef_wiki_page(site_dir, args.date)
