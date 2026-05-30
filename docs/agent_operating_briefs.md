@@ -47,6 +47,8 @@
 ## 공통 UX/UI 원칙
 
 - 공개 UX/UI의 기준 문서는 `docs/design_system.md`다. Newsletter, LP, GP, Wiki 담당은 공개 화면을 고치기 전에 이 문서의 navigation, typography, directory row, newsletter reference pattern을 먼저 적용한다.
+- 공개 화면의 기본 뷰 체계는 `docs/design_system.md`의 `View Taxonomy`를 따른다. 뉴스는 article list, LP/GP 목록은 directory table, LP/GP 상세는 profile detail, 출자공고는 notice row-card, Wiki는 document view로 본다.
+- 공개 사이트는 정적 생성물이다. 크롤러, DB, CSV가 갱신되어도 공개 화면은 자동으로 실시간 변경되지 않으며, source renderer 빌드와 GitHub Pages 배포가 끝나야 새 숫자와 새 행이 반영된다.
 - 공개 서비스는 혁신의숲 같은 데이터룸/디렉토리 서비스 톤을 기준으로 한다. 뉴스레터, LP, GP, Wiki가 서로 다른 제품처럼 보이지 않게 폰트, 색상, 여백, 버튼, 탭, 표 header, row 스타일, 하단 메뉴를 맞춘다.
 - 주요 목록과 디렉토리는 카드 나열보다 표 또는 표에 가까운 row layout을 기본으로 한다. 모바일에서도 핵심 컬럼은 남기고, 불필요한 가로 스크롤을 만들지 않는다.
 - 공개 서비스의 주 메뉴는 `브리프 / LP / GP / Wiki` 순서의 하단 메뉴 하나로 통일한다. 모바일과 PC 모두 같은 하단 메뉴를 쓰고, 상단 서비스 탭은 만들지 않는다. 상단·하단에 같은 서비스 메뉴가 동시에 보이면 회귀로 본다. 전역 저장함은 뉴스, LP, GP, Wiki 저장이 모두 구현되기 전까지 하단 메뉴에 두지 않는다.

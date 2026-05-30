@@ -27,6 +27,51 @@ typography, row density, icon treatment, and navigation hierarchy.
 - Wiki is a help-center/documentation surface. Its default shape is body text,
   table of contents, internal anchors, and related references.
 
+## View Taxonomy
+
+Use one of these view types before designing or changing a public screen.
+
+- Article list view: for daily/weekly brief articles. Use flat rows, section
+  labels, publisher metadata, restrained tags, and circular publisher icons.
+  Do not use table columns or card grids for ordinary article lists.
+- Directory table view: for GP and LP lists. Use table-like rows with comparable
+  columns, sorting/filter controls, circular CI/logo slots, and compact numeric
+  facts. Do not show entity-type badges under names when those values are only
+  useful as filters.
+- Profile detail view: for GP and LP entity pages. Use a calm identity header,
+  fact matrix, history/news/connection tables, source-linked sections, and
+  quiet typography. Avoid repeating generic row actions like `상세 프로필`.
+- Notice row-card view: for LP official notices and similar long-title workflow
+  items. Use row cards or table-like cards because notice titles, deadlines,
+  institutions, attachments, and source links need more room than a compact
+  directory row. Keep cards flat and operationally useful; do not turn notices
+  into marketing cards.
+- Document view: for Wiki. Use title, body text, table of contents, anchors,
+  related law/regulation links, and source references. Use tables only when the
+  source content is naturally tabular.
+
+If a screen mixes two view types, split it into tabs or pages instead of forcing
+both into one surface. For example, LP directory and official notices should be
+separate `LP` and `NOTICE` tabs/pages.
+
+## Data Refresh Model
+
+The public service is currently a static generated site. Source data lives in
+the DB, CSV files, exports, and crawler outputs, but public pages are generated
+HTML files at build time.
+
+- A crawler, DB import, or CSV edit changes the source data only.
+- The public website changes only after the site builder regenerates the static
+  HTML and the generated site is published to GitHub Pages.
+- Numbers such as article counts, LP notice counts, GP counts, AUM/commitment
+  metrics, and profile counts are not hand-coded in the source renderer. They
+  are read from source data during the build and then baked into the generated
+  HTML for that deployment.
+- Do not manually edit generated public HTML to update numbers. Fix or update
+  the source data/renderer, rebuild, verify, and publish.
+- When explaining freshness to non-developers, say: "DB update is the
+  ingredient; build/deploy is what puts it on the website."
+
 ## Navigation
 
 - Use one global bottom nav order everywhere: `브리프 / LP / GP / Wiki`.
