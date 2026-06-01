@@ -230,6 +230,13 @@ Use the newsletter screen as the reference for shared public UI polish.
   logo into a gray circle. Scale fallback favicon images to the standard inner
   size instead of preserving tiny natural favicon dimensions. Do not draw a
   second inner ring inside the slot.
+- Brand assets must be routed through `services/newsletter/src/brand_assets.py`.
+  Add verified official domains there instead of hardcoding image URLs in a
+  renderer. The static build caches brand marks into `assets/brand-marks` so
+  remote CORS, hotlinking, HTTP-only sources, and favicon load failures do not
+  surface as broken circles in the public UI. Google S2 and third-party icon
+  aggregators are acceptable only as a temporary last resort and should not be
+  visible in primary rows after a QA pass.
 - Tags: one-line by default. Use a small text-like `더보기 N` control when tags
   overflow. Do not use dark pill buttons for hidden tags.
 - Row dividers: sparse 1px neutral separators only between rows. Avoid stacked

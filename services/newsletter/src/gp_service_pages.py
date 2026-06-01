@@ -926,7 +926,7 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
     aum = _format_krw_100mn(gp.get("latest_primary_aum_proxy_krw_100mn"))
     representative = _clean(gp.get("representative_name"))
     homepage = _safe_url(gp.get("homepage_url"))
-    avatar_markup = _avatar_markup(homepage, avatar_label, name)
+    avatar_markup = _avatar_markup(homepage, avatar_label, name, name)
     profile_url = _gp_page_name(gp_id) if has_profile_page else ""
     title = (
         f'<a href="{_e(profile_url)}">{_e(name)}</a>'
@@ -987,11 +987,11 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
 def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: list[dict[str, object]]) -> str:
     name = _gp_name(gp)
     homepage = _safe_url(gp.get("homepage_url"))
-    logo_url = _favicon_url(homepage)
+    logo_url = _brand_logo_url(homepage, name)
     avatar_label = _avatar_label(name)
     avatar_tone = _identity_tone(name)
     avatar_class = "gp-detail-logo has-logo" if logo_url else "gp-detail-logo"
-    avatar_style = _logo_style_attr(homepage) if logo_url else ""
+    avatar_style = _brand_logo_style_attr(homepage, name) if logo_url else ""
     avatar_logo = (
         f'<img src="{logo_url}" alt="" loading="lazy" onerror="this.parentElement.classList.add(\'fallback-only\'); this.remove()">'
         if logo_url
@@ -1316,10 +1316,18 @@ def _logo_style_attr(url: object) -> str:
     return brand_style_attr(_safe_url(url))
 
 
-def _avatar_markup(homepage_url: object, label: str, seed: object) -> str:
+def _brand_logo_url(homepage_url: object, label: object) -> str:
+    return brand_logo_url(_safe_url(homepage_url), label)
+
+
+def _brand_logo_style_attr(homepage_url: object, label: object) -> str:
+    return brand_style_attr(_safe_url(homepage_url), label)
+
+
+def _avatar_markup(homepage_url: object, label: str, seed: object, brand_label: object = "") -> str:
     tone = _identity_tone(seed or label)
-    logo_url = _favicon_url(homepage_url)
-    style_attr = _logo_style_attr(homepage_url)
+    logo_url = _brand_logo_url(homepage_url, brand_label)
+    style_attr = _brand_logo_style_attr(homepage_url, brand_label)
     if logo_url:
         return (
             f'<span class="gp-avatar has-logo" data-tone="{tone}" aria-hidden="true"{style_attr}>'

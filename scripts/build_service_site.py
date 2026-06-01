@@ -19,7 +19,7 @@ NEWSLETTER_SRC = REPO_ROOT / "services" / "newsletter" / "src"
 if str(NEWSLETTER_SRC) not in sys.path:
     sys.path.append(str(NEWSLETTER_SRC))
 
-from brand_assets import brand_logo_url, brand_style_string, domain_from_url  # noqa: E402
+from brand_assets import brand_logo_url, brand_style_string, domain_from_url, prepare_brand_asset_cache  # noqa: E402
 from pef_wiki_pages import render_pef_wiki_page  # noqa: E402
 
 DEFAULT_PUBLIC_DIR = REPO_ROOT / "public"
@@ -3107,6 +3107,7 @@ def build(
     assets_dir = public_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
     public_dir.mkdir(parents=True, exist_ok=True)
+    prepare_brand_asset_cache(public_dir)
     home_path = public_dir / "index.html"
     daily_path = public_dir / "daily-news.html"
     css_path = assets_dir / "service.css"

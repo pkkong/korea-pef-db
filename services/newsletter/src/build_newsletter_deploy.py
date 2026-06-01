@@ -3129,6 +3129,7 @@ def zip_site(deploy_dir: Path, site_dir: Path) -> Path:
         site_dir / "404.html",
         site_dir / "assets" / "service.css",
         site_dir / "assets" / "service.js",
+        *sorted((site_dir / "assets" / "brand-marks").glob("*")),
     ]
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for path in include_paths:
