@@ -56,9 +56,10 @@
 - 뉴스레터 화면은 공개 UI의 기준 구현이다. LP, GP, Wiki 담당은 폰트, 색, 여백, 원형 로고 슬롯, 섹션 구분 밴드, row divider, 하단 메뉴를 바꿀 때 `docs/design_system.md`의 `Shared Tokens`, `Public Shell`, `Row Anatomy`, `Section Bands`를 먼저 따른다.
 - 타이포그래피는 서비스별 임의 크기를 금지한다. 공개 화면 기준 H1은 모바일 28px 안팎, PC 36-38px 안팎, 목록 row 제목은 15-16px, 보조 정보는 11-13px 범위로 맞춘다.
 - 대량 GP/LP 목록은 끝없이 긴 무한 스크롤로 두지 않는다. 검색·필터·정렬과 동기화되는 페이지네이션 또는 더보기 방식을 사용한다.
-- LP/GP 디렉토리 row는 혁신의숲처럼 원형 CI/로고 영역을 포함한 표형 row를 기본으로 한다. 공식 홈페이지가 있으면 공식 compact CI/로고, 공식 touch/app icon, favicon fallback 순서로 공개 이미지를 선택해 원형 안에 넣고, 없거나 로드 실패 시에만 단순 글자 배지가 아닌 동일 크기·얇은 링·절제된 톤의 임시 CI형 모노그램을 쓴다. 모바일에서도 이름, 최신/순위, 핵심 숫자 컬럼은 표 구조를 유지하고, 버튼·칩이 row 밖으로 튀거나 가로 overflow를 만들면 회귀로 본다.
-- 뉴스레터 언론사, LP 기관, GP 운용사 로고 슬롯은 같은 40px 원형 규칙을 쓴다. 로고가 있으면 기본은 혁신의숲/TheVC처럼 흰 원형 슬롯과 얇은 neutral border를 쓰고, 네이버·한국경제처럼 배경색이 명확한 로고는 도메인 기반 curated brand background로 원을 채운다. favicon fallback 원본이 작아도 자연 크기 그대로 두지 말고 표준 내부 크기로 키우며, 원 안에 별도 내부 원이나 링을 추가하지 않는다.
-- 로고 보완 작업은 `services/newsletter/src/brand_assets.py`를 단일 registry로 삼는다. 새 언론사/LP/GP 로고는 공식 홈페이지의 compact CI, touch/app icon, favicon 순으로 검증하고, HTTP-only 또는 hotlink 차단 가능성이 있는 자산은 정적 빌드의 `assets/brand-marks` 캐시를 거쳐 노출한다. Google S2나 DuckDuckGo 같은 외부 favicon 서비스는 임시 마지막 수단이며, 배포 전 뉴스/LP/GP 주요 화면에서 `google.com/s2`, `duckduckgo`, 깨진 이미지, `fallback-only`가 보이는지 확인한다.
+- LP/GP 디렉토리 row는 혁신의숲처럼 원형 CI/로고 영역을 포함한 표형 row를 기본으로 한다. 공식 홈페이지가 있으면 공식 compact CI/로고를 우선하고, 공식 touch/app icon은 명확히 브랜드 소유이고 시각적으로 쓸 만할 때만 사용한다. 검증 로고가 없거나 로드 실패 시에는 동일 크기·얇은 링·절제된 톤의 임시 CI형 모노그램을 쓴다. 모바일에서도 이름, 최신/순위, 핵심 숫자 컬럼은 표 구조를 유지하고, 버튼·칩이 row 밖으로 튀거나 가로 overflow를 만들면 회귀로 본다.
+- 뉴스레터 언론사, LP 기관, GP 운용사 로고 슬롯은 같은 40px 원형 규칙을 쓴다. 로고가 있으면 기본은 혁신의숲/TheVC처럼 흰 원형 슬롯과 얇은 neutral border를 쓰고, 네이버·한국경제처럼 배경색이 명확한 로고는 도메인 기반 curated brand background로 원을 채운다. 작은 favicon을 억지로 넣어 품질을 낮추지 말고, 원 안에 별도 내부 원이나 링을 추가하지 않는다.
+- 로고 보완 작업은 `services/newsletter/src/brand_assets.py`를 단일 registry로 삼는다. 새 언론사/LP/GP 로고는 공식 홈페이지의 compact CI, 공식 touch/app icon 순으로 검증하고, HTTP-only 또는 hotlink 차단 가능성이 있는 자산은 정적 빌드의 `assets/brand-marks` 캐시를 거쳐 노출한다. Google S2, DuckDuckGo 같은 외부 favicon 서비스는 공개 산출물에 남기지 않는다. 검증된 로고가 없거나 40px 원형 슬롯에서 공식 워드마크가 너무 얇게 보여 품질이 떨어지면 억지로 채우지 말고 깨끗한 텍스트 슬롯으로 남긴다. 배포 전 뉴스/LP/GP 주요 화면에서 `google.com/s2`, `duckduckgo`, 외부 hotlink, 깨진 이미지, `fallback-only`가 보이는지 확인한다.
+- 공식 워드마크가 40px 슬롯에서 가독성이 떨어지는 경우에는 회사가 직접 제공하는 공식 심볼형 아이콘을 쓸 수 있다. 단, 단순 파비콘 수집을 로고 보완으로 간주하지 말고, 공식 소유·시각 품질·원형 슬롯 적합성을 함께 확인한다.
 - LP의 `ownership_type` 같은 `public/private` 성격값은 이름 셀 아래에 노출하지 않는다. 해당 값은 필터와 정렬 데이터로만 활용하고, 목록 row에는 기관명과 핵심 숫자 위주로 표시한다.
 - LP 상세는 기관명과 핵심 숫자 이후 `기본 정보 → 투자 현황 → 출자공고 → 관련 GP → 뉴스 → 기관 비교 → 자료` 순서로 정리한다. 자료 커버리지, 출처 링크, 참고사항은 상단 요약이 아니라 하단 보조 영역에 둔다.
 - LP 상세 상단에는 `기본 정보, 투자 현황, 뉴스 정리` 같은 범용 설명문을 쓰지 않는다. 기관명, 유형, 담당 조직, 최신 공고, 핵심 숫자처럼 즉시 비교 가능한 데이터만 둔다.

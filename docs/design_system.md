@@ -152,8 +152,8 @@ variants.
   list rather than a stack of promotional cards.
 - Mobile directories should not rely on wide horizontal scrolling. If all
   columns cannot fit, choose the most important columns instead.
-- Rows should use a circular CI/logo slot. If no public logo is available, use a
-  same-size restrained monogram fallback.
+- Rows should use a circular CI/logo slot. If no verified public logo is
+  available, use a same-size restrained monogram fallback.
 - Primary row actions should lead to detail, source, compare, or connected
   records.
 - Public rows should not expose internal enum values or pipeline terminology.
@@ -223,20 +223,28 @@ Use the newsletter screen as the reference for shared public UI polish.
   rather than vertically centered.
 - Public logo slots for news publishers, LPs, and GPs must use the same visual
   treatment: circular container, thin neutral border, and brand mark centered
-  inside. Asset priority is official compact CI/logo, official touch icon or
-  app icon, then favicon fallback. Logo-backed slots default to white like
-  InnoForest/TheVC directory rows. Use curated domain-based brand backgrounds
-  for known solid-color marks such as NAVER or Hankyung instead of forcing every
-  logo into a gray circle. Scale fallback favicon images to the standard inner
-  size instead of preserving tiny natural favicon dimensions. Do not draw a
-  second inner ring inside the slot.
+  inside. Asset priority is official compact CI/logo, then official touch/app
+  icon only when it is clearly brand-owned and visually usable. Do not use
+  generic favicon services or low-quality arbitrary favicons to fake coverage;
+  if no verified asset exists, use the restrained monogram fallback. Logo-backed
+  slots default to white like InnoForest/TheVC directory rows. Use curated
+  domain-based brand backgrounds for known solid-color marks such as NAVER or
+  Hankyung instead of forcing every logo into a gray circle. Do not put a tiny
+  favicon into a gray circle, and do not draw a second inner ring inside the
+  slot. A verified official wordmark is still rejected when it becomes an
+  unreadable hairline inside a 40px slot; use a better official icon or the
+  monogram fallback instead.
 - Brand assets must be routed through `services/newsletter/src/brand_assets.py`.
   Add verified official domains there instead of hardcoding image URLs in a
   renderer. The static build caches brand marks into `assets/brand-marks` so
-  remote CORS, hotlinking, HTTP-only sources, and favicon load failures do not
-  surface as broken circles in the public UI. Google S2 and third-party icon
-  aggregators are acceptable only as a temporary last resort and should not be
-  visible in primary rows after a QA pass.
+  remote CORS, hotlinking, and HTTP-only sources do not surface as broken
+  circles in the public UI. Google S2, DuckDuckGo, and similar third-party icon
+  services must not appear in public output. Missing verified logos should stay
+  as clean text slots until a proper asset is found.
+- For compact 40px slots, a verified official symbol can be better than a full
+  wordmark when the wordmark collapses into an unreadable line. Do not use this
+  as permission to grab arbitrary favicons; the symbol must be official,
+  brand-owned, and visually clearer than the wordmark.
 - Tags: one-line by default. Use a small text-like `더보기 N` control when tags
   overflow. Do not use dark pill buttons for hidden tags.
 - Row dividers: sparse 1px neutral separators only between rows. Avoid stacked
@@ -253,7 +261,7 @@ Use the newsletter screen as the reference for shared public UI polish.
   latest/rank signal, key amount/count, and relevant connection.
 - News, LP, and GP list rows should share the same 40px circular logo-slot
   treatment. Detail hero logos may be larger, but must keep the same muted
-  container, neutral border, and favicon blending behavior.
+  container, neutral border, and monogram fallback behavior.
 - Detail pages should use fact matrix, history/news tables, source-linked
   sections, and quiet typography.
 - LP detail pages follow this public reading order: identity header, basic
