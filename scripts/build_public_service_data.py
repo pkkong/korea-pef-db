@@ -216,14 +216,173 @@ def project_mapped(row: dict[str, object], keys: list[str | tuple[str, str]]) ->
     return projected
 
 
+def numeric(value: object) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def notice_sort_value(row: dict[str, object]) -> str:
+    return str(row.get("event_date") or row.get("announced_date") or row.get("discovered_at") or "")
+
+
+def notice_year(row: dict[str, object]) -> int | None:
+    value = row.get("notice_year")
+    if value not in {None, ""}:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            pass
+    for key in ("event_date", "announced_date", "discovered_at"):
+        value = str(row.get(key) or "")
+        if len(value) >= 4 and value[:4].isdigit():
+            return int(value[:4])
+    return None
+
+
+def build_lp_notice_stats(notices: list[dict[str, object]]) -> dict[str, dict[str, object]]:
+    notices_by_code: dict[str, list[dict[str, object]]] = {}
+    for row in notices:
+        lp_code = str(row.get("lp_code") or "").strip()
+        if lp_code:
+            notices_by_code.setdefault(lp_code, []).append(row)
+
+    stats_by_code: dict[str, dict[str, object]] = {}
+    for lp_code, lp_notices in notices_by_code.items():
+        sorted_notices = sorted(lp_notices, key=notice_sort_value, reverse=True)
+        source_counts: dict[str, int] = {}
+        event_counts: dict[str, int] = {}
+        for notice in sorted_notices:
+            source_type = str(notice.get("source_type") or "")
+            event_type = str(notice.get("event_type") or "")
+            source_counts[source_type] = source_counts.get(source_type, 0) + 1
+            event_counts[event_type] = event_counts.get(event_type, 0) + 1
+        latest_notice = sorted_notices[0] if sorted_notices else {}
+        stats_by_code[lp_code] = {
+            "notice_count": len(sorted_notices),
+            "official_notice_count": source_counts.get("official", 0),
+            "news_notice_count": source_counts.get("news", 0),
+            "new_notice_count": event_counts.get("new_notice", 0),
+            "deadline_soon_count": event_counts.get("deadline_soon", 0),
+            "selection_event_count": event_counts.get("shortlist", 0) + event_counts.get("final_selection", 0),
+            "allocation_amount_krw_100mn": round(
+                sum(numeric(row.get("allocation_amount_krw_100mn")) for row in sorted_notices),
+                4,
+            ),
+            "commitment_amount_krw_100mn": round(
+                sum(numeric(row.get("commitment_amount_krw_100mn")) for row in sorted_notices),
+                4,
+            ),
+            "latest_event_date": latest_notice.get("event_date") or "",
+            "latest_announced_date": latest_notice.get("announced_date") or "",
+            "latest_discovered_at": latest_notice.get("discovered_at") or "",
+            "latest_notice_title": latest_notice.get("title") or "",
+            "latest_notice_url": latest_notice.get("notice_url") or "",
+            "latest_notice_event_type": latest_notice.get("event_type") or "",
+        }
+    return stats_by_code
+
+
+def with_lp_notice_stats(row: dict[str, object], stats_by_code: dict[str, dict[str, object]]) -> dict[str, object]:
+    stats = stats_by_code.get(str(row.get("lp_code") or "").strip(), {})
+    merged = dict(row)
+    for key in (
+        "notice_count",
+        "official_notice_count",
+        "news_notice_count",
+        "new_notice_count",
+        "deadline_soon_count",
+        "selection_event_count",
+        "allocation_amount_krw_100mn",
+        "commitment_amount_krw_100mn",
+        "latest_event_date",
+        "latest_announced_date",
+        "latest_discovered_at",
+        "latest_notice_title",
+        "latest_notice_url",
+        "latest_notice_event_type",
+    ):
+        if key in merged or key in LP_PROFILE_KEYS:
+            merged[key] = stats.get(key, 0 if key.endswith("_count") else "")
+    return merged
+
+
+def build_lp_institution_stats(
+    institutions: list[dict[str, object]],
+    stats_by_code: dict[str, dict[str, object]],
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for institution in institutions:
+        lp_code = str(institution.get("lp_code") or "").strip()
+        stats = stats_by_code.get(lp_code)
+        if not stats:
+            continue
+        rows.append(
+            {
+                "lp_code": lp_code,
+                "lp_name": institution.get("lp_name") or "",
+                "lp_type": institution.get("lp_type") or "",
+                "default_team": institution.get("default_team") or "",
+                "focus_asset_classes": institution.get("focus_asset_classes") or "",
+                "service_priority": institution.get("service_priority") or "",
+                "notice_count": stats.get("notice_count", 0),
+                "allocation_amount_krw_100mn": stats.get("allocation_amount_krw_100mn", 0),
+                "commitment_amount_krw_100mn": stats.get("commitment_amount_krw_100mn", 0),
+                "latest_event_date": stats.get("latest_event_date", ""),
+                "latest_announced_date": stats.get("latest_announced_date", ""),
+                "latest_discovered_at": stats.get("latest_discovered_at", ""),
+            }
+        )
+    return sorted(
+        rows,
+        key=lambda row: (-int(row.get("service_priority") or 0), -int(row.get("notice_count") or 0), str(row.get("lp_name") or "")),
+    )
+
+
+def build_lp_yearly_stats(notices: list[dict[str, object]]) -> list[dict[str, object]]:
+    rows_by_key: dict[tuple[int, str], dict[str, object]] = {}
+    for notice in notices:
+        year = notice_year(notice)
+        lp_code = str(notice.get("lp_code") or "").strip()
+        if year is None or not lp_code:
+            continue
+        row = rows_by_key.setdefault(
+            (year, lp_code),
+            {
+                "notice_year": year,
+                "lp_code": lp_code,
+                "lp_name": notice.get("lp_name") or "",
+                "notice_count": 0,
+                "allocation_amount_krw_100mn": 0.0,
+                "commitment_amount_krw_100mn": 0.0,
+            },
+        )
+        row["notice_count"] = int(row["notice_count"]) + 1
+        row["allocation_amount_krw_100mn"] = round(
+            numeric(row["allocation_amount_krw_100mn"]) + numeric(notice.get("allocation_amount_krw_100mn")),
+            4,
+        )
+        row["commitment_amount_krw_100mn"] = round(
+            numeric(row["commitment_amount_krw_100mn"]) + numeric(notice.get("commitment_amount_krw_100mn")),
+            4,
+        )
+    return sorted(
+        rows_by_key.values(),
+        key=lambda row: (-int(row.get("notice_year") or 0), -numeric(row.get("commitment_amount_krw_100mn")), -int(row.get("notice_count") or 0), str(row.get("lp_name") or "")),
+    )
+
+
 def build_payload(data: dict[str, object]) -> dict[str, object]:
     payload = {key: data.get(key, []) for key in PUBLIC_KEYS}
     public_lp_notice_rows = [
         row
         for row in data.get("lp_commitment_notices", [])
-        if isinstance(row, dict) and is_public_lp_notice_row(row)
+        if isinstance(row, dict) and is_public_lp_notice_row(row, allow_official_candidates=True)
     ]
     public_lp_notice_ids = {str(row.get("notice_id") or "") for row in public_lp_notice_rows if row.get("notice_id") not in {None, ""}}
+    lp_notice_stats = build_lp_notice_stats(public_lp_notice_rows)
+    lp_institutions = [row for row in data.get("lp_institutions", []) if isinstance(row, dict)]
     payload["meta"] = {
         "generated_at": data.get("meta", {}).get("generated_at", ""),
         "aum_basis": "금감원 PEF 운용 현황의 출자약정액 기준 지표",
@@ -236,10 +395,12 @@ def build_payload(data: dict[str, object]) -> dict[str, object]:
         if isinstance(row, dict)
     ]
     payload["lp_profiles"] = [
-        project(row, LP_PROFILE_KEYS)
+        project(with_lp_notice_stats(row, lp_notice_stats), LP_PROFILE_KEYS)
         for row in data.get("lp_profiles", [])
         if isinstance(row, dict)
     ]
+    payload["lp_institution_stats"] = build_lp_institution_stats(lp_institutions, lp_notice_stats)
+    payload["lp_commitment_yearly_stats"] = build_lp_yearly_stats(public_lp_notice_rows)
     payload["lp_commitment_notices"] = [
         project(row, LP_NOTICE_KEYS)
         for row in public_lp_notice_rows

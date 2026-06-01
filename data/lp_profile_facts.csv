@@ -149,3 +149,13 @@ ibk,general,본점,서울 중구 을지로 79,,IBK Corporate Data,https://global
 ibk,investment_status,정책금융 역할,SME 전 생애주기 지원을 위해 Scale-up·Level-up·Cycle-up 플랫폼을 제시,,IBK Co-up Financing,https://global.ibk.co.kr/en/company/CoUpFinancing,high,공식 영문 전략 페이지 기준,10,1
 ibk,notice_history,2026년 IBK 동행펀드,2026-05-18 공고·출자금액 총 1200억원 이내·6개 운용사 선정 예정,2026-05-18,한국벤처캐피탈협회 출자공고,https://www.kvca.or.kr/Program/invest/listbody.html?a_cd=8&a_gb=board&a_item=0&key=&keyfield=&page=1&po_no=852&sm=2_2_2,medium,KVCA 출자공고 백업 기준. IBK 자체 게시 여부는 미확정,10,1
 ibk,data_gap,공개자료 한계,IBK 자체 공고 채널은 미확정이며 2026년 동행펀드는 KVCA 출자공고에서 우선 확인,2026-05-28,한국벤처캐피탈협회 출자공고,https://www.kvca.or.kr/Program/invest/listbody.html?a_cd=8&a_gb=board&a_item=0&key=&keyfield=&page=1&po_no=852&sm=2_2_2,medium,백업 채널로 출처 품질을 구분,10,1
+geps,notice_history,위탁운용사 선정결과 공시,대체투자 선정결과에 국내 블라인드 벤처펀드·국내 부동산 블라인드 펀드·국내 인프라 블라인드 펀드·해외 사모펀드 등 자산군별 운용기관을 공개,2026-03-31,공무원연금공단 위탁운용사 선정결과,https://www.geps.or.kr/mgtNotice_financialAsset_financialCondition_tradingInstitution_selectionCmc,high,공식 경영공시 작성기준일 기준,10,1
+geps,notice_history,대체투자 운용기관 예시,국내 블라인드 벤처펀드: 아주IB투자·IMM인베스트먼트·SV인베스트먼트; 해외 사모펀드: Bridgepoint·HGGC·Triton·Barings·Blackstone·Goldman Sachs·Golub,2026-03-31,공무원연금공단 위탁운용사 선정결과,https://www.geps.or.kr/mgtNotice_financialAsset_financialCondition_tradingInstitution_selectionCmc,high,공식 선정결과 표 기준,20,1
+mmaa,general,설립 근거,군인공제회법에 따른 군인공제회,,국가법령정보센터 군인공제회법,https://www.law.go.kr/법령/군인공제회법,high,공식 법령 기준,10,1
+mmaa,general,목적,군인 및 군무원의 생활안정과 복지증진을 도모하고 국군의 전력 향상에 이바지,,국가법령정보센터 군인공제회법,https://www.law.go.kr/법령/군인공제회법,high,군인공제회법 목적 조항 기준,20,1
+cwma,notice_history,선정공고(자산운용) 게시판,공식 알림사항에 선정공고(자산운용) 게시판을 운영하며 위탁운용사 선정 공고와 대체투자 선정계획을 게시,2026-04-15,건설근로자공제회 홈페이지,https://www.cw.or.kr/index.do,high,공식 홈페이지 게시판 노출 기준,10,1
+cwma,notice_history,2026년 대체투자 위탁운용사 선정계획,2026년도 대체투자(국내 부동산 선순위 대출펀드) 위탁운용사 선정계획 게시,2026-01-15,건설근로자공제회 선정공고(자산운용),https://www.cw.or.kr/board.do?boardConfigNo=29&menuNo=248&action=view&boardNo=33936,high,공식 홈페이지 선정공고 목록 기준,20,1
+nps,public_people,기금운용본부장,서원주,,국민연금기금운용본부 조직 및 인력,https://fund.nps.or.kr/edwmintr/ognzprsn/getOHEB0010M0.do,high,공식 조직 및 인력 페이지 기준,10,1
+nps,public_people,사모·벤처투자실장,최형돈,,국민연금기금운용본부 조직 및 인력,https://fund.nps.or.kr/edwmintr/ognzprsn/getOHEB0010M0.do,high,공식 조직 및 인력 페이지 기준,20,1
+kvic,public_people,대표이사,이대희,,한국벤처투자 대표이사 소개,https://www.kvic.or.kr/about-kvic/introduce-executive-team/about-ceo,high,공식 경영진 소개 페이지 기준,10,1
+kvic,investment_org,펀드운용 조직,펀드운용1본부·펀드운용2본부·펀드관리본부·글로벌본부·지역성장본부 등이 모태펀드 운용과 출자펀드 사후관리 업무를 수행,,한국벤처투자 조직 및 인원,https://kvic.or.kr/about-kvic/organization,high,공식 조직 및 인원 페이지 기준,20,1

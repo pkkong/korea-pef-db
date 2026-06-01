@@ -1714,12 +1714,12 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-profile-nav a {{ min-height: 32px; display: inline-flex; align-items: center; border: 1px solid var(--separator); border-radius: 999px; padding: 6px 10px; background: #fff; color: var(--secondary); text-decoration: none; font-size: 12px; font-weight: 800; }}
     .ktcu-hero {{ display: grid; gap: 18px; padding: 8px 0 8px; }}
     .ktcu-title {{ display: grid; gap: 10px; }}
-    .ktcu-title-head {{ display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 14px; align-items: center; }}
-    .ktcu-logo {{ position: relative; display: inline-grid; width: 54px; height: 54px; box-sizing: border-box; place-items: center; overflow: hidden; border: 1px solid #dde3ea; border-radius: 50%; background: #f4f6f8; color: var(--text); font-size: 12px; font-weight: 900; box-shadow: none; }}
+    .ktcu-title-head {{ display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; }}
+    .ktcu-logo {{ position: relative; display: inline-grid; width: 40px; height: 40px; box-sizing: border-box; place-items: center; overflow: hidden; border: 1px solid #dde3ea; border-radius: 50%; background: #f4f6f8; color: var(--text); font-size: 10px; font-weight: 900; box-shadow: none; }}
     .ktcu-logo.has-logo {{ border-color: var(--logo-border, #e2e5ea); background: var(--logo-bg, #fff); }}
     .ktcu-logo.has-logo.fallback-only {{ border-color: #dde3ea; background: #f4f6f8; }}
     .ktcu-logo > span {{ position: relative; z-index: 1; }}
-    .ktcu-logo img {{ position: relative; z-index: 2; width: var(--logo-detail-img-width, var(--logo-img-width, 38px)); height: var(--logo-detail-img-height, var(--logo-img-height, 38px)); object-fit: contain; mix-blend-mode: normal; }}
+    .ktcu-logo img {{ position: relative; z-index: 2; width: var(--logo-detail-img-width, var(--logo-img-width, 27px)); height: var(--logo-detail-img-height, var(--logo-img-height, 27px)); object-fit: contain; mix-blend-mode: normal; }}
     .ktcu-logo.has-logo > span {{ display: none; }}
     .ktcu-logo.fallback-only > span {{ display: inline; }}
     .ktcu-logo[data-tone] {{ color: var(--text); }}
@@ -1860,18 +1860,6 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       .ktcu-peer-row span:nth-of-type(1) {{ display: none; }}
       .ktcu-peer-head {{ display: none; }}
       .ktcu-source-coverage {{ grid-template-columns: 1fr; }}
-    }}
-    .ktcu-title-head {{
-      grid-template-columns: 50px minmax(0, 1fr);
-      gap: 12px;
-    }}
-    .ktcu-logo {{
-      width: 50px;
-      height: 50px;
-    }}
-    .ktcu-logo img {{
-      width: var(--logo-detail-img-width, var(--logo-img-width, 35px));
-      height: var(--logo-detail-img-height, var(--logo-img-height, 35px));
     }}
     .ktcu-title-head div > span {{
       border-left: 0;
@@ -2342,7 +2330,7 @@ def render_lp_notices_page(
     .lp-notice-table {{ overflow: hidden; border: 1px solid var(--separator); border-radius: 6px; background: var(--surface); }}
     .lp-directory-head {{
       display: grid;
-      grid-template-columns: 44px minmax(0, 1fr) 82px 74px;
+      grid-template-columns: 40px minmax(0, 1fr) 76px 64px;
       gap: 8px;
       align-items: center;
       min-height: 44px;
@@ -2364,7 +2352,7 @@ def render_lp_notices_page(
     .lp-directory-head span:nth-child(5)::after {{ content: "공고"; font-size: 12px; }}
     .lp-notice-head {{ display: none; }}
     .lp-directory-grid {{ display: grid; gap: 0; margin-bottom: 16px; }}
-    .lp-directory-card {{ display: grid; grid-template-columns: 44px minmax(0, 1fr) 82px 74px; gap: 8px; align-items: center; min-height: 70px; border-bottom: 1px solid var(--separator); padding: 9px 10px; background: var(--surface); }}
+    .lp-directory-card {{ display: grid; grid-template-columns: 40px minmax(0, 1fr) 76px 64px; gap: 8px; align-items: center; min-height: 68px; border-bottom: 1px solid var(--separator); padding: 9px 10px; background: var(--surface); }}
     .lp-directory-card:hover {{ background: #fbfcfd; }}
     .lp-directory-card:last-child {{ border-bottom: 0; }}
     .lp-directory-avatar {{ position: relative; display: inline-grid; width: 40px; height: 40px; box-sizing: border-box; place-items: center; overflow: hidden; border: 1px solid #dde3ea; border-radius: 50%; background: #f4f6f8; color: var(--text); font-size: 10px; font-weight: 900; letter-spacing: 0; box-shadow: none; }}
@@ -2398,8 +2386,9 @@ def render_lp_notices_page(
     .lp-page-card h2 a {{ color: inherit; text-decoration: none; }}
     .lp-page-meta {{ display: flex; flex-wrap: wrap; gap: 6px; color: var(--secondary); font-size: 12px; line-height: 1.35; }}
     .lp-page-meta span + span::before {{ content: "·"; margin-right: 6px; color: var(--tertiary); }}
-    .lp-page-actions {{ display: flex; flex-wrap: wrap; gap: 8px; }}
-    .lp-page-actions a {{ display: inline-flex; min-height: 30px; align-items: center; border-radius: 6px; padding: 5px 8px; background: var(--surface-muted); color: var(--text); font-size: 12px; font-weight: 700; text-decoration: none; }}
+    .lp-page-actions {{ display: flex; flex-wrap: wrap; gap: 6px; }}
+    .lp-page-actions a {{ display: inline-flex; min-height: 28px; align-items: center; border-radius: 4px; padding: 4px 6px; background: transparent; color: var(--secondary); font-size: 12px; font-weight: 650; text-decoration: none; }}
+    .lp-page-actions a:hover {{ color: var(--text); text-decoration: underline; text-underline-offset: 3px; }}
     @media (min-width: 760px) {{
       body.lp-notices-page .app-shell {{ margin-top: 0; margin-bottom: 0; min-height: 100vh; border-radius: 0; box-shadow: none; }}
       .lp-directory-hero h1 {{ font-size: 38px; }}
@@ -2418,11 +2407,11 @@ def render_lp_notices_page(
       .lp-notice-table {{ border: 1px solid var(--separator); background: var(--surface); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }}
       .lp-directory-head {{
         display: grid;
-        grid-template-columns: 52px minmax(220px, 1.15fr) minmax(260px, 1.25fr) minmax(110px, 0.55fr) minmax(120px, 0.6fr) minmax(140px, 0.65fr);
-        gap: 18px;
+        grid-template-columns: 44px minmax(170px, 1.2fr) minmax(140px, 0.9fr) minmax(92px, 0.45fr) minmax(88px, 0.4fr) minmax(108px, 0.5fr);
+        gap: 12px;
         align-items: center;
         min-height: 48px;
-        padding: 0 18px;
+        padding: 0 14px;
         border-bottom: 1px solid var(--separator);
         background: #f4f5f6;
         color: var(--secondary);
@@ -2440,13 +2429,13 @@ def render_lp_notices_page(
       .lp-directory-head span:nth-child(5)::after {{ content: none; }}
       .lp-directory-grid {{ grid-template-columns: minmax(0, 1fr); gap: 0; margin-bottom: 0; }}
       .lp-directory-card {{
-        grid-template-columns: 52px minmax(220px, 1.15fr) minmax(260px, 1.25fr) minmax(110px, 0.55fr) minmax(120px, 0.6fr) minmax(140px, 0.65fr);
-        gap: 18px;
+        grid-template-columns: 44px minmax(170px, 1.2fr) minmax(140px, 0.9fr) minmax(92px, 0.45fr) minmax(88px, 0.4fr) minmax(108px, 0.5fr);
+        gap: 12px;
         align-items: center;
         border: 0;
         border-bottom: 1px solid var(--separator);
         border-radius: 0;
-        padding: 16px 18px;
+        padding: 15px 14px;
         box-shadow: none;
       }}
       .lp-directory-card:last-child {{ border-bottom: 0; }}
@@ -2602,7 +2591,7 @@ def render_lp_notices_page(
       background: #ffffff;
     }}
     .lp-directory-head {{
-      grid-template-columns: 44px minmax(0, 1fr) 82px 72px;
+      grid-template-columns: 40px minmax(0, 1fr) 76px 64px;
       min-height: 42px;
       background: #f7f7f8;
       color: var(--secondary);
@@ -2620,7 +2609,7 @@ def render_lp_notices_page(
       font-size: 12px;
     }}
     .lp-directory-card {{
-      grid-template-columns: 44px minmax(0, 1fr) 82px 72px;
+      grid-template-columns: 40px minmax(0, 1fr) 76px 64px;
       min-height: 68px;
       padding: 9px 10px;
       box-shadow: none;
@@ -2673,8 +2662,9 @@ def render_lp_notices_page(
       font-weight: 650;
     }}
     .lp-page-actions a {{
-      background: #f7f7f8;
-      font-weight: 650;
+      background: transparent;
+      color: var(--secondary);
+      font-weight: 620;
     }}
     @media (min-width: 760px) {{
       body.lp-notices-page .app-shell {{
@@ -2699,8 +2689,8 @@ def render_lp_notices_page(
         grid-template-columns: 180px 180px;
       }}
       .lp-directory-head {{
-        grid-template-columns: 52px minmax(220px, 1.15fr) minmax(260px, 1.25fr) minmax(110px, 0.55fr) minmax(120px, 0.6fr) minmax(140px, 0.65fr);
-        gap: 18px;
+        grid-template-columns: 44px minmax(170px, 1.2fr) minmax(140px, 0.9fr) minmax(92px, 0.45fr) minmax(88px, 0.4fr) minmax(108px, 0.5fr);
+        gap: 12px;
         text-align: left;
       }}
       .lp-directory-head span:nth-child(3),
@@ -2728,9 +2718,9 @@ def render_lp_notices_page(
         content: none;
       }}
       .lp-directory-card {{
-        grid-template-columns: 52px minmax(220px, 1.15fr) minmax(260px, 1.25fr) minmax(110px, 0.55fr) minmax(120px, 0.6fr) minmax(140px, 0.65fr);
-        gap: 18px;
-        padding: 15px 18px;
+        grid-template-columns: 44px minmax(170px, 1.2fr) minmax(140px, 0.9fr) minmax(92px, 0.45fr) minmax(88px, 0.4fr) minmax(108px, 0.5fr);
+        gap: 12px;
+        padding: 15px 14px;
       }}
       .lp-directory-focus {{
         display: block;

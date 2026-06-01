@@ -27,6 +27,7 @@ from services.newsletter.src.daily_news_common import (
     load_gp_aliases,
     match_gp_entities,
     matches_must_contain,
+    normalize_for_match,
     normalize_url,
     normalize_whitespace,
     now_utc_iso,
@@ -1690,16 +1691,83 @@ def clear_auto_candidates(conn: sqlite3.Connection) -> int:
     return int(cursor.rowcount or 0)
 
 
+def split_selected_gp_names(value: str) -> list[str]:
+    return [
+        part.strip()
+        for part in re.split(r"[,;]", value or "")
+        if part.strip()
+    ]
+
+
+def notice_gp_alias_indexes(gp_aliases: object) -> tuple[dict[str, object], dict[str, object]]:
+    exact_candidates: dict[str, object | None] = {}
+    normalized_candidates: dict[str, object | None] = {}
+    for alias in gp_aliases:
+        values = [
+            getattr(alias, "alias_name", ""),
+            getattr(alias, "canonical_name", ""),
+        ]
+        for value in values:
+            exact_key = normalize_whitespace(str(value or "")).lower()
+            if exact_key:
+                current_exact = exact_candidates.get(exact_key)
+                if current_exact is None and exact_key in exact_candidates:
+                    continue
+                if (
+                    current_exact is not None
+                    and getattr(current_exact, "gp_id", None) != getattr(alias, "gp_id", None)
+                ):
+                    exact_candidates[exact_key] = None
+                else:
+                    exact_candidates[exact_key] = alias
+
+            normalized_key = normalize_for_match(str(value or ""))
+            if not normalized_key:
+                continue
+            current = normalized_candidates.get(normalized_key)
+            if current is None and normalized_key in normalized_candidates:
+                continue
+            if (
+                current is not None
+                and getattr(current, "gp_id", None) != getattr(alias, "gp_id", None)
+            ):
+                normalized_candidates[normalized_key] = None
+            else:
+                normalized_candidates[normalized_key] = alias
+
+    exact_by_name = {
+        key: alias
+        for key, alias in exact_candidates.items()
+        if alias is not None
+    }
+    normalized_by_name = {
+        key: alias
+        for key, alias in normalized_candidates.items()
+        if alias is not None
+    }
+    return exact_by_name, normalized_by_name
+
+
+def resolve_notice_gp_alias(
+    name: str,
+    exact_by_name: dict[str, object],
+    normalized_by_name: dict[str, object],
+) -> object | None:
+    cleaned = normalize_whitespace(name)
+    if not cleaned or cleaned in GP_EXCLUSION_NAMES:
+        return None
+    exact_key = cleaned.lower()
+    alias = exact_by_name.get(exact_key)
+    if alias is not None:
+        return alias
+    return normalized_by_name.get(normalize_for_match(cleaned))
+
+
 def refresh_notice_links(conn: sqlite3.Connection, gp_aliases: object) -> tuple[int, int]:
     conn.execute("DELETE FROM lp_notice_gp_link")
     conn.execute("DELETE FROM lp_notice_news_link")
 
-    alias_by_name: dict[str, object] = {}
-    for alias in gp_aliases:
-        for value in [getattr(alias, "alias_name", ""), getattr(alias, "canonical_name", "")]:
-            key = normalize_whitespace(str(value or "")).lower()
-            if key and key not in alias_by_name:
-                alias_by_name[key] = alias
+    exact_by_name, normalized_by_name = notice_gp_alias_indexes(gp_aliases)
 
     gp_links = 0
     for notice_id, lp_code, selected_names, source_type, event_type in conn.execute(
@@ -1710,8 +1778,8 @@ def refresh_notice_links(conn: sqlite3.Connection, gp_aliases: object) -> tuple[
           AND COALESCE(selected_gp_names, '') <> ''
         """
     ):
-        for name in split_semicolon(str(selected_names or "")):
-            alias = alias_by_name.get(normalize_whitespace(name).lower())
+        for name in split_selected_gp_names(str(selected_names or "")):
+            alias = resolve_notice_gp_alias(name, exact_by_name, normalized_by_name)
             if alias is None:
                 continue
             link_confidence = "high" if source_type == "official" and event_type in {"final_selection", "shortlist"} else "medium" if event_type in {"final_selection", "shortlist"} else "low"

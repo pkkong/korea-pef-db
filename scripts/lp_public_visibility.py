@@ -20,7 +20,11 @@ def public_visible_value(value: object) -> bool:
     return str(value if value is not None else "1").strip().lower() not in LP_PUBLIC_FALSE_VALUES
 
 
-def is_public_lp_notice_row(row: dict[str, object], require_official: bool = False) -> bool:
+def is_public_lp_notice_row(
+    row: dict[str, object],
+    require_official: bool = False,
+    allow_official_candidates: bool = False,
+) -> bool:
     """Return True for public LP notice rows.
 
     News-derived candidates stay hidden until reviewed. Official-channel
@@ -29,18 +33,18 @@ def is_public_lp_notice_row(row: dict[str, object], require_official: bool = Fal
     """
     if not public_visible_value(row.get("public_visible", 1)):
         return False
-    source_type = str(row.get("source_type") or "").strip()
+    source_type = str(row.get("source_type") or "").strip().lower()
     if require_official and source_type != "official":
         return False
     event_type = str(row.get("event_type") or "").strip().lower()
-    if event_type in LP_NON_PUBLIC_EVENT_TYPES:
+    if not event_type or event_type in LP_NON_PUBLIC_EVENT_TYPES:
         return False
     confidence = str(row.get("confidence") or "").strip().lower()
     if confidence in LP_NON_PUBLIC_CONFIDENCE_VALUES:
         return False
     monitor_status = str(row.get("monitor_status") or "").strip().lower()
     if monitor_status in LP_NON_PUBLIC_MONITOR_STATUSES:
-        if require_official and source_type == "official" and monitor_status == "candidate":
+        if (require_official or allow_official_candidates) and source_type == "official" and monitor_status == "candidate":
             return True
         return False
     return True
