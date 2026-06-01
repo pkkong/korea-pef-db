@@ -19,6 +19,7 @@ from urllib.request import urlopen
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SERVICE_ROOT.parents[1]
+SRC_DIR = Path(__file__).resolve().parent
 DEFAULT_DEPLOY_DIR = SERVICE_ROOT / "deploy"
 DEFAULT_SITE_DIR = DEFAULT_DEPLOY_DIR / "site"
 DEFAULT_DB = REPO_ROOT / "db" / "private_equity.db"
@@ -95,8 +96,11 @@ KTCU_FACT_SECTION_ORDER = {
 }
 
 LEGACY_SCRIPTS_DIR = REPO_ROOT / "scripts"
+if str(SRC_DIR) not in sys.path:
+    sys.path.append(str(SRC_DIR))
 if str(LEGACY_SCRIPTS_DIR) not in sys.path:
     sys.path.append(str(LEGACY_SCRIPTS_DIR))
+from brand_assets import brand_logo_url, brand_style_attr  # noqa: E402
 from build_service_site import (  # noqa: E402
     DEFAULT_ARCHIVE_LIMIT,
     DEFAULT_EXPORT_DIR,
@@ -693,39 +697,11 @@ def directory_avatar_tone(value: object) -> int:
 
 
 def directory_logo_url(url: object) -> str:
-    raw = str(url or "").strip()
-    if not raw:
-        return ""
-    parsed = urlparse(raw if re.match(r"^https?://", raw, re.I) else f"https://{raw}")
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        return ""
-    domain = parsed.netloc.lower().removeprefix("www.")
-    return f"https://www.google.com/s2/favicons?domain={html_escape(domain)}&sz=64"
-
-
-LOGO_BRAND_THEMES: dict[str, tuple[str, str]] = {
-    "hankyung.com": ("#17376f", "#17376f"),
-    "marketinsight.hankyung.com": ("#17376f", "#17376f"),
-    "naver.com": ("#03c75a", "#03c75a"),
-    "thevc.kr": ("#111827", "#111827"),
-    "mbkpartners.com": ("#183f7a", "#183f7a"),
-    "mbkpartnerslp.com": ("#183f7a", "#183f7a"),
-    "hcompany.com": ("#111111", "#111111"),
-    "immholdings.co.kr": ("#6fca55", "#6fca55"),
-    "imminvestment.com": ("#6fca55", "#6fca55"),
-}
+    return brand_logo_url(url)
 
 
 def directory_logo_style(url: object) -> str:
-    raw = str(url or "").strip()
-    if not raw:
-        return ""
-    parsed = urlparse(raw if re.match(r"^https?://", raw, re.I) else f"https://{raw}")
-    domain = parsed.netloc.lower().removeprefix("www.")
-    for suffix, (background, border) in sorted(LOGO_BRAND_THEMES.items(), key=lambda item: len(item[0]), reverse=True):
-        if domain == suffix or domain.endswith(f".{suffix}"):
-            return f' style="--logo-bg: {background}; --logo-border: {border};"'
-    return ""
+    return brand_style_attr(url)
 
 
 def directory_avatar_markup(homepage_url: object, label: str, seed: object = "") -> str:
@@ -1743,7 +1719,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-logo.has-logo {{ border-color: var(--logo-border, #e2e5ea); background: var(--logo-bg, #fff); }}
     .ktcu-logo.has-logo.fallback-only {{ border-color: #dde3ea; background: #f4f6f8; }}
     .ktcu-logo > span {{ position: relative; z-index: 1; }}
-    .ktcu-logo img {{ position: relative; z-index: 2; width: 38px; height: 38px; object-fit: contain; mix-blend-mode: normal; }}
+    .ktcu-logo img {{ position: relative; z-index: 2; width: var(--logo-detail-img-width, var(--logo-img-width, 38px)); height: var(--logo-detail-img-height, var(--logo-img-height, 38px)); object-fit: contain; mix-blend-mode: normal; }}
     .ktcu-logo.has-logo > span {{ display: none; }}
     .ktcu-logo.fallback-only > span {{ display: inline; }}
     .ktcu-logo[data-tone] {{ color: var(--text); }}
@@ -1894,8 +1870,8 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       height: 50px;
     }}
     .ktcu-logo img {{
-      width: 35px;
-      height: 35px;
+      width: var(--logo-detail-img-width, var(--logo-img-width, 35px));
+      height: var(--logo-detail-img-height, var(--logo-img-height, 35px));
     }}
     .ktcu-title-head div > span {{
       border-left: 0;
@@ -2395,7 +2371,7 @@ def render_lp_notices_page(
     .lp-directory-avatar.has-logo {{ border-color: var(--logo-border, #e2e5ea); background: var(--logo-bg, #fff); }}
     .lp-directory-avatar.has-logo.fallback-only {{ border-color: #dde3ea; background: #f4f6f8; }}
     .lp-directory-avatar > span {{ position: relative; z-index: 1; }}
-    .lp-directory-avatar img {{ position: relative; z-index: 2; width: 27px; height: 27px; object-fit: contain; mix-blend-mode: normal; }}
+    .lp-directory-avatar img {{ position: relative; z-index: 2; width: var(--logo-img-width, 27px); height: var(--logo-img-height, 27px); object-fit: contain; mix-blend-mode: normal; }}
     .lp-directory-avatar.has-logo > span {{ display: none; }}
     .lp-directory-avatar.fallback-only > span {{ display: inline; }}
     .lp-directory-avatar[data-tone] {{ color: var(--text); }}

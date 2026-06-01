@@ -11,7 +11,6 @@ import struct
 import sys
 import zlib
 from pathlib import Path
-from urllib.parse import urlparse
 
 from daily_news_common import DEFAULT_EXPORT_DIR, REPO_ROOT, clean_news_title, normalize_url, normalize_whitespace, split_news_title_badges, today_seoul
 from lp_public_visibility import is_public_lp_notice_row
@@ -20,6 +19,7 @@ NEWSLETTER_SRC = REPO_ROOT / "services" / "newsletter" / "src"
 if str(NEWSLETTER_SRC) not in sys.path:
     sys.path.append(str(NEWSLETTER_SRC))
 
+from brand_assets import brand_logo_url, brand_style_string, domain_from_url  # noqa: E402
 from pef_wiki_pages import render_pef_wiki_page  # noqa: E402
 
 DEFAULT_PUBLIC_DIR = REPO_ROOT / "public"
@@ -710,34 +710,11 @@ def publisher_badge(source: str) -> str:
 
 
 def source_domain(url: str) -> str:
-    hostname = urlparse(url or "").hostname or ""
-    return hostname.removeprefix("www.")
+    return domain_from_url(url)
 
 
-def source_icon_url(url: str) -> str:
-    domain = source_domain(url)
-    if not domain:
-        return ""
-    return f"https://www.google.com/s2/favicons?domain={domain}&sz=64"
-
-
-LOGO_BRAND_THEMES: dict[str, tuple[str, str]] = {
-    "hankyung.com": ("#17376f", "#17376f"),
-    "marketinsight.hankyung.com": ("#17376f", "#17376f"),
-    "naver.com": ("#03c75a", "#03c75a"),
-    "thevc.kr": ("#111827", "#111827"),
-    "hcompany.com": ("#111111", "#111111"),
-    "immholdings.co.kr": ("#6fca55", "#6fca55"),
-    "imminvestment.com": ("#6fca55", "#6fca55"),
-}
-
-
-def logo_brand_style(domain: str) -> str:
-    domain = (domain or "").lower().removeprefix("www.")
-    for suffix, (background, border) in sorted(LOGO_BRAND_THEMES.items(), key=lambda item: len(item[0]), reverse=True):
-        if domain == suffix or domain.endswith(f".{suffix}"):
-            return f"--logo-bg: {background}; --logo-border: {border};"
-    return ""
+def source_icon_url(url: str, source: str = "") -> str:
+    return brand_logo_url(url, source)
 
 
 def section_sort_key(section: str) -> int:
@@ -1074,8 +1051,8 @@ def article_payload_rows(
                 "titleBadges": title_badges,
                 "source": row.get("source", ""),
                 "sourceBadge": publisher_badge(row.get("source", "")),
-                "sourceIconUrl": source_icon_url(row.get("url", "")),
-                "sourceIconStyle": logo_brand_style(source_domain(row.get("url", ""))),
+                "sourceIconUrl": source_icon_url(row.get("url", ""), row.get("source", "")),
+                "sourceIconStyle": brand_style_string(row.get("url", ""), row.get("source", "")),
                 "url": row.get("url", ""),
                 "sectionOrder": section_sort_key(section),
                 "gpNames": gp_names,
@@ -2025,8 +2002,8 @@ button, input { font: inherit; }
   margin-top: 1px;
 }
 .publisher-icon img {
-  width: 27px;
-  height: 27px;
+  width: var(--logo-img-width, 27px);
+  height: var(--logo-img-height, 27px);
   border: 0;
   border-radius: 0;
   background: transparent;

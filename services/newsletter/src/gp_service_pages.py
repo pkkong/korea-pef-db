@@ -11,6 +11,7 @@ from collections import defaultdict
 from pathlib import Path
 from urllib.parse import urlparse
 
+from brand_assets import brand_logo_url, brand_style_attr
 from daily_news_common import normalize_url
 
 
@@ -1308,35 +1309,11 @@ def _identity_tone(value: object) -> int:
 
 
 def _favicon_url(url: object) -> str:
-    safe = _safe_url(url)
-    if not safe:
-        return ""
-    domain = urlparse(safe).netloc.removeprefix("www.")
-    return f"https://www.google.com/s2/favicons?domain={_e(domain)}&sz=64"
-
-
-LOGO_BRAND_THEMES: dict[str, tuple[str, str]] = {
-    "hankyung.com": ("#17376f", "#17376f"),
-    "marketinsight.hankyung.com": ("#17376f", "#17376f"),
-    "naver.com": ("#03c75a", "#03c75a"),
-    "thevc.kr": ("#111827", "#111827"),
-    "mbkpartners.com": ("#183f7a", "#183f7a"),
-    "mbkpartnerslp.com": ("#183f7a", "#183f7a"),
-    "hcompany.com": ("#111111", "#111111"),
-    "immholdings.co.kr": ("#6fca55", "#6fca55"),
-    "imminvestment.com": ("#6fca55", "#6fca55"),
-}
+    return brand_logo_url(_safe_url(url))
 
 
 def _logo_style_attr(url: object) -> str:
-    safe = _safe_url(url)
-    if not safe:
-        return ""
-    domain = urlparse(safe).netloc.lower().removeprefix("www.")
-    for suffix, (background, border) in sorted(LOGO_BRAND_THEMES.items(), key=lambda item: len(item[0]), reverse=True):
-        if domain == suffix or domain.endswith(f".{suffix}"):
-            return f' style="--logo-bg: {background}; --logo-border: {border};"'
-    return ""
+    return brand_style_attr(_safe_url(url))
 
 
 def _avatar_markup(homepage_url: object, label: str, seed: object) -> str:
@@ -1965,8 +1942,8 @@ def _base_styles() -> str:
     .gp-detail-logo img {
       position: relative;
       z-index: 2;
-      width: 38px;
-      height: 38px;
+      width: var(--logo-detail-img-width, var(--logo-img-width, 38px));
+      height: var(--logo-detail-img-height, var(--logo-img-height, 38px));
       mix-blend-mode: normal;
       object-fit: contain;
     }
@@ -2191,8 +2168,8 @@ def _base_styles() -> str:
     .gp-avatar img {
       position: relative;
       z-index: 2;
-      width: 27px;
-      height: 27px;
+      width: var(--logo-img-width, 27px);
+      height: var(--logo-img-height, 27px);
       mix-blend-mode: normal;
       object-fit: contain;
     }
@@ -3032,8 +3009,8 @@ def _base_styles() -> str:
       box-shadow: none;
     }
     .gp-avatar img {
-      width: 27px;
-      height: 27px;
+      width: var(--logo-img-width, 27px);
+      height: var(--logo-img-height, 27px);
     }
     .gp-card-title {
       gap: 2px;
@@ -3107,8 +3084,8 @@ def _base_styles() -> str:
       box-shadow: none;
     }
     .gp-detail-logo img {
-      width: 35px;
-      height: 35px;
+      width: var(--logo-detail-img-width, var(--logo-img-width, 35px));
+      height: var(--logo-detail-img-height, var(--logo-img-height, 35px));
     }
     .gp-detail-card {
       margin-top: 8px;
@@ -3312,8 +3289,8 @@ def _base_styles() -> str:
         height: 40px;
       }
       .gp-avatar img {
-        width: 27px;
-        height: 27px;
+        width: var(--logo-img-width, 27px);
+        height: var(--logo-img-height, 27px);
       }
       .gp-meta-line {
         display: grid;

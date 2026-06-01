@@ -222,12 +222,14 @@ Use the newsletter screen as the reference for shared public UI polish.
 - Publisher icon: circular 40px slot, aligned toward the top of the article row
   rather than vertically centered.
 - Public logo slots for news publishers, LPs, and GPs must use the same visual
-  treatment: circular container, thin neutral border, and favicon or CI centered
-  inside. Logo-backed slots default to white like InnoForest/TheVC directory
-  rows. Use curated domain-based brand backgrounds for known solid-color marks
-  such as NAVER or Hankyung instead of forcing every logo into a gray circle.
-  Scale favicon images to the standard inner size instead of preserving tiny
-  natural favicon dimensions. Do not draw a second inner ring inside the slot.
+  treatment: circular container, thin neutral border, and brand mark centered
+  inside. Asset priority is official compact CI/logo, official touch icon or
+  app icon, then favicon fallback. Logo-backed slots default to white like
+  InnoForest/TheVC directory rows. Use curated domain-based brand backgrounds
+  for known solid-color marks such as NAVER or Hankyung instead of forcing every
+  logo into a gray circle. Scale fallback favicon images to the standard inner
+  size instead of preserving tiny natural favicon dimensions. Do not draw a
+  second inner ring inside the slot.
 - Tags: one-line by default. Use a small text-like `더보기 N` control when tags
   overflow. Do not use dark pill buttons for hidden tags.
 - Row dividers: sparse 1px neutral separators only between rows. Avoid stacked
