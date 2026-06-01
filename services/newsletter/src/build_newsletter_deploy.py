@@ -1713,9 +1713,8 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-title {{ display: grid; gap: 10px; }}
     .ktcu-title-head {{ display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 14px; align-items: center; }}
     .ktcu-logo {{ position: relative; display: inline-grid; width: 54px; height: 54px; box-sizing: border-box; place-items: center; overflow: hidden; border: 1px solid #dde3ea; border-radius: 50%; background: #f4f6f8; color: var(--text); font-size: 12px; font-weight: 900; box-shadow: none; }}
-    .ktcu-logo::after {{ position: absolute; inset: 9px; border: 1px solid currentColor; border-radius: 50%; opacity: 0.16; content: ""; }}
     .ktcu-logo > span {{ position: relative; z-index: 1; }}
-    .ktcu-logo img {{ position: relative; z-index: 2; max-width: 38px; max-height: 38px; object-fit: contain; mix-blend-mode: multiply; }}
+    .ktcu-logo img {{ position: relative; z-index: 2; width: 38px; height: 38px; object-fit: contain; mix-blend-mode: multiply; }}
     .ktcu-logo.has-logo > span {{ display: none; }}
     .ktcu-logo.fallback-only > span {{ display: inline; }}
     .ktcu-logo[data-tone] {{ border-color: #dde3ea; background: #f4f6f8; color: var(--text); }}
@@ -2364,9 +2363,8 @@ def render_lp_notices_page(
     .lp-directory-card:hover {{ background: #fbfcfd; }}
     .lp-directory-card:last-child {{ border-bottom: 0; }}
     .lp-directory-avatar {{ position: relative; display: inline-grid; width: 40px; height: 40px; box-sizing: border-box; place-items: center; overflow: hidden; border: 1px solid #dde3ea; border-radius: 50%; background: #f4f6f8; color: var(--text); font-size: 10px; font-weight: 900; letter-spacing: 0; box-shadow: none; }}
-    .lp-directory-avatar::after {{ position: absolute; inset: 7px; border: 1px solid currentColor; border-radius: 50%; opacity: 0.16; content: ""; }}
     .lp-directory-avatar > span {{ position: relative; z-index: 1; }}
-    .lp-directory-avatar img {{ position: relative; z-index: 2; max-width: 27px; max-height: 27px; object-fit: contain; mix-blend-mode: multiply; }}
+    .lp-directory-avatar img {{ position: relative; z-index: 2; width: 27px; height: 27px; object-fit: contain; mix-blend-mode: multiply; }}
     .lp-directory-avatar.has-logo > span {{ display: none; }}
     .lp-directory-avatar.fallback-only > span {{ display: inline; }}
     .lp-directory-avatar[data-tone] {{ border-color: #dde3ea; background: #f4f6f8; color: var(--text); }}

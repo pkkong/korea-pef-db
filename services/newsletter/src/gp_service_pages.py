@@ -1924,14 +1924,6 @@ def _base_styles() -> str:
       font-weight: 900;
       box-shadow: none;
     }
-    .gp-detail-logo::after {
-      position: absolute;
-      inset: 9px;
-      border: 1px solid currentColor;
-      border-radius: 50%;
-      opacity: 0.16;
-      content: "";
-    }
     .gp-detail-logo > span {
       position: relative;
       z-index: 1;
@@ -1939,8 +1931,8 @@ def _base_styles() -> str:
     .gp-detail-logo img {
       position: relative;
       z-index: 2;
-      max-width: 38px;
-      max-height: 38px;
+      width: 38px;
+      height: 38px;
       mix-blend-mode: multiply;
       object-fit: contain;
     }
@@ -2150,14 +2142,6 @@ def _base_styles() -> str:
       letter-spacing: 0;
       box-shadow: none;
     }
-    .gp-avatar::after {
-      position: absolute;
-      inset: 7px;
-      border: 1px solid currentColor;
-      border-radius: 50%;
-      opacity: 0.16;
-      content: "";
-    }
     .gp-avatar > span {
       position: relative;
       z-index: 1;
@@ -2165,8 +2149,8 @@ def _base_styles() -> str:
     .gp-avatar img {
       position: relative;
       z-index: 2;
-      max-width: 27px;
-      max-height: 27px;
+      width: 27px;
+      height: 27px;
       mix-blend-mode: multiply;
       object-fit: contain;
     }
@@ -3006,8 +2990,8 @@ def _base_styles() -> str:
       box-shadow: none;
     }
     .gp-avatar img {
-      max-width: 27px;
-      max-height: 27px;
+      width: 27px;
+      height: 27px;
     }
     .gp-card-title {
       gap: 2px;
@@ -3081,8 +3065,8 @@ def _base_styles() -> str:
       box-shadow: none;
     }
     .gp-detail-logo img {
-      max-width: 35px;
-      max-height: 35px;
+      width: 35px;
+      height: 35px;
     }
     .gp-detail-card {
       margin-top: 8px;
@@ -3286,8 +3270,8 @@ def _base_styles() -> str:
         height: 40px;
       }
       .gp-avatar img {
-        max-width: 27px;
-        max-height: 27px;
+        width: 27px;
+        height: 27px;
       }
       .gp-meta-line {
         display: grid;

@@ -225,6 +225,8 @@ Use the newsletter screen as the reference for shared public UI polish.
   treatment: circular muted-gray container, thin neutral border, favicon or CI
   centered inside, and `mix-blend-mode: multiply` on favicon images so white
   favicon backgrounds do not look like separate squares inside the circle.
+  Scale favicon images to the standard inner size instead of preserving tiny
+  natural favicon dimensions. Do not draw a second inner ring inside the slot.
 - Tags: one-line by default. Use a small text-like `더보기 N` control when tags
   overflow. Do not use dark pill buttons for hidden tags.
 - Row dividers: sparse 1px neutral separators only between rows. Avoid stacked
