@@ -20,6 +20,14 @@
 5. The Project Lead integrates subagent output, resolves conflicts, runs the final checks, and gives the user one consolidated answer.
 6. When a subagent is no longer needed, close it instead of leaving idle agents open.
 
+## Long-Running Sweep Delegation
+
+- Long-running logo, data-fill, backfill, research, or QA sweeps must be assigned to a dedicated Worker, Explorer, or Verifier by default instead of being executed manually by the Project Lead.
+- The Project Lead should stay available for user conversation, new task intake, prioritization, and parallel coordination while a sweep is running.
+- During repetitive sweeps, the Project Lead owns task framing, handoff prompts, checkpoint review, integration, verification, and any commit or deploy decision.
+- The Project Lead may do hands-on sweep work only for critical-path integration, a tight unblock, or a small sample needed to make the subagent handoff precise.
+- Sweep subagents should work in batches, report batch results and remaining risks, and avoid waiting for constant Project Lead involvement between individual items.
+
 ## Project Lead Responsibilities
 
 - Start by clarifying the user goal, current system state, and the smallest useful next milestone.
