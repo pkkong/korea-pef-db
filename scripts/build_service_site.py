@@ -721,6 +721,25 @@ def source_icon_url(url: str) -> str:
     return f"https://www.google.com/s2/favicons?domain={domain}&sz=64"
 
 
+LOGO_BRAND_THEMES: dict[str, tuple[str, str]] = {
+    "hankyung.com": ("#17376f", "#17376f"),
+    "marketinsight.hankyung.com": ("#17376f", "#17376f"),
+    "naver.com": ("#03c75a", "#03c75a"),
+    "thevc.kr": ("#111827", "#111827"),
+    "hcompany.com": ("#111111", "#111111"),
+    "immholdings.co.kr": ("#6fca55", "#6fca55"),
+    "imminvestment.com": ("#6fca55", "#6fca55"),
+}
+
+
+def logo_brand_style(domain: str) -> str:
+    domain = (domain or "").lower().removeprefix("www.")
+    for suffix, (background, border) in sorted(LOGO_BRAND_THEMES.items(), key=lambda item: len(item[0]), reverse=True):
+        if domain == suffix or domain.endswith(f".{suffix}"):
+            return f"--logo-bg: {background}; --logo-border: {border};"
+    return ""
+
+
 def section_sort_key(section: str) -> int:
     try:
         return EDITORIAL_SECTIONS.index(section)
@@ -1056,6 +1075,7 @@ def article_payload_rows(
                 "source": row.get("source", ""),
                 "sourceBadge": publisher_badge(row.get("source", "")),
                 "sourceIconUrl": source_icon_url(row.get("url", "")),
+                "sourceIconStyle": logo_brand_style(source_domain(row.get("url", ""))),
                 "url": row.get("url", ""),
                 "sectionOrder": section_sort_key(section),
                 "gpNames": gp_names,
@@ -1995,9 +2015,9 @@ button, input { font: inherit; }
   justify-content: center;
   overflow: hidden;
   box-sizing: border-box;
-  border: 1px solid #dde3ea;
+  border: 1px solid var(--logo-border, #e2e5ea);
   border-radius: 50%;
-  background: #f4f6f8;
+  background: var(--logo-bg, #fff);
   color: var(--text);
   font-size: 11px;
   font-weight: 760;
@@ -2010,8 +2030,13 @@ button, input { font: inherit; }
   border: 0;
   border-radius: 0;
   background: transparent;
-  mix-blend-mode: multiply;
+  mix-blend-mode: normal;
   object-fit: contain;
+}
+.publisher-icon.fallback,
+.publisher-icon.fallback-only {
+  --logo-bg: #f4f6f8;
+  --logo-border: #dde3ea;
 }
 .publisher-fallback {
   display: none;
@@ -2831,10 +2856,12 @@ def service_js() -> str:
     const mark = document.createElement("span");
     mark.className = "publisher-icon";
     mark.setAttribute("aria-label", article.source || "언론사");
+    if (article.sourceIconStyle) mark.setAttribute("style", article.sourceIconStyle);
     const fallback = document.createElement("span");
     fallback.className = "publisher-fallback";
     fallback.textContent = article.sourceBadge || "뉴";
     if (article.sourceIconUrl) {
+      mark.classList.add("has-logo");
       const icon = document.createElement("img");
       icon.src = article.sourceIconUrl;
       icon.alt = "";

@@ -990,6 +990,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
     avatar_label = _avatar_label(name)
     avatar_tone = _identity_tone(name)
     avatar_class = "gp-detail-logo has-logo" if logo_url else "gp-detail-logo"
+    avatar_style = _logo_style_attr(homepage) if logo_url else ""
     avatar_logo = (
         f'<img src="{logo_url}" alt="" loading="lazy" onerror="this.parentElement.classList.add(\'fallback-only\'); this.remove()">'
         if logo_url
@@ -1042,7 +1043,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
 
     <header class="gp-detail-hero">
       <div class="gp-detail-title-head">
-        <span class="{avatar_class}" data-tone="{avatar_tone}" aria-hidden="true">{avatar_logo}<span>{_e(avatar_label)}</span></span>
+        <span class="{avatar_class}" data-tone="{avatar_tone}" aria-hidden="true"{avatar_style}>{avatar_logo}<span>{_e(avatar_label)}</span></span>
         <div>
           <span>운용사</span>
           <h1>{_e(name)}</h1>
@@ -1314,12 +1315,37 @@ def _favicon_url(url: object) -> str:
     return f"https://www.google.com/s2/favicons?domain={_e(domain)}&sz=64"
 
 
+LOGO_BRAND_THEMES: dict[str, tuple[str, str]] = {
+    "hankyung.com": ("#17376f", "#17376f"),
+    "marketinsight.hankyung.com": ("#17376f", "#17376f"),
+    "naver.com": ("#03c75a", "#03c75a"),
+    "thevc.kr": ("#111827", "#111827"),
+    "mbkpartners.com": ("#183f7a", "#183f7a"),
+    "mbkpartnerslp.com": ("#183f7a", "#183f7a"),
+    "hcompany.com": ("#111111", "#111111"),
+    "immholdings.co.kr": ("#6fca55", "#6fca55"),
+    "imminvestment.com": ("#6fca55", "#6fca55"),
+}
+
+
+def _logo_style_attr(url: object) -> str:
+    safe = _safe_url(url)
+    if not safe:
+        return ""
+    domain = urlparse(safe).netloc.lower().removeprefix("www.")
+    for suffix, (background, border) in sorted(LOGO_BRAND_THEMES.items(), key=lambda item: len(item[0]), reverse=True):
+        if domain == suffix or domain.endswith(f".{suffix}"):
+            return f' style="--logo-bg: {background}; --logo-border: {border};"'
+    return ""
+
+
 def _avatar_markup(homepage_url: object, label: str, seed: object) -> str:
     tone = _identity_tone(seed or label)
     logo_url = _favicon_url(homepage_url)
+    style_attr = _logo_style_attr(homepage_url)
     if logo_url:
         return (
-            f'<span class="gp-avatar has-logo" data-tone="{tone}" aria-hidden="true">'
+            f'<span class="gp-avatar has-logo" data-tone="{tone}" aria-hidden="true"{style_attr}>'
             f'<img src="{logo_url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add(\'fallback-only\'); this.remove()">'
             f'<span>{_e(label)}</span></span>'
         )
@@ -1924,6 +1950,14 @@ def _base_styles() -> str:
       font-weight: 900;
       box-shadow: none;
     }
+    .gp-detail-logo.has-logo {
+      border-color: var(--logo-border, #e2e5ea);
+      background: var(--logo-bg, #fff);
+    }
+    .gp-detail-logo.has-logo.fallback-only {
+      border-color: #dde3ea;
+      background: #f4f6f8;
+    }
     .gp-detail-logo > span {
       position: relative;
       z-index: 1;
@@ -1933,12 +1967,12 @@ def _base_styles() -> str:
       z-index: 2;
       width: 38px;
       height: 38px;
-      mix-blend-mode: multiply;
+      mix-blend-mode: normal;
       object-fit: contain;
     }
     .gp-detail-logo.has-logo > span { display: none; }
     .gp-detail-logo.fallback-only > span { display: inline; }
-    .gp-detail-logo[data-tone] { border-color: #dde3ea; background: #f4f6f8; color: var(--text); }
+    .gp-detail-logo[data-tone] { color: var(--text); }
     .gp-hero-copy > span,
     .gp-detail-title-head div > span,
     .gp-empty > span {
@@ -2142,6 +2176,14 @@ def _base_styles() -> str:
       letter-spacing: 0;
       box-shadow: none;
     }
+    .gp-avatar.has-logo {
+      border-color: var(--logo-border, #e2e5ea);
+      background: var(--logo-bg, #fff);
+    }
+    .gp-avatar.has-logo.fallback-only {
+      border-color: #dde3ea;
+      background: #f4f6f8;
+    }
     .gp-avatar > span {
       position: relative;
       z-index: 1;
@@ -2151,12 +2193,12 @@ def _base_styles() -> str:
       z-index: 2;
       width: 27px;
       height: 27px;
-      mix-blend-mode: multiply;
+      mix-blend-mode: normal;
       object-fit: contain;
     }
     .gp-avatar.has-logo > span { display: none; }
     .gp-avatar.fallback-only > span { display: inline; }
-    .gp-avatar[data-tone] { border-color: #dde3ea; background: #f4f6f8; color: var(--text); }
+    .gp-avatar[data-tone] { color: var(--text); }
     .gp-card:last-child { border-bottom: 0; }
     .gp-card[hidden] { display: none; }
     .gp-card-main {

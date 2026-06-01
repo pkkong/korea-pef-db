@@ -703,12 +703,38 @@ def directory_logo_url(url: object) -> str:
     return f"https://www.google.com/s2/favicons?domain={html_escape(domain)}&sz=64"
 
 
+LOGO_BRAND_THEMES: dict[str, tuple[str, str]] = {
+    "hankyung.com": ("#17376f", "#17376f"),
+    "marketinsight.hankyung.com": ("#17376f", "#17376f"),
+    "naver.com": ("#03c75a", "#03c75a"),
+    "thevc.kr": ("#111827", "#111827"),
+    "mbkpartners.com": ("#183f7a", "#183f7a"),
+    "mbkpartnerslp.com": ("#183f7a", "#183f7a"),
+    "hcompany.com": ("#111111", "#111111"),
+    "immholdings.co.kr": ("#6fca55", "#6fca55"),
+    "imminvestment.com": ("#6fca55", "#6fca55"),
+}
+
+
+def directory_logo_style(url: object) -> str:
+    raw = str(url or "").strip()
+    if not raw:
+        return ""
+    parsed = urlparse(raw if re.match(r"^https?://", raw, re.I) else f"https://{raw}")
+    domain = parsed.netloc.lower().removeprefix("www.")
+    for suffix, (background, border) in sorted(LOGO_BRAND_THEMES.items(), key=lambda item: len(item[0]), reverse=True):
+        if domain == suffix or domain.endswith(f".{suffix}"):
+            return f' style="--logo-bg: {background}; --logo-border: {border};"'
+    return ""
+
+
 def directory_avatar_markup(homepage_url: object, label: str, seed: object = "") -> str:
     logo_url = directory_logo_url(homepage_url)
     tone = directory_avatar_tone(seed or label)
+    style_attr = directory_logo_style(homepage_url)
     if logo_url:
         return (
-            f'<span class="lp-directory-avatar has-logo" data-tone="{tone}" aria-hidden="true">'
+            f'<span class="lp-directory-avatar has-logo" data-tone="{tone}" aria-hidden="true"{style_attr}>'
             f'<img src="{logo_url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add(\'fallback-only\'); this.remove()">'
             f'<span>{html_escape(label)}</span></span>'
         )
@@ -1648,6 +1674,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     lp_avatar_label = directory_avatar_label(lp_short_label(lp_code, lp_name), "LP")
     lp_avatar_tone = directory_avatar_tone(lp_code or lp_name)
     lp_avatar_class = "ktcu-logo has-logo" if lp_logo_url else "ktcu-logo"
+    lp_avatar_style = directory_logo_style(profile.get("homepage_url")) if lp_logo_url else ""
     lp_avatar_logo = (
         f'<img src="{lp_logo_url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add(\'fallback-only\'); this.remove()">'
         if lp_logo_url
@@ -1713,11 +1740,13 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-title {{ display: grid; gap: 10px; }}
     .ktcu-title-head {{ display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 14px; align-items: center; }}
     .ktcu-logo {{ position: relative; display: inline-grid; width: 54px; height: 54px; box-sizing: border-box; place-items: center; overflow: hidden; border: 1px solid #dde3ea; border-radius: 50%; background: #f4f6f8; color: var(--text); font-size: 12px; font-weight: 900; box-shadow: none; }}
+    .ktcu-logo.has-logo {{ border-color: var(--logo-border, #e2e5ea); background: var(--logo-bg, #fff); }}
+    .ktcu-logo.has-logo.fallback-only {{ border-color: #dde3ea; background: #f4f6f8; }}
     .ktcu-logo > span {{ position: relative; z-index: 1; }}
-    .ktcu-logo img {{ position: relative; z-index: 2; width: 38px; height: 38px; object-fit: contain; mix-blend-mode: multiply; }}
+    .ktcu-logo img {{ position: relative; z-index: 2; width: 38px; height: 38px; object-fit: contain; mix-blend-mode: normal; }}
     .ktcu-logo.has-logo > span {{ display: none; }}
     .ktcu-logo.fallback-only > span {{ display: inline; }}
-    .ktcu-logo[data-tone] {{ border-color: #dde3ea; background: #f4f6f8; color: var(--text); }}
+    .ktcu-logo[data-tone] {{ color: var(--text); }}
     .ktcu-title-head div > span {{ width: fit-content; border-left: 3px solid var(--accent); padding-left: 8px; color: var(--text); font-size: 12px; font-weight: 800; }}
     .ktcu-title h1 {{ margin: 0; color: var(--text); font-size: 28px; font-weight: 850; line-height: 1.12; letter-spacing: 0; }}
     .ktcu-title p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 15px; line-height: 1.68; }}
@@ -1865,8 +1894,8 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       height: 50px;
     }}
     .ktcu-logo img {{
-      max-width: 35px;
-      max-height: 35px;
+      width: 35px;
+      height: 35px;
     }}
     .ktcu-title-head div > span {{
       border-left: 0;
@@ -1969,7 +1998,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
       <section class="ktcu-hero" aria-label="{html_escape(lp_name)} 요약">
         <div class="ktcu-title">
           <div class="ktcu-title-head">
-            <span class="{lp_avatar_class}" data-tone="{lp_avatar_tone}" aria-hidden="true">{lp_avatar_logo}<span>{html_escape(lp_avatar_label)}</span></span>
+            <span class="{lp_avatar_class}" data-tone="{lp_avatar_tone}" aria-hidden="true"{lp_avatar_style}>{lp_avatar_logo}<span>{html_escape(lp_avatar_label)}</span></span>
             <div>
               <span>출자기관</span>
               <h1>{html_escape(lp_name)}</h1>
@@ -2363,11 +2392,13 @@ def render_lp_notices_page(
     .lp-directory-card:hover {{ background: #fbfcfd; }}
     .lp-directory-card:last-child {{ border-bottom: 0; }}
     .lp-directory-avatar {{ position: relative; display: inline-grid; width: 40px; height: 40px; box-sizing: border-box; place-items: center; overflow: hidden; border: 1px solid #dde3ea; border-radius: 50%; background: #f4f6f8; color: var(--text); font-size: 10px; font-weight: 900; letter-spacing: 0; box-shadow: none; }}
+    .lp-directory-avatar.has-logo {{ border-color: var(--logo-border, #e2e5ea); background: var(--logo-bg, #fff); }}
+    .lp-directory-avatar.has-logo.fallback-only {{ border-color: #dde3ea; background: #f4f6f8; }}
     .lp-directory-avatar > span {{ position: relative; z-index: 1; }}
-    .lp-directory-avatar img {{ position: relative; z-index: 2; width: 27px; height: 27px; object-fit: contain; mix-blend-mode: multiply; }}
+    .lp-directory-avatar img {{ position: relative; z-index: 2; width: 27px; height: 27px; object-fit: contain; mix-blend-mode: normal; }}
     .lp-directory-avatar.has-logo > span {{ display: none; }}
     .lp-directory-avatar.fallback-only > span {{ display: inline; }}
-    .lp-directory-avatar[data-tone] {{ border-color: #dde3ea; background: #f4f6f8; color: var(--text); }}
+    .lp-directory-avatar[data-tone] {{ color: var(--text); }}
     .lp-directory-card-head {{ display: grid; gap: 4px; }}
     .lp-directory-card-head strong {{ color: var(--text); font-size: 15px; line-height: 1.28; overflow-wrap: anywhere; }}
     .lp-directory-latest {{ color: var(--secondary); font-size: 13px; font-weight: 750; line-height: 1.45; }}
