@@ -1913,15 +1913,16 @@ def _base_styles() -> str:
       display: inline-grid;
       width: 54px;
       height: 54px;
+      box-sizing: border-box;
       place-items: center;
       overflow: hidden;
-      border: 1px solid var(--line);
+      border: 1px solid #dde3ea;
       border-radius: 50%;
-      background: #fff;
+      background: #f4f6f8;
       color: var(--text);
       font-size: 12px;
       font-weight: 900;
-      box-shadow: inset 0 0 0 4px #fff;
+      box-shadow: none;
     }
     .gp-detail-logo::after {
       position: absolute;
@@ -1940,11 +1941,12 @@ def _base_styles() -> str:
       z-index: 2;
       max-width: 38px;
       max-height: 38px;
+      mix-blend-mode: multiply;
       object-fit: contain;
     }
     .gp-detail-logo.has-logo > span { display: none; }
     .gp-detail-logo.fallback-only > span { display: inline; }
-    .gp-detail-logo[data-tone] { border-color: var(--line); background: var(--surface-muted); color: var(--text); }
+    .gp-detail-logo[data-tone] { border-color: #dde3ea; background: #f4f6f8; color: var(--text); }
     .gp-hero-copy > span,
     .gp-detail-title-head div > span,
     .gp-empty > span {
@@ -2132,20 +2134,21 @@ def _base_styles() -> str:
     .gp-avatar {
       position: relative;
       display: inline-grid;
-      width: 38px;
-      height: 38px;
+      width: 40px;
+      height: 40px;
       grid-column: 1;
       grid-row: 1;
+      box-sizing: border-box;
       place-items: center;
       overflow: hidden;
-      border: 1px solid var(--line);
+      border: 1px solid #dde3ea;
       border-radius: 50%;
-      background: #fff;
+      background: #f4f6f8;
       color: var(--text);
       font-size: 10px;
       font-weight: 900;
       letter-spacing: 0;
-      box-shadow: inset 0 0 0 3px #fff;
+      box-shadow: none;
     }
     .gp-avatar::after {
       position: absolute;
@@ -2164,11 +2167,12 @@ def _base_styles() -> str:
       z-index: 2;
       max-width: 27px;
       max-height: 27px;
+      mix-blend-mode: multiply;
       object-fit: contain;
     }
     .gp-avatar.has-logo > span { display: none; }
     .gp-avatar.fallback-only > span { display: inline; }
-    .gp-avatar[data-tone] { border-color: var(--line); background: var(--surface-muted); color: var(--text); }
+    .gp-avatar[data-tone] { border-color: #dde3ea; background: #f4f6f8; color: var(--text); }
     .gp-card:last-child { border-bottom: 0; }
     .gp-card[hidden] { display: none; }
     .gp-card-main {
@@ -2994,16 +2998,16 @@ def _base_styles() -> str:
     }
     .gp-card:last-child { border-bottom: 0; }
     .gp-avatar {
-      width: 32px;
-      height: 32px;
+      width: 40px;
+      height: 40px;
       margin-top: 2px;
-      border-color: var(--line);
+      border-color: #dde3ea;
       font-size: 10px;
-      box-shadow: inset 0 0 0 3px #fff;
+      box-shadow: none;
     }
     .gp-avatar img {
-      max-width: 23px;
-      max-height: 23px;
+      max-width: 27px;
+      max-height: 27px;
     }
     .gp-card-title {
       gap: 2px;
@@ -3073,8 +3077,8 @@ def _base_styles() -> str:
     .gp-detail-logo {
       width: 50px;
       height: 50px;
-      border-color: var(--line);
-      box-shadow: inset 0 0 0 4px #fff;
+      border-color: #dde3ea;
+      box-shadow: none;
     }
     .gp-detail-logo img {
       max-width: 35px;
@@ -3278,8 +3282,8 @@ def _base_styles() -> str:
         padding: 12px 16px;
       }
       .gp-avatar {
-        width: 38px;
-        height: 38px;
+        width: 40px;
+        height: 40px;
       }
       .gp-avatar img {
         max-width: 27px;

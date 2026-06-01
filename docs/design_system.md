@@ -113,7 +113,7 @@ variants.
   dense.
 - Section band: full-bleed `#f7f7f8`, about `8px` high, with compact vertical
   spacing.
-- List icon/logo slot: circular `32px`, top-aligned for multi-line rows.
+- List icon/logo slot: circular `40px`, top-aligned for multi-line rows.
 - Bottom nav: fixed, same order everywhere, label about `11-12px`, icon about
   `18-23px`, active state neutral.
 
@@ -179,7 +179,7 @@ variants.
 
 ## Row Anatomy
 
-- Rows use a circular 32px logo slot, primary title, secondary metadata, and
+- Rows use a circular 40px logo slot, primary title, secondary metadata, and
   restrained contextual tags.
 - Multi-line rows align the logo slot near the top of the row.
 - Row titles should be strong enough to scan, but not headline-sized. Use about
@@ -219,8 +219,12 @@ Use the newsletter screen as the reference for shared public UI polish.
   in the public newsletter list.
 - Article title: about 15px, medium-bold, two-line clamp.
 - Publisher/meta: secondary information, visually lower than title.
-- Publisher icon: circular 32px slot, aligned toward the top of the article row
+- Publisher icon: circular 40px slot, aligned toward the top of the article row
   rather than vertically centered.
+- Public logo slots for news publishers, LPs, and GPs must use the same visual
+  treatment: circular muted-gray container, thin neutral border, favicon or CI
+  centered inside, and `mix-blend-mode: multiply` on favicon images so white
+  favicon backgrounds do not look like separate squares inside the circle.
 - Tags: one-line by default. Use a small text-like `더보기 N` control when tags
   overflow. Do not use dark pill buttons for hidden tags.
 - Row dividers: sparse 1px neutral separators only between rows. Avoid stacked
@@ -235,6 +239,9 @@ Use the newsletter screen as the reference for shared public UI polish.
   typography, neutral palette, and row rhythm.
 - LP/GP list pages should show comparable facts in table-like rows: name,
   latest/rank signal, key amount/count, and relevant connection.
+- News, LP, and GP list rows should share the same 40px circular logo-slot
+  treatment. Detail hero logos may be larger, but must keep the same muted
+  container, neutral border, and favicon blending behavior.
 - Detail pages should use fact matrix, history/news tables, source-linked
   sections, and quiet typography.
 - LP detail pages follow this public reading order: identity header, basic

@@ -1712,18 +1712,13 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     .ktcu-hero {{ display: grid; gap: 18px; padding: 8px 0 8px; }}
     .ktcu-title {{ display: grid; gap: 10px; }}
     .ktcu-title-head {{ display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 14px; align-items: center; }}
-    .ktcu-logo {{ position: relative; display: inline-grid; width: 54px; height: 54px; place-items: center; overflow: hidden; border: 1px solid var(--separator); border-radius: 50%; background: #fff; color: var(--text); font-size: 12px; font-weight: 900; box-shadow: inset 0 0 0 4px #fff; }}
+    .ktcu-logo {{ position: relative; display: inline-grid; width: 54px; height: 54px; box-sizing: border-box; place-items: center; overflow: hidden; border: 1px solid #dde3ea; border-radius: 50%; background: #f4f6f8; color: var(--text); font-size: 12px; font-weight: 900; box-shadow: none; }}
     .ktcu-logo::after {{ position: absolute; inset: 9px; border: 1px solid currentColor; border-radius: 50%; opacity: 0.16; content: ""; }}
     .ktcu-logo > span {{ position: relative; z-index: 1; }}
-    .ktcu-logo img {{ position: relative; z-index: 2; max-width: 38px; max-height: 38px; object-fit: contain; }}
+    .ktcu-logo img {{ position: relative; z-index: 2; max-width: 38px; max-height: 38px; object-fit: contain; mix-blend-mode: multiply; }}
     .ktcu-logo.has-logo > span {{ display: none; }}
     .ktcu-logo.fallback-only > span {{ display: inline; }}
-    .ktcu-logo[data-tone="1"] {{ border-color: #d7e0ef; background: #f6f8fc; color: #1f3a5f; }}
-    .ktcu-logo[data-tone="2"] {{ border-color: #d6e6df; background: #f5faf7; color: #1f5a45; }}
-    .ktcu-logo[data-tone="3"] {{ border-color: #e8ddca; background: #fbf8f2; color: #725a32; }}
-    .ktcu-logo[data-tone="4"] {{ border-color: #e1d9eb; background: #f8f5fb; color: #4b3b63; }}
-    .ktcu-logo[data-tone="5"] {{ border-color: #ead8d8; background: #fbf5f5; color: #704044; }}
-    .ktcu-logo[data-tone="6"] {{ border-color: #d9e3e7; background: #f5f9fa; color: #2d5361; }}
+    .ktcu-logo[data-tone] {{ border-color: #dde3ea; background: #f4f6f8; color: var(--text); }}
     .ktcu-title-head div > span {{ width: fit-content; border-left: 3px solid var(--accent); padding-left: 8px; color: var(--text); font-size: 12px; font-weight: 800; }}
     .ktcu-title h1 {{ margin: 0; color: var(--text); font-size: 28px; font-weight: 850; line-height: 1.12; letter-spacing: 0; }}
     .ktcu-title p {{ max-width: 760px; margin: 0; color: var(--secondary); font-size: 15px; line-height: 1.68; }}
@@ -2368,18 +2363,13 @@ def render_lp_notices_page(
     .lp-directory-card {{ display: grid; grid-template-columns: 44px minmax(0, 1fr) 82px 74px; gap: 8px; align-items: center; min-height: 70px; border-bottom: 1px solid var(--separator); padding: 9px 10px; background: var(--surface); }}
     .lp-directory-card:hover {{ background: #fbfcfd; }}
     .lp-directory-card:last-child {{ border-bottom: 0; }}
-    .lp-directory-avatar {{ position: relative; display: inline-grid; width: 40px; height: 40px; place-items: center; overflow: hidden; border: 1px solid var(--separator); border-radius: 50%; background: #fff; color: var(--text); font-size: 10px; font-weight: 900; letter-spacing: 0; box-shadow: inset 0 0 0 3px #fff; }}
+    .lp-directory-avatar {{ position: relative; display: inline-grid; width: 40px; height: 40px; box-sizing: border-box; place-items: center; overflow: hidden; border: 1px solid #dde3ea; border-radius: 50%; background: #f4f6f8; color: var(--text); font-size: 10px; font-weight: 900; letter-spacing: 0; box-shadow: none; }}
     .lp-directory-avatar::after {{ position: absolute; inset: 7px; border: 1px solid currentColor; border-radius: 50%; opacity: 0.16; content: ""; }}
     .lp-directory-avatar > span {{ position: relative; z-index: 1; }}
-    .lp-directory-avatar img {{ position: relative; z-index: 2; max-width: 27px; max-height: 27px; object-fit: contain; }}
+    .lp-directory-avatar img {{ position: relative; z-index: 2; max-width: 27px; max-height: 27px; object-fit: contain; mix-blend-mode: multiply; }}
     .lp-directory-avatar.has-logo > span {{ display: none; }}
     .lp-directory-avatar.fallback-only > span {{ display: inline; }}
-    .lp-directory-avatar[data-tone="1"] {{ border-color: #d7e0ef; background: #f6f8fc; color: #1f3a5f; }}
-    .lp-directory-avatar[data-tone="2"] {{ border-color: #d6e6df; background: #f5faf7; color: #1f5a45; }}
-    .lp-directory-avatar[data-tone="3"] {{ border-color: #e8ddca; background: #fbf8f2; color: #725a32; }}
-    .lp-directory-avatar[data-tone="4"] {{ border-color: #e1d9eb; background: #f8f5fb; color: #4b3b63; }}
-    .lp-directory-avatar[data-tone="5"] {{ border-color: #ead8d8; background: #fbf5f5; color: #704044; }}
-    .lp-directory-avatar[data-tone="6"] {{ border-color: #d9e3e7; background: #f5f9fa; color: #2d5361; }}
+    .lp-directory-avatar[data-tone] {{ border-color: #dde3ea; background: #f4f6f8; color: var(--text); }}
     .lp-directory-card-head {{ display: grid; gap: 4px; }}
     .lp-directory-card-head strong {{ color: var(--text); font-size: 15px; line-height: 1.28; overflow-wrap: anywhere; }}
     .lp-directory-latest {{ color: var(--secondary); font-size: 13px; font-weight: 750; line-height: 1.45; }}
@@ -2456,7 +2446,7 @@ def render_lp_notices_page(
       }}
       .lp-directory-card:last-child {{ border-bottom: 0; }}
       .lp-directory-card-head strong {{ font-size: 15px; }}
-      .lp-directory-avatar {{ width: 42px; height: 42px; }}
+      .lp-directory-avatar {{ width: 40px; height: 40px; }}
       .lp-directory-focus {{ color: var(--text); }}
       .lp-directory-focus {{ display: block; }}
       .lp-directory-metrics {{

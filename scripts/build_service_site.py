@@ -1970,7 +1970,7 @@ button, input { font: inherit; }
 }
 .clip-cell {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-columns: 40px minmax(0, 1fr);
   gap: 12px;
   min-height: 72px;
   align-items: start;
@@ -1988,27 +1988,29 @@ button, input { font: inherit; }
 .publisher-icon {
   display: inline-flex;
   position: relative;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   align-items: center;
   align-self: start;
   justify-content: center;
   overflow: hidden;
-  border: 1px solid rgba(0,0,0,0.12);
+  box-sizing: border-box;
+  border: 1px solid #dde3ea;
   border-radius: 50%;
-  background: #fff;
-  color: var(--secondary);
+  background: #f4f6f8;
+  color: var(--text);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 760;
   letter-spacing: 0;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 .publisher-icon img {
-  width: 20px;
-  height: 20px;
+  width: 27px;
+  height: 27px;
   border: 0;
   border-radius: 0;
   background: transparent;
+  mix-blend-mode: multiply;
   object-fit: contain;
 }
 .publisher-fallback {
@@ -2021,6 +2023,7 @@ button, input { font: inherit; }
   border-radius: 0;
   background: transparent;
   font-size: 10px;
+  font-weight: 800;
   line-height: 1;
 }
 .publisher-icon.fallback img { display: none; }
