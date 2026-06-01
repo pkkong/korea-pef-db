@@ -8,6 +8,7 @@ fall back to Google S2 favicons only for broad coverage.
 from __future__ import annotations
 
 import re
+import ssl
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -376,6 +377,7 @@ BRAND_MARKS: dict[str, dict[str, str]] = {
     },
     "sbva.vc": {
         "logo_url": "https://sbva.vc/assets-front/images/logo.png",
+        "allow_insecure_ssl": "true",
         "image_width": "31px",
         "image_height": "13px",
     },
@@ -429,6 +431,7 @@ BRAND_MARKS: dict[str, dict[str, str]] = {
     },
     "kipvc.com": {
         "logo_url": "https://www.kipvc.com/assets/logo_kor-DQc0PpYh.jpg",
+        "allow_insecure_ssl": "true",
         "image_width": "31px",
         "image_height": "13px",
     },
@@ -647,10 +650,18 @@ def prepare_brand_asset_cache(output_dir: Path, asset_prefix: str = "assets/bran
                     "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
                 },
             )
-            with urlopen(request, timeout=10) as response:
-                content_type = response.headers.get("content-type", "")
-                payload = response.read(1_500_000)
-                final_url = response.geturl()
+            try:
+                with urlopen(request, timeout=10) as response:
+                    content_type = response.headers.get("content-type", "")
+                    payload = response.read(1_500_000)
+                    final_url = response.geturl()
+            except Exception:
+                if mark.get("allow_insecure_ssl") != "true":
+                    raise
+                with urlopen(request, timeout=10, context=ssl._create_unverified_context()) as response:
+                    content_type = response.headers.get("content-type", "")
+                    payload = response.read(1_500_000)
+                    final_url = response.geturl()
             if not payload or "text/html" in content_type.lower():
                 continue
         except Exception:
