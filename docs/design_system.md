@@ -241,6 +241,9 @@ Use the newsletter screen as the reference for shared public UI polish.
   institution facts, investment status, official notices, related GP, related
   news, peer comparison, then source/reference links. Keep coverage counts and
   source diagnostics out of the top summary.
+- LP detail pages should not expose collection coverage as product content.
+  Avoid public rows such as `자료 성격`, `프로필 항목`, or repeated source-status
+  labels. Put source links and narrow caveats in the bottom `자료` area only.
 - LP detail headers should not use generic explanatory copy such as "we organize
   basic information and news." Follow data services like Preqin, The VC, and
   InnoForest: show the entity name, compact identity facts, tabs, and immediate
