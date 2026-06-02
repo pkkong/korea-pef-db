@@ -1350,6 +1350,17 @@ CREDIT_TRANSACTION_KEYWORDS = [
     "클로징",
 ]
 
+EXTERNAL_FUNDING_DEAL_KEYWORDS = [
+    "투자유치",
+    "신규 FI",
+    "시리즈A",
+    "시리즈B",
+    "시리즈C",
+    "프리IPO",
+    "pre-IPO",
+    "몸값",
+]
+
 NATIONAL_GROWTH_FUND_MAIN_TOPIC_KEYWORDS = [
     "간접투자",
     "출자사업",
@@ -1612,6 +1623,10 @@ def has_specific_equity_transaction_signal(text: str) -> bool:
     return bool(EQUITY_STAKE_TRANSACTION_RE.search(text)) or bool(AMOUNTED_INVESTMENT_RE.search(text))
 
 
+def has_external_funding_deal_signal(text: str) -> bool:
+    return contains_any_keyword(text, EXTERNAL_FUNDING_DEAL_KEYWORDS) or has_specific_equity_transaction_signal(text)
+
+
 def has_gp_national_growth_fund_strategy_signal(title: str, content: str, raw_sections: list[str]) -> bool:
     if has_national_growth_fund_theme(title, raw_sections):
         return False
@@ -1651,6 +1666,17 @@ def primary_section(row: dict[str, object]) -> str:
     )
     if has_national_growth_fund_theme(title, raw_sections):
         return "NationalGrowthFund"
+    if has_gp_national_growth_fund_strategy_signal(title, content, raw_sections):
+        return "GP"
+    if "GP" in topics and str(row.get("gp_names", "")).strip() and (
+        contains_any_keyword(title, SECTION_KEYWORDS["NationalGrowthFund"])
+        or contains_any_keyword(title, ["전략", "노리는", "드라이 파우더", "레버리지"])
+    ):
+        return "GP"
+    if has_credit_signal(title) and not has_credit_transaction_signal(title):
+        return "Market"
+    if has_external_funding_deal_signal(title):
+        return "Deal"
     if has_fundraising_title_signal(title) and (
         str(row.get("gp_names", "")).strip() or "GP" in topics or has_gp_focus_signal(title)
     ):
@@ -1670,8 +1696,6 @@ def primary_section(row: dict[str, object]) -> str:
         return "GP"
     if has_ai_pe_theme(title, content) and not title_has_non_ai_lp_priority(title):
         return "AI_PE"
-    if has_gp_national_growth_fund_strategy_signal(title, content, raw_sections):
-        return "GP"
     if has_market_structure_signal(title) or has_market_commentary_signal(title):
         return "Market"
     if contains_any_keyword(title, TITLE_RISK_KEYWORDS) or contains_any_keyword(title, SECTION_KEYWORDS["Regulation"]):

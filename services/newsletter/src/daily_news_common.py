@@ -968,9 +968,29 @@ def match_gp_entities(title: str, excerpt_text: str, body_text: str, aliases: li
                 "confidence": confidence,
             }
         )
-        if len(matches) >= 8:
-            break
-    return matches
+    suppress_secondary_body_matches = bool(normalize_whitespace(body_text)) and len(normalize_whitespace(body_text)) >= 280
+    return prioritize_gp_entity_matches(matches, suppress_secondary_body_matches=suppress_secondary_body_matches)[:8]
+
+
+def prioritize_gp_entity_matches(
+    matches: list[dict[str, object]],
+    suppress_secondary_body_matches: bool = False,
+) -> list[dict[str, object]]:
+    if not matches:
+        return []
+    field_priority = {"title": 0, "excerpt": 1, "body": 2}
+    ordered = sorted(
+        matches,
+        key=lambda row: (
+            field_priority.get(str(row.get("match_field", "")), 9),
+            -float(row.get("confidence", 0) or 0),
+            str(row.get("entity_name", "")),
+        ),
+    )
+    has_primary_match = any(str(row.get("match_field", "")) in {"title", "excerpt"} for row in ordered)
+    if not has_primary_match or not suppress_secondary_body_matches:
+        return ordered
+    return [row for row in ordered if str(row.get("match_field", "")) in {"title", "excerpt"}]
 
 
 def save_raw_html(raw_dir: Path, report_date: str, normalized_source_url: str, raw_bytes: bytes) -> str:

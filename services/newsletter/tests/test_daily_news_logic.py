@@ -172,6 +172,10 @@ def test_gp_alias_overrides_cover_common_short_names() -> None:
                     (47, "에이치앤큐코리아파트너스"),
                     (48, "이앤에프프라이빗에퀴티"),
                     (49, "고넥스프라이빗에쿼티"),
+                    (50, "파라투스인베스트먼트"),
+                    (51, "골든루트인베스트먼트"),
+                    (52, "대신프라이빗에쿼티"),
+                    (53, "에스케이에스프라이빗에쿼티"),
                     (7987, "어펄마캐피탈매니져스코리아"),
                     (6358, "헬리오스프라이빗에쿼티"),
                 ],
@@ -212,6 +216,22 @@ def test_gp_alias_overrides_cover_common_short_names() -> None:
         assert "에이치앤큐코리아파트너스" in named_gp_names
         assert "이앤에프프라이빗에퀴티" in named_gp_names
         assert "고넥스프라이빗에쿼티" in named_gp_names
+
+        paratus_matches = match_gp_entities(
+            "국민성장펀드 잡은 파라투스, 최대 3000억 펀딩 탄력",
+            "파라투스인베스트먼트가 국민성장펀드 운용사로 선정됐다.",
+            " ".join(["골든루트인베스트먼트와 아주아이비투자 등도 선정 명단에 포함됐다."] * 8),
+            aliases,
+        )
+        assert [str(match["entity_name"]) for match in paratus_matches] == ["파라투스인베스트먼트"]
+
+        daishin_matches = match_gp_entities(
+            "2000억대 체급 깬 대신PE, AI·반도체 4000억 펀드 시동",
+            "대신프라이빗에쿼티가 블라인드펀드 조성에 나섰다.",
+            " ".join(["에스케이에스프라이빗에쿼티와 인터베스트도 관련 리그에 이름을 올렸다."] * 8),
+            aliases,
+        )
+        assert [str(match["entity_name"]) for match in daishin_matches] == ["대신프라이빗에쿼티"]
 
 
 def test_lp_directory_includes_seed_only_profiles_without_empty_profile_pages() -> None:
@@ -1095,6 +1115,73 @@ def test_gp_stake_belongs_to_market_structure() -> None:
     }
     assert primary_section(row) == "Market"
     assert editorial_section({"title": str(row["title"]), "section": "GP"}) == "Market"
+
+
+def test_company_clipping_manual_corrections_for_20260602() -> None:
+    cases = [
+        (
+            {
+                "publisher": "이투데이",
+                "title": "2000억대 체급 깬 대신PE, AI·반도체 4000억 펀드 시동…역대 최대 블라인드 도전",
+                "summary_text": "대신프라이빗에쿼티가 블라인드펀드 조성에 나섰다.",
+                "section_tags": "",
+                "section_override_tags": "GP",
+                "topic_tags": "GP,Fundraising,NationalGrowthFund",
+                "document_type_tags": "",
+                "gp_names": "대신프라이빗에쿼티",
+                "source_url": "https://www.etoday.co.kr/news/view/2589138",
+                "review_status": "force_include",
+            },
+            "GP",
+        ),
+        (
+            {
+                "publisher": "뉴스톱",
+                "title": "국민성장펀드 잡은 파라투스, 최대 3000억 펀딩 탄력",
+                "summary_text": "파라투스인베스트먼트의 펀드레이징 기사다.",
+                "section_tags": "GP",
+                "section_override_tags": "NationalGrowthFund",
+                "topic_tags": "NationalGrowthFund,LP,GP",
+                "document_type_tags": "",
+                "gp_names": "파라투스인베스트먼트",
+                "source_url": "https://www.newstopkorea.com/news/articleView.html?idxno=45256",
+                "review_status": "force_include",
+            },
+            "NationalGrowthFund",
+        ),
+        (
+            {
+                "publisher": "아시아경제",
+                "title": "국내 금융권 등 해외 사모대출 56조…당국 시스템 리스크 가능성 낮아",
+                "summary_text": "해외 사모대출 시장과 금융권 리스크를 점검한다.",
+                "section_tags": "LP",
+                "section_override_tags": "Market",
+                "topic_tags": "Credit,Market",
+                "document_type_tags": "",
+                "gp_names": "",
+                "source_url": "https://view.asiae.co.kr/article/2026052611385718194",
+                "review_status": "force_include",
+            },
+            "Market",
+        ),
+        (
+            {
+                "publisher": "조선비즈",
+                "title": "“목표액 2배로 모았다” 엑시나, 2000억 투자유치… 신규 FI 10곳 이상",
+                "summary_text": "엑시나 투자유치와 신규 재무적투자자 참여 기사다.",
+                "section_tags": "Deal",
+                "section_override_tags": "Deal",
+                "topic_tags": "Deal",
+                "document_type_tags": "",
+                "gp_names": "",
+                "source_url": "https://biz.chosun.com/stock/market_trend/2026/06/01/NZIEO2HXAZG5PGY4YH4KW2PFCA",
+                "review_status": "force_include",
+            },
+            "Deal",
+        ),
+    ]
+    for row, expected in cases:
+        assert primary_section(row) == expected
 
 
 def test_new_gp_fund_start_is_export_quality_gp() -> None:
