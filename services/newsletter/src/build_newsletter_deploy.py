@@ -787,7 +787,6 @@ def render_service_bottom_nav(active: str) -> str:
         ("lp", "lp-notices.html", "LP", "nav-icon-lp"),
         ("gp", "gps.html", "GP", "nav-icon-gp"),
         ("wiki", "pef-wiki.html", "Wiki", "nav-icon-wiki"),
-        ("saved", "index.html#saved", "저장", "nav-icon-save"),
     ]
     links = "\n".join(
         f"""    <a class="{'active' if key == active else ''}" href="{href}">

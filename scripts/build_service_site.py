@@ -1161,10 +1161,6 @@ def render_app(
       <a href="pef-wiki.html">
         <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
         <strong>Wiki</strong>
-      </a>
-      <a href="index.html#saved">
-        <span aria-hidden="true" class="nav-dot nav-icon-save"></span>
-        <strong>저장</strong>
       </a>"""
     search_placeholder = "뉴스·기관·운용사 검색" if newsletter_only else "뉴스·공식공고·기관·운용사 검색"
     lp_monitor_section = (
@@ -1401,7 +1397,7 @@ button, input { font: inherit; }
 .kpef-icon-menu::after { top: 23px; }
 .kpef-service-tabs {
   display: none;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0 -14px 14px;
   border-bottom: 1px solid var(--separator);
   background: var(--surface);
@@ -2201,7 +2197,7 @@ button, input { font: inherit; }
   z-index: 20;
   display: grid;
   box-sizing: border-box;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   width: 100%;
   max-width: none;
   transform: none;
@@ -2211,7 +2207,7 @@ button, input { font: inherit; }
   backdrop-filter: blur(18px);
 }
 .newsletter-only .bottom-nav,
-.bottom-nav.newsletter-only { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.bottom-nav.newsletter-only { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .bottom-nav button,
 .bottom-nav a {
   display: flex;
@@ -2264,10 +2260,6 @@ button, input { font: inherit; }
 .nav-icon-wiki::before {
   -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 4.5h9.5A3.5 3.5 0 0 1 18 8v11.5H8.5A3.5 3.5 0 0 0 5 23V4.5Zm0 0A3.5 3.5 0 0 1 8.5 1H19v18.5M8 7h6M8 10.5h5' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 4.5h9.5A3.5 3.5 0 0 1 18 8v11.5H8.5A3.5 3.5 0 0 0 5 23V4.5Zm0 0A3.5 3.5 0 0 1 8.5 1H19v18.5M8 7h6M8 10.5h5' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
-}
-.nav-icon-save::before {
-  -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6.5 4.5A2.5 2.5 0 0 1 9 2h6a2.5 2.5 0 0 1 2.5 2.5V21l-5.5-3-5.5 3V4.5Z' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6.5 4.5A2.5 2.5 0 0 1 9 2h6a2.5 2.5 0 0 1 2.5 2.5V21l-5.5-3-5.5 3V4.5Z' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 .bottom-nav .active .nav-dot { opacity: 1; }
 .skeleton-list { display: grid; gap: 1px; overflow: hidden; border-radius: var(--radius); background: var(--surface); }
