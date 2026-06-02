@@ -82,7 +82,24 @@ BRAND_MARKS: dict[str, dict[str, str]] = {
         "logo_url": "https://www.bloter.net/image/logo/snslogo_20240118025249.png",
     },
     "newstopkorea.com": {
-        "logo_url": "https://cdn.newstopkorea.com/favicon.ico",
+        "logo_url": "https://cdn.newstopkorea.com/image/logo/toplogo_20250923031735.png",
+        "image_width": "31px",
+        "image_height": "5px",
+    },
+    "newsis.com": {
+        "logo_url": "https://img1.newsis.com/n_www/images/ci/2024/logo2024.png",
+        "image_width": "31px",
+        "image_height": "11px",
+    },
+    "news.mtn.co.kr": {
+        "logo_url": "https://news.mtn.co.kr/images/logo-mini.png",
+        "image_width": "25px",
+        "image_height": "25px",
+    },
+    "enewstoday.co.kr": {
+        "logo_url": "https://cdn.enewstoday.co.kr/image/logo/toplogo_20230510091236.png",
+        "image_width": "31px",
+        "image_height": "6px",
     },
     "news.einfomax.co.kr": {
         "logo_url": "https://news.einfomax.co.kr/image/logo/snslogo_20231006045256.png",
@@ -1696,6 +1713,8 @@ PUBLISHER_DOMAINS: dict[str, str] = {
     "이데일리": "edaily.co.kr",
     "연합인포맥스": "news.einfomax.co.kr",
     "뉴스톱": "newstopkorea.com",
+    "뉴시스": "newsis.com",
+    "머니투데이방송": "news.mtn.co.kr",
     "블로터": "bloter.net",
     "헤럴드경제": "biz.heraldcorp.com",
     "머니투데이": "mt.co.kr",
@@ -1703,6 +1722,7 @@ PUBLISHER_DOMAINS: dict[str, str] = {
     "뉴스토마토": "newstomato.com",
     "한국경제TV": "wowtv.co.kr",
     "뉴스핌": "newspim.com",
+    "이뉴스투데이": "enewstoday.co.kr",
     "조세일보": "joseilbo.com",
     "경기신문": "kgnews.co.kr",
     "구글뉴스": "news.google.com",

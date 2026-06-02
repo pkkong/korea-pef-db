@@ -30,6 +30,7 @@ DEFAULT_SCHEMA = SERVICE_ROOT / "schema" / "daily_news.sql"
 DEFAULT_SOURCES = SERVICE_ROOT / "data" / "news_sources.csv"
 DEFAULT_RULES = SERVICE_ROOT / "data" / "news_keyword_rules.csv"
 DEFAULT_OVERRIDES = SERVICE_ROOT / "data" / "news_manual_overrides.csv"
+DEFAULT_MANUAL_SEEDS = SERVICE_ROOT / "data" / "news_manual_seed_urls.csv"
 DEFAULT_GP_ALIAS_OVERRIDES = SERVICE_ROOT / "data" / "news_gp_alias_overrides.csv"
 DEFAULT_RAW_DIR = REPO_ROOT / "data" / "raw" / "daily_news"
 DEFAULT_EXPORT_DIR = REPO_ROOT / "exports" / "daily_news"
@@ -69,6 +70,10 @@ TRACKING_PARAMS = {
     "_gl",
     "ref",
     "ref_src",
+    "outlnkchk",
+    "trc",
+    "input",
+    "click",
 }
 
 
@@ -395,7 +400,8 @@ def normalize_url(value: str) -> str:
     if not value:
         return ""
     parsed = urlparse(value.strip())
-    scheme = parsed.scheme.lower() or "https"
+    parsed_scheme = parsed.scheme.lower()
+    scheme = "https" if parsed_scheme in {"", "http", "https"} else parsed_scheme
     netloc = parsed.netloc.lower()
     path = parsed.path or "/"
     if netloc in {"dealsite.co.kr", "www.dealsite.co.kr"}:

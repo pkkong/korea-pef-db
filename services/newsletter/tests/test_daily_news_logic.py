@@ -130,6 +130,22 @@ def test_sedaily_mobile_amp_url_normalizes_to_desktop_article() -> None:
     assert normalize_url("https://www.sedaily.com/article/20047971?ref=naver") == "https://www.sedaily.com/article/20047971"
 
 
+def test_common_news_tracking_params_are_removed() -> None:
+    assert (
+        normalize_url("https://www.edaily.co.kr/News/Read?newsId=04759286645477456&mediaCodeNo=257&OutLnkChk=Y")
+        == "https://www.edaily.co.kr/News/Read?mediaCodeNo=257&newsId=04759286645477456"
+    )
+    assert normalize_url("https://view.asiae.co.kr/article/2026052611385718194?input=1195m") == (
+        "https://view.asiae.co.kr/article/2026052611385718194"
+    )
+    assert normalize_url("https://www.thebell.co.kr/front/newsview.asp?click=F&key=202605280841565440103110") == (
+        "https://www.thebell.co.kr/front/newsview.asp?key=202605280841565440103110"
+    )
+    assert normalize_url("http://www.enewstoday.co.kr/news/articleView.html?idxno=2434987") == (
+        "https://www.enewstoday.co.kr/news/articleView.html?idxno=2434987"
+    )
+
+
 def test_dealsite_category_suffix_url_normalizes_to_article() -> None:
     assert normalize_url("https://dealsite.co.kr/articles/162589/075023") == "https://dealsite.co.kr/articles/162589"
     assert normalize_url("https://www.dealsite.co.kr/articles/162589") == "https://dealsite.co.kr/articles/162589"
@@ -1323,6 +1339,7 @@ def main() -> int:
         test_previous_export_keys_ignore_review_candidates,
         test_google_news_decode_helpers,
         test_sedaily_mobile_amp_url_normalizes_to_desktop_article,
+        test_common_news_tracking_params_are_removed,
         test_dealsite_category_suffix_url_normalizes_to_article,
         test_truncated_media_suffix_does_not_split_title_duplicates,
         test_gp_alias_overrides_cover_common_short_names,

@@ -19,3 +19,19 @@ https://view.asiae.co.kr/article/2026052611385718194,force_include,1,,section_ov
 https://dealsite.co.kr/articles/162472,force_exclude,,1,,,manual correction 2026-05-28 irrelevant article
 https://marketinsight.hankyung.com/article/202605271565r,force_include,1,,section_override:Market;topic:Credit;topic:Market,ASK 사모대출 시장 코멘터리라 LP가 아닌 시장 섹션에서 봅니다.,manual correction 2026-05-28
 https://dealsite.co.kr/articles/162594,force_include,1,,section_override:GP;topic:GP;topic:Fundraising,키움인베스트먼트의 벤처모펀드 운용 기사라 GP 섹션에서 추적합니다.,manual correction 2026-05-28
+https://dealsite.co.kr/articles/162787,force_include,1,,section_override:NationalGrowthFund;topic:NationalGrowthFund;topic:LP;topic:AI_PE,국민성장펀드의 퓨리오사AI 직접 투자 승인 기사입니다.,company clipping correction 2026-06-02
+https://www.etoday.co.kr/news/view/2589384,force_include,1,,section_override:Market;topic:Market;topic:GP;topic:Credit,스틱인베스트먼트 사모사채 발행과 국내 PE 조달시장 변화 기사입니다.,company clipping miss 2026-06-02
+https://www.etoday.co.kr/news/view/2588669,force_include,1,,section_override:NationalGrowthFund;topic:NationalGrowthFund;topic:LP;topic:GP,국민성장펀드 M&A 분야 선정 GP의 펀드레이징 기사입니다.,company clipping miss 2026-06-02
+https://www.newstopkorea.com/news/articleView.html?idxno=45256,force_include,1,,section_override:NationalGrowthFund;topic:NationalGrowthFund;topic:LP;topic:GP,파라투스의 국민성장펀드 선정 이후 펀딩 기사입니다.,company clipping correction 2026-06-02
+https://www.newstopkorea.com/news/articleView.html?idxno=45252,force_include,1,,section_override:Deal;topic:Deal;topic:GP,H&Q의 포트폴리오 엑시트 사례 기사입니다.,company clipping miss 2026-06-02
+https://www.etoday.co.kr/news/view/2588671,force_include,1,,section_override:NationalGrowthFund;topic:NationalGrowthFund;topic:LP;topic:GP,스카이레이크 국민성장펀드 선정 이후 메가펀드 결성 기사입니다.,company clipping miss 2026-06-02
+https://dealsite.co.kr/articles/162700,force_include,1,,section_override:Deal;topic:Deal;topic:GP,KKR의 리뉴어스 중심 환경사업 재편 기사입니다.,company clipping miss 2026-06-02
+https://dealsite.co.kr/articles/161523,force_include,1,,section_override:GP;topic:GP;topic:LP;topic:Fundraising,모태펀드 세컨더리 분야 GP 경쟁 기사입니다.,company clipping miss 2026-06-02
+https://www.investchosun.com/site/data/html_dir/2026/05/29/2026052980156.html,force_include,1,,section_override:Deal;topic:Deal,이지스자산운용 매각 변수 기사입니다.,company clipping miss 2026-06-02
+https://www.investchosun.com/site/data/html_dir/2026/05/29/2026052980052.html,force_include,1,,section_override:NationalGrowthFund;topic:NationalGrowthFund;topic:LP;topic:GP,국민성장펀드 2차 출자와 중형리그 경쟁 기사입니다.,company clipping miss 2026-06-02
+https://www.newstopkorea.com/news/articleView.html?idxno=45260,force_include,1,,section_override:GP;topic:GP;topic:Fundraising,삼호그린인베스트 전략산업펀드 결성 기사입니다.,company clipping correction 2026-06-02
+https://biz.heraldcorp.com/article/10760738,force_include,1,,section_override:Deal;topic:Deal,애큐온캐피탈 본입찰 순연 기사입니다.,company clipping miss 2026-06-02
+https://dealsite.co.kr/articles/162595,force_include,1,,section_override:Deal;topic:Deal,청호나이스 M&A 진행 변수 기사입니다.,company clipping miss 2026-06-02
+https://biz.chosun.com/stock/market_trend/2026/06/01/27ZALAMELFC35EXRUTYTINOA6I/,force_include,1,,section_override:Deal;topic:Deal;topic:Credit,롯데렌탈 매각가와 후순위 구조 기사입니다.,company clipping miss 2026-06-02
+https://www.investchosun.com/site/data/html_dir/2026/05/29/2026052980141.html,force_include,1,,section_override:NationalGrowthFund;topic:NationalGrowthFund;topic:LP;topic:GP,국민성장펀드 위탁운용사 선정 잡음과 시장 반응 기사입니다.,company clipping miss 2026-06-02
+https://www.investchosun.com/site/data/html_dir/2026/05/29/2026052980154.html,force_include,1,,section_override:Market;topic:Market;topic:Credit,생산적금융 경쟁과 중저신용 크레딧 시장 기사입니다.,company clipping miss 2026-06-02

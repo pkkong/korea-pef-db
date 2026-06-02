@@ -204,6 +204,32 @@ def fetch_source_items(
         page = fetch_text(source.locator, verify_ssl=verify_ssl)
         rows = parse_html_listing(source.locator, str(page["text"]), source.article_url_regex)
         return rows
+    if source.source_kind == "manual_url_list":
+        seed_path = Path(source.locator)
+        if not seed_path.is_absolute():
+            seed_path = REPO_ROOT / seed_path
+        rows: list[dict[str, str]] = []
+        for row in read_csv_rows(seed_path):
+            seed_date = str(row.get("report_date", "")).strip()
+            if seed_date and seed_date != report_date:
+                continue
+            source_url = str(row.get("source_url", "")).strip()
+            if not source_url:
+                continue
+            rows.append(
+                {
+                    "link": source_url,
+                    "title": str(row.get("title", "")).strip(),
+                    "publisher": str(row.get("publisher", "")).strip(),
+                    "published_at": str(row.get("published_at", "")).strip(),
+                    "excerpt": str(row.get("summary_text", "") or row.get("notes", "")).strip(),
+                    "manual_tags": str(row.get("manual_tags", "")).strip(),
+                    "manual_comment": str(row.get("manual_comment", "")).strip(),
+                    "force_include": str(row.get("force_include", "")).strip(),
+                    "force_exclude": str(row.get("force_exclude", "")).strip(),
+                }
+            )
+        return rows[:limit_per_source]
     raise ValueError(f"Unsupported source_kind={source.source_kind}")
 
 
@@ -2436,7 +2462,7 @@ def main() -> int:
 
                 override = overrides.get(normalized_source_url, {})
                 manual_tags = []
-                for tag in split_semicolon(override.get("manual_tags", "")):
+                for tag in split_semicolon(override.get("manual_tags", "")) + split_semicolon(str(item.get("manual_tags", ""))):
                     if ":" in tag:
                         tag_type, tag_value = tag.split(":", 1)
                     else:
@@ -2458,11 +2484,29 @@ def main() -> int:
                     document_type_tags,
                     gp_names,
                     score_result["comment_hints"],
-                    override.get("manual_comment", ""),
+                    override.get("manual_comment", "") or str(item.get("manual_comment", "")),
                 )
-                review_status = override.get("review_status", "") or "auto"
-                force_include = review_status == "force_include" or override.get("force_include", "").lower() in {"1", "true", "y", "yes"}
-                force_exclude = review_status == "force_exclude" or override.get("force_exclude", "").lower() in {"1", "true", "y", "yes"}
+                item_force_include = str(item.get("force_include", "")).lower() in {"1", "true", "y", "yes"}
+                item_force_exclude = str(item.get("force_exclude", "")).lower() in {"1", "true", "y", "yes"}
+                review_status = override.get("review_status", "") or (
+                    "force_include" if item_force_include else "force_exclude" if item_force_exclude else "auto"
+                )
+                force_include = (
+                    review_status == "force_include"
+                    or override.get("force_include", "").lower() in {"1", "true", "y", "yes"}
+                    or item_force_include
+                )
+                force_exclude = (
+                    review_status == "force_exclude"
+                    or override.get("force_exclude", "").lower() in {"1", "true", "y", "yes"}
+                    or item_force_exclude
+                )
+                seed_published_at = to_iso_datetime(str(item.get("published_at", "")))
+                published_at = (
+                    seed_published_at
+                    if source.source_kind == "manual_url_list" and seed_published_at
+                    else article_meta.get("published_at", "") or seed_published_at
+                )
 
                 candidate = {
                     "source_url": final_url,
@@ -2470,7 +2514,7 @@ def main() -> int:
                     "source_domain": source_domain(normalized_source_url),
                     "publisher": publisher_name,
                     "title": title,
-                    "published_at": article_meta.get("published_at", "") or to_iso_datetime(str(item.get("published_at", ""))),
+                    "published_at": published_at,
                     "fetched_at": now_utc_iso(),
                     "document_type": document_type_tags[0] if document_type_tags else "article",
                     "raw_html_path": raw_html_path,

@@ -154,6 +154,10 @@ print(f"archive_count={len(archive)}")
 PY
 
 SITE_DIR="$REPO_ROOT/services/newsletter/deploy/site"
+"$PYTHON_BIN" services/newsletter/src/check_newsletter_brand_icons.py \
+  --site-dir "$SITE_DIR" \
+  --report-date "$REPORT_DATE"
+
 TEMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TEMP_ROOT"' EXIT
 MIRROR_DIR="$TEMP_ROOT/kpef-newsletter"
