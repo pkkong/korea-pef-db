@@ -282,6 +282,7 @@ def ensure_lp_notice_columns(conn: sqlite3.Connection) -> None:
 
 def seed_lp_institutions(conn: sqlite3.Connection, path: Path) -> list[dict[str, str]]:
     rows = read_csv_rows(path)
+    source_lp_codes = sorted({str(row.get("lp_code") or "").strip() for row in rows if str(row.get("lp_code") or "").strip()})
     headers = [
         "lp_code",
         "lp_name",
@@ -316,6 +317,35 @@ def seed_lp_institutions(conn: sqlite3.Connection, path: Path) -> list[dict[str,
                 updated_at = excluded.updated_at
             """,
             [row.get(header, "") for header in headers] + [now_utc_iso()],
+        )
+    if source_lp_codes:
+        placeholders = ", ".join("?" for _ in source_lp_codes)
+        conn.execute(
+            f"""
+            DELETE FROM lp_institution
+            WHERE lp_code NOT IN ({placeholders})
+              AND NOT EXISTS (
+                  SELECT 1 FROM lp_profile_fact f
+                  WHERE f.lp_code = lp_institution.lp_code
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM lp_commitment_source s
+                  WHERE s.lp_code = lp_institution.lp_code
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM lp_commitment_notice n
+                  WHERE n.lp_code = lp_institution.lp_code
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM lp_notice_gp_link g
+                  WHERE g.lp_code = lp_institution.lp_code
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM lp_notice_news_link nl
+                  WHERE nl.lp_code = lp_institution.lp_code
+              )
+            """,
+            source_lp_codes,
         )
     conn.commit()
     return rows
