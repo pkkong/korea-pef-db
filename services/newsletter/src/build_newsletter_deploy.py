@@ -13,7 +13,7 @@ import sys
 import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, unquote_plus, urlparse
 from urllib.request import urlopen
 
 
@@ -120,11 +120,12 @@ from build_service_site import (  # noqa: E402
     parse_brief,
     parse_brief_basis,
     read_lp_monitor,
+    read_review_queue_context,
     read_service_context,
     render_app,
     render_public_product_header,
 )
-from daily_news_common import today_seoul  # noqa: E402
+from daily_news_common import normalize_whitespace, today_seoul  # noqa: E402
 from gp_service_pages import write_gp_pages  # noqa: E402
 from pef_wiki_pages import render_pef_wiki_page  # noqa: E402
 
@@ -786,6 +787,7 @@ def render_service_bottom_nav(active: str) -> str:
         ("lp", "lp-notices.html", "LP", "nav-icon-lp"),
         ("gp", "gps.html", "GP", "nav-icon-gp"),
         ("wiki", "pef-wiki.html", "Wiki", "nav-icon-wiki"),
+        ("saved", "index.html#saved", "저장", "nav-icon-save"),
     ]
     links = "\n".join(
         f"""    <a class="{'active' if key == active else ''}" href="{href}">
@@ -835,7 +837,7 @@ def lp_header_script() -> str:
       const setSearchOpen = (open) => {
         if (!serviceBar || !searchArea || !searchToggle) return;
         serviceBar.classList.toggle("search-open", open);
-        searchArea.classList.toggle("visible", open);
+        searchArea.classList.toggle("active", open);
         searchToggle.setAttribute("aria-expanded", String(open));
         if (open) searchInput?.focus();
       };
@@ -1472,7 +1474,7 @@ def render_lp_peer_rows(peers: list[dict[str, object]], active_code: str) -> str
         """          <div class="ktcu-peer-row ktcu-peer-head">
             <strong>LP</strong>
             <span>유형</span>
-            <span>표시 공고</span>
+            <span>출자공고</span>
             <span>규모</span>
           </div>"""
     ]
@@ -1493,7 +1495,7 @@ def render_lp_peer_rows(peers: list[dict[str, object]], active_code: str) -> str
             f"""          <a class="ktcu-peer-row{active_class}" href="lp-{html_escape(lp_code)}.html">
             <strong>{html_escape(str(row.get("lp_name") or lp_code))}</strong>
             <span data-label="유형">{html_escape(public_lp_type(row.get("lp_type") or "LP"))}</span>
-            <span data-label="표시 공고">{html_escape(str(row.get("visible_notice_count", row.get("notice_count") or 0)))}건</span>
+            <span data-label="출자공고">{html_escape(str(row.get("visible_notice_count", row.get("notice_count") or 0)))}건</span>
             <span data-label="규모" title="최신 공고일 {html_escape(latest)}">{html_escape(amount)}</span>
           </a>"""
         )
@@ -1545,7 +1547,7 @@ def render_profile_timeline(facts: list[dict[str, object]], notices: list[dict[s
         )
     events.sort(key=lambda row: (row.get("date") or "0000-00-00", row.get("title") or ""), reverse=True)
     if not events:
-        return """          <p class="ktcu-empty-note">공식 공고와 최근 뉴스가 확인되면 활동 타임라인으로 표시됩니다.</p>"""
+        return """          <p class="ktcu-empty-note">활동 내역이 없습니다.</p>"""
     rows: list[str] = []
     for event in events[:limit]:
         title = html_escape(event.get("title") or "-")
@@ -1577,7 +1579,7 @@ def render_related_gp_signals(notices: list[dict[str, object]], gp_links: list[d
             if clean_name and clean_name not in names:
                 names.append(clean_name)
     if not names:
-        return """          <p class="ktcu-empty-note">공개 공고에서 확인된 선정 GP가 아직 없습니다.</p>"""
+        return """          <p class="ktcu-empty-note">선정 GP 이력이 없습니다.</p>"""
     return "\n".join(f"          <span>{html_escape(name)}</span>" for name in names[:10])
 
 
@@ -1598,25 +1600,48 @@ def render_related_news_rows(news_rows: list[dict[str, object]]) -> str:
     return "\n".join(rows)
 
 
+def lp_notice_document_title(document_url: object, attachment_names: object = "") -> str:
+    candidates: list[str] = []
+    raw_url = str(document_url or "")
+    if raw_url:
+        query = parse_qs(urlparse(raw_url.replace("&amp;", "&")).query)
+        candidates.extend(query.get("filenameOrg", []))
+        candidates.extend(query.get("name", []))
+    candidates.extend(part.strip() for part in str(attachment_names or "").split(";") if part.strip())
+    for candidate in candidates:
+        title = clean_public_lp_text(unquote_plus(candidate))
+        title = re.sub(r"^\s*[-\d.)_\s]+", "", title)
+        title = re.sub(r"\.(?:hwp|hwpx|pdf|docx?|xlsx?)$", "", title, flags=re.IGNORECASE)
+        title = re.sub(r"\s*(?:공고문|공고)\s*(?:\(국문\)|\(English\))?$", " 공고", title)
+        title = normalize_whitespace(title)
+        if len(title) >= 12 and any(token in title for token in ["공고", "선정", "위탁운용", "출자"]):
+            return title
+    return ""
+
+
+def is_truncated_lp_notice_title(value: str) -> bool:
+    return bool(re.search(r"\.{2,}|…", value or ""))
+
+
 def public_gap_text(value: object) -> str:
     text = str(value or "")
     if any(token in text for token in ["정규화", "notice_id", "중복 게시"]):
-        return "같은 공고가 여러 공식 채널에 게시될 수 있어 중복 여부를 구분해 봐야 합니다."
+        return "동일 공고가 여러 공식 채널에 게시될 수 있습니다."
     if any(token in text for token in ["구조화", "상세 첨부파일"]):
-        return "첨부 자료와 최종 선정 결과는 공식 발표가 확인된 건만 반영합니다."
+        return "첨부 자료와 선정 결과는 공식 발표 기준으로 봅니다."
     if "선정 GP" in text:
-        return "선정 GP와 개별 펀드 정보는 공식 발표가 확인된 건만 반영합니다."
+        return "선정 GP와 개별 펀드 정보는 공식 발표 기준으로 봅니다."
     if any(token in text for token in ["잔액", "AUM", "최신"]):
-        return "자산 규모와 대체투자 잔액은 최신 공식 자료가 확인된 항목만 반영합니다."
+        return "자산 규모와 대체투자 잔액은 최신 공식 자료를 기준으로 봅니다."
     if any(token in text for token in ["조달 공고", "투자 공고"]):
-        return "입찰공고에는 조달·투자 공고가 함께 게시되므로 PE/VC 관련 공고만 표시합니다."
+        return "입찰공고에는 조달·투자 공고가 함께 게시될 수 있습니다."
     return clean_public_lp_text(text)
 
 
 def public_gap_label(value: object) -> str:
     text = str(value or "")
     if "공개자료" in text and "한계" in text:
-        return "자료 범위"
+        return "참고"
     if any(token in text for token in ["정규화", "구조화", "수집"]) or re.search(r"보강|검증", text):
         return "참고사항"
     return clean_public_lp_text(text) or "참고사항"
@@ -1659,11 +1684,11 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     official_notices = [notice for notice in notices if str(notice.get("source_type") or "official") == "official"]
 
     notice_rows = "\n".join(render_ktcu_notice_row(row) for row in official_notices) or (
-        """        <p class="ktcu-empty-note">아직 공개 페이지에 표시할 공식 출자공고가 없습니다.</p>"""
+        """        <p class="ktcu-empty-note">공식 출자공고가 없습니다.</p>"""
     )
     max_yearly = max([float(row.get("allocation_amount_krw_100mn") or 0) for row in yearly] or [0])
     yearly_rows = "\n".join(render_ktcu_year_bar(row, max_yearly) for row in yearly) or (
-        """        <p class="ktcu-empty-note">연도별 공고 규모는 공식 공고가 확인되면 표시됩니다.</p>"""
+        """        <p class="ktcu-empty-note">연도별 공고 규모가 없습니다.</p>"""
     )
     source_rows = render_ktcu_source_links(facts)
     source_tab = '<a href="#resources">자료</a>'
@@ -1679,13 +1704,13 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
         else ""
     )
     asset_mix_rows = render_ktcu_asset_mix(official_notices) or (
-        """          <p class="ktcu-empty-note">자산군별 출자 패턴은 공식 공고가 추가되면 표시됩니다.</p>"""
+        """          <p class="ktcu-empty-note">자산군별 출자 패턴이 없습니다.</p>"""
     )
     general_rows = render_ktcu_fact_list(facts_in_section(facts, "general")) or (
-        """          <div><dt>기관 개요</dt><dd>현재 공개자료에서 확인된 항목이 없습니다.</dd></div>"""
+        """          <div><dt>기관 개요</dt><dd>공식 자료 항목이 없습니다.</dd></div>"""
     )
     status_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_status")) or (
-        """          <div><dt>투자 현황</dt><dd>현재 공개자료에서 확인된 항목이 없습니다.</dd></div>"""
+        """          <div><dt>투자 현황</dt><dd>공식 자료 항목이 없습니다.</dd></div>"""
     )
     org_rows = render_ktcu_fact_list(facts_in_section(facts, "investment_org") + facts_in_section(facts, "public_people")) or (
         """          <div><dt>담당 조직</dt><dd>공식 조직도에서 확인된 조직 정보가 없습니다.</dd></div>"""
@@ -1703,7 +1728,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
         else ""
     )
     gap_rows = render_public_gap_rows(facts_in_section(facts, "data_gap")) or (
-        """          <div><dt>선정 GP 히스토리</dt><dd>공식 발표가 확인된 건만 반영합니다.</dd></div>"""
+        """          <div><dt>참고</dt><dd>추가 참고사항이 없습니다.</dd></div>"""
     )
 
     lp_code = str(profile.get("lp_code") or "")
@@ -1742,7 +1767,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
     highlight_count = len([notice for notice in official_notices if str(notice.get("event_date") or "").startswith(str(highlight_year))])
     highlight_amount = public_amount_label(ktcu_year_amount(official_notices, highlight_year))
     highlight_rows = render_ktcu_annual_highlights(official_notices, highlight_year) or (
-        f"""          <p class="ktcu-empty-note">{highlight_year}년 표시할 공식 공고가 없습니다.</p>"""
+        f"""          <p class="ktcu-empty-note">{highlight_year}년 공식 공고가 없습니다.</p>"""
     )
     timeline_rows = render_profile_timeline(facts, notices)
     peer_rows = render_lp_peer_rows(peers, lp_code)
@@ -2252,7 +2277,7 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
             <p class="lp-directory-focus">{html_escape(focus)}</p>
             <span class="lp-directory-latest">{html_escape(latest)}</span>
             <dl class="lp-directory-metrics">
-              <div><dt>표시 공고</dt><dd>{notice_count}건</dd></div>
+              <div><dt>출자공고</dt><dd>{notice_count}건</dd></div>
               <div><dt>공고 규모</dt><dd>{html_escape(amount)}</dd></div>
             </dl>
           </article>"""
@@ -2284,8 +2309,8 @@ def render_lp_notices_page(
     notice_cards = "\n".join(
         f"""          <section class="lp-notice-group" data-group="{html_escape(group_key)}">
             <h2 class="section-title">{html_escape(group_title)}</h2>
-            <div class="lp-page-list">
-{''.join(render_lp_notice_card(item, report_date) for item in group_items) or '<div class="empty-state visible"><strong>표시할 공고가 없습니다</strong></div>'}
+            <div class="lp-page-list lp-notice-list">
+{''.join(render_lp_notice_card(item, report_date) for item in group_items) or '<div class="empty-state visible"><strong>공고가 없습니다</strong></div>'}
             </div>
           </section>"""
         for group_key, group_title, group_items in notice_groups
@@ -2293,14 +2318,14 @@ def render_lp_notices_page(
     )
     if not notice_cards:
         notice_cards = """          <div class="empty-state visible">
-            <strong>표시할 공식 공고가 없습니다</strong>
-            <span>공식 공고가 확인되면 여기에 표시됩니다.</span>
+            <strong>공식 출자공고가 없습니다</strong>
+            <span>조건에 맞는 공고가 없습니다.</span>
           </div>"""
     directory_rows = directory_items or []
     directory_cards = "\n".join(render_lp_directory_card(item) for item in directory_rows) or (
         """          <div class="empty-state visible">
-            <strong>표시할 LP 프로필이 없습니다</strong>
-            <span>공개자료가 확인되면 여기에 표시됩니다.</span>
+            <strong>출자기관 목록이 없습니다</strong>
+            <span>조건에 맞는 기관이 없습니다.</span>
           </div>"""
     )
     tracked_count = len(directory_rows)
@@ -2308,11 +2333,23 @@ def render_lp_notices_page(
     visible_notice_count = len(notices)
     total_amount = sum(float(item.get("allocation_amount_krw_100mn") or 0) for item in directory_rows)
     if is_notice_view:
-        hero_title = '<h1 class="lp-directory-title">출자공고</h1>'
-        hero_meta = f'<p class="lp-directory-meta">공식 공고 {visible_notice_count}건 · 출자기관 {tracked_count}개 · {html_escape(report_date)} 기준</p>'
+        open_count = len([item for item in notices if lp_notice_status(item, report_date) == "open"])
+        result_count = len([item for item in notices if lp_notice_status(item, report_date) == "result"])
+        hero_title = '<h1 class="lp-directory-title">LP 출자공고</h1>'
+        hero_meta = f'<p class="lp-directory-meta">진행중 {open_count}건 · 선정 결과 {result_count}건 · 전체 {visible_notice_count}건 · {html_escape(report_date)} 기준</p>'
+        hero_kpis = ""
+        hero_class = "lp-directory-hero lp-notice-hero"
     else:
         hero_title = f'<h1 class="lp-directory-title"><strong>{tracked_count}개</strong> 출자기관</h1>'
         hero_meta = f'<p class="lp-directory-meta">기관 프로필 {profile_count}개 · 공식 공고 {visible_notice_count}건 · {html_escape(report_date)} 기준</p>'
+        hero_kpis = f"""
+        <div class="lp-directory-kpis">
+          <div><span>대상 기관</span><strong>{tracked_count}개</strong></div>
+          <div><span>기관 프로필</span><strong>{profile_count}개</strong></div>
+          <div><span>공고 기준 규모</span><strong>{html_escape(public_amount_label(total_amount, fallback="-"))}</strong></div>
+          <div><span>출자공고</span><strong>{visible_notice_count}건</strong></div>
+        </div>"""
+        hero_class = "lp-directory-hero"
     notice_asset_options = "".join(
         f'<option value="{html_escape(asset)}">{html_escape(asset)}</option>'
         for asset in sorted(
@@ -2354,7 +2391,7 @@ def render_lp_notices_page(
             <select id="lpSort" aria-label="정렬">
               <option value="latest">최근 공고일순</option>
               <option value="amount">공고 규모순</option>
-              <option value="notices">표시 공고 많은 순</option>
+              <option value="notices">공고 많은 순</option>
               <option value="name">기관명순</option>
             </select>
           </div>
@@ -2365,7 +2402,7 @@ def render_lp_notices_page(
             <span>출자기관명</span>
             <span>주요 자산군</span>
             <span>최근 공고</span>
-            <span>표시 공고</span>
+            <span>출자공고</span>
             <span>공고 규모</span>
           </div>
           <div class="lp-directory-grid">
@@ -2405,16 +2442,7 @@ def render_lp_notices_page(
             </select>
           </div>
         </div>
-        <div class="lp-notice-table">
-          <div class="lp-notice-head" aria-hidden="true">
-            <span>공고명</span>
-            <span>출자기관</span>
-            <span>유형</span>
-            <span>일정</span>
-            <span>규모</span>
-            <span>선정 GP</span>
-            <span>자료</span>
-          </div>
+        <div class="lp-notice-records">
           <div class="lp-notice-groups">
 {notice_cards}
           </div>
@@ -2443,8 +2471,7 @@ def render_lp_notices_page(
     .lp-directory-kpis div {{ border: 1px solid var(--separator); border-radius: 8px; padding: 11px; background: var(--surface); }}
     .lp-directory-kpis span {{ display: block; color: var(--secondary); font-size: 11.5px; font-weight: 800; }}
     .lp-directory-kpis strong {{ display: block; margin-top: 4px; color: var(--text); font-size: 20px; line-height: 1.2; }}
-    .lp-directory-table,
-    .lp-notice-table {{ overflow: hidden; border: 1px solid var(--separator); border-radius: 6px; background: var(--surface); }}
+    .lp-directory-table {{ overflow: hidden; border: 1px solid var(--separator); border-radius: 6px; background: var(--surface); }}
     .lp-directory-head {{
       display: grid;
       grid-template-columns: 40px minmax(0, 1fr) 76px 64px;
@@ -2467,7 +2494,6 @@ def render_lp_notices_page(
     .lp-directory-head span:nth-child(4)::after {{ content: "최근"; font-size: 12px; }}
     .lp-directory-head span:nth-child(5) {{ font-size: 0; }}
     .lp-directory-head span:nth-child(5)::after {{ content: "공고"; font-size: 12px; }}
-    .lp-notice-head {{ display: none; }}
     .lp-directory-grid {{ display: grid; gap: 0; margin-bottom: 16px; }}
     .lp-directory-card {{ display: grid; grid-template-columns: 40px minmax(0, 1fr) 76px 64px; gap: 8px; align-items: center; min-height: 68px; border-bottom: 1px solid var(--separator); padding: 9px 10px; background: var(--surface); }}
     .lp-directory-card:hover {{ background: #fbfcfd; }}
@@ -2481,6 +2507,9 @@ def render_lp_notices_page(
     .lp-directory-avatar.fallback-only > span {{ display: inline; }}
     .lp-directory-avatar[data-tone] {{ color: var(--text); }}
     .lp-directory-card-head {{ display: grid; gap: 4px; }}
+    .lp-directory-card-head,
+    .lp-directory-card-head strong,
+    .lp-directory-card-head a {{ text-align: left; }}
     .lp-directory-card-head strong {{ color: var(--text); font-size: 15px; line-height: 1.28; overflow-wrap: anywhere; }}
     .lp-directory-latest {{ color: var(--secondary); font-size: 13px; font-weight: 750; line-height: 1.45; }}
     .lp-directory-focus,
@@ -2520,8 +2549,7 @@ def render_lp_notices_page(
       body.lp-notices-page .bottom-nav {{
         display: grid;
       }}
-      .lp-directory-table,
-      .lp-notice-table {{ border: 1px solid var(--separator); background: var(--surface); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }}
+      .lp-directory-table {{ border: 1px solid var(--separator); background: var(--surface); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }}
       .lp-directory-head {{
         display: grid;
         grid-template-columns: 44px minmax(170px, 1.2fr) minmax(140px, 0.9fr) minmax(92px, 0.45fr) minmax(88px, 0.4fr) minmax(108px, 0.5fr);
@@ -2570,19 +2598,6 @@ def render_lp_notices_page(
       .lp-directory-metrics div {{ border-top: 0; padding-top: 0; }}
       .lp-directory-metrics dt {{ display: block; }}
       .lp-directory-card > .lp-page-actions {{ display: flex; }}
-      .lp-notice-head {{
-        display: grid;
-        grid-template-columns: minmax(360px, 1.4fr) minmax(320px, 1fr) minmax(160px, 0.42fr);
-        gap: 18px;
-        align-items: center;
-        min-height: 48px;
-        padding: 0 18px;
-        border-bottom: 1px solid var(--separator);
-        background: #f4f5f6;
-        color: var(--secondary);
-        font-size: 12px;
-        font-weight: 850;
-      }}
       .lp-page-list {{ grid-template-columns: minmax(0, 1fr); gap: 0; }}
       .lp-page-card {{
         grid-template-columns: minmax(360px, 1.4fr) minmax(320px, 1fr) minmax(160px, 0.42fr);
@@ -2636,6 +2651,9 @@ def render_lp_notices_page(
       gap: 8px;
       margin: 12px 0 16px;
       padding: 0;
+    }}
+    .lp-notice-hero {{
+      max-width: 760px;
     }}
     .lp-directory-meta {{
       order: 2;
@@ -2700,8 +2718,7 @@ def render_lp_notices_page(
       border-radius: 7px;
       font-size: 13px;
     }}
-    .lp-directory-table,
-    .lp-notice-table {{
+    .lp-directory-table {{
       border: 1px solid var(--separator);
       border-radius: 7px;
       box-shadow: none;
@@ -2806,6 +2823,9 @@ def render_lp_notices_page(
       .lp-directory-title {{
         font-size: 28px;
       }}
+      .lp-notice-hero {{
+        grid-template-columns: minmax(0, 1fr) !important;
+      }}
     }}
     @media (min-width: 960px) {{
       body.lp-notices-page .content-area,
@@ -2818,7 +2838,7 @@ def render_lp_notices_page(
       }}
       .lp-directory-controls,
       .lp-notice-controls {{
-        grid-template-columns: 180px 180px;
+        grid-template-columns: 180px 180px 220px 180px;
       }}
       .lp-directory-head {{
         grid-template-columns: 44px minmax(170px, 1.2fr) minmax(140px, 0.9fr) minmax(92px, 0.45fr) minmax(88px, 0.4fr) minmax(108px, 0.5fr);
@@ -2959,188 +2979,205 @@ def render_lp_notices_page(
     body.lp-notices-page .lp-notice-controls {{
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }}
-    body.lp-notices-page .lp-notice-head {{
+    body.lp-notices-page .lp-notice-records {{
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 82px 66px;
+      gap: 0;
+      background: transparent;
+    }}
+    body.lp-notices-page .lp-notice-groups {{
+      display: grid;
+      gap: 16px;
+    }}
+    body.lp-notices-page .lp-notice-group {{
+      border-top: 0;
+    }}
+    body.lp-notices-page .lp-notice-group + .lp-notice-group {{
+      padding-top: 14px;
+      border-top: 1px solid var(--separator);
+    }}
+    body.lp-notices-page .lp-notice-group .section-title {{
+      margin: 0 0 8px;
+      padding: 0;
+      border-bottom: 0;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 760;
+      line-height: 1.35;
+    }}
+    body.lp-notices-page .lp-notice-list {{
+      display: grid;
       gap: 8px;
-      align-items: center;
-      min-height: 42px;
-      padding: 0 10px;
-      border-bottom: 1px solid var(--separator);
-      background: #f7f7f8;
-      color: var(--secondary);
-      font-size: 12px;
-      font-weight: 720;
-    }}
-    body.lp-notices-page .lp-notice-head span:nth-child(2),
-    body.lp-notices-page .lp-notice-head span:nth-child(3),
-    body.lp-notices-page .lp-notice-head span:nth-child(6),
-    body.lp-notices-page .lp-notice-head span:nth-child(7) {{
-      display: none;
-    }}
-    body.lp-notices-page .lp-notice-head span:nth-child(4)::before {{
-      content: "일정";
-    }}
-    body.lp-notices-page .lp-notice-head span:nth-child(4) {{
-      font-size: 0;
-      text-align: right;
-    }}
-    body.lp-notices-page .lp-notice-head span:nth-child(4)::before {{
-      font-size: 12px;
-    }}
-    body.lp-notices-page .lp-notice-head span:nth-child(5) {{
-      text-align: right;
     }}
     body.lp-notices-page .lp-notice-row {{
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 82px 66px;
-      gap: 8px;
-      align-items: center;
-      min-height: 76px;
-      padding: 11px 10px;
-      border-bottom: 1px solid var(--separator);
+      grid-template-columns: minmax(0, 1fr);
+      gap: 9px;
+      align-items: stretch;
+      min-height: 0;
+      padding: 12px 11px;
+      border: 1px solid var(--separator);
+      border-radius: 7px;
       background: #ffffff;
+      box-shadow: none;
     }}
     body.lp-notices-page .lp-notice-row:last-child {{
-      border-bottom: 0;
+      border-bottom: 1px solid var(--separator);
     }}
     body.lp-notices-page .lp-notice-main {{
-      min-width: 0;
       display: grid;
-      gap: 4px;
+      min-width: 0;
+      gap: 5px;
     }}
-    body.lp-notices-page .lp-notice-main > span {{
+    body.lp-notices-page .lp-notice-eyebrow {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      align-items: center;
+      margin: 0;
       color: var(--secondary);
-      font-size: 11.5px;
-      font-weight: 680;
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.25;
+    }}
+    body.lp-notices-page .lp-notice-eyebrow span + span::before {{
+      color: var(--tertiary);
+      content: "·";
+      margin-right: 8px;
+    }}
+    body.lp-notices-page .lp-notice-status {{
+      color: #475569;
+      font-size: 12px;
+      font-weight: 760;
       line-height: 1.2;
+    }}
+    body.lp-notices-page .lp-notice-row[data-status="open"] .lp-notice-status {{
+      color: #047857;
+    }}
+    body.lp-notices-page .lp-notice-row[data-status="result"] .lp-notice-status {{
+      color: #1d4ed8;
+    }}
+    body.lp-notices-page .lp-notice-row[data-status="closed"] .lp-notice-status,
+    body.lp-notices-page .lp-notice-row[data-status="history"] .lp-notice-status {{
+      color: #64748b;
     }}
     body.lp-notices-page .lp-notice-main h2 {{
       margin: 0;
       color: var(--text);
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 760;
-      line-height: 1.4;
+      line-height: 1.42;
       overflow-wrap: anywhere;
     }}
     body.lp-notices-page .lp-notice-main h2 a {{
       color: inherit;
       text-decoration: none;
     }}
-    body.lp-notices-page .lp-notice-main p {{
-      display: flex;
-      min-width: 0;
-      flex-wrap: wrap;
-      gap: 2px 8px;
+    body.lp-notices-page .lp-notice-facts {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
       margin: 0;
+    }}
+    body.lp-notices-page .lp-notice-facts div {{
+      display: grid;
+      grid-template-columns: 58px minmax(0, 1fr);
+      gap: 8px;
+      min-width: 0;
+      align-items: start;
+    }}
+    body.lp-notices-page .lp-notice-facts dt {{
       color: var(--secondary);
       font-size: 11.5px;
-      font-weight: 620;
+      font-weight: 650;
       line-height: 1.35;
     }}
-    body.lp-notices-page .lp-notice-main p span + span::before {{
-      content: "·";
-      margin-right: 8px;
-      color: var(--tertiary);
+    body.lp-notices-page .lp-notice-facts dd {{
+      min-width: 0;
+      margin: 0;
+      color: var(--text);
+      font-size: 12.5px;
+      font-weight: 650;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
     }}
-    body.lp-notices-page .lp-notice-lp,
-    body.lp-notices-page .lp-notice-type,
-    body.lp-notices-page .lp-notice-gp {{
-      display: none;
+    body.lp-notices-page .lp-notice-facts time {{
+      color: inherit;
+    }}
+    body.lp-notices-page .lp-notice-date-sub {{
+      display: block;
+      margin-top: 2px;
+      color: var(--tertiary);
+      font-size: 11.5px;
+      font-weight: 600;
+      line-height: 1.3;
     }}
     body.lp-notices-page .lp-notice-actions {{
       grid-column: 1 / -1;
       display: flex;
+      flex-wrap: wrap;
       gap: 10px;
       min-height: 0;
       align-items: center;
-      padding-top: 2px;
+      padding-top: 0;
     }}
-    body.lp-notices-page .lp-notice-schedule {{
-      display: grid;
-      gap: 2px;
-      justify-items: end;
+    body.lp-notices-page .lp-notice-actions:empty {{
+      display: none;
+    }}
+    body.lp-notices-page .lp-notice-actions a {{
+      min-height: 26px;
+      padding: 2px 0;
+      border-radius: 0;
+      background: transparent;
       color: var(--secondary);
-      font-style: normal;
-      text-align: right;
+      font-size: 12px;
+      font-weight: 680;
+      text-decoration: none;
     }}
-    body.lp-notices-page .lp-notice-schedule span {{
-      font-size: 10.5px;
-      font-weight: 650;
-    }}
-    body.lp-notices-page .lp-notice-schedule strong,
-    body.lp-notices-page .lp-notice-amount {{
+    body.lp-notices-page .lp-notice-actions a:hover {{
       color: var(--text);
-      font-size: 12.5px;
-      font-weight: 760;
-      line-height: 1.25;
-      text-align: right;
-    }}
-    body.lp-notices-page .lp-notice-schedule em {{
-      color: var(--tertiary);
-      font-size: 10.5px;
-      font-style: normal;
-      font-weight: 600;
-      line-height: 1.2;
+      text-decoration: underline;
+      text-underline-offset: 3px;
     }}
     @media (min-width: 760px) {{
       body.lp-notices-page .lp-notice-controls {{
         grid-template-columns: 150px 160px minmax(180px, 1fr) 160px;
       }}
-      body.lp-notices-page .lp-notice-head {{
-        grid-template-columns: minmax(280px, 1.45fr) minmax(120px, 0.55fr) minmax(125px, 0.55fr) minmax(105px, 0.46fr) minmax(82px, 0.34fr) minmax(150px, 0.7fr) minmax(96px, 0.34fr);
-        gap: 14px;
-        padding: 0 16px;
+      body.lp-notices-page .lp-notice-groups {{
+        gap: 18px;
       }}
-      body.lp-notices-page .lp-notice-head span,
-      body.lp-notices-page .lp-notice-head span:nth-child(2),
-      body.lp-notices-page .lp-notice-head span:nth-child(3),
-      body.lp-notices-page .lp-notice-head span:nth-child(6),
-      body.lp-notices-page .lp-notice-head span:nth-child(7) {{
-        display: block;
+      body.lp-notices-page .lp-notice-group + .lp-notice-group {{
+        padding-top: 18px;
       }}
-      body.lp-notices-page .lp-notice-head span:nth-child(4) {{
-        font-size: 12px;
-        text-align: left;
+      body.lp-notices-page .lp-notice-group .section-title {{
+        margin-bottom: 10px;
+        font-size: 15px;
       }}
-      body.lp-notices-page .lp-notice-head span:nth-child(4)::before {{
-        content: none;
+      body.lp-notices-page .lp-notice-list {{
+        gap: 10px;
       }}
       body.lp-notices-page .lp-notice-row {{
-        grid-template-columns: minmax(280px, 1.45fr) minmax(120px, 0.55fr) minmax(125px, 0.55fr) minmax(105px, 0.46fr) minmax(82px, 0.34fr) minmax(150px, 0.7fr) minmax(96px, 0.34fr);
-        gap: 14px;
-        min-height: 70px;
+        grid-template-columns: minmax(0, 1.1fr) minmax(330px, 0.9fr);
+        gap: 9px 18px;
         padding: 13px 16px;
       }}
-      body.lp-notices-page .lp-notice-main p {{
-        display: none;
+      body.lp-notices-page .lp-notice-main {{
+        align-content: start;
       }}
-      body.lp-notices-page .lp-notice-lp,
-      body.lp-notices-page .lp-notice-type,
-      body.lp-notices-page .lp-notice-gp {{
-        display: block;
-        min-width: 0;
-        color: var(--text);
-        font-size: 12.5px;
-        font-weight: 650;
-        line-height: 1.35;
-        overflow-wrap: anywhere;
+      body.lp-notices-page .lp-notice-main h2 {{
+        font-size: 15.5px;
       }}
-      body.lp-notices-page .lp-notice-type,
-      body.lp-notices-page .lp-notice-gp {{
-        color: var(--secondary);
+      body.lp-notices-page .lp-notice-facts {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px 16px;
       }}
-      body.lp-notices-page .lp-notice-schedule {{
-        justify-items: start;
-        text-align: left;
-      }}
-      body.lp-notices-page .lp-notice-amount {{
-        text-align: left;
+      body.lp-notices-page .lp-notice-facts div {{
+        grid-template-columns: 58px minmax(0, 1fr);
       }}
       body.lp-notices-page .lp-notice-actions {{
-        grid-column: auto;
-        display: flex;
+        grid-column: 2;
         justify-content: flex-start;
+        padding-top: 6px;
+        border-top: 1px solid #edf0f2;
       }}
     }}
   </style>
@@ -3149,17 +3186,12 @@ def render_lp_notices_page(
   <div class="app-shell newsletter-only">
     {render_lp_service_header(active_tab, search_input_id, search_placeholder)}
     <main class="content-area">
-      <section class="lp-directory-hero" aria-label="LP 디렉토리 요약">
+      <section class="{hero_class}" aria-label="LP 디렉토리 요약">
         <div>
           {hero_title}
           {hero_meta}
         </div>
-        <div class="lp-directory-kpis">
-          <div><span>대상 기관</span><strong>{tracked_count}개</strong></div>
-          <div><span>기관 프로필</span><strong>{profile_count}개</strong></div>
-          <div><span>공고 기준 규모</span><strong>{html_escape(public_amount_label(total_amount, fallback="-"))}</strong></div>
-          <div><span>표시 공고</span><strong>{visible_notice_count}건</strong></div>
-        </div>
+{hero_kpis}
       </section>
 {directory_section}
 {notice_section}
@@ -3274,12 +3306,18 @@ def render_lp_notices_page(
 
 
 def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
-    title = str(item.get("displayTitle") or item.get("title") or "공식 공고")
+    raw_title = clean_public_lp_text(item.get("title") or "공식 공고") or "공식 공고"
+    display_title = clean_public_lp_text(item.get("displayTitle") or "") or raw_title
     url = str(item.get("url") or "")
     document_url = str(item.get("documentUrl") or "")
+    attachments = item.get("attachments") if isinstance(item.get("attachments"), list) else []
+    attachment_names = "; ".join(str(attachment.get("name") or "") for attachment in attachments if isinstance(attachment, dict))
+    document_title = lp_notice_document_title(document_url, attachment_names)
+    title = display_title if not is_truncated_lp_notice_title(display_title) else raw_title
+    if document_title and (is_truncated_lp_notice_title(title) or len(document_title) > len(title) + 8):
+        title = document_title
     lp_code = str(item.get("lpCode") or "")
-    lp_name = str(item.get("lpName") or "LP 미분류")
-    event_type = str(item.get("eventType") or "")
+    lp_name = clean_public_lp_text(item.get("lpName") or "LP 미분류") or "LP 미분류"
     event_date = str(item.get("eventDate") or item.get("announcedDate") or "")
     deadline = str(item.get("applicationDeadline") or "")
     status = lp_notice_status(item, report_date)
@@ -3304,19 +3342,36 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
         schedule_value = event_date or "-"
         schedule_sub = ""
     official_link = (
-        f'<a href="{html_escape(url)}" target="_blank" rel="noreferrer">원문</a>'
+        f'<a href="{html_escape(url)}" target="_blank" rel="noreferrer">공고 원문</a>'
         if url
         else ""
     )
     document_link = (
-        f'<a href="{html_escape(document_url)}" target="_blank" rel="noreferrer">첨부</a>'
+        f'<a href="{html_escape(document_url)}" target="_blank" rel="noreferrer">첨부파일</a>'
         if document_url and document_url != url
         else ""
     )
+    actions = official_link + document_link
     linked_title = (
         f'<a href="{html_escape(url)}" target="_blank" rel="noreferrer">{html_escape(title)}</a>'
         if url
         else html_escape(title)
+    )
+    schedule_detail = (
+        f'<time datetime="{html_escape(schedule_value)}">{html_escape(schedule_value)}</time>'
+        if schedule_value != "-"
+        else html_escape(schedule_value)
+    )
+    if schedule_sub:
+        schedule_detail += f'<span class="lp-notice-date-sub">{html_escape(schedule_sub)}</span>'
+    selected_fact = (
+        f"""
+              <div>
+                <dt>선정 GP</dt>
+                <dd>{html_escape(selected_label)}</dd>
+              </div>"""
+        if selected_label != "-"
+        else ""
     )
     search_blob = " ".join(
         str(value or "")
@@ -3324,29 +3379,32 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
             title,
             lp_name,
             asset_class,
-            event_type,
             status_label,
             deadline,
             strategy,
             item.get("selectedGpNames"),
         ]
     )
-    return f"""              <article class="lp-notice-row" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-lp-name="{html_escape(lp_name)}" data-asset="{html_escape(asset_class)}" data-event="{html_escape(event_type)}" data-status="{html_escape(status)}" data-status-group="{html_escape(status_group)}" data-date="{html_escape(event_date)}" data-deadline="{html_escape(deadline)}">
+    return f"""              <article class="lp-notice-row" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-lp-name="{html_escape(lp_name)}" data-asset="{html_escape(asset_class)}" data-status="{html_escape(status)}" data-status-group="{html_escape(status_group)}" data-date="{html_escape(event_date)}" data-deadline="{html_escape(deadline)}">
             <div class="lp-notice-main">
-              <span>{html_escape(status_label)}</span>
+              <p class="lp-notice-eyebrow"><span class="lp-notice-status">{html_escape(status_label)}</span><span>{html_escape(lp_name)}</span></p>
               <h2>{linked_title}</h2>
-              <p><span>{html_escape(lp_name)}</span><span>{html_escape(type_label)}</span></p>
             </div>
-            <strong class="lp-notice-lp">{html_escape(lp_name)}</strong>
-            <span class="lp-notice-type">{html_escape(type_label)}</span>
-            <time class="lp-notice-schedule" datetime="{html_escape(schedule_value if schedule_value != '-' else '')}">
-              <span>{html_escape(schedule_label)}</span>
-              <strong>{html_escape(schedule_value)}</strong>
-              {f'<em>{html_escape(schedule_sub)}</em>' if schedule_sub else ''}
-            </time>
-            <strong class="lp-notice-amount">{html_escape(amount_label)}</strong>
-            <span class="lp-notice-gp">{html_escape(selected_label)}</span>
-            <div class="lp-page-actions lp-notice-actions">{official_link}{document_link}</div>
+            <dl class="lp-notice-facts">
+              <div>
+                <dt>자산군</dt>
+                <dd>{html_escape(type_label)}</dd>
+              </div>
+              <div>
+                <dt>{html_escape(schedule_label)}</dt>
+                <dd>{schedule_detail}</dd>
+              </div>
+              <div>
+                <dt>출자규모</dt>
+                <dd>{html_escape(amount_label)}</dd>
+              </div>{selected_fact}
+            </dl>
+            <div class="lp-page-actions lp-notice-actions" aria-label="공고 자료">{actions}</div>
           </article>"""
 
 
@@ -3426,6 +3484,7 @@ def rewrite_site_archive(site_dir: Path, report_date: str, archive_entries: list
     articles = parse_brief(markdown_path)
     basis_text = parse_brief_basis(markdown_path)
     service_context = read_service_context(DEFAULT_SERVICE_INTEGRATION_WORKLIST)
+    service_context = merge_service_context(service_context, read_review_queue_context(DEFAULT_EXPORT_DIR))
     service_context = merge_service_context(service_context, read_lp_article_context())
     add_title_matched_lp_article_context(service_context, archive_entries)
     filter_service_context_profile_links(service_context)

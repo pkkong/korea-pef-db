@@ -113,6 +113,21 @@ GENERIC_LISTING_TITLES = {
     "next",
     "previous",
 }
+TITLE_METADATA_RE = re.compile(
+    r"(?:^|\s)(?:공고일|게시일|등록일|작성일|신청기한|접수마감|마감일)\s*[:：]?\s*"
+    r"20\d{2}[.\-/년]\s*\d{1,2}[.\-/월]\s*\d{1,2}(?:일)?",
+    re.IGNORECASE,
+)
+DETAIL_TITLE_TERMS = [
+    "출자",
+    "위탁운용",
+    "운용사",
+    "선정",
+    "우선협상",
+    "정량평가",
+    "공고",
+    "모집",
+]
 PROGRAM_SIZE_HINTS = [
     "국민성장펀드",
     "마중물",
@@ -684,6 +699,69 @@ def is_non_commitment_notice(title: str) -> bool:
     return any(term.lower() in title.lower() for term in NON_COMMITMENT_NOTICE_TERMS)
 
 
+def clean_official_notice_title(title: str, lp_name: str = "") -> str:
+    text = normalize_whitespace(strip_html_tags(unquote_plus(str(title or ""))))
+    if not text:
+        return ""
+    if "|" in text:
+        parts = [
+            normalize_whitespace(part)
+            for part in text.split("|")
+            if normalize_whitespace(part)
+        ]
+        substantive_parts = [
+            part
+            for part in parts
+            if len(part) >= 12
+            and any(term in part for term in DETAIL_TITLE_TERMS)
+            and part not in GENERIC_LISTING_TITLES
+        ]
+        if substantive_parts:
+            text = max(substantive_parts, key=len)
+    text = re.sub(r"\s*\bNEW\b\s*$", "", text, flags=re.IGNORECASE)
+    text = TITLE_METADATA_RE.sub(" ", text)
+    text = re.sub(r"\s*(?:을|를)?\s*표시합니다\.?\s*$", "", text)
+    text = normalize_whitespace(text)
+    if lp_name:
+        escaped_lp = re.escape(normalize_whitespace(lp_name))
+        text = re.sub(rf"^(?:\[{escaped_lp}\]|{escaped_lp})\s*", "", text)
+    return normalize_whitespace(text)
+
+
+def title_noise_score(title: str) -> int:
+    text = normalize_whitespace(title)
+    score = 0
+    if TITLE_METADATA_RE.search(text):
+        score += 4
+    if re.search(r"\bNEW\b\s*$", text, flags=re.IGNORECASE):
+        score += 1
+    if ".." in text or "…" in text:
+        score += 3
+    if any(token in text for token in ["상세보기", "목록으로", "작성자", "조회수", "상세내용"]):
+        score += 5
+    if len(text) < 12:
+        score += 2
+    return score
+
+
+def choose_official_notice_title(listing_title: str, detail_title: str, lp_name: str = "") -> str:
+    listing = clean_official_notice_title(listing_title, lp_name)
+    detail = clean_official_notice_title(detail_title, lp_name)
+    if not is_useful_official_detail_title(detail):
+        return listing
+    listing_noise = title_noise_score(listing_title)
+    detail_noise = title_noise_score(detail)
+    if not listing:
+        return detail
+    if detail_noise < listing_noise:
+        return detail
+    if (".." in listing or "…" in listing) and len(detail) >= len(listing.rstrip(".…")):
+        return detail
+    if len(detail) > len(listing) + 8:
+        return detail
+    return listing
+
+
 def normalize_date(value: str) -> str:
     value = str(value or "").strip()
     if not value:
@@ -816,6 +894,37 @@ def primary_document_url(attachments: list[dict[str, str]]) -> str:
     return str(attachments[0].get("url") or "") if attachments else ""
 
 
+def extract_official_detail_title(html_text: str) -> str:
+    summary_match = re.search(r"<table\b[^>]*summary=[\"'](?P<summary>[^\"']+)[\"']", html_text, flags=re.IGNORECASE)
+    if summary_match:
+        title = clean_official_notice_title(summary_match.group("summary"))
+        title = re.sub(r"\s*에 대한\s+작성자.*$", "", title)
+        title = re.sub(r"\s*에 대한\s*$", "", title)
+        if is_useful_official_detail_title(title):
+            return title
+    for pattern in [
+        r"<meta\b[^>]*(?:property|name)=[\"'](?:og:title|title)[\"'][^>]*content=[\"'](?P<title>[^\"']+)[\"']",
+        r"<meta\b[^>]*content=[\"'](?P<title>[^\"']+)[\"'][^>]*(?:property|name)=[\"'](?:og:title|title)[\"']",
+        r"<h1\b[^>]*>(?P<title>.*?)</h1>",
+        r"<h2\b[^>]*>(?P<title>.*?)</h2>",
+    ]:
+        match = re.search(pattern, html_text, flags=re.IGNORECASE | re.DOTALL)
+        if not match:
+            continue
+        title = clean_official_notice_title(match.group("title"))
+        if is_useful_official_detail_title(title) and not re.fullmatch(r"거래기관선정공고.*", title):
+            return title
+    return ""
+
+
+def is_useful_official_detail_title(title: str) -> bool:
+    if not title:
+        return False
+    if any(token in title for token in ["상세보기", "목록으로", "작성자", "조회수", "상세내용", "Agricultural Policy"]):
+        return False
+    return any(token in title for token in DETAIL_TITLE_TERMS)
+
+
 def fetch_official_detail(notice_url: str, allow_insecure_ssl: bool) -> dict[str, object]:
     try:
         fetched = fetch_text(notice_url, verify_ssl=not allow_insecure_ssl)
@@ -826,6 +935,7 @@ def fetch_official_detail(notice_url: str, allow_insecure_ssl: bool) -> dict[str
     final_url = str(fetched.get("final_url") or notice_url)
     return {
         "attachments": extract_official_attachments(final_url, html_text),
+        "title": extract_official_detail_title(html_text),
         "text": strip_html_tags(re.sub(r"<script\b.*?</script>", " ", html_text, flags=re.IGNORECASE | re.DOTALL)),
     }
 
@@ -1328,6 +1438,7 @@ def load_official_candidates(
     gp_aliases: object,
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
+    lp_names_by_code = {alias.lp_code: alias.lp_name for alias in lp_aliases}
     for source in sources:
         source_kind = source.get("source_kind", "")
         if not parse_bool(source.get("is_active", "1")) or source_kind not in {"html_listing", "apfs_board", "kbiz_listing", "ktcu_notice", "cu_notice", "kfcc_tender"}:
@@ -1369,12 +1480,16 @@ def load_official_candidates(
             if not matches_must_contain(split_semicolon(source.get("must_contain", "")), title, notice_url):
                 continue
             detail = fetch_official_detail(notice_url, allow_insecure_ssl)
+            detail_title = normalize_whitespace(str(detail.get("title") or ""))
             detail_text = normalize_whitespace(str(detail.get("text") or ""))[:6000]
             attachments = [item for item in detail.get("attachments", []) if isinstance(item, dict)]
             attachment_names = semicolon_join([str(item.get("name") or "") for item in attachments])
             attachment_urls = semicolon_join([str(item.get("url") or "") for item in attachments])
+            preliminary_text = f"{title} {detail_title} {detail_text} {notice_url}"
+            lp_code = infer_lp_code(preliminary_text, lp_aliases, source.get("lp_code", ""))
+            title = choose_official_notice_title(title, detail_title, lp_names_by_code.get(lp_code, ""))
             text = f"{title} {notice_url}" if source.get("source_code") == "vcs_investment_notice" else f"{title} {detail_text} {notice_url}"
-            lp_code = infer_lp_code(title, lp_aliases, source.get("lp_code", "")) or infer_lp_code(text, lp_aliases, source.get("lp_code", ""))
+            lp_code = infer_lp_code(title, lp_aliases, lp_code) or infer_lp_code(text, lp_aliases, lp_code)
             announced_date = link.get("announced_date", "")
             contact_team = link.get("contact_team", "")
             stage_for_gp = infer_stage(f"{title} {detail_text}")

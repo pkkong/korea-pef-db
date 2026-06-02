@@ -534,6 +534,16 @@ CREDIT_TRANSACTION_KEYWORDS = [
     "약정",
     "클로징",
 ]
+EXTERNAL_FUNDING_DEAL_KEYWORDS = [
+    "투자유치",
+    "신규 FI",
+    "시리즈A",
+    "시리즈B",
+    "시리즈C",
+    "프리IPO",
+    "pre-IPO",
+    "몸값",
+]
 
 
 def has_ai_theme(text: str) -> bool:
@@ -553,6 +563,10 @@ def has_national_growth_fund_theme(title_text: str, raw_section: str = "") -> bo
 
 def has_specific_equity_transaction_signal(text: str) -> bool:
     return bool(EQUITY_STAKE_TRANSACTION_RE.search(text)) or bool(AMOUNTED_INVESTMENT_RE.search(text))
+
+
+def has_external_funding_deal_signal(text: str) -> bool:
+    return contains_any(text, EXTERNAL_FUNDING_DEAL_KEYWORDS) or has_specific_equity_transaction_signal(text)
 
 
 def has_gp_focus_signal(text: str) -> bool:
@@ -617,14 +631,20 @@ def editorial_section(row: dict[str, str]) -> str:
         return "LP"
     if raw_section == "AI & PE":
         return "AI & PE"
-    if has_ai_theme(combined) and contains_any(combined, DEAL_SIGNAL_KEYWORDS + DEAL_FINANCING_KEYWORDS + LP_FOCUS_KEYWORDS + GP_FOCUS_KEYWORDS):
-        return "AI & PE"
     if contains_any(title_text, MARKET_STRUCTURE_KEYWORDS):
         return "Market"
     if contains_any(title_text, MARKET_COMMENTARY_KEYWORDS):
         return "Market"
-    if contains_any(title_text, ["펀드 결성", "펀드레이징", "펀드 조성", "펀드 도전", "클로징", "약정총액", "목표액", "블라인드펀드"]):
+    if contains_any(title_text, DEAL_FINANCING_KEYWORDS) and not contains_any(title_text, CREDIT_TRANSACTION_KEYWORDS):
+        return "Market"
+    if has_external_funding_deal_signal(title_text):
+        return "Deal"
+    if contains_any(title_text, ["펀드 결성", "펀드레이징", "펀드 조성", "펀드 도전", "펀드 시동", "펀딩", "클로징", "약정총액", "목표액", "블라인드펀드", "블라인드 도전"]):
         return "GP"
+    if raw_section.strip() == "GP" and has_gp_focus_signal(title_text):
+        return "GP"
+    if has_ai_theme(combined) and contains_any(combined, DEAL_SIGNAL_KEYWORDS + DEAL_FINANCING_KEYWORDS + LP_FOCUS_KEYWORDS + GP_FOCUS_KEYWORDS):
+        return "AI & PE"
     if contains_any(title_text, DEAL_SIGNAL_KEYWORDS + DEAL_OWNERSHIP_KEYWORDS + DEAL_ISSUE_KEYWORDS) or has_specific_equity_transaction_signal(title_text):
         return "Deal"
     if contains_any(title_text, DEAL_FINANCING_KEYWORDS):
@@ -681,7 +701,7 @@ def editorial_subtype(row: dict[str, str], section: str) -> str:
             return "Liquidity"
         return "Governance"
     if section == "GP":
-        if contains_any(text, ["펀드 결성", "펀드레이징", "펀드 조성", "펀드 도전", "클로징", "약정총액", "목표액", "블라인드펀드"]):
+        if contains_any(text, ["펀드 결성", "펀드레이징", "펀드 조성", "펀드 도전", "펀드 시동", "펀딩", "클로징", "약정총액", "목표액", "블라인드펀드", "블라인드 도전"]):
             return "Fundraising"
         if contains_any(text, ["대표", "파트너", "심사역", "영입", "선임", "복귀", "승진", "인력"]):
             return "People"
@@ -890,6 +910,7 @@ def lp_display_title(title: str) -> str:
     text = re.sub(r"선정\(예정\)일:\s*(?:20\d{2}-\d{2}-\d{2})?\s*", "", text)
     text = re.sub(r"결성\(예정\)일:\s*(?:20\d{2}-\d{2}-\d{2})?\s*", "", text)
     text = re.sub(r"^(?:\[[^\]]+\]\s*)+", "", text)
+    text = re.sub(r"\s*(?:을|를)?\s*표시합니다\.?\s*$", "", text)
     text = text.replace("-->", "")
     return normalize_whitespace(text) or title
 
@@ -1140,6 +1161,10 @@ def render_app(
       <a href="pef-wiki.html">
         <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
         <strong>Wiki</strong>
+      </a>
+      <a href="index.html#saved">
+        <span aria-hidden="true" class="nav-dot nav-icon-save"></span>
+        <strong>저장</strong>
       </a>"""
     search_placeholder = "뉴스·기관·운용사 검색" if newsletter_only else "뉴스·공식공고·기관·운용사 검색"
     lp_monitor_section = (
@@ -2176,7 +2201,7 @@ button, input { font: inherit; }
   z-index: 20;
   display: grid;
   box-sizing: border-box;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   width: 100%;
   max-width: none;
   transform: none;
@@ -2186,7 +2211,7 @@ button, input { font: inherit; }
   backdrop-filter: blur(18px);
 }
 .newsletter-only .bottom-nav,
-.bottom-nav.newsletter-only { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.bottom-nav.newsletter-only { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .bottom-nav button,
 .bottom-nav a {
   display: flex;
@@ -2239,6 +2264,10 @@ button, input { font: inherit; }
 .nav-icon-wiki::before {
   -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 4.5h9.5A3.5 3.5 0 0 1 18 8v11.5H8.5A3.5 3.5 0 0 0 5 23V4.5Zm0 0A3.5 3.5 0 0 1 8.5 1H19v18.5M8 7h6M8 10.5h5' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 4.5h9.5A3.5 3.5 0 0 1 18 8v11.5H8.5A3.5 3.5 0 0 0 5 23V4.5Zm0 0A3.5 3.5 0 0 1 8.5 1H19v18.5M8 7h6M8 10.5h5' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.nav-icon-save::before {
+  -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6.5 4.5A2.5 2.5 0 0 1 9 2h6a2.5 2.5 0 0 1 2.5 2.5V21l-5.5-3-5.5 3V4.5Z' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6.5 4.5A2.5 2.5 0 0 1 9 2h6a2.5 2.5 0 0 1 2.5 2.5V21l-5.5-3-5.5 3V4.5Z' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 .bottom-nav .active .nav-dot { opacity: 1; }
 .skeleton-list { display: grid; gap: 1px; overflow: hidden; border-radius: var(--radius); background: var(--surface); }
