@@ -17,3 +17,36 @@ mmaa,군인공제회,Military Mutual Aid Association,Mutual Aid Association,mutu
 cwma,건설근로자공제회,CWMA,Mutual Aid Association,mutual_aid,https://www.cw.or.kr,https://www.vcs.go.kr/web/portal/bbs/invtnotice/list?baCommSelec=false&baNotice=false&baOpenDay=false&baUse=true&bcId=invtnotice&pageSize=20,자산운용 담당,PEF;VC,62,건설근로자공제회;CWMA,PEF/VC 블라인드펀드 공고 추적 대상
 kbiz,중소기업중앙회,KBIZ,Mutual Aid/Industry Association,private,https://www.kbiz.or.kr,https://www.kbiz.or.kr/ko/contents/bbs/list.do?mnSeq=211,공제기금/투자 담당,VC;PEF,58,중소기업중앙회;KBIZ,국내 블라인드 VC/PE 출자사업 추적 대상
 ibk,IBK기업은행,Industrial Bank of Korea,Policy Bank,public,https://www.ibk.co.kr,https://www.vcs.go.kr/web/portal/bbs/invtnotice/list?baCommSelec=false&baNotice=false&baOpenDay=false&baUse=true&bcId=invtnotice&pageSize=20,모험자본/혁신금융 담당,VC;PEF;Policy Fund,56,IBK기업은행;기업은행;중소기업은행;IBK,정책금융성 출자사업 추적 대상
+kic,한국투자공사,Korea Investment Corporation,Sovereign Wealth Fund,public,https://www.kic.kr,,대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,84,한국투자공사;KIC;국부펀드,해외 대체투자 및 국내 기관투자자 네트워크 핵심 LP
+sema,과학기술인공제회,Science and Technology Mutual-aid Association,Mutual Aid Association,mutual_aid,https://www.sema.or.kr,,기금운용본부,PEF;VC;Private Credit;Real Estate;Infrastructure,77,과학기술인공제회;과기공;SEMA,국내외 대체투자 주요 공제회 LP 후보
+suhyup,수협중앙회,National Federation of Fisheries Cooperatives,Mutual Finance,private,https://www.suhyup.co.kr,,자금운용 담당,PEF;Private Credit;Real Estate;Infrastructure,69,수협중앙회;수협;Sh Suhyup Bank;수협은행,상호금융 및 금융권 대체투자 LP 후보
+nhfg,NH농협금융지주,NH Financial Group,Financial Group,private,https://www.nhfg.co.kr,,자산운용/전략투자 담당,PEF;Private Credit;Real Estate;Infrastructure,67,NH농협금융;농협금융;농협금융지주;NH Financial Group,금융지주 계열 대체투자 LP 후보
+kodit,신용보증기금,Korea Credit Guarantee Fund,Policy Finance Institution,public,https://www.kodit.co.kr,,투자금융/보증연계 담당,VC;Growth Capital;Policy Fund,66,신용보증기금;KODIT;신보,정책금융 및 벤처 모펀드성 출자 후보
+kibo,기술보증기금,Korea Technology Finance Corporation,Policy Finance Institution,public,https://www.kibo.or.kr,,벤처투자/기술금융 담당,VC;Growth Capital;Policy Fund,65,기술보증기금;KIBO;기보,기술금융 및 벤처 출자 후보
+kosme,중소벤처기업진흥공단,Korea SMEs and Startups Agency,Policy Finance Institution,public,https://www.kosmes.or.kr,,정책자금/투자 담당,VC;Growth Capital;Policy Fund,64,중소벤처기업진흥공단;중진공;KOSME,중소벤처 정책금융 출자 후보
+kocca,한국콘텐츠진흥원,Korea Creative Content Agency,Public Agency,public,https://www.kocca.kr,,콘텐츠금융/투자 담당,VC;Growth Capital;Content Fund,60,한국콘텐츠진흥원;콘진원;KOCCA;콘텐츠펀드,콘텐츠 분야 정책펀드 출자 후보
+kofic,영화진흥위원회,Korean Film Council,Public Agency,public,https://www.kofic.or.kr,,영화계정/투자 담당,VC;Content Fund;Project Fund,59,영화진흥위원회;영진위;KOFIC;영화펀드,영화 및 콘텐츠 계정 출자 후보
+kspo,국민체육진흥공단,Korea Sports Promotion Foundation,Public Agency,public,https://www.kspo.or.kr,,기금운용/스포츠산업 담당,VC;Growth Capital;Content Fund,57,국민체육진흥공단;KSPO;스포츠산업펀드,스포츠산업 정책펀드 출자 후보
+sba,서울경제진흥원,Seoul Business Agency,Regional Public Agency,public,https://www.sba.seoul.kr,,투자지원/펀드 담당,VC;Growth Capital;Regional Fund,55,서울경제진흥원;SBA;서울산업진흥원;서울시 펀드,지역 정책펀드 및 벤처 출자 후보
+nhuf,주택도시기금,National Housing and Urban Fund,Public Fund,public,https://nhuf.molit.go.kr,,기금운용 담당,Real Estate;Infrastructure;Private Credit,54,주택도시기금;국토교통부 주택도시기금;NHUF,부동산·인프라성 대체투자 LP 후보
+comwel,근로복지공단,Korea Workers' Compensation and Welfare Service,Public Fund,public,https://www.comwel.or.kr,,기금운용 담당,PEF;Private Credit;Real Estate;Infrastructure,53,근로복지공단;고용보험기금;산재보험기금;COMWEL,고용·산재보험기금 운용 관련 LP 후보
+nhis,국민건강보험공단,National Health Insurance Service,Public Fund,public,https://www.nhis.or.kr,,기금운용 담당,PEF;Private Credit;Real Estate;Infrastructure,52,국민건강보험공단;건강보험공단;NHIS,공공기금 운용 관련 LP 후보
+kbfg,KB금융지주,KB Financial Group,Financial Group,private,https://www.kbfg.com,,전략투자/자산운용 담당,PEF;Private Credit;Real Estate;Infrastructure,49,KB금융;KB금융지주;KB Financial Group,금융지주 계열 대체투자 LP 후보
+shfg,신한금융지주,Shinhan Financial Group,Financial Group,private,https://www.shinhangroup.com,,전략투자/자산운용 담당,PEF;Private Credit;Real Estate;Infrastructure,48,신한금융;신한금융지주;Shinhan Financial Group,금융지주 계열 대체투자 LP 후보
+hanafg,하나금융지주,Hana Financial Group,Financial Group,private,https://www.hanafn.com,,전략투자/자산운용 담당,PEF;Private Credit;Real Estate;Infrastructure,47,하나금융;하나금융지주;Hana Financial Group,금융지주 계열 대체투자 LP 후보
+woorifg,우리금융지주,Woori Financial Group,Financial Group,private,https://www.woorifg.com,,전략투자/자산운용 담당,PEF;Private Credit;Real Estate;Infrastructure,46,우리금융;우리금융지주;Woori Financial Group,금융지주 계열 대체투자 LP 후보
+samsunglife,삼성생명,Samsung Life Insurance,Insurance Company,private,https://www.samsunglife.com,,특별계정/대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,45,삼성생명;Samsung Life,보험사 대체투자 LP 후보
+hanwhalife,한화생명,Hanwha Life Insurance,Insurance Company,private,https://www.hanwhalife.com,,대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,44,한화생명;Hanwha Life,보험사 대체투자 LP 후보
+kyobolife,교보생명,Kyobo Life Insurance,Insurance Company,private,https://www.kyobo.com,,대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,43,교보생명;Kyobo Life,보험사 대체투자 LP 후보
+dbins,DB손해보험,DB Insurance,Insurance Company,private,https://www.idbins.com,,자산운용/대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,42,DB손해보험;DB Insurance,보험사 대체투자 LP 후보
+hyundaihi,현대해상,Hyundai Marine & Fire Insurance,Insurance Company,private,https://www.hi.co.kr,,자산운용/대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,41,현대해상;현대해상화재보험;Hyundai Marine,보험사 대체투자 LP 후보
+samsungfire,삼성화재,Samsung Fire & Marine Insurance,Insurance Company,private,https://www.samsungfire.com,,자산운용/대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,40,삼성화재;삼성화재해상보험;Samsung Fire,보험사 대체투자 LP 후보
+kbinsure,KB손해보험,KB Insurance,Insurance Company,private,https://www.kbinsure.co.kr,,자산운용/대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,39,KB손해보험;KB Insurance,보험사 대체투자 LP 후보
+miraeassetsec,미래에셋증권,Mirae Asset Securities,Securities Company,private,https://securities.miraeasset.com,,IB/대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,38,미래에셋증권;Mirae Asset Securities,증권사 자기자본·대체투자 LP 후보
+kissec,한국투자증권,Korea Investment & Securities,Securities Company,private,https://www.truefriend.com,,IB/대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,37,한국투자증권;한투증권;Korea Investment Securities,증권사 자기자본·대체투자 LP 후보
+nhsec,NH투자증권,NH Investment & Securities,Securities Company,private,https://www.nhqv.com,,IB/대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,36,NH투자증권;NH Investment Securities,증권사 자기자본·대체투자 LP 후보
+kbsec,KB증권,KB Securities,Securities Company,private,https://www.kbsec.com,,IB/대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,35,KB증권;KB Securities,증권사 자기자본·대체투자 LP 후보
+shinhansec,신한투자증권,Shinhan Securities,Securities Company,private,https://www.shinhansec.com,,IB/대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,34,신한투자증권;신한금융투자;Shinhan Securities,증권사 자기자본·대체투자 LP 후보
+samsungsec,삼성증권,Samsung Securities,Securities Company,private,https://www.samsungpop.com,,IB/대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,33,삼성증권;Samsung Securities,증권사 자기자본·대체투자 LP 후보
+hanasec,하나증권,Hana Securities,Securities Company,private,https://www.hanaw.com,,IB/대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,32,하나증권;하나금융투자;Hana Securities,증권사 자기자본·대체투자 LP 후보
+meritzsec,메리츠증권,Meritz Securities,Securities Company,private,https://home.imeritz.com,,IB/대체투자 담당,PEF;Private Credit;Real Estate;Infrastructure,31,메리츠증권;Meritz Securities,증권사 자기자본·대체투자 LP 후보
