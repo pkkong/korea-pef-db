@@ -26,6 +26,7 @@ DEFAULT_PUBLIC_DIR = REPO_ROOT / "public"
 DEFAULT_SERVICE_INTEGRATION_WORKLIST = REPO_ROOT / "exports" / "service_integration_worklist_latest.csv"
 DEFAULT_LP_COMMITMENT_MONITOR = REPO_ROOT / "exports" / "lp_commitment_monitor_latest.csv"
 DEFAULT_ARCHIVE_LIMIT = 30
+LP_PUBLIC_NOTICE_START_DATE = "2024-01-01"
 APP_ICON_FILE = "apple-touch-icon.png"
 SECTION_HEADER_RE = re.compile(r"^\[(?P<section>.+?)\]\s*$")
 ARTICLE_RE = re.compile(r"^- \[(?P<title>.+?)\]\((?P<url>https?://[^)]+)\)")
@@ -1011,6 +1012,9 @@ def read_lp_monitor(path: Path, limit: int | None = 8) -> list[dict[str, object]
                 continue
             if not is_public_lp_notice_row(row, require_official=True):
                 continue
+            event_date = row.get("event_date", "") or row.get("announced_date", "")
+            if event_date and event_date[:10] < LP_PUBLIC_NOTICE_START_DATE:
+                continue
             attachment_names = split_semicolon(row.get("attachment_names", ""))
             attachment_urls = split_semicolon(row.get("attachment_urls", ""))
             attachments = [
@@ -1032,7 +1036,7 @@ def read_lp_monitor(path: Path, limit: int | None = 8) -> list[dict[str, object]
                 "sourceCode": row.get("source_code", ""),
                 "sourceType": row.get("source_type", ""),
                 "eventType": row.get("event_type", ""),
-                "eventDate": row.get("event_date", "") or row.get("announced_date", ""),
+                "eventDate": event_date,
                 "title": title,
                 "displayTitle": display_title,
                 "url": notice_url,

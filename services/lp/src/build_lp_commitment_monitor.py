@@ -48,6 +48,10 @@ DEFAULT_LP_SOURCES = REPO_ROOT / "data" / "lp_commitment_sources.csv"
 DEFAULT_LP_REVIEWED_EVENTS = REPO_ROOT / "data" / "lp_reviewed_events.csv"
 DEFAULT_OUT_DIR = REPO_ROOT / "exports"
 NEWS_FEED_SOURCE_CODE = "daily_news_lp_feed"
+VCS_BACKFILL_PAGE_SIZE = 500
+SOURCE_BACKFILL_LIMITS = {
+    "vcs_investment_notice": 500,
+}
 
 NOTICE_TERMS = [
     "출자사업",
@@ -1225,6 +1229,45 @@ def parse_kbiz_listing(source: dict[str, str], allow_insecure_ssl: bool) -> list
     return rows
 
 
+def parse_vcs_investment_listing(source: dict[str, str], limit: int, allow_insecure_ssl: bool) -> list[dict[str, str]]:
+    locator = source.get("locator", "")
+    if not locator:
+        return []
+    parsed = urlparse(locator)
+    query = parse_qs(parsed.query)
+    query["pageSize"] = [str(max(VCS_BACKFILL_PAGE_SIZE, min(limit, 1000)))]
+    list_url = parsed._replace(query=urlencode({key: values[-1] for key, values in query.items()})).geturl()
+    fetched = fetch_text(list_url, verify_ssl=not allow_insecure_ssl)
+    html_text = str(fetched.get("text") or "")
+    final_url = str(fetched.get("final_url") or list_url)
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for link in parse_html_listing(final_url, html_text, r"/web/portal/bbs/invtnotice/\d+"):
+        raw_title = normalize_whitespace(link.get("title", ""))
+        notice_url = link.get("link", "")
+        if not raw_title or not notice_url or notice_url in seen:
+            continue
+        if "공고일:" not in raw_title:
+            continue
+        announced_date = extract_announcement_date(raw_title)
+        deadline = extract_deadline(raw_title)
+        lp_name = normalize_whitespace(raw_title.split("공고일:", 1)[0])
+        seen.add(notice_url)
+        rows.append(
+            {
+                "title": raw_title,
+                "link": notice_url,
+                "announced_date": announced_date,
+                "application_deadline": deadline,
+                "contact_team": lp_name,
+                "text": raw_title,
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
+
+
 def parse_ktcu_listing(source: dict[str, str], limit: int, allow_insecure_ssl: bool) -> list[dict[str, str]]:
     locator = source.get("locator", "")
     if not locator:
@@ -1774,26 +1817,29 @@ def load_official_candidates(
     lp_names_by_code = {alias.lp_code: alias.lp_name for alias in lp_aliases}
     for source in sources:
         source_kind = source.get("source_kind", "")
-        if not parse_bool(source.get("is_active", "1")) or source_kind not in {"html_listing", "html_page", "apfs_board", "kbiz_listing", "ktcu_notice", "cu_notice", "kfcc_tender", "kdb_jex_board", "kdic_notice"}:
+        if not parse_bool(source.get("is_active", "1")) or source_kind not in {"html_listing", "html_page", "apfs_board", "kbiz_listing", "vcs_listing", "ktcu_notice", "cu_notice", "kfcc_tender", "kdb_jex_board", "kdic_notice"}:
             continue
         locator = source.get("locator", "")
         if not locator:
             continue
         try:
+            source_limit = max(limit_per_source, SOURCE_BACKFILL_LIMITS.get(source.get("source_code", ""), 0))
             if source_kind == "apfs_board":
-                links = parse_apfs_board_listing(source, limit_per_source, allow_insecure_ssl)
+                links = parse_apfs_board_listing(source, source_limit, allow_insecure_ssl)
             elif source_kind == "kbiz_listing":
                 links = parse_kbiz_listing(source, allow_insecure_ssl)
+            elif source_kind == "vcs_listing":
+                links = parse_vcs_investment_listing(source, source_limit, allow_insecure_ssl)
             elif source_kind == "ktcu_notice":
-                links = parse_ktcu_listing(source, limit_per_source, allow_insecure_ssl)
+                links = parse_ktcu_listing(source, source_limit, allow_insecure_ssl)
             elif source_kind == "cu_notice":
-                links = parse_cu_listing(source, limit_per_source, allow_insecure_ssl)
+                links = parse_cu_listing(source, source_limit, allow_insecure_ssl)
             elif source_kind == "kfcc_tender":
-                links = parse_kfcc_tender_listing(source, limit_per_source, allow_insecure_ssl)
+                links = parse_kfcc_tender_listing(source, source_limit, allow_insecure_ssl)
             elif source_kind == "kdb_jex_board":
-                links = parse_kdb_ngf_listing(source, limit_per_source, allow_insecure_ssl)
+                links = parse_kdb_ngf_listing(source, source_limit, allow_insecure_ssl)
             elif source_kind == "kdic_notice":
-                links = parse_kdic_notice_listing(source, limit_per_source, allow_insecure_ssl)
+                links = parse_kdic_notice_listing(source, source_limit, allow_insecure_ssl)
             elif source_kind == "html_page":
                 fetched = fetch_text(locator, verify_ssl=not allow_insecure_ssl)
                 links = make_html_page_link(
@@ -1831,7 +1877,10 @@ def load_official_candidates(
                 for name, url in zip(link_attachment_names, link_attachment_urls)
                 if url
             ]
-            detail = fetch_official_detail(notice_url, allow_insecure_ssl)
+            if source_kind == "vcs_listing":
+                detail = {}
+            else:
+                detail = fetch_official_detail(notice_url, allow_insecure_ssl)
             detail_title = normalize_whitespace(str(detail.get("title") or ""))
             detail_text = normalize_whitespace(f"{link_text} {detail.get('text') or ''}")[:6000]
             detail_attachments = [item for item in detail.get("attachments", []) if isinstance(item, dict)]
@@ -1841,7 +1890,7 @@ def load_official_candidates(
             preliminary_text = f"{title} {detail_title} {link_text} {detail_text} {notice_url}"
             lp_code = infer_lp_code(preliminary_text, lp_aliases, source.get("lp_code", ""))
             title = choose_official_notice_title(title, detail_title, lp_names_by_code.get(lp_code, ""))
-            text = f"{title} {notice_url}" if source.get("source_code") == "vcs_investment_notice" else f"{title} {link_text} {detail_text} {notice_url}"
+            text = f"{title} {link_text} {notice_url}" if source_kind == "vcs_listing" else f"{title} {link_text} {detail_text} {notice_url}"
             lp_code = infer_lp_code(title, lp_aliases, lp_code) or infer_lp_code(text, lp_aliases, lp_code)
             announced_date = link.get("announced_date", "")
             contact_team = link.get("contact_team", "")
@@ -1854,7 +1903,7 @@ def load_official_candidates(
                     source_type="official",
                     notice_url=notice_url,
                     title=title,
-                    announced_date=announced_date,
+                    announced_date=announced_date or str(link.get("announced_date") or ""),
                     fallback_year=fallback_year,
                     report_date=report_date,
                     text=text,
@@ -1867,7 +1916,7 @@ def load_official_candidates(
                 )
             )
             count += 1
-            if count >= limit_per_source:
+            if count >= source_limit:
                 break
     return rows
 
@@ -2148,13 +2197,11 @@ def candidate_quality(row: dict[str, object]) -> tuple[int, int, int]:
     return confidence_score, source_score, amount_score
 
 
-def clear_auto_candidates(conn: sqlite3.Connection) -> int:
-    cursor = conn.execute(
-        """
-        DELETE FROM lp_commitment_notice
-        WHERE monitor_status NOT IN ('validated', 'dismissed')
-        """,
-    )
+def clear_auto_candidates(conn: sqlite3.Connection, preserve_official: bool = False) -> int:
+    where_clause = "monitor_status NOT IN ('validated', 'dismissed')"
+    if preserve_official:
+        where_clause += " AND source_type <> 'official'"
+    cursor = conn.execute(f"DELETE FROM lp_commitment_notice WHERE {where_clause}")
     conn.commit()
     return int(cursor.rowcount or 0)
 
@@ -2399,7 +2446,7 @@ def build(
         news_rows = load_news_candidates(conn, lp_aliases, fallback_year, report_date, days, gp_aliases)
         reviewed_rows = load_reviewed_candidates(reviewed_events_path, fallback_year, report_date)
         candidates = dedupe_candidates(official_rows + news_rows + reviewed_rows)
-        cleared = clear_auto_candidates(conn)
+        cleared = clear_auto_candidates(conn, preserve_official=True)
         upserted = upsert_notices(conn, candidates)
         gp_links, news_links = refresh_notice_links(conn, gp_aliases)
         dated_path, latest_path, exported = export_monitor(conn, out_dir, report_date)

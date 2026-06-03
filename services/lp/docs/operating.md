@@ -16,7 +16,7 @@ Both entrypoints call the same implementation in
 
 ## Local Validation
 
-Use `--skip-source-fetch` for fast no-network validation of the split and
+Use `--skip-source-fetch` only for fast no-network validation of the split and
 database/schema integration:
 
 ```bash
@@ -24,7 +24,10 @@ python3 scripts/build_lp_commitment_monitor.py --skip-source-fetch
 python3 services/lp/src/build_lp_commitment_monitor.py --skip-source-fetch
 ```
 
-Run without `--skip-source-fetch` only when official source fetching is expected.
+Run without `--skip-source-fetch` for operating builds. Official notice rows are
+preserved across builds and updated by normalized URL, while news candidates are
+refreshed. This prevents a temporary source-fetch failure or a skip-source
+validation run from deleting the historical official notice set.
 
 ## Profile Expansion Model
 

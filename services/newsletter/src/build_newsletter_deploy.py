@@ -2398,6 +2398,17 @@ def render_lp_notices_page(
             }
         )
     )
+    notice_year_options = "".join(
+        f'<option value="{html_escape(year)}">{html_escape(year)}년</option>'
+        for year in sorted(
+            {
+                str(item.get("eventDate") or item.get("announcedDate") or "")[:4]
+                for item in notices
+                if re.match(r"^20\d{2}", str(item.get("eventDate") or item.get("announcedDate") or ""))
+            },
+            reverse=True,
+        )
+    )
     notice_lp_options = "".join(
         f'<option value="{html_escape(code)}">{html_escape(name)}</option>'
         for code, name in sorted(
@@ -2464,6 +2475,10 @@ def render_lp_notices_page(
               <option value="result">선정결과</option>
               <option value="history">히스토리</option>
               <option value="closed">마감</option>
+            </select>
+            <select id="lpNoticeYearFilter" aria-label="연도">
+              <option value="all">전체 연도</option>
+              {notice_year_options}
             </select>
             <select id="lpNoticeAssetFilter" aria-label="자산군">
               <option value="all">전체 자산군</option>
@@ -3185,7 +3200,7 @@ def render_lp_notices_page(
     }}
     @media (min-width: 760px) {{
       body.lp-notices-page .lp-notice-controls {{
-        grid-template-columns: 150px 160px minmax(180px, 1fr) 160px;
+        grid-template-columns: 140px 130px 160px minmax(180px, 1fr) 150px;
       }}
       body.lp-notices-page .lp-notice-groups {{
         gap: 18px;
@@ -3252,6 +3267,7 @@ def render_lp_notices_page(
       const filter = document.getElementById("lpFilter");
       const noticeSort = document.getElementById("lpNoticeSort");
       const noticeFilter = document.getElementById("lpNoticeFilter");
+      const noticeYearFilter = document.getElementById("lpNoticeYearFilter");
       const noticeAssetFilter = document.getElementById("lpNoticeAssetFilter");
       const noticeLpFilter = document.getElementById("lpNoticeLpFilter");
       const directory = document.querySelector(".lp-directory-grid");
@@ -3309,11 +3325,13 @@ def render_lp_notices_page(
       }};
       const applyNotices = () => {{
         const active = noticeFilter?.value || "all";
+        const activeYear = noticeYearFilter?.value || "all";
         const activeAsset = noticeAssetFilter?.value || "all";
         const activeLp = noticeLpFilter?.value || "all";
         let count = 0;
         noticeCards.forEach((card) => {{
-          const visibleCard = fieldsMatch(card, active) && fieldsMatch(card, activeAsset) && fieldsMatch(card, activeLp) && queryMatch(card);
+          const yearMatch = activeYear === "all" || card.dataset.year === activeYear;
+          const visibleCard = fieldsMatch(card, active) && yearMatch && fieldsMatch(card, activeAsset) && fieldsMatch(card, activeLp) && queryMatch(card);
           card.style.display = visibleCard ? "" : "none";
           if (visibleCard) count += 1;
         }});
@@ -3337,6 +3355,7 @@ def render_lp_notices_page(
         applyNotices();
       }});
       noticeFilter?.addEventListener("change", applyNotices);
+      noticeYearFilter?.addEventListener("change", applyNotices);
       noticeAssetFilter?.addEventListener("change", applyNotices);
       noticeLpFilter?.addEventListener("change", applyNotices);
       applyDirectorySort();
@@ -3374,6 +3393,7 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
     strategy = clean_public_lp_text(item.get("strategy") or item.get("purpose") or "")
     type_label = " · ".join(value for value in [asset_class, strategy] if value)
     selected_label = notice_gp_label(item.get("selectedGpNames"))
+    notice_year = str(item.get("eventDate") or item.get("announcedDate") or "")[:4]
     if status == "result":
         schedule_label = "결과일"
         schedule_value = event_date or "-"
@@ -3449,7 +3469,7 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
             item.get("selectedGpNames"),
         ]
     )
-    return f"""              <article class="lp-notice-row" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-lp-name="{html_escape(lp_name)}" data-asset="{html_escape(asset_class)}" data-status="{html_escape(status)}" data-status-group="{html_escape(status_group)}" data-date="{html_escape(event_date)}" data-deadline="{html_escape(deadline)}">
+    return f"""              <article class="lp-notice-row" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-lp-name="{html_escape(lp_name)}" data-asset="{html_escape(asset_class)}" data-status="{html_escape(status)}" data-status-group="{html_escape(status_group)}" data-year="{html_escape(notice_year)}" data-date="{html_escape(event_date)}" data-deadline="{html_escape(deadline)}">
             <div class="lp-notice-main">
               <p class="lp-notice-kicker"><span class="lp-notice-stage">{html_escape(stage_label)}</span></p>
               <h2>{linked_title}</h2>
