@@ -987,6 +987,61 @@ def read_lp_directory_items(db_path: Path = DEFAULT_DB) -> list[dict[str, object
         conn.close()
 
 
+def read_lp_lifecycle_compare(db_path: Path = DEFAULT_DB) -> list[dict[str, object]]:
+    if not db_path.exists():
+        return []
+    conn = sqlite3.connect(db_path)
+    try:
+        if not db_object_exists(conn, "v_lp_commitment_lifecycle_compare"):
+            return []
+        return fetch_dicts(
+            conn,
+            """
+            SELECT
+                lp_code,
+                lp_name,
+                lp_type,
+                program_name,
+                round_name,
+                asset_class,
+                strategy,
+                notice_count,
+                open_count,
+                shortlist_count,
+                final_selection_count,
+                selected_gp_count,
+                allocation_amount_krw_100mn_sum,
+                commitment_amount_krw_100mn_sum,
+                amount_krw_100mn_sum,
+                program_size_krw_100mn_max,
+                latest_notice_title,
+                latest_notice_url,
+                latest_notice_date,
+                latest_event_type,
+                latest_stage,
+                next_application_deadline,
+                latest_application_deadline,
+                deadline_status
+            FROM v_lp_commitment_lifecycle_compare
+            WHERE COALESCE(lp_code, '') <> ''
+            ORDER BY
+                CASE deadline_status
+                    WHEN 'open' THEN 0
+                    WHEN 'final_selection' THEN 1
+                    WHEN 'shortlist' THEN 2
+                    WHEN 'closed' THEN 3
+                    ELSE 4
+                END,
+                COALESCE(latest_notice_date, '') DESC,
+                selected_gp_count DESC,
+                notice_count DESC,
+                lp_name
+            """,
+        )
+    finally:
+        conn.close()
+
+
 def render_lp_profile_nav(nav_items: list[dict[str, str]], active_code: str = "") -> str:
     rows = nav_items or [
         {
@@ -2322,6 +2377,7 @@ def render_lp_notices_page(
     notices: list[dict[str, object]],
     nav_items: list[dict[str, str]] | None = None,
     directory_items: list[dict[str, object]] | None = None,
+    lifecycle_rows: list[dict[str, object]] | None = None,
     active_tab: str = "lp",
 ) -> str:
     is_notice_view = active_tab == "notice"
@@ -2356,6 +2412,7 @@ def render_lp_notices_page(
             <span>조건에 맞는 공고가 없습니다.</span>
           </div>"""
     notice_year_summary = render_lp_notice_year_summary(notices, report_date) if is_notice_view else ""
+    lifecycle_summary = render_lp_lifecycle_summary(lifecycle_rows or [], report_date) if is_notice_view else ""
     directory_rows = directory_items or []
     directory_cards = "\n".join(render_lp_directory_card(item) for item in directory_rows) or (
         """          <div class="empty-state visible">
@@ -2464,6 +2521,7 @@ def render_lp_notices_page(
     if is_notice_view:
         notice_section = f"""
       <section class="section-block" id="lpNotices" aria-label="LP 공식 공고">
+{lifecycle_summary}
 {notice_year_summary}
         <div class="lp-notice-toolbar">
           <div class="lp-control-head">
@@ -3038,6 +3096,98 @@ def render_lp_notices_page(
     body.lp-notices-page .lp-notice-controls {{
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }}
+    body.lp-notices-page .lp-lifecycle-summary {{
+      margin: 0 0 14px;
+    }}
+    body.lp-notices-page .lp-lifecycle-title {{
+      display: grid;
+      gap: 3px;
+      margin: 0 0 8px;
+    }}
+    body.lp-notices-page .lp-lifecycle-title h2 {{
+      margin: 0;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 780;
+      line-height: 1.35;
+    }}
+    body.lp-notices-page .lp-lifecycle-title p {{
+      margin: 0;
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 620;
+      line-height: 1.42;
+    }}
+    body.lp-notices-page .lp-lifecycle-table {{
+      overflow: hidden;
+      border: 1px solid var(--separator);
+      border-radius: 6px;
+      background: var(--surface);
+    }}
+    body.lp-notices-page .lp-lifecycle-row {{
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) 34px 34px 34px 34px 34px 58px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      min-height: 48px;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--separator);
+      color: var(--text);
+      font-size: 12.5px;
+      font-weight: 660;
+      text-decoration: none;
+    }}
+    body.lp-notices-page .lp-lifecycle-row:last-child {{
+      border-bottom: 0;
+    }}
+    body.lp-notices-page a.lp-lifecycle-row:hover {{
+      background: #fafafa;
+    }}
+    body.lp-notices-page .lp-lifecycle-row.is-head {{
+      min-height: 36px;
+      background: var(--surface-strong);
+      color: var(--secondary);
+      font-size: 11.5px;
+      font-weight: 760;
+    }}
+    body.lp-notices-page .lp-lifecycle-row span {{
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+    body.lp-notices-page .lp-lifecycle-row span:not(:first-child) {{
+      text-align: right;
+    }}
+    body.lp-notices-page .lp-lifecycle-program {{
+      display: grid;
+      gap: 2px;
+      text-align: left !important;
+    }}
+    body.lp-notices-page .lp-lifecycle-program strong {{
+      min-width: 0;
+      overflow: hidden;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 760;
+      line-height: 1.3;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+    body.lp-notices-page .lp-lifecycle-program em {{
+      min-width: 0;
+      overflow: hidden;
+      color: var(--secondary);
+      font-size: 11.5px;
+      font-style: normal;
+      font-weight: 620;
+      line-height: 1.3;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+    body.lp-notices-page .lp-lifecycle-latest {{
+      text-align: left !important;
+    }}
     body.lp-notices-page .lp-notice-year-summary {{
       margin: 0 0 14px;
       border: 1px solid var(--separator);
@@ -3263,6 +3413,11 @@ def render_lp_notices_page(
       }}
       body.lp-notices-page .lp-year-row {{
         grid-template-columns: 90px 80px 80px 80px minmax(180px, 1fr);
+        padding: 0 14px;
+      }}
+      body.lp-notices-page .lp-lifecycle-row {{
+        grid-template-columns: minmax(230px, 1.5fr) 54px 54px 54px 54px 54px 86px minmax(250px, 1.2fr);
+        gap: 10px;
         padding: 0 14px;
       }}
       body.lp-notices-page .lp-notice-groups {{
@@ -3497,6 +3652,102 @@ def render_lp_notice_year_summary(notices: list[dict[str, object]], report_date:
         </div>"""
 
 
+def lp_lifecycle_status_label(value: object) -> str:
+    return {
+        "open": "진행중",
+        "final_selection": "최종선정",
+        "shortlist": "서류심사",
+        "closed": "마감",
+        "no_deadline": "일정 없음",
+    }.get(str(value or ""), "공고")
+
+
+def lp_lifecycle_amount(row: dict[str, object]) -> float:
+    for key in [
+        "allocation_amount_krw_100mn_sum",
+        "commitment_amount_krw_100mn_sum",
+        "amount_krw_100mn_sum",
+        "program_size_krw_100mn_max",
+    ]:
+        amount = safe_float(row.get(key))
+        if amount > 0:
+            return amount
+    return 0.0
+
+
+def render_lp_lifecycle_summary(rows: list[dict[str, object]], report_date: str, limit: int = 8) -> str:
+    rows = [
+        row
+        for row in rows
+        if "2024-01-01" <= str(row.get("latest_notice_date") or "")[:10] <= report_date
+    ]
+    if not rows:
+        return ""
+    total_programs = len(rows)
+    total_notices = sum(safe_int(row.get("notice_count")) for row in rows)
+    open_count = sum(safe_int(row.get("open_count")) for row in rows)
+    shortlist_count = sum(safe_int(row.get("shortlist_count")) for row in rows)
+    final_count = sum(safe_int(row.get("final_selection_count")) for row in rows)
+    selected_gp_count = sum(safe_int(row.get("selected_gp_count")) for row in rows)
+    total_amount = sum(lp_lifecycle_amount(row) for row in rows)
+    summary = (
+        f"프로그램 {total_programs:,}개 · 단계 기록 {total_notices:,}건 · 진행중 {open_count:,}건 · "
+        f"서류 {shortlist_count:,}건 · 최종 {final_count:,}건 · GP 연결 {selected_gp_count:,}건 · "
+        f"{public_amount_label(total_amount, fallback='규모 미표기')}"
+    )
+    rendered_rows: list[str] = []
+    for row in rows[:limit]:
+        lp_name = clean_public_lp_text(row.get("lp_name") or "LP 미분류") or "LP 미분류"
+        program_name = clean_public_lp_text(row.get("program_name") or "") or "프로그램 미분류"
+        round_name = clean_public_lp_text(row.get("round_name") or "")
+        program_label = f"{program_name} {round_name}".strip()
+        asset_label = public_asset_class(row.get("asset_class")) if row.get("asset_class") else ""
+        strategy = clean_public_lp_text(row.get("strategy") or "")
+        status_label = lp_lifecycle_status_label(row.get("deadline_status"))
+        detail = " · ".join(value for value in [lp_name, asset_label, strategy, status_label] if value)
+        latest_title = clean_public_lp_text(row.get("latest_notice_title") or "") or "-"
+        latest_date = str(row.get("latest_notice_date") or "")
+        latest_label = " · ".join(value for value in [latest_date, latest_title] if value) or "-"
+        amount_label = public_amount_label(lp_lifecycle_amount(row), fallback="-")
+        href = str(row.get("latest_notice_url") or "")
+        tag = "a" if href else "div"
+        href_attr = f' href="{html_escape(href)}" target="_blank" rel="noreferrer"' if href else ""
+        rendered_rows.append(
+            f"""          <{tag} class="lp-lifecycle-row" {href_attr}>
+            <span class="lp-lifecycle-program">
+              <strong>{html_escape(program_label)}</strong>
+              <em>{html_escape(detail)}</em>
+            </span>
+            <span>{safe_int(row.get("notice_count")):,}</span>
+            <span>{safe_int(row.get("open_count")):,}</span>
+            <span>{safe_int(row.get("shortlist_count")):,}</span>
+            <span>{safe_int(row.get("final_selection_count")):,}</span>
+            <span>{safe_int(row.get("selected_gp_count")):,}</span>
+            <span>{html_escape(amount_label)}</span>
+            <span class="lp-lifecycle-latest">{html_escape(latest_label)}</span>
+          </{tag}>"""
+        )
+    return f"""        <section class="lp-lifecycle-summary" aria-label="출자 진행 현황">
+          <div class="lp-lifecycle-title">
+            <h2>출자 진행 현황</h2>
+            <p>{html_escape(summary)}</p>
+          </div>
+          <div class="lp-lifecycle-table" role="table" aria-label="프로그램별 출자 진행 현황">
+            <div class="lp-lifecycle-row is-head" role="row">
+              <span>프로그램</span>
+              <span>기록</span>
+              <span>진행</span>
+              <span>서류</span>
+              <span>최종</span>
+              <span>GP</span>
+              <span>규모</span>
+              <span>최근 공고</span>
+            </div>
+{chr(10).join(rendered_rows)}
+          </div>
+        </section>"""
+
+
 def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
     raw_title = clean_public_lp_text(item.get("title") or "공식 공고") or "공식 공고"
     display_title = clean_public_lp_text(item.get("displayTitle") or "") or raw_title
@@ -3615,12 +3866,20 @@ def write_lp_notices_page(site_dir: Path, report_date: str) -> int:
     notices = read_lp_monitor(DEFAULT_LP_COMMITMENT_MONITOR, limit=None)
     nav_items = read_lp_profile_nav()
     directory_items = read_lp_directory_items()
+    lifecycle_rows = read_lp_lifecycle_compare()
     (site_dir / "lp-notices.html").write_text(
         render_lp_notices_page(report_date, notices, nav_items, directory_items, active_tab="lp"),
         encoding="utf-8",
     )
     (site_dir / "lp-official-notices.html").write_text(
-        render_lp_notices_page(report_date, notices, nav_items, directory_items, active_tab="notice"),
+        render_lp_notices_page(
+            report_date,
+            notices,
+            nav_items,
+            directory_items,
+            lifecycle_rows=lifecycle_rows,
+            active_tab="notice",
+        ),
         encoding="utf-8",
     )
     return len(notices)
