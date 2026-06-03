@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import re
 import ssl
 import sqlite3
@@ -170,6 +171,7 @@ NON_COMMITMENT_AMOUNT_HINTS = [
     "aum",
     "관리자산",
     "운용자산",
+    "운용규모",
     "자산규모",
     "자산 규모",
     "트랙레코드",
@@ -178,7 +180,6 @@ NON_COMMITMENT_NOTICE_TERMS = [
     "온라인마케팅",
     "참여기업 모집",
     "회계감사인",
-    "POOL",
     "논문",
     "투자유치",
     "크라우드펀딩",
@@ -186,7 +187,27 @@ NON_COMMITMENT_NOTICE_TERMS = [
     "회원 대상",
     "공정가치 평가",
     "투자성과 모니터링",
-    "용역 입찰",
+    "회계감사",
+    "평가 대행",
+    "정량평가 대행",
+    "실사 위탁",
+    "평가기관",
+    "외부 평가기관",
+    "제안요청서 작성",
+]
+PROCUREMENT_SERVICE_TERMS = [
+    "컨설팅",
+    "내부통제",
+    "데이터 관리",
+    "생성형 ai",
+    "휴양소",
+    "온비드",
+    "부동산",
+    "유가증권 매각",
+    "인수자 지정",
+    "평가",
+    "실사",
+    "모니터링",
     "회계감사",
 ]
 GP_EXCLUSION_NAMES = {
@@ -534,7 +555,7 @@ def infer_stage(text: str) -> str:
         return "selection_result"
     if "선정" in value and any(term in value for term in ["gp에", "gp로", "운용사로"]):
         return "selection_result"
-    if any(term in value for term in ["숏리스트", "shortlist", "1차 선정", "2라운드", "본선"]):
+    if any(term in value for term in ["숏리스트", "shortlist", "1차 선정", "2라운드", "본선", "서류심사 결과", "정량평가 결과", "제안서 발표대상", "발표대상", "적격", "합격"]):
         return "shortlist"
     if (
         any(term in value for term in ["lp rader", "팀장", "겸임", "조직", "인사"])
@@ -543,14 +564,14 @@ def infer_stage(text: str) -> str:
         return "candidate"
     if any(term in value for term in ["설명회", "사업설명회", "제안설명"]):
         return "briefing"
-    if any(term in value for term in ["접수", "마감", "제안서", "서류제출"]):
+    if any(term in value for term in ["접수", "접수현황", "마감", "제안서", "서류제출"]):
         return "application"
     if (
         any(term in value for term in ["회수", "분배금", "dpi", "moic", "청산"])
         and not any(term in value for term in ["공고", "선정계획", "위탁운용사", "출자사업"])
     ):
         return "performance_update"
-    if any(term in value for term in ["공고", "모집", "선정계획", "출자사업", "위탁운용사", "운용사 선정"]):
+    if any(term in value for term in ["공고", "모집", "공모", "선정계획", "출자사업", "위탁운용사", "운용사 선정"]):
         return "notice"
     return "candidate"
 
@@ -641,16 +662,24 @@ def is_non_commitment_amount_context(context: str) -> bool:
     return ("미만" in ctx or "이상" in ctx) and any(hint in ctx for hint in ["aum", "운용", "자산", "트랙레코드"])
 
 
+def is_law_article_amount(text: str, start: int) -> bool:
+    return bool(re.search(r"제\s*$", text[max(0, start - 3) : start]))
+
+
 def classify_amounts(text: str) -> dict[str, object]:
     cleaned = re.sub(r"\[[^\]]*국민성장펀드[^\]]*\]", " ", text or "")
     amount_rows: list[dict[str, object]] = []
     for match in COMBINED_AMOUNT_RE.finditer(text):
+        if is_law_article_amount(text, match.start()):
+            continue
         jo = parse_number(match.group("jo"))
         eok = parse_number(match.group("eok") or "0")
         if jo:
             ctx = amount_context(text, match.start(), match.end())
             amount_rows.append({"amount": (jo * 10000) + eok, "context": ctx, "raw": match.group(0)})
     for match in AMOUNT_RE.finditer(cleaned):
+        if is_law_article_amount(cleaned, match.start()):
+            continue
         amount = parse_number(match.group("num"))
         unit = match.group("unit")
         if not amount:
@@ -767,7 +796,13 @@ def is_menu_link(title: str, url: str) -> bool:
 
 
 def is_non_commitment_notice(title: str) -> bool:
-    return any(term.lower() in title.lower() for term in NON_COMMITMENT_NOTICE_TERMS)
+    lowered = title.lower()
+    if any(term.lower() in lowered for term in NON_COMMITMENT_NOTICE_TERMS):
+        return True
+    if any(term.lower() in lowered for term in ["용역", "대행", "사업자 선정"]):
+        if not any(term.lower() in lowered for term in ["ocio", "외부위탁운용관리", "주간운용사"]):
+            return any(term.lower() in lowered for term in PROCUREMENT_SERVICE_TERMS)
+    return False
 
 
 def clean_official_notice_title(title: str, lp_name: str = "") -> str:
@@ -1426,6 +1461,208 @@ def parse_kfcc_tender_listing(source: dict[str, str], limit: int, allow_insecure
     return rows[:limit]
 
 
+def parse_compact_datetime(value: str) -> str:
+    text = re.sub(r"[^0-9]", "", str(value or ""))
+    if len(text) >= 8:
+        try:
+            return datetime.strptime(text[:8], "%Y%m%d").date().isoformat()
+        except ValueError:
+            return ""
+    return normalize_date(value)
+
+
+def is_kdb_ngf_relevant_notice(title: str) -> bool:
+    if "국민성장펀드" not in title:
+        return False
+    if any(term in title for term in ["약정서", "운영 안내", "제출서식"]):
+        return False
+    return any(term in title for term in ["선정공고", "선정결과", "선정계획"])
+
+
+def make_kdb_ngf_detail_url(locator: str, row: dict[str, object]) -> str:
+    payload = {
+        "ITR_NAC_ID_MNG_SNO": str(row.get("ITR_NAC_ID_MNG_SNO") or ""),
+        "ITR_BLB_ID": "PDS463",
+        "NAC_SNO": str(row.get("NUM") or ""),
+        "FIRST_MENU_ID": "GFIMMG01N00",
+        "CTG_C": str(row.get("CTG_C") or ""),
+        "DCD_SNO": str(row.get("DCD_SNO") or ""),
+    }
+    return urljoin(locator, "/BOUBUF02N00.act") + "?" + urlencode(
+        {
+            "_mnuId": "WBGFGF0007",
+            "_PARAM_NAME": "NEXT_DATA",
+            "_PARM_DATA": json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        }
+    )
+
+
+def parse_kdb_ngf_listing(source: dict[str, str], limit: int, allow_insecure_ssl: bool) -> list[dict[str, str]]:
+    locator = source.get("locator", "")
+    if not locator:
+        return []
+    payload = {
+        "SEARCH_CONDITION": "",
+        "SEARCH_KEYWORD": "",
+        "SEARCH_CATEGORY": "",
+        "ORDER_TYPE": "new",
+        "MODE": "",
+        "ITR_BLB_ID": "PDS463",
+        "HEADER_STD_WEB": {
+            "REQ_PAGE_NO": 1,
+            "PAGE_ROW_COUNT": str(max(10, min(limit, 50))),
+            "NEXT_PAGE_YN": "S",
+            "NEXTPAGDTT": "P",
+            "GRID_NEXTKEY_ITR_CND": "",
+        },
+    }
+    response_text = fetch_form_text(
+        "https://ngf.kdb.co.kr/BOUBUF01R01.jct",
+        {"_JSON_": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
+        locator,
+        allow_insecure_ssl,
+    )
+    try:
+        data = json.loads(response_text)
+    except json.JSONDecodeError as exc:
+        print(f"warning: kdb_ngf_json_failed source_code={source.get('source_code')} error={exc}")
+        return []
+
+    files_by_group: dict[str, list[dict[str, str]]] = {}
+    for file_row in data.get("FILELIST_REC", []) or []:
+        if not isinstance(file_row, dict):
+            continue
+        group_id = str(file_row.get("GROUP_ID") or "")
+        file_id = str(file_row.get("FILE_ID") or "")
+        file_name = clean_attachment_name(str(file_row.get("FILE_NM") or ""))
+        if not group_id or not file_id:
+            continue
+        files_by_group.setdefault(group_id, []).append(
+            {
+                "name": file_name,
+                "url": "https://file.kdb.co.kr/fileView?" + urlencode({"groupId": group_id, "fileId": file_id}),
+            }
+        )
+
+    rows: list[dict[str, str]] = []
+    for raw_row in data.get("PDSLIST_REC", []) or []:
+        if not isinstance(raw_row, dict):
+            continue
+        title = normalize_whitespace(strip_html_tags(str(raw_row.get("NAC_CONE_TTL") or "")))
+        if not title or not is_kdb_ngf_relevant_notice(title):
+            continue
+        body = normalize_whitespace(
+            strip_html_tags(str(raw_row.get("NAC_SMRY_CONE") or raw_row.get("NAC_HTML_TXT_INF") or ""))
+        )
+        group_id = str(raw_row.get("FILE_ID") or "")
+        attachments = files_by_group.get(group_id, [])
+        rows.append(
+            {
+                "title": title,
+                "link": make_kdb_ngf_detail_url(locator, raw_row),
+                "announced_date": parse_compact_datetime(str(raw_row.get("FST_ENR_DTM") or "")),
+                "contact_team": "",
+                "text": body,
+                "attachment_names": semicolon_join([item["name"] for item in attachments]),
+                "attachment_urls": semicolon_join([item["url"] for item in attachments]),
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def is_kdic_relevant_notice(title: str, contact_team: str) -> bool:
+    haystack = f"{title} {contact_team}".lower()
+    if is_non_commitment_notice(title):
+        return False
+    if "예금보험기금" not in title and "기금운용실" not in contact_team:
+        return False
+    return any(term in haystack for term in ["위탁운용사", "운용사", "pool", "자산운용", "국내채권자산"])
+
+
+def extract_kdic_detail_payload(html_text: str) -> dict[str, str]:
+    detail_block = ""
+    detail_match = re.search(
+        r"<div\b[^>]*class=[\"'][^\"']*detailTable[^\"']*[\"'][^>]*>(?P<block>.*?)</div>\s*<!--// detailTable -->",
+        html_text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if detail_match:
+        detail_block = detail_match.group("block")
+    title_match = re.search(r"<th\b[^>]*[^>]*>\s*<span>(?P<title>.*?)</span>", detail_block, flags=re.IGNORECASE | re.DOTALL)
+    team_match = re.search(r"<b>\s*소관부서\s*</b>\s*<em\b[^>]*>(?P<team>.*?)</em>", detail_block, flags=re.IGNORECASE | re.DOTALL)
+    date_match = re.search(r"<b>\s*등록일\s*</b>\s*<em\b[^>]*>(?P<date>.*?)</em>", detail_block, flags=re.IGNORECASE | re.DOTALL)
+    body_match = re.search(r"<tr\b[^>]*class=[\"']detail[\"'][^>]*>\s*<td\b[^>]*>(?P<body>.*?)</td>", detail_block, flags=re.IGNORECASE | re.DOTALL)
+    attachment_names = []
+    for item in re.findall(r"<div\b[^>]*class=[\"'][^\"']*downFileBox[^\"']*[\"'][^>]*>.*?</div>", detail_block, flags=re.IGNORECASE | re.DOTALL):
+        for name in re.findall(r"<p\b[^>]*>\s*<span>(?P<name>.*?)</span>", item, flags=re.IGNORECASE | re.DOTALL):
+            attachment_names.append(clean_attachment_name(strip_html_tags(name)))
+    return {
+        "title": strip_html_tags(title_match.group("title")) if title_match else "",
+        "contact_team": strip_html_tags(team_match.group("team")) if team_match else "",
+        "announced_date": normalize_date(strip_html_tags(date_match.group("date"))) if date_match else "",
+        "text": strip_html_tags(body_match.group("body")) if body_match else strip_html_tags(detail_block),
+        "attachment_names": semicolon_join(attachment_names),
+    }
+
+
+def parse_kdic_notice_listing(source: dict[str, str], limit: int, allow_insecure_ssl: bool) -> list[dict[str, str]]:
+    locator = source.get("locator", "")
+    if not locator:
+        return []
+    fetched = fetch_text(locator, verify_ssl=not allow_insecure_ssl)
+    html_text = str(fetched.get("text") or "")
+    final_url = str(fetched.get("final_url") or locator)
+    rows: list[dict[str, str]] = []
+    for row_html in re.findall(r"<tr\b.*?</tr>", html_text, flags=re.IGNORECASE | re.DOTALL):
+        action = re.search(r"detailView\((?P<pst_no>\d+)\)", row_html, flags=re.IGNORECASE)
+        title_match = re.search(
+            r"<td\b[^>]*class=[\"'][^\"']*tit[^\"']*[\"'][^>]*>.*?<a\b[^>]*>(?P<title>.*?)</a>",
+            row_html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not action or not title_match:
+            continue
+        title = normalize_whitespace(strip_html_tags(title_match.group("title")))
+        team_match = re.search(
+            r"<td\b[^>]*>\s*<span\b[^>]*>\s*소관부서\s*</span>\s*<a\b[^>]*>(?P<team>.*?)</a>",
+            row_html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        date_match = re.search(
+            r"<td\b[^>]*>\s*<span\b[^>]*>\s*등록일\s*</span>(?P<date>.*?)</td>",
+            row_html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        contact_team = normalize_whitespace(strip_html_tags(team_match.group("team"))) if team_match else ""
+        if not is_kdic_relevant_notice(title, contact_team):
+            continue
+        detail_url = urljoin(final_url, "/di/pbcr/selectPbcrNtcDtl.do") + "?" + urlencode(
+            {"pstNo": action.group("pst_no"), "curPage": "0"}
+        )
+        payload: dict[str, str] = {}
+        try:
+            detail = fetch_text(detail_url, verify_ssl=not allow_insecure_ssl)
+            payload = extract_kdic_detail_payload(str(detail.get("text") or ""))
+        except Exception as exc:
+            print(f"warning: kdic_detail_fetch_failed pst_no={action.group('pst_no')} error={exc}")
+        rows.append(
+            {
+                "title": normalize_whitespace(payload.get("title") or title),
+                "link": detail_url,
+                "announced_date": payload.get("announced_date") or normalize_date(strip_html_tags(date_match.group("date"))) if date_match else payload.get("announced_date", ""),
+                "contact_team": payload.get("contact_team") or contact_team,
+                "text": normalize_whitespace(payload.get("text", "")),
+                "attachment_names": payload.get("attachment_names", ""),
+                "attachment_urls": "",
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
+
+
 def selected_gp_names(title: str, excerpt: str, aliases: object, existing: str = "") -> str:
     names = [part.strip() for part in re.split(r"[,;]", existing or "") if part.strip()]
     for match in match_gp_entities(title, excerpt, "", aliases):
@@ -1537,7 +1774,7 @@ def load_official_candidates(
     lp_names_by_code = {alias.lp_code: alias.lp_name for alias in lp_aliases}
     for source in sources:
         source_kind = source.get("source_kind", "")
-        if not parse_bool(source.get("is_active", "1")) or source_kind not in {"html_listing", "html_page", "apfs_board", "kbiz_listing", "ktcu_notice", "cu_notice", "kfcc_tender"}:
+        if not parse_bool(source.get("is_active", "1")) or source_kind not in {"html_listing", "html_page", "apfs_board", "kbiz_listing", "ktcu_notice", "cu_notice", "kfcc_tender", "kdb_jex_board", "kdic_notice"}:
             continue
         locator = source.get("locator", "")
         if not locator:
@@ -1553,6 +1790,10 @@ def load_official_candidates(
                 links = parse_cu_listing(source, limit_per_source, allow_insecure_ssl)
             elif source_kind == "kfcc_tender":
                 links = parse_kfcc_tender_listing(source, limit_per_source, allow_insecure_ssl)
+            elif source_kind == "kdb_jex_board":
+                links = parse_kdb_ngf_listing(source, limit_per_source, allow_insecure_ssl)
+            elif source_kind == "kdic_notice":
+                links = parse_kdic_notice_listing(source, limit_per_source, allow_insecure_ssl)
             elif source_kind == "html_page":
                 fetched = fetch_text(locator, verify_ssl=not allow_insecure_ssl)
                 links = make_html_page_link(
@@ -1582,16 +1823,25 @@ def load_official_candidates(
                 continue
             if not matches_must_contain(split_semicolon(source.get("must_contain", "")), title, notice_url):
                 continue
+            link_text = normalize_whitespace(str(link.get("text") or ""))
+            link_attachment_names = split_semicolon(str(link.get("attachment_names") or ""))
+            link_attachment_urls = split_semicolon(str(link.get("attachment_urls") or ""))
+            link_attachments = [
+                {"name": name, "url": url}
+                for name, url in zip(link_attachment_names, link_attachment_urls)
+                if url
+            ]
             detail = fetch_official_detail(notice_url, allow_insecure_ssl)
             detail_title = normalize_whitespace(str(detail.get("title") or ""))
-            detail_text = normalize_whitespace(str(detail.get("text") or ""))[:6000]
-            attachments = [item for item in detail.get("attachments", []) if isinstance(item, dict)]
-            attachment_names = semicolon_join([str(item.get("name") or "") for item in attachments])
-            attachment_urls = semicolon_join([str(item.get("url") or "") for item in attachments])
-            preliminary_text = f"{title} {detail_title} {detail_text} {notice_url}"
+            detail_text = normalize_whitespace(f"{link_text} {detail.get('text') or ''}")[:6000]
+            detail_attachments = [item for item in detail.get("attachments", []) if isinstance(item, dict)]
+            attachments = [*link_attachments, *detail_attachments]
+            attachment_names = semicolon_join([*link_attachment_names, *[str(item.get("name") or "") for item in detail_attachments]])
+            attachment_urls = semicolon_join([*link_attachment_urls, *[str(item.get("url") or "") for item in detail_attachments]])
+            preliminary_text = f"{title} {detail_title} {link_text} {detail_text} {notice_url}"
             lp_code = infer_lp_code(preliminary_text, lp_aliases, source.get("lp_code", ""))
             title = choose_official_notice_title(title, detail_title, lp_names_by_code.get(lp_code, ""))
-            text = f"{title} {notice_url}" if source.get("source_code") == "vcs_investment_notice" else f"{title} {detail_text} {notice_url}"
+            text = f"{title} {notice_url}" if source.get("source_code") == "vcs_investment_notice" else f"{title} {link_text} {detail_text} {notice_url}"
             lp_code = infer_lp_code(title, lp_aliases, lp_code) or infer_lp_code(text, lp_aliases, lp_code)
             announced_date = link.get("announced_date", "")
             contact_team = link.get("contact_team", "")
@@ -1611,7 +1861,7 @@ def load_official_candidates(
                     gp_names=selected_gp_names(title, gp_text, gp_aliases),
                     raw_excerpt=f"{source.get('source_name', '')} 목록에서 발견",
                     contact_team=contact_team,
-                    document_url=primary_document_url(attachments),
+                    document_url=str(link.get("document_url") or "") or primary_document_url(attachments),
                     attachment_names=attachment_names,
                     attachment_urls=attachment_urls,
                 )
