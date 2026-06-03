@@ -865,6 +865,7 @@ def read_lp_profile_codes(db_path: Path = DEFAULT_DB) -> list[str]:
                 """
                 SELECT lp_code, fact_count
                 FROM v_lp_profile_summary
+                WHERE COALESCE(display_enabled, 1) = 1
                 ORDER BY service_priority DESC, lp_name
                 """,
             )
@@ -943,12 +944,17 @@ def read_lp_directory_items(db_path: Path = DEFAULT_DB) -> list[dict[str, object
                 default_team,
                 focus_asset_classes,
                 service_priority,
+                coverage_tier,
+                display_enabled,
+                notice_tracking_enabled,
+                profile_status,
                 notice_count,
                 allocation_amount_krw_100mn,
                 latest_event_date,
                 fact_count,
                 source_count
             FROM v_lp_profile_summary
+            WHERE COALESCE(display_enabled, 1) = 1
             ORDER BY service_priority DESC, lp_name
             """,
         )
@@ -1208,7 +1214,7 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
                     "confidence": row.get("notice_confidence"),
                     "public_visible": row.get("public_visible"),
                 },
-                require_official=True,
+                require_official=False,
             )
         ]
 
@@ -2254,6 +2260,8 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
     }.get(ownership.lower(), clean_public_lp_text(ownership))
     default_team = str(item.get("default_team") or "투자 담당")
     focus = display_asset_classes(item.get("focus_asset_classes"))
+    coverage_tier = str(item.get("coverage_tier") or "candidate")
+    tracking_enabled = "1" if safe_int(item.get("notice_tracking_enabled")) else "0"
     notice_count = safe_int(item.get("visible_notice_count", item.get("notice_count")))
     latest = str(item.get("latest_event_date") or "-") or "-"
     amount = public_amount_label(item.get("allocation_amount_krw_100mn"), fallback="-")
@@ -2262,13 +2270,13 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
     profile_url = f"lp-{lp_code}.html" if lp_code else "lp-notices.html"
     avatar_label = directory_avatar_label(lp_short_label(lp_code, lp_name), "LP")
     avatar_markup = directory_avatar_markup(homepage_url, avatar_label, lp_code or lp_name)
-    search_blob = " ".join([lp_name, lp_type, ownership_label, default_team, focus])
+    search_blob = " ".join([lp_name, lp_type, ownership_label, default_team, focus, coverage_tier])
     title_markup = (
         f'<a href="{html_escape(profile_url)}">{html_escape(lp_name)}</a>'
         if item.get("has_public_profile", True)
         else html_escape(lp_name)
     )
-    return f"""          <article class="lp-directory-card" aria-label="{html_escape(lp_name)}" data-search="{html_escape(search_blob)}" data-name="{html_escape(lp_name)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(focus)}" data-kind="{html_escape(' '.join([lp_type, ownership_label]))}" data-notices="{notice_count}" data-amount="{amount_sort:.4f}" data-latest="{html_escape(latest)}">
+    return f"""          <article class="lp-directory-card" aria-label="{html_escape(lp_name)}" data-search="{html_escape(search_blob)}" data-name="{html_escape(lp_name)}" data-lp="{html_escape(lp_code)}" data-asset="{html_escape(focus)}" data-kind="{html_escape(' '.join([lp_type, ownership_label]))}" data-tier="{html_escape(coverage_tier)}" data-tracking="{tracking_enabled}" data-notices="{notice_count}" data-amount="{amount_sort:.4f}" data-latest="{html_escape(latest)}">
             {avatar_markup}
             <div class="lp-directory-card-head">
               <strong>{title_markup}</strong>
@@ -2328,7 +2336,11 @@ def render_lp_notices_page(
           </div>"""
     )
     tracked_count = len(directory_rows)
-    profile_count = len([item for item in directory_rows if item.get("has_public_profile")])
+    tier_counts = {
+        "core": len([item for item in directory_rows if str(item.get("coverage_tier") or "") == "core"]),
+        "ocio": len([item for item in directory_rows if str(item.get("coverage_tier") or "") == "ocio"]),
+        "policy": len([item for item in directory_rows if str(item.get("coverage_tier") or "") == "policy"]),
+    }
     visible_notice_count = len(notices)
     total_amount = sum(float(item.get("allocation_amount_krw_100mn") or 0) for item in directory_rows)
     if is_notice_view:
@@ -2340,11 +2352,11 @@ def render_lp_notices_page(
         hero_class = "lp-directory-hero lp-notice-hero"
     else:
         hero_title = f'<h1 class="lp-directory-title"><strong>{tracked_count}개</strong> 출자기관</h1>'
-        hero_meta = f'<p class="lp-directory-meta">기관 프로필 {profile_count}개 · 공식 공고 {visible_notice_count}건 · {html_escape(report_date)} 기준</p>'
+        hero_meta = f'<p class="lp-directory-meta">핵심 LP {tier_counts["core"]}개 · OCIO/공적기금 {tier_counts["ocio"]}개 · 정책펀드 {tier_counts["policy"]}개 · 공식 공고 {visible_notice_count}건 · {html_escape(report_date)} 기준</p>'
         hero_kpis = f"""
         <div class="lp-directory-kpis">
           <div><span>대상 기관</span><strong>{tracked_count}개</strong></div>
-          <div><span>기관 프로필</span><strong>{profile_count}개</strong></div>
+          <div><span>OCIO/공적기금</span><strong>{tier_counts["ocio"]}개</strong></div>
           <div><span>공고 기준 규모</span><strong>{html_escape(public_amount_label(total_amount, fallback="-"))}</strong></div>
           <div><span>출자공고</span><strong>{visible_notice_count}건</strong></div>
         </div>"""
@@ -2382,10 +2394,10 @@ def render_lp_notices_page(
           <div class="lp-control-line lp-directory-controls">
             <select id="lpFilter" aria-label="필터">
               <option value="all">전체</option>
-              <option value="공공">공공 LP</option>
-              <option value="공제">공제회</option>
-              <option value="PEF">PEF</option>
-              <option value="VC">VC</option>
+              <option value="core">핵심 LP</option>
+              <option value="ocio">OCIO/공적기금</option>
+              <option value="policy">정책펀드</option>
+              <option value="1">공고 추적</option>
             </select>
             <select id="lpSort" aria-label="정렬">
               <option value="latest">최근 공고일순</option>
@@ -3219,7 +3231,7 @@ def render_lp_notices_page(
         return Number.isFinite(value) ? value : 0;
       }};
       const fieldsMatch = (card, active) => {{
-        const fields = [card.dataset.asset, card.dataset.event, card.dataset.lp, card.dataset.kind, card.dataset.status, card.dataset.statusGroup].filter(Boolean);
+        const fields = [card.dataset.asset, card.dataset.event, card.dataset.lp, card.dataset.kind, card.dataset.tier, card.dataset.tracking, card.dataset.status, card.dataset.statusGroup].filter(Boolean);
         return active === "all" || fields.includes(active) || fields.some((field) => field.includes(active));
       }};
       const queryMatch = (card) => {{

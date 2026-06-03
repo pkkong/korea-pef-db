@@ -55,6 +55,9 @@ NOTICE_TERMS = [
     "출자 규모",
     "위탁운용",
     "위탁운용사",
+    "주간운용사",
+    "OCIO",
+    "외부위탁운용관리",
     "운용사 선정",
     "선정계획",
     "숏리스트",
@@ -83,6 +86,18 @@ LP_CONTEXT_TERMS = [
     "수출입은행",
     "수은",
     "공급망안정화기금",
+    "고용보험기금",
+    "산재보험기금",
+    "장애인고용촉진및직업재활기금",
+    "임금채권보장기금",
+    "예금보험기금",
+    "주택금융신용보증기금",
+    "정보통신진흥기금",
+    "방송통신발전기금",
+    "전력산업기반기금",
+    "연기금투자풀",
+    "주간운용사",
+    "OCIO",
 ]
 
 COMBINED_AMOUNT_RE = re.compile(r"\[?(?P<jo>\d[\d,]*(?:\.\d+)?)\]?\s*조(?:\s*\[?(?P<eok>\d[\d,]*)\]?\s*억?|원)?(?![가-힣])", re.IGNORECASE)
@@ -247,12 +262,30 @@ def apply_schema(conn: sqlite3.Connection, schema_path: Path) -> None:
     if marker in schema_sql:
         pre_index_sql, index_and_view_sql = schema_sql.split(marker, 1)
         conn.executescript(pre_index_sql)
+        ensure_lp_institution_columns(conn)
         ensure_lp_notice_columns(conn)
         conn.executescript(marker + index_and_view_sql)
     else:
         conn.executescript(schema_sql)
+    ensure_lp_institution_columns(conn)
     ensure_lp_notice_columns(conn)
     conn.commit()
+
+
+def ensure_lp_institution_columns(conn: sqlite3.Connection) -> None:
+    existing = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(lp_institution)").fetchall()
+    }
+    columns = {
+        "coverage_tier": "TEXT NOT NULL DEFAULT 'candidate'",
+        "display_enabled": "INTEGER NOT NULL DEFAULT 1",
+        "notice_tracking_enabled": "INTEGER NOT NULL DEFAULT 0",
+        "profile_status": "TEXT NOT NULL DEFAULT 'candidate'",
+    }
+    for name, definition in columns.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE lp_institution ADD COLUMN {name} {definition}")
 
 
 def ensure_lp_notice_columns(conn: sqlite3.Connection) -> None:
@@ -294,6 +327,10 @@ def seed_lp_institutions(conn: sqlite3.Connection, path: Path) -> list[dict[str,
         "default_team",
         "focus_asset_classes",
         "service_priority",
+        "coverage_tier",
+        "display_enabled",
+        "notice_tracking_enabled",
+        "profile_status",
         "aliases",
         "notes",
     ]
@@ -312,6 +349,10 @@ def seed_lp_institutions(conn: sqlite3.Connection, path: Path) -> list[dict[str,
                 default_team = excluded.default_team,
                 focus_asset_classes = excluded.focus_asset_classes,
                 service_priority = excluded.service_priority,
+                coverage_tier = excluded.coverage_tier,
+                display_enabled = excluded.display_enabled,
+                notice_tracking_enabled = excluded.notice_tracking_enabled,
+                profile_status = excluded.profile_status,
                 aliases = excluded.aliases,
                 notes = excluded.notes,
                 updated_at = excluded.updated_at
