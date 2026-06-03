@@ -434,7 +434,7 @@ def prepare_request_url(value: str) -> str:
     query_pairs = parse_qsl(parsed.query, keep_blank_values=True)
     if query_pairs:
         query = "&".join(
-            f"{quote_plus(key)}={quote_plus(val)}" if val else quote_plus(key)
+            f"{quote_plus(key)}={quote_plus(val)}"
             for key, val in query_pairs
         )
     else:

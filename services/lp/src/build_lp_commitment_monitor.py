@@ -10,11 +10,12 @@ import re
 import ssl
 import sqlite3
 import sys
+from http.cookiejar import CookieJar
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, unquote_plus, urljoin, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPCookieProcessor, HTTPSHandler, Request, build_opener, urlopen
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SERVICE_ROOT.parents[1]
@@ -248,7 +249,41 @@ GP_EXCLUSION_NAMES = {
     "새마을금고중앙회",
     "한국수출입은행",
     "수출입은행",
+    "한국성장금융투자운용",
 }
+GP_NAME_SUFFIXES = [
+    "자산운용",
+    "인베스트먼트파트너스",
+    "인베스트먼트",
+    "그린인베스트먼트",
+    "벤처투자",
+    "기술투자",
+    "창업투자",
+    "벤처스코리아",
+    "벤처스",
+    "캐피탈",
+    "파트너즈",
+    "파트너스",
+    "홀딩스",
+]
+RAW_GP_EXPLICIT_NAMES = [
+    "에이티넘",
+    "파트너스현",
+    "엑스퀘어드",
+    "리인베스트먼트",
+    "아주IB투자",
+    "아주IB",
+]
+RAW_GP_DISPLAY_ALIASES = {
+    "아주IB투자": "아주아이비투자",
+    "아주IB": "아주아이비투자",
+    "KB자산운용": "케이비자산운용",
+}
+RAW_GP_NAME_RE = re.compile(
+    r"(?P<name>[가-힣A-Za-z0-9&·]{2,34}(?:"
+    + "|".join(re.escape(suffix) for suffix in GP_NAME_SUFFIXES)
+    + r"))"
+)
 
 
 @dataclass
@@ -1033,6 +1068,25 @@ def extract_official_attachments(base_url: str, html_text: str) -> list[dict[str
         label = normalize_whitespace(label.replace("첨부파일", ""))
         add_attachment(label, href_match.group("href"))
 
+    for item in re.findall(r"<li\b[^>]*>.*?</li>", html_text, flags=re.IGNORECASE | re.DOTALL):
+        call_match = re.search(
+            r"fn_egov_downFile\(\s*['\"](?P<atch>[^'\"]+)['\"]\s*,\s*['\"](?P<sn>[^'\"]+)['\"]\s*\)",
+            item,
+            flags=re.IGNORECASE,
+        )
+        if not call_match:
+            continue
+        label = strip_html_tags(item)
+        label = re.sub(r"\[[^\]]*KByte\]", "", label, flags=re.IGNORECASE)
+        label = normalize_whitespace(label.replace("다운로드", ""))
+        href = "/ebz/cmm/fms/FileDown.do?" + urlencode(
+            {
+                "atchFileId": call_match.group("atch"),
+                "fileSn": call_match.group("sn"),
+            }
+        )
+        add_attachment(label, href)
+
     return attachments
 
 
@@ -1093,6 +1147,48 @@ def fetch_official_detail(notice_url: str, allow_insecure_ssl: bool) -> dict[str
         "title": extract_official_detail_title(html_text),
         "text": strip_html_tags(re.sub(r"<script\b.*?</script>", " ", html_text, flags=re.IGNORECASE | re.DOTALL)),
     }
+
+
+def fetch_kgrowth_detail(notice_url: str, referer_url: str, allow_insecure_ssl: bool) -> dict[str, object]:
+    handlers: list[object] = [HTTPCookieProcessor(CookieJar())]
+    if allow_insecure_ssl:
+        handlers.append(HTTPSHandler(context=ssl._create_unverified_context()))
+    opener = build_opener(*handlers)
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.7,en;q=0.6",
+    }
+    referer = referer_url or "https://www.kgrowth.or.kr/notice.asp?str_type=1&tab=1"
+    opener.open(Request(referer, headers=headers), timeout=20).read()
+    detail_headers = dict(headers)
+    detail_headers["Referer"] = referer
+    with opener.open(Request(notice_url, headers=detail_headers), timeout=20) as response:
+        raw = response.read()
+        charset = response.headers.get_content_charset() or "euc-kr"
+        html_text = raw.decode(charset, errors="replace")
+        final_url = response.geturl() or notice_url
+    if "비정상적인 접근" in html_text:
+        return {}
+    cleaned_html = re.sub(r"<script\b.*?</script>", " ", html_text, flags=re.IGNORECASE | re.DOTALL)
+    return {
+        "attachments": extract_official_attachments(final_url, html_text),
+        "title": extract_official_detail_title(html_text),
+        "text": strip_html_tags(cleaned_html),
+    }
+
+
+def fetch_source_detail(source: dict[str, str], notice_url: str, allow_insecure_ssl: bool) -> dict[str, object]:
+    if source.get("source_code") == "kgrowth_notice":
+        try:
+            return fetch_kgrowth_detail(notice_url, source.get("locator", ""), allow_insecure_ssl)
+        except Exception as exc:
+            print(f"warning: kgrowth_detail_fetch_failed url={notice_url} error={exc}")
+            return {}
+    return fetch_official_detail(notice_url, allow_insecure_ssl)
 
 
 def normalize_official_notice_url(source: dict[str, str], notice_url: str) -> str:
@@ -1626,20 +1722,20 @@ def parse_kdb_ngf_listing(source: dict[str, str], limit: int, allow_insecure_ssl
         return []
 
     files_by_group: dict[str, list[dict[str, str]]] = {}
-    for file_row in data.get("FILELIST_REC", []) or []:
-        if not isinstance(file_row, dict):
-            continue
-        group_id = str(file_row.get("GROUP_ID") or "")
-        file_id = str(file_row.get("FILE_ID") or "")
-        file_name = clean_attachment_name(str(file_row.get("FILE_NM") or ""))
-        if not group_id or not file_id:
-            continue
-        files_by_group.setdefault(group_id, []).append(
-            {
-                "name": file_name,
-                "url": "https://file.kdb.co.kr/fileView?" + urlencode({"groupId": group_id, "fileId": file_id}),
-            }
-        )
+    for file_key in ["FILELIST_REC", "FILEGRPLIST_REC"]:
+        for file_row in data.get(file_key, []) or []:
+            if not isinstance(file_row, dict):
+                continue
+            group_id = str(file_row.get("GROUP_ID") or "")
+            file_id = str(file_row.get("FILE_ID") or "")
+            file_name = clean_attachment_name(str(file_row.get("FILE_NM") or ""))
+            if not group_id or not file_id:
+                continue
+            url = "https://file.kdb.co.kr/fileView?" + urlencode({"groupId": group_id, "fileId": file_id})
+            group_files = files_by_group.setdefault(group_id, [])
+            if any(item["url"] == url for item in group_files):
+                continue
+            group_files.append({"name": file_name, "url": url})
 
     rows: list[dict[str, str]] = []
     for raw_row in data.get("PDSLIST_REC", []) or []:
@@ -1762,12 +1858,87 @@ def parse_kdic_notice_listing(source: dict[str, str], limit: int, allow_insecure
 
 def selected_gp_names(title: str, excerpt: str, aliases: object, existing: str = "") -> str:
     names = [part.strip() for part in re.split(r"[,;]", existing or "") if part.strip()]
+    raw_names = extract_raw_selected_gp_names(f"{title} {excerpt}")
+    raw_norms = {normalize_for_match(name): name for name in raw_names}
     for match in match_gp_entities(title, excerpt, "", aliases):
         name = str(match.get("entity_name") or "").strip()
+        matched_alias_norm = normalize_for_match(str(match.get("matched_alias") or ""))
+        entity_norm = normalize_for_match(name)
+        if any(matched_alias_norm and matched_alias_norm in raw_norm and entity_norm != raw_norm for raw_norm in raw_norms):
+            continue
+        if name and name not in names:
+            names.append(name)
+    for name in raw_names:
         if name and name not in names:
             names.append(name)
     names = [name for name in names if name and name not in GP_EXCLUSION_NAMES]
     return "; ".join(names)
+
+
+def clean_raw_gp_candidate(value: str) -> str:
+    text = normalize_whitespace(value)
+    text = re.sub(r"\([^)]*\)", "", text)
+    text = re.sub(r"^[0-9]+\s*", "", text)
+    text = re.sub(r"^[ㅇ○●ㆍ·\-\s]+", "", text)
+    text = re.sub(r"^\[[^\]]+\]\s*", "", text)
+    text = re.sub(r"^(?:대형|중형|소형|루키|중대형|선정결과|운용사명|운용사\s*명|구분)\s*", "", text)
+    text = re.sub(r"\s*(?:대형|중형|소형|루키|중대형)\s*$", "", text)
+    text = normalize_whitespace(text)
+    return text
+
+
+def append_raw_gp_name(names: list[str], raw_name: str) -> None:
+    name = clean_raw_gp_candidate(raw_name)
+    name = RAW_GP_DISPLAY_ALIASES.get(name, name)
+    if not name or name in GP_EXCLUSION_NAMES:
+        return
+    if any(token in name for token in ["위탁운용사", "선정결과", "서류심사", "운용사명", "투자운용"]):
+        return
+    if len(normalize_for_match(name)) < 3:
+        return
+    name_norm = normalize_for_match(name)
+    for existing in names:
+        existing_norm = normalize_for_match(existing)
+        if name_norm == existing_norm or name_norm in existing_norm or existing_norm in name_norm:
+            return
+    names.append(name)
+
+
+def extract_raw_selected_gp_names(text: str) -> list[str]:
+    value = normalize_whitespace(text)
+    if not value:
+        return []
+    # Keep the extraction focused on the result section; page chrome often contains unrelated menus.
+    start_candidates = [
+        value.find(term)
+        for term in ["선정 결과", "선정결과", "서류심사 통과", "정량평가 결과", "대상 운용사"]
+        if value.find(term) >= 0
+    ]
+    if start_candidates:
+        value = value[min(start_candidates) :]
+    stop_candidates = [
+        value.find(term)
+        for term in ["다음글", "이전글", "목록", "문의:", "Copyright"]
+        if value.find(term) >= 0
+    ]
+    if stop_candidates:
+        value = value[: min(stop_candidates)]
+    names: list[str] = []
+    for explicit_name in RAW_GP_EXPLICIT_NAMES:
+        if explicit_name in value:
+            append_raw_gp_name(names, explicit_name)
+    normalized_chunks = value
+    normalized_chunks = normalized_chunks.replace("/", "|")
+    normalized_chunks = re.sub(r"\s*[-–—]\s*", "|", normalized_chunks)
+    normalized_chunks = re.sub(r"(?:^|\s)(?:[0-9]{1,2}[.)]?|ㅇ|○|●|ㆍ|·)\s*", "|", normalized_chunks)
+    normalized_chunks = re.sub(r"\s+(?:대형|중형|소형|루키|중대형)(?=\s|$)", "|", normalized_chunks)
+    for chunk in re.split(r"[|,;]", normalized_chunks):
+        chunk = clean_raw_gp_candidate(chunk)
+        if not chunk:
+            continue
+        for match in RAW_GP_NAME_RE.finditer(chunk):
+            append_raw_gp_name(names, match.group("name"))
+    return names
 
 
 def is_lp_related_news(row: dict[str, object], text: str, lp_code: str) -> bool:
@@ -1934,7 +2105,7 @@ def load_official_candidates(
                 if url
             ]
             if should_fetch_source_detail(source_kind, link):
-                detail = fetch_official_detail(notice_url, allow_insecure_ssl)
+                detail = fetch_source_detail(source, notice_url, allow_insecure_ssl)
             else:
                 detail = {}
             detail_title = normalize_whitespace(str(detail.get("title") or ""))
@@ -2258,11 +2429,13 @@ def dedupe_candidates(rows: list[dict[str, object]]) -> list[dict[str, object]]:
     return sorted(grouped.values(), key=lambda row: (EVENT_PRIORITY.get(str(row.get("event_type") or ""), 99), str(row.get("event_date") or ""), str(row.get("title") or "")))
 
 
-def candidate_quality(row: dict[str, object]) -> tuple[int, int, int]:
+def candidate_quality(row: dict[str, object]) -> tuple[int, ...]:
     confidence_score = {"high": 3, "medium": 2, "low": 1}.get(str(row.get("confidence") or ""), 0)
     source_score = 2 if row.get("source_type") == "official" else 1
+    selected_score = 1 if row.get("selected_gp_names") else 0
     amount_score = 1 if row.get("allocation_amount_krw_100mn") else 0
-    return confidence_score, source_score, amount_score
+    validated_score = 1 if row.get("monitor_status") == "validated" else 0
+    return confidence_score, source_score, validated_score, selected_score, amount_score
 
 
 def notice_event_group(event_type: object) -> str:
