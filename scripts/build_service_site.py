@@ -915,6 +915,22 @@ def lp_display_title(title: str) -> str:
     return normalize_whitespace(text) or title
 
 
+def is_lp_notice_supporting_document(title: object) -> bool:
+    text = lp_display_title(str(title or ""))
+    support_terms = [
+        "제출서식",
+        "제출서류 및 서식",
+        "제출서류",
+        "FAQ",
+        "자주 묻는",
+        "담당팀 연락처",
+        "상시 게시",
+        "운영 안내",
+        "홈페이지 운영",
+    ]
+    return any(term.lower() in text.lower() for term in support_terms)
+
+
 def lp_dedupe_title(title: str) -> str:
     text = lp_display_title(title)
     text = re.sub(r"^20\d{2}년\s*", "", text)
@@ -990,6 +1006,8 @@ def read_lp_monitor(path: Path, limit: int | None = 8) -> list[dict[str, object]
             title = str(row.get("title") or "").strip()
             notice_url = str(row.get("notice_url") or "").strip()
             if not title or not notice_url:
+                continue
+            if is_lp_notice_supporting_document(title):
                 continue
             if not is_public_lp_notice_row(row, require_official=True):
                 continue

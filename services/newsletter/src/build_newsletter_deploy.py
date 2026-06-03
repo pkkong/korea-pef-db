@@ -513,6 +513,29 @@ def lp_notice_status_label(status: str) -> str:
     }.get(status, "공고")
 
 
+def lp_notice_stage_label(item: dict[str, object], status: str) -> str:
+    event_type = str(item.get("eventType") or "")
+    stage = str(item.get("stage") or "")
+    title = str(item.get("title") or "")
+    if any(term in title for term in ["서류심사", "정량평가 결과", "제안서 발표대상", "발표대상"]):
+        return "서류심사"
+    if event_type == "final_selection" or stage == "selection_result":
+        return "최종선정"
+    if event_type == "shortlist" or stage == "shortlist":
+        return "서류심사"
+    if stage == "application" or "접수현황" in title:
+        return "접수"
+    if event_type == "revision":
+        return "변경/정정"
+    if event_type == "cancellation":
+        return "취소"
+    if status == "open":
+        return "공고"
+    if status == "closed":
+        return "마감"
+    return "공고"
+
+
 def db_object_exists(conn: sqlite3.Connection, name: str) -> bool:
     row = conn.execute(
         """
@@ -2351,7 +2374,7 @@ def render_lp_notices_page(
         open_count = len([item for item in notices if lp_notice_status(item, report_date) == "open"])
         result_count = len([item for item in notices if lp_notice_status(item, report_date) == "result"])
         hero_title = '<h1 class="lp-directory-title">LP 출자공고</h1>'
-        hero_meta = f'<p class="lp-directory-meta">진행중 {open_count}건 · 선정 결과 {result_count}건 · 전체 {visible_notice_count}건 · {html_escape(report_date)} 기준</p>'
+        hero_meta = f'<p class="lp-directory-meta">{html_escape(report_date)} 기준 · 진행중 {open_count}건 · 선정결과 {result_count}건</p>'
         hero_kpis = ""
         hero_class = "lp-directory-hero lp-notice-hero"
     else:
@@ -2431,7 +2454,7 @@ def render_lp_notices_page(
       <section class="section-block" id="lpNotices" aria-label="LP 공식 공고">
         <div class="lp-notice-toolbar">
           <div class="lp-control-head">
-            <label for="{search_input_id}">공고 검색</label>
+            <label for="{search_input_id}">공고 필터</label>
             <span id="lpNoticeVisibleCount">{visible_notice_count}건 표시</span>
           </div>
           <div class="lp-control-line lp-notice-controls">
@@ -3043,7 +3066,8 @@ def render_lp_notices_page(
       min-width: 0;
       gap: 5px;
     }}
-    body.lp-notices-page .lp-notice-eyebrow {{
+    body.lp-notices-page .lp-notice-eyebrow,
+    body.lp-notices-page .lp-notice-kicker {{
       display: flex;
       flex-wrap: wrap;
       gap: 4px 8px;
@@ -3054,25 +3078,31 @@ def render_lp_notices_page(
       font-weight: 650;
       line-height: 1.25;
     }}
-    body.lp-notices-page .lp-notice-eyebrow span + span::before {{
+    body.lp-notices-page .lp-notice-eyebrow span + span::before,
+    body.lp-notices-page .lp-notice-kicker span + span::before {{
       color: var(--tertiary);
       content: "·";
       margin-right: 8px;
     }}
-    body.lp-notices-page .lp-notice-status {{
+    body.lp-notices-page .lp-notice-status,
+    body.lp-notices-page .lp-notice-stage {{
       color: #475569;
       font-size: 12px;
       font-weight: 760;
       line-height: 1.2;
     }}
-    body.lp-notices-page .lp-notice-row[data-status="open"] .lp-notice-status {{
+    body.lp-notices-page .lp-notice-row[data-status="open"] .lp-notice-status,
+    body.lp-notices-page .lp-notice-row[data-status="open"] .lp-notice-stage {{
       color: #047857;
     }}
-    body.lp-notices-page .lp-notice-row[data-status="result"] .lp-notice-status {{
+    body.lp-notices-page .lp-notice-row[data-status="result"] .lp-notice-status,
+    body.lp-notices-page .lp-notice-row[data-status="result"] .lp-notice-stage {{
       color: #1d4ed8;
     }}
     body.lp-notices-page .lp-notice-row[data-status="closed"] .lp-notice-status,
-    body.lp-notices-page .lp-notice-row[data-status="history"] .lp-notice-status {{
+    body.lp-notices-page .lp-notice-row[data-status="history"] .lp-notice-status,
+    body.lp-notices-page .lp-notice-row[data-status="closed"] .lp-notice-stage,
+    body.lp-notices-page .lp-notice-row[data-status="history"] .lp-notice-stage {{
       color: #64748b;
     }}
     body.lp-notices-page .lp-notice-main h2 {{
@@ -3338,14 +3368,14 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
     status = lp_notice_status(item, report_date)
     status_group = "history" if status in {"closed", "history"} else status
     status_label = lp_notice_status_label(status)
+    stage_label = lp_notice_stage_label(item, status)
     amount = lp_amount_label(item.get("allocationAmount"))
-    amount_label = amount or "-"
     asset_class = public_asset_class(item.get("assetClass")) if item.get("assetClass") else ""
     strategy = clean_public_lp_text(item.get("strategy") or item.get("purpose") or "")
-    type_label = " · ".join(value for value in [asset_class, strategy] if value) or "-"
+    type_label = " · ".join(value for value in [asset_class, strategy] if value)
     selected_label = notice_gp_label(item.get("selectedGpNames"))
     if status == "result":
-        schedule_label = "선정일"
+        schedule_label = "결과일"
         schedule_value = event_date or "-"
         schedule_sub = ""
     elif deadline:
@@ -3353,7 +3383,7 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
         schedule_value = deadline
         schedule_sub = f"공고 {event_date}" if event_date else ""
     else:
-        schedule_label = "공고일"
+        schedule_label = "공고일" if str(item.get("announcedDate") or "").strip() else "기준일"
         schedule_value = event_date or "-"
         schedule_sub = ""
     official_link = (
@@ -3379,10 +3409,28 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
     )
     if schedule_sub:
         schedule_detail += f'<span class="lp-notice-date-sub">{html_escape(schedule_sub)}</span>'
+    asset_fact = (
+        f"""
+              <div>
+                <dt>자산군</dt>
+                <dd>{html_escape(type_label)}</dd>
+              </div>"""
+        if type_label
+        else ""
+    )
+    amount_fact = (
+        f"""
+              <div>
+                <dt>출자규모</dt>
+                <dd>{html_escape(amount)}</dd>
+              </div>"""
+        if amount
+        else ""
+    )
     selected_fact = (
         f"""
               <div>
-                <dt>선정 GP</dt>
+                <dt>관련 GP</dt>
                 <dd>{html_escape(selected_label)}</dd>
               </div>"""
         if selected_label != "-"
@@ -3395,6 +3443,7 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
             lp_name,
             asset_class,
             status_label,
+            stage_label,
             deadline,
             strategy,
             item.get("selectedGpNames"),
@@ -3402,22 +3451,18 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
     )
     return f"""              <article class="lp-notice-row" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-lp-name="{html_escape(lp_name)}" data-asset="{html_escape(asset_class)}" data-status="{html_escape(status)}" data-status-group="{html_escape(status_group)}" data-date="{html_escape(event_date)}" data-deadline="{html_escape(deadline)}">
             <div class="lp-notice-main">
-              <p class="lp-notice-eyebrow"><span class="lp-notice-status">{html_escape(status_label)}</span><span>{html_escape(lp_name)}</span></p>
+              <p class="lp-notice-kicker"><span class="lp-notice-stage">{html_escape(stage_label)}</span></p>
               <h2>{linked_title}</h2>
             </div>
             <dl class="lp-notice-facts">
               <div>
-                <dt>자산군</dt>
-                <dd>{html_escape(type_label)}</dd>
+                <dt>기관명</dt>
+                <dd>{html_escape(lp_name)}</dd>
               </div>
               <div>
                 <dt>{html_escape(schedule_label)}</dt>
                 <dd>{schedule_detail}</dd>
-              </div>
-              <div>
-                <dt>출자규모</dt>
-                <dd>{html_escape(amount_label)}</dd>
-              </div>{selected_fact}
+              </div>{asset_fact}{amount_fact}{selected_fact}
             </dl>
             <div class="lp-page-actions lp-notice-actions" aria-label="공고 자료">{actions}</div>
           </article>"""

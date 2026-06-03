@@ -263,15 +263,17 @@ def check_generated_gp_contract() -> list[str]:
 
 def check_generated_lp_wiki_contract() -> list[str]:
     lp_path = NEWSLETTER_SITE_DIR / "lp-notices.html"
+    lp_notice_path = NEWSLETTER_SITE_DIR / "lp-official-notices.html"
     wiki_path = NEWSLETTER_SITE_DIR / "pef-wiki.html"
-    if not lp_path.exists() or not wiki_path.exists():
+    if not lp_path.exists() or not lp_notice_path.exists() or not wiki_path.exists():
         return ["generated_lp_wiki_contract=skipped"]
 
     violations: list[str] = []
     lp_html = lp_path.read_text(encoding="utf-8")
+    lp_notice_html = lp_notice_path.read_text(encoding="utf-8")
     wiki_html = wiki_path.read_text(encoding="utf-8")
 
-    for name, html in [("lp-notices.html", lp_html), ("pef-wiki.html", wiki_html)]:
+    for name, html in [("lp-notices.html", lp_html), ("lp-official-notices.html", lp_notice_html), ("pef-wiki.html", wiki_html)]:
         labels = bottom_nav_labels(html)
         if labels != BOTTOM_NAV_LABELS:
             raise CheckFailure(f"{name} bottom nav mismatch: expected {BOTTOM_NAV_LABELS}, got {labels}")
@@ -284,6 +286,12 @@ def check_generated_lp_wiki_contract() -> list[str]:
         raise CheckFailure("LP service title missing")
     if gp_service_tabs(lp_html) != ["LP", "NOTICE", "PEOPLE"]:
         raise CheckFailure(f"LP service tabs mismatch: got {gp_service_tabs(lp_html)}")
+    if gp_service_tabs(lp_notice_html) != ["LP", "NOTICE", "PEOPLE"]:
+        raise CheckFailure(f"LP notice service tabs mismatch: got {gp_service_tabs(lp_notice_html)}")
+    if 'aria-current="page">NOTICE</a>' not in lp_notice_html:
+        violations.append("lp-official-notices.html:NOTICE tab not current")
+    if "lp-notice-row" not in lp_notice_html:
+        violations.append("lp-official-notices.html:notice rows missing")
     if re.search(r'data-kind="[^"]*\b(public|private|mutual_aid)\b', lp_html):
         violations.append("lp-notices.html:raw ownership token")
     if "출자기관 프로필" in lp_html:
