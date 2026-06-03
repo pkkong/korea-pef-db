@@ -1732,8 +1732,19 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
         if news_rows.strip()
         else ""
     )
-    gap_rows = render_public_gap_rows(facts_in_section(facts, "data_gap")) or (
-        """          <div><dt>참고</dt><dd>추가 참고사항이 없습니다.</dd></div>"""
+    gap_rows = render_public_gap_rows(facts_in_section(facts, "data_gap"))
+    gap_details = (
+        f"""      <details class="ktcu-detail" id="notes">
+        <summary>참고사항</summary>
+        <div class="ktcu-detail-body">
+          <dl class="ktcu-facts">
+{gap_rows}
+          </dl>
+        </div>
+      </details>
+"""
+        if gap_rows.strip()
+        else ""
     )
 
     lp_code = str(profile.get("lp_code") or "")
@@ -2190,14 +2201,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
 
     <section class="ktcu-section-grid ktcu-resources" id="resources" aria-label="자료">
 {source_details}
-      <details class="ktcu-detail" id="notes">
-        <summary>참고사항</summary>
-        <div class="ktcu-detail-body">
-          <dl class="ktcu-facts">
-{gap_rows}
-          </dl>
-        </div>
-      </details>
+{gap_details}
     </section>
 
     <p class="ktcu-footer">기준일 {html_escape(report_date)} · 최신 공고일 {html_escape(latest_label)}</p>

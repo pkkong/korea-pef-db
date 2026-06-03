@@ -1028,7 +1028,32 @@ def normalize_official_notice_url(source: dict[str, str], notice_url: str) -> st
                 "https://www.kpasset.go.kr/board.es"
                 f"?mid={match.group('mid')}&bid={bid}&list_no={match.group('no')}&act=view&intro_yn=Y"
             )
+    if source_code == "kobc_notice":
+        match = re.search(
+            r"goTo\.view\(['\"]view['\"]\s*,\s*['\"](?P<bidx>\d+)['\"]\s*,\s*['\"](?P<ptidx>\d+)['\"]\s*,\s*['\"](?P<mid>[^'\"]+)['\"]\)",
+            notice_url,
+        )
+        if match:
+            return (
+                "https://www.kobc.or.kr/ebz/kor/bbs/view.do"
+                f"?mId={match.group('mid')}&bIdx={match.group('bidx')}&ptIdx={match.group('ptidx')}"
+            )
     return notice_url
+
+
+def make_html_page_link(source: dict[str, str], html_text: str, final_url: str) -> list[dict[str, str]]:
+    title_match = re.search(r"<title\b[^>]*>(?P<title>.*?)</title>", html_text, flags=re.IGNORECASE | re.DOTALL)
+    title = normalize_whitespace(source.get("source_name", "")) or (
+        normalize_whitespace(strip_html_tags(title_match.group("title"))) if title_match else ""
+    )
+    return [
+        {
+            "title": title or source.get("source_name", "") or final_url,
+            "link": final_url,
+            "announced_date": "",
+            "contact_team": "",
+        }
+    ]
 
 
 def fetch_form_text(url: str, data: dict[str, str], referer: str, allow_insecure_ssl: bool) -> str:
@@ -1512,7 +1537,7 @@ def load_official_candidates(
     lp_names_by_code = {alias.lp_code: alias.lp_name for alias in lp_aliases}
     for source in sources:
         source_kind = source.get("source_kind", "")
-        if not parse_bool(source.get("is_active", "1")) or source_kind not in {"html_listing", "apfs_board", "kbiz_listing", "ktcu_notice", "cu_notice", "kfcc_tender"}:
+        if not parse_bool(source.get("is_active", "1")) or source_kind not in {"html_listing", "html_page", "apfs_board", "kbiz_listing", "ktcu_notice", "cu_notice", "kfcc_tender"}:
             continue
         locator = source.get("locator", "")
         if not locator:
@@ -1528,6 +1553,13 @@ def load_official_candidates(
                 links = parse_cu_listing(source, limit_per_source, allow_insecure_ssl)
             elif source_kind == "kfcc_tender":
                 links = parse_kfcc_tender_listing(source, limit_per_source, allow_insecure_ssl)
+            elif source_kind == "html_page":
+                fetched = fetch_text(locator, verify_ssl=not allow_insecure_ssl)
+                links = make_html_page_link(
+                    source,
+                    str(fetched.get("text") or ""),
+                    str(fetched.get("final_url") or locator),
+                )
             else:
                 fetched = fetch_text(locator, verify_ssl=not allow_insecure_ssl)
                 links = parse_html_listing(

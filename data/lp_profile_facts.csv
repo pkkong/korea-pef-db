@@ -24,8 +24,8 @@ ktcu,public_people,기금운용이사/CIO,고재택,2025-02-01,KTCU 임원 관�
 ktcu,notice_history,2025년 PEF 블라인드 공고,"총 7,000억원 이내·10개사 이내·펀드별 400억~1,000억원",2025-03-21,KTCU 2025 PEF 공고,https://www.ktcu.or.kr/PPW-CSB-000101/57104,high,공식 공고문 기준,10,1
 ktcu,notice_history,2025년 VC 블라인드 공고,"총 1,520억원 이내·10개사 이내",2025-05-09,KTCU 2025 VC 공고,https://www.ktcu.or.kr/PPW-CSB-000101/57425,high,공식 공고문 기준,20,1
 ktcu,notice_history,2025년 권역별 골프장 투자사업,"5,000억원 내외·부동산 펀드·1개 운용사",2025-07-02,KTCU 골프장 투자사업 공고,https://www.ktcu.or.kr/PPW-CSB-000101/57882,high,공식 공고문 기준,30,1
-ktcu,data_gap,기업투자부 실무자명,기업투자1팀·2팀 직급/업무/전화는 공개되지만 실명은 공개되지 않음,2026-05-26,KTCU 조직도 부서 조회,https://www.ktcu.or.kr/IN/IPW-INA-200101,high,실명은 빈 값으로 응답됨. 추정하지 않음,10,1
-ktcu,data_gap,선정 GP 히스토리,최종 선정 GP 히스토리는 공식 공고와 별도 자료를 대조해 추가 검증 필요,2026-05-26,KTCU 공지사항,https://www.ktcu.or.kr/PPW-CSB-000101,medium,LP-GP 연계의 다음 구현 대상,20,1
+ktcu,data_gap,기업투자부 실무자명,기업투자1팀·2팀 직급/업무/전화는 공개되지만 실명은 공개되지 않음,2026-05-26,KTCU 조직도 부서 조회,https://www.ktcu.or.kr/IN/IPW-INA-200101,high,실명은 빈 값으로 응답됨. 추정하지 않음,10,0
+ktcu,data_gap,선정 GP 히스토리,최종 선정 GP 히스토리는 공식 공고와 별도 자료를 대조해 추가 검증 필요,2026-05-26,KTCU 공지사항,https://www.ktcu.or.kr/PPW-CSB-000101,medium,LP-GP 연계의 다음 구현 대상,20,0
 pmaa,general,설립 목적,경찰공무원의 생활안정과 복지 증진,,경찰공제회 설립목적 및 연혁,https://www.pmaa.or.kr/www/1461128128029/content.do,high,공식 설립목적 기준,10,1
 pmaa,general,설립 근거,경찰공제회법,,경찰공제회법,https://www.pmaa.or.kr/www/1461128181587/content.do,high,공식 관련법령 기준,20,1
 pmaa,general,본부 소재지,서울특별시 마포구 마포대로 78 경찰공제회,,경찰공제회 홈페이지,https://www.pmaa.or.kr/index.do,high,공식 홈페이지 푸터 기준,30,1
@@ -39,13 +39,13 @@ pmaa,investment_governance,자산운용위원회,투자정책 방향·중장기 
 pmaa,investment_governance,대체투자실무협의회,신규 대체투자의 안정성·수익성·위험성 사전 검토,,경찰공제회 자산운용위원회,https://www.pmaa.or.kr/www/1461131386517/content.do,high,공식 위원회 설명 기준,20,1
 pmaa,public_people,금융이사/CIO,공석,2026-05-26,경찰공제회 임원현황,https://www.pmaa.or.kr/www/1474439236504/content.do,high,공식 임원현황 기준,10,1
 pmaa,notice_history,2026년 국내 PE·VC 위탁운용사 선정,"총 1,800억원: PE 1,200억원(3개사)·VC 600억원(3개사)",2026-01-12,경찰공제회 입찰공고,https://www.pmaa.or.kr/www/1461128463820/bbs.do?bbs_idx=38984&recruitCd=&type=view,high,공식 공고 기준,10,1
-pmaa,data_gap,공개자료 한계,공식 페이지는 총량·대분류·공고 중심이며 선정 GP와 개별 펀드 성과 히스토리는 별도 검증 필요,2026-05-26,경찰공제회 입찰공고,https://www.pmaa.or.kr/www/1461128463820/bbs.do,medium,LP-GP 연계의 다음 구현 대상,10,1
+pmaa,data_gap,공개자료 한계,공식 페이지는 총량·대분류·공고 중심이며 선정 GP와 개별 펀드 성과 히스토리는 별도 검증 필요,2026-05-26,경찰공제회 입찰공고,https://www.pmaa.or.kr/www/1461128463820/bbs.do,medium,LP-GP 연계의 다음 구현 대상,10,0
 cu,general,회원조합,866개 조합,2024-12-31,신협중앙회 조직구성,https://cu.co.kr/cu/cm/cntnts/cntntsView.do?cntntsId=1009&mi=100026,high,공식 조직구성 기준,10,1
 cu,general,주요 기능,지도·검사·교육·홍보 지원 및 공제업무,,신협중앙회 조직구성,https://cu.co.kr/cu/cm/cntnts/cntntsView.do?cntntsId=1009&mi=100026,high,공식 조직구성 기준,20,1
 cu,general,자금운용 역할,조합 여유자금을 예탁받아 대출과 자금운용 시장에 참여,,신협중앙회 조직구성,https://cu.co.kr/cu/cm/cntnts/cntntsView.do?cntntsId=1009&mi=100026,high,공식 조직구성 기준,30,1
 cu,general,본부 소재지,대전광역시 서구 한밭대로 745,,신협중앙회 조직구성,https://cu.co.kr/cu/cm/cntnts/cntntsView.do?cntntsId=1009&mi=100026,high,공식 홈페이지 푸터 기준,40,1
 cu,investment_status,자금운용 역할,조합 여유자금 예탁·대출·자금운용 시장 참여,,신협중앙회 조직구성,https://cu.co.kr/cu/cm/cntnts/cntntsView.do?cntntsId=1009&mi=100026,high,공식 조직구성 기준,10,1
-cu,investment_status,2025년 VC 블라인드,"3개사·펀드당 200억원 이내·최소 결성규모 400억원 이상",2025-02-03,신협중앙회 2025 VC 공고,https://cu.co.kr/cu/na/ntt/selectNttInfo.do?nttSn=111261&mi=100007,high,공식 공고문 기준,20,1
+cu,investment_status,2025년 VC 블라인드,3개사·펀드당 200억원 이내·최소 결성규모 400억원 이상,2025-02-03,신협중앙회 2025 VC 공고,https://cu.co.kr/cu/na/ntt/selectNttInfo.do?nttSn=111261&mi=100007,high,공식 공고문 기준,20,1
 cu,investment_status,2025년 소형 PE 블라인드,"펀드당 300억원 이내·최소 결성규모 2,000억원 이상·AUM 2,000억 초과~8,000억원 이하",2025-06-09,신협중앙회 소형 PE PDF,https://cu.co.kr/upload/cu/na/bbs_1020/ntt_111581/img_e75d0c23-ab80-4640-bb8d-870a269fa30b1749631042594.pdf,high,공식 첨부 기준,30,1
 cu,investment_status,2025년 중형 PE 블라인드,"펀드당 500억원 이내·최소 결성규모 3,500억원 이상·AUM 8,000억 초과~20,000억원 이하",2025-07-14,신협중앙회 중형 PE PDF,https://cu.co.kr/upload/cu/na/bbs_1020/ntt_111681/img_a22ec225-2f86-4237-9acc-b970779303ce1753932413076.pdf,high,공식 첨부 기준,40,1
 cu,investment_org,핵심 의사결정 축,사업대표이사 산하 자금기획본부·유가증권운용본부·투자금융본부,2026-03-16,신협중앙회 조직구성,https://cu.co.kr/cu/cm/cntnts/cntntsView.do?cntntsId=1009&mi=100026,high,공식 조직도 기준,10,1
@@ -54,7 +54,7 @@ cu,investment_org,리스크관리부문,리스크전략팀·리스크관리팀·
 cu,investment_governance,선정 절차,공고·접수→정량·정성평가→구술평가→우선협상대상운용사→실사→최종선정,2025-07-14,신협중앙회 중형 PE PDF,https://cu.co.kr/upload/cu/na/bbs_1020/ntt_111681/img_a22ec225-2f86-4237-9acc-b970779303ce1753932413076.pdf,high,공식 첨부 기준,10,1
 cu,notice_history,2025년 국내 VC 블라인드 공고,국내 VC 블라인드펀드 선정 공고,2025-02-03,신협중앙회 공지사항,https://cu.co.kr/cu/na/ntt/selectNttInfo.do?nttSn=111261&mi=100007,high,공식 공고 기준,10,1
 cu,notice_history,2025년 국내 기업형 블라인드 공고,소형PE·중형PE 위탁운용사 선정 공고,2025-07-14,신협중앙회 공지사항,https://cu.co.kr/cu/na/ntt/selectNttInfo.do?nttSn=111681&mi=100007,high,공식 공고 기준,20,1
-cu,data_gap,공개자료 한계,공식 조직도와 공고는 확인되나 자금운용 AUM·대체투자 잔액·선정 GP 히스토리는 별도 검증 필요,2026-05-26,신협중앙회 공지사항,https://cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007,medium,LP-GP 연계의 다음 구현 대상,10,1
+cu,data_gap,공개자료 한계,공식 조직도와 공고는 확인되나 자금운용 AUM·대체투자 잔액·선정 GP 히스토리는 별도 검증 필요,2026-05-26,신협중앙회 공지사항,https://cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007,medium,LP-GP 연계의 다음 구현 대상,10,0
 kfcc,general,설립 목적,새마을금고 경영 지원·감독과 공동이익 추구,,새마을금고중앙회 주요업무,https://www.kfcc.co.kr/cc/kfccMainRoles.do,high,공식 주요업무 기준,10,1
 kfcc,general,자산·거래자,"자산 약 280조원·거래자수 2,355만명",,새마을금고 Company Brief,https://www.kfcc.co.kr/cc/companyBrief.do,high,공식 Company Brief 기준,20,1
 kfcc,general,금고 수,"1,300여개",,새마을금고 Company Brief,https://www.kfcc.co.kr/cc/companyBrief.do,medium,공식 Company Brief 기준,30,1
@@ -67,7 +67,7 @@ kfcc,investment_status,신용사업 역할,안정적 자금 운용과 자금 수
 kfcc,investment_org,핵심 의사결정 축,신용공제대표이사 산하 자금운용부문(CIO)·대체운용본부,2026-05-26,새마을금고중앙회 조직현황,https://www.kfcc.co.kr/cc/organizationChart.do,high,공식 조직도 기준,10,1
 kfcc,investment_org,대체운용본부,프로젝트운용부·기업운용부,2026-05-26,새마을금고중앙회 조직현황,https://www.kfcc.co.kr/cc/organizationChart.do,high,공식 조직도 기준,20,1
 kfcc,notice_history,2025년 PE·VC 위탁운용사 선정,"PEF·VC 대상 총 4,400억원 출자 계획 보도",2025-06-26,인베스트조선,https://www.investchosun.com/site/data/html_dir/2025/06/26/2025062680181.html,medium,뉴스 보도 기준으로 공식 선정 자료와 대조 필요,10,1
-kfcc,data_gap,공개자료 한계,공식 입찰공고는 일반 조달 공고와 투자 공고가 섞여 있어 PE/VC 공고만 선별 확인 필요,2026-05-26,새마을금고중앙회 입찰공고,https://www.kfcc.co.kr/noticeofTender/noticeofTenderList.do,medium,공식 공고 전용 필터 보강 대상,10,1
+kfcc,data_gap,공개자료 한계,공식 입찰공고는 일반 조달 공고와 투자 공고가 섞여 있어 PE/VC 공고만 선별 확인 필요,2026-05-26,새마을금고중앙회 입찰공고,https://www.kfcc.co.kr/noticeofTender/noticeofTenderList.do,medium,공식 공고 전용 필터 보강 대상,10,0
 kexim,general,기관 성격,수출입·해외투자 활동을 지원하는 정책금융기관,,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,high,공식 홈페이지 주요 서비스 기준,10,1
 kexim,general,본점 소재지,서울특별시 영등포구 은행로 38,,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,high,공식 홈페이지 푸터 기준,20,1
 kexim,general,해외 네트워크,대표사무소 25곳·현지법인 5곳·연락사무소 6곳,,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,high,공식 홈페이지 글로벌 네트워크 기준,30,1
@@ -78,28 +78,28 @@ kexim,notice_history,공급망안정화기금 공고,공식 홈페이지 공지�
 kexim,notice_history,2026년 핵심광물·에너지 공급망안정화 펀드 선정,비엔더블유인베스트먼트·한국투자프라이빗에쿼티 각 500억원,2026-01-09,딜사이트,https://dealsite.co.kr/articles/154841,medium,뉴스 기반 선정 결과. 공식 공고 URL과 첨부파일 추가 확보 필요,20,1
 kexim,recent_news,2026년 상반기 핵심광물·에너지 공급망안정화 펀드,"출자 1,000억원·비엔더블유인베스트먼트 500억원·한국투자프라이빗에쿼티 500억원 선정 보도",2026-01-09,딜사이트,https://dealsite.co.kr/articles/154841,medium,뉴스 기반 선정 결과. 공식 공고 URL과 첨부파일 추가 확보 필요,10,1
 kexim,recent_news,2026년 지역주도성장 펀드 GP 선정,"총 2,500억원 출자·6개 GP·자펀드 1조2,500억원 목표",2026-04-10,딜사이트,https://dealsite.co.kr/articles/160028,medium,뉴스 기반 선정 결과. 정책금융형 펀드로 순수 LP 출자와 구분 관리,20,1
-kexim,data_gap,공개자료 한계,순수 LP 성격의 PE/VC 출자공고와 정책금융 프로그램 공고를 분리해서 축적 필요,2026-05-26,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,medium,정책금융형 LP 정규화의 다음 구현 대상,10,1
+kexim,data_gap,공개자료 한계,순수 LP 성격의 PE/VC 출자공고와 정책금융 프로그램 공고를 분리해서 축적 필요,2026-05-26,한국수출입은행 대표홈페이지,https://www.koreaexim.go.kr/index,medium,정책금융형 LP 정규화의 다음 구현 대상,10,0
 nps,general,설치,1988년 국민연금기금 설치,1988,NPS 2024 기금운용보고서,https://fund.nps.or.kr/fileDown.do?atchFileId=FL25002684&atchFileSn=1,high,공식 기금운용보고서 주요 연혁 기준,10,1
 nps,general,2024년말 기금규모,"1,212조 8천억원",2024-12-31,NPS 2024 기금운용보고서,https://fund.nps.or.kr/fileDown.do?atchFileId=FL25002684&atchFileSn=1,high,시가 기준 기금규모,20,1
-nps,investment_status,2024년 대체투자,"206조 9천억원·기금자산 17.1%·국내 25조 1천억원·해외 181조 8천억원",2024-12-31,NPS 2024 기금운용보고서,https://fund.nps.or.kr/fileDown.do?atchFileId=FL25002684&atchFileSn=1,high,공식 기금운용 현황 기준,10,1
-nps,investment_status,2024년 위탁운용,"588조 4천억원·금융부문 대비 48.5%",2024-12-31,NPS 2024 기금운용보고서,https://fund.nps.or.kr/fileDown.do?atchFileId=FL25002684&atchFileSn=1,high,외부운용사 위탁운용 현황 기준,20,1
+nps,investment_status,2024년 대체투자,206조 9천억원·기금자산 17.1%·국내 25조 1천억원·해외 181조 8천억원,2024-12-31,NPS 2024 기금운용보고서,https://fund.nps.or.kr/fileDown.do?atchFileId=FL25002684&atchFileSn=1,high,공식 기금운용 현황 기준,10,1
+nps,investment_status,2024년 위탁운용,588조 4천억원·금융부문 대비 48.5%,2024-12-31,NPS 2024 기금운용보고서,https://fund.nps.or.kr/fileDown.do?atchFileId=FL25002684&atchFileSn=1,high,외부운용사 위탁운용 현황 기준,20,1
 nps,investment_org,PE 관련 핵심 조직,사모벤처투자실: 아시아사모투자팀·미주사모투자팀·유럽사모투자팀·대체전략투자팀·사모대출투자팀,2024-12-31,NPS 2024 기금운용보고서,https://fund.nps.or.kr/fileDown.do?atchFileId=FL25002684&atchFileSn=1,high,공식 기금운용본부 조직도 기준,10,1
 nps,investment_governance,최고 의사결정기구,국민연금기금운용위원회(위원장: 보건복지부장관),2024-12-31,NPS 2024 기금운용보고서,https://fund.nps.or.kr/fileDown.do?atchFileId=FL25002684&atchFileSn=1,high,공식 의사결정 체계 기준,10,1
-nps,notice_history,2026년 VC 위탁운용사 출자전,"국내 VC 위탁운용사 선정 관련 4,000억원 공개 신호 관측",2026-05-20,이투데이,https://www.etoday.co.kr/news/view/2586421,medium,뉴스 기반 출자 신호. 공식 선정공고/최종선정 자료와 대조 필요,10,1
-nps,data_gap,공개자료 한계,거래기관 선정공고의 상세 첨부파일과 최종 선정 결과를 공식 공고 채널에서 추가 구조화 필요,2026-05-27,NPS 거래기관 선정공고,https://fund.nps.or.kr/impa/dlnginstslctnpbanclist/getOHEF0017M0.do,medium,공식 크롤러 품질 점검 대상,10,1
+nps,notice_history,2026년 VC 위탁운용사 출자전,"국내 VC 위탁운용사 선정 관련 4,000억원 출자 보도",2026-05-20,이투데이,https://www.etoday.co.kr/news/view/2586421,medium,뉴스 보도 기준. 공식 선정공고와 최종 선정 자료는 별도 자료 링크로 확인,10,1
+nps,data_gap,공개자료 한계,거래기관 선정공고의 상세 첨부파일과 최종 선정 결과를 공식 공고 채널에서 추가 구조화 필요,2026-05-27,NPS 거래기관 선정공고,https://fund.nps.or.kr/impa/dlnginstslctnpbanclist/getOHEF0017M0.do,medium,공식 크롤러 품질 점검 대상,10,0
 kgrowth,general,설립,2016년 2월,2016-02-01,K-Growth Company Overview,https://eng.kgrowth.or.kr/company.asp,high,공식 영문 회사개요 기준,10,1
 kgrowth,general,역할,VC&PE 대표 Fund of Funds로 정책지원 영역에 투자자금 공급,,K-Growth Company Overview,https://eng.kgrowth.or.kr/company.asp,high,공식 영문 회사개요 기준,20,1
 kgrowth,investment_status,핵심 운용 영역,Startup-Scale-up-Exit/Re-challenge 생태계 지원을 위한 FoF 조성·운용,,K-Growth Company Overview,https://eng.kgrowth.or.kr/company.asp,high,공식 영문 회사개요 기준,10,1
 kgrowth,investment_org,투자 조직,Investment Division 산하 Growth Investment Department·Industrial Finance Department·Innovative Investment Department,,K-Growth Company Overview,https://eng.kgrowth.or.kr/company.asp,high,공식 영문 조직도 기준,10,1
 kgrowth,notice_history,2026년 국민성장펀드(국민참여형),공고일 2026-04-10·신청기한 2026-04-17,2026-04-10,벤처투자종합포털,https://www.vcs.go.kr/web/portal/bbs/invtnotice/130194?baCommSelec=false&baNotice=false&baOpenDay=false&baUse=true&bcId=invtnotice&cp=3&pageSize=10,high,공식 출자공고 기준,10,1
 kgrowth,notice_history,2026년 방산기술혁신펀드 GP 선정,이앤인베·에임인베·리인베 선정·출자 520억원 관측,2026-04-29,더벨,https://www.thebell.co.kr/free/content/ArticleView.asp?key=202604281123073080102470,medium,뉴스 기반 선정 결과. 공식 결과 공고 추가 확인 필요,20,1
-kgrowth,data_gap,공개자료 한계,공식 사업공고 URL과 VCS 백업 채널을 같은 notice_id로 묶는 정규화 필요,2026-05-27,한국성장금융 공지사항,https://www.kgrowth.or.kr/notice.asp?str_type=1&tab=1,medium,공식 사이트 EUC-KR/동적 게시판 수집 보강 대상,10,1
+kgrowth,data_gap,공개자료 한계,공식 사업공고 URL과 VCS 백업 채널을 같은 notice_id로 묶는 정규화 필요,2026-05-27,한국성장금융 공지사항,https://www.kgrowth.or.kr/notice.asp?str_type=1&tab=1,medium,공식 사이트 EUC-KR/동적 게시판 수집 보강 대상,10,0
 kdb,general,성격,산업 개발과 국민경제 발전을 지원하는 정책금융기관,,KDB Investor Presentation,https://www.kdb.co.kr/wcmscontents/pdf/KDB_Investor_Presentation_July_2025.pdf,medium,한국산업은행 공식 IR 자료 기준. 최신 사업범위 추가 검증 대상,10,1
-kdb,investment_status,국민성장펀드,"민관합동 150조원 조성·첨단전략산업 생태계 지원",2026-05-27,국민성장펀드 공식 홈페이지,https://ngf.kdb.co.kr/GFMNMN00N00.act,high,국민성장펀드 공식 홈페이지 기준,10,1
+kdb,investment_status,국민성장펀드,민관합동 150조원 조성·첨단전략산업 생태계 지원,2026-05-27,국민성장펀드 공식 홈페이지,https://ngf.kdb.co.kr/GFMNMN00N00.act,high,국민성장펀드 공식 홈페이지 기준,10,1
 kdb,investment_org,국민성장펀드부문,총괄사무국·대출운용국·투자운용국·심사지원국,2026-05-27,국민성장펀드 공식 홈페이지,https://ngf.kdb.co.kr/GFMNMN00N00.act,high,공식 문의 조직 기준,10,1
 kdb,notice_history,2026년 국민성장펀드 간접투자 정책성펀드 1차,2026-04-15 위탁운용사 선정계획 공고·2026-04-17 설명회,2026-04-15,한국산업은행 공지사항,https://www.kdb.co.kr/BOUBUF02N00.act?ECY_PWD=&GmBrnId=&_PARAM_NAME=NEXT_DATA&_PARM_DATA=%7B%22ITR_NAC_ID_MNG_SNO%22%3A%22185727%22%2C%22ITR_BLB_ID%22%3A%22STD119%22%7D,high,공식 KDB 공지 기준,10,1
 kdb,notice_history,2026년 회수시장 지원 세컨더리 펀드,공고일 2026-04-30·신청기한 2026-05-29,2026-04-30,벤처투자종합포털,https://www.vcs.go.kr/web/portal/bbs/invtnotice/130335?cp=1&pageSize=10&bcId=invtnotice&baNotice=false&baCommSelec=false&baOpenDay=false&baUse=true,high,공식 출자공고 기준,20,1
-kdb,data_gap,공개자료 한계,KDB 공지사항·국민성장펀드 전용 홈페이지·VCS 출자공고가 중복 게시될 수 있어 canonical notice_id 정규화 필요,2026-05-27,국민성장펀드 공식 홈페이지,https://ngf.kdb.co.kr/GFMNMN00N00.act,medium,중복 공고 병합과 첨부파일 파싱 보강 대상,10,1
+kdb,data_gap,공개자료 한계,KDB 공지사항·국민성장펀드 전용 홈페이지·VCS 출자공고가 중복 게시될 수 있어 canonical notice_id 정규화 필요,2026-05-27,국민성장펀드 공식 홈페이지,https://ngf.kdb.co.kr/GFMNMN00N00.act,medium,중복 공고 병합과 첨부파일 파싱 보강 대상,10,0
 kvic,general,한국모태펀드 결성,2005년 7월 15일,2005-07-15,한국벤처투자 한국모태펀드 사업개요,https://www.kvic.or.kr/about-business/capital-business/korea-mother-fund/overview,high,공식 한국모태펀드 사업개요 기준,10,1
 kvic,general,한국모태펀드 규모,"8조 8,968억(2023년 12월 31일 기준)",2023-12-31,한국벤처투자 한국모태펀드 사업개요,https://www.kvic.or.kr/about-business/capital-business/korea-mother-fund/overview,high,공식 한국모태펀드 개요 기준,20,1
 kvic,general,운용기간,30년(2005년~2035년),,한국벤처투자 한국모태펀드 사업개요,https://www.kvic.or.kr/about-business/capital-business/korea-mother-fund/overview,high,공식 한국모태펀드 개요 기준,30,1
@@ -107,7 +107,7 @@ kvic,investment_status,주 출자 분야,창업초기·지방기업·부품소�
 kvic,investment_org,운용기관,한국벤처투자,,한국벤처투자 한국모태펀드 사업개요,https://www.kvic.or.kr/about-business/capital-business/korea-mother-fund/overview,high,공식 한국모태펀드 개요 기준,10,1
 kvic,investment_governance,운용체계,출자자가 모태조합에 출자하고 모태조합이 투자조합에 출자해 중소·벤처기업에 투자,,한국벤처투자 한국모태펀드 사업개요,https://www.kvic.or.kr/about-business/capital-business/korea-mother-fund/overview,high,공식 운용구조 기준,10,1
 kvic,investment_governance,모태출자펀드 선정 절차,연간운용 계획수립→출자사업공고→제안서 접수→1차 심사→2차 심사→선정결과통보,,한국벤처투자 선정 및 사후관리 절차,https://www.kvic.or.kr/about-business/capital-business/korea-mother-fund/selection-and-post-investment-management,high,공식 선정 절차 기준,20,1
-kvic,data_gap,공개자료 한계,모태펀드 공식 개요는 2023년말 규모 기준이며 계정별 최신 잔액·선정 GP 히스토리는 공고별 추가 대조 필요,2026-05-27,한국벤처투자 한국모태펀드 사업개요,https://www.kvic.or.kr/about-business/capital-business/korea-mother-fund/overview,medium,프로필 최신화와 GP 선정 히스토리 보강 대상,10,1
+kvic,data_gap,공개자료 한계,모태펀드 공식 개요는 2023년말 규모 기준이며 계정별 최신 잔액·선정 GP 히스토리는 공고별 추가 대조 필요,2026-05-27,한국벤처투자 한국모태펀드 사업개요,https://www.kvic.or.kr/about-business/capital-business/korea-mother-fund/overview,medium,프로필 최신화와 GP 선정 히스토리 보강 대상,10,0
 poba,general,설립,1975년,,대한지방행정공제회 자산운용 개요,https://poba.or.kr/mno/mno01/mno0105/mno010501?menuseq=149,high,공식 자산운용 개요 기준,10,1
 poba,general,2025년말 자산규모,"33조 8,260억원",2025-12-31,대한지방행정공제회 자산운용 개요,https://poba.or.kr/mno/mno01/mno0105/mno010501?menuseq=149,high,공식 자산운용 개요 기준,20,1
 poba,investment_status,2026년 자산운용 계획,"총자산 37조 1,832억원·목표수익률 5.0%",2026-01-01,대한지방행정공제회 자산운용 계획,https://poba.or.kr/mno/mno01/mno0105/mno010501?menuseq=149,high,공식 자산운용 계획 기준,10,1
@@ -116,7 +116,7 @@ poba,investment_org,자산운용 조직,사업이사 산하 투자전략실·부
 poba,investment_org,투자전략실,기업투자팀·크레딧투자팀·주식팀,2026-01-01,대한지방행정공제회 자산운용 조직도,https://poba.or.kr/mno/mno01/mno0105/mno010501?menuseq=149,high,공식 자산운용 조직도 기준,20,1
 poba,investment_governance,운영위원회,전략적 자산배분과 대체투자 단위사업당 투자한도 초과집행 등을 심의·의결,,대한지방행정공제회 자산운용 관련 위원회,https://poba.or.kr/mno/mno01/mno0105/mno010501?menuseq=149,high,공식 위원회 설명 기준,10,1
 poba,investment_governance,투자심의위원회,대체투자와 파생상품 투자 등에 관한 의사결정 기구,,대한지방행정공제회 자산운용 관련 위원회,https://poba.or.kr/mno/mno01/mno0105/mno010501?menuseq=149,high,공식 위원회 설명 기준,20,1
-poba,data_gap,공개자료 한계,세부 자산운용 계획은 운용업무 공정성 및 금융시장 안정 우려로 공개 제한,2026-05-27,대한지방행정공제회 자산운용 계획,https://poba.or.kr/mno/mno01/mno0105/mno010501?menuseq=149,medium,공식 공개 제한 문구 기준,10,1
+poba,data_gap,공개자료 한계,세부 자산운용 계획은 운용업무 공정성 및 금융시장 안정 우려로 공개 제한,2026-05-27,대한지방행정공제회 자산운용 계획,https://poba.or.kr/mno/mno01/mno0105/mno010501?menuseq=149,medium,공식 공개 제한 문구 기준,10,0
 kafi,general,기관 목적,정부 농업 정책자금을 효율적으로 운용·관리·감독해 농식품산업 발전에 기여,,농식품 투자정보 플랫폼 ASSIST 농금원 안내,https://assist.apfs.kr/usr/inform/intro/openAPFS.do,high,공식 농금원 안내 기준,10,1
 kafi,general,주요 사업,농업재해보험 사업관리·농림수산식품모태펀드관리·농림수산정책자금관리,,농식품 투자정보 플랫폼 ASSIST 농금원 안내,https://assist.apfs.kr/usr/inform/intro/openAPFS.do,high,공식 농금원 안내 기준,20,1
 kafi,general,소재지,"서울특별시 영등포구 여의공원로 101, 2층 201호",,농식품 투자정보 플랫폼 ASSIST 농금원 안내,https://assist.apfs.kr/usr/inform/intro/openAPFS.do,high,공식 찾아오시는 길 기준,30,1
@@ -125,12 +125,12 @@ kafi,investment_org,모태펀드 주요 업무,출자계획 수립·경영체 �
 kafi,investment_org,투자지원센터,가온누리 인베지움은 농림수산식품 모태펀드 투자 지원사업을 총괄하는 투자지원센터,,농식품 투자정보 플랫폼 ASSIST 농금원 안내,https://assist.apfs.kr/usr/inform/intro/openAPFS.do,high,공식 투자지원센터 소개 기준,20,1
 kafi,investment_governance,추진 체계,농식품부·해수부가 운용지침 마련 및 출자하고 농금원이 운용계획 수립·출자공고·투자조합 심사 및 선정을 담당,,농식품 투자정보 플랫폼 ASSIST 농금원 안내,https://assist.apfs.kr/usr/inform/intro/openAPFS.do,high,공식 사업 추진체계 기준,10,1
 kafi,notice_history,2023년 정기 출자사업,2023-02-20 공고·농식품 및 수산 계정 출자사업·제안서 접수마감 2023-03-17,2023-02-20,농업정책보험금융원 공지사항,https://www.apfs.kr/front/board/boardContentsView.do?boardId=10026&contId=13423&menuId=41,high,공식 출자사업 공고 기준,10,1
-kafi,data_gap,공개자료 한계,공식 APFS 공지와 VCS 백업 공고를 같은 notice_id로 묶는 정규화 및 첨부파일 추출 품질 점검 필요,2026-05-28,농업정책보험금융원 공지사항,https://www.apfs.kr/front/board/boardContentsListPage.do?boardId=10026&menuId=5386&selTab=1,medium,공식 채널과 백업 채널 중복 관리 대상,10,1
+kafi,data_gap,공개자료 한계,공식 APFS 공지와 VCS 백업 공고를 같은 notice_id로 묶는 정규화 및 첨부파일 추출 품질 점검 필요,2026-05-28,농업정책보험금융원 공지사항,https://www.apfs.kr/front/board/boardContentsListPage.do?boardId=10026&menuId=5386&selTab=1,medium,공식 채널과 백업 채널 중복 관리 대상,10,0
 koreapost,general,우체국예금 연혁,1905년 7월 우편환·우편저금 최초 시행,,우정사업본부 예금 연혁 및 사업목적,https://www.koreapost.go.kr/kpost/subIndex/4246.do,high,공식 우정사업본부 사업분야 기준,10,1
 koreapost,general,우체국예금 목적,국민 저축의욕 고취와 보편적 금융서비스 제공을 통한 공공복리 증진,,우정사업본부 예금 연혁 및 사업목적,https://www.koreapost.go.kr/kpost/subIndex/4246.do,high,공식 우정사업본부 사업분야 기준,20,1
 koreapost,general,우체국보험 연혁,1929년 10월 보험사업 시작,,우정사업본부 보험 연혁 및 사업목적,https://www.koreapost.go.kr/kpost/subIndex/4249.do,high,공식 우정사업본부 사업분야 기준,30,1
 koreapost,investment_status,예금자금 운용 원칙,상시 원리금 상환 가능성을 위해 안정성을 최우선으로 고려하고 주식·대체투자도 일부 병행,,우정사업본부 예금자금운용개요,https://www.koreapost.go.kr/kpost/subIndex/321.do,high,공식 자금운용현황 기준,10,1
-koreapost,investment_status,2025년 예금자금 대체투자,"포트폴리오 내 대체투자 10.4%",2025,우정사업본부 세부운용현황,https://www.koreapost.go.kr/kpost/subIndex/322.do,high,공식 자금운용현황 기준,20,1
+koreapost,investment_status,2025년 예금자금 대체투자,포트폴리오 내 대체투자 10.4%,2025,우정사업본부 세부운용현황,https://www.koreapost.go.kr/kpost/subIndex/322.do,high,공식 자금운용현황 기준,20,1
 koreapost,notice_history,거래기관 선정공고 채널,우체국금융 자산운용 사이트에서 위탁운용사 선정공고를 공시,,우체국금융 자산운용,https://www.kpasset.go.kr/menu.es?mid=a10510000000,high,공식 자산운용 채널 기준,10,1
 tp,general,설립목적,사립학교 교직원과 유족의 경제적 생활 안정 및 복리향상에 기여,,사학연금 설립목적 및 체계,https://www.tp.or.kr/tp-kr/cntnts/i-732/web.do,high,공식 공단소개 기준,10,1
 tp,general,주요 업무,부담금 징수·급여 결정과 지급·자산운용·교직원 복지사업 수행,,사학연금 설립목적 및 체계,https://www.tp.or.kr/tp-kr/cntnts/i-732/web.do,high,공식 공단소개 기준,20,1
@@ -148,7 +148,7 @@ ibk,general,설립일,1961년 8월 1일,1961-08-01,IBK Corporate Data,https://gl
 ibk,general,본점,서울 중구 을지로 79,,IBK Corporate Data,https://global.ibk.co.kr/en/company/CorporateData,high,공식 영문 기업정보 기준,20,1
 ibk,investment_status,정책금융 역할,SME 전 생애주기 지원을 위해 Scale-up·Level-up·Cycle-up 플랫폼을 제시,,IBK Co-up Financing,https://global.ibk.co.kr/en/company/CoUpFinancing,high,공식 영문 전략 페이지 기준,10,1
 ibk,notice_history,2026년 IBK 동행펀드,2026-05-18 공고·출자금액 총 1200억원 이내·6개 운용사 선정 예정,2026-05-18,한국벤처캐피탈협회 출자공고,https://www.kvca.or.kr/Program/invest/listbody.html?a_cd=8&a_gb=board&a_item=0&key=&keyfield=&page=1&po_no=852&sm=2_2_2,medium,KVCA 출자공고 백업 기준. IBK 자체 게시 여부는 미확정,10,1
-ibk,data_gap,공개자료 한계,IBK 자체 공고 채널은 미확정이며 2026년 동행펀드는 KVCA 출자공고에서 우선 확인,2026-05-28,한국벤처캐피탈협회 출자공고,https://www.kvca.or.kr/Program/invest/listbody.html?a_cd=8&a_gb=board&a_item=0&key=&keyfield=&page=1&po_no=852&sm=2_2_2,medium,백업 채널로 출처 품질을 구분,10,1
+ibk,data_gap,공개자료 한계,IBK 자체 공고 채널은 미확정이며 2026년 동행펀드는 KVCA 출자공고에서 우선 확인,2026-05-28,한국벤처캐피탈협회 출자공고,https://www.kvca.or.kr/Program/invest/listbody.html?a_cd=8&a_gb=board&a_item=0&key=&keyfield=&page=1&po_no=852&sm=2_2_2,medium,백업 채널로 출처 품질을 구분,10,0
 geps,notice_history,위탁운용사 선정결과 공시,대체투자 선정결과에 국내 블라인드 벤처펀드·국내 부동산 블라인드 펀드·국내 인프라 블라인드 펀드·해외 사모펀드 등 자산군별 운용기관을 공개,2026-03-31,공무원연금공단 위탁운용사 선정결과,https://www.geps.or.kr/mgtNotice_financialAsset_financialCondition_tradingInstitution_selectionCmc,high,공식 경영공시 작성기준일 기준,10,1
 geps,notice_history,대체투자 운용기관 예시,국내 블라인드 벤처펀드: 아주IB투자·IMM인베스트먼트·SV인베스트먼트; 해외 사모펀드: Bridgepoint·HGGC·Triton·Barings·Blackstone·Goldman Sachs·Golub,2026-03-31,공무원연금공단 위탁운용사 선정결과,https://www.geps.or.kr/mgtNotice_financialAsset_financialCondition_tradingInstitution_selectionCmc,high,공식 선정결과 표 기준,20,1
 mmaa,general,설립 근거,군인공제회법에 따른 군인공제회,,국가법령정보센터 군인공제회법,https://www.law.go.kr/법령/군인공제회법,high,공식 법령 기준,10,1
@@ -159,3 +159,289 @@ nps,public_people,기금운용본부장,서원주,,국민연금기금운용본�
 nps,public_people,사모·벤처투자실장,최형돈,,국민연금기금운용본부 조직 및 인력,https://fund.nps.or.kr/edwmintr/ognzprsn/getOHEB0010M0.do,high,공식 조직 및 인력 페이지 기준,20,1
 kvic,public_people,대표이사,이대희,,한국벤처투자 대표이사 소개,https://www.kvic.or.kr/about-kvic/introduce-executive-team/about-ceo,high,공식 경영진 소개 페이지 기준,10,1
 kvic,investment_org,펀드운용 조직,펀드운용1본부·펀드운용2본부·펀드관리본부·글로벌본부·지역성장본부 등이 모태펀드 운용과 출자펀드 사후관리 업무를 수행,,한국벤처투자 조직 및 인원,https://kvic.or.kr/about-kvic/organization,high,공식 조직 및 인원 페이지 기준,20,1
+nps,general,기관 유형,공적 연금,,국민연금기금 홈페이지,https://fund.nps.or.kr,medium,기관 공개 정보 기준,5,1
+nps,general,영문명,National Pension Service,,국민연금기금 홈페이지,https://fund.nps.or.kr,medium,기관 공개 정보 기준,8,1
+nps,general,홈페이지,공식 홈페이지,,국민연금기금 홈페이지,https://fund.nps.or.kr,medium,기관 공개 정보 기준,90,1
+nps,investment_org,담당 조직,아시아사모투자팀,,국민연금기금 홈페이지,https://fund.nps.or.kr,medium,기관 공개 정보 기준,5,1
+nps,investment_status,관심 자산군,PEF · VC · 사모대출 · 부동산 · 인프라,,국민연금기금 홈페이지,https://fund.nps.or.kr,medium,기관 공개 정보 기준,5,1
+nps,notice_history,공식 공고 채널,공식 홈페이지 공고 채널,,국민연금기금 공고 채널,https://fund.nps.or.kr/impa/dlnginstslctnpbanclist/getOHEF0017M0.do,medium,기관 공개 정보 기준,5,1
+kvic,general,기관 유형,모태펀드,,한국벤처투자 홈페이지,https://www.kvic.or.kr,medium,기관 공개 정보 기준,5,1
+kvic,general,영문명,KVIC,,한국벤처투자 홈페이지,https://www.kvic.or.kr,medium,기관 공개 정보 기준,8,1
+kvic,general,홈페이지,공식 홈페이지,,한국벤처투자 홈페이지,https://www.kvic.or.kr,medium,기관 공개 정보 기준,90,1
+kvic,investment_org,담당 조직,투자운용본부,,한국벤처투자 홈페이지,https://www.kvic.or.kr,medium,기관 공개 정보 기준,5,1
+kvic,investment_status,관심 자산군,VC · PEF · 모태펀드,,한국벤처투자 홈페이지,https://www.kvic.or.kr,medium,기관 공개 정보 기준,5,1
+kvic,notice_history,공식 공고 채널,벤처투자종합포털 출자공고,,한국벤처투자 공고 채널,https://www.vcs.go.kr/web/portal/bbs/invtnotice/list?baCommSelec=false&baNotice=false&baOpenDay=false&baUse=true&bcId=invtnotice&pageSize=20,medium,기관 공개 정보 기준,5,1
+kgrowth,general,기관 유형,정책 모태펀드,,한국성장금융 홈페이지,https://www.kgrowth.or.kr,medium,기관 공개 정보 기준,5,1
+kgrowth,general,영문명,KoFC/K-Growth,,한국성장금융 홈페이지,https://www.kgrowth.or.kr,medium,기관 공개 정보 기준,8,1
+kgrowth,general,홈페이지,공식 홈페이지,,한국성장금융 홈페이지,https://www.kgrowth.or.kr,medium,기관 공개 정보 기준,90,1
+kgrowth,investment_org,담당 조직,출자사업 담당,,한국성장금융 홈페이지,https://www.kgrowth.or.kr,medium,기관 공개 정보 기준,5,1
+kgrowth,investment_status,관심 자산군,PEF · VC · 사모대출 · 정책펀드,,한국성장금융 홈페이지,https://www.kgrowth.or.kr,medium,기관 공개 정보 기준,5,1
+kgrowth,notice_history,공식 공고 채널,공식 홈페이지 공고 채널,,한국성장금융 공고 채널,https://www.kgrowth.or.kr/notice.asp?str_type=1&tab=1,medium,기관 공개 정보 기준,5,1
+kafi,general,기관 유형,정책 모태펀드,,농업정책보험금융원 홈페이지,https://www.apfs.kr,medium,기관 공개 정보 기준,5,1
+kafi,general,영문명,Korea Agriculture Fund of Funds Investment Management,,농업정책보험금융원 홈페이지,https://www.apfs.kr,medium,기관 공개 정보 기준,8,1
+kafi,general,홈페이지,공식 홈페이지,,농업정책보험금융원 홈페이지,https://www.apfs.kr,medium,기관 공개 정보 기준,90,1
+kafi,investment_org,담당 조직,농식품모태펀드 담당,,농업정책보험금융원 홈페이지,https://www.apfs.kr,medium,기관 공개 정보 기준,5,1
+kafi,investment_status,관심 자산군,VC · PEF · 모태펀드,,농업정책보험금융원 홈페이지,https://www.apfs.kr,medium,기관 공개 정보 기준,5,1
+kafi,notice_history,공식 공고 채널,공식 홈페이지 공고 채널,,농업정책보험금융원 공고 채널,https://www.apfs.kr/front/board/boardContentsListPage.do?boardId=10026&menuId=5386&selTab=1,medium,기관 공개 정보 기준,5,1
+kdb,general,기관 유형,정책은행,,한국산업은행 홈페이지,https://www.kdb.co.kr,medium,기관 공개 정보 기준,5,1
+kdb,general,영문명,Korea Development Bank,,한국산업은행 홈페이지,https://www.kdb.co.kr,medium,기관 공개 정보 기준,8,1
+kdb,general,홈페이지,공식 홈페이지,,한국산업은행 홈페이지,https://www.kdb.co.kr,medium,기관 공개 정보 기준,90,1
+kdb,investment_org,담당 조직,간접투자/혁신성장펀드 담당,,한국산업은행 홈페이지,https://www.kdb.co.kr,medium,기관 공개 정보 기준,5,1
+kdb,investment_status,관심 자산군,PEF · VC · 정책펀드,,한국산업은행 홈페이지,https://www.kdb.co.kr,medium,기관 공개 정보 기준,5,1
+kdb,notice_history,공식 공고 채널,국민성장펀드 공지사항,,한국산업은행 공고 채널,https://ngf.kdb.co.kr/GFIMMG01N00.act?_mnuId=WBGFGF0007,medium,기관 공개 정보 기준,5,1
+koreapost,general,기관 유형,공적 기금,,우정사업본부 홈페이지,https://www.koreapost.go.kr,medium,기관 공개 정보 기준,5,1
+koreapost,general,영문명,Korea Post,,우정사업본부 홈페이지,https://www.koreapost.go.kr,medium,기관 공개 정보 기준,8,1
+koreapost,general,홈페이지,공식 홈페이지,,우정사업본부 홈페이지,https://www.koreapost.go.kr,medium,기관 공개 정보 기준,90,1
+koreapost,investment_org,담당 조직,예금대체투자과,,우정사업본부 홈페이지,https://www.koreapost.go.kr,medium,기관 공개 정보 기준,5,1
+koreapost,investment_status,관심 자산군,PEF · VC · 사모대출,,우정사업본부 홈페이지,https://www.koreapost.go.kr,medium,기관 공개 정보 기준,5,1
+koreapost,notice_history,공식 공고 채널,우체국금융 자산운용 공고,,우정사업본부 공고 채널,https://www.kpasset.go.kr/menu.es?mid=a10510000000,medium,기관 공개 정보 기준,5,1
+poba,general,기관 유형,공제회,,대한지방행정공제회 홈페이지,https://www.poba.or.kr,medium,기관 공개 정보 기준,5,1
+poba,general,영문명,POBA,,대한지방행정공제회 홈페이지,https://www.poba.or.kr,medium,기관 공개 정보 기준,8,1
+poba,general,홈페이지,공식 홈페이지,,대한지방행정공제회 홈페이지,https://www.poba.or.kr,medium,기관 공개 정보 기준,90,1
+poba,investment_org,담당 조직,대체투자 담당,,대한지방행정공제회 홈페이지,https://www.poba.or.kr,medium,기관 공개 정보 기준,5,1
+poba,investment_status,관심 자산군,PEF · VC · 사모대출,,대한지방행정공제회 홈페이지,https://www.poba.or.kr,medium,기관 공개 정보 기준,5,1
+poba,notice_history,공식 공고 채널,벤처투자종합포털 출자공고,,대한지방행정공제회 공고 채널,https://www.vcs.go.kr/web/portal/bbs/invtnotice/list?baCommSelec=false&baNotice=false&baOpenDay=false&baUse=true&bcId=invtnotice&pageSize=20,medium,기관 공개 정보 기준,5,1
+ktcu,general,기관 유형,공제회,,한국교직원공제회 홈페이지,https://www.ktcu.or.kr,medium,기관 공개 정보 기준,5,1
+ktcu,general,영문명,KTCU,,한국교직원공제회 홈페이지,https://www.ktcu.or.kr,medium,기관 공개 정보 기준,8,1
+ktcu,general,홈페이지,공식 홈페이지,,한국교직원공제회 홈페이지,https://www.ktcu.or.kr,medium,기관 공개 정보 기준,90,1
+ktcu,investment_org,담당 조직,대체투자 담당,,한국교직원공제회 홈페이지,https://www.ktcu.or.kr,medium,기관 공개 정보 기준,5,1
+ktcu,investment_status,관심 자산군,PEF · VC · 사모대출 · 부동산,,한국교직원공제회 홈페이지,https://www.ktcu.or.kr,medium,기관 공개 정보 기준,5,1
+ktcu,notice_history,공식 공고 채널,공식 홈페이지 공고 채널,,한국교직원공제회 공고 채널,https://www.ktcu.or.kr/PPW-CSB-000101,medium,기관 공개 정보 기준,5,1
+pmaa,general,기관 유형,공제회,,경찰공제회 홈페이지,https://www.pmaa.or.kr,medium,기관 공개 정보 기준,5,1
+pmaa,general,영문명,Police Mutual Aid Association,,경찰공제회 홈페이지,https://www.pmaa.or.kr,medium,기관 공개 정보 기준,8,1
+pmaa,general,홈페이지,공식 홈페이지,,경찰공제회 홈페이지,https://www.pmaa.or.kr,medium,기관 공개 정보 기준,90,1
+pmaa,investment_org,담당 조직,대체투자본부/기업투자팀,,경찰공제회 홈페이지,https://www.pmaa.or.kr,medium,기관 공개 정보 기준,5,1
+pmaa,investment_status,관심 자산군,PEF · VC · 사모대출,,경찰공제회 홈페이지,https://www.pmaa.or.kr,medium,기관 공개 정보 기준,5,1
+pmaa,notice_history,공식 공고 채널,공식 홈페이지 공고 채널,,경찰공제회 공고 채널,https://www.pmaa.or.kr/www/1461128463820/bbs.do,medium,기관 공개 정보 기준,5,1
+cu,general,기관 유형,상호금융,,신협중앙회 홈페이지,https://www.cu.co.kr,medium,기관 공개 정보 기준,5,1
+cu,general,영문명,National Credit Union Federation of Korea,,신협중앙회 홈페이지,https://www.cu.co.kr,medium,기관 공개 정보 기준,8,1
+cu,general,홈페이지,공식 홈페이지,,신협중앙회 홈페이지,https://www.cu.co.kr,medium,기관 공개 정보 기준,90,1
+cu,investment_org,담당 조직,자금운용/대체투자 담당,,신협중앙회 홈페이지,https://www.cu.co.kr,medium,기관 공개 정보 기준,5,1
+cu,investment_status,관심 자산군,PEF · VC,,신협중앙회 홈페이지,https://www.cu.co.kr,medium,기관 공개 정보 기준,5,1
+cu,notice_history,공식 공고 채널,공식 홈페이지 공고 채널,,신협중앙회 공고 채널,https://cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007,medium,기관 공개 정보 기준,5,1
+kfcc,general,기관 유형,상호금융,,새마을금고중앙회 홈페이지,https://www.kfcc.co.kr,medium,기관 공개 정보 기준,5,1
+kfcc,general,영문명,Korean Federation of Community Credit Cooperatives,,새마을금고중앙회 홈페이지,https://www.kfcc.co.kr,medium,기관 공개 정보 기준,8,1
+kfcc,general,홈페이지,공식 홈페이지,,새마을금고중앙회 홈페이지,https://www.kfcc.co.kr,medium,기관 공개 정보 기준,90,1
+kfcc,investment_org,담당 조직,신용공제대표이사/대체운용본부,,새마을금고중앙회 홈페이지,https://www.kfcc.co.kr,medium,기관 공개 정보 기준,5,1
+kfcc,investment_status,관심 자산군,PEF · VC · 사모대출 · 부동산,,새마을금고중앙회 홈페이지,https://www.kfcc.co.kr,medium,기관 공개 정보 기준,5,1
+kfcc,notice_history,공식 공고 채널,공식 홈페이지 공고 채널,,새마을금고중앙회 공고 채널,https://www.kfcc.co.kr/noticeofTender/noticeofTenderList.do,medium,기관 공개 정보 기준,5,1
+kexim,general,기관 유형,정책은행,,한국수출입은행 홈페이지,https://www.koreaexim.go.kr,medium,기관 공개 정보 기준,5,1
+kexim,general,영문명,Korea Eximbank,,한국수출입은행 홈페이지,https://www.koreaexim.go.kr,medium,기관 공개 정보 기준,8,1
+kexim,general,홈페이지,공식 홈페이지,,한국수출입은행 홈페이지,https://www.koreaexim.go.kr,medium,기관 공개 정보 기준,90,1
+kexim,investment_org,담당 조직,공급망안정화기금/기업금융 담당,,한국수출입은행 홈페이지,https://www.koreaexim.go.kr,medium,기관 공개 정보 기준,5,1
+kexim,investment_status,관심 자산군,정책펀드 · PEF · VC · 인프라 · 공급망,,한국수출입은행 홈페이지,https://www.koreaexim.go.kr,medium,기관 공개 정보 기준,5,1
+kexim,notice_history,공식 공고 채널,공식 홈페이지 공고 채널,,한국수출입은행 공고 채널,https://www.koreaexim.go.kr/index,medium,기관 공개 정보 기준,5,1
+tp,general,기관 유형,공적 연금,,사립학교교직원연금공단 홈페이지,https://www.tp.or.kr,medium,기관 공개 정보 기준,5,1
+tp,general,영문명,Teachers' Pension,,사립학교교직원연금공단 홈페이지,https://www.tp.or.kr,medium,기관 공개 정보 기준,8,1
+tp,general,홈페이지,공식 홈페이지,,사립학교교직원연금공단 홈페이지,https://www.tp.or.kr,medium,기관 공개 정보 기준,90,1
+tp,investment_org,담당 조직,대체투자 담당,,사립학교교직원연금공단 홈페이지,https://www.tp.or.kr,medium,기관 공개 정보 기준,5,1
+tp,investment_status,관심 자산군,PEF · VC,,사립학교교직원연금공단 홈페이지,https://www.tp.or.kr,medium,기관 공개 정보 기준,5,1
+tp,notice_history,공식 공고 채널,사학연금 공지사항,,사립학교교직원연금공단 공고 채널,https://www.tp.or.kr/tp-kr/bbs/i-151/list.do,medium,기관 공개 정보 기준,5,1
+geps,general,기관 유형,공적 연금,,공무원연금공단 홈페이지,https://www.geps.or.kr,medium,기관 공개 정보 기준,5,1
+geps,general,영문명,GEPS,,공무원연금공단 홈페이지,https://www.geps.or.kr,medium,기관 공개 정보 기준,8,1
+geps,general,홈페이지,공식 홈페이지,,공무원연금공단 홈페이지,https://www.geps.or.kr,medium,기관 공개 정보 기준,90,1
+geps,investment_org,담당 조직,대체투자부,,공무원연금공단 홈페이지,https://www.geps.or.kr,medium,기관 공개 정보 기준,5,1
+geps,investment_status,관심 자산군,PEF · VC,,공무원연금공단 홈페이지,https://www.geps.or.kr,medium,기관 공개 정보 기준,5,1
+geps,notice_history,공식 공고 채널,공무원연금공단 위탁운용사 선정결과,,공무원연금공단 공고 채널,https://www.geps.or.kr/mgtNotice_financialAsset_financialCondition_tradingInstitution_selectionCmc,medium,기관 공개 정보 기준,5,1
+mmaa,general,기관 유형,공제회,,군인공제회 홈페이지,https://www.mmaa.or.kr,medium,기관 공개 정보 기준,5,1
+mmaa,general,영문명,Military Mutual Aid Association,,군인공제회 홈페이지,https://www.mmaa.or.kr,medium,기관 공개 정보 기준,8,1
+mmaa,general,홈페이지,공식 홈페이지,,군인공제회 홈페이지,https://www.mmaa.or.kr,medium,기관 공개 정보 기준,90,1
+mmaa,investment_org,담당 조직,투자 담당,,군인공제회 홈페이지,https://www.mmaa.or.kr,medium,기관 공개 정보 기준,5,1
+mmaa,investment_status,관심 자산군,PEF · VC · 사모대출,,군인공제회 홈페이지,https://www.mmaa.or.kr,medium,기관 공개 정보 기준,5,1
+mmaa,notice_history,공식 공고 채널,벤처투자종합포털 출자공고,,군인공제회 공고 채널,https://www.vcs.go.kr/web/portal/bbs/invtnotice/list?baCommSelec=false&baNotice=false&baOpenDay=false&baUse=true&bcId=invtnotice&pageSize=20,medium,기관 공개 정보 기준,5,1
+cwma,general,기관 유형,공제회,,건설근로자공제회 홈페이지,https://www.cw.or.kr,medium,기관 공개 정보 기준,5,1
+cwma,general,영문명,CWMA,,건설근로자공제회 홈페이지,https://www.cw.or.kr,medium,기관 공개 정보 기준,8,1
+cwma,general,홈페이지,공식 홈페이지,,건설근로자공제회 홈페이지,https://www.cw.or.kr,medium,기관 공개 정보 기준,90,1
+cwma,investment_org,담당 조직,자산운용 담당,,건설근로자공제회 홈페이지,https://www.cw.or.kr,medium,기관 공개 정보 기준,5,1
+cwma,investment_status,관심 자산군,PEF · VC,,건설근로자공제회 홈페이지,https://www.cw.or.kr,medium,기관 공개 정보 기준,5,1
+cwma,notice_history,공식 공고 채널,벤처투자종합포털 출자공고,,건설근로자공제회 공고 채널,https://www.vcs.go.kr/web/portal/bbs/invtnotice/list?baCommSelec=false&baNotice=false&baOpenDay=false&baUse=true&bcId=invtnotice&pageSize=20,medium,기관 공개 정보 기준,5,1
+kbiz,general,기관 유형,공제·산업단체,,중소기업중앙회 홈페이지,https://www.kbiz.or.kr,medium,기관 공개 정보 기준,5,1
+kbiz,general,영문명,KBIZ,,중소기업중앙회 홈페이지,https://www.kbiz.or.kr,medium,기관 공개 정보 기준,8,1
+kbiz,general,홈페이지,공식 홈페이지,,중소기업중앙회 홈페이지,https://www.kbiz.or.kr,medium,기관 공개 정보 기준,90,1
+kbiz,investment_org,담당 조직,공제기금/투자 담당,,중소기업중앙회 홈페이지,https://www.kbiz.or.kr,medium,기관 공개 정보 기준,5,1
+kbiz,investment_status,관심 자산군,VC · PEF,,중소기업중앙회 홈페이지,https://www.kbiz.or.kr,medium,기관 공개 정보 기준,5,1
+kbiz,notice_history,공식 공고 채널,공식 홈페이지 공고 채널,,중소기업중앙회 공고 채널,https://www.kbiz.or.kr/ko/contents/bbs/list.do?mnSeq=211,medium,기관 공개 정보 기준,5,1
+ibk,general,기관 유형,정책은행,,IBK기업은행 홈페이지,https://www.ibk.co.kr,medium,기관 공개 정보 기준,5,1
+ibk,general,영문명,Industrial Bank of Korea,,IBK기업은행 홈페이지,https://www.ibk.co.kr,medium,기관 공개 정보 기준,8,1
+ibk,general,홈페이지,공식 홈페이지,,IBK기업은행 홈페이지,https://www.ibk.co.kr,medium,기관 공개 정보 기준,90,1
+ibk,investment_org,담당 조직,모험자본/혁신금융 담당,,IBK기업은행 홈페이지,https://www.ibk.co.kr,medium,기관 공개 정보 기준,5,1
+ibk,investment_status,관심 자산군,VC · PEF · 정책펀드,,IBK기업은행 홈페이지,https://www.ibk.co.kr,medium,기관 공개 정보 기준,5,1
+ibk,notice_history,공식 공고 채널,벤처투자종합포털 출자공고,,IBK기업은행 공고 채널,https://www.vcs.go.kr/web/portal/bbs/invtnotice/list?baCommSelec=false&baNotice=false&baOpenDay=false&baUse=true&bcId=invtnotice&pageSize=20,medium,기관 공개 정보 기준,5,1
+kic,general,기관 유형,국부펀드,,한국투자공사 홈페이지,https://www.kic.kr,medium,기관 공개 정보 기준,5,1
+kic,general,영문명,Korea Investment Corporation,,한국투자공사 홈페이지,https://www.kic.kr,medium,기관 공개 정보 기준,8,1
+kic,general,홈페이지,공식 홈페이지,,한국투자공사 홈페이지,https://www.kic.kr,medium,기관 공개 정보 기준,90,1
+kic,investment_org,담당 조직,대체투자 담당,,한국투자공사 홈페이지,https://www.kic.kr,medium,기관 공개 정보 기준,5,1
+kic,investment_status,관심 자산군,PEF · 사모대출 · 부동산 · 인프라,,한국투자공사 홈페이지,https://www.kic.kr,medium,기관 공개 정보 기준,5,1
+sema,general,기관 유형,공제회,,과학기술인공제회 홈페이지,https://www.sema.or.kr,medium,기관 공개 정보 기준,5,1
+sema,general,영문명,Science and Technology Mutual-aid Association,,과학기술인공제회 홈페이지,https://www.sema.or.kr,medium,기관 공개 정보 기준,8,1
+sema,general,홈페이지,공식 홈페이지,,과학기술인공제회 홈페이지,https://www.sema.or.kr,medium,기관 공개 정보 기준,90,1
+sema,investment_org,담당 조직,기금운용본부,,과학기술인공제회 홈페이지,https://www.sema.or.kr,medium,기관 공개 정보 기준,5,1
+sema,investment_status,관심 자산군,PEF · VC · 사모대출 · 부동산 · 인프라,,과학기술인공제회 홈페이지,https://www.sema.or.kr,medium,기관 공개 정보 기준,5,1
+suhyup,general,기관 유형,상호금융,,수협중앙회 홈페이지,https://www.suhyup.co.kr,medium,기관 공개 정보 기준,5,1
+suhyup,general,영문명,National Federation of Fisheries Cooperatives,,수협중앙회 홈페이지,https://www.suhyup.co.kr,medium,기관 공개 정보 기준,8,1
+suhyup,general,홈페이지,공식 홈페이지,,수협중앙회 홈페이지,https://www.suhyup.co.kr,medium,기관 공개 정보 기준,90,1
+suhyup,investment_org,담당 조직,자금운용 담당,,수협중앙회 홈페이지,https://www.suhyup.co.kr,medium,기관 공개 정보 기준,5,1
+suhyup,investment_status,관심 자산군,PEF · 사모대출 · 부동산 · 인프라,,수협중앙회 홈페이지,https://www.suhyup.co.kr,medium,기관 공개 정보 기준,5,1
+moel_eif,general,기관 유형,공적 기금 / OCIO,,고용보험기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,5,1
+moel_eif,general,영문명,Employment Insurance Fund,,고용보험기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,8,1
+moel_eif,general,홈페이지,공식 홈페이지,,고용보험기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,90,1
+moel_eif,investment_org,담당 조직,고용노동부 기금운용 담당,,고용보험기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,5,1
+moel_eif,investment_status,관심 자산군,PEF · 사모대출 · 부동산 · 인프라 · OCIO,,고용보험기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,5,1
+moel_eif,notice_history,공식 공고 채널,고용노동부 기금 자산운용 공고,,고용보험기금 공고 채널,https://www.moel.go.kr/info/astmgmt/employ/imchaeBbsList.do,medium,기관 공개 정보 기준,5,1
+kodit,general,기관 유형,정책금융기관,,신용보증기금 홈페이지,https://www.kodit.co.kr,medium,기관 공개 정보 기준,5,1
+kodit,general,영문명,Korea Credit Guarantee Fund,,신용보증기금 홈페이지,https://www.kodit.co.kr,medium,기관 공개 정보 기준,8,1
+kodit,general,홈페이지,공식 홈페이지,,신용보증기금 홈페이지,https://www.kodit.co.kr,medium,기관 공개 정보 기준,90,1
+kodit,investment_org,담당 조직,투자금융/보증연계 담당,,신용보증기금 홈페이지,https://www.kodit.co.kr,medium,기관 공개 정보 기준,5,1
+kodit,investment_status,관심 자산군,VC · 성장자본 · 정책펀드,,신용보증기금 홈페이지,https://www.kodit.co.kr,medium,기관 공개 정보 기준,5,1
+kibo,general,기관 유형,정책금융기관,,기술보증기금 홈페이지,https://www.kibo.or.kr,medium,기관 공개 정보 기준,5,1
+kibo,general,영문명,Korea Technology Finance Corporation,,기술보증기금 홈페이지,https://www.kibo.or.kr,medium,기관 공개 정보 기준,8,1
+kibo,general,홈페이지,공식 홈페이지,,기술보증기금 홈페이지,https://www.kibo.or.kr,medium,기관 공개 정보 기준,90,1
+kibo,investment_org,담당 조직,벤처투자/기술금융 담당,,기술보증기금 홈페이지,https://www.kibo.or.kr,medium,기관 공개 정보 기준,5,1
+kibo,investment_status,관심 자산군,VC · 성장자본 · 정책펀드,,기술보증기금 홈페이지,https://www.kibo.or.kr,medium,기관 공개 정보 기준,5,1
+kosme,general,기관 유형,정책금융기관,,중소벤처기업진흥공단 홈페이지,https://www.kosmes.or.kr,medium,기관 공개 정보 기준,5,1
+kosme,general,영문명,Korea SMEs and Startups Agency,,중소벤처기업진흥공단 홈페이지,https://www.kosmes.or.kr,medium,기관 공개 정보 기준,8,1
+kosme,general,홈페이지,공식 홈페이지,,중소벤처기업진흥공단 홈페이지,https://www.kosmes.or.kr,medium,기관 공개 정보 기준,90,1
+kosme,investment_org,담당 조직,정책자금/투자 담당,,중소벤처기업진흥공단 홈페이지,https://www.kosmes.or.kr,medium,기관 공개 정보 기준,5,1
+kosme,investment_status,관심 자산군,VC · 성장자본 · 정책펀드,,중소벤처기업진흥공단 홈페이지,https://www.kosmes.or.kr,medium,기관 공개 정보 기준,5,1
+kocca,general,기관 유형,공공기관,,한국콘텐츠진흥원 홈페이지,https://www.kocca.kr,medium,기관 공개 정보 기준,5,1
+kocca,general,영문명,Korea Creative Content Agency,,한국콘텐츠진흥원 홈페이지,https://www.kocca.kr,medium,기관 공개 정보 기준,8,1
+kocca,general,홈페이지,공식 홈페이지,,한국콘텐츠진흥원 홈페이지,https://www.kocca.kr,medium,기관 공개 정보 기준,90,1
+kocca,investment_org,담당 조직,콘텐츠금융/투자 담당,,한국콘텐츠진흥원 홈페이지,https://www.kocca.kr,medium,기관 공개 정보 기준,5,1
+kocca,investment_status,관심 자산군,VC · 성장자본 · 콘텐츠펀드,,한국콘텐츠진흥원 홈페이지,https://www.kocca.kr,medium,기관 공개 정보 기준,5,1
+kofic,general,기관 유형,공공기관,,영화진흥위원회 홈페이지,https://www.kofic.or.kr,medium,기관 공개 정보 기준,5,1
+kofic,general,영문명,Korean Film Council,,영화진흥위원회 홈페이지,https://www.kofic.or.kr,medium,기관 공개 정보 기준,8,1
+kofic,general,홈페이지,공식 홈페이지,,영화진흥위원회 홈페이지,https://www.kofic.or.kr,medium,기관 공개 정보 기준,90,1
+kofic,investment_org,담당 조직,영화계정/투자 담당,,영화진흥위원회 홈페이지,https://www.kofic.or.kr,medium,기관 공개 정보 기준,5,1
+kofic,investment_status,관심 자산군,VC · 콘텐츠펀드 · 프로젝트펀드,,영화진흥위원회 홈페이지,https://www.kofic.or.kr,medium,기관 공개 정보 기준,5,1
+kspo,general,기관 유형,공공기관,,국민체육진흥공단 홈페이지,https://www.kspo.or.kr,medium,기관 공개 정보 기준,5,1
+kspo,general,영문명,Korea Sports Promotion Foundation,,국민체육진흥공단 홈페이지,https://www.kspo.or.kr,medium,기관 공개 정보 기준,8,1
+kspo,general,홈페이지,공식 홈페이지,,국민체육진흥공단 홈페이지,https://www.kspo.or.kr,medium,기관 공개 정보 기준,90,1
+kspo,investment_org,담당 조직,기금운용/스포츠산업 담당,,국민체육진흥공단 홈페이지,https://www.kspo.or.kr,medium,기관 공개 정보 기준,5,1
+kspo,investment_status,관심 자산군,VC · 성장자본 · 콘텐츠펀드,,국민체육진흥공단 홈페이지,https://www.kspo.or.kr,medium,기관 공개 정보 기준,5,1
+sba,general,기관 유형,지역 공공기관,,서울경제진흥원 홈페이지,https://www.sba.seoul.kr,medium,기관 공개 정보 기준,5,1
+sba,general,영문명,Seoul Business Agency,,서울경제진흥원 홈페이지,https://www.sba.seoul.kr,medium,기관 공개 정보 기준,8,1
+sba,general,홈페이지,공식 홈페이지,,서울경제진흥원 홈페이지,https://www.sba.seoul.kr,medium,기관 공개 정보 기준,90,1
+sba,investment_org,담당 조직,투자지원/펀드 담당,,서울경제진흥원 홈페이지,https://www.sba.seoul.kr,medium,기관 공개 정보 기준,5,1
+sba,investment_status,관심 자산군,VC · 성장자본 · Regional Fund,,서울경제진흥원 홈페이지,https://www.sba.seoul.kr,medium,기관 공개 정보 기준,5,1
+nhuf,general,기관 유형,공적 기금,,주택도시기금 홈페이지,https://nhuf.molit.go.kr,medium,기관 공개 정보 기준,5,1
+nhuf,general,영문명,National Housing and Urban Fund,,주택도시기금 홈페이지,https://nhuf.molit.go.kr,medium,기관 공개 정보 기준,8,1
+nhuf,general,홈페이지,공식 홈페이지,,주택도시기금 홈페이지,https://nhuf.molit.go.kr,medium,기관 공개 정보 기준,90,1
+nhuf,investment_org,담당 조직,기금운용 담당,,주택도시기금 홈페이지,https://nhuf.molit.go.kr,medium,기관 공개 정보 기준,5,1
+nhuf,investment_status,관심 자산군,부동산 · 인프라 · 사모대출,,주택도시기금 홈페이지,https://nhuf.molit.go.kr,medium,기관 공개 정보 기준,5,1
+comwel,general,기관 유형,공적 기금,,근로복지공단 홈페이지,https://www.comwel.or.kr,medium,기관 공개 정보 기준,5,1
+comwel,general,영문명,Korea Workers' Compensation and Welfare Service,,근로복지공단 홈페이지,https://www.comwel.or.kr,medium,기관 공개 정보 기준,8,1
+comwel,general,홈페이지,공식 홈페이지,,근로복지공단 홈페이지,https://www.comwel.or.kr,medium,기관 공개 정보 기준,90,1
+comwel,investment_org,담당 조직,기금운용 담당,,근로복지공단 홈페이지,https://www.comwel.or.kr,medium,기관 공개 정보 기준,5,1
+comwel,investment_status,관심 자산군,PEF · 사모대출 · 부동산 · 인프라,,근로복지공단 홈페이지,https://www.comwel.or.kr,medium,기관 공개 정보 기준,5,1
+nhis,general,기관 유형,공적 기금,,국민건강보험공단 홈페이지,https://www.nhis.or.kr,medium,기관 공개 정보 기준,5,1
+nhis,general,영문명,National Health Insurance Service,,국민건강보험공단 홈페이지,https://www.nhis.or.kr,medium,기관 공개 정보 기준,8,1
+nhis,general,홈페이지,공식 홈페이지,,국민건강보험공단 홈페이지,https://www.nhis.or.kr,medium,기관 공개 정보 기준,90,1
+nhis,investment_org,담당 조직,기금운용 담당,,국민건강보험공단 홈페이지,https://www.nhis.or.kr,medium,기관 공개 정보 기준,5,1
+nhis,investment_status,관심 자산군,PEF · 사모대출 · 부동산 · 인프라,,국민건강보험공단 홈페이지,https://www.nhis.or.kr,medium,기관 공개 정보 기준,5,1
+moel_iaci,general,기관 유형,공적 기금 / OCIO,,산재보험기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,5,1
+moel_iaci,general,영문명,Industrial Accident Compensation Insurance Fund,,산재보험기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,8,1
+moel_iaci,general,홈페이지,공식 홈페이지,,산재보험기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,90,1
+moel_iaci,investment_org,담당 조직,고용노동부 기금운용 담당,,산재보험기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,5,1
+moel_iaci,investment_status,관심 자산군,PEF · 사모대출 · 부동산 · 인프라 · OCIO,,산재보험기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,5,1
+moel_iaci,notice_history,공식 공고 채널,고용노동부 기금 자산운용 공고,,산재보험기금 공고 채널,https://www.moel.go.kr/info/astmgmt/employ/imchaeBbsList.do,medium,기관 공개 정보 기준,5,1
+moel_wage,general,기관 유형,공적 기금 / OCIO,,임금채권보장기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,5,1
+moel_wage,general,영문명,Wage Claim Guarantee Fund,,임금채권보장기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,8,1
+moel_wage,general,홈페이지,공식 홈페이지,,임금채권보장기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,90,1
+moel_wage,investment_org,담당 조직,고용노동부 기금운용 담당,,임금채권보장기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,5,1
+moel_wage,investment_status,관심 자산군,사모대출 · 채권 · OCIO,,임금채권보장기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,5,1
+moel_wage,notice_history,공식 공고 채널,고용노동부 기금 자산운용 공고,,임금채권보장기금 공고 채널,https://www.moel.go.kr/info/astmgmt/employ/imchaeBbsList.do,medium,기관 공개 정보 기준,5,1
+moel_disability,general,기관 유형,공적 기금 / OCIO,,장애인고용촉진및직업재활기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,5,1
+moel_disability,general,영문명,Employment Promotion and Vocational Rehabilitation Fund for Persons with Disabilities,,장애인고용촉진및직업재활기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,8,1
+moel_disability,general,홈페이지,공식 홈페이지,,장애인고용촉진및직업재활기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,90,1
+moel_disability,investment_org,담당 조직,고용노동부 기금운용 담당,,장애인고용촉진및직업재활기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,5,1
+moel_disability,investment_status,관심 자산군,PEF · 사모대출 · OCIO,,장애인고용촉진및직업재활기금 홈페이지,https://www.moel.go.kr,medium,기관 공개 정보 기준,5,1
+moel_disability,notice_history,공식 공고 채널,고용노동부 기금 자산운용 공고,,장애인고용촉진및직업재활기금 공고 채널,https://www.moel.go.kr/info/astmgmt/employ/imchaeBbsList.do,medium,기관 공개 정보 기준,5,1
+kdic_dif,general,기관 유형,공적 기금 / OCIO,,예금보험기금 홈페이지,https://www.kdic.or.kr,medium,기관 공개 정보 기준,5,1
+kdic_dif,general,영문명,Deposit Insurance Fund,,예금보험기금 홈페이지,https://www.kdic.or.kr,medium,기관 공개 정보 기준,8,1
+kdic_dif,general,홈페이지,공식 홈페이지,,예금보험기금 홈페이지,https://www.kdic.or.kr,medium,기관 공개 정보 기준,90,1
+kdic_dif,investment_org,담당 조직,예금보험공사 기금운용 담당,,예금보험기금 홈페이지,https://www.kdic.or.kr,medium,기관 공개 정보 기준,5,1
+kdic_dif,investment_status,관심 자산군,사모대출 · 채권 · OCIO,,예금보험기금 홈페이지,https://www.kdic.or.kr,medium,기관 공개 정보 기준,5,1
+hf_hcgf,general,기관 유형,공적 기금 / OCIO,,주택금융신용보증기금 홈페이지,https://www.hf.go.kr,medium,기관 공개 정보 기준,5,1
+hf_hcgf,general,영문명,Housing Finance Credit Guarantee Fund,,주택금융신용보증기금 홈페이지,https://www.hf.go.kr,medium,기관 공개 정보 기준,8,1
+hf_hcgf,general,홈페이지,공식 홈페이지,,주택금융신용보증기금 홈페이지,https://www.hf.go.kr,medium,기관 공개 정보 기준,90,1
+hf_hcgf,investment_org,담당 조직,한국주택금융공사 기금운용 담당,,주택금융신용보증기금 홈페이지,https://www.hf.go.kr,medium,기관 공개 정보 기준,5,1
+hf_hcgf,investment_status,관심 자산군,사모대출 · 부동산 · 인프라 · OCIO,,주택금융신용보증기금 홈페이지,https://www.hf.go.kr,medium,기관 공개 정보 기준,5,1
+msit_ictfund,general,기관 유형,공적 기금 / OCIO,,정보통신진흥기금 홈페이지,https://www.msit.go.kr,medium,기관 공개 정보 기준,5,1
+msit_ictfund,general,영문명,Information and Communications Promotion Fund,,정보통신진흥기금 홈페이지,https://www.msit.go.kr,medium,기관 공개 정보 기준,8,1
+msit_ictfund,general,홈페이지,공식 홈페이지,,정보통신진흥기금 홈페이지,https://www.msit.go.kr,medium,기관 공개 정보 기준,90,1
+msit_ictfund,investment_org,담당 조직,과학기술정보통신부 기금운용 담당,,정보통신진흥기금 홈페이지,https://www.msit.go.kr,medium,기관 공개 정보 기준,5,1
+msit_ictfund,investment_status,관심 자산군,VC · 성장자본 · 정책펀드 · OCIO,,정보통신진흥기금 홈페이지,https://www.msit.go.kr,medium,기관 공개 정보 기준,5,1
+kcc_bcfund,general,기관 유형,공적 기금 / OCIO,,방송통신발전기금 홈페이지,https://www.kcc.go.kr,medium,기관 공개 정보 기준,5,1
+kcc_bcfund,general,영문명,Broadcasting Communications Development Fund,,방송통신발전기금 홈페이지,https://www.kcc.go.kr,medium,기관 공개 정보 기준,8,1
+kcc_bcfund,general,홈페이지,공식 홈페이지,,방송통신발전기금 홈페이지,https://www.kcc.go.kr,medium,기관 공개 정보 기준,90,1
+kcc_bcfund,investment_org,담당 조직,방송통신위원회 기금운용 담당,,방송통신발전기금 홈페이지,https://www.kcc.go.kr,medium,기관 공개 정보 기준,5,1
+kcc_bcfund,investment_status,관심 자산군,VC · 성장자본 · 콘텐츠펀드 · OCIO,,방송통신발전기금 홈페이지,https://www.kcc.go.kr,medium,기관 공개 정보 기준,5,1
+motie_powerfund,general,기관 유형,공적 기금 / OCIO,,전력산업기반기금 홈페이지,https://www.motie.go.kr,medium,기관 공개 정보 기준,5,1
+motie_powerfund,general,영문명,Electric Power Industry Basis Fund,,전력산업기반기금 홈페이지,https://www.motie.go.kr,medium,기관 공개 정보 기준,8,1
+motie_powerfund,general,홈페이지,공식 홈페이지,,전력산업기반기금 홈페이지,https://www.motie.go.kr,medium,기관 공개 정보 기준,90,1
+motie_powerfund,investment_org,담당 조직,산업통상자원부 기금운용 담당,,전력산업기반기금 홈페이지,https://www.motie.go.kr,medium,기관 공개 정보 기준,5,1
+motie_powerfund,investment_status,관심 자산군,인프라 · 에너지 · 사모대출 · OCIO,,전력산업기반기금 홈페이지,https://www.motie.go.kr,medium,기관 공개 정보 기준,5,1
+moef_lotteryfund,general,기관 유형,공적 기금 / OCIO,,복권기금 홈페이지,https://www.moef.go.kr,medium,기관 공개 정보 기준,5,1
+moef_lotteryfund,general,영문명,Lottery Fund,,복권기금 홈페이지,https://www.moef.go.kr,medium,기관 공개 정보 기준,8,1
+moef_lotteryfund,general,홈페이지,공식 홈페이지,,복권기금 홈페이지,https://www.moef.go.kr,medium,기관 공개 정보 기준,90,1
+moef_lotteryfund,investment_org,담당 조직,기획재정부 복권위원회 기금운용 담당,,복권기금 홈페이지,https://www.moef.go.kr,medium,기관 공개 정보 기준,5,1
+moef_lotteryfund,investment_status,관심 자산군,PEF · 사모대출 · 부동산 · 인프라 · OCIO,,복권기금 홈페이지,https://www.moef.go.kr,medium,기관 공개 정보 기준,5,1
+mcst_tourismfund,general,기관 유형,공적 기금 / OCIO,,관광진흥개발기금 홈페이지,https://www.mcst.go.kr,medium,기관 공개 정보 기준,5,1
+mcst_tourismfund,general,영문명,Tourism Promotion and Development Fund,,관광진흥개발기금 홈페이지,https://www.mcst.go.kr,medium,기관 공개 정보 기준,8,1
+mcst_tourismfund,general,홈페이지,공식 홈페이지,,관광진흥개발기금 홈페이지,https://www.mcst.go.kr,medium,기관 공개 정보 기준,90,1
+mcst_tourismfund,investment_org,담당 조직,문화체육관광부 기금운용 담당,,관광진흥개발기금 홈페이지,https://www.mcst.go.kr,medium,기관 공개 정보 기준,5,1
+mcst_tourismfund,investment_status,관심 자산군,VC · 성장자본 · 부동산 · OCIO,,관광진흥개발기금 홈페이지,https://www.mcst.go.kr,medium,기관 공개 정보 기준,5,1
+arko_culturefund,general,기관 유형,공적 기금 / OCIO,,문화예술진흥기금 홈페이지,https://www.arko.or.kr,medium,기관 공개 정보 기준,5,1
+arko_culturefund,general,영문명,Culture and Arts Promotion Fund,,문화예술진흥기금 홈페이지,https://www.arko.or.kr,medium,기관 공개 정보 기준,8,1
+arko_culturefund,general,홈페이지,공식 홈페이지,,문화예술진흥기금 홈페이지,https://www.arko.or.kr,medium,기관 공개 정보 기준,90,1
+arko_culturefund,investment_org,담당 조직,한국문화예술위원회 기금운용 담당,,문화예술진흥기금 홈페이지,https://www.arko.or.kr,medium,기관 공개 정보 기준,5,1
+arko_culturefund,investment_status,관심 자산군,콘텐츠펀드 · VC · OCIO,,문화예술진흥기금 홈페이지,https://www.arko.or.kr,medium,기관 공개 정보 기준,5,1
+mof_marinefund,general,기관 유형,공적 기금 / OCIO,,수산발전기금 홈페이지,https://www.mof.go.kr,medium,기관 공개 정보 기준,5,1
+mof_marinefund,general,영문명,Fisheries Development Fund,,수산발전기금 홈페이지,https://www.mof.go.kr,medium,기관 공개 정보 기준,8,1
+mof_marinefund,general,홈페이지,공식 홈페이지,,수산발전기금 홈페이지,https://www.mof.go.kr,medium,기관 공개 정보 기준,90,1
+mof_marinefund,investment_org,담당 조직,해양수산부 기금운용 담당,,수산발전기금 홈페이지,https://www.mof.go.kr,medium,기관 공개 정보 기준,5,1
+mof_marinefund,investment_status,관심 자산군,VC · 성장자본 · 정책펀드 · OCIO,,수산발전기금 홈페이지,https://www.mof.go.kr,medium,기관 공개 정보 기준,5,1
+me_envfund,general,기관 유형,공적 기금 / OCIO,,환경개선특별회계 홈페이지,https://www.me.go.kr,medium,기관 공개 정보 기준,5,1
+me_envfund,general,영문명,Environmental Improvement Special Account,,환경개선특별회계 홈페이지,https://www.me.go.kr,medium,기관 공개 정보 기준,8,1
+me_envfund,general,홈페이지,공식 홈페이지,,환경개선특별회계 홈페이지,https://www.me.go.kr,medium,기관 공개 정보 기준,90,1
+me_envfund,investment_org,담당 조직,환경부 기금운용 담당,,환경개선특별회계 홈페이지,https://www.me.go.kr,medium,기관 공개 정보 기준,5,1
+me_envfund,investment_status,관심 자산군,인프라 · 에너지전환 · 사모대출 · OCIO,,환경개선특별회계 홈페이지,https://www.me.go.kr,medium,기관 공개 정보 기준,5,1
+fsc_nhuf,general,기관 유형,공적 기금 / OCIO,,농어가목돈마련저축장려기금 홈페이지,https://www.fsc.go.kr,medium,기관 공개 정보 기준,5,1
+fsc_nhuf,general,영문명,Farm and Fishery Household Savings Incentive Fund,,농어가목돈마련저축장려기금 홈페이지,https://www.fsc.go.kr,medium,기관 공개 정보 기준,8,1
+fsc_nhuf,general,홈페이지,공식 홈페이지,,농어가목돈마련저축장려기금 홈페이지,https://www.fsc.go.kr,medium,기관 공개 정보 기준,90,1
+fsc_nhuf,investment_org,담당 조직,금융위원회 기금운용 담당,,농어가목돈마련저축장려기금 홈페이지,https://www.fsc.go.kr,medium,기관 공개 정보 기준,5,1
+fsc_nhuf,investment_status,관심 자산군,채권 · OCIO,,농어가목돈마련저축장려기금 홈페이지,https://www.fsc.go.kr,medium,기관 공개 정보 기준,5,1
+kosaf_fund,general,기관 유형,공적 기금 / OCIO,,한국장학재단 기금 홈페이지,https://www.kosaf.go.kr,medium,기관 공개 정보 기준,5,1
+kosaf_fund,general,영문명,Korea Student Aid Foundation Fund,,한국장학재단 기금 홈페이지,https://www.kosaf.go.kr,medium,기관 공개 정보 기준,8,1
+kosaf_fund,general,홈페이지,공식 홈페이지,,한국장학재단 기금 홈페이지,https://www.kosaf.go.kr,medium,기관 공개 정보 기준,90,1
+kosaf_fund,investment_org,담당 조직,한국장학재단 기금운용 담당,,한국장학재단 기금 홈페이지,https://www.kosaf.go.kr,medium,기관 공개 정보 기준,5,1
+kosaf_fund,investment_status,관심 자산군,채권 · 사모대출 · OCIO,,한국장학재단 기금 홈페이지,https://www.kosaf.go.kr,medium,기관 공개 정보 기준,5,1
+kofpi_greenfund,general,기관 유형,공적 기금 / OCIO,,녹색자금 홈페이지,https://www.kofpi.or.kr,medium,기관 공개 정보 기준,5,1
+kofpi_greenfund,general,영문명,Green Fund,,녹색자금 홈페이지,https://www.kofpi.or.kr,medium,기관 공개 정보 기준,8,1
+kofpi_greenfund,general,홈페이지,공식 홈페이지,,녹색자금 홈페이지,https://www.kofpi.or.kr,medium,기관 공개 정보 기준,90,1
+kofpi_greenfund,investment_org,담당 조직,한국산림복지진흥원 녹색자금 담당,,녹색자금 홈페이지,https://www.kofpi.or.kr,medium,기관 공개 정보 기준,5,1
+kofpi_greenfund,investment_status,관심 자산군,인프라 · ESG · OCIO,,녹색자금 홈페이지,https://www.kofpi.or.kr,medium,기관 공개 정보 기준,5,1
+svcf_localfund,general,기관 유형,정책금융기관,,지역신용보증재단중앙회 홈페이지,https://www.koreg.or.kr,medium,기관 공개 정보 기준,5,1
+svcf_localfund,general,영문명,Regional Credit Guarantee Foundation Central Federation,,지역신용보증재단중앙회 홈페이지,https://www.koreg.or.kr,medium,기관 공개 정보 기준,8,1
+svcf_localfund,general,홈페이지,공식 홈페이지,,지역신용보증재단중앙회 홈페이지,https://www.koreg.or.kr,medium,기관 공개 정보 기준,90,1
+svcf_localfund,investment_org,담당 조직,지역신용보증재단 기금운용 담당,,지역신용보증재단중앙회 홈페이지,https://www.koreg.or.kr,medium,기관 공개 정보 기준,5,1
+svcf_localfund,investment_status,관심 자산군,VC · 성장자본 · 정책펀드 · OCIO,,지역신용보증재단중앙회 홈페이지,https://www.koreg.or.kr,medium,기관 공개 정보 기준,5,1
+kotec_motiefund,general,기관 유형,공적 기금 / OCIO,,산업기술진흥및사업화촉진기금 홈페이지,https://www.motie.go.kr,medium,기관 공개 정보 기준,5,1
+kotec_motiefund,general,영문명,Industrial Technology Promotion and Commercialization Fund,,산업기술진흥및사업화촉진기금 홈페이지,https://www.motie.go.kr,medium,기관 공개 정보 기준,8,1
+kotec_motiefund,general,홈페이지,공식 홈페이지,,산업기술진흥및사업화촉진기금 홈페이지,https://www.motie.go.kr,medium,기관 공개 정보 기준,90,1
+kotec_motiefund,investment_org,담당 조직,산업통상자원부 기금운용 담당,,산업기술진흥및사업화촉진기금 홈페이지,https://www.motie.go.kr,medium,기관 공개 정보 기준,5,1
+kotec_motiefund,investment_status,관심 자산군,VC · 성장자본 · 정책펀드 · OCIO,,산업기술진흥및사업화촉진기금 홈페이지,https://www.motie.go.kr,medium,기관 공개 정보 기준,5,1
+kamco,general,기관 유형,정책금융기관,,한국자산관리공사 홈페이지,https://www.kamco.or.kr,medium,기관 공개 정보 기준,5,1
+kamco,general,영문명,KAMCO,,한국자산관리공사 홈페이지,https://www.kamco.or.kr,medium,기관 공개 정보 기준,8,1
+kamco,general,홈페이지,공식 홈페이지,,한국자산관리공사 홈페이지,https://www.kamco.or.kr,medium,기관 공개 정보 기준,90,1
+kamco,investment_org,담당 조직,기업지원/구조조정 담당,,한국자산관리공사 홈페이지,https://www.kamco.or.kr,medium,기관 공개 정보 기준,5,1
+kamco,investment_status,관심 자산군,PEF · 사모대출 · 구조조정 · 정책펀드,,한국자산관리공사 홈페이지,https://www.kamco.or.kr,medium,기관 공개 정보 기준,5,1
+kamco,notice_history,공식 공고 채널,한국자산관리공사 공지,,한국자산관리공사 공고 채널,https://www.kamco.or.kr/portal/bbs/list.do?mId=0701030000,medium,기관 공개 정보 기준,5,1
+kobc,general,기관 유형,정책금융기관,,한국해양진흥공사 홈페이지,https://www.kobc.or.kr,medium,기관 공개 정보 기준,5,1
+kobc,general,영문명,Korea Ocean Business Corporation,,한국해양진흥공사 홈페이지,https://www.kobc.or.kr,medium,기관 공개 정보 기준,8,1
+kobc,general,홈페이지,공식 홈페이지,,한국해양진흥공사 홈페이지,https://www.kobc.or.kr,medium,기관 공개 정보 기준,90,1
+kobc,investment_org,담당 조직,해양금융/투자 담당,,한국해양진흥공사 홈페이지,https://www.kobc.or.kr,medium,기관 공개 정보 기준,5,1
+kobc,investment_status,관심 자산군,사모대출 · 인프라 · 정책펀드 · OCIO,,한국해양진흥공사 홈페이지,https://www.kobc.or.kr,medium,기관 공개 정보 기준,5,1
+sema,notice_history,공식 공고 채널,과학기술인공제회 입찰공고,,과학기술인공제회 공고 채널,https://www.sema.or.kr/sema/bbs/B0000024/list.do?menuNo=200018,medium,기관 공개 정보 기준,5,1
+kdic_dif,notice_history,공식 공고 채널,예금보험공사 공지사항,,예금보험기금 공고 채널,https://www.kdic.or.kr/di/pbcr/selectPbcrNtcList.do,medium,기관 공개 정보 기준,5,1
+kobc,notice_history,공식 공고 채널,한국해양진흥공사 알림사항,,한국해양진흥공사 공고 채널,https://www.kobc.or.kr/ebz/kor/bbs/list.do?ptIdx=326&mId=0201000000,medium,기관 공개 정보 기준,5,1
