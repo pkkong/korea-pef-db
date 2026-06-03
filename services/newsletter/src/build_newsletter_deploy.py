@@ -2355,6 +2355,7 @@ def render_lp_notices_page(
             <strong>공식 출자공고가 없습니다</strong>
             <span>조건에 맞는 공고가 없습니다.</span>
           </div>"""
+    notice_year_summary = render_lp_notice_year_summary(notices, report_date) if is_notice_view else ""
     directory_rows = directory_items or []
     directory_cards = "\n".join(render_lp_directory_card(item) for item in directory_rows) or (
         """          <div class="empty-state visible">
@@ -2463,6 +2464,7 @@ def render_lp_notices_page(
     if is_notice_view:
         notice_section = f"""
       <section class="section-block" id="lpNotices" aria-label="LP 공식 공고">
+{notice_year_summary}
         <div class="lp-notice-toolbar">
           <div class="lp-control-head">
             <label for="{search_input_id}">공고 필터</label>
@@ -2472,7 +2474,10 @@ def render_lp_notices_page(
             <select id="lpNoticeFilter" aria-label="필터">
               <option value="all">전체 상태</option>
               <option value="open">진행중</option>
+              <option value="deadline-soon">마감 임박</option>
               <option value="result">선정결과</option>
+              <option value="has-amount">출자규모 있음</option>
+              <option value="has-gp">관련 GP 있음</option>
               <option value="history">히스토리</option>
               <option value="closed">마감</option>
             </select>
@@ -2491,6 +2496,7 @@ def render_lp_notices_page(
             <select id="lpNoticeSort" aria-label="정렬">
               <option value="latest">최근 공고일순</option>
               <option value="deadline">마감일순</option>
+              <option value="amount">출자규모순</option>
               <option value="lp">기관명순</option>
             </select>
           </div>
@@ -3032,6 +3038,59 @@ def render_lp_notices_page(
     body.lp-notices-page .lp-notice-controls {{
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }}
+    body.lp-notices-page .lp-notice-year-summary {{
+      margin: 0 0 14px;
+      border: 1px solid var(--separator);
+      border-radius: 6px;
+      background: var(--surface);
+      overflow: hidden;
+    }}
+    body.lp-notices-page .lp-year-row {{
+      display: grid;
+      grid-template-columns: 58px 46px 46px 46px minmax(76px, 1fr);
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+      min-height: 42px;
+      padding: 0 10px;
+      border: 0;
+      border-bottom: 1px solid var(--separator);
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      text-align: left;
+    }}
+    body.lp-notices-page .lp-year-row:last-child {{
+      border-bottom: 0;
+    }}
+    body.lp-notices-page .lp-year-row.is-head {{
+      min-height: 36px;
+      background: var(--surface-strong);
+      color: var(--secondary);
+      font-size: 11.5px;
+      font-weight: 760;
+    }}
+    body.lp-notices-page button.lp-year-row {{
+      cursor: pointer;
+    }}
+    body.lp-notices-page button.lp-year-row:hover {{
+      background: #fafafa;
+    }}
+    body.lp-notices-page .lp-year-row strong {{
+      font-size: 13px;
+      font-weight: 760;
+      letter-spacing: 0;
+    }}
+    body.lp-notices-page .lp-year-row span {{
+      min-width: 0;
+      color: inherit;
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.3;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
     body.lp-notices-page .lp-notice-records {{
       display: grid;
       gap: 0;
@@ -3134,14 +3193,14 @@ def render_lp_notices_page(
     }}
     body.lp-notices-page .lp-notice-facts {{
       display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      gap: 6px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 10px;
       margin: 0;
     }}
     body.lp-notices-page .lp-notice-facts div {{
       display: grid;
-      grid-template-columns: 58px minmax(0, 1fr);
-      gap: 8px;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 2px;
       min-width: 0;
       align-items: start;
     }}
@@ -3202,6 +3261,10 @@ def render_lp_notices_page(
       body.lp-notices-page .lp-notice-controls {{
         grid-template-columns: 140px 130px 160px minmax(180px, 1fr) 150px;
       }}
+      body.lp-notices-page .lp-year-row {{
+        grid-template-columns: 90px 80px 80px 80px minmax(180px, 1fr);
+        padding: 0 14px;
+      }}
       body.lp-notices-page .lp-notice-groups {{
         gap: 18px;
       }}
@@ -3227,11 +3290,11 @@ def render_lp_notices_page(
         font-size: 15.5px;
       }}
       body.lp-notices-page .lp-notice-facts {{
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 7px 16px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px 16px;
       }}
       body.lp-notices-page .lp-notice-facts div {{
-        grid-template-columns: 58px minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr);
       }}
       body.lp-notices-page .lp-notice-actions {{
         grid-column: 2;
@@ -3272,6 +3335,7 @@ def render_lp_notices_page(
       const noticeLpFilter = document.getElementById("lpNoticeLpFilter");
       const directory = document.querySelector(".lp-directory-grid");
       const noticeGroups = Array.from(document.querySelectorAll(".lp-notice-group"));
+      const yearSummaryRows = Array.from(document.querySelectorAll("[data-summary-year]"));
       const visible = document.getElementById("lpVisibleCount");
       const noticeVisible = document.getElementById("lpNoticeVisibleCount");
       const directoryCards = Array.from(document.querySelectorAll(".lp-directory-card"));
@@ -3313,6 +3377,7 @@ def render_lp_notices_page(
         const mode = noticeSort?.value || "latest";
         const sorted = [...noticeCards].sort((a, b) => {{
           if (mode === "deadline") return (a.dataset.deadline || "9999-99-99").localeCompare(b.dataset.deadline || "9999-99-99");
+          if (mode === "amount") return Number(b.dataset.amount || 0) - Number(a.dataset.amount || 0);
           if (mode === "lp") return (a.dataset.lpName || "").localeCompare(b.dataset.lpName || "", "ko");
           return (b.dataset.date || "").localeCompare(a.dataset.date || "");
         }});
@@ -3329,9 +3394,17 @@ def render_lp_notices_page(
         const activeAsset = noticeAssetFilter?.value || "all";
         const activeLp = noticeLpFilter?.value || "all";
         let count = 0;
+        const today = "{html_escape(report_date)}";
         noticeCards.forEach((card) => {{
           const yearMatch = activeYear === "all" || card.dataset.year === activeYear;
-          const visibleCard = fieldsMatch(card, active) && yearMatch && fieldsMatch(card, activeAsset) && fieldsMatch(card, activeLp) && queryMatch(card);
+          const deadline = card.dataset.deadline || "";
+          const daysToDeadline = deadline ? Math.floor((new Date(`${{deadline}}T00:00:00+09:00`) - new Date(`${{today}}T00:00:00+09:00`)) / 86400000) : 9999;
+          const statusMatch = active === "all"
+            || fieldsMatch(card, active)
+            || (active === "deadline-soon" && deadline && daysToDeadline >= 0 && daysToDeadline <= 14)
+            || (active === "has-amount" && Number(card.dataset.amount || 0) > 0)
+            || (active === "has-gp" && card.dataset.hasGp === "1");
+          const visibleCard = statusMatch && yearMatch && fieldsMatch(card, activeAsset) && fieldsMatch(card, activeLp) && queryMatch(card);
           card.style.display = visibleCard ? "" : "none";
           if (visibleCard) count += 1;
         }});
@@ -3358,6 +3431,13 @@ def render_lp_notices_page(
       noticeYearFilter?.addEventListener("change", applyNotices);
       noticeAssetFilter?.addEventListener("change", applyNotices);
       noticeLpFilter?.addEventListener("change", applyNotices);
+      yearSummaryRows.forEach((row) => {{
+        row.addEventListener("click", () => {{
+          if (!noticeYearFilter) return;
+          noticeYearFilter.value = row.dataset.summaryYear || "all";
+          applyNotices();
+        }});
+      }});
       applyDirectorySort();
       applyNoticeSort();
       applyDirectory();
@@ -3367,6 +3447,54 @@ def render_lp_notices_page(
 </body>
 </html>
 """
+
+
+def lp_notice_year_value(item: dict[str, object]) -> str:
+    value = str(item.get("eventDate") or item.get("announcedDate") or "")[:4]
+    return value if re.fullmatch(r"20\d{2}", value) else ""
+
+
+def render_lp_notice_year_summary(notices: list[dict[str, object]], report_date: str) -> str:
+    grouped: dict[str, list[dict[str, object]]] = {}
+    for item in notices:
+        year = lp_notice_year_value(item)
+        if not year:
+            continue
+        grouped.setdefault(year, []).append(item)
+    if not grouped:
+        return ""
+    rows: list[str] = []
+    for year in sorted(grouped.keys(), reverse=True):
+        items = grouped[year]
+        open_count = len([item for item in items if lp_notice_status(item, report_date) == "open"])
+        result_count = len([item for item in items if lp_notice_status(item, report_date) == "result"])
+        lp_counts: dict[str, int] = {}
+        for item in items:
+            name = clean_public_lp_text(item.get("lpName") or "LP 미분류") or "LP 미분류"
+            lp_counts[name] = lp_counts.get(name, 0) + 1
+        top_lps = sorted(lp_counts.items(), key=lambda pair: (-pair[1], pair[0]))[:2]
+        lp_label = ", ".join(name for name, _count in top_lps)
+        if len(lp_counts) > len(top_lps):
+            lp_label += f" 외 {len(lp_counts) - len(top_lps)}"
+        rows.append(
+            f"""          <button class="lp-year-row" type="button" data-summary-year="{html_escape(year)}" aria-label="{html_escape(year)}년 공고 보기">
+            <strong>{html_escape(year)}</strong>
+            <span>{len(items):,}건</span>
+            <span>{open_count:,}건</span>
+            <span>{result_count:,}건</span>
+            <span>{html_escape(lp_label or "-")}</span>
+          </button>"""
+        )
+    return f"""        <div class="lp-notice-year-summary" aria-label="연도별 출자공고 요약">
+          <div class="lp-year-row is-head" aria-hidden="true">
+            <span>연도</span>
+            <span>공고</span>
+            <span>진행</span>
+            <span>선정</span>
+            <span>주요 LP</span>
+          </div>
+{chr(10).join(rows)}
+        </div>"""
 
 
 def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
@@ -3388,11 +3516,17 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
     status_group = "history" if status in {"closed", "history"} else status
     status_label = lp_notice_status_label(status)
     stage_label = lp_notice_stage_label(item, status)
-    amount = lp_amount_label(item.get("allocationAmount"))
+    raw_amount = item.get("allocationAmount")
+    amount = lp_amount_label(raw_amount)
+    try:
+        amount_numeric = float(str(raw_amount or "0").replace(",", ""))
+    except ValueError:
+        amount_numeric = 0.0
     asset_class = public_asset_class(item.get("assetClass")) if item.get("assetClass") else ""
     strategy = clean_public_lp_text(item.get("strategy") or item.get("purpose") or "")
     type_label = " · ".join(value for value in [asset_class, strategy] if value)
     selected_label = notice_gp_label(item.get("selectedGpNames"))
+    has_gp = "1" if selected_label != "-" else "0"
     notice_year = str(item.get("eventDate") or item.get("announcedDate") or "")[:4]
     if status == "result":
         schedule_label = "결과일"
@@ -3469,7 +3603,7 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
             item.get("selectedGpNames"),
         ]
     )
-    return f"""              <article class="lp-notice-row" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-lp-name="{html_escape(lp_name)}" data-asset="{html_escape(asset_class)}" data-status="{html_escape(status)}" data-status-group="{html_escape(status_group)}" data-year="{html_escape(notice_year)}" data-date="{html_escape(event_date)}" data-deadline="{html_escape(deadline)}">
+    return f"""              <article class="lp-notice-row" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-lp-name="{html_escape(lp_name)}" data-asset="{html_escape(asset_class)}" data-status="{html_escape(status)}" data-status-group="{html_escape(status_group)}" data-year="{html_escape(notice_year)}" data-date="{html_escape(event_date)}" data-deadline="{html_escape(deadline)}" data-amount="{amount_numeric:.0f}" data-has-gp="{has_gp}">
             <div class="lp-notice-main">
               <p class="lp-notice-kicker"><span class="lp-notice-stage">{html_escape(stage_label)}</span></p>
               <h2>{linked_title}</h2>
