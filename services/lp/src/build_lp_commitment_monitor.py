@@ -108,8 +108,13 @@ LP_CONTEXT_TERMS = [
 COMBINED_AMOUNT_RE = re.compile(r"\[?(?P<jo>\d[\d,]*(?:\.\d+)?)\]?\s*조(?:\s*\[?(?P<eok>\d[\d,]*)\]?\s*억?|원)?(?![가-힣])", re.IGNORECASE)
 AMOUNT_RE = re.compile(r"\[?(?P<num>\d[\d,]*(?:\.\d+)?)\]?\s*(?P<unit>조\s*원|조원|억원|억|조(?![가-힣]))", re.IGNORECASE)
 DATE_RE = re.compile(r"(?P<year>20\d{2})[.\-/년]\s*(?P<month>\d{1,2})[.\-/월]\s*(?P<day>\d{1,2})")
+SHORT_DATE_RE = re.compile(r"(?<!\d)[`'‘’]?(?P<year>\d{2})[.\-/년]\s*(?P<month>\d{1,2})[.\-/월]\s*(?P<day>\d{1,2})")
+DATE_TOKEN_RE = r"(?:20\d{2}|[`'‘’]?\d{2})[.\-/년]\s*\d{1,2}[.\-/월]\s*\d{1,2}"
 FILE_EXT_RE = re.compile(r"\.(pdf|hwp|hwpx|docx?|xlsx?|pptx?|zip)($|[?#&])", re.IGNORECASE)
 MONEY_CONTEXT_WINDOW = 44
+LP_NOTICE_COMPARISON_START_DATE = "2024-01-01"
+OFFICIAL_DETAIL_TEXT_LIMIT = 30000
+OFFICIAL_GP_MATCH_TEXT_LIMIT = 12000
 EVENT_PRIORITY = {
     "new_notice": 0,
     "deadline_soon": 1,
@@ -179,6 +184,16 @@ NON_COMMITMENT_AMOUNT_HINTS = [
     "자산규모",
     "자산 규모",
     "트랙레코드",
+]
+FUND_TARGET_AMOUNT_HINTS = [
+    "결성목표액",
+    "결성 목표액",
+    "목표결성",
+    "목표 결성",
+    "결성규모",
+    "결성 규모",
+    "최소결성",
+    "최소 결성",
 ]
 NON_COMMITMENT_NOTICE_TERMS = [
     "온라인마케팅",
@@ -653,9 +668,9 @@ def amount_to_krw_100mn(amount: float, unit: str) -> float:
     return amount * 10000 if unit.strip().startswith("조") else amount
 
 
-def amount_context(text: str, start: int, end: int) -> str:
-    left = max(0, start - MONEY_CONTEXT_WINDOW)
-    right = min(len(text), end + MONEY_CONTEXT_WINDOW)
+def amount_context(text: str, start: int, end: int, window: int = MONEY_CONTEXT_WINDOW) -> str:
+    left = max(0, start - window)
+    right = min(len(text), end + window)
     return text[left:right]
 
 
@@ -664,6 +679,11 @@ def is_non_commitment_amount_context(context: str) -> bool:
     if any(hint.lower() in ctx for hint in NON_COMMITMENT_AMOUNT_HINTS):
         return True
     return ("미만" in ctx or "이상" in ctx) and any(hint in ctx for hint in ["aum", "운용", "자산", "트랙레코드"])
+
+
+def is_fund_target_amount_context(context: str) -> bool:
+    ctx = context.lower()
+    return any(hint.lower() in ctx for hint in FUND_TARGET_AMOUNT_HINTS)
 
 
 def is_law_article_amount(text: str, start: int) -> bool:
@@ -680,7 +700,9 @@ def classify_amounts(text: str) -> dict[str, object]:
         eok = parse_number(match.group("eok") or "0")
         if jo:
             ctx = amount_context(text, match.start(), match.end())
-            amount_rows.append({"amount": (jo * 10000) + eok, "context": ctx, "raw": match.group(0)})
+            near_ctx = amount_context(text, match.start(), match.end(), window=18)
+            left_ctx = text[max(0, match.start() - 18) : match.start()]
+            amount_rows.append({"amount": (jo * 10000) + eok, "context": ctx, "near_context": near_ctx, "left_context": left_ctx, "raw": match.group(0)})
     for match in AMOUNT_RE.finditer(cleaned):
         if is_law_article_amount(cleaned, match.start()):
             continue
@@ -689,14 +711,23 @@ def classify_amounts(text: str) -> dict[str, object]:
         if not amount:
             continue
         ctx = amount_context(cleaned, match.start(), match.end())
-        amount_rows.append({"amount": amount_to_krw_100mn(amount, unit), "context": ctx, "raw": match.group(0)})
+        near_ctx = amount_context(cleaned, match.start(), match.end(), window=18)
+        left_ctx = cleaned[max(0, match.start() - 18) : match.start()]
+        amount_rows.append({"amount": amount_to_krw_100mn(amount, unit), "context": ctx, "near_context": near_ctx, "left_context": left_ctx, "raw": match.group(0)})
     program_amounts: list[float] = []
     allocation_amounts: list[float] = []
     fallback_amounts: list[float] = []
     for row in amount_rows:
         ctx = str(row["context"]).lower()
+        near_ctx = str(row.get("near_context") or row["context"]).lower()
+        left_ctx = str(row.get("left_context") or "").lower()
         amount = float(row["amount"])
-        if is_non_commitment_amount_context(ctx):
+        if is_non_commitment_amount_context(near_ctx):
+            continue
+        if is_fund_target_amount_context(left_ctx):
+            continue
+        allocation_near = any(hint.lower() in near_ctx for hint in ALLOCATION_HINTS)
+        if is_fund_target_amount_context(near_ctx) and not allocation_near:
             continue
         is_program = (
             amount >= 50000
@@ -876,6 +907,7 @@ def normalize_date(value: str) -> str:
     value = str(value or "").strip()
     if not value:
         return ""
+    value = value.replace("`", "'").replace("‘", "'").replace("’", "'")
     try:
         return datetime.fromisoformat(value.replace("Z", "+00:00")).date().isoformat()
     except ValueError:
@@ -889,6 +921,17 @@ def normalize_date(value: str) -> str:
             return datetime(year, month, day).date().isoformat()
         except ValueError:
             return ""
+    short_match = SHORT_DATE_RE.search(value)
+    if short_match:
+        short_year = int(short_match.group("year"))
+        year = 2000 + short_year
+        month = int(short_match.group("month"))
+        day = int(short_match.group("day"))
+        if 2020 <= year <= 2035:
+            try:
+                return datetime(year, month, day).date().isoformat()
+            except ValueError:
+                return ""
     return value[:10] if re.match(r"^20\d{2}-\d{2}-\d{2}", value) else ""
 
 
@@ -907,9 +950,10 @@ def extract_year(date_value: str, text: str, fallback_year: int) -> int | None:
 
 
 def extract_deadline(text: str) -> str:
+    date_token = DATE_TOKEN_RE
     for pattern in [
-        r"(?:접수|제출|신청|마감)[^0-9]{0,20}(20\d{2}[.\-/년]\s*\d{1,2}[.\-/월]\s*\d{1,2})",
-        r"(20\d{2}[.\-/년]\s*\d{1,2}[.\-/월]\s*\d{1,2})[^0-9]{0,20}(?:까지|마감)",
+        rf"(?:접수마감|접수기한|제출기한|신청기한|서류\s*제출|제안서\s*접수|온라인\s*신청|접수|제출|신청|마감)[^0-9`'‘’]{{0,30}}({date_token})",
+        rf"({date_token})[^0-9]{{0,30}}(?:까지|마감|접수|제출)",
     ]:
         match = re.search(pattern, text)
         if match:
@@ -918,10 +962,11 @@ def extract_deadline(text: str) -> str:
 
 
 def extract_announcement_date(text: str) -> str:
+    date_token = DATE_TOKEN_RE
     for pattern in [
-        r"(?:공고일|게시일|등록일|작성일)[^0-9]{0,20}(20\d{2}[.\-/년]\s*\d{1,2}[.\-/월]\s*\d{1,2})",
-        r"(20\d{2}[.\-/년]\s*\d{1,2}[.\-/월]\s*\d{1,2})[^0-9]{0,20}(?:공고|게시|등록)",
-        r"(20\d{2}[.\-/년]\s*\d{1,2}[.\-/월]\s*\d{1,2})[^0-9]{0,20}(?:작성자|조회수)",
+        rf"(?:공고일|게시일|등록일|작성일)[^0-9`'‘’]{{0,20}}({date_token})",
+        rf"({date_token})[^0-9]{{0,20}}(?:공고|게시|등록)",
+        rf"({date_token})[^0-9]{{0,20}}(?:작성자|조회수)",
     ]:
         match = re.search(pattern, text)
         if match:
@@ -1266,6 +1311,15 @@ def parse_vcs_investment_listing(source: dict[str, str], limit: int, allow_insec
         if len(rows) >= limit:
             break
     return rows
+
+
+def should_fetch_source_detail(source_kind: str, link: dict[str, str]) -> bool:
+    if source_kind != "vcs_listing":
+        return True
+    announced = normalize_date(str(link.get("announced_date") or ""))
+    if announced and announced < LP_NOTICE_COMPARISON_START_DATE:
+        return False
+    return True
 
 
 def parse_ktcu_listing(source: dict[str, str], limit: int, allow_insecure_ssl: bool) -> list[dict[str, str]]:
@@ -1763,6 +1817,8 @@ def make_notice_row(
     title_stage = infer_stage(title)
     stage = title_stage if title_stage in {"notice", "application", "briefing"} else infer_stage(cleaned_text)
     event_type = infer_event_type(title, stage, deadline, report_date)
+    if event_type not in {"final_selection", "shortlist"}:
+        gp_names = ""
     amount_info = classify_amounts(cleaned_text)
     allocation = amount_info["allocation_amount_krw_100mn"]
     confidence, confidence_note, public_visible = confidence_for(source_type, lp_code, event_type, allocation, title)
@@ -1877,25 +1933,32 @@ def load_official_candidates(
                 for name, url in zip(link_attachment_names, link_attachment_urls)
                 if url
             ]
-            if source_kind == "vcs_listing":
-                detail = {}
-            else:
+            if should_fetch_source_detail(source_kind, link):
                 detail = fetch_official_detail(notice_url, allow_insecure_ssl)
+            else:
+                detail = {}
             detail_title = normalize_whitespace(str(detail.get("title") or ""))
-            detail_text = normalize_whitespace(f"{link_text} {detail.get('text') or ''}")[:6000]
+            detail_text = normalize_whitespace(f"{link_text} {detail.get('text') or ''}")[:OFFICIAL_DETAIL_TEXT_LIMIT]
             detail_attachments = [item for item in detail.get("attachments", []) if isinstance(item, dict)]
             attachments = [*link_attachments, *detail_attachments]
             attachment_names = semicolon_join([*link_attachment_names, *[str(item.get("name") or "") for item in detail_attachments]])
             attachment_urls = semicolon_join([*link_attachment_urls, *[str(item.get("url") or "") for item in detail_attachments]])
-            preliminary_text = f"{title} {detail_title} {link_text} {detail_text} {notice_url}"
-            lp_code = infer_lp_code(preliminary_text, lp_aliases, source.get("lp_code", ""))
-            title = choose_official_notice_title(title, detail_title, lp_names_by_code.get(lp_code, ""))
-            text = f"{title} {link_text} {notice_url}" if source_kind == "vcs_listing" else f"{title} {link_text} {detail_text} {notice_url}"
-            lp_code = infer_lp_code(title, lp_aliases, lp_code) or infer_lp_code(text, lp_aliases, lp_code)
-            announced_date = link.get("announced_date", "")
             contact_team = link.get("contact_team", "")
+            contact_lp_code = infer_lp_code(contact_team, lp_aliases)
+            preliminary_text = f"{title} {detail_title} {link_text} {detail_text} {notice_url}"
+            if source_kind == "vcs_listing" and contact_lp_code:
+                lp_code = contact_lp_code
+            else:
+                lp_code = infer_lp_code(preliminary_text, lp_aliases, source.get("lp_code", ""))
+            title = choose_official_notice_title(title, detail_title, lp_names_by_code.get(lp_code, ""))
+            text = f"{title} {link_text} {detail_text} {notice_url}"
+            if source_kind == "vcs_listing":
+                lp_code = infer_lp_code(title, lp_aliases, "") or lp_code
+            else:
+                lp_code = infer_lp_code(title, lp_aliases, lp_code) or infer_lp_code(text, lp_aliases, lp_code)
+            announced_date = link.get("announced_date", "")
             stage_for_gp = infer_stage(f"{title} {detail_text}")
-            gp_text = detail_text[:3000] if stage_for_gp in {"selection_result", "shortlist"} else ""
+            gp_text = detail_text[:OFFICIAL_GP_MATCH_TEXT_LIMIT] if stage_for_gp in {"selection_result", "shortlist"} else ""
             rows.append(
                 make_notice_row(
                     lp_code=lp_code,
@@ -2146,7 +2209,10 @@ def upsert_notices(conn: sqlite3.Connection, rows: list[dict[str, object]]) -> i
                 amount_type = COALESCE(NULLIF(excluded.amount_type, ''), lp_commitment_notice.amount_type),
                 amount_confidence = COALESCE(NULLIF(excluded.amount_confidence, ''), lp_commitment_notice.amount_confidence),
                 commitment_amount_krw_100mn = COALESCE(excluded.commitment_amount_krw_100mn, lp_commitment_notice.commitment_amount_krw_100mn),
-                selected_gp_names = COALESCE(NULLIF(excluded.selected_gp_names, ''), lp_commitment_notice.selected_gp_names),
+                selected_gp_names = CASE
+                    WHEN excluded.event_type NOT IN ('final_selection', 'shortlist') THEN ''
+                    ELSE COALESCE(NULLIF(excluded.selected_gp_names, ''), lp_commitment_notice.selected_gp_names)
+                END,
                 contact_team = COALESCE(NULLIF(excluded.contact_team, ''), lp_commitment_notice.contact_team),
                 confidence = COALESCE(NULLIF(excluded.confidence, ''), lp_commitment_notice.confidence),
                 confidence_note = COALESCE(NULLIF(excluded.confidence_note, ''), lp_commitment_notice.confidence_note),
@@ -2168,6 +2234,8 @@ def upsert_notices(conn: sqlite3.Connection, rows: list[dict[str, object]]) -> i
 
 def normalize_title_key(title: str) -> str:
     value = re.sub(r"\[[^\]]+\]", " ", title or "")
+    value = re.sub(r"(?<!\d)[`'‘’](?P<year>\d{2})(?=\s*년|[.\-/])", lambda m: f"20{m.group('year')}", value)
+    value = re.sub(r"(?<!\d)(?P<year>2[0-9])(?=\s*년|[.\-/])", lambda m: f"20{m.group('year')}", value)
     value = re.sub(r"[-–—]\s*(더벨|인베스트조선|매일경제|한국경제|이데일리|블로터|딜사이트)\s*$", " ", value)
     value = re.sub(r"\s+", " ", value).strip()
     return re.sub(r"[^0-9A-Za-z가-힣]", "", value).lower()
@@ -2195,6 +2263,236 @@ def candidate_quality(row: dict[str, object]) -> tuple[int, int, int]:
     source_score = 2 if row.get("source_type") == "official" else 1
     amount_score = 1 if row.get("allocation_amount_krw_100mn") else 0
     return confidence_score, source_score, amount_score
+
+
+def notice_event_group(event_type: object) -> str:
+    value = str(event_type or "")
+    if value in {"new_notice", "deadline_soon", "deadline_closed"}:
+        return "notice"
+    if value in {"final_selection", "shortlist"}:
+        return value
+    if value in {"revision", "cancellation"}:
+        return value
+    return "history"
+
+
+def canonical_notice_key(row: dict[str, object]) -> tuple[str, str, str]:
+    title_key = normalize_title_key(str(row.get("title") or ""))
+    return (
+        str(row.get("lp_code") or ""),
+        notice_event_group(row.get("event_type")),
+        title_key,
+    )
+
+
+def stored_notice_quality(row: dict[str, object]) -> tuple[int, int, int, int, int, int, int]:
+    confidence_score = {"high": 3, "medium": 2, "low": 1}.get(str(row.get("confidence") or ""), 0)
+    source_code = str(row.get("source_code") or "")
+    source_type = str(row.get("source_type") or "")
+    source_score = 0
+    if source_type == "official":
+        source_score = 3
+    if source_code == "vcs_investment_notice":
+        source_score = 2
+    if source_type == "news":
+        source_score = 1
+    field_score = sum(
+        1
+        for key in [
+            "allocation_amount_krw_100mn",
+            "application_deadline",
+            "selected_gp_names",
+            "document_url",
+            "attachment_urls",
+            "asset_class",
+            "strategy",
+        ]
+        if row.get(key)
+    )
+    validated_score = 2 if row.get("monitor_status") == "validated" else 0
+    visible_score = 1 if row.get("public_visible") else 0
+    detail_score = len(str(row.get("raw_excerpt") or ""))
+    notice_id = int(row.get("notice_id") or 0)
+    return validated_score, confidence_score, field_score, source_score, visible_score, detail_score, -notice_id
+
+
+def merged_selected_gp_names(rows: list[dict[str, object]]) -> str:
+    names: list[str] = []
+    for row in rows:
+        if str(row.get("event_type") or "") not in {"final_selection", "shortlist"}:
+            continue
+        for name in split_selected_gp_names(str(row.get("selected_gp_names") or "")):
+            if name not in names:
+                names.append(name)
+    return "; ".join(names)
+
+
+def first_non_blank(rows: list[dict[str, object]], key: str) -> object:
+    for row in rows:
+        value = row.get(key)
+        if value not in {None, ""}:
+            return value
+    return None
+
+
+def dedupe_stored_notices(conn: sqlite3.Connection) -> int:
+    cursor = conn.execute(
+        """
+        SELECT
+            notice_id,
+            lp_code,
+            source_code,
+            source_type,
+            title,
+            event_type,
+            event_date,
+            announced_date,
+            application_deadline,
+            document_url,
+            attachment_names,
+            attachment_urls,
+            program_name,
+            round_name,
+            notice_year,
+            notice_stage,
+            asset_class,
+            strategy,
+            program_size_krw_100mn,
+            allocation_amount_krw_100mn,
+            amount_type,
+            amount_confidence,
+            commitment_amount_krw_100mn,
+            selected_gp_names,
+            confidence,
+            confidence_note,
+            public_visible,
+            monitor_status,
+            raw_excerpt
+        FROM lp_commitment_notice
+        WHERE public_visible = 1
+          AND COALESCE(monitor_status, '') <> 'dismissed'
+        """
+    )
+    headers = [desc[0] for desc in cursor.description]
+    groups: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    for row in [dict(zip(headers, values)) for values in cursor.fetchall()]:
+        key = canonical_notice_key(row)
+        if not key[0] or not key[2]:
+            continue
+        groups.setdefault(key, []).append(row)
+
+    hidden = 0
+    now = now_utc_iso()
+    for rows in groups.values():
+        if len(rows) < 2:
+            continue
+        ranked = sorted(rows, key=stored_notice_quality, reverse=True)
+        keeper = ranked[0]
+        keeper_id = int(keeper["notice_id"])
+        merged: dict[str, object] = {}
+        for key in [
+            "document_url",
+            "attachment_names",
+            "attachment_urls",
+            "program_name",
+            "round_name",
+            "application_deadline",
+            "notice_stage",
+            "asset_class",
+            "strategy",
+            "amount_type",
+            "amount_confidence",
+            "confidence",
+            "confidence_note",
+            "raw_excerpt",
+        ]:
+            merged[key] = keeper.get(key) or first_non_blank(ranked, key) or ""
+        for key in [
+            "program_size_krw_100mn",
+            "allocation_amount_krw_100mn",
+            "commitment_amount_krw_100mn",
+        ]:
+            merged[key] = keeper.get(key) or first_non_blank(ranked, key)
+        merged["selected_gp_names"] = merged_selected_gp_names(ranked)
+        conn.execute(
+            """
+            UPDATE lp_commitment_notice
+            SET
+                document_url = ?,
+                attachment_names = ?,
+                attachment_urls = ?,
+                program_name = ?,
+                round_name = ?,
+                application_deadline = ?,
+                notice_stage = ?,
+                asset_class = ?,
+                strategy = ?,
+                program_size_krw_100mn = ?,
+                allocation_amount_krw_100mn = ?,
+                amount_type = ?,
+                amount_confidence = ?,
+                commitment_amount_krw_100mn = ?,
+                selected_gp_names = ?,
+                confidence = ?,
+                confidence_note = ?,
+                raw_excerpt = ?,
+                public_visible = 1,
+                updated_at = ?
+            WHERE notice_id = ?
+            """,
+            (
+                merged["document_url"],
+                merged["attachment_names"],
+                merged["attachment_urls"],
+                merged["program_name"],
+                merged["round_name"],
+                merged["application_deadline"],
+                merged["notice_stage"],
+                merged["asset_class"],
+                merged["strategy"],
+                merged["program_size_krw_100mn"],
+                merged["allocation_amount_krw_100mn"],
+                merged["amount_type"],
+                merged["amount_confidence"],
+                merged["commitment_amount_krw_100mn"],
+                merged["selected_gp_names"],
+                merged["confidence"],
+                merged["confidence_note"],
+                merged["raw_excerpt"],
+                now,
+                keeper_id,
+            ),
+        )
+        duplicate_ids = [int(row["notice_id"]) for row in ranked[1:] if row.get("monitor_status") != "validated"]
+        if duplicate_ids:
+            conn.executemany(
+                """
+                UPDATE lp_commitment_notice
+                SET public_visible = 0,
+                    monitor_status = 'duplicate',
+                    updated_at = ?
+                WHERE notice_id = ?
+                """,
+                [(now, notice_id) for notice_id in duplicate_ids],
+            )
+            hidden += len(duplicate_ids)
+    conn.commit()
+    return hidden
+
+
+def clear_non_result_gp_names(conn: sqlite3.Connection) -> int:
+    cursor = conn.execute(
+        """
+        UPDATE lp_commitment_notice
+        SET selected_gp_names = '',
+            updated_at = ?
+        WHERE COALESCE(selected_gp_names, '') <> ''
+          AND COALESCE(event_type, '') NOT IN ('final_selection', 'shortlist')
+        """,
+        (now_utc_iso(),),
+    )
+    conn.commit()
+    return int(cursor.rowcount or 0)
 
 
 def clear_auto_candidates(conn: sqlite3.Connection, preserve_official: bool = False) -> int:
@@ -2448,6 +2746,8 @@ def build(
         candidates = dedupe_candidates(official_rows + news_rows + reviewed_rows)
         cleared = clear_auto_candidates(conn, preserve_official=True)
         upserted = upsert_notices(conn, candidates)
+        deduped = dedupe_stored_notices(conn)
+        cleared_non_result_gp_names = clear_non_result_gp_names(conn)
         gp_links, news_links = refresh_notice_links(conn, gp_aliases)
         dated_path, latest_path, exported = export_monitor(conn, out_dir, report_date)
     finally:
@@ -2462,6 +2762,8 @@ def build(
         "reviewed_candidates": len(reviewed_rows),
         "cleared_auto_candidates": cleared,
         "upserted": upserted,
+        "deduped": deduped,
+        "cleared_non_result_gp_names": cleared_non_result_gp_names,
         "gp_links": gp_links,
         "news_links": news_links,
         "exported": exported,

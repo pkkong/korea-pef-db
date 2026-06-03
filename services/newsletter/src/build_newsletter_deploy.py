@@ -3516,15 +3516,16 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
     status_group = "history" if status in {"closed", "history"} else status
     status_label = lp_notice_status_label(status)
     stage_label = lp_notice_stage_label(item, status)
+    stage_status_label = stage_label if stage_label == status_label else f"{stage_label} · {status_label}"
     raw_amount = item.get("allocationAmount")
-    amount = lp_amount_label(raw_amount)
+    amount = lp_amount_label(raw_amount) or "-"
     try:
         amount_numeric = float(str(raw_amount or "0").replace(",", ""))
     except ValueError:
         amount_numeric = 0.0
     asset_class = public_asset_class(item.get("assetClass")) if item.get("assetClass") else ""
     strategy = clean_public_lp_text(item.get("strategy") or item.get("purpose") or "")
-    type_label = " · ".join(value for value in [asset_class, strategy] if value)
+    type_label = " · ".join(value for value in [asset_class, strategy] if value) or "-"
     selected_label = notice_gp_label(item.get("selectedGpNames"))
     has_gp = "1" if selected_label != "-" else "0"
     notice_year = str(item.get("eventDate") or item.get("announcedDate") or "")[:4]
@@ -3563,33 +3564,21 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
     )
     if schedule_sub:
         schedule_detail += f'<span class="lp-notice-date-sub">{html_escape(schedule_sub)}</span>'
-    asset_fact = (
-        f"""
+    asset_fact = f"""
               <div>
                 <dt>자산군</dt>
                 <dd>{html_escape(type_label)}</dd>
               </div>"""
-        if type_label
-        else ""
-    )
-    amount_fact = (
-        f"""
+    amount_fact = f"""
               <div>
                 <dt>출자규모</dt>
                 <dd>{html_escape(amount)}</dd>
               </div>"""
-        if amount
-        else ""
-    )
-    selected_fact = (
-        f"""
+    selected_fact = f"""
               <div>
                 <dt>관련 GP</dt>
                 <dd>{html_escape(selected_label)}</dd>
               </div>"""
-        if selected_label != "-"
-        else ""
-    )
     search_blob = " ".join(
         str(value or "")
         for value in [
@@ -3605,7 +3594,7 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
     )
     return f"""              <article class="lp-notice-row" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-lp-name="{html_escape(lp_name)}" data-asset="{html_escape(asset_class)}" data-status="{html_escape(status)}" data-status-group="{html_escape(status_group)}" data-year="{html_escape(notice_year)}" data-date="{html_escape(event_date)}" data-deadline="{html_escape(deadline)}" data-amount="{amount_numeric:.0f}" data-has-gp="{has_gp}">
             <div class="lp-notice-main">
-              <p class="lp-notice-kicker"><span class="lp-notice-stage">{html_escape(stage_label)}</span></p>
+              <p class="lp-notice-kicker"><span class="lp-notice-stage">{html_escape(stage_status_label)}</span></p>
               <h2>{linked_title}</h2>
             </div>
             <dl class="lp-notice-facts">
