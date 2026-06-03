@@ -5,11 +5,16 @@ from __future__ import annotations
 
 import argparse
 import csv
+import html
+import io
 import json
 import re
 import ssl
 import sqlite3
+import struct
 import sys
+import zipfile
+import zlib
 from http.cookiejar import CookieJar
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -116,6 +121,9 @@ MONEY_CONTEXT_WINDOW = 44
 LP_NOTICE_COMPARISON_START_DATE = "2024-01-01"
 OFFICIAL_DETAIL_TEXT_LIMIT = 30000
 OFFICIAL_GP_MATCH_TEXT_LIMIT = 12000
+ATTACHMENT_TEXT_LIMIT = 20000
+ATTACHMENT_FETCH_LIMIT = 2
+ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024
 EVENT_PRIORITY = {
     "new_notice": 0,
     "deadline_soon": 1,
@@ -249,12 +257,14 @@ GP_EXCLUSION_NAMES = {
     "새마을금고중앙회",
     "한국수출입은행",
     "수출입은행",
-    "한국성장금융투자운용",
 }
 GP_NAME_SUFFIXES = [
     "자산운용",
     "인베스트먼트파트너스",
     "인베스트먼트",
+    "프라이빗에쿼티",
+    "에쿼티파트너스",
+    "투자운용",
     "그린인베스트먼트",
     "벤처투자",
     "기술투자",
@@ -1103,6 +1113,416 @@ def primary_document_url(attachments: list[dict[str, str]]) -> str:
     return str(attachments[0].get("url") or "") if attachments else ""
 
 
+def attachment_kind(name: str, url: str, content_type: str, raw_bytes: bytes = b"") -> str:
+    haystack = f"{name} {url} {content_type}".lower()
+    if raw_bytes.startswith(b"%PDF") or ".pdf" in haystack or "application/pdf" in haystack:
+        return "pdf"
+    if raw_bytes.startswith(b"PK\x03\x04") and (".hwpx" in haystack or ".docx" in haystack):
+        return "hwpx"
+    if raw_bytes.startswith(b"HWP Document File") or raw_bytes.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1") or ".hwp" in haystack:
+        return "hwp"
+    return ""
+
+
+def is_text_extractable_attachment(name: str, url: str) -> bool:
+    haystack = f"{name} {url}".lower()
+    return any(token in haystack for token in [".pdf", ".hwp", ".hwpx", "fileview", "filedown"])
+
+
+def should_extract_attachment_text(stage: str, title: str, attachments: list[dict[str, str]]) -> bool:
+    if not attachments:
+        return False
+    text = f"{title} {' '.join(str(item.get('name') or '') for item in attachments)}"
+    if stage in {"selection_result", "shortlist"}:
+        return any(token in text for token in ["선정", "결과", "서류심사", "숏리스트", "위탁운용사"])
+    if stage in {"notice", "application", "briefing"}:
+        return any(
+            token in text
+            for token in [
+                "공고",
+                "공모",
+                "모집",
+                "선정계획",
+                "출자사업",
+                "위탁운용사",
+                "제안요청서",
+                "제안서",
+                "사업계획서",
+            ]
+        )
+    return False
+
+
+def attachment_priority(item: dict[str, str]) -> tuple[int, int, str]:
+    name = str(item.get("name") or "")
+    url = str(item.get("url") or "")
+    haystack = f"{name} {url}"
+    result_score = 0
+    if any(token in haystack for token in ["선정 결과", "선정결과", "서류심사", "숏리스트", "우선협상"]):
+        result_score = 3
+    elif any(token in haystack for token in ["선정", "결과"]):
+        result_score = 2
+    elif any(token in haystack for token in ["공고", "선정계획"]):
+        result_score = 1
+    kind_score = 1 if is_text_extractable_attachment(name, url) else 0
+    return result_score, kind_score, name
+
+
+def extract_attachment_texts(attachments: list[dict[str, str]], allow_insecure_ssl: bool) -> str:
+    values: list[str] = []
+    seen: set[str] = set()
+    candidates = sorted(attachments, key=attachment_priority, reverse=True)
+    for item in candidates:
+        if len(values) >= ATTACHMENT_FETCH_LIMIT:
+            break
+        name = str(item.get("name") or "")
+        url = str(item.get("url") or "")
+        if not url or url in seen or not is_text_extractable_attachment(name, url):
+            continue
+        seen.add(url)
+        try:
+            fetched = fetch_text(url, timeout=20, verify_ssl=not allow_insecure_ssl)
+        except Exception as exc:
+            print(f"warning: attachment_fetch_failed url={url} error={exc}")
+            continue
+        raw_bytes = bytes(fetched.get("raw_bytes") or b"")
+        if not raw_bytes or len(raw_bytes) > ATTACHMENT_MAX_BYTES:
+            continue
+        kind = attachment_kind(name, str(fetched.get("final_url") or url), str(fetched.get("content_type") or ""), raw_bytes)
+        text = extract_attachment_text(raw_bytes, kind)
+        text = normalize_whitespace(text)
+        if text:
+            values.append(text[:ATTACHMENT_TEXT_LIMIT])
+    return normalize_whitespace(" ".join(values))[:ATTACHMENT_TEXT_LIMIT]
+
+
+def extract_attachment_text(raw_bytes: bytes, kind: str) -> str:
+    if kind == "pdf":
+        return extract_pdf_text(raw_bytes)
+    if kind == "hwpx":
+        return extract_hwpx_text(raw_bytes)
+    if kind == "hwp":
+        return extract_hwp_text(raw_bytes)
+    return ""
+
+
+def extract_pdf_text(raw_bytes: bytes) -> str:
+    try:
+        from pypdf import PdfReader  # type: ignore
+
+        reader = PdfReader(io.BytesIO(raw_bytes))
+        text = " ".join(page.extract_text() or "" for page in reader.pages)
+        if text:
+            return text
+    except Exception:
+        pass
+    return extract_pdf_text_fallback(raw_bytes)
+
+
+def pdf_objects(raw_bytes: bytes) -> dict[int, bytes]:
+    return {
+        int(match.group(1)): match.group(2)
+        for match in re.finditer(rb"(\d+)\s+0\s+obj\s*(.*?)\s*endobj", raw_bytes, flags=re.DOTALL)
+    }
+
+
+def pdf_stream_data(body: bytes) -> bytes:
+    match = re.search(rb"stream\r?\n(.*?)\r?\nendstream", body, flags=re.DOTALL)
+    if not match:
+        return b""
+    data = match.group(1)
+    if b"/FlateDecode" in body:
+        for window_bits in [15, -15]:
+            try:
+                return zlib.decompress(data, window_bits)
+            except Exception:
+                continue
+    return data
+
+
+def parse_pdf_cmap(stream: bytes) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    if b"begincmap" not in stream:
+        return mapping
+    text = stream.decode("latin1", errors="ignore")
+    for block in re.findall(r"beginbfchar\s*(.*?)\s*endbfchar", text, flags=re.DOTALL):
+        for src, dst in re.findall(r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", block):
+            if dst.lower() == "ffff":
+                continue
+            try:
+                mapping[src.lower()] = "".join(chr(int(dst[index : index + 4], 16)) for index in range(0, len(dst), 4))
+            except ValueError:
+                continue
+    for block in re.findall(r"beginbfrange\s*(.*?)\s*endbfrange", text, flags=re.DOTALL):
+        for start, end, dst in re.findall(r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", block):
+            try:
+                start_int = int(start, 16)
+                end_int = int(end, 16)
+                dst_int = int(dst, 16)
+            except ValueError:
+                continue
+            width = len(start)
+            for offset, code in enumerate(range(start_int, end_int + 1)):
+                mapping[f"{code:0{width}x}"] = chr(dst_int + offset)
+    return mapping
+
+
+def decode_pdf_hex_text(hex_text: str, mapping: dict[str, str]) -> str:
+    value = re.sub(r"\s+", "", hex_text).lower()
+    if not value:
+        return ""
+    token_lengths = sorted({len(key) for key in mapping}, reverse=True) or [4, 2]
+    output: list[str] = []
+    index = 0
+    while index < len(value):
+        for token_length in token_lengths:
+            token = value[index : index + token_length]
+            if token in mapping:
+                output.append(mapping[token])
+                index += token_length
+                break
+        else:
+            token = value[index : index + 2]
+            try:
+                codepoint = int(token, 16)
+                if 32 <= codepoint < 127:
+                    output.append(chr(codepoint))
+            except ValueError:
+                pass
+            index += 2
+    return "".join(output)
+
+
+def extract_pdf_text_fallback(raw_bytes: bytes) -> str:
+    objects = pdf_objects(raw_bytes)
+    font_object_by_name: dict[str, int] = {}
+    for body in objects.values():
+        for name, object_number in re.findall(rb"/([A-Za-z][A-Za-z0-9]+)\s+(\d+)\s+0\s+R", body):
+            if name.startswith((b"F", b"T")):
+                font_object_by_name[name.decode("latin1")] = int(object_number)
+    font_maps: dict[str, dict[str, str]] = {}
+    for name, object_number in font_object_by_name.items():
+        body = objects.get(object_number, b"")
+        match = re.search(rb"/ToUnicode\s+(\d+)\s+0\s+R", body)
+        if not match:
+            continue
+        cmap_stream = pdf_stream_data(objects.get(int(match.group(1)), b""))
+        font_maps[name] = parse_pdf_cmap(cmap_stream)
+
+    chunks: list[str] = []
+    token_re = re.compile(
+        r"/([A-Za-z][A-Za-z0-9]+)\s+[0-9.]+\s+Tf|\[(.*?)\]\s*TJ|<([0-9A-Fa-f\s]+)>\s*Tj",
+        flags=re.DOTALL,
+    )
+    for _, body in sorted(objects.items()):
+        stream = pdf_stream_data(body)
+        if not stream or b"BT" not in stream:
+            continue
+        content = stream.decode("latin1", errors="ignore")
+        current_font = ""
+        for match in token_re.finditer(content):
+            if match.group(1):
+                current_font = match.group(1)
+                continue
+            mapping = font_maps.get(current_font, {})
+            if match.group(2) is not None:
+                text = "".join(
+                    decode_pdf_hex_text(hex_value, mapping)
+                    for hex_value in re.findall(r"<([0-9A-Fa-f\s]+)>", match.group(2))
+                )
+            else:
+                text = decode_pdf_hex_text(match.group(3) or "", mapping)
+            if text:
+                chunks.append(text)
+    return normalize_whitespace(" ".join(chunks))
+
+
+def extract_hwpx_text(raw_bytes: bytes) -> str:
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw_bytes)) as archive:
+            texts: list[str] = []
+            for name in sorted(archive.namelist()):
+                lower = name.lower()
+                if not lower.endswith(".xml") or not any(token in lower for token in ["section", "contents", "body"]):
+                    continue
+                payload = archive.read(name).decode("utf-8", errors="ignore")
+                payload = re.sub(r"<[^>]+>", " ", payload)
+                texts.append(html.unescape(payload))
+            return normalize_whitespace(" ".join(texts))
+    except Exception:
+        return ""
+
+
+def extract_hwp_text(raw_bytes: bytes) -> str:
+    try:
+        from olefile import OleFileIO  # type: ignore
+
+        ole = OleFileIO(io.BytesIO(raw_bytes))
+        try:
+            header = ole.openstream("FileHeader").read()
+            compressed = len(header) >= 40 and bool(struct.unpack_from("<I", header, 36)[0] & 1)
+            texts: list[str] = []
+            section_names = sorted("/".join(item) for item in ole.listdir() if len(item) == 2 and item[0] == "BodyText")
+            for name in section_names:
+                data = ole.openstream(name).read()
+                if compressed:
+                    data = zlib.decompress(data, -15)
+                texts.append(extract_hwp_body_text(data))
+            return normalize_whitespace(" ".join(texts))
+        finally:
+            ole.close()
+    except Exception:
+        pass
+    try:
+        reader = CompoundFileReader(raw_bytes)
+        header = reader.read_stream("FileHeader")
+        compressed = len(header) >= 40 and bool(struct.unpack_from("<I", header, 36)[0] & 1)
+        texts = []
+        for name in reader.stream_names():
+            if not re.fullmatch(r"Section\d+", name):
+                continue
+            data = reader.read_stream(name)
+            if compressed:
+                data = zlib.decompress(data, -15)
+            texts.append(extract_hwp_body_text(data))
+        return normalize_whitespace(" ".join(texts))
+    except Exception:
+        return ""
+
+
+def extract_hwp_body_text(data: bytes) -> str:
+    position = 0
+    texts: list[str] = []
+    while position + 4 <= len(data):
+        record_header = struct.unpack_from("<I", data, position)[0]
+        position += 4
+        tag = record_header & 0x3FF
+        size = (record_header >> 20) & 0xFFF
+        if size == 0xFFF:
+            if position + 4 > len(data):
+                break
+            size = struct.unpack_from("<I", data, position)[0]
+            position += 4
+        payload = data[position : position + size]
+        position += size
+        if tag == 67:
+            text = payload.decode("utf-16le", errors="ignore")
+            text = "".join(char if char in {"\n", "\t"} or ord(char) >= 32 else " " for char in text)
+            texts.append(text)
+    return " ".join(texts)
+
+
+class CompoundFileReader:
+    END_OF_CHAIN = 0xFFFFFFFE
+    FREE_SECTOR = 0xFFFFFFFF
+    FAT_SECTOR = 0xFFFFFFFD
+    DIFAT_SECTOR = 0xFFFFFFFC
+
+    def __init__(self, data: bytes):
+        if not data.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
+            raise ValueError("not a compound file")
+        self.data = data
+        self.sector_size = 1 << struct.unpack_from("<H", data, 30)[0]
+        self.mini_sector_size = 1 << struct.unpack_from("<H", data, 32)[0]
+        self.first_dir_sector = struct.unpack_from("<I", data, 48)[0]
+        self.mini_stream_cutoff = struct.unpack_from("<I", data, 56)[0]
+        self.first_mini_fat_sector = struct.unpack_from("<I", data, 60)[0]
+        self.num_mini_fat_sectors = struct.unpack_from("<I", data, 64)[0]
+        first_difat_sector = struct.unpack_from("<I", data, 68)[0]
+        num_difat_sectors = struct.unpack_from("<I", data, 72)[0]
+        difat = [
+            entry
+            for entry in struct.unpack_from("<109I", data, 76)
+            if entry not in {self.FREE_SECTOR, self.END_OF_CHAIN}
+        ]
+        sector = first_difat_sector
+        for _ in range(num_difat_sectors):
+            if sector in {self.FREE_SECTOR, self.END_OF_CHAIN}:
+                break
+            payload = self.read_sector(sector)
+            entries = struct.unpack("<" + "I" * (self.sector_size // 4), payload)
+            difat.extend(entry for entry in entries[:-1] if entry not in {self.FREE_SECTOR, self.END_OF_CHAIN})
+            sector = entries[-1]
+        self.fat: list[int] = []
+        for sector_id in difat:
+            payload = self.read_sector(sector_id)
+            self.fat.extend(struct.unpack("<" + "I" * (self.sector_size // 4), payload))
+        self.entries = self.read_directory()
+        self.root_entry = next((entry for entry in self.entries if entry.get("type") == 5), None)
+        self.mini_fat = self.read_mini_fat()
+        self.mini_stream = self.read_regular_stream(int(self.root_entry.get("start", self.END_OF_CHAIN))) if self.root_entry else b""
+
+    def read_sector(self, sector_id: int) -> bytes:
+        offset = (sector_id + 1) * self.sector_size
+        return self.data[offset : offset + self.sector_size]
+
+    def sector_chain(self, start_sector: int) -> list[int]:
+        chain: list[int] = []
+        sector = start_sector
+        seen: set[int] = set()
+        while sector not in {self.END_OF_CHAIN, self.FREE_SECTOR} and sector < len(self.fat) and sector not in seen:
+            seen.add(sector)
+            chain.append(sector)
+            sector = self.fat[sector]
+        return chain
+
+    def read_regular_stream(self, start_sector: int) -> bytes:
+        return b"".join(self.read_sector(sector) for sector in self.sector_chain(start_sector))
+
+    def read_directory(self) -> list[dict[str, object]]:
+        stream = self.read_regular_stream(self.first_dir_sector)
+        entries: list[dict[str, object]] = []
+        for index in range(0, len(stream), 128):
+            entry = stream[index : index + 128]
+            if len(entry) < 128:
+                continue
+            name_length = struct.unpack_from("<H", entry, 64)[0]
+            name = entry[: max(0, name_length - 2)].decode("utf-16le", errors="ignore")
+            object_type = entry[66]
+            if not name or object_type == 0:
+                continue
+            start_sector = struct.unpack_from("<I", entry, 116)[0]
+            stream_size = struct.unpack_from("<Q", entry, 120)[0]
+            entries.append({"name": name, "type": object_type, "start": start_sector, "size": stream_size})
+        return entries
+
+    def read_mini_fat(self) -> list[int]:
+        if self.first_mini_fat_sector in {self.FREE_SECTOR, self.END_OF_CHAIN} or self.num_mini_fat_sectors == 0:
+            return []
+        stream = self.read_regular_stream(self.first_mini_fat_sector)
+        return list(struct.unpack("<" + "I" * (len(stream) // 4), stream))
+
+    def mini_sector_chain(self, start_sector: int) -> list[int]:
+        chain: list[int] = []
+        sector = start_sector
+        seen: set[int] = set()
+        while sector not in {self.END_OF_CHAIN, self.FREE_SECTOR} and sector < len(self.mini_fat) and sector not in seen:
+            seen.add(sector)
+            chain.append(sector)
+            sector = self.mini_fat[sector]
+        return chain
+
+    def read_mini_stream(self, start_sector: int) -> bytes:
+        chunks = []
+        for sector in self.mini_sector_chain(start_sector):
+            offset = sector * self.mini_sector_size
+            chunks.append(self.mini_stream[offset : offset + self.mini_sector_size])
+        return b"".join(chunks)
+
+    def stream_names(self) -> list[str]:
+        return [str(entry["name"]) for entry in self.entries if entry.get("type") == 2]
+
+    def read_stream(self, name: str) -> bytes:
+        entry = next((item for item in self.entries if item.get("name") == name and item.get("type") == 2), None)
+        if entry is None:
+            raise KeyError(name)
+        size = int(entry.get("size") or 0)
+        start = int(entry.get("start") or self.END_OF_CHAIN)
+        if size < self.mini_stream_cutoff and self.mini_fat and self.mini_stream:
+            return self.read_mini_stream(start)[:size]
+        return self.read_regular_stream(start)[:size]
+
+
 def extract_official_detail_title(html_text: str) -> str:
     summary_match = re.search(r"<table\b[^>]*summary=[\"'](?P<summary>[^\"']+)[\"']", html_text, flags=re.IGNORECASE)
     if summary_match:
@@ -1892,14 +2312,19 @@ def append_raw_gp_name(names: list[str], raw_name: str) -> None:
     name = RAW_GP_DISPLAY_ALIASES.get(name, name)
     if not name or name in GP_EXCLUSION_NAMES:
         return
-    if any(token in name for token in ["위탁운용사", "선정결과", "서류심사", "운용사명", "투자운용"]):
+    if any(token in name for token in ["위탁운용사", "선정결과", "서류심사", "운용사명"]):
         return
     if len(normalize_for_match(name)) < 3:
         return
     name_norm = normalize_for_match(name)
-    for existing in names:
+    for index, existing in enumerate(names):
         existing_norm = normalize_for_match(existing)
-        if name_norm == existing_norm or name_norm in existing_norm or existing_norm in name_norm:
+        if name_norm == existing_norm:
+            return
+        if name_norm in existing_norm:
+            return
+        if existing_norm in name_norm:
+            names[index] = name
             return
     names.append(name)
 
@@ -2109,11 +2534,18 @@ def load_official_candidates(
             else:
                 detail = {}
             detail_title = normalize_whitespace(str(detail.get("title") or ""))
-            detail_text = normalize_whitespace(f"{link_text} {detail.get('text') or ''}")[:OFFICIAL_DETAIL_TEXT_LIMIT]
             detail_attachments = [item for item in detail.get("attachments", []) if isinstance(item, dict)]
             attachments = [*link_attachments, *detail_attachments]
             attachment_names = semicolon_join([*link_attachment_names, *[str(item.get("name") or "") for item in detail_attachments]])
             attachment_urls = semicolon_join([*link_attachment_urls, *[str(item.get("url") or "") for item in detail_attachments]])
+            base_detail_text = normalize_whitespace(f"{link_text} {detail.get('text') or ''}")
+            stage_hint = infer_stage(f"{title} {detail_title} {base_detail_text}")
+            attachment_text = (
+                extract_attachment_texts(attachments, allow_insecure_ssl)
+                if should_extract_attachment_text(stage_hint, title, attachments)
+                else ""
+            )
+            detail_text = normalize_whitespace(f"{attachment_text} {base_detail_text}")[:OFFICIAL_DETAIL_TEXT_LIMIT]
             contact_team = link.get("contact_team", "")
             contact_lp_code = infer_lp_code(contact_team, lp_aliases)
             preliminary_text = f"{title} {detail_title} {link_text} {detail_text} {notice_url}"
@@ -2128,7 +2560,7 @@ def load_official_candidates(
             else:
                 lp_code = infer_lp_code(title, lp_aliases, lp_code) or infer_lp_code(text, lp_aliases, lp_code)
             announced_date = link.get("announced_date", "")
-            stage_for_gp = infer_stage(f"{title} {detail_text}")
+            stage_for_gp = infer_stage(f"{title} {detail_text}") or stage_hint
             gp_text = detail_text[:OFFICIAL_GP_MATCH_TEXT_LIMIT] if stage_for_gp in {"selection_result", "shortlist"} else ""
             rows.append(
                 make_notice_row(

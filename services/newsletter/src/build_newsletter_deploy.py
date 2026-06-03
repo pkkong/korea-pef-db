@@ -1158,7 +1158,7 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
             if db_object_exists(conn, "v_lp_commitment_notice_public")
             else []
         )
-        notices = [row for row in notices if is_public_lp_notice_row(row)]
+        notices = [row for row in notices if is_public_lp_notice_row(row, require_official=True)]
 
         yearly = yearly_stats_from_notices(notices)
 
