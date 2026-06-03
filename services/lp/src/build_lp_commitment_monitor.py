@@ -52,6 +52,7 @@ DEFAULT_LP_INSTITUTIONS = REPO_ROOT / "data" / "lp_institutions.csv"
 DEFAULT_LP_PROFILE_FACTS = REPO_ROOT / "data" / "lp_profile_facts.csv"
 DEFAULT_LP_SOURCES = REPO_ROOT / "data" / "lp_commitment_sources.csv"
 DEFAULT_LP_REVIEWED_EVENTS = REPO_ROOT / "data" / "lp_reviewed_events.csv"
+DEFAULT_LP_SELECTED_GP_EXCLUSIONS = REPO_ROOT / "data" / "lp_selected_gp_non_gp_exclusions.csv"
 DEFAULT_OUT_DIR = REPO_ROOT / "exports"
 NEWS_FEED_SOURCE_CODE = "daily_news_lp_feed"
 VCS_BACKFILL_PAGE_SIZE = 500
@@ -258,6 +259,21 @@ GP_EXCLUSION_NAMES = {
     "한국수출입은행",
     "수출입은행",
 }
+
+
+def load_selected_gp_exclusion_names(path: Path = DEFAULT_LP_SELECTED_GP_EXCLUSIONS) -> set[str]:
+    if not path.exists():
+        return set()
+    names: set[str] = set()
+    for row in read_csv_rows(path):
+        token = normalize_whitespace(row.get("token", ""))
+        if token:
+            names.add(token)
+    return names
+
+
+GP_EXCLUSION_NAMES.update(load_selected_gp_exclusion_names())
+
 GP_NAME_SUFFIXES = [
     "자산운용",
     "인베스트먼트파트너스",
@@ -1682,6 +1698,32 @@ def fetch_form_text(url: str, data: dict[str, str], referer: str, allow_insecure
         return raw.decode(charset, errors="replace")
 
 
+def fetch_json_post_text(url: str, data: dict[str, object], referer: str, allow_insecure_ssl: bool) -> str:
+    encoded = json.dumps(data, ensure_ascii=False).encode("utf-8")
+    request = Request(
+        url,
+        data=encoded,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/135.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json",
+            "Accept-Language": "ko,en-US;q=0.7,en;q=0.3",
+            "Content-Type": "application/json;",
+            "Referer": referer,
+        },
+    )
+    context = None
+    if allow_insecure_ssl and url.lower().startswith("https://"):
+        context = ssl._create_unverified_context()
+    with urlopen(request, timeout=20, context=context) as response:
+        raw = response.read()
+        charset = response.headers.get_content_charset() or "utf-8"
+        return raw.decode(charset, errors="replace")
+
+
 def apfs_board_params(locator: str, page_size: int) -> dict[str, str]:
     parsed = urlparse(locator)
     query = parse_qs(parsed.query)
@@ -2276,6 +2318,111 @@ def parse_kdic_notice_listing(source: dict[str, str], limit: int, allow_insecure
     return rows
 
 
+def is_nps_commitment_notice(title: str) -> bool:
+    include_terms = [
+        "사모투자",
+        "PEF",
+        "벤처",
+        "대체투자",
+        "부동산투자",
+        "인프라투자",
+        "인프라",
+        "사모대출",
+        "크레딧",
+    ]
+    exclude_terms = [
+        "국내주식",
+        "MMF",
+        "외화금고",
+        "수탁기관",
+        "자문사",
+        "투자자문",
+        "채권",
+        "거래증권사",
+        "보관기관",
+    ]
+    return any(term in title for term in include_terms) and not any(term in title for term in exclude_terms)
+
+
+def parse_nps_manager_selection_listing(source: dict[str, str], limit: int, allow_insecure_ssl: bool) -> list[dict[str, str]]:
+    locator = source.get("locator", "")
+    if not locator:
+        return []
+    fetched = fetch_text(locator, verify_ssl=not allow_insecure_ssl)
+    first_html = str(fetched.get("text") or "")
+    final_url = str(fetched.get("final_url") or locator)
+    page_numbers = [
+        int(value)
+        for value in re.findall(r"data-pagenum=[\"'](?P<page>\d+)[\"']", first_html)
+        if value.isdigit()
+    ]
+    max_page = max(page_numbers) if page_numbers else 1
+    list_url = urljoin(final_url, "/impa/dlnginstslctnpbanclist/empty/getOHEF0017M0.do")
+    detail_base = urljoin(final_url, "/impa/dlnginstslctnpbancdtl/getOHEF0018M0.do")
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    def append_rows(html_text: str) -> None:
+        for row_html in re.findall(r"<tr\b.*?</tr>", html_text, flags=re.IGNORECASE | re.DOTALL):
+            action = re.search(
+                r"fnc_goBbsDetail\(\s*['\"](?P<pst_id>[^'\"]+)['\"]\s*,\s*['\"](?P<bbs_cd>[^'\"]+)['\"]\s*\)",
+                row_html,
+                flags=re.IGNORECASE,
+            )
+            title_match = re.search(
+                r"<td\b[^>]*class=[\"'][^\"']*title[^\"']*[\"'][^>]*>.*?<a\b[^>]*>(?P<title>.*?)</a>",
+                row_html,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            if not action or not title_match:
+                continue
+            title = normalize_whitespace(strip_html_tags(title_match.group("title")))
+            if not title or not is_nps_commitment_notice(title):
+                continue
+            date_match = re.search(
+                r"<td\b[^>]*class=[\"'][^\"']*date[^\"']*[\"'][^>]*>(?P<date>.*?)</td>",
+                row_html,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            writer_match = re.search(
+                r"<td\b[^>]*class=[\"'][^\"']*writer[^\"']*[\"'][^>]*>(?P<writer>.*?)</td>",
+                row_html,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            pst_id = action.group("pst_id")
+            bbs_cd = action.group("bbs_cd")
+            detail_url = detail_base + "?" + urlencode({"pstId": pst_id, "hmpgBbsCd": bbs_cd})
+            if detail_url in seen:
+                continue
+            seen.add(detail_url)
+            rows.append(
+                {
+                    "title": title,
+                    "link": detail_url,
+                    "announced_date": normalize_date(strip_html_tags(date_match.group("date"))) if date_match else "",
+                    "contact_team": normalize_whitespace(strip_html_tags(writer_match.group("writer"))) if writer_match else "",
+                    "text": title,
+                }
+            )
+
+    append_rows(first_html)
+    for page_no in range(2, max_page + 1):
+        if len(rows) >= limit:
+            break
+        try:
+            html_text = fetch_json_post_text(
+                list_url,
+                {"pageIndex": page_no, "searchGbu": "", "searchText": ""},
+                final_url,
+                allow_insecure_ssl,
+            )
+        except Exception as exc:
+            print(f"warning: nps_page_fetch_failed page={page_no} error={exc}")
+            continue
+        append_rows(html_text)
+    return rows[:limit]
+
+
 def selected_gp_names(title: str, excerpt: str, aliases: object, existing: str = "") -> str:
     names = [part.strip() for part in re.split(r"[,;]", existing or "") if part.strip()]
     raw_names = extract_raw_selected_gp_names(f"{title} {excerpt}")
@@ -2492,6 +2639,8 @@ def load_official_candidates(
                 links = parse_kdb_ngf_listing(source, source_limit, allow_insecure_ssl)
             elif source_kind == "kdic_notice":
                 links = parse_kdic_notice_listing(source, source_limit, allow_insecure_ssl)
+            elif source.get("source_code") == "nps_manager_selection":
+                links = parse_nps_manager_selection_listing(source, source_limit, allow_insecure_ssl)
             elif source_kind == "html_page":
                 fetched = fetch_text(locator, verify_ssl=not allow_insecure_ssl)
                 links = make_html_page_link(
