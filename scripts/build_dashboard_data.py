@@ -479,6 +479,8 @@ def build_payload(
     lp_notice_news_links: list[dict[str, object]] = []
     lp_commitment_notices: list[dict[str, object]] = []
     lp_commitment_yearly_stats: list[dict[str, object]] = []
+    lp_commitment_selected_gp_compare: list[dict[str, object]] = []
+    lp_commitment_lifecycle_compare: list[dict[str, object]] = []
     if object_exists(conn, "lp_institution"):
         lp_institutions = fetch_dicts(
             conn,
@@ -653,6 +655,86 @@ def build_payload(
             ORDER BY notice_year DESC, commitment_amount_krw_100mn DESC, notice_count DESC, lp_name
             """,
         )
+    if object_exists(conn, "v_lp_commitment_selected_gp_compare"):
+        lp_commitment_selected_gp_compare = fetch_dicts(
+            conn,
+            """
+            SELECT
+                notice_id,
+                lp_code,
+                lp_name,
+                lp_type,
+                program_name,
+                round_name,
+                notice_year,
+                event_type,
+                event_date,
+                announced_date,
+                application_deadline,
+                stage,
+                notice_stage,
+                asset_class,
+                strategy,
+                program_size_krw_100mn,
+                allocation_amount_krw_100mn,
+                commitment_amount_krw_100mn,
+                amount_krw_100mn,
+                amount_type,
+                amount_confidence,
+                source_gp_id,
+                gp_name,
+                matched_alias,
+                gp_link_confidence,
+                confidence,
+                source_type,
+                source_code,
+                notice_title,
+                source_url,
+                document_url,
+                discovered_at,
+                updated_at
+            FROM v_lp_commitment_selected_gp_compare
+            ORDER BY COALESCE(event_date, announced_date, discovered_at) DESC, notice_id DESC, gp_name
+            """,
+        )
+    if object_exists(conn, "v_lp_commitment_lifecycle_compare"):
+        lp_commitment_lifecycle_compare = fetch_dicts(
+            conn,
+            """
+            SELECT
+                lp_code,
+                lp_name,
+                lp_type,
+                program_name,
+                round_name,
+                program_key,
+                round_key,
+                asset_class,
+                strategy,
+                notice_count,
+                open_count,
+                shortlist_count,
+                final_selection_count,
+                selected_gp_count,
+                allocation_amount_krw_100mn_sum,
+                commitment_amount_krw_100mn_sum,
+                amount_krw_100mn_sum,
+                program_size_krw_100mn_max,
+                latest_notice_id,
+                latest_notice_title,
+                latest_notice_url,
+                latest_document_url,
+                latest_notice_date,
+                latest_event_type,
+                latest_stage,
+                latest_confidence,
+                next_application_deadline,
+                latest_application_deadline,
+                deadline_status
+            FROM v_lp_commitment_lifecycle_compare
+            ORDER BY latest_notice_date DESC, notice_count DESC, lp_name, program_name, round_name
+            """,
+        )
     lp_profiles = build_lp_profiles(lp_institutions, lp_institution_stats, lp_commitment_notices)
 
     return {
@@ -684,6 +766,8 @@ def build_payload(
         "lp_notice_news_links": lp_notice_news_links,
         "lp_commitment_notices": lp_commitment_notices,
         "lp_commitment_yearly_stats": lp_commitment_yearly_stats,
+        "lp_commitment_selected_gp_compare": lp_commitment_selected_gp_compare,
+        "lp_commitment_lifecycle_compare": lp_commitment_lifecycle_compare,
         "news_gp_update_queue": news_gp_update_queue,
         "service_integration_queue": service_integration_queue,
         "source_documents": source_documents,
@@ -728,6 +812,8 @@ def main() -> int:
     print(f"lp_notice_gp_links={len(payload['lp_notice_gp_links'])}")
     print(f"lp_notice_news_links={len(payload['lp_notice_news_links'])}")
     print(f"lp_commitment_notices={len(payload['lp_commitment_notices'])}")
+    print(f"lp_commitment_selected_gp_compare={len(payload['lp_commitment_selected_gp_compare'])}")
+    print(f"lp_commitment_lifecycle_compare={len(payload['lp_commitment_lifecycle_compare'])}")
     print(f"service_integration_queue={len(payload['service_integration_queue'])}")
     return 0
 

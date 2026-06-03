@@ -3110,11 +3110,31 @@ def clear_auto_candidates(conn: sqlite3.Connection, preserve_official: bool = Fa
 
 
 def split_selected_gp_names(value: str) -> list[str]:
-    return [
-        part.strip()
-        for part in re.split(r"[,;]", value or "")
-        if part.strip()
-    ]
+    names: list[str] = []
+    for part in re.split(r"[,;]", value or ""):
+        token = normalize_whitespace(part)
+        if not token:
+            continue
+        names.append(token)
+        if "-" not in token:
+            continue
+        sub_tokens = [normalize_whitespace(piece) for piece in re.split(r"\s*-\s*", token) if normalize_whitespace(piece)]
+        if len(sub_tokens) < 2:
+            continue
+        if all(is_gp_like_token(piece) for piece in sub_tokens):
+            names.extend(piece for piece in sub_tokens if piece not in names)
+    return names
+
+
+def is_gp_like_token(value: str) -> bool:
+    return bool(
+        value
+        and (
+            re.search(r"(PE|GP|VC|증권|은행|투자|인베스트|파트너|자산운용|캐피탈|벤처)", value, flags=re.IGNORECASE)
+            or len(value) >= 2
+            and value.isascii()
+        )
+    )
 
 
 def notice_gp_alias_indexes(gp_aliases: object) -> tuple[dict[str, object], dict[str, object]]:

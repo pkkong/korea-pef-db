@@ -42,6 +42,8 @@ PUBLIC_KEYS = [
     "lp_notice_news_links",
     "lp_commitment_notices",
     "lp_commitment_yearly_stats",
+    "lp_commitment_selected_gp_compare",
+    "lp_commitment_lifecycle_compare",
 ]
 
 PROFILE_KEY_MAP = [
@@ -179,6 +181,74 @@ LP_NOTICE_NEWS_LINK_KEYS = [
     "link_source",
     "confidence",
     "created_at",
+]
+
+LP_SELECTED_GP_COMPARE_KEYS = [
+    "notice_id",
+    "lp_code",
+    "lp_name",
+    "lp_type",
+    "program_name",
+    "round_name",
+    "notice_year",
+    "event_type",
+    "event_date",
+    "announced_date",
+    "application_deadline",
+    "stage",
+    "notice_stage",
+    "asset_class",
+    "strategy",
+    "program_size_krw_100mn",
+    "allocation_amount_krw_100mn",
+    "commitment_amount_krw_100mn",
+    "amount_krw_100mn",
+    "amount_type",
+    "amount_confidence",
+    "source_gp_id",
+    "gp_name",
+    "matched_alias",
+    "gp_link_confidence",
+    "confidence",
+    "source_type",
+    "source_code",
+    "notice_title",
+    "source_url",
+    "document_url",
+    "discovered_at",
+    "updated_at",
+]
+
+LP_LIFECYCLE_COMPARE_KEYS = [
+    "lp_code",
+    "lp_name",
+    "lp_type",
+    "program_name",
+    "round_name",
+    "program_key",
+    "round_key",
+    "asset_class",
+    "strategy",
+    "notice_count",
+    "open_count",
+    "shortlist_count",
+    "final_selection_count",
+    "selected_gp_count",
+    "allocation_amount_krw_100mn_sum",
+    "commitment_amount_krw_100mn_sum",
+    "amount_krw_100mn_sum",
+    "program_size_krw_100mn_max",
+    "latest_notice_id",
+    "latest_notice_title",
+    "latest_notice_url",
+    "latest_document_url",
+    "latest_notice_date",
+    "latest_event_type",
+    "latest_stage",
+    "latest_confidence",
+    "next_application_deadline",
+    "latest_application_deadline",
+    "deadline_status",
 ]
 
 PUBLIC_KEY_RENAMES = {
@@ -419,6 +489,16 @@ def build_payload(data: dict[str, object]) -> dict[str, object]:
         project(row, LP_NOTICE_NEWS_LINK_KEYS)
         for row in data.get("lp_notice_news_links", [])
         if isinstance(row, dict) and str(row.get("notice_id") or "") in public_lp_notice_ids
+    ]
+    payload["lp_commitment_selected_gp_compare"] = [
+        project(row, LP_SELECTED_GP_COMPARE_KEYS)
+        for row in data.get("lp_commitment_selected_gp_compare", [])
+        if isinstance(row, dict) and str(row.get("notice_id") or "") in public_lp_notice_ids
+    ]
+    payload["lp_commitment_lifecycle_compare"] = [
+        project(row, LP_LIFECYCLE_COMPARE_KEYS)
+        for row in data.get("lp_commitment_lifecycle_compare", [])
+        if isinstance(row, dict)
     ]
     return sanitize_public_keys(payload)
 
