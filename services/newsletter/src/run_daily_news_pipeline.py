@@ -40,6 +40,7 @@ from daily_news_common import (
     build_summary,
     choose_relevance_label,
     clean_news_title,
+    dedupe_tags,
     fetch_text,
     google_news_rss_url,
     is_generic_aggregator_text,
@@ -1361,6 +1362,125 @@ EXTERNAL_FUNDING_DEAL_KEYWORDS = [
     "몸값",
 ]
 
+TITLE_TRANSACTION_KEYWORDS = [
+    "SPA",
+    "본계약",
+    "주식매매계약",
+    "지분 매각",
+    "지분매각",
+    "지분 인수",
+    "경영권 인수",
+    "경영권 매각",
+    "소수 지분",
+    "투자유치",
+    "신규 FI",
+    "본입찰",
+    "예비입찰",
+    "우선협상",
+    "우협",
+    "인수전",
+]
+
+LP_PRIMARY_EVENT_KEYWORDS = [
+    "출자사업",
+    "출자 공고",
+    "출자공고",
+    "펀드 출자",
+    "출자에",
+    "위탁운용",
+    "운용사 선정",
+    "GP 선정",
+    "GP 낙점",
+    "출자사업 숏리스트",
+    "서류심사",
+    "출자확약",
+    "VC 출자",
+    "PE 출자",
+    "앵커 출자",
+    "CIO",
+    "자산운용본부장",
+    "기금운용본부장",
+    "기금운용평가",
+    "자산배분",
+    "대체투자 선별",
+]
+
+LP_ALLOCATOR_NAMES = [
+    "국민연금",
+    "사학연금",
+    "공무원연금",
+    "교직원공제",
+    "행정공제",
+    "군인공제",
+    "경찰공제",
+    "노란우산",
+    "중소기업중앙회",
+    "산재기금",
+    "고용노동부",
+    "KIC",
+    "한국투자공사",
+    "산은",
+    "한국산업은행",
+    "성장금융",
+    "한국성장금융",
+    "한국벤처투자",
+    "모태펀드",
+    "농금원",
+    "농업정책보험금융원",
+    "증권금융",
+]
+
+LP_ALLOCATOR_EVENT_WORDS = [
+    "출자",
+    "위탁운용",
+    "운용사",
+    "GP",
+    "낙점",
+    "선정",
+    "지원",
+    "접전",
+    "숏리스트",
+    "서류심사",
+    "배정",
+    "회수시장지원펀드",
+]
+
+GP_CAPITAL_EVENT_KEYWORDS = [
+    "사모채",
+    "사모사채",
+    "채권 조달",
+    "채권 발행",
+    "투자재원 확보",
+]
+
+PUBLIC_TOPIC_TAGS = {
+    "AI_PE",
+    "NationalGrowthFund",
+    "Deal",
+    "LP",
+    "GP",
+    "Market",
+    "Credit",
+    "Fundraising",
+    "PEF",
+    "Portfolio",
+    "Regulation",
+}
+
+PRIVATE_TOPIC_TAGS = {
+    "daily",
+    "publisher_watch",
+    "deal_watch",
+    "gp_watch",
+    "lp_watch",
+    "allocator",
+    "market_news",
+    "private_credit",
+    "portfolio",
+    "fundraising",
+    "people",
+}
+
 NATIONAL_GROWTH_FUND_MAIN_TOPIC_KEYWORDS = [
     "간접투자",
     "출자사업",
@@ -1518,18 +1638,27 @@ def title_has_non_ai_lp_priority(title: str) -> bool:
 
 
 def has_national_growth_fund_theme(title: str, raw_sections: list[str] | None = None) -> bool:
-    raw_sections = raw_sections or []
-    if "NationalGrowthFund" in raw_sections:
-        return True
-    raw_text = " ".join(raw_sections or [])
-    if not contains_any_keyword(title, SECTION_KEYWORDS["NationalGrowthFund"]):
-        return contains_any_keyword(raw_text, SECTION_KEYWORDS["NationalGrowthFund"])
-    if contains_any_keyword(raw_text, SECTION_KEYWORDS["NationalGrowthFund"]):
-        return True
-    stripped_title = title.lstrip()
-    if stripped_title.startswith("[") and contains_any_keyword(title, SECTION_KEYWORDS["NationalGrowthFund"]):
-        return True
-    return contains_any_keyword(title, NATIONAL_GROWTH_FUND_MAIN_TOPIC_KEYWORDS)
+    return contains_any_keyword(title, SECTION_KEYWORDS["NationalGrowthFund"])
+
+
+def has_national_growth_body_primary_signal(text: str) -> bool:
+    if not contains_any_keyword(text, SECTION_KEYWORDS["NationalGrowthFund"]):
+        return False
+    return contains_any_keyword(
+        text,
+        [
+            "투자 승인",
+            "집행",
+            "위탁사로 선정",
+            "위탁사 선정",
+            "운용사로 선정",
+            "운용사 선정",
+            "국민성장펀드서",
+            "국민성장펀드 위탁사",
+            "국민성장펀드 운용사",
+            "국민성장펀드 잡은",
+        ],
+    )
 
 
 def has_lp_focus_signal(text: str) -> bool:
@@ -1627,9 +1756,73 @@ def has_external_funding_deal_signal(text: str) -> bool:
     return contains_any_keyword(text, EXTERNAL_FUNDING_DEAL_KEYWORDS) or has_specific_equity_transaction_signal(text)
 
 
-def has_gp_national_growth_fund_strategy_signal(title: str, content: str, raw_sections: list[str]) -> bool:
-    if has_national_growth_fund_theme(title, raw_sections):
+def has_title_transaction_signal(title: str) -> bool:
+    if contains_any_keyword(title, ["인수 기회", "투자 기회"]):
         return False
+    if (
+        contains_any_keyword(title, ["인수금융", "리파이낸싱"])
+        and not contains_any_keyword(
+            title,
+            ["투자유치", "매각", "지분", "본계약", "인수전", "인수 추진", "인수 완료", "경영권 인수"],
+        )
+    ):
+        return False
+    if (
+        "세컨더리" in title
+        and contains_any_keyword(title, ["모태펀드", "출자", "펀드 GP", "GP 독주", "지원"])
+        and not contains_any_keyword(title, ["LP 지분", "거래", "매각", "컨티뉴에이션"])
+    ):
+        return False
+    return (
+        contains_any_keyword(title, STRONG_DEAL_KEYWORDS + TITLE_TRANSACTION_KEYWORDS)
+        or has_specific_equity_transaction_signal(title)
+    )
+
+
+def has_primary_lp_event_signal(text: str) -> bool:
+    return contains_any_keyword(text, LP_PRIMARY_EVENT_KEYWORDS)
+
+
+def has_allocator_selection_signal(text: str) -> bool:
+    return contains_any_keyword(text, LP_ALLOCATOR_NAMES) and contains_any_keyword(text, LP_ALLOCATOR_EVENT_WORDS)
+
+
+def has_gp_capital_event_signal(title: str, gp_names: str) -> bool:
+    return bool(str(gp_names or "").strip()) and contains_any_keyword(title, GP_CAPITAL_EVENT_KEYWORDS)
+
+
+def has_aggregate_credit_market_signal(text: str) -> bool:
+    if not has_credit_signal(text):
+        return False
+    return contains_any_keyword(
+        text,
+        [
+            "국내 금융권",
+            "금융권",
+            "연기금",
+            "해외 사모대출",
+            "시스템 리스크",
+            "당국",
+            "리스크 관리",
+            "시장",
+            "스프레드",
+            "사모대출은",
+            "프라이빗크레딧 시장",
+        ],
+    )
+
+
+def has_regulatory_market_signal(text: str) -> bool:
+    return contains_any_keyword(
+        text,
+        ["공정위", "금감원", "금융감독원", "금융위", "당국", "국장 공백", "규제"],
+    ) and contains_any_keyword(
+        text,
+        ["지연", "우려", "검사", "조사", "제재", "리스크", "시장", "책임분담"],
+    )
+
+
+def has_gp_national_growth_fund_strategy_signal(title: str, content: str, raw_sections: list[str]) -> bool:
     if not contains_any_keyword(title, SECTION_KEYWORDS["NationalGrowthFund"]):
         return False
     return contains_any_keyword(content, ["GP", "운용사", "PEF", "PE하우스", "프라이빗에쿼티"]) and contains_any_keyword(
@@ -1664,23 +1857,34 @@ def primary_section(row: dict[str, object]) -> str:
             str(row.get("gp_names", "")),
         ]
     )
-    if has_national_growth_fund_theme(title, raw_sections):
-        return "NationalGrowthFund"
     if has_gp_national_growth_fund_strategy_signal(title, content, raw_sections):
         return "GP"
-    if "GP" in topics and str(row.get("gp_names", "")).strip() and (
-        contains_any_keyword(title, SECTION_KEYWORDS["NationalGrowthFund"])
-        or contains_any_keyword(title, ["전략", "노리는", "드라이 파우더", "레버리지"])
+    if has_national_growth_fund_theme(title, raw_sections):
+        return "NationalGrowthFund"
+    if (
+        "NationalGrowthFund" in topics
+        and contains_any_keyword(content, SECTION_KEYWORDS["NationalGrowthFund"])
+        and has_national_growth_body_primary_signal(content)
+        and not has_primary_lp_event_signal(title)
+        and not has_allocator_selection_signal(title)
+    ):
+        return "NationalGrowthFund"
+    if has_primary_lp_event_signal(title) or has_allocator_selection_signal(title):
+        return "LP"
+    if has_regulatory_market_signal(title):
+        return "Market"
+    if has_gp_capital_event_signal(title, str(row.get("gp_names", ""))):
+        return "GP"
+    if has_fundraising_title_signal(title) and (
+        str(row.get("gp_names", "")).strip() or "GP" in topics or "GP" in raw_sections or has_gp_focus_signal(title)
     ):
         return "GP"
+    if has_title_transaction_signal(title) or has_external_funding_deal_signal(title):
+        return "Deal"
+    if has_aggregate_credit_market_signal(title) and not has_credit_transaction_signal(title):
+        return "Market"
     if has_credit_signal(title) and not has_credit_transaction_signal(title):
         return "Market"
-    if has_external_funding_deal_signal(title):
-        return "Deal"
-    if has_fundraising_title_signal(title) and (
-        str(row.get("gp_names", "")).strip() or "GP" in topics or has_gp_focus_signal(title)
-    ):
-        return "GP"
     if has_credit_signal(title) and (
         has_market_commentary_signal(content)
         or contains_any_keyword(content, ["ASK 2026", "GAIC 2026", "컨퍼런스", "콘퍼런스"])
@@ -1751,6 +1955,98 @@ def primary_section(row: dict[str, object]) -> str:
                 continue
             return section
     return "Market"
+
+
+def tag_value_list(tags: list[dict[str, object]], tag_type: str) -> list[str]:
+    return [str(tag.get("tag_value") or "").strip() for tag in tags if str(tag.get("tag_type") or "") == tag_type]
+
+
+def should_keep_topic_tag(value: str, source: str, section: str, title: str, content: str, gp_names: str) -> bool:
+    if source == "manual_override":
+        return True
+    if not value or value in PRIVATE_TOPIC_TAGS:
+        return False
+    if value == "AI_PE":
+        return section == "AI_PE"
+    if value == "NationalGrowthFund":
+        return section == "NationalGrowthFund" or has_national_growth_fund_theme(title, [])
+    if value == "Market":
+        return section == "Market"
+    if value == "Credit":
+        return has_credit_signal(title) or (section == "Market" and has_credit_signal(content))
+    if value == "Deal":
+        if section == "Market" and has_regulatory_market_signal(title):
+            return False
+        if section == "LP" and has_allocator_selection_signal(title):
+            return False
+        return section == "Deal" or has_title_transaction_signal(title)
+    if value == "Fundraising":
+        return section == "GP" and has_fundraising_title_signal(title)
+    if value == "GP":
+        if section == "GP":
+            return True
+        return bool(gp_names.strip()) and (has_gp_focus_signal(title) or has_fundraising_title_signal(title))
+    if value == "LP":
+        if section == "LP":
+            return True
+        if has_aggregate_credit_market_signal(title) and section == "Market":
+            return False
+        return has_primary_lp_event_signal(title) or title_has_non_ai_lp_priority(title)
+    if value == "Portfolio":
+        return section == "Deal" and contains_any_keyword(content, SECTION_KEYWORDS["Portfolio"])
+    if value == "Regulation":
+        return section == "Market" and contains_any_keyword(content, SECTION_KEYWORDS["Regulation"])
+    if value == "PEF":
+        return section in {"Deal", "GP", "LP", "NationalGrowthFund"}
+    return value in PUBLIC_TOPIC_TAGS
+
+
+def refine_news_tags(
+    tags: list[dict[str, object]],
+    title: str,
+    summary_text: str,
+    gp_names: list[str],
+) -> list[dict[str, object]]:
+    gp_text = ", ".join(name for name in gp_names if name)
+    provisional_row = {
+        "title": title,
+        "summary_text": summary_text,
+        "gp_names": gp_text,
+        "section_tags": ",".join(tag_value_list(tags, "section")),
+        "section_override_tags": ",".join(tag_value_list(tags, "section_override")),
+        "topic_tags": ",".join(tag_value_list(tags, "topic")),
+    }
+    section = primary_section(provisional_row)
+    content = " ".join([title, summary_text, gp_text])
+    refined: list[dict[str, object]] = []
+    for tag in tags:
+        tag_type = str(tag.get("tag_type") or "").strip()
+        value = str(tag.get("tag_value") or "").strip()
+        source = str(tag.get("tag_source") or "").strip()
+        if tag_type == "topic" and not should_keep_topic_tag(value, source, section, title, content, gp_text):
+            continue
+        refined.append(tag)
+    primary_topic_by_section = {
+        "AI_PE": "AI_PE",
+        "NationalGrowthFund": "NationalGrowthFund",
+        "Deal": "Deal",
+        "LP": "LP",
+        "GP": "GP",
+    }
+    primary_topic = primary_topic_by_section.get(section)
+    if primary_topic and not any(
+        str(tag.get("tag_type") or "") == "topic" and str(tag.get("tag_value") or "") == primary_topic
+        for tag in refined
+    ):
+        refined.append(
+            {
+                "tag_type": "topic",
+                "tag_value": primary_topic,
+                "tag_source": "classifier_refine",
+                "confidence": 0.85,
+            }
+        )
+    return dedupe_tags(refined)
 
 
 def quality_sort_key(row: dict[str, object]) -> tuple[float, float, int]:
@@ -2499,10 +2795,10 @@ def main() -> int:
                             "confidence": 1.0,
                         }
                     )
-                tags = score_result["tags"] + manual_tags
+                gp_names = [str(link["entity_name"]) for link in entity_links]
+                tags = refine_news_tags(score_result["tags"] + manual_tags, title, summary_text, gp_names)
                 topic_tags = [str(tag["tag_value"]) for tag in tags if str(tag["tag_type"]) == "topic"]
                 document_type_tags = [str(tag["tag_value"]) for tag in tags if str(tag["tag_type"]) == "document_type"]
-                gp_names = [str(link["entity_name"]) for link in entity_links]
                 comment_text = build_comment(
                     topic_tags,
                     document_type_tags,
