@@ -299,9 +299,9 @@ def read_lp_alias_patterns(db_path: Path = DEFAULT_DB) -> list[dict[str, object]
     finally:
         conn.close()
     extras = {
-        "kdb": ["국민성장펀드", "국민참여형 국민성장펀드"],
         "kvic": ["모태펀드", "한국모태펀드"],
         "kgrowth": ["성장금융"],
+        "moel_iaci": ["산재기금"],
         "nps": ["국민연금"],
         "poba": ["행정공제회"],
     }
@@ -340,7 +340,7 @@ def add_title_matched_lp_article_context(
             continue
         for row in parse_brief(markdown_path):
             url = row.get("url", "")
-            haystack = " ".join([row.get("title", ""), row.get("section", ""), row.get("source", "")])
+            haystack = row.get("title", "")
             matched = 0
             for pattern in patterns:
                 aliases = pattern.get("aliases") if isinstance(pattern.get("aliases"), list) else []

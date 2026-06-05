@@ -392,6 +392,14 @@ def test_kic_lp_alias_seed_feeds_article_context() -> None:
     assert payload[0]["gpNames"] == ["도미누스인베스트먼트", "아이엠엠인베스트먼트"]
 
 
+def test_national_growth_section_does_not_attach_kdb_context() -> None:
+    patterns = read_lp_alias_patterns()
+    kdb = next(pattern for pattern in patterns if pattern["lp_code"] == "kdb")
+    moel_iaci = next(pattern for pattern in patterns if pattern["lp_code"] == "moel_iaci")
+    assert "국민성장펀드" not in kdb["aliases"]
+    assert "산재기금" in moel_iaci["aliases"]
+
+
 def test_context_only_lp_keeps_name_without_broken_profile_link() -> None:
     context = {
         "https://www.sedaily.com/article/test-kic": {
@@ -1439,6 +1447,7 @@ def main() -> int:
         test_official_lp_candidates_are_public_on_notice_surfaces,
         test_article_payload_does_not_render_lp_as_gp_chip,
         test_kic_lp_alias_seed_feeds_article_context,
+        test_national_growth_section_does_not_attach_kdb_context,
         test_context_only_lp_keeps_name_without_broken_profile_link,
         test_national_growth_fund_has_dedicated_section,
         test_national_growth_fund_title_beats_ai_keyword,
