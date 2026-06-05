@@ -284,12 +284,13 @@ def check_generated_lp_wiki_contract() -> list[str]:
 
     if '<strong class="service-title">LP</strong>' not in lp_html:
         raise CheckFailure("LP service title missing")
-    if gp_service_tabs(lp_html) != ["LP", "NOTICE", "PEOPLE"]:
+    expected_lp_tabs = ["출자기관", "출자공고", "선정결과"]
+    if gp_service_tabs(lp_html) != expected_lp_tabs:
         raise CheckFailure(f"LP service tabs mismatch: got {gp_service_tabs(lp_html)}")
-    if gp_service_tabs(lp_notice_html) != ["LP", "NOTICE", "PEOPLE"]:
+    if gp_service_tabs(lp_notice_html) != expected_lp_tabs:
         raise CheckFailure(f"LP notice service tabs mismatch: got {gp_service_tabs(lp_notice_html)}")
-    if 'aria-current="page">NOTICE</a>' not in lp_notice_html:
-        violations.append("lp-official-notices.html:NOTICE tab not current")
+    if 'aria-current="page">출자공고</a>' not in lp_notice_html:
+        violations.append("lp-official-notices.html:notice tab not current")
     if "lp-notice-row" not in lp_notice_html:
         violations.append("lp-official-notices.html:notice rows missing")
     if re.search(r'data-kind="[^"]*\b(public|private|mutual_aid)\b', lp_html):
