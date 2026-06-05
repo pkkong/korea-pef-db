@@ -355,7 +355,11 @@ notice_rows AS (
         CASE
             WHEN event_type = 'shortlist' OR notice_stage = 'shortlist' THEN 1
             ELSE 0
-        END AS is_shortlist
+        END AS is_shortlist,
+        CASE
+            WHEN event_type = 'cancellation' THEN 1
+            ELSE 0
+        END AS is_cancellation
     FROM normalized_rows
     WHERE COALESCE(lp_code, '') <> ''
       AND COALESCE(event_type, '') <> ''
@@ -403,6 +407,7 @@ notice_rollup AS (
         SUM(is_open_notice) AS open_count,
         SUM(is_shortlist) AS shortlist_count,
         SUM(is_final_selection) AS final_selection_count,
+        SUM(is_cancellation) AS cancellation_count,
         ROUND(SUM(COALESCE(allocation_amount_krw_100mn, 0)), 4) AS allocation_amount_krw_100mn_sum,
         ROUND(SUM(COALESCE(commitment_amount_krw_100mn, 0)), 4) AS commitment_amount_krw_100mn_sum,
         ROUND(SUM(COALESCE(allocation_amount_krw_100mn, commitment_amount_krw_100mn, 0)), 4) AS amount_krw_100mn_sum,
@@ -443,6 +448,7 @@ SELECT
     r.open_count,
     r.shortlist_count,
     r.final_selection_count,
+    r.cancellation_count,
     COALESCE(gp.selected_gp_count, 0) AS selected_gp_count,
     r.allocation_amount_krw_100mn_sum,
     r.commitment_amount_krw_100mn_sum,
@@ -459,6 +465,7 @@ SELECT
     r.next_application_deadline,
     r.latest_application_deadline,
     CASE
+        WHEN r.cancellation_count > 0 THEN 'cancellation'
         WHEN r.open_count > 0 THEN 'open'
         WHEN r.final_selection_count > 0 THEN 'final_selection'
         WHEN r.shortlist_count > 0 THEN 'shortlist'

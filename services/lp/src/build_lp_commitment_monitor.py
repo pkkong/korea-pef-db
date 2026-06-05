@@ -827,6 +827,15 @@ GENERIC_PROGRAM_NAMES = {
 }
 
 
+def _normalize_program_name_text(value: object) -> str:
+    return re.sub(r"[^0-9A-Za-z가-힣]", "", normalize_whitespace(str(value or "")))
+
+
+def is_generic_program_name(value: str) -> bool:
+    normalized = _normalize_program_name_text(value)
+    return normalized in {_normalize_program_name_text(item) for item in GENERIC_PROGRAM_NAMES}
+
+
 def clean_program_candidate(value: object) -> str:
     text = normalize_whitespace(str(value or ""))
     if not text:
@@ -834,11 +843,35 @@ def clean_program_candidate(value: object) -> str:
     text = re.sub(r"^[【\[]?선정(?:공고|결과)?[】\]]?\s*", "", text)
     text = re.sub(r"^[\"'「『\(\[\s]+|[\"'」』\)\]\s]+$", "", text)
     text = re.sub(r"\((?:\d+차|\d+호|상반기|하반기|수시|정시)\)?", "", text)
+    text = re.sub(r"(?:\(|\[)?(?:\d+차|\d+호)\)?$", "", text)
     text = re.sub(r"\s+\d+호$", "", text)
-    text = re.sub(r"\s+(?:위탁운용사|업무집행조합원|GP)\s*.*$", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s+(?:선정계획|선정 결과|서류심사 결과|정량평가 결과|출자사업 계획)\s*$", "", text)
+    text = re.sub(r"\s+(?:위탁운용사|업무집행조합원|GP|운용사|운용사 선정)\s*.*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+(?:선정계획|선정 결과|선정 결과 발표|서류심사 결과|정량평가 결과|출자사업 계획|운용사 선정 계획)\s*$", "", text)
     text = re.sub(r"\s+공고(?:문)?$", "", text)
-    return normalize_whitespace(text).strip(" -·:;")
+    text = normalize_whitespace(text).strip(" -·:;")
+    return text
+
+
+def _program_candidates_from_brackets(raw: str, patterns: list[str]) -> list[str]:
+    candidates: list[str] = []
+    for pattern in patterns:
+        for match in re.finditer(pattern, raw):
+            candidate = clean_program_candidate(match.group(1))
+            if candidate:
+                candidates.append(candidate)
+    return candidates
+
+
+def _program_candidates_from_tokens(raw: str) -> list[str]:
+    candidates: list[str] = []
+    for match in re.finditer(
+        r"([가-힣A-Za-z0-9&·ㆍ\-\s]{2,90}(?:펀드|출자사업|투자조합|계정|리그|특정투자지주|전략펀드)(?:\([^)]*\))?)",
+        raw,
+    ):
+        candidate = clean_program_candidate(match.group(1))
+        if candidate:
+            candidates.append(candidate)
+    return candidates
 
 
 def program_candidates(text: str) -> list[str]:
@@ -846,44 +879,43 @@ def program_candidates(text: str) -> list[str]:
     if not raw:
         return []
     candidates: list[str] = []
-    for pattern in [
+    quote_patterns = [
         r"[「『\"]([^」』\"]{2,80}(?:펀드|출자사업|투자조합|계정|리그|분야)(?:\([^)]*\))?[^」』\"]*)[」』\"]",
         r"[\[【]([^\]】]{2,80}(?:펀드|출자사업|투자조합|계정|리그|분야)(?:\([^)]*\))?[^\]】]*)[\]】]",
-    ]:
-        candidates.extend(match.group(1) for match in re.finditer(pattern, raw))
+    ]
+    candidates.extend(_program_candidates_from_brackets(raw, quote_patterns))
     titleish = re.split(r"(?:\n|\. | \| )", raw, maxsplit=1)[0]
     titleish = re.sub(r"^[^,，:：]{1,18}[,，:：]\s*", "", titleish)
-    candidates.extend(
-        match.group(1)
-        for match in re.finditer(
-            r"([가-힣A-Za-z0-9&·ㆍ\-\s]{2,80}(?:펀드|출자사업|투자조합|계정)(?:\([^)]*\))?)",
-            titleish,
-        )
-    )
-    candidates.extend(
-        match.group(1)
-        for match in re.finditer(
-            r"([가-힣A-Za-z0-9&·ㆍ\-\s]{2,80}(?:펀드|출자사업|투자조합|계정)(?:\([^)]*\))?)",
-            raw,
-        )
-    )
+    candidates.extend(_program_candidates_from_tokens(titleish))
+    candidates.extend(_program_candidates_from_tokens(raw))
     cleaned: list[str] = []
     for candidate in candidates:
         value = clean_program_candidate(candidate)
         if value and value not in cleaned:
             cleaned.append(value)
-    cleaned.sort(key=lambda value: (value in GENERIC_PROGRAM_NAMES, -len(value), value))
+    generic_lookup = {_normalize_program_name_text(name): True for name in GENERIC_PROGRAM_NAMES}
+
+    def score(value: str) -> tuple[int, int, int, str]:
+        normalized = _normalize_program_name_text(value)
+        has_generic_core = 1 if generic_lookup.get(normalized, False) else 0
+        long_bonus = -len(value)
+        has_round = 1 if re.search(r"(\d+차|\d+호)", value) else 0
+        return (has_generic_core, long_bonus, -has_round, value)
+
+    cleaned.sort(key=score)
     return cleaned
 
 
 def infer_program_name(text: str) -> str:
-    for candidate in program_candidates(text):
-        if candidate not in GENERIC_PROGRAM_NAMES:
+    candidates = program_candidates(text)
+    for candidate in candidates:
+        if not is_generic_program_name(candidate):
             return candidate
+    if candidates:
+        return candidates[0]
     for generic in ["공급망안정화기금", "국민성장펀드", "농식품모태펀드", "농림수산식품모태펀드", "모태펀드"]:
         if generic in text:
             return "농식품모태펀드" if generic == "농림수산식품모태펀드" else generic
-    candidates = program_candidates(text)
     return candidates[0] if candidates else ""
 
 
@@ -900,6 +932,16 @@ def infer_round_name(text: str) -> str:
         match = re.search(pattern, text, flags=re.IGNORECASE)
         if match:
             return normalize_whitespace(match.group(1))
+    return ""
+
+
+def infer_round_name_with_fallback(text: str) -> str:
+    round_name = infer_round_name(text)
+    if round_name:
+        return round_name
+    match = re.search(r"\b(\d+(?:차|호))\b", normalize_whitespace(text))
+    if match:
+        return match.group(1)
     return ""
 
 
@@ -2964,6 +3006,7 @@ def make_notice_row(
 ) -> dict[str, object]:
     cleaned_text = normalize_whitespace(text)
     title = normalize_whitespace(title)
+    title_first_text = normalize_whitespace(f"{title}\n{cleaned_text}")
     overrides = official_notice_value_overrides(source_code, title, cleaned_text)
     announced = normalize_date(announced_date) or extract_announcement_date(cleaned_text)
     deadline = str(overrides.get("application_deadline") or "") or extract_deadline(cleaned_text)
@@ -3416,25 +3459,27 @@ def notice_business_key(row: dict[str, object]) -> str:
     text = normalize_whitespace(
         " ".join(
             str(row.get(key) or "")
-            for key in ["title", "program_name", "round_name", "raw_excerpt"]
+    for key in ["title", "program_name", "round_name", "raw_excerpt"]
         )
     )
-    program = infer_program_name(text)
-    round_name = str(row.get("round_name") or "").strip() or infer_round_name(text)
+    stored_program = clean_program_candidate(row.get("program_name"))
+    program = stored_program if stored_program and not is_generic_program_name(stored_program) else infer_program_name(text)
+    if not program:
+        program = clean_program_candidate(str(row.get("program_name") or ""))
+    round_name = str(row.get("round_name") or "").strip() or infer_round_name_with_fallback(text)
     if not program:
         return ""
     return re.sub(r"[^0-9A-Za-z가-힣]", "", f"{program}|{round_name}").lower()
 
 
 def dedupe_candidates(rows: list[dict[str, object]]) -> list[dict[str, object]]:
-    grouped: dict[tuple[object, str, str, str], dict[str, object]] = {}
+    grouped: dict[tuple[object, str, str], dict[str, object]] = {}
     for row in rows:
         business_key = notice_business_key(row)
         key = (
             row.get("lp_code") or "",
             str(row.get("event_type") or ""),
             business_key or normalize_title_key(str(row.get("title") or "")),
-            str(row.get("event_date") or row.get("announced_date") or "")[:10],
         )
         if not key[2]:
             continue

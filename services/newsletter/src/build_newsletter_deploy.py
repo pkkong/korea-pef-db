@@ -494,8 +494,10 @@ def notice_gp_label(value: object, limit: int = 2) -> str:
 
 
 def lp_notice_program_label(item: dict[str, object]) -> str:
-    program = clean_public_lp_text(item.get("programName") or "")
-    round_name = clean_public_lp_text(item.get("roundName") or "")
+    program = lp_notice_specific_program_name(item)
+    round_name = lp_notice_business_round_name(item)
+    program = clean_public_lp_text(program)
+    round_name = clean_public_lp_text(round_name)
     return " ".join(value for value in [program, round_name] if value) or "-"
 
 
@@ -528,9 +530,13 @@ def lp_notice_date(value: object):
 
 def lp_notice_status(item: dict[str, object], report_date: str) -> str:
     event_type = str(item.get("eventType") or "")
-    if event_type in {"final_selection", "shortlist", "performance_update"}:
+    if event_type in {"final_selection", "performance_update"}:
         return "result"
-    if event_type in {"cancellation", "deadline_closed"}:
+    if event_type == "shortlist":
+        return "shortlist"
+    if event_type == "cancellation":
+        return "cancellation"
+    if event_type == "deadline_closed":
         return "closed"
     today = lp_notice_date(report_date)
     deadline = lp_notice_date(item.get("applicationDeadline"))
@@ -546,7 +552,7 @@ def lp_notice_status(item: dict[str, object], report_date: str) -> str:
 
 def lp_notice_public_status(item: dict[str, object], report_date: str) -> str:
     business_status = str(item.get("businessStatus") or "")
-    if business_status in {"open", "result", "closed", "history"}:
+    if business_status in {"open", "shortlist", "result", "closed", "cancellation", "history"}:
         return business_status
     return lp_notice_status(item, report_date)
 
@@ -554,8 +560,10 @@ def lp_notice_public_status(item: dict[str, object], report_date: str) -> str:
 def lp_notice_status_label(status: str) -> str:
     return {
         "open": "진행중",
+        "shortlist": "서류심사",
         "result": "선정결과",
         "closed": "마감",
+        "cancellation": "취소",
         "history": "히스토리",
     }.get(status, "공고")
 
@@ -578,6 +586,10 @@ def lp_notice_stage_label(item: dict[str, object], status: str) -> str:
         return "취소"
     if status == "open":
         return "공고"
+    if status == "shortlist":
+        return "서류심사"
+    if status == "cancellation":
+        return "취소"
     if status == "closed":
         return "마감"
     return "공고"
@@ -726,13 +738,29 @@ def lp_notice_canonical_title(item: dict[str, object]) -> str:
 
 
 def lp_notice_display_group_key(item: dict[str, object]) -> tuple[str, str]:
+    business_key = item.get("businessKey")
     lp_key = str(item.get("lpCode") or item.get("lpName") or "").strip()
+    if isinstance(business_key, (tuple, list)) and len(business_key) >= 2:
+        secondary_key = str(business_key[1] or "").strip()
+        if secondary_key:
+            if "|" in secondary_key:
+                program_key, round_key = secondary_key.split("|", 1)
+                program_key = lp_notice_business_key_text(program_key)
+                round_key = lp_notice_business_key_text(round_key)
+                return lp_key, f"{program_key}|{round_key}" if round_key else program_key
+            clean_key = lp_notice_business_key_text(secondary_key)
+            if clean_key:
+                return lp_key, clean_key
+    elif isinstance(business_key, str):
+        clean_key = lp_notice_business_key_text(business_key)
+        if clean_key:
+            return lp_key, clean_key
     program = lp_notice_specific_program_name(item)
     round_name = lp_notice_business_round_name(item)
     program_key = lp_notice_business_key_text(program)
     round_key = lp_notice_business_key_text(round_name)
     if program_key and program != "-":
-        return lp_key, f"{program_key}|{round_key}"
+        return lp_key, f"{program_key}|{round_key}" if round_key else program_key
     return lp_key, lp_notice_canonical_title(item)
 
 
@@ -870,13 +898,16 @@ def consolidate_lp_notice_display_items(items: list[dict[str, object]]) -> list[
         event_types = {str(event.get("eventType") or "") for event in events if isinstance(event, dict)}
         event_statuses = {str(event.get("status") or "") for event in events if isinstance(event, dict)}
         if "cancellation" in event_types:
-            row["businessStatus"] = "closed"
+            row["businessStatus"] = "cancellation"
             row["businessStageLabel"] = "취소"
         elif "final_selection" in event_types:
             row["businessStatus"] = "result"
             row["businessStageLabel"] = "선정완료"
-        elif "shortlist" in event_types:
+        elif "result" in event_statuses:
             row["businessStatus"] = "result"
+            row["businessStageLabel"] = "선정완료"
+        elif "shortlist" in event_types:
+            row["businessStatus"] = "shortlist"
             row["businessStageLabel"] = "서류심사"
         elif "open" in event_statuses:
             row["businessStatus"] = "open"
@@ -887,6 +918,7 @@ def consolidate_lp_notice_display_items(items: list[dict[str, object]]) -> list[
         else:
             row["businessStatus"] = "history"
             row["businessStageLabel"] = "히스토리"
+        row["businessStatus"] = str(row.get("businessStatus") or "history")
         if events:
             latest = events[0]
             row["latestEventDate"] = latest.get("eventDate") or row.get("eventDate")
@@ -2749,16 +2781,31 @@ def render_lp_notices_page(
     search_placeholder = "공고명, LP, GP 검색" if is_notice_view else "LP명, 자산군 검색"
     if is_notice_view:
         notices = consolidate_lp_notice_display_items(notices)
+    notice_status_counts = {
+        status: len([item for item in notices if lp_notice_public_status(item, report_date) == status])
+        for status in ["open", "shortlist", "result", "closed", "cancellation", "history"]
+    }
     notice_groups = [
-        ("open", "진행중 공고", [item for item in notices if lp_notice_public_status(item, report_date) == "open"]),
-        ("result", "선정결과", [item for item in notices if lp_notice_public_status(item, report_date) == "result"]),
+        ("open", "진행중", [item for item in notices if lp_notice_public_status(item, report_date) == "open"]),
+        ("shortlist", "서류심사", [item for item in notices if lp_notice_public_status(item, report_date) == "shortlist"]),
+        ("result", "선정완료", [item for item in notices if lp_notice_public_status(item, report_date) == "result"]),
+        ("closed", "마감", [item for item in notices if lp_notice_public_status(item, report_date) == "closed"]),
+        (
+            "cancellation",
+            "취소",
+            [
+                item
+                for item in notices
+                if lp_notice_public_status(item, report_date) == "cancellation"
+            ],
+        ),
         (
             "history",
             "히스토리",
             [
                 item
                 for item in notices
-                if lp_notice_public_status(item, report_date) in {"closed", "history"}
+                if lp_notice_public_status(item, report_date) == "history"
             ],
         ),
     ]
@@ -2795,9 +2842,23 @@ def render_lp_notices_page(
     visible_notice_count = len(notices)
     total_amount = sum(float(item.get("allocation_amount_krw_100mn") or 0) for item in directory_rows)
     if is_notice_view:
-        open_count = len([item for item in notices if lp_notice_public_status(item, report_date) == "open"])
-        result_count = len([item for item in notices if lp_notice_public_status(item, report_date) == "result"])
-        history_count = len([item for item in notices if lp_notice_public_status(item, report_date) in {"closed", "history"}])
+        open_count = notice_status_counts.get("open", 0)
+        shortlist_count = notice_status_counts.get("shortlist", 0)
+        result_count = notice_status_counts.get("result", 0)
+        closed_count = notice_status_counts.get("closed", 0)
+        cancellation_count = notice_status_counts.get("cancellation", 0)
+        history_count = notice_status_counts.get("history", 0)
+        default_notice_status = "open" if open_count > 0 else "all"
+        notice_status_tabs = f"""
+        <div class="lp-notice-status-tabs" role="tablist" aria-label="출자공고 상태">
+          <button class="lp-notice-status-tab" type="button" data-status="all">전체 <span>{visible_notice_count:,}</span></button>
+          <button class="lp-notice-status-tab" type="button" data-status="open">진행중 <span>{open_count:,}</span></button>
+          <button class="lp-notice-status-tab" type="button" data-status="shortlist">서류심사 <span>{shortlist_count:,}</span></button>
+          <button class="lp-notice-status-tab" type="button" data-status="result">선정완료 <span>{result_count:,}</span></button>
+          <button class="lp-notice-status-tab" type="button" data-status="closed">마감 <span>{closed_count:,}</span></button>
+          <button class="lp-notice-status-tab" type="button" data-status="cancellation">취소 <span>{cancellation_count:,}</span></button>
+          <button class="lp-notice-status-tab" type="button" data-status="history">히스토리 <span>{history_count:,}</span></button>
+        </div>"""
         notice_amount = sum(
             lp_notice_amount_label(item)[1]
             for item in notices
@@ -2811,7 +2872,9 @@ def render_lp_notices_page(
         notice_summary_html = f"""
         <div class="lp-notice-summary" aria-label="출자공고 요약">
           <span>진행중 <strong>{open_count:,}</strong></span>
-          <span>선정결과 <strong>{result_count:,}</strong></span>
+          <span>서류심사 <strong>{shortlist_count:,}</strong></span>
+          <span>선정완료 <strong>{result_count:,}</strong></span>
+          <span>취소 <strong>{cancellation_count:,}</strong></span>
           <span>히스토리 <strong>{history_count:,}</strong></span>
           <span>전체 <strong>{visible_notice_count:,}</strong></span>
         </div>"""
@@ -2903,20 +2966,21 @@ def render_lp_notices_page(
         notice_section = f"""
       <section class="section-block" id="lpNotices" aria-label="LP 공식 공고">
 {notice_summary_html}
+{notice_status_tabs}
         <div class="lp-notice-toolbar">
           <div class="lp-control-head">
             <label for="{search_input_id}">공고 필터</label>
             <span id="lpNoticeVisibleCount">{visible_notice_count}건 표시</span>
           </div>
-          <div class="lp-control-line lp-notice-controls">
-            <select id="lpNoticeFilter" aria-label="필터">
+        <div class="lp-control-line lp-notice-controls">
+            <select id="lpNoticeFilter" class="lp-notice-status-legacy" aria-label="필터">
               <option value="all">전체</option>
               <option value="open">진행중</option>
-              <option value="deadline-soon">마감 임박</option>
+              <option value="shortlist">서류심사</option>
               <option value="result">선정결과</option>
               <option value="closed">마감</option>
+              <option value="cancellation">취소</option>
               <option value="history">히스토리</option>
-              <option value="has-gp">GP 연결</option>
             </select>
             <select id="lpNoticeYearFilter" aria-label="연도">
               <option value="all">전체 연도</option>
@@ -3019,6 +3083,56 @@ def render_lp_notices_page(
     .lp-directory-metrics dt {{ display: none; }}
     .lp-directory-metrics dd {{ margin: 0; color: var(--text); font-size: 13px; font-weight: 800; overflow-wrap: anywhere; }}
     .lp-notice-toolbar {{ display: grid; gap: 9px; margin-bottom: 12px; }}
+    .lp-notice-status-tabs {{
+      position: relative;
+      display: flex;
+      gap: 16px;
+      overflow: auto;
+      padding: 0 2px 12px;
+      border-bottom: 1px solid var(--separator);
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }}
+    .lp-notice-status-tabs::-webkit-scrollbar {{
+      display: none;
+    }}
+    .lp-notice-status-tab {{
+      flex: 0 0 auto;
+      appearance: none;
+      border: 0;
+      border-radius: 0;
+      margin: 0;
+      padding: 0 0 8px;
+      min-height: 34px;
+      background: transparent;
+      color: var(--secondary);
+      font-size: 12.5px;
+      font-weight: 660;
+      letter-spacing: 0;
+      line-height: 1.2;
+      font-family: inherit;
+      cursor: pointer;
+      transition: color 0.15s ease;
+    }}
+    .lp-notice-status-tab span {{
+      margin-left: 6px;
+      color: #9aa0a6;
+      font-size: 11.5px;
+      font-weight: 650;
+    }}
+    .lp-notice-status-tab:hover,
+    .lp-notice-status-tab:focus-visible {{
+      color: var(--text);
+      outline: none;
+    }}
+    .lp-notice-status-tab.active {{
+      color: var(--text);
+      font-weight: 780;
+      border-bottom: 2px solid #111214;
+    }}
+    .lp-notice-status-tab.active span {{
+      color: var(--text);
+    }}
     .lp-control-head {{ display: flex; gap: 10px; align-items: center; justify-content: space-between; color: var(--secondary); font-size: 12px; font-weight: 850; }}
     .lp-control-line {{ display: grid; gap: 8px; }}
     .lp-notice-toolbar input {{ width: 100%; min-height: 42px; border: 1px solid var(--separator); border-radius: 8px; padding: 8px 11px; background: var(--surface); color: var(--text); font-size: 14px; }}
@@ -4188,6 +4302,12 @@ def render_lp_notices_page(
       font-size: 13px;
       font-weight: 620;
     }}
+    body.lp-official-notices-page .lp-notice-status-legacy {{
+      display: none;
+    }}
+    body.lp-official-notices-page .lp-notice-toolbar select {{
+      background: #f8f9fa;
+    }}
     body.lp-official-notices-page .lp-notice-groups {{
       gap: 12px;
     }}
@@ -4215,10 +4335,13 @@ def render_lp_notices_page(
     body.lp-official-notices-page .lp-notice-row {{
       display: grid;
       grid-template-columns: minmax(0, 1fr);
-      gap: 11px;
-      padding: 14px 13px;
-      border: 1px solid #e4e6ea;
-      border-radius: 9px;
+      gap: 9px;
+      padding: 14px 12px;
+      border-top: 1px solid var(--separator);
+      border-right: 0;
+      border-bottom: 0;
+      border-left: 0;
+      border-radius: 0;
       background: #ffffff;
       box-shadow: none;
     }}
@@ -4261,7 +4384,7 @@ def render_lp_notices_page(
     body.lp-official-notices-page .lp-notice-main h2 {{
       margin: 0;
       color: #111214;
-      font-size: 17px;
+      font-size: 16px;
       font-weight: 830;
       line-height: 1.38;
       overflow-wrap: anywhere;
@@ -4278,10 +4401,25 @@ def render_lp_notices_page(
       line-height: 1.45;
       overflow-wrap: anywhere;
     }}
+    body.lp-official-notices-page .lp-notice-summary-meta {{
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 1px 0 0;
+      color: #8a8f98;
+      font-size: 11.8px;
+      font-weight: 640;
+      line-height: 1.35;
+    }}
+    body.lp-official-notices-page .lp-notice-summary-meta span + span::before {{
+      margin-right: 8px;
+      content: "·";
+      color: #b8bcc2;
+    }}
     body.lp-official-notices-page .lp-notice-facts {{
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px 12px;
+      gap: 9px 14px;
       margin: 0;
     }}
     body.lp-official-notices-page .lp-notice-facts div {{
@@ -4365,8 +4503,8 @@ def render_lp_notices_page(
       }}
       body.lp-official-notices-page .lp-notice-row {{
         grid-template-columns: minmax(280px, 1fr) minmax(330px, 0.95fr);
-        gap: 13px 18px;
-        padding: 16px 18px;
+        gap: 10px 18px;
+        padding: 14px 16px;
       }}
       body.lp-official-notices-page .lp-notice-facts {{
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -4409,6 +4547,7 @@ def render_lp_notices_page(
       const noticeYearFilter = document.getElementById("lpNoticeYearFilter");
       const noticeAssetFilter = document.getElementById("lpNoticeAssetFilter");
       const noticeLpFilter = document.getElementById("lpNoticeLpFilter");
+      const noticeStatusTabs = Array.from(document.querySelectorAll(".lp-notice-status-tab"));
       const directory = document.querySelector(".lp-directory-grid");
       const noticeGroups = Array.from(document.querySelectorAll(".lp-notice-group"));
       const yearSummaryRows = Array.from(document.querySelectorAll("[data-summary-year]"));
@@ -4419,20 +4558,29 @@ def render_lp_notices_page(
       const noticeCards = Array.from(document.querySelectorAll(".lp-notice-row"));
       const params = new URLSearchParams(window.location.search);
       const requestedStatus = params.get("status");
-      const resultTab = document.querySelector(".lp-result-tab");
-      if (requestedStatus && noticeFilter && Array.from(noticeFilter.options).some((option) => option.value === requestedStatus)) {{
-        noticeFilter.value = requestedStatus;
-      }}
-      if (requestedStatus === "result" && resultTab) {{
-        resultTab.classList.add("active");
-        resultTab.setAttribute("aria-current", "page");
-        document.querySelectorAll(".lp-section-tabs .brief-section-tab").forEach((tab) => {{
-          if (tab !== resultTab && tab.textContent?.trim() === "출자공고") {{
-            tab.classList.remove("active");
+      const setStatusTabActive = (status) => {{
+        noticeStatusTabs.forEach((tab) => {{
+          const active = tab.dataset.status === status;
+          tab.classList.toggle("active", active);
+          if (active) {{
+            tab.setAttribute("aria-current", "page");
+          }} else {{
             tab.removeAttribute("aria-current");
           }}
         }});
+      }};
+      const syncNoticeStatus = (value) => {{
+        if (noticeFilter && Array.from(noticeFilter.options).some((option) => option.value === value)) {{
+          noticeFilter.value = value;
+        }}
+        setStatusTabActive(value);
+        applyNotices();
+      }};
+      const defaultNoticeStatus = (new Set(["open", "shortlist", "result", "closed", "cancellation", "history"]).has(requestedStatus) && requestedStatus) ? requestedStatus : "all";
+      if (noticeFilter) {{
+        noticeFilter.value = defaultNoticeStatus;
       }}
+      setStatusTabActive(defaultNoticeStatus);
       const num = (card, key) => {{
         const value = Number(card.dataset[key]);
         return Number.isFinite(value) ? value : 0;
@@ -4527,6 +4675,12 @@ def render_lp_notices_page(
         applyNotices();
       }});
       noticeFilter?.addEventListener("change", applyNotices);
+      noticeStatusTabs.forEach((tab) => {{
+        tab.addEventListener("click", () => {{
+          const value = String(tab.dataset.status || "all");
+          syncNoticeStatus(value);
+        }});
+      }});
       noticeYearFilter?.addEventListener("change", applyNotices);
       noticeAssetFilter?.addEventListener("change", applyNotices);
       noticeLpFilter?.addEventListener("change", applyNotices);
@@ -4784,11 +4938,26 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
         else "-"
     )
     fact_rows: list[str] = []
+    summary_meta: list[str] = []
+    if deadline_value != "-":
+        summary_meta.append(f"마감일 {deadline_value}")
+    if amount != "-":
+        summary_meta.append(f"출자규모 {amount}")
+    if event_date_value != "-":
+        summary_meta.append(f"최근 업데이트 {event_date_value}")
+    if summary_meta:
+        summary_meta_html = " ".join(
+            f"<span>{html_escape(meta)}</span>" for meta in summary_meta[:2]
+        )
+    else:
+        summary_meta_html = ""
+    if summary_meta_html:
+        summary_meta_html = f"<p class=\"lp-notice-summary-meta\">{summary_meta_html}</p>"
+    else:
+        summary_meta_html = ""
     for label, value in [
         ("LP", html_escape(lp_name)),
-        ("마감일", deadline_detail if deadline_value != "-" else ""),
         ("최근 업데이트", event_date_detail if event_date_value != "-" else ""),
-        ("출자규모", html_escape(amount) if amount != "-" else ""),
         ("자산/전략", html_escape(type_label) if type_label != "-" else ""),
         ("플랫폼", html_escape(platform_label) if platform_label else ""),
         ("선정 GP", html_escape(selected_label) if selected_label != "-" else ""),
@@ -4850,6 +5019,7 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
             <div class="lp-notice-main">
               <p class="lp-notice-kicker"><span class="lp-notice-status">{html_escape(stage_label or status_label)}</span><span>{html_escape(lp_name)}</span></p>
               <h2>{linked_title}</h2>
+              {summary_meta_html}
               {summary_html}
             </div>
             <dl class="lp-notice-facts">
