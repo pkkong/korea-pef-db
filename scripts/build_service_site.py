@@ -782,6 +782,14 @@ def split_context_names(value: object) -> list[str]:
     return [part.strip() for part in re.split(r"[,;]", str(value or "")) if part.strip()]
 
 
+def split_lp_name_values(value: object) -> list[str]:
+    if isinstance(value, (list, tuple, set)):
+        parts = [str(item or "") for item in value]
+    else:
+        parts = re.split(r"[,;]", str(value or ""))
+    return [part.strip() for part in parts if part and part.strip()]
+
+
 def entity_name_key(value: object) -> str:
     return re.sub(r"[\s·ㆍ.,()\\[\\]{}'\"`]+", "", str(value or "").strip()).lower()
 
@@ -939,6 +947,123 @@ def lp_dedupe_title(title: str) -> str:
     return re.sub(r"[^0-9A-Za-z가-힣]", "", text).lower()
 
 
+GENERIC_LP_PROGRAM_NAMES = {
+    "국민성장펀드",
+    "모태펀드",
+    "농식품모태펀드",
+    "농림수산식품모태펀드",
+    "공급망안정화기금",
+}
+
+
+def clean_lp_program_candidate(value: object) -> str:
+    text = normalize_whitespace(str(value or ""))
+    if not text:
+        return ""
+    text = re.sub(r"^[【\[]?선정(?:공고|결과)?[】\]]?\s*", "", text)
+    text = re.sub(r"^[\"'「『\(\[\s]+|[\"'」』\)\]\s]+$", "", text)
+    text = re.sub(r"\((?:\d+차|\d+호|상반기|하반기|수시|정시)\)?", "", text)
+    text = re.sub(r"\s+\d+호$", "", text)
+    text = re.sub(r"\s+(?:위탁운용사|업무집행조합원|GP)\s*.*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+(?:선정계획|선정 결과|서류심사 결과|정량평가 결과|출자사업 계획)\s*$", "", text)
+    text = re.sub(r"\s+공고(?:문)?$", "", text)
+    return normalize_whitespace(text).strip(" -·:;")
+
+
+def lp_program_candidates(text: object) -> list[str]:
+    raw = normalize_whitespace(str(text or ""))
+    if not raw:
+        return []
+    candidates: list[str] = []
+    for pattern in [
+        r"[「『\"]([^」』\"]{2,80}(?:펀드|출자사업|투자조합|계정|리그|분야)(?:\([^)]*\))?[^」』\"]*)[」』\"]",
+        r"[\[【]([^\]】]{2,80}(?:펀드|출자사업|투자조합|계정|리그|분야)(?:\([^)]*\))?[^\]】]*)[\]】]",
+    ]:
+        candidates.extend(match.group(1) for match in re.finditer(pattern, raw))
+    first_line = re.split(r"(?:\n|\. | \| )", raw, maxsplit=1)[0]
+    first_line = re.sub(r"^[^,，:：]{1,18}[,，:：]\s*", "", first_line)
+    for source in [first_line, raw]:
+        candidates.extend(
+            match.group(1)
+            for match in re.finditer(
+                r"([가-힣A-Za-z0-9&·ㆍ\-\s]{2,80}(?:펀드|출자사업|투자조합|계정)(?:\([^)]*\))?)",
+                source,
+            )
+        )
+    cleaned: list[str] = []
+    for candidate in candidates:
+        value = clean_lp_program_candidate(candidate)
+        if value and value not in cleaned:
+            cleaned.append(value)
+    cleaned.sort(key=lambda value: (value in GENERIC_LP_PROGRAM_NAMES, -len(value), value))
+    return cleaned
+
+
+def lp_specific_program_name(item: dict[str, object]) -> str:
+    for key in ["title", "displayTitle", "rawExcerpt", "programName"]:
+        for candidate in lp_program_candidates(item.get(key)):
+            if candidate not in GENERIC_LP_PROGRAM_NAMES:
+                return candidate
+    for key in ["programName", "title", "displayTitle"]:
+        for candidate in lp_program_candidates(item.get(key)):
+            if candidate:
+                return candidate
+    return clean_lp_program_candidate(item.get("programName"))
+
+
+def lp_business_round_name(item: dict[str, object]) -> str:
+    text = " ".join(str(item.get(key) or "") for key in ["title", "displayTitle", "rawExcerpt"])
+    for pattern in [
+        r"\((\d+차|\d+호)\)",
+        r"(\d+차년도)",
+        r"\b(\d+호)",
+        r"\b(\d+차)\s*(?:출자|공고|선정|간접투자|출항)?",
+        r"(상반기|하반기|정시|수시)\s*(?:출자|공고|선정)?",
+        r"(대형|중형|루키|도전|코스닥|M&A|세컨더리)\s*(?:리그|분야)",
+    ]:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return normalize_whitespace(match.group(1))
+    round_name = normalize_whitespace(str(item.get("roundName") or ""))
+    if round_name:
+        return round_name
+    return ""
+
+
+def lp_business_key_text(value: object) -> str:
+    return re.sub(r"[^0-9A-Za-z가-힣]", "", normalize_whitespace(str(value or ""))).lower()
+
+
+def lp_business_key(item: dict[str, object]) -> tuple[str, str]:
+    lp_key = str(item.get("lpCode") or item.get("lpName") or "").strip()
+    program = lp_specific_program_name(item)
+    round_name = lp_business_round_name(item)
+    program_key = lp_business_key_text(program)
+    if program_key:
+        return lp_key, f"{program_key}|{lp_business_key_text(round_name)}"
+    return lp_key, lp_dedupe_title(str(item.get("title") or ""))
+
+
+def lp_event_group(event_type: object) -> str:
+    value = str(event_type or "")
+    if value in {"new_notice", "deadline_soon", "deadline_closed"}:
+        return "notice"
+    if value in {"shortlist", "final_selection", "revision", "cancellation"}:
+        return value
+    return "history"
+
+
+def is_lp_notice_merge_support_row(row: dict[str, object]) -> bool:
+    if not is_public_lp_notice_row(row, require_official=False, allow_official_candidates=False):
+        source_type = str(row.get("source_type") or "").strip().lower()
+        monitor_status = str(row.get("monitor_status") or "").strip().lower()
+        confidence = str(row.get("confidence") or "").strip().lower()
+        event_type = str(row.get("event_type") or "").strip().lower()
+        if source_type != "news" or monitor_status != "candidate" or event_type == "candidate" or confidence in {"", "low"}:
+            return False
+    return bool(str(row.get("lp_code") or "").strip())
+
+
 def lp_source_priority(item: dict[str, object]) -> int:
     source_code = str(item.get("sourceCode") or "")
     if source_code in PRIMARY_LP_SOURCE_CODES:
@@ -948,13 +1073,17 @@ def lp_source_priority(item: dict[str, object]) -> int:
     return 1
 
 
-def lp_item_quality(item: dict[str, object]) -> tuple[int, int, int, str]:
+def lp_item_quality(item: dict[str, object]) -> tuple[int, ...]:
     has_document = 1 if item.get("documentUrl") or item.get("attachments") else 0
     has_deadline = 1 if item.get("applicationDeadline") else 0
+    has_amount = 1 if item.get("allocationAmount") or item.get("programSize") else 0
+    has_selected_gp = 1 if split_lp_name_values(item.get("selectedGpNames")) else 0
     return (
         lp_source_priority(item),
         has_document,
         has_deadline,
+        has_amount,
+        has_selected_gp,
         str(item.get("eventDate") or ""),
     )
 
@@ -979,6 +1108,15 @@ def lp_public_sort_key(item: dict[str, object]) -> tuple[int, int, int, int]:
 
 def merge_lp_item(primary: dict[str, object], secondary: dict[str, object]) -> dict[str, object]:
     merged = dict(primary)
+    primary_program = lp_specific_program_name(primary)
+    secondary_program = lp_specific_program_name(secondary)
+    if primary_program in {"", *GENERIC_LP_PROGRAM_NAMES} and secondary_program not in {"", *GENERIC_LP_PROGRAM_NAMES}:
+        merged["programName"] = secondary_program
+    elif primary_program:
+        merged["programName"] = primary_program
+    elif secondary_program:
+        merged["programName"] = secondary_program
+    merged["roundName"] = lp_business_round_name(primary) or lp_business_round_name(secondary)
     for key in [
         "applicationDeadline",
         "announcedDate",
@@ -986,8 +1124,9 @@ def merge_lp_item(primary: dict[str, object], secondary: dict[str, object]) -> d
         "assetClass",
         "strategy",
         "purpose",
-        "programName",
-        "roundName",
+        "allocationAmount",
+        "programSize",
+        "amountConfidence",
     ]:
         if not merged.get(key) and secondary.get(key):
             merged[key] = secondary[key]
@@ -995,13 +1134,37 @@ def merge_lp_item(primary: dict[str, object], secondary: dict[str, object]) -> d
         merged["attachments"] = secondary["attachments"]
     if not merged.get("documentUrl") and secondary.get("documentUrl"):
         merged["documentUrl"] = secondary["documentUrl"]
+    selected_names = split_lp_name_values(merged.get("selectedGpNames")) + split_lp_name_values(secondary.get("selectedGpNames"))
+    if selected_names:
+        seen: set[str] = set()
+        merged["selectedGpNames"] = [name for name in selected_names if not (name in seen or seen.add(name))]
+    source_links = list(merged.get("sourceLinks") or [])
+    for source in [primary, secondary]:
+        signature = (str(source.get("url") or ""), str(source.get("documentUrl") or ""))
+        if not signature[0] and not signature[1] and not source.get("attachments"):
+            continue
+        if not any(link.get("signature") == signature for link in source_links):
+            source_links.append(
+                {
+                    "signature": signature,
+                    "sourceType": source.get("sourceType"),
+                    "url": source.get("url"),
+                    "documentUrl": source.get("documentUrl"),
+                    "attachments": source.get("attachments") or [],
+                }
+            )
+    merged["sourceLinks"] = source_links
+    merged["sourceCount"] = len(source_links)
+    merged["publicAnchor"] = bool(primary.get("publicAnchor") or secondary.get("publicAnchor"))
+    merged["businessKey"] = primary.get("businessKey") or secondary.get("businessKey") or lp_business_key(merged)
     return merged
 
 
 def read_lp_monitor(path: Path, limit: int | None = 8) -> list[dict[str, object]]:
     if not path.exists():
         return []
-    grouped: dict[tuple[str, str], dict[str, object]] = {}
+    grouped: dict[tuple[str, str, str, str], dict[str, object]] = {}
+    public_business_keys: set[tuple[str, str]] = set()
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         for row in csv.DictReader(handle):
             title = str(row.get("title") or "").strip()
@@ -1010,7 +1173,8 @@ def read_lp_monitor(path: Path, limit: int | None = 8) -> list[dict[str, object]
                 continue
             if is_lp_notice_supporting_document(title):
                 continue
-            if not is_public_lp_notice_row(row, require_official=True):
+            public_anchor = is_public_lp_notice_row(row, require_official=True)
+            if not public_anchor and not is_lp_notice_merge_support_row(row):
                 continue
             event_date = row.get("event_date", "") or row.get("announced_date", "")
             if event_date and event_date[:10] < LP_PUBLIC_NOTICE_START_DATE:
@@ -1056,15 +1220,26 @@ def read_lp_monitor(path: Path, limit: int | None = 8) -> list[dict[str, object]
                 "confidence": row.get("confidence", ""),
                 "monitorStatus": row.get("monitor_status", ""),
                 "selectedGpNames": split_semicolon(row.get("selected_gp_names", "")),
+                "rawExcerpt": row.get("raw_excerpt", ""),
                 "attachments": attachments,
+                "publicAnchor": public_anchor,
             }
-            dedupe_key = (str(item["lpName"]), lp_dedupe_title(title))
+            business_key = lp_business_key(item)
+            item["businessKey"] = business_key
+            if public_anchor:
+                public_business_keys.add(business_key)
+            dedupe_key = (
+                business_key[0],
+                business_key[1],
+                lp_event_group(item.get("eventType")),
+                str(item.get("eventDate") or item.get("announcedDate") or "")[:10],
+            )
             current = grouped.get(dedupe_key)
             if current is None or lp_item_quality(item) > lp_item_quality(current):
                 grouped[dedupe_key] = merge_lp_item(item, current or {})
             else:
                 grouped[dedupe_key] = merge_lp_item(current, item)
-    rows = list(grouped.values())
+    rows = [item for item in grouped.values() if item.get("businessKey") in public_business_keys]
     rows.sort(key=lp_public_sort_key)
     return rows[:limit] if limit and limit > 0 else rows
 

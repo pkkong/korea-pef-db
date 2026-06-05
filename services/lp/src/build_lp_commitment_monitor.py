@@ -809,6 +809,7 @@ def classify_amounts(text: str) -> dict[str, object]:
     program = max(program_amounts) if program_amounts else None
     if allocation is None and fallback_amounts:
         allocation = max(fallback_amounts)
+    title_first_text = normalize_whitespace(f"{title}\n{cleaned_text}")
     return {
         "allocation_amount_krw_100mn": allocation,
         "program_size_krw_100mn": program,
@@ -817,21 +818,80 @@ def classify_amounts(text: str) -> dict[str, object]:
     }
 
 
+GENERIC_PROGRAM_NAMES = {
+    "국민성장펀드",
+    "모태펀드",
+    "농식품모태펀드",
+    "농림수산식품모태펀드",
+    "공급망안정화기금",
+}
+
+
+def clean_program_candidate(value: object) -> str:
+    text = normalize_whitespace(str(value or ""))
+    if not text:
+        return ""
+    text = re.sub(r"^[【\[]?선정(?:공고|결과)?[】\]]?\s*", "", text)
+    text = re.sub(r"^[\"'「『\(\[\s]+|[\"'」』\)\]\s]+$", "", text)
+    text = re.sub(r"\((?:\d+차|\d+호|상반기|하반기|수시|정시)\)?", "", text)
+    text = re.sub(r"\s+\d+호$", "", text)
+    text = re.sub(r"\s+(?:위탁운용사|업무집행조합원|GP)\s*.*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+(?:선정계획|선정 결과|서류심사 결과|정량평가 결과|출자사업 계획)\s*$", "", text)
+    text = re.sub(r"\s+공고(?:문)?$", "", text)
+    return normalize_whitespace(text).strip(" -·:;")
+
+
+def program_candidates(text: str) -> list[str]:
+    raw = normalize_whitespace(text)
+    if not raw:
+        return []
+    candidates: list[str] = []
+    for pattern in [
+        r"[「『\"]([^」』\"]{2,80}(?:펀드|출자사업|투자조합|계정|리그|분야)(?:\([^)]*\))?[^」』\"]*)[」』\"]",
+        r"[\[【]([^\]】]{2,80}(?:펀드|출자사업|투자조합|계정|리그|분야)(?:\([^)]*\))?[^\]】]*)[\]】]",
+    ]:
+        candidates.extend(match.group(1) for match in re.finditer(pattern, raw))
+    titleish = re.split(r"(?:\n|\. | \| )", raw, maxsplit=1)[0]
+    titleish = re.sub(r"^[^,，:：]{1,18}[,，:：]\s*", "", titleish)
+    candidates.extend(
+        match.group(1)
+        for match in re.finditer(
+            r"([가-힣A-Za-z0-9&·ㆍ\-\s]{2,80}(?:펀드|출자사업|투자조합|계정)(?:\([^)]*\))?)",
+            titleish,
+        )
+    )
+    candidates.extend(
+        match.group(1)
+        for match in re.finditer(
+            r"([가-힣A-Za-z0-9&·ㆍ\-\s]{2,80}(?:펀드|출자사업|투자조합|계정)(?:\([^)]*\))?)",
+            raw,
+        )
+    )
+    cleaned: list[str] = []
+    for candidate in candidates:
+        value = clean_program_candidate(candidate)
+        if value and value not in cleaned:
+            cleaned.append(value)
+    cleaned.sort(key=lambda value: (value in GENERIC_PROGRAM_NAMES, -len(value), value))
+    return cleaned
+
+
 def infer_program_name(text: str) -> str:
-    if "공급망안정화기금" in text:
-        return "공급망안정화기금"
-    if "국민성장펀드" in text:
-        return "국민성장펀드"
-    if "농식품모태펀드" in text or "농림수산식품모태펀드" in text:
-        return "농식품모태펀드"
-    if "모태펀드" in text:
-        return "모태펀드"
-    match = re.search(r"([가-힣A-Za-z0-9·\-\s]{2,40}(?:펀드|출자사업))", text)
-    return normalize_whitespace(match.group(1)) if match else ""
+    for candidate in program_candidates(text):
+        if candidate not in GENERIC_PROGRAM_NAMES:
+            return candidate
+    for generic in ["공급망안정화기금", "국민성장펀드", "농식품모태펀드", "농림수산식품모태펀드", "모태펀드"]:
+        if generic in text:
+            return "농식품모태펀드" if generic == "농림수산식품모태펀드" else generic
+    candidates = program_candidates(text)
+    return candidates[0] if candidates else ""
 
 
 def infer_round_name(text: str) -> str:
     patterns = [
+        r"\((\d+차|\d+호)\)",
+        r"(\d+차년도)",
+        r"(\d+호)",
         r"(\d+차\s*(?:출자|공고|선정|간접투자)?)",
         r"(상반기|하반기|정시|수시)\s*(?:출자|공고|선정)?",
         r"(대형|중형|루키|도전|코스닥|M&A|세컨더리)\s*(?:리그|분야)",
@@ -2933,8 +2993,8 @@ def make_notice_row(
         "title": title,
         "event_type": event_type,
         "event_date": announced or report_date,
-        "program_name": infer_program_name(cleaned_text),
-        "round_name": infer_round_name(cleaned_text),
+        "program_name": infer_program_name(title_first_text),
+        "round_name": infer_round_name(title_first_text),
         "announced_date": announced,
         "notice_year": extract_year(announced, cleaned_text, fallback_year),
         "application_deadline": deadline,
@@ -3352,13 +3412,28 @@ def normalize_title_key(title: str) -> str:
     return re.sub(r"[^0-9A-Za-z가-힣]", "", value).lower()
 
 
+def notice_business_key(row: dict[str, object]) -> str:
+    text = normalize_whitespace(
+        " ".join(
+            str(row.get(key) or "")
+            for key in ["title", "program_name", "round_name", "raw_excerpt"]
+        )
+    )
+    program = infer_program_name(text)
+    round_name = str(row.get("round_name") or "").strip() or infer_round_name(text)
+    if not program:
+        return ""
+    return re.sub(r"[^0-9A-Za-z가-힣]", "", f"{program}|{round_name}").lower()
+
+
 def dedupe_candidates(rows: list[dict[str, object]]) -> list[dict[str, object]]:
     grouped: dict[tuple[object, str, str, str], dict[str, object]] = {}
     for row in rows:
+        business_key = notice_business_key(row)
         key = (
             row.get("lp_code") or "",
             str(row.get("event_type") or ""),
-            normalize_title_key(str(row.get("title") or "")),
+            business_key or normalize_title_key(str(row.get("title") or "")),
             str(row.get("event_date") or row.get("announced_date") or "")[:10],
         )
         if not key[2]:
@@ -3390,7 +3465,7 @@ def notice_event_group(event_type: object) -> str:
 
 
 def canonical_notice_key(row: dict[str, object]) -> tuple[str, str, str]:
-    title_key = normalize_title_key(str(row.get("title") or ""))
+    title_key = notice_business_key(row) or normalize_title_key(str(row.get("title") or ""))
     return (
         str(row.get("lp_code") or ""),
         notice_event_group(row.get("event_type")),

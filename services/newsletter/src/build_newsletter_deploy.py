@@ -544,6 +544,13 @@ def lp_notice_status(item: dict[str, object], report_date: str) -> str:
     return "history"
 
 
+def lp_notice_public_status(item: dict[str, object], report_date: str) -> str:
+    business_status = str(item.get("businessStatus") or "")
+    if business_status in {"open", "result", "closed", "history"}:
+        return business_status
+    return lp_notice_status(item, report_date)
+
+
 def lp_notice_status_label(status: str) -> str:
     return {
         "open": "진행중",
@@ -596,6 +603,109 @@ def lp_notice_source_note(item: dict[str, object]) -> str:
     return f"{labels[0]} {len(links)}" if len(links) > 1 else labels[0]
 
 
+GENERIC_LP_PROGRAM_NAMES = {
+    "국민성장펀드",
+    "모태펀드",
+    "농식품모태펀드",
+    "농림수산식품모태펀드",
+    "공급망안정화기금",
+}
+
+
+def clean_lp_program_candidate(value: object) -> str:
+    text = clean_public_lp_text(value)
+    if not text:
+        return ""
+    text = re.sub(r"^[【\[]?선정(?:공고|결과)?[】\]]?\s*", "", text)
+    text = re.sub(r"^[\"'「『\(\[\s]+|[\"'」』\)\]\s]+$", "", text)
+    text = re.sub(r"\((?:\d+차|\d+호|상반기|하반기|수시|정시)\)?", "", text)
+    text = re.sub(r"\s+\d+호$", "", text)
+    text = re.sub(r"\s+(?:위탁운용사|업무집행조합원|GP)\s*.*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+(?:선정계획|선정 결과|서류심사 결과|정량평가 결과|출자사업 계획)\s*$", "", text)
+    text = re.sub(r"\s+공고(?:문)?$", "", text)
+    text = normalize_whitespace(text)
+    return text.strip(" -·:;")
+
+
+def lp_notice_program_candidates(text: object) -> list[str]:
+    raw = clean_public_lp_text(text)
+    if not raw:
+        return []
+    candidates: list[str] = []
+    quoted_patterns = [
+        r"[「『\"]([^」』\"]{2,70}(?:펀드|출자사업|투자조합|계정|리그|분야)(?:\([^)]*\))?[^」』\"]*)[」』\"]",
+        r"[\[【]([^\]】]{2,70}(?:펀드|출자사업|투자조합|계정|리그|분야)(?:\([^)]*\))?[^\]】]*)[\]】]",
+    ]
+    for pattern in quoted_patterns:
+        for match in re.finditer(pattern, raw):
+            candidates.append(match.group(1))
+    simplified = re.sub(r"^[^,，:：]{1,18}[,，:：]\s*", "", raw)
+    for match in re.finditer(r"([가-힣A-Za-z0-9&·ㆍ\-\s]{2,70}(?:펀드|출자사업|투자조합|계정)(?:\([^)]*\))?)", simplified):
+        candidates.append(match.group(1))
+    cleaned: list[str] = []
+    for candidate in candidates:
+        value = clean_lp_program_candidate(candidate)
+        if not value or value in cleaned:
+            continue
+        cleaned.append(value)
+    cleaned.sort(key=lambda value: (value in GENERIC_LP_PROGRAM_NAMES, -len(value), value))
+    return cleaned
+
+
+def lp_notice_specific_program_name(item: dict[str, object]) -> str:
+    sources = [
+        item.get("title"),
+        item.get("displayTitle"),
+        item.get("rawExcerpt"),
+        item.get("programName"),
+    ]
+    for source in sources:
+        for candidate in lp_notice_program_candidates(source):
+            if candidate not in GENERIC_LP_PROGRAM_NAMES:
+                return candidate
+    for source in sources:
+        for candidate in lp_notice_program_candidates(source):
+            if candidate:
+                return candidate
+    program = clean_lp_program_candidate(item.get("programName"))
+    return program or "-"
+
+
+def lp_notice_platform_label(item: dict[str, object]) -> str:
+    values = [item.get("strategy"), item.get("programName"), item.get("title"), item.get("displayTitle")]
+    labels: list[str] = []
+    for value in values:
+        text = clean_public_lp_text(value)
+        for label in GENERIC_LP_PROGRAM_NAMES:
+            if label in text and label not in labels:
+                labels.append(label)
+    return " · ".join(labels)
+
+
+def lp_notice_business_round_name(item: dict[str, object]) -> str:
+    text = " ".join(str(item.get(key) or "") for key in ["title", "displayTitle", "rawExcerpt"])
+    for pattern in [
+        r"\((\d+차)\)",
+        r"\((\d+호)\)",
+        r"(\d+차년도)",
+        r"\b(\d+호)",
+        r"\b(\d+차)\s*(?:출자|공고|선정|간접투자|출항)?",
+        r"(상반기|하반기|정시|수시)\s*(?:출자|공고|선정)?",
+        r"(대형|중형|루키|도전|코스닥|M&A|세컨더리)\s*(?:리그|분야)",
+    ]:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return normalize_whitespace(match.group(1))
+    round_name = clean_public_lp_text(item.get("roundName") or "")
+    if round_name:
+        return round_name
+    return ""
+
+
+def lp_notice_business_key_text(value: object) -> str:
+    return re.sub(r"[^0-9A-Za-z가-힣]", "", clean_public_lp_text(value)).lower()
+
+
 def lp_notice_canonical_title(item: dict[str, object]) -> str:
     title = clean_public_lp_text(item.get("displayTitle") or item.get("title") or "")
     replacements = [
@@ -617,19 +727,13 @@ def lp_notice_canonical_title(item: dict[str, object]) -> str:
 
 def lp_notice_display_group_key(item: dict[str, object]) -> tuple[str, str]:
     lp_key = str(item.get("lpCode") or item.get("lpName") or "").strip()
-    title_key = lp_notice_canonical_title(item)
-    if len(title_key) >= 10:
-        return lp_key, title_key
-    fallback = "|".join(
-        str(value or "").strip().lower()
-        for value in [
-            item.get("programName"),
-            item.get("roundName"),
-            item.get("eventDate") or item.get("announcedDate"),
-            item.get("eventType"),
-        ]
-    )
-    return lp_key, fallback
+    program = lp_notice_specific_program_name(item)
+    round_name = lp_notice_business_round_name(item)
+    program_key = lp_notice_business_key_text(program)
+    round_key = lp_notice_business_key_text(round_name)
+    if program_key and program != "-":
+        return lp_key, f"{program_key}|{round_key}"
+    return lp_key, lp_notice_canonical_title(item)
 
 
 def lp_notice_display_quality(item: dict[str, object]) -> tuple[int, int, int, int, int, str]:
@@ -647,6 +751,20 @@ def lp_notice_link_signature(item: dict[str, object]) -> tuple[str, str]:
 
 def merge_lp_notice_display_item(primary: dict[str, object], secondary: dict[str, object]) -> dict[str, object]:
     merged = dict(primary)
+    primary_program = lp_notice_specific_program_name(primary)
+    secondary_program = lp_notice_specific_program_name(secondary)
+    if primary_program == "-" or (
+        primary_program in GENERIC_LP_PROGRAM_NAMES and secondary_program not in {"-", *GENERIC_LP_PROGRAM_NAMES}
+    ):
+        merged["programName"] = secondary_program
+    else:
+        merged["programName"] = primary_program
+    primary_round = lp_notice_business_round_name(primary)
+    secondary_round = lp_notice_business_round_name(secondary)
+    merged["roundName"] = primary_round or secondary_round
+    platform = lp_notice_platform_label(primary) or lp_notice_platform_label(secondary)
+    if platform:
+        merged["programPlatform"] = platform
     for key in [
         "applicationDeadline",
         "announcedDate",
@@ -687,6 +805,50 @@ def merge_lp_notice_display_item(primary: dict[str, object], secondary: dict[str
             )
     merged["sourceLinks"] = source_links
     merged["sourceCount"] = len(source_links)
+    events = list(merged.get("events") or [])
+    for source in [primary, secondary]:
+        nested_events = source.get("events") if isinstance(source.get("events"), list) else []
+        for nested_event in nested_events:
+            if not isinstance(nested_event, dict):
+                continue
+            nested_notice_id = str(nested_event.get("noticeId") or "")
+            nested_title = clean_public_lp_text(nested_event.get("title") or "")
+            if any(
+                (nested_notice_id and event.get("noticeId") == nested_notice_id)
+                or (not nested_notice_id and nested_title and event.get("title") == nested_title)
+                for event in events
+            ):
+                continue
+            events.append(dict(nested_event))
+        notice_id = str(source.get("noticeId") or "")
+        title = clean_public_lp_text(source.get("title") or source.get("displayTitle") or "")
+        if not notice_id and not title:
+            continue
+        if any((event.get("noticeId") == notice_id and notice_id) or (not notice_id and event.get("title") == title) for event in events):
+            continue
+        event_status = lp_notice_status(source, today_seoul())
+        events.append(
+            {
+                "noticeId": notice_id,
+                "title": title,
+                "eventType": source.get("eventType"),
+                "eventDate": source.get("eventDate") or source.get("announcedDate"),
+                "stage": source.get("stage"),
+                "status": event_status,
+                "stageLabel": lp_notice_stage_label(source, event_status),
+                "sourceType": source.get("sourceType"),
+                "url": source.get("url"),
+                "documentUrl": source.get("documentUrl"),
+            }
+        )
+    events.sort(
+        key=lambda event: (
+            str(event.get("eventDate") or ""),
+            {"new_notice": 1, "deadline_soon": 2, "shortlist": 3, "final_selection": 4}.get(str(event.get("eventType") or ""), 0),
+        ),
+        reverse=True,
+    )
+    merged["events"] = events
     return merged
 
 
@@ -703,7 +865,37 @@ def consolidate_lp_notice_display_items(items: list[dict[str, object]]) -> list[
         else:
             grouped[key] = merge_lp_notice_display_item(current, item)
     rows = list(grouped.values())
-    rows.sort(key=lambda item: str(item.get("eventDate") or item.get("announcedDate") or ""), reverse=True)
+    for row in rows:
+        events = row.get("events") if isinstance(row.get("events"), list) else []
+        event_types = {str(event.get("eventType") or "") for event in events if isinstance(event, dict)}
+        event_statuses = {str(event.get("status") or "") for event in events if isinstance(event, dict)}
+        if "cancellation" in event_types:
+            row["businessStatus"] = "closed"
+            row["businessStageLabel"] = "취소"
+        elif "final_selection" in event_types:
+            row["businessStatus"] = "result"
+            row["businessStageLabel"] = "선정완료"
+        elif "shortlist" in event_types:
+            row["businessStatus"] = "result"
+            row["businessStageLabel"] = "서류심사"
+        elif "open" in event_statuses:
+            row["businessStatus"] = "open"
+            row["businessStageLabel"] = "진행중"
+        elif "closed" in event_statuses:
+            row["businessStatus"] = "closed"
+            row["businessStageLabel"] = "마감"
+        else:
+            row["businessStatus"] = "history"
+            row["businessStageLabel"] = "히스토리"
+        if events:
+            latest = events[0]
+            row["latestEventDate"] = latest.get("eventDate") or row.get("eventDate")
+            row["latestEventType"] = latest.get("eventType") or row.get("eventType")
+            row["latestEventTitle"] = latest.get("title") or row.get("title")
+    rows.sort(
+        key=lambda item: str(item.get("latestEventDate") or item.get("eventDate") or item.get("announcedDate") or ""),
+        reverse=True,
+    )
     return rows
 
 
@@ -2552,20 +2744,21 @@ def render_lp_notices_page(
     active_tab: str = "lp",
 ) -> str:
     is_notice_view = active_tab == "notice"
+    body_class = "lp-notices-page lp-official-notices-page" if is_notice_view else "lp-notices-page"
     search_input_id = "lpOfficialNoticeSearch" if is_notice_view else "lpDirectorySearch"
     search_placeholder = "공고명, LP, GP 검색" if is_notice_view else "LP명, 자산군 검색"
     if is_notice_view:
         notices = consolidate_lp_notice_display_items(notices)
     notice_groups = [
-        ("open", "진행중 공고", [item for item in notices if lp_notice_status(item, report_date) == "open"]),
-        ("result", "선정결과", [item for item in notices if lp_notice_status(item, report_date) == "result"]),
+        ("open", "진행중 공고", [item for item in notices if lp_notice_public_status(item, report_date) == "open"]),
+        ("result", "선정결과", [item for item in notices if lp_notice_public_status(item, report_date) == "result"]),
         (
             "history",
             "히스토리",
             [
                 item
                 for item in notices
-                if lp_notice_status(item, report_date) in {"closed", "history"}
+                if lp_notice_public_status(item, report_date) in {"closed", "history"}
             ],
         ),
     ]
@@ -2602,9 +2795,9 @@ def render_lp_notices_page(
     visible_notice_count = len(notices)
     total_amount = sum(float(item.get("allocation_amount_krw_100mn") or 0) for item in directory_rows)
     if is_notice_view:
-        open_count = len([item for item in notices if lp_notice_status(item, report_date) == "open"])
-        result_count = len([item for item in notices if lp_notice_status(item, report_date) == "result"])
-        history_count = len([item for item in notices if lp_notice_status(item, report_date) in {"closed", "history"}])
+        open_count = len([item for item in notices if lp_notice_public_status(item, report_date) == "open"])
+        result_count = len([item for item in notices if lp_notice_public_status(item, report_date) == "result"])
+        history_count = len([item for item in notices if lp_notice_public_status(item, report_date) in {"closed", "history"}])
         notice_amount = sum(
             lp_notice_amount_label(item)[1]
             for item in notices
@@ -2617,12 +2810,10 @@ def render_lp_notices_page(
         hero_class = "lp-directory-hero lp-notice-hero"
         notice_summary_html = f"""
         <div class="lp-notice-summary" aria-label="출자공고 요약">
-          <div><span>전체</span><strong>{visible_notice_count:,}건</strong></div>
-          <div><span>진행중</span><strong>{open_count:,}건</strong></div>
-          <div><span>선정결과</span><strong>{result_count:,}건</strong></div>
-          <div><span>히스토리</span><strong>{history_count:,}건</strong></div>
-          <div><span>출자규모</span><strong>{html_escape(public_amount_label(notice_amount, fallback="-"))}</strong></div>
-          <div><span>GP 연결</span><strong>{notice_with_gp_count:,}건</strong></div>
+          <span>진행중 <strong>{open_count:,}</strong></span>
+          <span>선정결과 <strong>{result_count:,}</strong></span>
+          <span>히스토리 <strong>{history_count:,}</strong></span>
+          <span>전체 <strong>{visible_notice_count:,}</strong></span>
         </div>"""
     else:
         hero_title = f'<h1 class="lp-directory-title"><strong>{tracked_count}개</strong> 출자기관</h1>'
@@ -2650,9 +2841,9 @@ def render_lp_notices_page(
         f'<option value="{html_escape(year)}">{html_escape(year)}년</option>'
         for year in sorted(
             {
-                str(item.get("eventDate") or item.get("announcedDate") or "")[:4]
+                str(item.get("latestEventDate") or item.get("eventDate") or item.get("announcedDate") or "")[:4]
                 for item in notices
-                if re.match(r"^20\d{2}", str(item.get("eventDate") or item.get("announcedDate") or ""))
+                if re.match(r"^20\d{2}", str(item.get("latestEventDate") or item.get("eventDate") or item.get("announcedDate") or ""))
             },
             reverse=True,
         )
@@ -3938,9 +4129,259 @@ def render_lp_notices_page(
         grid-column: 1 / -1;
       }}
     }}
+    body.lp-official-notices-page .app-shell {{
+      width: min(100%, 980px);
+      background: #ffffff;
+    }}
+    body.lp-official-notices-page .content-area,
+    body.lp-official-notices-page .app-header {{
+      width: min(900px, calc(100% - 28px));
+      max-width: 900px;
+    }}
+    body.lp-official-notices-page .lp-notice-hero {{
+      margin: 10px 0 14px;
+      gap: 5px;
+    }}
+    body.lp-official-notices-page .lp-directory-title {{
+      font-size: 22px !important;
+      font-weight: 830;
+      line-height: 1.24;
+    }}
+    body.lp-official-notices-page .lp-directory-meta {{
+      color: #73777d;
+      font-size: 12px;
+      font-weight: 620;
+    }}
+    body.lp-official-notices-page .lp-notice-summary {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      margin: 0 0 12px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: #73777d;
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.35;
+    }}
+    body.lp-official-notices-page .lp-notice-summary span {{
+      color: #73777d;
+      font-size: 12px;
+      font-weight: 650;
+    }}
+    body.lp-official-notices-page .lp-notice-summary strong {{
+      color: #111214;
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    body.lp-official-notices-page .lp-control-head {{
+      font-size: 12px;
+      font-weight: 700;
+    }}
+    body.lp-official-notices-page .lp-notice-toolbar select {{
+      min-height: 39px;
+      border-color: #e2e4e7;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #202124;
+      font-size: 13px;
+      font-weight: 620;
+    }}
+    body.lp-official-notices-page .lp-notice-groups {{
+      gap: 12px;
+    }}
+    body.lp-official-notices-page .lp-notice-group,
+    body.lp-official-notices-page .lp-notice-group + .lp-notice-group {{
+      padding-top: 0;
+      border-top: 0;
+    }}
+    body.lp-official-notices-page .lp-notice-group .section-title {{
+      margin: 0;
+      padding: 12px 2px 8px;
+      border: 0;
+      background: transparent;
+      color: #111214;
+      font-size: 15.5px;
+      font-weight: 820;
+      line-height: 1.35;
+    }}
+    body.lp-official-notices-page .lp-notice-list {{
+      display: grid;
+      gap: 8px;
+      overflow: visible;
+      background: transparent;
+    }}
+    body.lp-official-notices-page .lp-notice-row {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 11px;
+      padding: 14px 13px;
+      border: 1px solid #e4e6ea;
+      border-radius: 9px;
+      background: #ffffff;
+      box-shadow: none;
+    }}
+    body.lp-official-notices-page .lp-notice-main {{
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }}
+    body.lp-official-notices-page .lp-notice-kicker {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px 8px;
+      align-items: center;
+      margin: 0;
+      color: #73777d;
+      font-size: 12px;
+      font-weight: 670;
+      line-height: 1.3;
+    }}
+    body.lp-official-notices-page .lp-notice-kicker span + span::before {{
+      color: #b8bcc2;
+      content: "·";
+      margin-right: 8px;
+    }}
+    body.lp-official-notices-page .lp-notice-status {{
+      color: #111214;
+      font-size: 12px;
+      font-weight: 850;
+    }}
+    body.lp-official-notices-page .lp-notice-row[data-status="open"] .lp-notice-status {{
+      color: #087f5b;
+    }}
+    body.lp-official-notices-page .lp-notice-row[data-status="result"] .lp-notice-status {{
+      color: #1d4ed8;
+    }}
+    body.lp-official-notices-page .lp-notice-row[data-status="closed"] .lp-notice-status,
+    body.lp-official-notices-page .lp-notice-row[data-status="history"] .lp-notice-status {{
+      color: #667085;
+    }}
+    body.lp-official-notices-page .lp-notice-main h2 {{
+      margin: 0;
+      color: #111214;
+      font-size: 17px;
+      font-weight: 830;
+      line-height: 1.38;
+      overflow-wrap: anywhere;
+    }}
+    body.lp-official-notices-page .lp-notice-main h2 a {{
+      color: inherit;
+      text-decoration: none;
+    }}
+    body.lp-official-notices-page .lp-notice-summary-title {{
+      margin: 0;
+      color: #73777d;
+      font-size: 12.5px;
+      font-weight: 620;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }}
+    body.lp-official-notices-page .lp-notice-facts {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 12px;
+      margin: 0;
+    }}
+    body.lp-official-notices-page .lp-notice-facts div {{
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+      align-content: start;
+    }}
+    body.lp-official-notices-page .lp-notice-facts dt {{
+      color: #8a8f98;
+      font-size: 11.5px;
+      font-weight: 650;
+      line-height: 1.3;
+    }}
+    body.lp-official-notices-page .lp-notice-facts dd {{
+      min-width: 0;
+      margin: 0;
+      color: #202124;
+      font-size: 13px;
+      font-weight: 720;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }}
+    body.lp-official-notices-page .lp-notice-materials {{
+      grid-column: 1 / -1;
+    }}
+    body.lp-official-notices-page .lp-notice-links {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 10px;
+      margin: 0;
+    }}
+    body.lp-official-notices-page .lp-notice-links a {{
+      color: #4f545b;
+      font-size: 12.5px;
+      font-weight: 760;
+      text-decoration: none;
+    }}
+    body.lp-official-notices-page .lp-notice-links a:hover {{
+      color: #111214;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }}
+    body.lp-official-notices-page .lp-notice-timeline {{
+      display: grid;
+      gap: 0;
+      margin: 2px 0 0;
+      padding: 8px 0 0;
+      border-top: 1px solid #edf0f2;
+      list-style: none;
+    }}
+    body.lp-official-notices-page .lp-notice-timeline li {{
+      display: grid;
+      grid-template-columns: 82px 58px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      min-width: 0;
+      padding: 4px 0;
+      color: #73777d;
+      font-size: 11.5px;
+      line-height: 1.35;
+    }}
+    body.lp-official-notices-page .lp-notice-timeline time {{
+      color: #8a8f98;
+      font-weight: 620;
+    }}
+    body.lp-official-notices-page .lp-notice-timeline strong {{
+      color: #4f545b;
+      font-weight: 780;
+    }}
+    body.lp-official-notices-page .lp-notice-timeline span {{
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+    @media (min-width: 760px) {{
+      body.lp-official-notices-page .content-area,
+      body.lp-official-notices-page .app-header {{
+        width: min(900px, calc(100% - 44px));
+      }}
+      body.lp-official-notices-page .lp-notice-row {{
+        grid-template-columns: minmax(280px, 1fr) minmax(330px, 0.95fr);
+        gap: 13px 18px;
+        padding: 16px 18px;
+      }}
+      body.lp-official-notices-page .lp-notice-facts {{
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px 14px;
+      }}
+      body.lp-official-notices-page .lp-notice-timeline {{
+        grid-column: 1 / -1;
+      }}
+      body.lp-official-notices-page .lp-notice-controls {{
+        grid-template-columns: 128px 128px 150px minmax(180px, 1fr) 144px;
+      }}
+    }}
   </style>
 </head>
-<body class="lp-notices-page">
+<body class="{body_class}">
   <div class="app-shell newsletter-only">
     {render_lp_service_header(active_tab, search_input_id, search_placeholder)}
     <main class="content-area">
@@ -4264,36 +4705,61 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
         title = document_title
     lp_code = str(item.get("lpCode") or "")
     lp_name = clean_public_lp_text(item.get("lpName") or "LP 미분류") or "LP 미분류"
-    event_date = str(item.get("eventDate") or item.get("announcedDate") or "")
+    event_date = str(item.get("latestEventDate") or item.get("eventDate") or item.get("announcedDate") or "")
     deadline = str(item.get("applicationDeadline") or "")
-    status = lp_notice_status(item, report_date)
+    status = lp_notice_public_status(item, report_date)
     status_group = "history" if status in {"closed", "history"} else status
     status_label = lp_notice_status_label(status)
-    stage_label = lp_notice_stage_label(item, status)
+    stage_label = clean_public_lp_text(item.get("businessStageLabel") or "") or lp_notice_stage_label(item, status)
     amount, amount_numeric = lp_notice_amount_label(item)
     program_label = lp_notice_program_label(item)
+    business_title = title if program_label == "-" else program_label
+    summary_title = "" if title == business_title else title
+    platform_label = clean_public_lp_text(item.get("programPlatform") or "")
     asset_class = public_asset_class(item.get("assetClass")) if item.get("assetClass") else ""
     strategy = clean_public_lp_text(item.get("strategy") or item.get("purpose") or "")
+    if platform_label and platform_label == strategy:
+        platform_label = ""
     type_label = " · ".join(value for value in [asset_class, strategy] if value) or "-"
     selected_label = notice_gp_label(item.get("selectedGpNames"))
     has_gp = "1" if selected_label != "-" else "0"
-    notice_year = str(item.get("eventDate") or item.get("announcedDate") or "")[:4]
+    notice_year = str(event_date or item.get("eventDate") or item.get("announcedDate") or "")[:4]
     source_label = lp_notice_source_label(item)
-    source_note = lp_notice_source_note(item)
-    result_or_deadline_label = "결과일" if status == "result" else "마감일"
-    result_or_deadline_value = event_date if status == "result" else deadline
     material_links: list[str] = []
-    if url:
-        material_links.append(f'<a href="{html_escape(url)}" target="_blank" rel="noreferrer">원문</a>')
-    if document_url and document_url != url:
-        material_links.append(f'<a href="{html_escape(document_url)}" target="_blank" rel="noreferrer">첨부</a>')
+    used_links: set[str] = set()
+    source_links = item.get("sourceLinks") if isinstance(item.get("sourceLinks"), list) else []
+    if not source_links:
+        source_links = [
+            {"sourceType": item.get("sourceType"), "url": url, "documentUrl": document_url, "attachments": attachments}
+        ]
+    for link in source_links:
+        if not isinstance(link, dict):
+            continue
+        link_url = str(link.get("url") or "")
+        link_doc = str(link.get("documentUrl") or "")
+        link_label = "기사" if str(link.get("sourceType") or "").lower() == "news" else "원문"
+        if link_url and link_url not in used_links:
+            material_links.append(f'<a href="{html_escape(link_url)}" target="_blank" rel="noreferrer">{link_label}</a>')
+            used_links.add(link_url)
+        if link_doc and link_doc not in used_links:
+            material_links.append(f'<a href="{html_escape(link_doc)}" target="_blank" rel="noreferrer">첨부</a>')
+            used_links.add(link_doc)
+        link_attachments = link.get("attachments") if isinstance(link.get("attachments"), list) else []
+        for attachment in link_attachments[:2]:
+            if not isinstance(attachment, dict):
+                continue
+            attachment_url = str(attachment.get("url") or "")
+            if attachment_url and attachment_url not in used_links:
+                material_links.append(f'<a href="{html_escape(attachment_url)}" target="_blank" rel="noreferrer">첨부</a>')
+                used_links.add(attachment_url)
     attachment_index = 1
     for attachment in attachments[:2]:
         if not isinstance(attachment, dict):
             continue
         attachment_url = str(attachment.get("url") or "")
-        if attachment_url and attachment_url not in {url, document_url}:
+        if attachment_url and attachment_url not in used_links:
             material_links.append(f'<a href="{html_escape(attachment_url)}" target="_blank" rel="noreferrer">첨부{attachment_index}</a>')
+            used_links.add(attachment_url)
             attachment_index += 1
     material_links_html = (
         f'<span class="lp-notice-links">{"".join(material_links)}</span>'
@@ -4301,9 +4767,9 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
         else ""
     )
     linked_title = (
-        f'<a href="{html_escape(url)}" target="_blank" rel="noreferrer">{html_escape(title)}</a>'
+        f'<a href="{html_escape(url)}" target="_blank" rel="noreferrer">{html_escape(business_title)}</a>'
         if url
-        else html_escape(title)
+        else html_escape(business_title)
     )
     event_date_value = event_date or "-"
     event_date_detail = (
@@ -4311,51 +4777,62 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
         if event_date_value != "-"
         else "-"
     )
-    deadline_value = result_or_deadline_value or "-"
+    deadline_value = deadline or "-"
     deadline_detail = (
         f'<time datetime="{html_escape(deadline_value)}">{html_escape(deadline_value)}</time>'
         if deadline_value != "-"
         else "-"
     )
-    date_fact = f"""
-              <div>
-                <dt>공고일</dt>
-                <dd>{event_date_detail}</dd>
+    fact_rows: list[str] = []
+    for label, value in [
+        ("LP", html_escape(lp_name)),
+        ("마감일", deadline_detail if deadline_value != "-" else ""),
+        ("최근 업데이트", event_date_detail if event_date_value != "-" else ""),
+        ("출자규모", html_escape(amount) if amount != "-" else ""),
+        ("자산/전략", html_escape(type_label) if type_label != "-" else ""),
+        ("플랫폼", html_escape(platform_label) if platform_label else ""),
+        ("선정 GP", html_escape(selected_label) if selected_label != "-" else ""),
+    ]:
+        if not value:
+            continue
+        fact_rows.append(
+            f"""              <div>
+                <dt>{html_escape(label)}</dt>
+                <dd>{value}</dd>
               </div>"""
-    deadline_fact = f"""
-              <div>
-                <dt>{html_escape(result_or_deadline_label)}</dt>
-                <dd>{deadline_detail}</dd>
-              </div>"""
-    stage_fact = f"""
-              <div>
-                <dt>단계</dt>
-                <dd>{html_escape(stage_label)}</dd>
-              </div>"""
-    amount_fact = f"""
-              <div>
-                <dt>출자규모</dt>
-                <dd>{html_escape(amount)}</dd>
-              </div>"""
-    asset_fact = f"""
-              <div>
-                <dt>자산/전략</dt>
-                <dd>{html_escape(type_label)}</dd>
-              </div>"""
-    selected_fact = f"""
-              <div>
-                <dt>선정 GP</dt>
-                <dd>{html_escape(selected_label)}</dd>
-              </div>"""
-    source_fact = f"""
-              <div class="lp-notice-materials">
+        )
+    if material_links_html:
+        fact_rows.append(
+            f"""              <div class="lp-notice-materials">
                 <dt>자료</dt>
-                <dd>{material_links_html or "-"}</dd>
+                <dd>{material_links_html}</dd>
               </div>"""
+        )
+    facts_html = "\n".join(fact_rows)
+    events = [event for event in item.get("events", []) if isinstance(event, dict)] if isinstance(item.get("events"), list) else []
+    timeline_items: list[str] = []
+    for event in events[:4]:
+        event_title = clean_public_lp_text(event.get("title") or "")
+        event_date_label = str(event.get("eventDate") or "")[:10]
+        event_stage = clean_public_lp_text(event.get("stageLabel") or "") or lp_event_label(event.get("eventType"))
+        timeline_items.append(
+            f"""                <li>
+                  <time>{html_escape(event_date_label or "-")}</time>
+                  <strong>{html_escape(event_stage)}</strong>
+                  <span>{html_escape(event_title)}</span>
+                </li>"""
+        )
+    timeline_html = ""
+    if len(timeline_items) > 1:
+        timeline_html = f"""
+              <ol class="lp-notice-timeline" aria-label="진행 이력">
+{chr(10).join(timeline_items)}
+              </ol>"""
     search_blob = " ".join(
         str(value or "")
         for value in [
             title,
+            business_title,
             lp_name,
             program_label,
             asset_class,
@@ -4365,18 +4842,20 @@ def render_lp_notice_card(item: dict[str, object], report_date: str) -> str:
             strategy,
             selected_label,
             source_label,
+            " ".join(str(event.get("title") or "") for event in events if isinstance(event, dict)),
         ]
     )
-    program_meta = "" if program_label == "-" else f'<p class="lp-notice-program">{html_escape(program_label)}</p>'
+    summary_html = f'<p class="lp-notice-summary-title">{html_escape(summary_title)}</p>' if summary_title else ""
     return f"""              <article class="lp-notice-row" data-search="{html_escape(search_blob)}" data-lp="{html_escape(lp_code)}" data-lp-name="{html_escape(lp_name)}" data-program="{html_escape(program_label)}" data-asset="{html_escape(asset_class)}" data-asset-value="{html_escape(asset_class)}" data-source="{html_escape(source_label)}" data-status="{html_escape(status)}" data-status-group="{html_escape(status_group)}" data-year="{html_escape(notice_year)}" data-date="{html_escape(event_date)}" data-deadline="{html_escape(deadline)}" data-amount="{amount_numeric:.0f}" data-has-gp="{has_gp}">
             <div class="lp-notice-main">
-              <p class="lp-notice-kicker"><span class="lp-notice-status">{html_escape(status_label)}</span><span>{html_escape(source_note)}</span><span>{html_escape(lp_name)}</span></p>
+              <p class="lp-notice-kicker"><span class="lp-notice-status">{html_escape(stage_label or status_label)}</span><span>{html_escape(lp_name)}</span></p>
               <h2>{linked_title}</h2>
-              {program_meta}
+              {summary_html}
             </div>
             <dl class="lp-notice-facts">
-{date_fact}{deadline_fact}{stage_fact}{amount_fact}{asset_fact}{selected_fact}{source_fact}
+{facts_html}
             </dl>
+            {timeline_html}
           </article>"""
 
 

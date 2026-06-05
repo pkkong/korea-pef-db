@@ -251,16 +251,72 @@ WHERE COALESCE(NULLIF(lgl.gp_name, ''), NULLIF(gh.gp_name, ''), '') <> ''
   );
 
 CREATE VIEW v_lp_commitment_lifecycle_compare AS
-WITH notice_rows AS (
+WITH source_rows AS (
+    SELECT
+        *,
+        CASE
+            WHEN INSTR(title, '「') > 0 AND INSTR(title, '」') > INSTR(title, '「')
+            THEN TRIM(SUBSTR(title, INSTR(title, '「') + 1, INSTR(title, '」') - INSTR(title, '「') - 1))
+            WHEN INSTR(title, '『') > 0 AND INSTR(title, '』') > INSTR(title, '『')
+            THEN TRIM(SUBSTR(title, INSTR(title, '『') + 1, INSTR(title, '』') - INSTR(title, '『') - 1))
+            ELSE ''
+        END AS title_program_name
+    FROM v_lp_commitment_notice_public
+),
+normalized_rows AS (
+    SELECT
+        *,
+        TRIM(
+            REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+            REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                CASE
+                    WHEN COALESCE(NULLIF(TRIM(program_name), ''), '') IN (
+                        '국민성장펀드',
+                        '모태펀드',
+                        '농식품모태펀드',
+                        '농림수산식품모태펀드',
+                        '공급망안정화기금'
+                    )
+                     AND COALESCE(NULLIF(TRIM(title_program_name), ''), '') <> ''
+                    THEN title_program_name
+                    ELSE COALESCE(NULLIF(TRIM(program_name), ''), '')
+                END,
+                '(1차)', ''), '(2차)', ''), '(3차)', ''), '(4차)', ''), '(5차)', ''),
+                '(6차)', ''), '(7차)', ''), '(8차)', ''), '(9차)', ''), '(10차)', ''),
+                '(1호)', ''), '(2호)', ''), '(3호)', ''), '(4호)', ''), '(5호)', ''),
+                '(6호)', ''), '(7호)', ''), '(8호)', ''), '(9호)', ''), '(10호)', '')
+        ) AS lifecycle_program_name,
+        CASE
+            WHEN COALESCE(NULLIF(TRIM(round_name), ''), '') <> '' THEN TRIM(round_name)
+            WHEN title_program_name LIKE '%(1차)%' THEN '1차'
+            WHEN title_program_name LIKE '%(2차)%' THEN '2차'
+            WHEN title_program_name LIKE '%(3차)%' THEN '3차'
+            WHEN title_program_name LIKE '%(4차)%' THEN '4차'
+            WHEN title_program_name LIKE '%(5차)%' THEN '5차'
+            WHEN title_program_name LIKE '%(6차)%' THEN '6차'
+            WHEN title_program_name LIKE '%(7차)%' THEN '7차'
+            WHEN title_program_name LIKE '%(8차)%' THEN '8차'
+            WHEN title_program_name LIKE '%(9차)%' THEN '9차'
+            WHEN title_program_name LIKE '%(10차)%' THEN '10차'
+            WHEN title_program_name LIKE '%(1호)%' THEN '1호'
+            WHEN title_program_name LIKE '%(2호)%' THEN '2호'
+            WHEN title_program_name LIKE '%(3호)%' THEN '3호'
+            WHEN title_program_name LIKE '%(4호)%' THEN '4호'
+            WHEN title_program_name LIKE '%(5호)%' THEN '5호'
+            ELSE COALESCE(NULLIF(TRIM(round_name), ''), '')
+        END AS lifecycle_round_name
+    FROM source_rows
+),
+notice_rows AS (
     SELECT
         notice_id,
         lp_code,
         lp_name,
         lp_type,
-        COALESCE(NULLIF(TRIM(program_name), ''), '') AS program_name,
-        COALESCE(NULLIF(TRIM(round_name), ''), '') AS round_name,
-        LOWER(COALESCE(NULLIF(TRIM(program_name), ''), '')) AS program_key,
-        LOWER(COALESCE(NULLIF(TRIM(round_name), ''), '')) AS round_key,
+        COALESCE(NULLIF(TRIM(lifecycle_program_name), ''), '') AS program_name,
+        COALESCE(NULLIF(TRIM(lifecycle_round_name), ''), '') AS round_name,
+        LOWER(REPLACE(REPLACE(REPLACE(COALESCE(NULLIF(TRIM(lifecycle_program_name), ''), ''), ' ', ''), '(', ''), ')', '')) AS program_key,
+        LOWER(REPLACE(REPLACE(REPLACE(COALESCE(NULLIF(TRIM(lifecycle_round_name), ''), ''), ' ', ''), '(', ''), ')', '')) AS round_key,
         notice_year,
         event_type,
         event_date,
@@ -300,7 +356,7 @@ WITH notice_rows AS (
             WHEN event_type = 'shortlist' OR notice_stage = 'shortlist' THEN 1
             ELSE 0
         END AS is_shortlist
-    FROM v_lp_commitment_notice_public
+    FROM normalized_rows
     WHERE COALESCE(lp_code, '') <> ''
       AND COALESCE(event_type, '') <> ''
       AND LOWER(COALESCE(event_type, '')) <> 'candidate'

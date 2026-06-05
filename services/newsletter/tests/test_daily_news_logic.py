@@ -47,13 +47,17 @@ from daily_news_common import (
     to_iso_datetime,
 )
 from build_newsletter_deploy import (
+    consolidate_lp_notice_display_items,
     display_asset_classes,
     filter_service_context_profile_links,
+    lp_notice_program_label,
+    lp_notice_specific_program_name,
     public_coverage_label,
     public_lp_type,
     read_lp_directory_items,
     read_lp_alias_patterns,
     read_lp_profile_codes,
+    render_lp_notice_card,
 )
 from build_service_site import editorial_section
 from build_service_site import article_payload_rows
@@ -314,6 +318,98 @@ def test_official_lp_candidates_are_public_on_notice_surfaces() -> None:
         {**official_candidate, "source_type": "news", "monitor_status": "candidate"},
         require_official=True,
     )
+
+
+def test_lp_notice_title_program_beats_generic_platform() -> None:
+    row = {
+        "noticeId": "27100",
+        "lpCode": "kgrowth",
+        "lpName": "한국성장금융",
+        "sourceType": "official",
+        "eventType": "new_notice",
+        "eventDate": "2026-06-04",
+        "title": "【선정공고】「은행권 중견기업 밸류업펀드(3차)」 위탁운용사 선정계획 공고",
+        "programName": "국민성장펀드",
+        "roundName": "3차",
+        "strategy": "국민성장펀드",
+        "url": "https://www.kgrowth.or.kr/notice/value-up-3",
+    }
+
+    assert lp_notice_specific_program_name(row) == "은행권 중견기업 밸류업펀드"
+    merged = consolidate_lp_notice_display_items([row])
+    assert len(merged) == 1
+    assert lp_notice_program_label(merged[0]) == "은행권 중견기업 밸류업펀드 3차"
+    rendered = render_lp_notice_card(merged[0], "2026-06-05")
+    assert "은행권 중견기업 밸류업펀드 3차" in rendered
+    assert 'data-program="국민성장펀드 3차"' not in rendered
+    assert '<p class="lp-notice-program">국민성장펀드 3차</p>' not in rendered
+
+
+def test_lp_notice_fund_series_round_beats_generic_page_round() -> None:
+    row = {
+        "noticeId": "content",
+        "lpCode": "kgrowth",
+        "lpName": "한국성장금융",
+        "sourceType": "official",
+        "eventType": "new_notice",
+        "eventDate": "2026-05-29",
+        "title": "【선정공고】「K-콘텐츠 미디어 전략펀드 3호」위탁운용사 선정계획 공고",
+        "programName": "국민성장펀드",
+        "roundName": "2차",
+        "strategy": "국민성장펀드",
+    }
+
+    merged = consolidate_lp_notice_display_items([row])
+    assert lp_notice_program_label(merged[0]) == "K-콘텐츠 미디어 전략펀드 3호"
+    assert "3호 2차" not in render_lp_notice_card(merged[0], "2026-06-05")
+
+
+def test_lp_notice_lifecycle_events_roll_into_one_business_card() -> None:
+    rows = [
+        {
+            "noticeId": "notice",
+            "lpCode": "kgrowth",
+            "lpName": "한국성장금융",
+            "sourceType": "official",
+            "eventType": "new_notice",
+            "eventDate": "2026-06-01",
+            "title": "【선정공고】「은행권 중견기업 밸류업펀드(3차)」 위탁운용사 선정계획 공고",
+            "programName": "은행권 중견기업 밸류업펀드",
+            "roundName": "3차",
+        },
+        {
+            "noticeId": "shortlist",
+            "lpCode": "kgrowth",
+            "lpName": "한국성장금융",
+            "sourceType": "official",
+            "eventType": "shortlist",
+            "eventDate": "2026-06-10",
+            "title": "은행권 중견기업 밸류업펀드 3차 서류심사 결과",
+            "programName": "은행권 중견기업 밸류업펀드",
+            "roundName": "3차",
+        },
+        {
+            "noticeId": "result",
+            "lpCode": "kgrowth",
+            "lpName": "한국성장금융",
+            "sourceType": "official",
+            "eventType": "final_selection",
+            "eventDate": "2026-06-20",
+            "title": "은행권 중견기업 밸류업펀드 3차 위탁운용사 선정 결과",
+            "programName": "은행권 중견기업 밸류업펀드",
+            "roundName": "3차",
+            "selectedGpNames": ["A운용", "B운용"],
+        },
+    ]
+
+    merged = consolidate_lp_notice_display_items(rows)
+    assert len(merged) == 1
+    assert merged[0]["businessStatus"] == "result"
+    assert merged[0]["businessStageLabel"] == "선정완료"
+    assert len(merged[0]["events"]) == 3
+    rendered = render_lp_notice_card(merged[0], "2026-06-21")
+    assert rendered.count("<article class=\"lp-notice-row\"") == 1
+    assert "진행 이력" in rendered
 
 
 def test_article_payload_does_not_render_lp_as_gp_chip() -> None:
@@ -1445,6 +1541,9 @@ def main() -> int:
         test_lp_directory_includes_seed_only_profiles_without_empty_profile_pages,
         test_lp_public_labels_do_not_expose_internal_taxonomy,
         test_official_lp_candidates_are_public_on_notice_surfaces,
+        test_lp_notice_title_program_beats_generic_platform,
+        test_lp_notice_fund_series_round_beats_generic_page_round,
+        test_lp_notice_lifecycle_events_roll_into_one_business_card,
         test_article_payload_does_not_render_lp_as_gp_chip,
         test_kic_lp_alias_seed_feeds_article_context,
         test_national_growth_section_does_not_attach_kdb_context,
