@@ -52,6 +52,7 @@
 - 공개 UX/UI의 기준 문서는 `docs/design_system.md`다. Newsletter, LP, GP, Wiki 담당은 공개 화면을 고치기 전에 이 문서의 navigation, typography, directory row, newsletter reference pattern을 먼저 적용한다.
 - 공개 화면의 기본 뷰 체계는 `docs/design_system.md`의 `View Taxonomy`를 따른다. 뉴스는 article list, LP/GP 목록은 directory table, LP/GP 상세는 profile detail, 출자공고는 notice row-card, Wiki는 document view로 본다.
 - 공개 사이트는 정적 생성물이다. 크롤러, DB, CSV가 갱신되어도 공개 화면은 자동으로 실시간 변경되지 않으며, source renderer 빌드와 GitHub Pages 배포가 끝나야 새 숫자와 새 행이 반영된다.
+- 뉴스레터/LP/GP가 같이 쓰는 날짜, CSV, URL 정규화, GP alias, HTML parsing 유틸은 `services/shared/src/daily_news_common.py`를 기준 모듈로 둔다. `services/newsletter/src/daily_news_common.py`와 `scripts/daily_news_common.py`는 호환용 shim으로만 남기고, LP/GP 코드는 뉴스레터 내부 경로인 `services.newsletter.src.daily_news_common`를 직접 import하지 않는다.
 - 공개 서비스는 혁신의숲 같은 데이터룸/디렉토리 서비스 톤을 기준으로 한다. 뉴스레터, LP, GP, Wiki가 서로 다른 제품처럼 보이지 않게 폰트, 색상, 여백, 버튼, 탭, 표 header, row 스타일, 하단 메뉴를 맞춘다.
 - 주요 목록과 디렉토리는 카드 나열보다 표 또는 표에 가까운 row layout을 기본으로 한다. 모바일에서도 핵심 컬럼은 남기고, 불필요한 가로 스크롤을 만들지 않는다.
 - 공개 서비스의 주 메뉴는 `브리프 / LP / GP / Wiki` 순서의 하단 메뉴 하나로 통일한다. 모바일과 PC 모두 같은 하단 메뉴를 쓰고, 상단 서비스 탭은 만들지 않는다. 상단·하단에 같은 서비스 메뉴가 동시에 보이면 회귀로 본다. 전역 저장함은 뉴스, LP, GP, Wiki 저장이 모두 구현되기 전까지 하단 메뉴에 두지 않는다.
@@ -73,6 +74,9 @@
 - `coverage_tier` 기본값은 `core`, `ocio`, `policy`, `candidate`다. `core`는 핵심 출자기관, `ocio`는 OCIO/공적기금, `policy`는 정책펀드·공공기관성 출자 주체, `candidate`는 화면 노출 전 검토 후보로 둔다.
 - `display_enabled=1`인 LP는 빈 상세 페이지로 두지 않는다. 최소 공개 facts는 `기관 유형`, `홈페이지`, `담당 조직`, `관심 자산군`이며, 공식 공고 채널이 확인된 경우 `공식 공고 채널`도 함께 넣는다. 총자산, 배분, 담당자, 선정 GP처럼 공식 근거가 부족한 값은 추정하지 않고 비워 둔다.
 - LP 서비스의 중심 화면은 출자공고다. 기관 목록은 디렉토리로 유지하고, 출자공고 화면은 `진행중 공고`, `선정 결과`, `공고 히스토리`를 구분해 마감일, 규모, 기관, 원문, 첨부자료, 연결 GP가 체계적으로 보이게 한다.
+- LP Notice의 사업명 정규화와 라운드 판정은 `services/lp/src/lp_notice_identity.py`를 기준 모듈로 둔다. 공개 화면의 상태 판정과 공고/서류심사/선정결과 카드 병합은 `services/newsletter/src/lp_notice_view.py`에 두고, `services/newsletter/src/build_newsletter_deploy.py`에는 이 규칙을 다시 직접 붙이지 않고 화면 조립과 배포 산출물 생성만 남긴다.
+- LP Notice 상태는 기준일과 유효 마감일을 우선한다. 마감일이 기준일 이후면 `모집중`으로 올리고, 마감일이 과거인 공고를 매일 `deadline_closed` 신규 이벤트처럼 만들지 않는다. 공고일이 없고 과거 마감일만 있는 공고는 `event_date=오늘`로 저장하지 않는다.
+- LP Notice 사업명은 저장된 특정 사업명이 깨끗하면 우선 사용하고, 본문 메뉴·지원자격·운용계획 문장에서 뽑힌 긴 후보는 버린다. 같은 사업 카드라도 최신 이벤트와 18개월 이상 떨어진 과거 이벤트/마감일은 현재 카드 상태와 진행 이력에 섞지 않는다.
 - LP/GP 상세 fact row에서 출처명, 날짜, `공식 확인` 같은 긴 메타 문자열을 값 아래 반복 노출하지 않는다. 필요한 출처는 홈페이지·자료·기사·LinkedIn을 구분하는 작은 아이콘 링크로 표시하고, 긴 출처 목록은 하단 `자료` 영역에 둔다.
 - LP 상세에서 `프로필 항목`, `자료 성격`, `공개자료 기준`처럼 수집 커버리지나 내부 판단에 가까운 항목은 본문 콘텐츠처럼 노출하지 않는다. 자료 링크와 제한적 참고사항만 하단 `자료` 영역에 둔다.
 - `상세 프로필`, 중복 순위, 반복되는 자료/근거 문구처럼 모든 row에서 같은 의미를 되풀이하는 텍스트는 줄인다. 사용자에게 필요한 핵심 값만 표 컬럼과 row 안에 둔다.

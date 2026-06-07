@@ -29,7 +29,7 @@ REPO_ROOT = SERVICE_ROOT.parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from services.newsletter.src.daily_news_common import (
+from services.shared.src.daily_news_common import (
     DEFAULT_DB,
     DEFAULT_GP_ALIAS_OVERRIDES,
     fetch_text,
@@ -46,6 +46,23 @@ from services.newsletter.src.daily_news_common import (
     strip_html_tags,
     today_seoul,
     write_csv_rows,
+)
+from services.lp.src.lp_notice_identity import (
+    GENERIC_PROGRAM_NAMES,
+    _normalize_program_name_text,
+    _notice_platform_name,
+    _notice_program_specificity,
+    _notice_specific_map_key,
+    clean_program_candidate,
+    infer_notice_program_name,
+    infer_notice_round_name,
+    infer_program_name,
+    infer_round_name,
+    infer_round_name_with_fallback,
+    is_generic_program_name,
+    normalize_round_name,
+    notice_business_key,
+    program_candidates,
 )
 
 
@@ -678,8 +695,6 @@ def infer_event_type(text: str, stage: str, deadline: str, report_date: str) -> 
             gap = 999
         if 0 <= gap <= 14:
             return "deadline_soon"
-        if gap < 0:
-            return "deadline_closed"
     if stage in {"notice", "application", "briefing"}:
         return "new_notice"
     return "candidate"
@@ -809,140 +824,12 @@ def classify_amounts(text: str) -> dict[str, object]:
     program = max(program_amounts) if program_amounts else None
     if allocation is None and fallback_amounts:
         allocation = max(fallback_amounts)
-    title_first_text = normalize_whitespace(f"{title}\n{cleaned_text}")
     return {
         "allocation_amount_krw_100mn": allocation,
         "program_size_krw_100mn": program,
         "amount_type": "allocation" if allocation else ("program_size" if program else ""),
         "amount_confidence": "medium" if allocation else ("low" if program else ""),
     }
-
-
-GENERIC_PROGRAM_NAMES = {
-    "국민성장펀드",
-    "모태펀드",
-    "농식품모태펀드",
-    "농림수산식품모태펀드",
-    "공급망안정화기금",
-}
-
-
-def _normalize_program_name_text(value: object) -> str:
-    return re.sub(r"[^0-9A-Za-z가-힣]", "", normalize_whitespace(str(value or "")))
-
-
-def is_generic_program_name(value: str) -> bool:
-    normalized = _normalize_program_name_text(value)
-    return normalized in {_normalize_program_name_text(item) for item in GENERIC_PROGRAM_NAMES}
-
-
-def clean_program_candidate(value: object) -> str:
-    text = normalize_whitespace(str(value or ""))
-    if not text:
-        return ""
-    text = re.sub(r"^[【\[]?선정(?:공고|결과)?[】\]]?\s*", "", text)
-    text = re.sub(r"^[\"'「『\(\[\s]+|[\"'」』\)\]\s]+$", "", text)
-    text = re.sub(r"\((?:\d+차|\d+호|상반기|하반기|수시|정시)\)?", "", text)
-    text = re.sub(r"(?:\(|\[)?(?:\d+차|\d+호)\)?$", "", text)
-    text = re.sub(r"\s+\d+호$", "", text)
-    text = re.sub(r"\s+(?:위탁운용사|업무집행조합원|GP|운용사|운용사 선정)\s*.*$", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s+(?:선정계획|선정 결과|선정 결과 발표|서류심사 결과|정량평가 결과|출자사업 계획|운용사 선정 계획)\s*$", "", text)
-    text = re.sub(r"\s+공고(?:문)?$", "", text)
-    text = normalize_whitespace(text).strip(" -·:;")
-    return text
-
-
-def _program_candidates_from_brackets(raw: str, patterns: list[str]) -> list[str]:
-    candidates: list[str] = []
-    for pattern in patterns:
-        for match in re.finditer(pattern, raw):
-            candidate = clean_program_candidate(match.group(1))
-            if candidate:
-                candidates.append(candidate)
-    return candidates
-
-
-def _program_candidates_from_tokens(raw: str) -> list[str]:
-    candidates: list[str] = []
-    for match in re.finditer(
-        r"([가-힣A-Za-z0-9&·ㆍ\-\s]{2,90}(?:펀드|출자사업|투자조합|계정|리그|특정투자지주|전략펀드)(?:\([^)]*\))?)",
-        raw,
-    ):
-        candidate = clean_program_candidate(match.group(1))
-        if candidate:
-            candidates.append(candidate)
-    return candidates
-
-
-def program_candidates(text: str) -> list[str]:
-    raw = normalize_whitespace(text)
-    if not raw:
-        return []
-    candidates: list[str] = []
-    quote_patterns = [
-        r"[「『\"]([^」』\"]{2,80}(?:펀드|출자사업|투자조합|계정|리그|분야)(?:\([^)]*\))?[^」』\"]*)[」』\"]",
-        r"[\[【]([^\]】]{2,80}(?:펀드|출자사업|투자조합|계정|리그|분야)(?:\([^)]*\))?[^\]】]*)[\]】]",
-    ]
-    candidates.extend(_program_candidates_from_brackets(raw, quote_patterns))
-    titleish = re.split(r"(?:\n|\. | \| )", raw, maxsplit=1)[0]
-    titleish = re.sub(r"^[^,，:：]{1,18}[,，:：]\s*", "", titleish)
-    candidates.extend(_program_candidates_from_tokens(titleish))
-    candidates.extend(_program_candidates_from_tokens(raw))
-    cleaned: list[str] = []
-    for candidate in candidates:
-        value = clean_program_candidate(candidate)
-        if value and value not in cleaned:
-            cleaned.append(value)
-    generic_lookup = {_normalize_program_name_text(name): True for name in GENERIC_PROGRAM_NAMES}
-
-    def score(value: str) -> tuple[int, int, int, str]:
-        normalized = _normalize_program_name_text(value)
-        has_generic_core = 1 if generic_lookup.get(normalized, False) else 0
-        long_bonus = -len(value)
-        has_round = 1 if re.search(r"(\d+차|\d+호)", value) else 0
-        return (has_generic_core, long_bonus, -has_round, value)
-
-    cleaned.sort(key=score)
-    return cleaned
-
-
-def infer_program_name(text: str) -> str:
-    candidates = program_candidates(text)
-    for candidate in candidates:
-        if not is_generic_program_name(candidate):
-            return candidate
-    if candidates:
-        return candidates[0]
-    for generic in ["공급망안정화기금", "국민성장펀드", "농식품모태펀드", "농림수산식품모태펀드", "모태펀드"]:
-        if generic in text:
-            return "농식품모태펀드" if generic == "농림수산식품모태펀드" else generic
-    return candidates[0] if candidates else ""
-
-
-def infer_round_name(text: str) -> str:
-    patterns = [
-        r"\((\d+차|\d+호)\)",
-        r"(\d+차년도)",
-        r"(\d+호)",
-        r"(\d+차\s*(?:출자|공고|선정|간접투자)?)",
-        r"(상반기|하반기|정시|수시)\s*(?:출자|공고|선정)?",
-        r"(대형|중형|루키|도전|코스닥|M&A|세컨더리)\s*(?:리그|분야)",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE)
-        if match:
-            return normalize_whitespace(match.group(1))
-    return ""
-
-
-def infer_round_name_with_fallback(text: str) -> str:
-    round_name = infer_round_name(text)
-    if round_name:
-        return round_name
-    match = re.search(r"\b(\d+(?:차|호))\b", normalize_whitespace(text))
-    if match:
-        return match.group(1)
-    return ""
 
 
 def confidence_for(source_type: str, lp_code: str, event_type: str, allocation: object, title: str) -> tuple[str, str, int]:
@@ -3024,6 +2911,11 @@ def make_notice_row(
     allocation = amount_info["allocation_amount_krw_100mn"]
     confidence, confidence_note, public_visible = confidence_for(source_type, lp_code, event_type, allocation, title)
     first_document = document_url or (split_semicolon(attachment_urls)[0] if attachment_urls else "")
+    event_date = announced or report_date
+    if not announced and deadline and deadline < report_date:
+        event_date = deadline
+    program_name = infer_program_name(title) or infer_program_name(title_first_text)
+    round_name = infer_round_name(title) or infer_round_name(title_first_text)
     return {
         "lp_code": lp_code or None,
         "source_code": source_code,
@@ -3035,9 +2927,9 @@ def make_notice_row(
         "attachment_urls": attachment_urls,
         "title": title,
         "event_type": event_type,
-        "event_date": announced or report_date,
-        "program_name": infer_program_name(title_first_text),
-        "round_name": infer_round_name(title_first_text),
+        "event_date": event_date,
+        "program_name": program_name,
+        "round_name": round_name,
         "announced_date": announced,
         "notice_year": extract_year(announced, cleaned_text, fallback_year),
         "application_deadline": deadline,
@@ -3454,22 +3346,112 @@ def normalize_title_key(title: str) -> str:
     value = re.sub(r"\s+", " ", value).strip()
     return re.sub(r"[^0-9A-Za-z가-힣]", "", value).lower()
 
+def _build_lp_notice_business_maps(rows: list[dict[str, object]]) -> tuple[
+    dict[tuple[str, str, str], str],
+    dict[tuple[str, str, str], set[str]],
+]:
+    """사업 단위 병합을 위한 특수사업명/플랫폼/라운드 인덱스를 생성한다."""
+    specific_by_anchor: dict[tuple[str, str, str], tuple[tuple[int, ...], str]] = {}
+    rounds_by_business: dict[tuple[str, str, str], set[str]] = {}
 
-def notice_business_key(row: dict[str, object]) -> str:
-    text = normalize_whitespace(
-        " ".join(
-            str(row.get(key) or "")
-    for key in ["title", "program_name", "round_name", "raw_excerpt"]
+    def round_key(row: dict[str, object]) -> str:
+        return normalize_round_name(infer_notice_round_name(row))
+
+    for row in rows:
+        lp_code = str(row.get("lp_code") or "").strip()
+        if not lp_code:
+            continue
+        platform_key = _normalize_program_name_text(_notice_platform_name(row))
+        program = infer_notice_program_name(row)
+        if not program or is_generic_program_name(program):
+            continue
+        program_key = _normalize_program_name_text(program)
+        rkey = round_key(row)
+        score = stored_notice_quality(row)
+        candidate: tuple[tuple[int, ...], str] = (score, program)
+        for key in [
+            _notice_specific_map_key(lp_code, rkey, platform_key),
+            _notice_specific_map_key(lp_code, rkey, ""),
+            _notice_specific_map_key(lp_code, "", platform_key),
+        ]:
+            existing = specific_by_anchor.get(key)
+            if not existing or score > existing[0] or (score == existing[0] and len(program) > len(existing[1])):
+                specific_by_anchor[key] = candidate
+
+        if rkey:
+            rounds_key = (lp_code, program_key, platform_key)
+            rounds_by_business.setdefault(rounds_key, set()).add(rkey)
+
+    resolved_specific_map: dict[tuple[str, str, str], str] = {key: value[1] for key, value in specific_by_anchor.items()}
+    return resolved_specific_map, rounds_by_business
+
+
+def _best_notice_program_name(rows: list[dict[str, object]]) -> str:
+    ranked = sorted(rows, key=stored_notice_quality, reverse=True)
+    # Prefer business-specific program names (e.g., '은행권 중견기업 밸류업펀드 3차')
+    # over platform-level names (e.g., '국민성장펀드').
+    for row in ranked:
+        candidate = infer_notice_program_name(row)
+        if candidate and not is_generic_program_name(candidate):
+            return candidate
+    # If no business-specific candidate is found, keep legacy fallback behavior.
+    for row in ranked:
+        candidate = clean_program_candidate(row.get("program_name"))
+        if candidate:
+            return candidate
+    for row in ranked:
+        candidate = infer_notice_program_name(row)
+        if candidate:
+            return candidate
+    for row in ranked:
+        inferred = infer_program_name(
+            normalize_whitespace(
+                " ".join(
+                    str(value or "")
+                    for value in [
+                        row.get("title", ""),
+                        row.get("raw_excerpt", ""),
+                        row.get("program_name", ""),
+                        row.get("round_name", ""),
+                    ]
+                )
+            )
+        )
+        if inferred:
+            return inferred
+    return ""
+
+
+def _best_notice_round_name(rows: list[dict[str, object]]) -> str:
+    ranked = sorted(rows, key=stored_notice_quality, reverse=True)
+    preferred: list[str] = []
+    fallback: list[str] = []
+    for row in ranked:
+        raw_round = infer_notice_round_name(row)
+        if raw_round:
+            preferred.append(raw_round)
+        else:
+            fallback_candidate = normalize_round_name(row.get("round_name"))
+            if fallback_candidate:
+                fallback.append(fallback_candidate)
+    for round_name in preferred:
+        if round_name and round_name not in {"수시", "정시", "상반기", "하반기"}:
+            return round_name
+    for round_name in preferred:
+        if round_name:
+            return round_name
+    for round_name in fallback:
+        if round_name:
+            return round_name
+    text_round = infer_round_name_with_fallback(
+        normalize_whitespace(
+            " ".join(
+                str(value or "")
+                for value in [row.get("title") for row in rows if row.get("title")]
+            )
         )
     )
-    stored_program = clean_program_candidate(row.get("program_name"))
-    program = stored_program if stored_program and not is_generic_program_name(stored_program) else infer_program_name(text)
-    if not program:
-        program = clean_program_candidate(str(row.get("program_name") or ""))
-    round_name = str(row.get("round_name") or "").strip() or infer_round_name_with_fallback(text)
-    if not program:
-        return ""
-    return re.sub(r"[^0-9A-Za-z가-힣]", "", f"{program}|{round_name}").lower()
+    return text_round or ""
 
 
 def dedupe_candidates(rows: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -3490,35 +3472,22 @@ def dedupe_candidates(rows: list[dict[str, object]]) -> list[dict[str, object]]:
 
 
 def candidate_quality(row: dict[str, object]) -> tuple[int, ...]:
+    program_specificity = _notice_program_specificity(row)
     confidence_score = {"high": 3, "medium": 2, "low": 1}.get(str(row.get("confidence") or ""), 0)
     source_score = 2 if row.get("source_type") == "official" else 1
     selected_score = 1 if row.get("selected_gp_names") else 0
     amount_score = 1 if row.get("allocation_amount_krw_100mn") else 0
     validated_score = 1 if row.get("monitor_status") == "validated" else 0
-    return confidence_score, source_score, validated_score, selected_score, amount_score
+    return confidence_score, program_specificity, source_score, validated_score, selected_score, amount_score
 
 
-def notice_event_group(event_type: object) -> str:
-    value = str(event_type or "")
-    if value in {"new_notice", "deadline_soon", "deadline_closed"}:
-        return "notice"
-    if value in {"final_selection", "shortlist"}:
-        return value
-    if value in {"revision", "cancellation"}:
-        return value
-    return "history"
-
-
-def canonical_notice_key(row: dict[str, object]) -> tuple[str, str, str]:
+def canonical_notice_key(row: dict[str, object]) -> tuple[str, str]:
     title_key = notice_business_key(row) or normalize_title_key(str(row.get("title") or ""))
-    return (
-        str(row.get("lp_code") or ""),
-        notice_event_group(row.get("event_type")),
-        title_key,
-    )
+    return (str(row.get("lp_code") or ""), title_key)
 
 
 def stored_notice_quality(row: dict[str, object]) -> tuple[int, int, int, int, int, int, int]:
+    program_specificity = _notice_program_specificity(row)
     confidence_score = {"high": 3, "medium": 2, "low": 1}.get(str(row.get("confidence") or ""), 0)
     source_code = str(row.get("source_code") or "")
     source_type = str(row.get("source_type") or "")
@@ -3546,7 +3515,7 @@ def stored_notice_quality(row: dict[str, object]) -> tuple[int, int, int, int, i
     visible_score = 1 if row.get("public_visible") else 0
     detail_score = len(str(row.get("raw_excerpt") or ""))
     notice_id = int(row.get("notice_id") or 0)
-    return validated_score, confidence_score, field_score, source_score, visible_score, detail_score, -notice_id
+    return validated_score, confidence_score, program_specificity, field_score, source_score, visible_score, detail_score, -notice_id
 
 
 def merged_selected_gp_names(rows: list[dict[str, object]]) -> str:
@@ -3607,10 +3576,56 @@ def dedupe_stored_notices(conn: sqlite3.Connection) -> int:
         """
     )
     headers = [desc[0] for desc in cursor.description]
-    groups: dict[tuple[str, str, str], list[dict[str, object]]] = {}
-    for row in [dict(zip(headers, values)) for values in cursor.fetchall()]:
+    groups: dict[tuple[str, str], list[dict[str, object]]] = {}
+    rows = [dict(zip(headers, values)) for values in cursor.fetchall()]
+    specific_map, rounds_by_business = _build_lp_notice_business_maps(rows)
+
+    resolved_rows: list[dict[str, object]] = []
+    for row in rows:
+        lp_code = str(row.get("lp_code") or "").strip()
+        if not lp_code:
+            resolved_rows.append(row)
+            continue
+
+        resolved_row = dict(row)
+        lp_key = lp_code
+        program = infer_notice_program_name(resolved_row)
+        rkey = normalize_round_name(infer_notice_round_name(resolved_row))
+        platform_key = _normalize_program_name_text(_notice_platform_name(resolved_row))
+
+        if not program or is_generic_program_name(program):
+            for key in [
+                _notice_specific_map_key(lp_key, rkey, platform_key),
+                _notice_specific_map_key(lp_key, rkey, ""),
+                _notice_specific_map_key(lp_key, "", platform_key),
+            ]:
+                mapped_program = specific_map.get(key)
+                if mapped_program:
+                    resolved_row["program_name"] = mapped_program
+                    program = mapped_program
+                    break
+
+        if program and rkey == "":
+            program_key = _normalize_program_name_text(program)
+            fallback_round = ""
+            for key in [
+                (lp_key, program_key, platform_key),
+                (lp_key, program_key, ""),
+            ]:
+                candidates = rounds_by_business.get(key, set())
+                if candidates and len(candidates) == 1:
+                    candidate_round = next(iter(candidates))
+                    if candidate_round:
+                        fallback_round = candidate_round
+                        break
+            if fallback_round:
+                resolved_row["round_name"] = fallback_round
+
+        resolved_rows.append(resolved_row)
+
+    for row in resolved_rows:
         key = canonical_notice_key(row)
-        if not key[0] or not key[2]:
+        if not key[0] or not key[1]:
             continue
         groups.setdefault(key, []).append(row)
 
@@ -3622,13 +3637,14 @@ def dedupe_stored_notices(conn: sqlite3.Connection) -> int:
         ranked = sorted(rows, key=stored_notice_quality, reverse=True)
         keeper = ranked[0]
         keeper_id = int(keeper["notice_id"])
-        merged: dict[str, object] = {}
+        merged: dict[str, object] = {
+            "program_name": _best_notice_program_name(ranked),
+            "round_name": _best_notice_round_name(ranked),
+        }
         for key in [
             "document_url",
             "attachment_names",
             "attachment_urls",
-            "program_name",
-            "round_name",
             "application_deadline",
             "notice_stage",
             "asset_class",
@@ -3936,6 +3952,7 @@ def export_monitor(conn: sqlite3.Connection, out_dir: Path, report_date: str) ->
             updated_at
         FROM v_lp_commitment_notice_public
         ORDER BY
+            COALESCE(event_date, announced_date, discovered_at) DESC,
             CASE event_type
                 WHEN 'new_notice' THEN 0
                 WHEN 'deadline_soon' THEN 1
@@ -3946,7 +3963,6 @@ def export_monitor(conn: sqlite3.Connection, out_dir: Path, report_date: str) ->
                 WHEN 'performance_update' THEN 6
                 ELSE 9
             END,
-            COALESCE(event_date, announced_date, discovered_at) DESC,
             notice_id DESC
         LIMIT 500
         """
