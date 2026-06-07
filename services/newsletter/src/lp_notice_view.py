@@ -40,7 +40,7 @@ def lp_event_label(value: object) -> str:
     return {
         "new_notice": "신규 공고",
         "deadline_soon": "마감 임박",
-        "deadline_closed": "마감",
+        "deadline_closed": "접수마감",
         "shortlist": "숏리스트",
         "final_selection": "최종 선정",
         "revision": "정정",
@@ -165,15 +165,18 @@ def lp_notice_public_status(item: dict[str, object], report_date: str) -> str:
     business_status = str(item.get("businessStatus") or "")
     today = lp_notice_date(report_date)
     deadline = lp_notice_effective_deadline_date(item)
-    if today and deadline and deadline >= today and business_status not in {"cancellation", "result"}:
-        return "open"
-    if business_status == "open":
-        if today and deadline and deadline < today:
-            return "closed"
+    if business_status in {"cancellation", "result"}:
+        return business_status
     if business_status == "shortlist":
         latest_event = lp_notice_date(item.get("latestEventDate") or item.get("eventDate") or item.get("announcedDate"))
         if today and latest_event and (today - latest_event).days > 90:
             return "history"
+        return "shortlist"
+    if today and deadline and deadline >= today:
+        return "open"
+    if business_status == "open":
+        if today and deadline and deadline < today:
+            return "closed"
     if business_status in {"open", "shortlist", "result", "closed", "cancellation", "history"}:
         return business_status
     return lp_notice_status(item, report_date)
@@ -181,12 +184,12 @@ def lp_notice_public_status(item: dict[str, object], report_date: str) -> str:
 
 def lp_notice_status_label(status: str) -> str:
     return {
-        "open": "모집중",
+        "open": "공고중",
         "shortlist": "1차 선정",
         "result": "선정완료",
-        "closed": "마감",
+        "closed": "접수마감",
         "cancellation": "취소",
-        "history": "지난 공고",
+        "history": "히스토리",
     }.get(status, "공고")
 
 
@@ -207,13 +210,13 @@ def lp_notice_stage_label(item: dict[str, object], status: str) -> str:
     if event_type == "cancellation":
         return "취소"
     if status == "open":
-        return "모집중"
+        return "공고중"
     if status == "shortlist":
         return "1차 선정"
     if status == "cancellation":
         return "취소"
     if status == "closed":
-        return "마감"
+        return "접수마감"
     return "공고"
 
 
@@ -642,9 +645,6 @@ def consolidate_lp_notice_display_items(items: list[dict[str, object]], report_d
         if "cancellation" in event_types:
             row["businessStatus"] = "cancellation"
             row["businessStageLabel"] = "취소"
-        elif deadline_is_open:
-            row["businessStatus"] = "open"
-            row["businessStageLabel"] = "모집중"
         elif "final_selection" in event_types:
             row["businessStatus"] = "result"
             row["businessStageLabel"] = "선정완료"
@@ -654,15 +654,18 @@ def consolidate_lp_notice_display_items(items: list[dict[str, object]], report_d
         elif "shortlist" in event_types:
             row["businessStatus"] = "shortlist"
             row["businessStageLabel"] = "1차 선정"
+        elif deadline_is_open:
+            row["businessStatus"] = "open"
+            row["businessStageLabel"] = "공고중"
         elif row_status == "open" or "open" in event_statuses:
             row["businessStatus"] = "open"
-            row["businessStageLabel"] = "모집중"
+            row["businessStageLabel"] = "공고중"
         elif row_status == "closed" or "closed" in event_statuses:
             row["businessStatus"] = "closed"
-            row["businessStageLabel"] = "마감"
+            row["businessStageLabel"] = "접수마감"
         else:
             row["businessStatus"] = "history"
-            row["businessStageLabel"] = "지난 공고"
+            row["businessStageLabel"] = "히스토리"
         row["businessStatus"] = str(row.get("businessStatus") or "history")
         if events:
             latest = events[0]

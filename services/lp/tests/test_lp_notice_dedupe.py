@@ -212,10 +212,80 @@ def test_deadline_soon_notice_consolidates_as_open_business_card() -> None:
     [item] = consolidate_lp_notice_display_items(notices, "2026-06-07")
 
     assert item["businessStatus"] == "open"
-    assert item["businessStageLabel"] == "모집중"
+    assert item["businessStageLabel"] == "공고중"
     assert lp_notice_public_status(item, "2026-06-07") == "open"
     assert item["events"][0]["status"] == "open"
     assert item["events"][0]["applicationDeadline"] == "2026-06-10"
+
+
+def test_selection_status_beats_future_deadline_on_business_card() -> None:
+    notices = [
+        {
+            "noticeId": "notice",
+            "lpCode": "kgrowth",
+            "lpName": "한국성장금융",
+            "sourceType": "official",
+            "title": "은행권 중견기업 밸류업펀드 3차 출자공고",
+            "programName": "은행권 중견기업 밸류업펀드",
+            "roundName": "3차",
+            "eventType": "new_notice",
+            "eventDate": "2026-06-01",
+            "applicationDeadline": "2026-06-30",
+        },
+        {
+            "noticeId": "result",
+            "lpCode": "kgrowth",
+            "lpName": "한국성장금융",
+            "sourceType": "official",
+            "title": "은행권 중견기업 밸류업펀드 3차 최종 선정 결과",
+            "programName": "은행권 중견기업 밸류업펀드",
+            "roundName": "3차",
+            "eventType": "final_selection",
+            "eventDate": "2026-06-10",
+            "applicationDeadline": "2026-06-30",
+        },
+    ]
+
+    [item] = consolidate_lp_notice_display_items(notices, "2026-06-12")
+
+    assert item["businessStatus"] == "result"
+    assert item["businessStageLabel"] == "선정완료"
+    assert lp_notice_public_status(item, "2026-06-12") == "result"
+
+
+def test_shortlist_status_beats_future_deadline_on_business_card() -> None:
+    notices = [
+        {
+            "noticeId": "notice",
+            "lpCode": "kgrowth",
+            "lpName": "한국성장금융",
+            "sourceType": "official",
+            "title": "은행권 중견기업 밸류업펀드 3차 출자공고",
+            "programName": "은행권 중견기업 밸류업펀드",
+            "roundName": "3차",
+            "eventType": "new_notice",
+            "eventDate": "2026-06-01",
+            "applicationDeadline": "2026-06-30",
+        },
+        {
+            "noticeId": "shortlist",
+            "lpCode": "kgrowth",
+            "lpName": "한국성장금융",
+            "sourceType": "official",
+            "title": "은행권 중견기업 밸류업펀드 3차 서류심사 결과",
+            "programName": "은행권 중견기업 밸류업펀드",
+            "roundName": "3차",
+            "eventType": "shortlist",
+            "eventDate": "2026-06-10",
+            "applicationDeadline": "2026-06-30",
+        },
+    ]
+
+    [item] = consolidate_lp_notice_display_items(notices, "2026-06-12")
+
+    assert item["businessStatus"] == "shortlist"
+    assert item["businessStageLabel"] == "1차 선정"
+    assert lp_notice_public_status(item, "2026-06-12") == "shortlist"
 
 
 def test_stale_deadline_does_not_close_recent_notice_card() -> None:
@@ -459,7 +529,7 @@ def test_lifecycle_view_rolls_up_by_business_identity() -> None:
                 "【선정공고】「은행권 중견기업 밸류업펀드(3차)」 위탁운용사 선정계획 공고",
                 "new_notice",
                 "2026-06-01",
-                "2026-06-01",
+                "2099-06-01",
                 "국민성장펀드",
                 "3차",
                 "high",
@@ -476,7 +546,7 @@ def test_lifecycle_view_rolls_up_by_business_identity() -> None:
                 "은행권 중견기업 밸류업펀드 3차 위탁운용사 선정 결과",
                 "final_selection",
                 "2026-06-20",
-                "2026-06-01",
+                "2099-06-01",
                 "은행권 중견기업 밸류업펀드",
                 "3차",
                 "high",
@@ -509,7 +579,7 @@ def test_lifecycle_view_rolls_up_by_business_identity() -> None:
     finally:
         conn.close()
 
-    assert rollups == [("은행권 중견기업 밸류업펀드", "3차", 2, 0, 1, "final_selection")]
+    assert rollups == [("은행권 중견기업 밸류업펀드", "3차", 2, 1, 1, "final_selection")]
 
 
 if __name__ == "__main__":
@@ -519,6 +589,8 @@ if __name__ == "__main__":
     test_stale_shortlist_is_public_history_not_current_shortlist()
     test_future_deadline_overrides_stale_business_status()
     test_deadline_soon_notice_consolidates_as_open_business_card()
+    test_selection_status_beats_future_deadline_on_business_card()
+    test_shortlist_status_beats_future_deadline_on_business_card()
     test_stale_deadline_does_not_close_recent_notice_card()
     test_consolidation_drops_cross_year_stale_lifecycle_event()
     test_dedupe_normalizes_no_space_round_notation_as_same_business()

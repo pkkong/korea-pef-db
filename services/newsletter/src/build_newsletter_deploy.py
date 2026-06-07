@@ -2332,10 +2332,10 @@ def render_lp_notices_page(
         for status in ["open", "shortlist", "result", "closed", "cancellation", "history"]
     }
     notice_groups = [
-        ("open", "진행중", [item for item in notices if lp_notice_public_status(item, report_date) == "open"]),
-        ("shortlist", "서류심사", [item for item in notices if lp_notice_public_status(item, report_date) == "shortlist"]),
+        ("open", "공고중", [item for item in notices if lp_notice_public_status(item, report_date) == "open"]),
+        ("closed", "접수마감", [item for item in notices if lp_notice_public_status(item, report_date) == "closed"]),
+        ("shortlist", "1차 선정", [item for item in notices if lp_notice_public_status(item, report_date) == "shortlist"]),
         ("result", "선정완료", [item for item in notices if lp_notice_public_status(item, report_date) == "result"]),
-        ("closed", "마감", [item for item in notices if lp_notice_public_status(item, report_date) == "closed"]),
         (
             "cancellation",
             "취소",
@@ -2347,7 +2347,7 @@ def render_lp_notices_page(
         ),
         (
             "history",
-            "지난 공고",
+            "히스토리",
             [
                 item
                 for item in notices
@@ -2391,12 +2391,12 @@ def render_lp_notices_page(
         notice_status_tabs = f"""
         <div class="lp-notice-status-tabs" role="tablist" aria-label="출자공고 상태">
           <button class="lp-notice-status-tab" type="button" data-status="all">전체</button>
-          <button class="lp-notice-status-tab" type="button" data-status="open">모집중</button>
+          <button class="lp-notice-status-tab" type="button" data-status="open">공고중</button>
+          <button class="lp-notice-status-tab" type="button" data-status="closed">접수마감</button>
           <button class="lp-notice-status-tab" type="button" data-status="shortlist">1차 선정</button>
           <button class="lp-notice-status-tab" type="button" data-status="result">선정완료</button>
-          <button class="lp-notice-status-tab" type="button" data-status="closed">마감</button>
           <button class="lp-notice-status-tab" type="button" data-status="cancellation">취소</button>
-          <button class="lp-notice-status-tab" type="button" data-status="history">지난 공고</button>
+          <button class="lp-notice-status-tab" type="button" data-status="history">히스토리</button>
         </div>"""
         notice_amount = sum(
             lp_notice_amount_label(item)[1]
@@ -4655,10 +4655,10 @@ def render_lp_notice_year_summary(notices: list[dict[str, object]], report_date:
 
 def lp_lifecycle_status_label(value: object) -> str:
     return {
-        "open": "진행중",
-        "final_selection": "최종선정",
-        "shortlist": "서류심사",
-        "closed": "마감",
+        "open": "공고중",
+        "final_selection": "선정완료",
+        "shortlist": "1차 선정",
+        "closed": "접수마감",
         "no_deadline": "일정 없음",
     }.get(str(value or ""), "공고")
 
@@ -4692,7 +4692,7 @@ def render_lp_lifecycle_summary(rows: list[dict[str, object]], report_date: str,
     selected_gp_count = sum(safe_int(row.get("selected_gp_count")) for row in rows)
     total_amount = sum(lp_lifecycle_amount(row) for row in rows)
     summary = (
-        f"프로그램 {total_programs:,}개 · 단계 기록 {total_notices:,}건 · 진행중 {open_count:,}건 · "
+        f"프로그램 {total_programs:,}개 · 단계 기록 {total_notices:,}건 · 공고중 {open_count:,}건 · "
         f"서류 {shortlist_count:,}건 · 최종 {final_count:,}건 · GP 연결 {selected_gp_count:,}건 · "
         f"{public_amount_label(total_amount, fallback='규모 미표기')}"
     )

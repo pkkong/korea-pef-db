@@ -287,27 +287,28 @@ normalized_rows AS (
                 '(6호)', ''), '(7호)', ''), '(8호)', ''), '(9호)', ''), '(10호)', '')
         ) AS lifecycle_program_name,
         CASE
+            WHEN TRIM(round_name) IN ('상반기', '하반기', '정시', '수시') THEN ''
             WHEN COALESCE(NULLIF(TRIM(round_name), ''), '') <> '' THEN TRIM(round_name)
-            WHEN title_program_name LIKE '%(1차)%' THEN '1차'
-            WHEN title_program_name LIKE '%(2차)%' THEN '2차'
-            WHEN title_program_name LIKE '%(3차)%' THEN '3차'
-            WHEN title_program_name LIKE '%(4차)%' THEN '4차'
-            WHEN title_program_name LIKE '%(5차)%' THEN '5차'
-            WHEN title_program_name LIKE '%(6차)%' THEN '6차'
-            WHEN title_program_name LIKE '%(7차)%' THEN '7차'
-            WHEN title_program_name LIKE '%(8차)%' THEN '8차'
-            WHEN title_program_name LIKE '%(9차)%' THEN '9차'
-            WHEN title_program_name LIKE '%(10차)%' THEN '10차'
-            WHEN title_program_name LIKE '%(1호)%' THEN '1호'
-            WHEN title_program_name LIKE '%(2호)%' THEN '2호'
-            WHEN title_program_name LIKE '%(3호)%' THEN '3호'
-            WHEN title_program_name LIKE '%(4호)%' THEN '4호'
-            WHEN title_program_name LIKE '%(5호)%' THEN '5호'
+            WHEN title_program_name LIKE '%1차%' THEN '1차'
+            WHEN title_program_name LIKE '%2차%' THEN '2차'
+            WHEN title_program_name LIKE '%3차%' THEN '3차'
+            WHEN title_program_name LIKE '%4차%' THEN '4차'
+            WHEN title_program_name LIKE '%5차%' THEN '5차'
+            WHEN title_program_name LIKE '%6차%' THEN '6차'
+            WHEN title_program_name LIKE '%7차%' THEN '7차'
+            WHEN title_program_name LIKE '%8차%' THEN '8차'
+            WHEN title_program_name LIKE '%9차%' THEN '9차'
+            WHEN title_program_name LIKE '%10차%' THEN '10차'
+            WHEN title_program_name LIKE '%1호%' THEN '1호'
+            WHEN title_program_name LIKE '%2호%' THEN '2호'
+            WHEN title_program_name LIKE '%3호%' THEN '3호'
+            WHEN title_program_name LIKE '%4호%' THEN '4호'
+            WHEN title_program_name LIKE '%5호%' THEN '5호'
             ELSE COALESCE(NULLIF(TRIM(round_name), ''), '')
         END AS lifecycle_round_name
     FROM source_rows
 ),
-notice_rows AS (
+notice_rows_raw AS (
     SELECT
         notice_id,
         lp_code,
@@ -381,6 +382,61 @@ notice_rows AS (
           )
       )
 ),
+notice_rows AS (
+    SELECT
+        nr.*,
+        CASE
+            WHEN nr.round_name <> ''
+            THEN nr.round_name
+            ELSE COALESCE(
+                MAX(NULLIF(TRIM(nr.round_name), '')) OVER (
+                    PARTITION BY nr.lp_code, nr.program_key
+                ),
+                ''
+            )
+        END AS resolved_round_name
+    FROM notice_rows_raw nr
+),
+notice_rows_v2 AS (
+    SELECT
+        notice_id,
+        lp_code,
+        lp_name,
+        lp_type,
+        program_name,
+        COALESCE(NULLIF(TRIM(resolved_round_name), ''), '') AS round_name,
+        LOWER(REPLACE(REPLACE(REPLACE(COALESCE(NULLIF(TRIM(program_name), ''), ''), ' ', ''), '(', ''), ')', '')) AS program_key,
+        LOWER(REPLACE(REPLACE(REPLACE(COALESCE(NULLIF(TRIM(resolved_round_name), ''), ''), ' ', ''), '(', ''), ')', '')) AS round_key,
+        notice_year,
+        event_type,
+        event_date,
+        announced_date,
+        application_deadline,
+        stage,
+        notice_stage,
+        asset_class,
+        strategy,
+        program_size_krw_100mn,
+        allocation_amount_krw_100mn,
+        commitment_amount_krw_100mn,
+        amount_type,
+        amount_confidence,
+        selected_gp_names,
+        confidence,
+        source_type,
+        source_code,
+        notice_title,
+        source_url,
+        document_url,
+        discovered_at,
+        updated_at,
+        sort_date,
+        is_open_notice,
+        is_final_selection,
+        is_shortlist,
+        is_cancellation
+    FROM notice_rows
+),
 latest_rows AS (
     SELECT *
     FROM (
@@ -390,7 +446,7 @@ latest_rows AS (
                 PARTITION BY lp_code, program_key, round_key
                 ORDER BY sort_date DESC, notice_id DESC
             ) AS row_rank
-        FROM notice_rows nr
+        FROM notice_rows_v2 nr
     )
     WHERE row_rank = 1
 ),
@@ -420,7 +476,7 @@ notice_rollup AS (
         END) AS next_application_deadline,
         MAX(NULLIF(application_deadline, '')) AS latest_application_deadline,
         MAX(sort_date) AS latest_notice_date
-    FROM notice_rows
+    FROM notice_rows_v2
     GROUP BY lp_code, program_key, round_key
 ),
 selected_gp_rollup AS (
@@ -429,7 +485,7 @@ selected_gp_rollup AS (
         nr.program_key,
         nr.round_key,
         COUNT(DISTINCT lgl.source_gp_id) AS selected_gp_count
-    FROM notice_rows nr
+    FROM notice_rows_v2 nr
     JOIN lp_notice_gp_link lgl
         ON lgl.notice_id = nr.notice_id
     GROUP BY nr.lp_code, nr.program_key, nr.round_key
@@ -466,9 +522,9 @@ SELECT
     r.latest_application_deadline,
     CASE
         WHEN r.cancellation_count > 0 THEN 'cancellation'
-        WHEN r.open_count > 0 THEN 'open'
         WHEN r.final_selection_count > 0 THEN 'final_selection'
         WHEN r.shortlist_count > 0 THEN 'shortlist'
+        WHEN r.open_count > 0 THEN 'open'
         WHEN COALESCE(r.latest_application_deadline, '') <> '' THEN 'closed'
         ELSE 'no_deadline'
     END AS deadline_status
