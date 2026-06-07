@@ -395,7 +395,46 @@ def test_notice_identity_uses_title_when_stored_program_is_body_sentence() -> No
     }
 
     assert lp_notice_specific_program_name(display_row) == "2026년 우체국예금 해외주식 신흥국형 신규 운용사"
-    assert lp_notice_program_label(display_row) == "2026년 우체국예금 해외주식 신흥국형 신규 운용사 62호"
+    assert lp_notice_program_label(display_row) == "2026년 우체국예금 해외주식 신흥국형 신규 운용사"
+
+
+def test_notice_identity_rejects_crawler_sentence_and_uses_title_program() -> None:
+    display_row = {
+        "lpCode": "comwel",
+        "title": "2024년 산재보험기금 대체투자상품(PEF, VC) 선정 공고",
+        "programName": "고 목록에서 발견 을 통해 사실상 법령을 위반한 상태라고 판단되는 경우 최근 3년 내 자산건전성이 취약하거나 도덕적 해이 등으로 사회적 물의를 일으킨 운용사로서 펀드",
+        "roundName": "1호",
+        "rawExcerpt": "벤처투자종합포털 출자공고 목록에서 발견",
+    }
+
+    assert lp_notice_specific_program_name(display_row) == "2024년 산재보험기금 대체투자상품(PEF, VC)"
+    assert lp_notice_program_label(display_row) == "2024년 산재보험기금 대체투자상품(PEF, VC)"
+
+
+def test_notice_identity_rejects_rfp_criteria_sentences() -> None:
+    cases = [
+        (
+            {
+                "lpCode": "comwel",
+                "title": "(수정공고)2025년 산재보험기금 하위운용사 유니버스 선정공고",
+                "programName": "및 일임자산의 경우 운용성과를 제출하지 못할 경우 상세한 이유를 기재 - 추후 성과 미제출 사유가 고의·과실로 사실과 다른 것으로 밝혀질 경우",
+                "roundName": "1호",
+            },
+            "2025년 산재보험기금 하위운용사 유니버스",
+        ),
+        (
+            {
+                "lpCode": "comwel",
+                "title": "2025년 산재보험기금 대체투자상품(PEF) 선정 공고",
+                "programName": "청산펀드(2020년 1월 1일 이후 청산펀드 기준",
+                "roundName": "1호",
+            },
+            "2025년 산재보험기금 대체투자상품(PEF)",
+        ),
+    ]
+
+    for display_row, expected_label in cases:
+        assert lp_notice_program_label(display_row) == expected_label
 
 
 def test_lifecycle_view_rolls_up_by_business_identity() -> None:
@@ -486,5 +525,7 @@ if __name__ == "__main__":
     test_identity_module_and_display_grouping_share_business_key()
     test_notice_identity_prefers_clean_stored_program_over_noisy_body_candidate()
     test_notice_identity_uses_title_when_stored_program_is_body_sentence()
+    test_notice_identity_rejects_crawler_sentence_and_uses_title_program()
+    test_notice_identity_rejects_rfp_criteria_sentences()
     test_lifecycle_view_rolls_up_by_business_identity()
     print("lp notice dedupe test passed")

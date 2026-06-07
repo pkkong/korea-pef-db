@@ -5049,38 +5049,48 @@ def render_lp_notice_detail_page(report_date: str, item: dict[str, object]) -> s
 {app_head_meta()}
   <link rel="stylesheet" href="assets/service.css?v={app_asset_version()}">
   <style>
-    body.lp-notice-detail-page {{ background: #f7f7f8; }}
-    body.lp-notice-detail-page .app-shell {{ width: min(100%, 1120px); background: #f7f7f8; box-shadow: none; }}
+    body.lp-notice-detail-page {{ background: #ffffff; }}
+    body.lp-notice-detail-page .app-shell {{ width: min(100%, 1120px); min-height: 100dvh; background: #ffffff; box-shadow: none; }}
     body.lp-notice-detail-page .content-area,
-    body.lp-notice-detail-page .app-header {{ width: min(1040px, calc(100% - 32px)); max-width: 1040px; margin: 0 auto; }}
-    .lp-notice-detail-back {{ display: inline-flex; margin: 8px 0 14px; color: #52575c; font-size: 13px; font-weight: 720; text-decoration: none; }}
-    .lp-notice-detail-hero {{ display: grid; gap: 12px; margin: 0 0 14px; padding: 18px 0 8px; }}
-    .lp-notice-detail-hero h1 {{ margin: 0; color: #111214; font-size: 24px; font-weight: 820; line-height: 1.28; letter-spacing: 0; }}
-    .lp-notice-detail-meta {{ display: flex; flex-wrap: wrap; gap: 7px 10px; align-items: center; color: #6f7378; font-size: 13px; font-weight: 650; }}
+    body.lp-notice-detail-page .app-header {{ width: min(900px, calc(100% - 32px)); max-width: 900px; margin: 0 auto; }}
+    body.lp-notice-detail-page .content-area {{ padding-bottom: calc(112px + env(safe-area-inset-bottom)); }}
+    .lp-notice-detail-back {{ display: inline-flex; margin: 14px 0 18px; color: #4f555c; font-size: 13px; font-weight: 760; text-decoration: none; }}
+    .lp-notice-detail-hero {{ display: grid; gap: 12px; margin: 0; padding: 0 0 20px; border-bottom: 1px solid #e5e5e5; }}
+    .lp-notice-detail-hero h1 {{ margin: 0; color: #111214; font-size: 22px; font-weight: 820; line-height: 1.32; letter-spacing: 0; }}
+    .lp-notice-detail-meta {{ display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; color: #70757d; font-size: 13px; font-weight: 650; line-height: 1.35; }}
     .lp-notice-detail-status {{ color: #111214; font-weight: 820; }}
-    .lp-notice-detail-source-action {{ display: inline-flex; justify-self: start; min-height: 36px; align-items: center; border-radius: 8px; padding: 0 12px; background: #111214; color: #ffffff; font-size: 13px; font-weight: 780; text-decoration: none; }}
-    .lp-notice-detail-section {{ margin: 0 0 12px; border-radius: 8px; background: #ffffff; padding: 16px; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05); }}
-    .lp-notice-detail-section h2 {{ margin: 0 0 12px; color: #111214; font-size: 15px; font-weight: 820; line-height: 1.35; }}
-    .lp-notice-detail-facts {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; margin: 0; }}
-    .lp-notice-detail-facts div {{ display: grid; gap: 3px; min-width: 0; }}
+    .lp-notice-detail-source-action {{ display: inline-flex; justify-self: start; min-height: 34px; align-items: center; border-radius: 8px; padding: 0 12px; background: #111214; color: #ffffff; font-size: 13px; font-weight: 780; text-decoration: none; }}
+    .lp-notice-detail-section {{ margin: 0; border-bottom: 1px solid #e9eaec; background: #ffffff; padding: 20px 0; box-shadow: none; }}
+    .lp-notice-detail-section:last-of-type {{ margin-bottom: calc(88px + env(safe-area-inset-bottom)); }}
+    .lp-notice-detail-section h2 {{ margin: 0 0 14px; color: #111214; font-size: 16px; font-weight: 820; line-height: 1.35; }}
+    .lp-notice-detail-facts {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; margin: 0; }}
+    .lp-notice-detail-facts div {{ display: grid; gap: 4px; min-width: 0; }}
     .lp-notice-detail-facts dt {{ color: #7a7f86; font-size: 12px; font-weight: 650; }}
-    .lp-notice-detail-facts dd {{ margin: 0; color: #111214; font-size: 14px; font-weight: 740; line-height: 1.35; overflow-wrap: anywhere; }}
+    .lp-notice-detail-facts dd {{ margin: 0; color: #111214; font-size: 14px; font-weight: 760; line-height: 1.35; overflow-wrap: anywhere; }}
     .lp-notice-detail-timeline {{ display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }}
-    .lp-notice-detail-timeline li {{ display: grid; grid-template-columns: 112px 78px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-top: 1px solid #eceff2; color: #52575c; font-size: 13px; line-height: 1.4; }}
+    .lp-notice-detail-timeline li {{ display: grid; grid-template-columns: 112px 78px minmax(0, 1fr); gap: 10px; padding: 11px 0; border-top: 1px solid #eceff2; color: #52575c; font-size: 13px; line-height: 1.42; }}
     .lp-notice-detail-timeline li:first-child {{ border-top: 0; }}
     .lp-notice-detail-timeline time {{ color: #7a7f86; font-weight: 650; }}
     .lp-notice-detail-timeline strong {{ color: #111214; font-weight: 780; }}
     .lp-notice-detail-timeline span {{ min-width: 0; overflow-wrap: anywhere; }}
     .lp-notice-detail-sources {{ display: grid; gap: 8px; }}
-    .lp-notice-detail-sources a {{ display: flex; justify-content: space-between; gap: 12px; align-items: center; min-height: 44px; border-radius: 8px; padding: 0 12px; background: #f7f8fa; color: #111214; text-decoration: none; }}
+    .lp-notice-detail-sources a {{ display: flex; justify-content: space-between; gap: 12px; align-items: center; min-height: 42px; border-radius: 8px; padding: 0 12px; background: #f7f8fa; color: #111214; text-decoration: none; }}
     .lp-notice-detail-sources span {{ color: #7a7f86; font-size: 12px; font-weight: 650; }}
-    .lp-notice-detail-sources strong {{ min-width: 0; color: #111214; font-size: 13px; font-weight: 760; overflow-wrap: anywhere; text-align: right; }}
+    .lp-notice-detail-sources strong {{ flex: 1 1 auto; min-width: 0; color: #111214; font-size: 13px; font-weight: 760; overflow-wrap: anywhere; text-align: right; }}
     @media (max-width: 620px) {{
       body.lp-notice-detail-page .content-area,
-      body.lp-notice-detail-page .app-header {{ width: min(100% - 28px, 1040px); }}
-      .lp-notice-detail-hero h1 {{ font-size: 21px; }}
-      .lp-notice-detail-facts {{ grid-template-columns: minmax(0, 1fr); }}
-      .lp-notice-detail-timeline li {{ grid-template-columns: minmax(0, 1fr); gap: 4px; }}
+      body.lp-notice-detail-page .app-header {{ width: 100%; max-width: none; }}
+      .lp-notice-detail-back {{ margin: 12px 0 18px; }}
+      .lp-notice-detail-hero {{ padding-bottom: 18px; }}
+      .lp-notice-detail-hero h1 {{ font-size: 21px; line-height: 1.3; }}
+      .lp-notice-detail-section {{ padding: 18px 0; }}
+      .lp-notice-detail-facts {{ grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }}
+      .lp-notice-detail-timeline li {{ grid-template-columns: 82px 56px minmax(0, 1fr); gap: 7px; }}
+      .lp-notice-detail-timeline time,
+      .lp-notice-detail-timeline strong,
+      .lp-notice-detail-timeline span {{ font-size: 12.5px; }}
+      .lp-notice-detail-sources a {{ min-height: 40px; align-items: flex-start; padding-top: 10px; padding-bottom: 10px; }}
+      .lp-notice-detail-sources span {{ flex: 0 0 auto; }}
     }}
   </style>
 </head>
@@ -5118,6 +5128,8 @@ def render_lp_notice_detail_page(report_date: str, item: dict[str, object]) -> s
 
 
 def write_lp_notice_detail_pages(site_dir: Path, report_date: str, notices: list[dict[str, object]]) -> None:
+    for stale_path in site_dir.glob("lp-notice-*.html"):
+        stale_path.unlink()
     for item in notices:
         detail_url = str(item.get("detailUrl") or lp_notice_detail_slug(item))
         (site_dir / detail_url).write_text(render_lp_notice_detail_page(report_date, item), encoding="utf-8")

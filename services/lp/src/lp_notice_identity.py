@@ -64,7 +64,11 @@ def clean_notice_text_brackets(value: object) -> str:
     text = normalize_whitespace(value)
     if not text:
         return ""
-    text = re.sub(r"^[\"'`‘’“”\(\[【「『\s]+|[\"'`’”\)\]】」』\s]+$", "", text)
+    text = re.sub(r"^[\"'`‘’“”\s]+|[\"'`’”\s]+$", "", text)
+    for opener, closer in [("(", ")"), ("[", "]"), ("【", "】"), ("「", "」"), ("『", "』")]:
+        if text.startswith(opener) and text.endswith(closer):
+            text = text[len(opener) : -len(closer)]
+            break
     text = re.sub(r"^\[[^\]]*\]\s*", "", text)
     text = re.sub(r"^\([^)]*\)\s*", "", text)
     return normalize_whitespace(text)
@@ -147,7 +151,7 @@ def strip_program_noise(value: object) -> str:
     if not text:
         return ""
     text = re.sub(r"^[\u3010\[]?선정(?:공고|결과)?[\u3011\]]?\s*", "", text)
-    text = re.sub(r"^[\"'「『\(\[\s]+|[\"'」』\)\]\s]+$", "", text)
+    text = re.sub(r"^[\"'「『\s]+|[\"'」』\s]+$", "", text)
     text = strip_business_round_suffix(text)
     for pattern in LP_NOTICE_NOISE_PATTERNS:
         text = re.sub(rf"\s*{pattern}\s*(?:$|(?=[가-힣A-Za-z0-9]))", "", text)
@@ -178,6 +182,10 @@ def program_is_business_specific(candidate: str) -> bool:
     if re.search(r"(최종|선정|선정결과|서류심사|결과|공고|개최|운영|자료)", cleaned):
         return False
     if re.search(r"(운용계획상|투자하고자|보유하고|최근\s*3년|이해관계|제반\s*장치|대응방안)", cleaned):
+        return False
+    if re.search(r"(목록에서\s*발견|법령|위반|자산건전성|도덕적|사회적\s*물의|운용사로서|사실상)", cleaned):
+        return False
+    if re.search(r"(운용성과|제출하지\s*못할|미제출|상세한\s*이유|고의|과실|청산펀드.*기준|기준\s*$)", cleaned):
         return False
     return True
 
@@ -355,7 +363,7 @@ def infer_notice_program_name(row: dict[str, object]) -> str:
         if (
             title_fallback
             and program_is_specific_and_not_platform_only(title_fallback)
-            and any(term in title_text for term in ["운용사", "출자사업", "공모", "투자조합"])
+            and any(term in title_text for term in ["운용사", "출자사업", "공모", "투자조합", "대체투자상품", "대체투자"])
         ):
             return title_fallback
     text = normalize_whitespace(
@@ -397,10 +405,19 @@ def infer_notice_round_name(row: dict[str, object]) -> str:
     text = normalize_whitespace(
         " ".join(str(value or "") for value in [row.get("title", ""), row.get("displayTitle", ""), row.get("raw_excerpt", row.get("rawExcerpt", ""))])
     )
-    text_round = infer_round_name_with_fallback(text)
+    searchable_text = re.sub(r"\([^)]*공고\s*제?\s*\d{4}[-\s]?\d+호?[^)]*\)", " ", text)
+    searchable_text = re.sub(r"공고\s*제?\s*\d{4}[-\s]?\d+호?", " ", searchable_text)
+    searchable_text = normalize_whitespace(searchable_text)
+    text_round = infer_round_name_with_fallback(searchable_text)
     if text_round:
         return text_round
-    return normalize_round_name(row.get("round_name", row.get("roundName")))
+    stored_round = normalize_round_name(row.get("round_name", row.get("roundName")))
+    if stored_round and re.search(re.escape(stored_round), searchable_text):
+        return stored_round
+    stored_program = clean_program_candidate(row.get("program_name", row.get("programName")))
+    if stored_round and program_is_specific_and_not_platform_only(stored_program):
+        return stored_round
+    return ""
 
 
 def business_key_text(value: object) -> str:
