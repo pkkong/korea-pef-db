@@ -29,7 +29,7 @@ REQUIRED_PUBLIC_FILES = [
     "assets/service.js",
     "data/service_data.json",
 ]
-BOTTOM_NAV_LABELS = ["브리프", "LP", "GP", "Wiki"]
+BOTTOM_NAV_LABELS = ["브리프", "LP", "GP"]
 PUBLIC_HTML_FILES = ["index.html", "daily-news.html", "db.html", "pef-wiki.html"]
 FORBIDDEN_VISIBLE_TEXT = [
     "NPL_RESTRUCTURING_AND_PE_MANAGER",

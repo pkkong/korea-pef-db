@@ -443,10 +443,6 @@ def _render_bottom_nav() -> str:
       <span aria-hidden="true" class="nav-dot nav-icon-gp"></span>
       <strong>GP</strong>
     </a>
-    <a class="active" href="pef-wiki.html">
-      <span aria-hidden="true" class="nav-dot nav-icon-wiki"></span>
-      <strong>Wiki</strong>
-    </a>
   </nav>"""
 
 

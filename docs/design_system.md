@@ -74,7 +74,8 @@ HTML files at build time.
 
 ## Navigation
 
-- Use one global bottom nav order everywhere: `브리프 / LP / GP / Wiki`.
+- Use one global bottom nav order everywhere: `브리프 / LP / GP`.
+- Do not show Wiki in public navigation until the Wiki product is re-planned.
 - Do not add top-level service tabs above public content.
 - Page-local controls may exist, but they must be scoped to the current screen:
   for example `시장 / GP / 펀드 / LP / 비교` inside `db.html`.
@@ -140,7 +141,7 @@ variants.
 - Page-local tabs use text tabs with a thin neutral baseline and a black active
   underline. Disabled/future tabs stay low-contrast.
 - Bottom nav is the only global service navigation and must stay in the order
-  `브리프 / LP / GP / Wiki`.
+  `브리프 / LP / GP`.
 - Desktop keeps the same navigation hierarchy; it may render as a lighter centered
   pill but should not become a different product shell.
 
@@ -334,7 +335,7 @@ Use the newsletter screen as the reference for shared public UI polish.
 
 ## Regression Checklist
 
-- Bottom nav labels are exactly `브리프 / LP / GP / Wiki`.
+- Bottom nav labels are exactly `브리프 / LP / GP`.
 - Newsletter keeps flat list structure, circular publisher icons, restrained
   section labels, and non-heavy article titles.
 - LP/GP list pages preserve table-like row structure and do not regress to

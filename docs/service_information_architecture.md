@@ -29,9 +29,10 @@ The public service has four primary user-facing destinations:
 - `GP`: GP directory/profile, current commitment amount, funds, people, and source evidence.
 - `Wiki`: practical guides and definitions linked from the public service.
 
-The global bottom navigation order is fixed as `브리프 / LP / GP / Wiki` on both
-mobile and desktop. Do not add a second top-level service nav. A global saved
-area can be added only after saved items work across news, LP, GP, and Wiki.
+The global bottom navigation order is fixed as `브리프 / LP / GP` on both
+mobile and desktop. Wiki should not appear in public navigation until it is
+re-planned. Do not add a second top-level service nav. A global saved area can
+be added only after saved items work across news, LP, GP, and Wiki.
 
 Public data directories should use table-like rows. Cards are allowed for compact
 summary modules, detail panels, and mobile row collapse, but not as the dominant
