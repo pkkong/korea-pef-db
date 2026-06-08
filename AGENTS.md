@@ -97,4 +97,12 @@ Every non-trivial subagent task should state:
 - Public view taxonomy is a durable product rule: articles use list views, GP/LP directories use table-like directory views, GP/LP entities use profile detail views, LP notices use row-card notice views, and Wiki uses document views.
 - Local secrets are not committed. The local daily news env file is `config/daily_news.env`; GitHub Actions uses repository secrets.
 - Product and role-specific operating briefs are in `docs/agent_operating_briefs.md`.
-- Public UX/UI rules are durable instructions in `docs/design_system.md`: benchmark the public service against InnoForest-style data directories, keep the unified `브리프 / LP / GP / Wiki` bottom nav, use table-like rows for LP/GP directories, avoid card-heavy layouts, and remove operator/internal wording from public pages.
+- The Project Lead control document is `docs/project_lead_control_center.md`. Use it as the current source of truth for active service ownership, product decisions, verification commands, deployment state, and handoff notes before starting or delegating substantial work.
+- Public UX/UI rules are durable instructions in `docs/design_system.md`: benchmark the public service against InnoForest-style data directories, keep the unified `브리프 / LP / GP` bottom nav while Wiki is hidden, use table-like rows for LP/GP directories, avoid card-heavy layouts, and remove operator/internal wording from public pages.
+
+## Cross-Chat / Handoff Discipline
+
+- If the user moves a service to another chat or asks another agent to work on it, treat that as a coordination event, not as lost context.
+- The Project Lead must keep `docs/project_lead_control_center.md`, `docs/service_quality_backlog.md`, and any service-specific rules current enough that another chat can start without asking the user to repeat decisions.
+- Any handoff to another chat, subagent, or future run must include current product decisions, owned files, forbidden files, verification commands, known regressions, and deployment status.
+- When a service is owned in another chat, do not silently diverge. Read the control center first, update durable docs when decisions change, and only integrate changes after source build and verification.

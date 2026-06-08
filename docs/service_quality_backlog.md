@@ -5,6 +5,8 @@
 ## 공통
 
 - 하단 메뉴는 `브리프 → LP → GP` 순서를 모든 서비스에서 고정한다. Wiki는 재기획 전까지 공개 메뉴에 노출하지 않는다.
+- Project Lead는 작업 전후에 `docs/project_lead_control_center.md`를 확인하고, 서비스별 소유자·검증·배포 상태·반복 오류를 갱신한다.
+- 별도 채팅방이나 서브에이전트에 업무를 넘길 때는 control center의 handoff template을 사용한다. 사용자가 같은 결정을 다시 설명하게 만들면 운영 실패로 본다.
 - 공개 UX/UI 개선은 `docs/design_system.md`를 기준으로 한다. 뉴스레터에서 정리한 flat list, 원형 아이콘, restrained typography, table-like row 원칙을 LP/GP/Wiki에 확장한다.
 - 공개 화면 금지 표현은 `docs/agent_operating_briefs.md`의 공개 화면 문구 원칙을 따른다.
 - 생성 HTML 기준 금지 표현 스캔, 모바일 렌더링, 콘솔 에러 확인을 배포 전 필수 검증으로 둔다.
