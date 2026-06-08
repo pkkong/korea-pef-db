@@ -37,6 +37,31 @@ Public data directories should use table-like rows. Cards are allowed for compac
 summary modules, detail panels, and mobile row collapse, but not as the dominant
 layout for LP/GP directories. Detailed visual rules live in `design_system.md`.
 
+## Public Build Ownership
+
+The public site is one static GitHub Pages product, but build ownership is split
+by service.
+
+- Newsletter owns daily brief collection, article classification, archive data,
+  and `index.html` / `daily-news.html`.
+- LP owns LP directory pages, official notice pages, notice detail pages, and LP
+  profile pages.
+- GP owns Market, GP directory, and GP profile pages.
+- Wiki owns document pages and source-linked practical guidance.
+- Shared build/deploy owns the final site bundle, common static support files,
+  health metadata, zip artifact, and GitHub Pages publishing contract.
+
+The preferred build entry point is:
+
+```bash
+python3 scripts/build_site_bundle.py --services newsletter,lp,gp,wiki --date YYYY-MM-DD
+```
+
+Use a narrower service list for targeted rebuilds, such as `--services lp`.
+Generated HTML in `public/` or `services/newsletter/deploy/site/` should not be
+hand-edited; service source renderers and the integrated bundle builder are the
+durable control points.
+
 ## Primary Navigation
 
 ### 1. Market

@@ -3310,6 +3310,7 @@ def build(
     lp_commitment_monitor: Path = DEFAULT_LP_COMMITMENT_MONITOR,
     archive_limit: int = DEFAULT_ARCHIVE_LIMIT,
     newsletter_only: bool = False,
+    include_wiki: bool = True,
 ) -> dict[str, str]:
     if not report_date:
         report_date = latest_report_date(out_dir, today_seoul())
@@ -3339,19 +3340,22 @@ def build(
     css_path.write_text(service_css(), encoding="utf-8")
     js_path.write_text(service_js(), encoding="utf-8")
     manifest_path.write_text(app_web_manifest(), encoding="utf-8")
-    wiki_path.write_text(render_pef_wiki_page(report_date, app_asset_version()), encoding="utf-8")
-    return {
+    if include_wiki:
+        wiki_path.write_text(render_pef_wiki_page(report_date, app_asset_version()), encoding="utf-8")
+    result = {
         "report_date": report_date,
         "home_path": str(home_path),
         "daily_path": str(daily_path),
         "css_path": str(css_path),
         "js_path": str(js_path),
         "manifest_path": str(manifest_path),
-        "wiki_path": str(wiki_path),
         "icon_path": str(icon_path),
         "article_count": str(len(articles)),
         "lp_monitor_count": str(len(lp_monitor)),
     }
+    if include_wiki:
+        result["wiki_path"] = str(wiki_path)
+    return result
 
 
 def main() -> int:
@@ -3363,6 +3367,7 @@ def main() -> int:
     parser.add_argument("--lp-commitment-monitor", type=Path, default=DEFAULT_LP_COMMITMENT_MONITOR)
     parser.add_argument("--archive-limit", type=int, default=DEFAULT_ARCHIVE_LIMIT)
     parser.add_argument("--newsletter-only", action="store_true", help="Build the Daily Brief without DB navigation")
+    parser.add_argument("--skip-wiki", action="store_true", help="Do not render the Wiki page in this build")
     args = parser.parse_args()
     result = build(
         args.public_dir,
@@ -3372,6 +3377,7 @@ def main() -> int:
         args.lp_commitment_monitor,
         args.archive_limit,
         args.newsletter_only,
+        not args.skip_wiki,
     )
     for key, value in result.items():
         print(f"{key}={value}")

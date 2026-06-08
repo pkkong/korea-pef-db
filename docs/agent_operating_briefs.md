@@ -88,6 +88,12 @@
 
 ## 서비스별 기본 담당
 
+- 공개 사이트 빌드는 서비스별 빌드와 통합 배포를 분리한다. Newsletter, LP, GP, Wiki는 각자 서비스별 builder entry point를 갖고, 최종 공개 산출물은 `scripts/build_site_bundle.py`가 한 폴더인 `services/newsletter/deploy/site/`로 합친다.
+- 기본 통합 빌드 명령은 `python3 scripts/build_site_bundle.py --services newsletter,lp,gp,wiki --date YYYY-MM-DD`다. 특정 서비스만 다시 굽는 경우에는 `--services lp`, `--services gp`, `--services wiki`처럼 좁혀서 실행한다.
+- 서비스별 source renderer를 고치지 않고 `public/` 또는 `services/newsletter/deploy/site/`의 생성 HTML을 직접 고치는 것은 금지한다. 생성물은 빌드 검증이나 배포 결과로만 다룬다.
+- Wiki는 뉴스레터처럼 매일 수집·재분류되는 서비스가 아니다. Wiki 본문이나 공통 shell이 바뀌었을 때만 Wiki builder를 실행하고, 루틴 뉴스/LP 갱신이 Wiki 콘텐츠를 불필요하게 다시 쓰지 않게 한다.
+- 기존 호환 파일인 `services/newsletter/src/build_newsletter_deploy.py`는 당분간 남길 수 있지만, 새 자동화와 새 작업은 서비스별 builder와 `scripts/build_site_bundle.py`를 우선한다.
+
 - `뉴스레터 데스크`: `services/newsletter/`, 뉴스 수집·분류·태그·검색·발행 화면·뉴스레터 배포 준비를 맡는다. LP/GP 원천 CSV와 People 입력 파일은 직접 대량 수정하지 않는다.
 - `LP Monitor / LP Research`: `services/lp/`, LP 기관 프로필, 출자공고, 출자 히스토리, 공식 채널, LP profile facts를 맡는다. 뉴스레터 편집 판단과 GP evidence 파일은 직접 바꾸지 않는다.
 - `GP Profile / Market Data`: GP 식별자, 별칭, profile evidence, FSS 기반 운용사·펀드 데이터, GP profile master 산출물을 맡는다. 뉴스레터 본문 판단과 LP 리뷰 상태는 직접 바꾸지 않는다.

@@ -17,6 +17,7 @@ REVIEW_LIMIT="${NEWSLETTER_LOCAL_REVIEW_LIMIT:-80}"
 LP_MONITOR_DAYS="${NEWSLETTER_LP_MONITOR_DAYS:-180}"
 LP_LIMIT_PER_SOURCE="${NEWSLETTER_LP_LIMIT_PER_SOURCE:-50}"
 ARCHIVE_LIMIT="${NEWSLETTER_ARCHIVE_LIMIT:-30}"
+BUILD_SERVICES="${NEWSLETTER_BUILD_SERVICES:-newsletter,lp,gp,wiki}"
 NO_PUSH=0
 SKIP_GENERATE=0
 
@@ -26,6 +27,7 @@ Usage: services/newsletter/scripts/publish_newsletter_pages_local.sh [options]
 
 Options:
   --date YYYY-MM-DD    Report date. Defaults to today's date in Asia/Seoul.
+  --services LIST      Build services: newsletter,lp,gp,wiki or all.
   --no-push            Build and validate, but do not push the public mirror.
   --skip-generate      Publish the existing services/newsletter/deploy/site bundle.
   -h, --help           Show this help.
@@ -35,6 +37,7 @@ Environment overrides:
   NEWSLETTER_LOCAL_LIMIT_PER_SOURCE, NEWSLETTER_LOCAL_BRIEF_LIMIT
   NEWSLETTER_LOCAL_REVIEW_LIMIT, NEWSLETTER_LP_MONITOR_DAYS
   NEWSLETTER_LP_LIMIT_PER_SOURCE, NEWSLETTER_ARCHIVE_LIMIT
+  NEWSLETTER_BUILD_SERVICES
 USAGE
 }
 
@@ -42,6 +45,10 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --date)
       REPORT_DATE="${2:?--date requires YYYY-MM-DD}"
+      shift 2
+      ;;
+    --services)
+      BUILD_SERVICES="${2:?--services requires a comma-separated service list}"
       shift 2
       ;;
     --no-push)
@@ -74,6 +81,7 @@ echo "repo_root=$REPO_ROOT"
 echo "report_date=$REPORT_DATE"
 echo "public_repo_url=$PUBLIC_REPO_URL"
 echo "public_branch=$PUBLIC_BRANCH"
+echo "build_services=$BUILD_SERVICES"
 echo "log_file=$LOG_FILE"
 
 if [ -f "$REPO_ROOT/config/daily_news.env" ]; then
@@ -88,30 +96,46 @@ if [ "${NEWSLETTER_GOOGLE_DATE_WINDOW:-1}" != "0" ]; then
   google_date_args=(--google-date-window)
 fi
 
+normalized_services="${BUILD_SERVICES//[[:space:]]/}"
+service_selected() {
+  local service="$1"
+  case ",$normalized_services," in
+    *,all,*|*,"$service",*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 if [ "$SKIP_GENERATE" -eq 0 ]; then
-  "$PYTHON_BIN" services/newsletter/src/run_daily_news_pipeline.py \
+  if service_selected newsletter; then
+    "$PYTHON_BIN" services/newsletter/src/run_daily_news_pipeline.py \
+      --date "$REPORT_DATE" \
+      --limit-per-source "$LIMIT_PER_SOURCE" \
+      --brief-limit "$BRIEF_LIMIT" \
+      --review-limit "$REVIEW_LIMIT" \
+      --allow-insecure-ssl \
+      "${google_date_args[@]}"
+
+    "$PYTHON_BIN" services/newsletter/src/build_newsletter_source_audit.py \
+      --date "$REPORT_DATE"
+  fi
+
+  if service_selected lp; then
+    "$PYTHON_BIN" services/lp/src/build_lp_commitment_monitor.py \
+      --date "$REPORT_DATE" \
+      --days "$LP_MONITOR_DAYS" \
+      --limit-per-source "$LP_LIMIT_PER_SOURCE" \
+      --allow-insecure-ssl
+  fi
+
+  if service_selected newsletter; then
+    "$PYTHON_BIN" services/newsletter/src/validate_daily_news_pipeline.py \
+      --date "$REPORT_DATE"
+  fi
+
+  "$PYTHON_BIN" scripts/build_site_bundle.py \
     --date "$REPORT_DATE" \
-    --limit-per-source "$LIMIT_PER_SOURCE" \
-    --brief-limit "$BRIEF_LIMIT" \
-    --review-limit "$REVIEW_LIMIT" \
-    --allow-insecure-ssl \
-    "${google_date_args[@]}"
-
-  "$PYTHON_BIN" services/newsletter/src/build_newsletter_source_audit.py \
-    --date "$REPORT_DATE"
-
-  "$PYTHON_BIN" services/lp/src/build_lp_commitment_monitor.py \
-    --date "$REPORT_DATE" \
-    --days "$LP_MONITOR_DAYS" \
-    --limit-per-source "$LP_LIMIT_PER_SOURCE" \
-    --allow-insecure-ssl
-
-  "$PYTHON_BIN" services/newsletter/src/validate_daily_news_pipeline.py \
-    --date "$REPORT_DATE"
-
-  "$PYTHON_BIN" services/newsletter/src/build_newsletter_deploy.py \
-    --date "$REPORT_DATE" \
-    --archive-limit "$ARCHIVE_LIMIT"
+    --archive-limit "$ARCHIVE_LIMIT" \
+    --services "$BUILD_SERVICES"
 fi
 
 "$PYTHON_BIN" - "$REPORT_DATE" <<'PY'
@@ -124,6 +148,7 @@ site = Path("services/newsletter/deploy/site")
 required = [
     "index.html",
     "daily-news.html",
+    "db.html",
     "ktcu.html",
     "lp-ktcu.html",
     "lp-pmaa.html",
@@ -133,6 +158,9 @@ required = [
     "archive.json",
     "health.json",
     ".nojekyll",
+    "assets/app.css",
+    "assets/app.js",
+    "data/service_data.json",
 ]
 missing = [name for name in required if not (site / name).exists()]
 if missing:

@@ -111,9 +111,10 @@ fi
 "$PYTHON_BIN" services/lp/src/build_lp_profile_backlog.py \
   --date "$REPORT_DATE"
 
-"$PYTHON_BIN" services/newsletter/src/build_newsletter_deploy.py \
+"$PYTHON_BIN" scripts/build_site_bundle.py \
   --date "$SITE_DATE" \
-  --archive-limit "$ARCHIVE_LIMIT"
+  --archive-limit "$ARCHIVE_LIMIT" \
+  --services newsletter,lp,gp,wiki
 
 if [ "$PUBLISH" = "1" ]; then
   services/newsletter/scripts/publish_newsletter_pages_local.sh --date "$SITE_DATE" --skip-generate

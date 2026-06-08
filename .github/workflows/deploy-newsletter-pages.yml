@@ -140,7 +140,7 @@ jobs:
 
       - name: Build static newsletter site
         run: |
-          python3 services/newsletter/src/build_newsletter_deploy.py --date "${{ steps.date.outputs.report_date }}"
+          python3 scripts/build_site_bundle.py --date "${{ steps.date.outputs.report_date }}" --services newsletter,lp,gp,wiki
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -152,6 +152,14 @@ jobs:
               raise SystemExit("index.html was not generated")
           if not (site / "daily-news.html").exists():
               raise SystemExit("daily-news.html was not generated")
+          if not (site / "db.html").exists():
+              raise SystemExit("db.html was not generated")
+          if not (site / "assets/app.css").exists():
+              raise SystemExit("assets/app.css was not generated")
+          if not (site / "assets/app.js").exists():
+              raise SystemExit("assets/app.js was not generated")
+          if not (site / "data/service_data.json").exists():
+              raise SystemExit("data/service_data.json was not generated")
           if not (site / "ktcu.html").exists():
               raise SystemExit("ktcu.html was not generated")
           if not (site / "lp-ktcu.html").exists():
