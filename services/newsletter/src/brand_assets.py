@@ -66,8 +66,16 @@ BRAND_MARKS: dict[str, dict[str, str]] = {
     "view.asiae.co.kr": {
         "logo_url": "https://cwstatic.asiae.co.kr/asiae_v2/asiae_news.png",
     },
+    "asiae.co.kr": {
+        "logo_url": "https://cwstatic.asiae.co.kr/asiae_v2/asiae_news.png",
+    },
     "sedaily.com": {
         "logo_url": "https://static.sedaily.com/img/favicon-228.png",
+    },
+    "sentv.co.kr": {
+        "logo_url": "https://www.sentv.co.kr/data/sentv/upload/save/company/sentv17605930367478.png",
+        "image_width": "31px",
+        "image_height": "10px",
     },
     "biz.chosun.com": {
         "logo_url": "https://biz.chosun.com/pf/resources/icons/favicon_chosun.png?d=446",
@@ -108,7 +116,9 @@ BRAND_MARKS: dict[str, dict[str, str]] = {
         "logo_url": "https://static.heraldcorp.com/wbazic/biz/www/image/m_touch_icon180.png",
     },
     "mt.co.kr": {
-        "logo_url": "https://menu.mt.co.kr/common/favicons/favicon-180.ico",
+        "logo_url": "https://menu.mt.co.kr/mt24/assets/20260605151524/logo-ClKSLyDR.svg",
+        "image_width": "31px",
+        "image_height": "10px",
     },
     "newspim.com": {
         "logo_url": "https://img.newspim.com/m/mweb/favicon_144X144V2.png",
@@ -130,6 +140,33 @@ BRAND_MARKS: dict[str, dict[str, str]] = {
         "logo_url": "https://m.joseilbo.com/images/jose_head_logo.png",
         "image_width": "31px",
         "image_height": "11px",
+    },
+    "pinpointnews.co.kr": {
+        "logo_url": "https://cdn.pinpointnews.co.kr/image/logo/favicon.png",
+    },
+    "ebn.co.kr": {
+        "logo_url": "https://cdn.ebn.co.kr/image/logo/favicon.png",
+    },
+    "autodaily.co.kr": {
+        "logo_url": "https://cdn.autodaily.co.kr/image/logo/toplogo_20220915013725.png",
+        "image_width": "31px",
+        "image_height": "7px",
+    },
+    "junggi.co.kr": {
+        "logo_url": "https://cdn.junggi.co.kr/image/logo/toplogo_20260326014650.png",
+        "image_width": "31px",
+        "image_height": "7px",
+    },
+    "4th.kr": {
+        "logo_url": "https://cdn.4th.kr/image/logo/favicon.png",
+    },
+    "kbanker.co.kr": {
+        "logo_url": "https://cdn.kbanker.co.kr/image/logo/logo_250224_1.svg",
+        "image_width": "31px",
+        "image_height": "10px",
+    },
+    "hani.co.kr": {
+        "logo_url": "https://www.hani.co.kr/images/shortcut-icon.png",
     },
     # Platform/company marks commonly surfaced in deal/news contexts.
     "thevc.kr": {
@@ -1710,6 +1747,7 @@ PUBLISHER_DOMAINS: dict[str, str] = {
     "조선비즈": "biz.chosun.com",
     "아시아경제": "view.asiae.co.kr",
     "서울경제": "sedaily.com",
+    "서울경제TV": "sentv.co.kr",
     "이데일리": "edaily.co.kr",
     "연합인포맥스": "news.einfomax.co.kr",
     "뉴스톱": "newstopkorea.com",
@@ -1725,6 +1763,13 @@ PUBLISHER_DOMAINS: dict[str, str] = {
     "이뉴스투데이": "enewstoday.co.kr",
     "조세일보": "joseilbo.com",
     "경기신문": "kgnews.co.kr",
+    "핀포인트뉴스": "pinpointnews.co.kr",
+    "EBN": "ebn.co.kr",
+    "엠투데이": "autodaily.co.kr",
+    "중기이코노미": "junggi.co.kr",
+    "포쓰저널": "4th.kr",
+    "대한금융신문": "kbanker.co.kr",
+    "한겨레": "hani.co.kr",
     "구글뉴스": "news.google.com",
     "Google News": "news.google.com",
 }
@@ -2072,6 +2117,20 @@ def _brand_asset_filename(key: str, logo_url: str, content_type: str) -> str:
     return f"{safe_key}{_asset_extension(logo_url, content_type)}"
 
 
+def _cached_asset_path(asset_dir: Path, key: str) -> Path | None:
+    safe_key = re.sub(r"[^A-Za-z0-9]+", "-", key).strip("-").lower() or "brand"
+    candidates = sorted(asset_dir.glob(f"{safe_key}.*"))
+    for path in candidates:
+        if path.suffix.lower() == ".ico":
+            continue
+        try:
+            if path.stat().st_size > 0:
+                return path
+        except OSError:
+            continue
+    return None
+
+
 def prepare_brand_asset_cache(output_dir: Path, asset_prefix: str = "assets/brand-marks") -> None:
     """Cache selected official marks into the generated site.
 
@@ -2085,6 +2144,10 @@ def prepare_brand_asset_cache(output_dir: Path, asset_prefix: str = "assets/bran
     asset_dir = output_dir / asset_prefix
     asset_dir.mkdir(parents=True, exist_ok=True)
     for key, mark in BRAND_MARKS.items():
+        cached_path = _cached_asset_path(asset_dir, key)
+        if cached_path:
+            BRAND_ASSET_CACHE[key] = f"{asset_prefix}/{cached_path.name}"
+            continue
         logo_url = mark.get("logo_url", "")
         if not logo_url:
             continue

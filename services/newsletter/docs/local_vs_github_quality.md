@@ -7,8 +7,8 @@
 
 운영 기준은 다음과 같다.
 
-- GitHub Actions: 공개 배포용 기본 자동 발행 경로. 매일 정해진 소스 세트로 만들고 GitHub Pages public mirror에 올린다.
-- 로컬 Mac 실행: Actions 장애, 장시간 지연, 기사 누락 조사, 더 넓은 재수집이 필요할 때 쓰는 백업/진단 경로다.
+- 로컬 Mac 실행: 공개 배포용 기본 자동 발행 경로. 매일 더 넓은 소스 세트와 로컬 DB/cache를 활용해 만들고 GitHub Pages public mirror에 올린다.
+- GitHub Actions: Mac 장애, 장시간 지연, 수동 복구가 필요할 때 쓰는 fallback 경로다.
 
 ## Main Differences
 
@@ -21,13 +21,13 @@
 | 브리프 기사 수 | 보통 30개까지 후보화 가능 | 30개까지 후보화 가능 | 최종 노출 수는 같아도 GitHub는 앞단 후보 풀이 작다. |
 | LP 공고 탭 | 소스당 50개 | 소스당 20개 | Daily 본문과 분리된 별도 페이지/서비스로 관리한다. |
 | DB/캐시 | 기존 `db/private_equity.db`, raw cache, exports 활용 | 매 실행마다 GitHub 환경에서 새로 생성 | 로컬은 과거 캐시와 검수 흔적 덕분에 더 풍부할 수 있다. |
-| 공개 배포 | 백업 스크립트 실행 시 public mirror에 push | schedule 또는 수동 실행 시 public mirror에 push | GitHub Actions가 primary publisher다. |
+| 공개 배포 | launchd 또는 수동 실행 시 public mirror에 push | 수동 workflow 실행 시 public mirror에 push | 로컬 Mac이 primary publisher다. |
 
 ## Current Practical Judgment
 
 GitHub 결과물이 항상 더 나쁘다는 뜻은 아니다. 공개 뉴스레터로 보기에는 충분히 쓸 수 있게 맞춰져 있다.
-현재 운영의 기본 발행 방식은 GitHub Actions로 둔다. 다만 로컬 Mac 실행이 더 넓게 훑고 로컬 DB/cache를 활용할 수 있으므로,
-누락 조사나 복구 발행에는 로컬 경로가 여전히 더 적합할 수 있다.
+현재 운영의 기본 발행 방식은 로컬 Mac launchd로 둔다. GitHub Actions는 동일 파이프라인을 쓰는 수동 fallback이지만,
+로컬 DB/cache와 수동 검수 흔적을 기본으로 갖지 않으므로 기사 커버리지가 달라질 수 있다.
 
 가장 큰 차이를 만드는 요소는 세 가지다.
 
@@ -49,10 +49,10 @@ GitHub Actions와 로컬 백업 발행 스크립트는 다음 조건을 검사�
 
 ## When To Use Which
 
-- 매일 공개 발행: GitHub Actions scheduled workflow를 기준으로 한다.
+- 매일 공개 발행: 로컬 Mac launchd와 `publish_newsletter_pages_local.sh`를 기준으로 한다.
 - 기사 누락이 의심될 때: 로컬에서 더 넓은 source/limit으로 돌린다.
 - 소스 품질, 분류, 키워드 룰을 손볼 때: 로컬에서 테스트하고 GitHub 설정에 반영한다.
-- GitHub Actions가 실패했을 때: 로컬 Mac 백업 발행 또는 GitHub Actions 수동 재실행으로 복구한다.
+- 로컬 Mac 발행이 실패했을 때: GitHub Actions 수동 fallback 또는 로컬 재실행으로 복구한다.
 - 사용자에게 보여줄 최종 URL 확인: GitHub Pages public URL을 본다.
 
 ## Direction

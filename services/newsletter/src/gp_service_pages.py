@@ -11,7 +11,7 @@ from collections import defaultdict
 from pathlib import Path
 from urllib.parse import urlparse
 
-from brand_assets import brand_logo_url, brand_style_attr
+from brand_assets import brand_logo_url, brand_style_attr, prepare_brand_asset_cache
 from daily_news_common import normalize_url
 
 
@@ -63,6 +63,7 @@ def _app_head_meta() -> str:
 def write_gp_pages(site_dir: Path, db_path: Path, report_date: str) -> dict[str, int]:
     """Write market, GP directory, and top-GP profile pages into a static site directory."""
     site_dir.mkdir(parents=True, exist_ok=True)
+    prepare_brand_asset_cache(site_dir)
     _remove_stale_gp_pages(site_dir)
 
     zero_counts = _zero_counts()
@@ -660,6 +661,49 @@ def _render_empty_market(report_date: str, message: str) -> str:
 """
 
 
+def _bar_width(value: object, maximum: float) -> str:
+    if maximum <= 0:
+        return "0%"
+    width = max(3.0, min(100.0, _as_float(value) / maximum * 100.0))
+    return f"{width:.1f}%"
+
+
+def _render_market_trend_chart(periods: list[dict[str, object]]) -> str:
+    rows = periods[-8:]
+    if not rows:
+        return ""
+    max_commitment = max(_as_float(row.get("commitment_amount_krw_mn")) for row in rows)
+    bars = "\n".join(
+        f"""          <div class="market-chart-bar">
+            <span>{_e(row.get("period_label"))}</span>
+            <i style="height:{_bar_width(row.get("commitment_amount_krw_mn"), max_commitment)}"></i>
+            <strong>{_e(_format_trn_krw_as_100mn(_as_float(row.get("commitment_amount_krw_mn")) / 1000000))}</strong>
+          </div>"""
+        for row in rows
+    )
+    return f"""      <div class="market-chart market-trend-chart" aria-label="출자약정액 추이">
+{bars}
+      </div>"""
+
+
+def _render_market_top_gp_bars(top_gps: list[dict[str, object]]) -> str:
+    rows = top_gps[:8]
+    if not rows:
+        return ""
+    max_commitment = max(_as_float(row.get("commitment_aum_proxy_trn_krw")) for row in rows)
+    bars = "\n".join(
+        f"""          <div class="market-rank-bar">
+            <span>{_e(row.get("gp_name"))}</span>
+            <i><b style="width:{_bar_width(row.get("commitment_aum_proxy_trn_krw"), max_commitment)}"></b></i>
+            <strong>{_e(_format_trn_krw_as_100mn(row.get("commitment_aum_proxy_trn_krw")))}</strong>
+          </div>"""
+        for row in rows
+    )
+    return f"""      <div class="market-chart market-rank-chart" aria-label="상위 GP 약정액">
+{bars}
+      </div>"""
+
+
 def _render_market_page(report_date: str, context: dict[str, object]) -> str:
     latest = context.get("latest") if isinstance(context.get("latest"), dict) else {}
     prior_year = context.get("prior_year") if isinstance(context.get("prior_year"), dict) else {}
@@ -672,6 +716,8 @@ def _render_market_page(report_date: str, context: dict[str, object]) -> str:
     latest_period = _clean(latest.get("period_label")) or "-"
     latest_date = _format_date_dot(latest.get("as_of_date")) or _e(report_date)
     period_rows = list(reversed(periods[-10:]))
+    trend_chart_html = _render_market_trend_chart(periods)
+    top_gp_chart_html = _render_market_top_gp_bars(top_gps)
     top10_share = _format_pct(context.get("top10_share"))
     top20_share = _format_pct(context.get("top20_share"))
 
@@ -738,6 +784,10 @@ def _render_market_page(report_date: str, context: dict[str, object]) -> str:
           </li>"""
         for row in sources
     ) or "          <li><span>기준 자료 없음</span></li>"
+    metric_note_html = f"""      <p class="market-metric-note">
+        운용 GP는 {_e(latest_period)} 기준 각 펀드의 대표 운용사 집계입니다.
+        프로필/제휴 기준의 전체 GP 수와 다를 수 있습니다.
+      </p>"""
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -762,12 +812,14 @@ def _render_market_page(report_date: str, context: dict[str, object]) -> str:
       <div class="market-kpis">
 {kpi_html}
       </div>
+{metric_note_html}
     </section>
 
     <section class="market-section" aria-label="분기별 시장 추이">
       <div class="market-section-head">
         <h2>분기별 시장 추이</h2>
       </div>
+{trend_chart_html}
       <div class="market-table">
         <div class="market-head market-period-row"><span>기준</span><span>펀드</span><span>GP</span><span>약정액</span></div>
 {period_html}
@@ -778,6 +830,7 @@ def _render_market_page(report_date: str, context: dict[str, object]) -> str:
       <div class="market-section-head">
         <h2>상위 GP</h2>
       </div>
+{top_gp_chart_html}
       <div class="market-table">
         <div class="market-head market-gp-row"><span>순위</span><span>운용사</span><span>약정액</span><span>펀드</span></div>
 {top_gp_html}
@@ -1371,7 +1424,6 @@ def _render_service_header(active_tab: str = "gp") -> str:
       <nav class="brief-section-tabs gp-section-tabs" aria-label="GP 메뉴">
         <a class="brief-section-tab{market_active}" href="market.html"{market_current}>MARKET</a>
         <a class="brief-section-tab{gp_active}" href="gps.html"{gp_current}>GP</a>
-        <button class="brief-section-tab" type="button" disabled>PEOPLE</button>
       </nav>
     </header>"""
 
@@ -3402,6 +3454,93 @@ def _base_styles() -> str:
       font-weight: 780;
       line-height: 1.15;
     }
+    .market-metric-note {
+      margin: 10px 0 0;
+      color: var(--secondary);
+      font-size: 11.5px;
+      font-weight: 620;
+      line-height: 1.5;
+    }
+    .market-chart {
+      margin: 0 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+    }
+    .market-trend-chart {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      align-items: end;
+      gap: 8px;
+      min-height: 164px;
+      padding: 12px;
+    }
+    .market-chart-bar {
+      display: grid;
+      grid-template-rows: 18px minmax(48px, 1fr) 18px;
+      gap: 6px;
+      align-items: end;
+      min-width: 0;
+      height: 136px;
+      color: var(--secondary);
+      font-size: 10.5px;
+      font-weight: 650;
+      text-align: center;
+    }
+    .market-chart-bar i {
+      display: block;
+      width: 100%;
+      min-height: 8px;
+      border-radius: 4px 4px 0 0;
+      background: #2f6f66;
+    }
+    .market-chart-bar strong {
+      overflow: hidden;
+      color: var(--text);
+      font-size: 10.5px;
+      font-weight: 720;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .market-rank-chart {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+    }
+    .market-rank-bar {
+      display: grid;
+      grid-template-columns: minmax(90px, 1fr) minmax(90px, 2fr) 70px;
+      gap: 8px;
+      align-items: center;
+      min-height: 24px;
+      font-size: 11.5px;
+      font-weight: 650;
+    }
+    .market-rank-bar span {
+      overflow: hidden;
+      color: var(--text);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .market-rank-bar i {
+      display: block;
+      overflow: hidden;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--surface-muted);
+    }
+    .market-rank-bar b {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: #2f6f66;
+    }
+    .market-rank-bar strong {
+      color: var(--secondary);
+      font-size: 11px;
+      font-weight: 720;
+      text-align: right;
+    }
     .market-section {
       position: relative;
       margin: 0 0 18px;
@@ -3652,6 +3791,18 @@ def _base_styles() -> str:
     .gp-signal-strip,
     .gp-meta-line {
       display: none !important;
+    }
+    @media (max-width: 620px) {
+      .market-trend-chart {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        min-height: 220px;
+      }
+      .market-chart-bar {
+        height: 96px;
+      }
+      .market-rank-bar {
+        grid-template-columns: minmax(80px, 1fr) minmax(80px, 1.4fr) 60px;
+      }
     }
     @media (min-width: 760px) {
       .market-kpis {

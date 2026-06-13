@@ -303,6 +303,19 @@ def lp_notice_business_round_name(item: dict[str, object]) -> str:
 def lp_notice_business_key_text(value: object) -> str:
     return business_key_text(value)
 
+
+def lp_notice_group_year_key(item: dict[str, object]) -> str:
+    for key in ["noticeYear", "latestEventDate", "eventDate", "announcedDate", "applicationDeadline"]:
+        value = str(item.get(key) or "").strip()
+        if re.match(r"^20\d{2}", value):
+            return value[:4]
+    return ""
+
+
+def lp_notice_group_asset_key(item: dict[str, object]) -> str:
+    return lp_notice_business_key_text(" ".join(str(item.get(key) or "") for key in ["assetClass", "strategy"]))
+
+
 def lp_notice_canonical_title(item: dict[str, object]) -> str:
     title = clean_public_lp_text(item.get("displayTitle") or item.get("title") or "")
     replacements = [
@@ -325,10 +338,19 @@ def lp_notice_canonical_title(item: dict[str, object]) -> str:
 def lp_notice_display_group_key(item: dict[str, object]) -> tuple[str, str]:
     lp_key = str(item.get("lpCode") or item.get("lpName") or "").strip()
     program = lp_notice_specific_program_name(item)
+    group_year = lp_notice_group_year_key(item)
+    group_asset = lp_notice_group_asset_key(item)
     if program and program != "-" and not is_generic_lp_program_name(program):
         program = lp_notice_business_key_text(program)
         round_name = lp_notice_business_key_text(lp_notice_business_round_name(item))
-        return lp_key, f"{program}|{round_name}" if round_name else program
+        key_parts = [program]
+        if round_name:
+            key_parts.append(round_name)
+        if group_asset:
+            key_parts.append(group_asset)
+        if group_year:
+            key_parts.append(group_year)
+        return lp_key, "|".join(key_parts)
     # Existing businessKey is useful when title-based specific extraction failed.
     business_key = item.get("businessKey")
     if isinstance(business_key, (tuple, list)) and len(business_key) >= 2:
@@ -338,17 +360,81 @@ def lp_notice_display_group_key(item: dict[str, object]) -> tuple[str, str]:
                 program_key, round_key = secondary_key.split("|", 1)
                 program_key = lp_notice_business_key_text(program_key)
                 round_key = lp_notice_business_key_text(round_key)
-                return lp_key, f"{program_key}|{round_key}" if round_key else program_key
+                key_parts = [program_key]
+                if round_key:
+                    key_parts.append(round_key)
+                if group_asset:
+                    key_parts.append(group_asset)
+                if group_year:
+                    key_parts.append(group_year)
+                return lp_key, "|".join(part for part in key_parts if part)
             clean_key = lp_notice_business_key_text(secondary_key)
             if clean_key:
-                return lp_key, clean_key
+                key_parts = [clean_key]
+                if group_asset:
+                    key_parts.append(group_asset)
+                if group_year:
+                    key_parts.append(group_year)
+                return lp_key, "|".join(part for part in key_parts if part)
     elif isinstance(business_key, str):
         clean_key = lp_notice_business_key_text(business_key)
         if clean_key:
-            return lp_key, clean_key
+            key_parts = [clean_key]
+            if group_asset:
+                key_parts.append(group_asset)
+            if group_year:
+                key_parts.append(group_year)
+            return lp_key, "|".join(part for part in key_parts if part)
     # Fallback to title-based anchor (normalized).
     fallback = lp_notice_canonical_title(item)
-    return lp_key, fallback
+    key_parts = [fallback]
+    if group_asset:
+        key_parts.append(group_asset)
+    if group_year:
+        key_parts.append(group_year)
+    return lp_key, "|".join(part for part in key_parts if part)
+
+
+def lp_notice_stable_business_key(item: dict[str, object]) -> tuple[str, str]:
+    lp_key = str(item.get("lpCode") or item.get("lpName") or "").strip()
+    program = lp_notice_specific_program_name(item)
+    if not program or program == "-" or is_generic_lp_program_name(program):
+        return "", ""
+    key_parts = [lp_notice_business_key_text(program)]
+    round_name = lp_notice_business_key_text(lp_notice_business_round_name(item))
+    if round_name:
+        key_parts.append(round_name)
+    return lp_key, "|".join(part for part in key_parts if part)
+
+
+def lp_notice_event_year(item: dict[str, object]) -> int:
+    for key in ["latestEventDate", "eventDate", "announcedDate", "applicationDeadline", "noticeYear"]:
+        value = str(item.get(key) or "").strip()
+        if re.match(r"^20\d{2}", value):
+            return int(value[:4])
+    return 0
+
+
+def drop_cross_year_stale_lifecycle_items(items: list[dict[str, object]]) -> list[dict[str, object]]:
+    latest_year_by_key: dict[tuple[str, str], int] = {}
+    for item in items:
+        key = lp_notice_stable_business_key(item)
+        year = lp_notice_event_year(item)
+        if key[0] and key[1] and year:
+            latest_year_by_key[key] = max(latest_year_by_key.get(key, 0), year)
+    if not latest_year_by_key:
+        return items
+    stale_event_types = {"new_notice", "deadline_soon", "deadline_closed", "revision"}
+    filtered: list[dict[str, object]] = []
+    for item in items:
+        key = lp_notice_stable_business_key(item)
+        latest_year = latest_year_by_key.get(key, 0)
+        year = lp_notice_event_year(item)
+        event_type = str(item.get("eventType") or "")
+        if latest_year and year and year < latest_year and event_type in stale_event_types:
+            continue
+        filtered.append(item)
+    return filtered
 
 
 def _normalize_notice_round_key_for_group(item: dict[str, object]) -> tuple[str, str]:
@@ -621,6 +707,7 @@ def consolidate_lp_notice_display_items(items: list[dict[str, object]], report_d
         )
         for item in items
     ]
+    normalized_items = drop_cross_year_stale_lifecycle_items(normalized_items)
 
     grouped: dict[tuple[str, str], dict[str, object]] = {}
     for item in normalized_items:

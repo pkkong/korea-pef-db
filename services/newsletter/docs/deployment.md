@@ -21,7 +21,7 @@ python services\newsletter\src\build_newsletter_deploy.py --date 2026-05-22
 ## GitHub Pages Deploy
 
 뉴스레터는 기본적으로 GitHub Actions가 매일 만들고, 공개 가능한 정적 파일만 별도 public mirror 저장소에 올린다.
-Mac launchd 발행은 GitHub Actions가 실패하거나 수동 복구가 필요할 때 쓰는 보조/백업 경로다.
+Mac launchd 발행은 GitHub Actions 장애, Secret 문제 복구, 또는 수동 긴급 복구가 필요할 때 쓰는 백업 경로다.
 비개발자는 GitHub Pages 주소만 확인하면 된다.
 
 - 원본 저장소: private repo `pkkong/korea-pef-db`
@@ -41,28 +41,28 @@ GitHub Actions 자동 발행은 다음 순서로 실행된다.
 
 ```text
 1. run_daily_news_pipeline.py로 그날의 뉴스 데이터를 만든다.
-2. build_newsletter_deploy.py로 정적 사이트 파일을 만든다.
-3. services/newsletter/deploy/site/ 결과물만 모은다.
-4. NEWSLETTER_PUBLIC_REPO_TOKEN으로 public mirror pkkong/kpef-newsletter의 `gh-pages` 브랜치에 push한다.
-5. GitHub Pages가 https://pkkong.github.io/kpef-newsletter/ 주소로 보여준다.
+2. build_newsletter_source_audit.py와 enrich_daily_news_ai.py로 품질 점검과 3줄 요약 보강 파일을 만든다.
+3. scripts/build_site_bundle.py --services newsletter로 정적 사이트 파일을 만든다.
+4. services/newsletter/deploy/site/ 결과물만 모은다.
+5. NEWSLETTER_PUBLIC_REPO_TOKEN으로 public mirror pkkong/kpef-newsletter의 `gh-pages` 브랜치에 push한다.
+6. 공개 `health.json`과 `archive.json`이 오늘 날짜와 기사 수를 보여주는지 확인한다.
+7. GitHub Pages가 https://pkkong.github.io/kpef-newsletter/ 주소로 보여준다.
 ```
 
 자동 실행은 GitHub Actions schedule이 담당한다. 기본 설정은 매일 한국시간 오전 8:30 실행이다.
-GitHub cron 표현은 UTC 기준 `30 23 * * *`이며, 실행 시 `report_date`는 Asia/Seoul 기준 오늘 날짜로 계산한다.
 
-GitHub Actions 화면에서 수동 fallback도 그대로 사용할 수 있다. private 원본 저장소의 GitHub 화면에서
+GitHub Actions 화면에서 수동 실행도 그대로 사용할 수 있다. private 원본 저장소의 GitHub 화면에서
 `Actions` → `Deploy newsletter to GitHub Pages` → `Run workflow`를 누르면 실행된다. `report_date`를 비워 두면
 한국시간 기준 오늘 날짜로 생성되고, 필요한 경우 `YYYY-MM-DD` 형식으로 날짜를 직접 넣을 수 있다.
 
-Mac launchd는 GitHub Actions 장애나 public mirror push 복구가 필요할 때 쓰는 보조/백업 자동화다.
-기본 설정은 로컬 시간 매일 오전 8:30 실행이다.
+Mac launchd 백업 설치:
 설치:
 
 ```bash
 services/newsletter/scripts/install_newsletter_local_publisher_launchd.sh
 ```
 
-수동으로 바로 만들고 공개하려면:
+로컬에서 수동으로 바로 만들고 공개하려면:
 
 ```bash
 services/newsletter/scripts/publish_newsletter_pages_local.sh
@@ -90,8 +90,7 @@ GitHub Actions 자동 발행에는 private 원본 저장소의 `Settings` → `S
 - `NAVER_CLIENT_SECRET`: Naver News API client secret
 - `NEWSLETTER_PUBLIC_REPO_TOKEN`: private 원본 저장소의 Action이 public mirror `pkkong/kpef-newsletter`에 push할 때 쓰는 GitHub token
 
-`NAVER_CLIENT_ID` 또는 `NAVER_CLIENT_SECRET`이 없으면 워크플로는 Naver News 소스를 건너뛰고
-Google/RSS/HTML 소스만으로 빌드한다.
+`NAVER_CLIENT_ID` 또는 `NAVER_CLIENT_SECRET`이 없으면 워크플로는 실패한다. Naver 소스를 빼고 발행하면 커버리지가 크게 낮아져서 자동 발행으로 인정하지 않는다.
 `NEWSLETTER_PUBLIC_REPO_TOKEN`이 없거나 public mirror에 push 권한이 없으면 뉴스레터 파일을 만들 수는 있어도
 `pkkong/kpef-newsletter`에 게시할 수 없다.
 
@@ -114,7 +113,7 @@ Branch를 `gh-pages`, Folder를 `/ (root)`로 둔다.
 python3 services/newsletter/scripts/check_github_actions_readiness.py
 ```
 
-정상이라면 `schedule trigger present`, `manual workflow_dispatch trigger present`, 세 Secret 이름이 모두 `[OK]`로 나온다.
+정상이라면 `schedule trigger present`, `daily 08:30 KST cron present`, `manual workflow_dispatch trigger present`, 세 Secret 이름이 모두 `[OK]`로 나온다.
 `gh CLI not found` 또는 `GitHub secret names not checked`가 나오면 로컬에서 이름 확인만 못 한 상태다. 이때는 GitHub 화면에서
 아래 경로로 확인한다.
 
@@ -195,8 +194,8 @@ curl http://127.0.0.1/health.json
 
 매일 갱신은 GitHub Actions scheduled workflow가 처리한다. Repository secrets와 public mirror token이 정상이어야
 뉴스 수집, 정적 사이트 생성, public mirror push가 순서대로 실행된다.
-수동 `Run workflow`는 같은 workflow의 fallback 실행 경로로 유지한다.
-Mac launchd는 Actions 장애, 장시간 지연, 또는 토큰 문제 복구 중 임시 백업으로 사용한다.
+수동 `Run workflow`는 같은 workflow의 수동 실행 경로로 유지한다.
+Mac launchd는 Actions 장애, 장시간 지연, 또는 토큰 문제 복구 중 임시 백업으로만 사용한다. GitHub Actions가 정상 동작하는 날에는 Mac launchd를 같은 시간에 중복 실행하지 않는다.
 
 로컬 실행과 GitHub Actions 실행의 품질/커버리지 차이는
 `services/newsletter/docs/local_vs_github_quality.md`에 정리한다.

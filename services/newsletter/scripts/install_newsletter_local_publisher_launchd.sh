@@ -85,6 +85,8 @@ cat > "$PLIST_PATH" <<PLIST
   <dict>
     <key>PATH</key>
     <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>NEWSLETTER_BUILD_SERVICES</key>
+    <string>newsletter</string>
   </dict>
   <key>StartCalendarInterval</key>
   <dict>

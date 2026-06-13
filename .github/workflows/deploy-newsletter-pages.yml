@@ -22,21 +22,12 @@ env:
   NEWSLETTER_PUBLIC_REPO: pkkong/kpef-newsletter
   NEWSLETTER_PUBLIC_BRANCH: gh-pages
   NEWSLETTER_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter/
-  NEWSLETTER_SOURCE_CODES: >-
-    naver_pef_core_samo,naver_pef_core_pef,naver_pef_deal_sale,
-    naver_pef_deal_acquisition,naver_pef_gp_mbk,naver_pef_lp_commitment,
-    naver_pef_lp_nps,naver_pef_lp_mutual_aid,naver_pef_fundraising,
-    naver_pef_credit,naver_pef_portfolio_valueup,naver_pef_regulation,
-    naver_publisher_thebell,naver_publisher_newstomato,
-    naver_publisher_newstomato_pef,naver_publisher_newstomato_mna,
-    naver_publisher_newstof,naver_publisher_newstof_pef,
-    naver_publisher_newstof_mna,naver_ai_pe_gaic,
-    naver_pef_growth_fund,naver_publisher_dealsite_pef,
-    naver_publisher_dealsite_growth_fund,naver_publisher_dealsite_lp_scope,
-    naver_pef_deal_pe_ub,naver_pef_deal_spa,
-    google_pef_named_gp_watch,google_pef_mna_process_watch,
-    google_lp_people_watch,newstop_private_equity,dealsite_pe_category,
-    kgnews_economy_lp_people
+  NEWSLETTER_BUILD_SERVICES: newsletter
+  NEWSLETTER_LIMIT_PER_SOURCE: "50"
+  NEWSLETTER_LP_LIMIT_PER_SOURCE: "50"
+  NEWSLETTER_AI_PROVIDER: local
+  NEWSLETTER_AI_APPLY_SECTIONS: "0"
+  NEWSLETTER_STRICT_ICON_CHECK: "0"
 
 jobs:
   build-and-publish:
@@ -99,8 +90,8 @@ jobs:
             fi
           }
 
-          check_secret "NAVER_CLIENT_ID" "${NAVER_CLIENT_ID:-}" "recommended" "Naver News sources will be skipped."
-          check_secret "NAVER_CLIENT_SECRET" "${NAVER_CLIENT_SECRET:-}" "recommended" "Naver News sources will be skipped."
+          check_secret "NAVER_CLIENT_ID" "${NAVER_CLIENT_ID:-}" "required" "Active Naver News sources cannot be collected."
+          check_secret "NAVER_CLIENT_SECRET" "${NAVER_CLIENT_SECRET:-}" "required" "Active Naver News sources cannot be collected."
           check_secret "NEWSLETTER_PUBLIC_REPO_TOKEN" "${NEWSLETTER_PUBLIC_REPO_TOKEN:-}" "required" "Publishing to ${NEWSLETTER_PUBLIC_REPO} will fail."
 
           if [ -z "${NEWSLETTER_PUBLIC_REPO_TOKEN:-}" ]; then
@@ -118,61 +109,75 @@ jobs:
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         run: |
           mkdir -p db data/raw/daily_news exports/daily_news
-          if [ -z "${NAVER_CLIENT_ID:-}" ] || [ -z "${NAVER_CLIENT_SECRET:-}" ]; then
-            echo "::warning::NAVER_CLIENT_ID and NAVER_CLIENT_SECRET are not configured; Naver News sources will be skipped."
-          fi
           python3 services/newsletter/src/run_daily_news_pipeline.py \
             --date "${{ steps.date.outputs.report_date }}" \
-            --source-code "${NEWSLETTER_SOURCE_CODES//[[:space:]]/}" \
-            --limit-per-source 5 \
+            --limit-per-source "${NEWSLETTER_LIMIT_PER_SOURCE}" \
             --brief-limit 30 \
             --review-limit 80 \
             --allow-insecure-ssl \
             --google-date-window
 
-      - name: Build LP commitment monitor
+      - name: Build newsletter quality files
         run: |
-          python3 services/lp/src/build_lp_commitment_monitor.py \
-            --date "${{ steps.date.outputs.report_date }}" \
-            --days 180 \
-            --limit-per-source 20 \
-            --allow-insecure-ssl
+          python3 services/newsletter/src/build_newsletter_source_audit.py \
+            --date "${{ steps.date.outputs.report_date }}"
+          NEWSLETTER_AI_APPLY_SECTIONS="${NEWSLETTER_AI_APPLY_SECTIONS}" \
+            python3 services/newsletter/src/enrich_daily_news_ai.py \
+              --date "${{ steps.date.outputs.report_date }}" \
+              --provider "${NEWSLETTER_AI_PROVIDER}"
 
       - name: Build static newsletter site
         run: |
-          python3 scripts/build_site_bundle.py --date "${{ steps.date.outputs.report_date }}" --services newsletter,lp,gp,wiki
+          python3 scripts/build_site_bundle.py --date "${{ steps.date.outputs.report_date }}" --services "${NEWSLETTER_BUILD_SERVICES}"
           python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
 
           site = Path("services/newsletter/deploy/site")
+          requested_services = {
+              part.strip().lower()
+              for chunk in os.environ.get("NEWSLETTER_BUILD_SERVICES", "newsletter").split(",")
+              for part in chunk.split()
+              if part.strip()
+          }
+          if not requested_services or "all" in requested_services:
+              requested_services = {"newsletter", "lp", "gp"}
           health = json.loads((site / "health.json").read_text(encoding="utf-8"))
           print(json.dumps(health, ensure_ascii=False, indent=2))
-          if not (site / "index.html").exists():
-              raise SystemExit("index.html was not generated")
-          if not (site / "daily-news.html").exists():
-              raise SystemExit("daily-news.html was not generated")
-          if not (site / "db.html").exists():
-              raise SystemExit("db.html was not generated")
-          if not (site / "assets/app.css").exists():
-              raise SystemExit("assets/app.css was not generated")
-          if not (site / "assets/app.js").exists():
-              raise SystemExit("assets/app.js was not generated")
-          if not (site / "data/service_data.json").exists():
-              raise SystemExit("data/service_data.json was not generated")
-          if not (site / "ktcu.html").exists():
-              raise SystemExit("ktcu.html was not generated")
-          if not (site / "lp-ktcu.html").exists():
-              raise SystemExit("lp-ktcu.html was not generated")
-          if not (site / "archive.json").exists():
-              raise SystemExit("archive.json was not generated")
+          required = {
+              "index.html",
+              "daily-news.html",
+              "archive.json",
+              "health.json",
+              ".nojekyll",
+              "assets/service.css",
+              "assets/service.js",
+              "apple-touch-icon.png",
+          }
+          if requested_services & {"lp", "gp", "wiki"}:
+              required.update({"db.html", "assets/app.css", "assets/app.js", "data/service_data.json"})
+          if "lp" in requested_services:
+              required.update({"lp-notices.html", "lp-official-notices.html"})
+          if "gp" in requested_services:
+              required.update({"gps.html", "market.html"})
+          missing = [path for path in required if not (site / path).exists()]
+          if missing:
+              raise SystemExit(f"Missing generated files: {', '.join(sorted(missing))}")
           if health["article_count"] <= 0:
               raise SystemExit("article_count is 0; keeping the existing public newsletter instead of publishing an empty issue")
-          if health["lp_monitor_count"] <= 0:
+          if "lp" in requested_services and health["lp_monitor_count"] <= 0:
               print("WARNING: lp_monitor_count is 0; publishing can continue because LP monitor is not the core newsletter.")
           archive = json.loads((site / "archive.json").read_text(encoding="utf-8"))
           print(f"archive_count={len(archive)}")
           PY
+          python3 services/newsletter/src/validate_daily_news_pipeline.py \
+            --date "${{ steps.date.outputs.report_date }}" \
+            --public-dir services/newsletter/deploy/site \
+            --site-dir services/newsletter/deploy/site
+          python3 services/newsletter/src/check_newsletter_brand_icons.py \
+            --site-dir services/newsletter/deploy/site \
+            --report-date "${{ steps.date.outputs.report_date }}"
 
       - name: Publish public newsletter mirror
         shell: bash
@@ -181,8 +186,31 @@ jobs:
         run: |
           publish_dir="$(mktemp -d)"
           git clone --depth 1 --branch "${NEWSLETTER_PUBLIC_BRANCH}" "https://x-access-token:${NEWSLETTER_PUBLIC_REPO_TOKEN}@github.com/${NEWSLETTER_PUBLIC_REPO}.git" "$publish_dir/site-repo"
-          find "$publish_dir/site-repo" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          cp -R services/newsletter/deploy/site/. "$publish_dir/site-repo"/
+          normalized_services="${NEWSLETTER_BUILD_SERVICES//[[:space:]]/}"
+          service_selected() {
+            local service="$1"
+            case ",$normalized_services," in
+              *,all,*|*,"$service",*) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+          if service_selected lp || service_selected gp || service_selected wiki; then
+            find "$publish_dir/site-repo" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            cp -R services/newsletter/deploy/site/. "$publish_dir/site-repo"/
+          else
+            mkdir -p "$publish_dir/site-repo/assets"
+            for path in index.html daily-news.html archive.json health.json .nojekyll robots.txt 404.html site.webmanifest apple-touch-icon.png; do
+              if [ -e "services/newsletter/deploy/site/$path" ]; then
+                cp -R "services/newsletter/deploy/site/$path" "$publish_dir/site-repo/$path"
+              fi
+            done
+            cp services/newsletter/deploy/site/assets/service.css "$publish_dir/site-repo/assets/service.css"
+            cp services/newsletter/deploy/site/assets/service.js "$publish_dir/site-repo/assets/service.js"
+            if [ -d services/newsletter/deploy/site/assets/brand-marks ]; then
+              rm -rf "$publish_dir/site-repo/assets/brand-marks"
+              cp -R services/newsletter/deploy/site/assets/brand-marks "$publish_dir/site-repo/assets/brand-marks"
+            fi
+          fi
           cd "$publish_dir/site-repo"
           touch .nojekyll
           git config user.name "github-actions[bot]"
@@ -195,3 +223,50 @@ jobs:
           git commit -m "Deploy newsletter ${{ steps.date.outputs.report_date }} from GitHub Actions" >/dev/null
           git push origin "${NEWSLETTER_PUBLIC_BRANCH}"
           echo "Published ${NEWSLETTER_PUBLIC_URL}"
+
+      - name: Verify public newsletter
+        shell: bash
+        run: |
+          python3 - "${{ steps.date.outputs.report_date }}" "${NEWSLETTER_PUBLIC_URL}" <<'PY'
+          import json
+          import sys
+          import time
+          from urllib.request import Request, urlopen
+
+          report_date = sys.argv[1]
+          base_url = sys.argv[2].rstrip("/")
+          deadline = time.time() + 180
+          last_error = ""
+
+          def fetch_json(path: str):
+              req = Request(
+                  f"{base_url}/{path}?verify={int(time.time())}-{report_date}",
+                  headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
+              )
+              with urlopen(req, timeout=15) as response:
+                  return json.loads(response.read().decode("utf-8"))
+
+          while time.time() <= deadline:
+              try:
+                  health = fetch_json("health.json")
+                  archive = fetch_json("archive.json")
+                  if health.get("report_date") != report_date:
+                      raise RuntimeError(f"health report_date={health.get('report_date')} expected={report_date}")
+                  article_count = int(health.get("article_count") or 0)
+                  if article_count <= 0:
+                      raise RuntimeError("health article_count is 0")
+                  entry = next((row for row in archive if isinstance(row, dict) and row.get("reportDate") == report_date), None)
+                  if entry is None:
+                      raise RuntimeError(f"archive missing reportDate={report_date}")
+                  archive_count = len(entry.get("articles") or [])
+                  if archive_count <= 0:
+                      raise RuntimeError("archive article_count is 0")
+                  print(f"public_verify_status=ok report_date={report_date} health_articles={article_count} archive_articles={archive_count}")
+                  raise SystemExit(0)
+              except Exception as exc:
+                  last_error = str(exc)
+                  print(f"public_verify_wait={last_error}")
+                  time.sleep(10)
+
+          raise SystemExit(f"public verification failed: {last_error}")
+          PY

@@ -6,13 +6,25 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import re
 import struct
 import sys
 import zlib
 from pathlib import Path
+from urllib.parse import urlparse
 
-from daily_news_common import DEFAULT_EXPORT_DIR, REPO_ROOT, clean_news_title, normalize_url, normalize_whitespace, split_news_title_badges, today_seoul
+from daily_news_common import (
+    DEFAULT_EXPORT_DIR,
+    REPO_ROOT,
+    clean_investment_memo_summary_line,
+    clean_investment_memo_summary_lines,
+    clean_news_title,
+    normalize_url,
+    normalize_whitespace,
+    split_news_title_badges,
+    today_seoul,
+)
 from lp_public_visibility import is_public_lp_notice_row
 
 NEWSLETTER_SRC = REPO_ROOT / "services" / "newsletter" / "src"
@@ -20,6 +32,7 @@ if str(NEWSLETTER_SRC) not in sys.path:
     sys.path.append(str(NEWSLETTER_SRC))
 
 from brand_assets import brand_logo_url, brand_style_string, domain_from_url, prepare_brand_asset_cache  # noqa: E402
+from news_taxonomy import SECTION_LABELS, TAG_TAXONOMY_VERSION, canonical_section  # noqa: E402
 from pef_wiki_pages import render_pef_wiki_page  # noqa: E402
 
 DEFAULT_PUBLIC_DIR = REPO_ROOT / "public"
@@ -28,6 +41,20 @@ DEFAULT_LP_COMMITMENT_MONITOR = REPO_ROOT / "exports" / "lp_commitment_monitor_l
 DEFAULT_ARCHIVE_LIMIT = 30
 LP_PUBLIC_NOTICE_START_DATE = "2024-01-01"
 APP_ICON_FILE = "apple-touch-icon.png"
+LP_NOTICE_PROGRAM_NOISE_TERMS = [
+    "벤처투자마트",
+    "벤처투자종합포털",
+    "주식유통정보",
+    "비상장주식거래플랫폼",
+    "VC구주유통망",
+    "신청 정보 확인",
+    "동의하지 않은 경우",
+    "경우에는 본회",
+    "부합하는 경우",
+    "목록에서 발견",
+    "고객센터",
+    "FAQ",
+]
 SECTION_HEADER_RE = re.compile(r"^\[(?P<section>.+?)\]\s*$")
 ARTICLE_RE = re.compile(r"^- \[(?P<title>.+?)\]\((?P<url>https?://[^)]+)\)")
 EDITORIAL_SECTIONS = [
@@ -39,10 +66,11 @@ EDITORIAL_SECTIONS = [
     "Market",
 ]
 AI_SHORT_RE = re.compile(r"(?<![A-Za-z])AI(?![A-Za-z])", re.IGNORECASE)
+FUNDRAISING_FUND_CHALLENGE_RE = re.compile(r"펀드[\"'’”\)\]\s]{0,4}도전")
 EQUITY_STAKE_TRANSACTION_RE = re.compile(
     r"(?:투자.*지분\s*\d+(?:\.\d+)?%|지분\s*\d+(?:\.\d+)?%.*확보)"
 )
-AMOUNTED_INVESTMENT_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:조|억|억원)\s*(?:규모\s*)?투자")
+AMOUNTED_INVESTMENT_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:조|억|억원)\s*(?:규모\s*)?(?:투자|베팅|투입|집행)")
 NATIONAL_GROWTH_FUND_KEYWORDS = [
     "국민성장펀드",
     "국민성장 펀드",
@@ -249,6 +277,92 @@ LP_EVENT_PRIORITY = {
     "performance_update": 6,
     "deadline_closed": 7,
 }
+
+
+def _build_lp_notice_program_round_maps(
+    rows: list[dict[str, object]],
+) -> tuple[dict[tuple[str, str], str], dict[str, set[str]], dict[tuple[str, str], set[str]]]:
+    """LP 공고 병합을 위한 LP/사업/라운드 별 정규화 맵을 만든다.
+
+    Returns:
+    - LP+round 별 선호 사업명 맵(사업명 정규화가 가능한 데이터 기준)
+    - LP 단위 후보 사업명 집합(불분명한 경우에만 단일 후보로 사용)
+    - LP+사업명별 라운드 후보 집합
+    """
+    preferred_by_key: dict[tuple[str, str], tuple[tuple[int, ...], str]] = {}
+    lp_programs: dict[str, set[str]] = {}
+    rounds_by_business: dict[tuple[str, str], set[str]] = {}
+
+    for row in rows:
+        lp_key = str(row.get("lpCode") or row.get("lpName") or "").strip()
+        if not lp_key:
+            continue
+        program = lp_specific_program_name(row)
+        if not program or program in GENERIC_LP_PROGRAM_NAMES:
+            continue
+        normalized_program = lp_business_key_text(program)
+        if not normalized_program:
+            continue
+
+        round_key = lp_business_key_text(lp_business_round_name(row))
+        score = lp_item_quality(row)
+        for key in [(lp_key, round_key), (lp_key, "")]:
+            current = preferred_by_key.get(key)
+            if current is None or score > current[0] or (score == current[0] and len(program) > len(current[1])):
+                preferred_by_key[key] = (score, program)
+
+        lp_programs.setdefault(lp_key, set()).add(normalized_program)
+        if round_key:
+            rounds_by_business[(lp_key, normalized_program)] = rounds_by_business.get((lp_key, normalized_program), set()) | {round_key}
+
+    preferred = {key: value[1] for key, value in preferred_by_key.items()}
+    return preferred, lp_programs, rounds_by_business
+
+
+def _resolve_lp_notice_program_for_group(
+    item: dict[str, object],
+    program_map: dict[tuple[str, str], str],
+    fallback_map: dict[str, set[str]],
+) -> dict[str, object]:
+    lp_key = str(item.get("lpCode") or item.get("lpName") or "").strip()
+    round_key = lp_business_key_text(lp_business_round_name(item))
+    program = lp_specific_program_name(item)
+    if program and program not in GENERIC_LP_PROGRAM_NAMES:
+        return item
+
+    resolved = program_map.get((lp_key, round_key))
+    if not resolved and fallback_map.get(lp_key):
+        candidates = fallback_map[lp_key]
+        if len(candidates) == 1:
+            resolved = next(iter(candidates))
+    if not resolved:
+        return item
+
+    resolved_item = dict(item)
+    resolved_item["programName"] = resolved
+    return resolved_item
+
+
+def _resolve_lp_notice_round_for_group(
+    item: dict[str, object],
+    round_map: dict[tuple[str, str], str],
+) -> dict[str, object]:
+    round_name = lp_business_round_name(item)
+    if round_name:
+        return item
+
+    program = lp_specific_program_name(item)
+    if not program or program in GENERIC_LP_PROGRAM_NAMES:
+        return item
+
+    lp_key = str(item.get("lpCode") or item.get("lpName") or "").strip()
+    resolved = round_map.get((lp_key, lp_business_key_text(program)))
+    if not resolved:
+        return item
+
+    resolved_item = dict(item)
+    resolved_item["roundName"] = resolved
+    return resolved_item
 def html_escape(value: str) -> str:
     return (
         str(value or "")
@@ -414,7 +528,7 @@ DEAL_FINANCING_KEYWORDS = [
     "대출",
     "파이낸싱",
 ]
-DEAL_OWNERSHIP_KEYWORDS = ["포트폴리오", "밸류업", "PMI", "구조조정", "턴어라운드", "운영 개선", "체질 개선", "실적"]
+DEAL_OWNERSHIP_KEYWORDS = ["포트폴리오", "밸류업", "PMI", "구조조정", "턴어라운드", "운영 개선", "체질 개선", "실적", "수익성", "수익성 개선", "손본다"]
 DEAL_ISSUE_KEYWORDS = ["무산", "분쟁", "소송", "가격 이견", "리스크", "부실", "시끌", "장고"]
 LP_FOCUS_KEYWORDS = [
     "LP",
@@ -434,6 +548,9 @@ LP_FOCUS_KEYWORDS = [
     "국민성장펀드",
     "자산배분",
     "대체투자",
+    "펀드 출자",
+    "PE 출자",
+    "VC 출자",
     "출자사업",
     "출자공고",
     "위탁운용",
@@ -470,6 +587,15 @@ LP_GOVERNANCE_KEYWORDS = [
     "의결권",
     "중기 자산배분",
 ]
+RETIREMENT_ALLOCATOR_KEYWORDS = [
+    "퇴직연금",
+    "401k",
+    "401K",
+    "401(k)",
+    "retirement plan",
+    "retirement plans",
+    "defined contribution",
+]
 GP_FOCUS_KEYWORDS = [
     "GP",
     "운용사",
@@ -489,9 +615,33 @@ GP_FOCUS_KEYWORDS = [
     "약정총액",
     "목표액",
     "블라인드펀드",
+    "블라인드",
+    "펀딩",
+    "자펀드",
     "하우스 전략",
     "운용전략",
     "플랫폼",
+]
+ADVISORY_PEOPLE_ORG_KEYWORDS = [
+    "법무법인",
+    "회계법인",
+    "PwC",
+    "삼일",
+    "광장",
+    "김앤장",
+    "태평양",
+    "세종",
+    "율촌",
+]
+ADVISORY_PEOPLE_EVENT_KEYWORDS = [
+    "영입",
+    "고문",
+    "합류",
+    "리더십 재편",
+    "부대표",
+    "대표 선임",
+    "파트너 선임",
+    "승진",
 ]
 MARKET_KEYWORDS = ["규제", "금감원", "금융위", "금융감독원", "내부통제", "자본시장법", "세제", "과세", "시장", "전망", "동향", "트렌드"]
 MARKET_COMMENTARY_KEYWORDS = [
@@ -501,6 +651,11 @@ MARKET_COMMENTARY_KEYWORDS = [
     "시장 동향",
     "시장 구조",
     "사모 시장",
+    "M&A 보험",
+    "보험 시장",
+    "진술·보장",
+    "진술 보장",
+    "W&I",
     "사모대출은",
     "프라이빗크레딧 시장",
     "은행이 못 채운 공백",
@@ -529,6 +684,7 @@ CREDIT_TRANSACTION_KEYWORDS = [
     "조달",
     "제공",
     "주선",
+    "투입",
     "리파이낸싱 완료",
     "리캡 완료",
     "차환",
@@ -573,6 +729,68 @@ def has_external_funding_deal_signal(text: str) -> bool:
 def has_gp_focus_signal(text: str) -> bool:
     keywords = [keyword for keyword in GP_FOCUS_KEYWORDS if keyword != "파트너"]
     return contains_any(text, keywords) or "파트너" in text.replace("파트너스", "")
+
+
+def has_advisory_people_signal(text: str) -> bool:
+    return contains_any(text, ADVISORY_PEOPLE_ORG_KEYWORDS) and contains_any(text, ADVISORY_PEOPLE_EVENT_KEYWORDS)
+
+
+def has_deal_market_commentary_signal(text: str) -> bool:
+    if not contains_any(text, ["M&A", "인수합병"]):
+        return False
+    if contains_any(
+        text,
+        [
+            "예비입찰",
+            "본입찰",
+            "우선협상",
+            "우협",
+            "주식매매계약",
+            "본계약",
+            "인수 추진",
+            "매각 추진",
+            "인수 완료",
+            "경영권 인수",
+        ],
+    ):
+        return False
+    return contains_any(
+        text,
+        [
+            "시장",
+            "규모",
+            "최저",
+            "급증",
+            "커진다",
+            "얼어붙",
+            "쪼그라",
+            "팬데믹",
+            "보험",
+            "의뢰건수",
+        ],
+    )
+
+
+def has_fundraising_signal(text: str) -> bool:
+    return contains_any(
+        text,
+        ["펀드 결성", "펀드레이징", "펀드 조성", "펀드 도전", "펀드 시동", "펀드 출격", "펀드 증액", "펀딩", "펀딩 목표", "자펀드", "GP 도전", "클로징", "약정총액", "목표액", "블라인드펀드", "블라인드", "블라인드 도전"],
+    ) or bool(FUNDRAISING_FUND_CHALLENGE_RE.search(text))
+
+
+def has_retirement_allocator_signal(text: str) -> bool:
+    return contains_any(text, RETIREMENT_ALLOCATOR_KEYWORDS)
+
+
+def has_financial_license_market_signal(text: str) -> bool:
+    return contains_any(text, ["장외파생상품"]) and contains_any(text, ["라이선스", "인가", "금감원", "금융위"])
+
+
+def has_gp_lp_program_fundraise_signal(text: str) -> bool:
+    return contains_any(text, ["농모태펀드", "모태펀드", "출자 사업", "출자사업"]) and contains_any(
+        text,
+        ["GP 도전", "블라인드", "펀딩", "펀드레이징", "펀드 결성", "자펀드"],
+    )
 
 
 def has_gp_national_growth_fund_strategy_signal(title_text: str, raw_section: str) -> bool:
@@ -626,12 +844,24 @@ def editorial_section(row: dict[str, str]) -> str:
         return "국민성장펀드"
     if has_gp_national_growth_fund_strategy_signal(title_text, raw_section):
         return "GP"
+    if has_financial_license_market_signal(title_text):
+        return "Market"
+    if has_advisory_people_signal(title_text):
+        return "Market"
+    if has_deal_market_commentary_signal(title_text):
+        return "AI & PE" if has_ai_theme(combined) else "Market"
+    if has_gp_lp_program_fundraise_signal(title_text):
+        return "GP"
+    if has_retirement_allocator_signal(title_text):
+        return "LP"
     if contains_any(title_text, LP_FOCUS_KEYWORDS) and not has_ai_theme(title_text):
         return "LP"
     if raw_section == "LP" and contains_any(title_text, LP_GOVERNANCE_KEYWORDS):
         return "LP"
     if raw_section == "AI & PE":
         return "AI & PE"
+    if has_fundraising_signal(title_text) and (raw_section.strip() == "GP" or has_gp_focus_signal(title_text)):
+        return "GP"
     if contains_any(title_text, MARKET_STRUCTURE_KEYWORDS):
         return "Market"
     if contains_any(title_text, MARKET_COMMENTARY_KEYWORDS):
@@ -640,7 +870,7 @@ def editorial_section(row: dict[str, str]) -> str:
         return "Market"
     if has_external_funding_deal_signal(title_text):
         return "Deal"
-    if contains_any(title_text, ["펀드 결성", "펀드레이징", "펀드 조성", "펀드 도전", "펀드 시동", "펀딩", "클로징", "약정총액", "목표액", "블라인드펀드", "블라인드 도전"]):
+    if has_fundraising_signal(title_text):
         return "GP"
     if raw_section.strip() == "GP" and has_gp_focus_signal(title_text):
         return "GP"
@@ -682,18 +912,22 @@ def editorial_subtype(row: dict[str, str], section: str) -> str:
             return "Secondary"
         if contains_any(text, DEAL_ISSUE_KEYWORDS):
             return "Issue"
-        if contains_any(text, ["밸류업", "PMI", "구조조정", "턴어라운드", "운영 개선", "실적"]):
+        if contains_any(text, ["밸류업", "PMI", "구조조정", "턴어라운드", "운영 개선", "실적", "수익성", "수익성 개선", "손본다", "숨겨진 가치", "가치 재평가", "재평가"]):
             return "Ownership"
-        if contains_any(text, ["엑시트", "회수", "매각", "IPO", "블록딜", "청산"]):
-            return "Exit"
         if contains_any(text, ["SPA", "본계약", "계약 체결", "클로징", "자금 납입", "마무리", "완료"]):
             return "Signing·Closing"
-        if contains_any(text, ["입찰", "우선협상", "숏리스트", "주관사", "매각주관"]):
+        if contains_any(text, ["입찰", "우선협상", "숏리스트", "주관사", "매각주관", "원매자", "인수의향", "제안"]):
             return "Auction"
+        if contains_any(text, ["엑시트", "회수", "매각", "IPO", "블록딜", "청산"]):
+            return "Exit"
         return "Acquisition"
     if section == "LP":
+        if has_retirement_allocator_signal(text):
+            return "Allocation"
         if contains_any(text, ["출자사업", "출자공고", "위탁운용", "운용사 선정", "RFP", "출자확약", "앵커"]):
             return "Mandate"
+        if contains_any(text, ["출자", "커밋먼트", "commitment"]):
+            return "Allocation"
         if contains_any(text, ["자산배분", "대체투자", "투자정책", "리밸런싱", "국민성장펀드"]):
             return "Allocation"
         if contains_any(text, ["분배금", "DPI", "수익률", "성과", "포트폴리오"]):
@@ -702,7 +936,7 @@ def editorial_subtype(row: dict[str, str], section: str) -> str:
             return "Liquidity"
         return "Governance"
     if section == "GP":
-        if contains_any(text, ["펀드 결성", "펀드레이징", "펀드 조성", "펀드 도전", "펀드 시동", "펀딩", "클로징", "약정총액", "목표액", "블라인드펀드", "블라인드 도전"]):
+        if has_fundraising_signal(text):
             return "Fundraising"
         if contains_any(text, ["대표", "파트너", "심사역", "영입", "선임", "복귀", "승진", "인력"]):
             return "People"
@@ -711,7 +945,7 @@ def editorial_subtype(row: dict[str, str], section: str) -> str:
         if contains_any(text, ["트랙레코드", "성과", "과거 딜", "회수 성과"]):
             return "Track Record"
         return "Strategy"
-    if contains_any(text, ["규제", "금융위", "금감원", "자본시장법", "세제", "공정위", "제재", "소송"]):
+    if has_financial_license_market_signal(text) or contains_any(text, ["규제", "금융위", "금감원", "자본시장법", "세제", "공정위", "제재", "소송"]):
         return "Regulation"
     if contains_any(text, ["금리", "환율", "유동성", "대출시장", "스프레드", "레버리지"]):
         return "Capital Market"
@@ -758,11 +992,15 @@ def add_unique(items: list[str], value: str) -> None:
 def context_entry() -> dict[str, object]:
     return {
         "gpNames": [],
+        "gpProfileLinks": [],
         "lpNames": [],
         "lpProfileLinks": [],
+        "summaryText": "",
+        "summaryLines": [],
         "searchTerms": [],
         "peopleCount": 0,
         "serviceActions": [],
+        "sectionSuggestion": "",
     }
 
 
@@ -776,6 +1014,13 @@ def service_context_keys(source_url: object = "", normalized_source_url: object 
             if key and key not in keys:
                 keys.append(key)
     return keys
+
+
+def is_google_news_redirect_url(value: object) -> bool:
+    try:
+        return urlparse(str(value or "")).hostname == "news.google.com"
+    except ValueError:
+        return False
 
 
 def split_context_names(value: object) -> list[str]:
@@ -809,6 +1054,60 @@ def article_public_gp_names(context: dict[str, object]) -> list[str]:
     return public_names
 
 
+def public_article_summary(value: object, title: object = "") -> str:
+    text = normalize_whitespace(str(value or ""))
+    title_text = normalize_whitespace(str(title or ""))
+    if not text or len(text) < 18:
+        return ""
+    if title_text and entity_name_key(text) == entity_name_key(title_text):
+        return ""
+    return text[:360]
+
+
+def public_article_summary_lines(value: object, title: object = "") -> list[str]:
+    text = public_article_summary(value, title)
+    if not text:
+        return []
+    text = re.sub(r"\[[^\]]*본 기사는[^\]]*\]", " ", text)
+    text = re.sub(r"이 기사는\s*20\d{2}년\s*\d{1,2}월\s*\d{1,2}일[^.。]*", " ", text)
+    text = re.sub(r"▲[^.。]{0,80}", " ", text)
+    text = re.sub(r"\s*[-–]\s*(?:인베스트조선|한국경제|매일경제|딜사이트|더벨|뉴스톱)\s*$", "", text)
+    text = normalize_whitespace(text)
+    raw_parts = [
+        normalize_whitespace(part)
+        for part in re.split(
+            r"(?<=[!?。])(?=\s*[가-힣A-Z0-9\"“‘<])\s*|(?<=\.)(?=\s*[가-힣A-Z\"“‘<])\s*|(?<=\.)\s+(?=[0-9])|…\s*|\s{2,}",
+            text,
+        )
+        if normalize_whitespace(part)
+    ]
+    if len(raw_parts) <= 1:
+        raw_parts = [
+            normalize_whitespace(part)
+            for part in re.split(r"\s*[;；]\s*|\s*,\s*(?=[가-힣A-Za-z0-9]{2,})", text)
+            if normalize_whitespace(part)
+        ]
+    lines: list[str] = []
+    for part in raw_parts:
+        line = part.strip(" \t\r\n-–—·,.;:。")
+        line = re.sub(r"^\[[^\]]+\]\s*", "", line)
+        line = re.sub(r"\s+", " ", line)
+        line = clean_investment_memo_summary_line(line, title, max_length=62)
+        if not line or len(line) < 8:
+            continue
+        if line not in lines:
+            lines.append(line)
+        if len(lines) >= 3:
+            break
+    if not lines:
+        fallback = text.strip(" \t\r\n-–—·,.;:。")
+        if len(fallback) > 62:
+            fallback = fallback[:61].rstrip(" ,.;:·") + "…"
+        fallback = clean_investment_memo_summary_line(fallback, title, max_length=62)
+        return [fallback] if fallback else []
+    return lines
+
+
 def service_action_label(action: str, context_action: str = "") -> str:
     text = f"{action} {context_action}"
     if "프로필 필수정보" in text:
@@ -838,6 +1137,20 @@ def read_service_context(path: Path) -> dict[str, dict[str, object]]:
             search_terms = entry["searchTerms"]
             add_unique(gp_names, row.get("standard_gp_name", ""))
             add_unique(search_terms, row.get("standard_gp_name", ""))
+            source_gp_id = str(row.get("source_gp_id") or "").strip()
+            try:
+                latest_rank = int(float(str(row.get("latest_primary_rank") or "999999")))
+            except ValueError:
+                latest_rank = 999999
+            if source_gp_id and latest_rank <= 120:
+                links = entry.setdefault("gpProfileLinks", [])
+                link = {
+                    "id": source_gp_id,
+                    "name": str(row.get("standard_gp_name") or "").strip(),
+                    "url": f"gp-{source_gp_id}.html",
+                }
+                if link["name"] and link not in links:
+                    links.append(link)
             for alias in split_semicolon(row.get("matched_aliases", "")):
                 add_unique(search_terms, alias)
             try:
@@ -862,15 +1175,63 @@ def read_review_queue_context(out_dir: Path) -> dict[str, dict[str, object]]:
         with path.open("r", encoding="utf-8-sig", newline="") as handle:
             for row in csv.DictReader(handle):
                 names = split_context_names(row.get("gp_names", ""))
-                if not names:
+                summary_text = normalize_whitespace(str(row.get("summary_text") or ""))
+                if not names and not summary_text:
                     continue
                 for key in service_context_keys(row.get("source_url", ""), row.get("normalized_source_url", "")):
                     entry = context.setdefault(key, context_entry())
+                    if summary_text:
+                        entry["summaryText"] = summary_text
                     gp_names = entry["gpNames"]
                     search_terms = entry["searchTerms"]
                     for name in names:
                         add_unique(gp_names, name)
                         add_unique(search_terms, name)
+    return merge_service_context(context, read_ai_enrichment_context(out_dir))
+
+
+def clean_summary_line_values(value: object, title: object = "") -> list[str]:
+    return clean_investment_memo_summary_lines(value, title, limit=3)
+
+
+def public_section_from_ai_suggestion(value: object) -> str:
+    section_code = canonical_section(value)
+    return SECTION_LABELS.get(section_code, "")
+
+
+def should_apply_ai_section_suggestions() -> bool:
+    return str(os.environ.get("NEWSLETTER_AI_APPLY_SECTIONS", "0")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def read_ai_enrichment_context(out_dir: Path) -> dict[str, dict[str, object]]:
+    context: dict[str, dict[str, object]] = {}
+    for path in sorted(out_dir.glob("daily_news_ai_enrichment_*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        articles = data.get("articles") if isinstance(data, dict) else data
+        if not isinstance(articles, list):
+            continue
+        for row in articles:
+            if not isinstance(row, dict):
+                continue
+            summary_lines = clean_summary_line_values(row.get("summary_lines") or row.get("summaryLines"), row.get("title", ""))
+            summary_text = normalize_whitespace(str(row.get("summary_text") or row.get("summaryText") or ""))
+            section_suggestion = public_section_from_ai_suggestion(row.get("section_suggestion") or row.get("section"))
+            if not summary_lines and not summary_text and not section_suggestion:
+                continue
+            keys = service_context_keys(row.get("source_url", ""), row.get("normalized_source_url", ""))
+            if not keys:
+                keys = service_context_keys(row.get("url", ""), "")
+            for key in keys:
+                entry = context.setdefault(key, context_entry())
+                if summary_text:
+                    entry["summaryText"] = summary_text
+                if summary_lines:
+                    entry["summaryLines"] = summary_lines
+                if section_suggestion:
+                    entry["sectionSuggestion"] = section_suggestion
     return context
 
 
@@ -882,8 +1243,39 @@ def merge_service_context(
         entry = base.setdefault(key, context_entry())
         for name in row.get("gpNames", []):
             add_unique(entry["gpNames"], str(name))
+        gp_links = entry.setdefault("gpProfileLinks", [])
+        seen_gp_links = {
+            (
+                str(item.get("id") or ""),
+                str(item.get("url") or ""),
+                str(item.get("name") or ""),
+            )
+            for item in gp_links
+            if isinstance(item, dict)
+        }
+        for item in row.get("gpProfileLinks", []):
+            if not isinstance(item, dict):
+                continue
+            link = {
+                "id": str(item.get("id") or ""),
+                "name": str(item.get("name") or ""),
+                "url": str(item.get("url") or ""),
+            }
+            key_tuple = (link["id"], link["url"], link["name"])
+            if link["name"] and link["url"] and key_tuple not in seen_gp_links:
+                gp_links.append(link)
+                seen_gp_links.add(key_tuple)
         for name in row.get("lpNames", []):
             add_unique(entry["lpNames"], str(name))
+        summary_text = normalize_whitespace(str(row.get("summaryText") or ""))
+        if summary_text:
+            entry["summaryText"] = summary_text
+        summary_lines = clean_summary_line_values(row.get("summaryLines") or row.get("summary_lines"))
+        if summary_lines:
+            entry["summaryLines"] = summary_lines
+        section_suggestion = public_section_from_ai_suggestion(row.get("sectionSuggestion") or row.get("section_suggestion"))
+        if section_suggestion:
+            entry["sectionSuggestion"] = section_suggestion
         for term in row.get("searchTerms", []):
             add_unique(entry["searchTerms"], str(term))
         links = entry.setdefault("lpProfileLinks", [])
@@ -956,18 +1348,107 @@ GENERIC_LP_PROGRAM_NAMES = {
 }
 
 
-def clean_lp_program_candidate(value: object) -> str:
+LP_NOTICE_BUSINESS_STOP_TERMS = [
+    "출자공고",
+    "공고",
+    "최종",
+    "선정",
+    "선정결과",
+    "선정계획",
+    "서류심사",
+    "정량평가",
+    "위탁운용사",
+    "운영",
+    "결정",
+    "자료",
+    "발표",
+    "결과",
+]
+
+
+LP_NON_BUSINESS_ROUNDS = {"상반기", "하반기", "정시", "수시"}
+
+
+def strip_lp_business_round_suffix(text: object) -> str:
+    value = normalize_whitespace(str(text or ""))
+    if not value:
+        return ""
+    normalized = value
+    while True:
+        updated = re.sub(
+            r"\s*\(?\s*(?:\d+차|\d+호|\d+차년도|상반기|하반기|정시|수시)\s*\)?\s*$",
+            "",
+            normalized,
+            flags=re.IGNORECASE,
+        )
+        if updated == normalized:
+            return normalize_whitespace(normalized)
+        normalized = normalize_whitespace(updated)
+
+
+def clean_lp_notice_text_brackets(value: object) -> str:
     text = normalize_whitespace(str(value or ""))
     if not text:
         return ""
-    text = re.sub(r"^[【\[]?선정(?:공고|결과)?[】\]]?\s*", "", text)
-    text = re.sub(r"^[\"'「『\(\[\s]+|[\"'」』\)\]\s]+$", "", text)
-    text = re.sub(r"\((?:\d+차|\d+호|상반기|하반기|수시|정시)\)?", "", text)
+    text = re.sub(r"^[\"'`‘’“”\s]+|[\"'`’”\s]+$", "", text)
+    for opener, closer in [("(", ")"), ("[", "]"), ("【", "】"), ("「", "」"), ("『", "』")]:
+        if text.startswith(opener) and text.endswith(closer):
+            text = text[len(opener) : -len(closer)]
+            break
+    text = re.sub(r"^\[[^\]]*\]\s*", "", text)
+    text = re.sub(r"^\([^)]*\)\s*", "", text)
+    return normalize_whitespace(text)
+
+
+def normalize_lp_round_name(value: object) -> str:
+    text = normalize_whitespace(str(value or ""))
+    if not text:
+        return ""
+    text = text.strip()
+    text = re.sub(r"[()（）]", "", text)
+    if re.fullmatch(r"\d+차|\d+호|\d+차년도", text):
+        return text
+    if re.fullmatch(r"\d+", text):
+        return text
+    if text in LP_NON_BUSINESS_ROUNDS:
+        return ""
+    if re.search(r"(상반기|하반기|정시|수시)", text) and not re.search(r"\d", text):
+        return ""
+    return text
+
+
+def clean_lp_program_candidate(value: object) -> str:
+    text = clean_lp_notice_text_brackets(value)
+    if not text:
+        return ""
+    if any(term in text for term in LP_NOTICE_PROGRAM_NOISE_TERMS):
+        return ""
+    text = re.sub(r"^[【\[\(]?(?:선정(?:공고|결과)?|최종\s*선정|서류심사\s*결과|정량평가\s*결과)?[】\]\)]?\s*", "", text)
+    text = strip_lp_business_round_suffix(text)
     text = re.sub(r"\s+\d+호$", "", text)
     text = re.sub(r"\s+(?:위탁운용사|업무집행조합원|GP)\s*.*$", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s+(?:선정계획|선정 결과|서류심사 결과|정량평가 결과|출자사업 계획)\s*$", "", text)
+    for term in LP_NOTICE_BUSINESS_STOP_TERMS:
+        text = re.sub(rf"[\s,./｜|·-]*{re.escape(term)}.*$", "", text)
     text = re.sub(r"\s+공고(?:문)?$", "", text)
+    text = re.sub(r"\s+최종$", "", text)
+    if any(term in text for term in LP_NOTICE_PROGRAM_NOISE_TERMS):
+        return ""
     return normalize_whitespace(text).strip(" -·:;")
+
+
+def is_site_lp_program_specific(value: object) -> bool:
+    text = clean_lp_program_candidate(value)
+    if not text or text in GENERIC_LP_PROGRAM_NAMES:
+        return False
+    if len(text) < 6:
+        return False
+    if any(term in text for term in LP_NOTICE_PROGRAM_NOISE_TERMS):
+        return False
+    if re.search(r"(운용계획상|투자하고자|보유하고|최근\s*3년|이해관계|제반\s*장치|대응방안)", text):
+        return False
+    if re.search(r"(가치형이나|고배당형에|동의하지|신청\s*정보|공지\s*-|FAQ)", text):
+        return False
+    return True
 
 
 def lp_program_candidates(text: object) -> list[str]:
@@ -982,6 +1463,7 @@ def lp_program_candidates(text: object) -> list[str]:
         candidates.extend(match.group(1) for match in re.finditer(pattern, raw))
     first_line = re.split(r"(?:\n|\. | \| )", raw, maxsplit=1)[0]
     first_line = re.sub(r"^[^,，:：]{1,18}[,，:：]\s*", "", first_line)
+    first_line = re.sub(r"^\[[^\]]*\]\s*", "", first_line)
     for source in [first_line, raw]:
         candidates.extend(
             match.group(1)
@@ -1000,32 +1482,44 @@ def lp_program_candidates(text: object) -> list[str]:
 
 
 def lp_specific_program_name(item: dict[str, object]) -> str:
-    for key in ["title", "displayTitle", "rawExcerpt", "programName"]:
+    for key in ["title", "displayTitle", "rawExcerpt"]:
         for candidate in lp_program_candidates(item.get(key)):
-            if candidate not in GENERIC_LP_PROGRAM_NAMES:
+            if is_site_lp_program_specific(candidate):
                 return candidate
-    for key in ["programName", "title", "displayTitle"]:
-        for candidate in lp_program_candidates(item.get(key)):
-            if candidate:
-                return candidate
-    return clean_lp_program_candidate(item.get("programName"))
+    for key in ["title", "displayTitle"]:
+        title_fallback = clean_lp_program_candidate(item.get(key))
+        if title_fallback and is_site_lp_program_specific(title_fallback):
+            return title_fallback
+    for candidate in lp_program_candidates(item.get("programName")):
+        if is_site_lp_program_specific(candidate):
+            return candidate
+    stored = clean_lp_program_candidate(item.get("programName"))
+    return stored if is_site_lp_program_specific(stored) else ""
 
 
 def lp_business_round_name(item: dict[str, object]) -> str:
     text = " ".join(str(item.get(key) or "") for key in ["title", "displayTitle", "rawExcerpt"])
+    searchable_text = re.sub(r"\([^)]*공고\s*제?\s*\d{4}[-\s]?\d+호?[^)]*\)", " ", text)
+    searchable_text = re.sub(r"공고\s*제?\s*\d{4}[-\s]?\d+호?", " ", searchable_text)
+    searchable_text = normalize_whitespace(searchable_text)
     for pattern in [
         r"\((\d+차|\d+호)\)",
         r"(\d+차년도)",
-        r"\b(\d+호)",
-        r"\b(\d+차)\s*(?:출자|공고|선정|간접투자|출항)?",
+        r"(\d+호)(?:\s*(?:출자|공고|선정|간접투자|출항))?",
+        r"(\d+차)(?:\s*(?:출자|공고|선정|간접투자|출항))?",
         r"(상반기|하반기|정시|수시)\s*(?:출자|공고|선정)?",
         r"(대형|중형|루키|도전|코스닥|M&A|세컨더리)\s*(?:리그|분야)",
     ]:
-        match = re.search(pattern, text, flags=re.IGNORECASE)
+        match = re.search(pattern, searchable_text, flags=re.IGNORECASE)
         if match:
-            return normalize_whitespace(match.group(1))
-    round_name = normalize_whitespace(str(item.get("roundName") or ""))
-    if round_name:
+            candidate = normalize_lp_round_name(match.group(1))
+            if candidate:
+                return candidate
+    round_name = normalize_lp_round_name(item.get("roundName"))
+    if round_name and re.search(re.escape(round_name), searchable_text):
+        return round_name
+    stored_program = clean_lp_program_candidate(item.get("programName"))
+    if round_name and is_site_lp_program_specific(stored_program):
         return round_name
     return ""
 
@@ -1034,14 +1528,68 @@ def lp_business_key_text(value: object) -> str:
     return re.sub(r"[^0-9A-Za-z가-힣]", "", normalize_whitespace(str(value or ""))).lower()
 
 
+def lp_group_year_key(item: dict[str, object]) -> str:
+    for key in ["noticeYear", "latestEventDate", "eventDate", "announcedDate", "applicationDeadline"]:
+        value = str(item.get(key) or "").strip()
+        if re.match(r"^20\d{2}", value):
+            return value[:4]
+    return ""
+
+
+def lp_group_asset_key(item: dict[str, object]) -> str:
+    return lp_business_key_text(" ".join(str(item.get(key) or "") for key in ["assetClass", "strategy"]))
+
+
 def lp_business_key(item: dict[str, object]) -> tuple[str, str]:
     lp_key = str(item.get("lpCode") or item.get("lpName") or "").strip()
     program = lp_specific_program_name(item)
     round_name = lp_business_round_name(item)
     program_key = lp_business_key_text(program)
     if program_key:
-        return lp_key, f"{program_key}|{lp_business_key_text(round_name)}"
-    return lp_key, lp_dedupe_title(str(item.get("title") or ""))
+        key_parts = [program_key]
+        round_key = lp_business_key_text(round_name)
+        if round_key:
+            key_parts.append(round_key)
+        asset_key = lp_group_asset_key(item)
+        if asset_key:
+            key_parts.append(asset_key)
+        year_key = lp_group_year_key(item)
+        if year_key:
+            key_parts.append(year_key)
+        return lp_key, "|".join(key_parts)
+    key_parts = [lp_dedupe_title(str(item.get("title") or ""))]
+    asset_key = lp_group_asset_key(item)
+    if asset_key:
+        key_parts.append(asset_key)
+    year_key = lp_group_year_key(item)
+    if year_key:
+        key_parts.append(year_key)
+    return lp_key, "|".join(part for part in key_parts if part)
+
+
+def lp_business_key_signature(item: dict[str, object]) -> tuple[str, str, str]:
+    lp_key = str(item.get("lpCode") or item.get("lpName") or "").strip()
+    program = lp_specific_program_name(item)
+    round_name = lp_business_round_name(item)
+    return lp_key, lp_business_key_text(program), lp_business_key_text(round_name)
+
+
+def _rounds_for_lp_program(rows: list[dict[str, object]]) -> str:
+    non_empty_rounds: list[tuple[str, str]] = []
+    for row in rows:
+        round_key = lp_business_key_text(lp_business_round_name(row))
+        if not round_key:
+            continue
+        event_date = str(row.get("eventDate") or row.get("announcedDate") or row.get("latestEventDate") or "")
+        source_type = str(row.get("sourceType") or "").strip().lower()
+        non_empty_rounds.append((event_date, source_type, round_key))
+    if not non_empty_rounds:
+        return ""
+    # When a unique round exists for the same LP/program, use it as fallback for placeholder rows.
+    unique_rounds = {round_key for _, __, round_key in non_empty_rounds}
+    if len(unique_rounds) == 1:
+        return sorted(non_empty_rounds, key=lambda item: (item[0], item[1]), reverse=True)[0][2]
+    return ""
 
 
 def lp_event_group(event_type: object) -> str:
@@ -1157,13 +1705,73 @@ def merge_lp_item(primary: dict[str, object], secondary: dict[str, object]) -> d
     merged["sourceCount"] = len(source_links)
     merged["publicAnchor"] = bool(primary.get("publicAnchor") or secondary.get("publicAnchor"))
     merged["businessKey"] = primary.get("businessKey") or secondary.get("businessKey") or lp_business_key(merged)
+    events = list(merged.get("events") or [])
+    for source in [primary, secondary]:
+        nested_events = source.get("events") if isinstance(source.get("events"), list) else []
+        for nested_event in nested_events:
+            if not isinstance(nested_event, dict):
+                continue
+            nested_id = str(nested_event.get("noticeId") or "")
+            nested_title = str(nested_event.get("title") or "")
+            nested_event_date = str(nested_event.get("eventDate") or "")
+            if any(
+                (str(event.get("noticeId") or "") == nested_id and nested_id)
+                or (not nested_id and str(event.get("title") or "") == nested_title and nested_event_date == str(event.get("eventDate") or ""))
+                for event in events
+            ):
+                continue
+            events.append(dict(nested_event))
+        event_title = str(source.get("title") or source.get("displayTitle") or "")
+        event_type = str(source.get("eventType") or "")
+        event_date = str(source.get("eventDate") or source.get("announcedDate") or "")
+        if not (event_title or event_type or event_date):
+            continue
+        event_signature = (event_title, event_type, event_date)
+        if any((str(event.get("title") or ""), str(event.get("eventType") or ""), str(event.get("eventDate") or "")) == event_signature for event in events):
+            continue
+        event_record = {
+            "noticeId": str(source.get("noticeId") or ""),
+            "title": event_title,
+            "eventType": event_type,
+            "eventDate": event_date,
+            "stage": source.get("stage"),
+            "url": source.get("url"),
+            "documentUrl": source.get("documentUrl"),
+            "sourceType": source.get("sourceType"),
+        }
+        events.append(event_record)
+    if events:
+        events.sort(
+            key=lambda event: (
+                str(event.get("eventDate") or ""),
+                LP_EVENT_PRIORITY.get(str(event.get("eventType") or ""), 99),
+            ),
+            reverse=True,
+        )
+        merged["events"] = events
+        latest_event = events[0]
+        merged["latestEventDate"] = latest_event.get("eventDate") or merged.get("eventDate")
+        merged["latestEventType"] = latest_event.get("eventType") or merged.get("eventType")
+        merged["latestEventTitle"] = latest_event.get("title") or merged.get("title")
+        merged["eventDate"] = merged["latestEventDate"]
+    else:
+        merged["events"] = []
+        merged["latestEventDate"] = merged.get("eventDate")
+        merged["latestEventType"] = merged.get("eventType")
+        merged["latestEventTitle"] = merged.get("title")
     return merged
 
 
 def read_lp_monitor(path: Path, limit: int | None = 8) -> list[dict[str, object]]:
     if not path.exists():
         return []
-    grouped: dict[tuple[str, str, str, str], dict[str, object]] = {}
+    grouped: dict[tuple[str, str], dict[str, object]] = {}
+    staged_rows: list[dict[str, object]] = []
+    program_round_candidates: dict[tuple[str, str], list[dict[str, object]]] = {}
+    program_by_anchor: dict[tuple[str, str], str] = {}
+    fallback_program_by_lp: dict[str, set[str]] = {}
+    round_candidates_by_business: dict[tuple[str, str], set[str]] = {}
+    resolved_round_by_key: dict[tuple[str, str], str] = {}
     public_business_keys: set[tuple[str, str]] = set()
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         for row in csv.DictReader(handle):
@@ -1173,7 +1781,11 @@ def read_lp_monitor(path: Path, limit: int | None = 8) -> list[dict[str, object]
                 continue
             if is_lp_notice_supporting_document(title):
                 continue
-            public_anchor = is_public_lp_notice_row(row, require_official=True)
+            public_anchor = is_public_lp_notice_row(
+                row,
+                require_official=True,
+                allow_official_candidates=True,
+            )
             if not public_anchor and not is_lp_notice_merge_support_row(row):
                 continue
             event_date = row.get("event_date", "") or row.get("announced_date", "")
@@ -1223,22 +1835,40 @@ def read_lp_monitor(path: Path, limit: int | None = 8) -> list[dict[str, object]
                 "rawExcerpt": row.get("raw_excerpt", ""),
                 "attachments": attachments,
                 "publicAnchor": public_anchor,
+                "latestEventDate": row.get("event_date", ""),
+                "latestEventType": row.get("event_type", ""),
+                "latestEventTitle": row.get("title", ""),
             }
-            business_key = lp_business_key(item)
-            item["businessKey"] = business_key
-            if public_anchor:
-                public_business_keys.add(business_key)
-            dedupe_key = (
-                business_key[0],
-                business_key[1],
-                lp_event_group(item.get("eventType")),
-                str(item.get("eventDate") or item.get("announcedDate") or "")[:10],
-            )
-            current = grouped.get(dedupe_key)
-            if current is None or lp_item_quality(item) > lp_item_quality(current):
-                grouped[dedupe_key] = merge_lp_item(item, current or {})
-            else:
-                grouped[dedupe_key] = merge_lp_item(current, item)
+            lp_key, program_key, _ = lp_business_key_signature(item)
+            program_round_candidates.setdefault((lp_key, program_key), []).append(item)
+            staged_rows.append(item)
+
+    program_by_anchor, fallback_program_by_lp, round_candidates_by_business = _build_lp_notice_program_round_maps(staged_rows)
+    resolved_round_by_key = {
+        key: next(iter(values)) for key, values in round_candidates_by_business.items() if len(values) == 1
+    }
+    fallback_program_by_lp = {
+        lp_code: candidates for lp_code, candidates in fallback_program_by_lp.items() if len(candidates) == 1
+    }
+
+    for item in staged_rows:
+        item = _resolve_lp_notice_program_for_group(item, program_by_anchor, fallback_program_by_lp)
+        item = _resolve_lp_notice_round_for_group(item, resolved_round_by_key)
+        lp_key = str(item.get("lpCode") or item.get("lpName") or "").strip()
+        program = lp_specific_program_name(item)
+        program_key = lp_business_key_text(program)
+        resolved_round = _rounds_for_lp_program(program_round_candidates.get((lp_key, program_key), []))
+        if resolved_round:
+            item["roundName"] = resolved_round
+        business_key = lp_business_key(item)
+        item["businessKey"] = business_key
+        if item.get("publicAnchor"):
+            public_business_keys.add(business_key)
+        current = grouped.get(business_key)
+        if current is None or lp_item_quality(item) > lp_item_quality(current):
+            grouped[business_key] = merge_lp_item(item, current or {})
+        else:
+            grouped[business_key] = merge_lp_item(current, item)
     rows = [item for item in grouped.values() if item.get("businessKey") in public_business_keys]
     rows.sort(key=lp_public_sort_key)
     return rows[:limit] if limit and limit > 0 else rows
@@ -1252,12 +1882,21 @@ def article_payload_rows(
     service_context = service_context or {}
     payload: list[dict[str, object]] = []
     for index, row in enumerate(rows):
-        section = editorial_section(row)
-        subtype = editorial_subtype(row, section)
+        raw_section = row.get("section", "")
+        section = raw_section if raw_section in EDITORIAL_SECTIONS else editorial_section(row)
         article_url = row.get("url", "")
+        if is_google_news_redirect_url(article_url):
+            continue
         context = service_context.get(normalize_url(article_url), service_context.get(article_url, {}))
+        if should_apply_ai_section_suggestions():
+            ai_section = str(context.get("sectionSuggestion") or "")
+            if ai_section in EDITORIAL_SECTIONS:
+                section = ai_section
+        subtype = editorial_subtype(row, section)
         display_title, title_badges = split_news_title_badges(row.get("title", ""), row.get("source", ""))
         gp_names = article_public_gp_names(context)
+        summary_text = public_article_summary(context.get("summaryText", ""), display_title)
+        summary_lines = clean_summary_line_values(context.get("summaryLines"), display_title) or public_article_summary_lines(summary_text, display_title)
         payload.append(
             {
                 "id": f"{id_prefix}-{index}",
@@ -1272,8 +1911,12 @@ def article_payload_rows(
                 "sourceIconUrl": source_icon_url(row.get("url", ""), row.get("source", "")),
                 "sourceIconStyle": brand_style_string(row.get("url", ""), row.get("source", "")),
                 "url": row.get("url", ""),
+                "summaryText": summary_text,
+                "summaryLines": summary_lines,
+                "tagVersion": TAG_TAXONOMY_VERSION,
                 "sectionOrder": section_sort_key(section),
                 "gpNames": gp_names,
+                "gpProfileLinks": context.get("gpProfileLinks", []),
                 "lpNames": context.get("lpNames", []),
                 "lpProfileLinks": context.get("lpProfileLinks", []),
                 "peopleCount": context.get("peopleCount", 0),
@@ -2258,6 +2901,23 @@ button, input { font: inherit; }
   font-weight: 600;
   letter-spacing: 0;
 }
+.cell-summary {
+  display: grid;
+  overflow: hidden;
+  gap: 2px;
+  margin: 5px 0 0;
+  color: #4f4f52;
+  font-size: 12.5px;
+  line-height: 1.48;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.cell-summary-line {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .title-badge {
   display: inline-flex;
   min-height: 18px;
@@ -2327,6 +2987,10 @@ button, input { font: inherit; }
 .lp-chip {
   background: var(--surface-muted);
   color: #5f5f63;
+}
+.gp-chip {
+  background: #f2f5f4;
+  color: #4f625e;
 }
 .context-chip:active { background: #e0e0e6; }
 .tag-toggle {
@@ -2746,6 +3410,7 @@ def service_js() -> str:
 
   const articleSearchValues = (article) => [
     article.title,
+    article.summaryText,
     article.source,
     article.section,
     article.subCategory,
@@ -3082,6 +3747,26 @@ def service_js() -> str:
     titleText.textContent = article.title;
     title.append(titleText);
 
+    const summaryLines = Array.isArray(article.summaryLines)
+      ? article.summaryLines.map((line) => String(line || "").trim()).filter(Boolean).slice(0, 3)
+      : [];
+    const summaryText = summaryLines.length ? "" : String(article.summaryText || "").trim();
+    let summary = null;
+    if (summaryLines.length || summaryText) {
+      summary = document.createElement("span");
+      summary.className = "cell-summary";
+      if (summaryLines.length) {
+        summaryLines.forEach((line) => {
+          const item = document.createElement("span");
+          item.className = "cell-summary-line";
+          item.textContent = line;
+          summary.append(item);
+        });
+      } else {
+        summary.textContent = summaryText;
+      }
+    }
+
     const meta = document.createElement("span");
     meta.className = "cell-meta";
     const source = document.createElement("span");
@@ -3094,7 +3779,9 @@ def service_js() -> str:
       meta.append(date);
     }
     meta.append(source);
-    link.append(title, meta);
+    link.append(title);
+    if (summary) link.append(summary);
+    link.append(meta);
     main.append(link);
 
     const chips = document.createElement("span");
@@ -3121,8 +3808,11 @@ def service_js() -> str:
     lpLinks.forEach((item) => appendLinkChip(item.name, item.url, "lp-chip"));
     const lpNames = Array.isArray(article.lpNames) ? article.lpNames.filter(Boolean) : [];
     lpNames.filter((name) => !lpLinkedNames.has(name)).forEach((name) => appendChip(name, "lp-chip"));
+    const gpLinks = Array.isArray(article.gpProfileLinks) ? article.gpProfileLinks.filter((item) => item && item.name && item.url) : [];
+    const gpLinkedNames = new Set(gpLinks.map((item) => item.name));
+    gpLinks.forEach((item) => appendLinkChip(item.name, item.url, "gp-chip"));
     const gpNames = Array.isArray(article.gpNames) ? article.gpNames.filter(Boolean) : [];
-    gpNames.forEach((name) => appendChip(name));
+    gpNames.filter((name) => !gpLinkedNames.has(name)).forEach((name) => appendChip(name, "gp-chip"));
     if (chips.childElementCount) {
       const toggle = document.createElement("button");
       toggle.type = "button";
@@ -3321,6 +4011,7 @@ def build(
     prepare_brand_asset_cache(public_dir)
     home_path = public_dir / "index.html"
     daily_path = public_dir / "daily-news.html"
+    archive_path = public_dir / "archive.json"
     css_path = assets_dir / "service.css"
     js_path = assets_dir / "service.js"
     manifest_path = public_dir / "site.webmanifest"
@@ -3329,6 +4020,7 @@ def build(
     html = render_app(report_date, articles, basis_text, service_context, archive_entries, lp_monitor, newsletter_only)
     home_path.write_text(html, encoding="utf-8")
     daily_path.write_text(html, encoding="utf-8")
+    archive_path.write_text(json.dumps(archive_entries, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     css_path.write_text(service_css(), encoding="utf-8")
     js_path.write_text(service_js(), encoding="utf-8")
     manifest_path.write_text(app_web_manifest(), encoding="utf-8")
@@ -3338,6 +4030,7 @@ def build(
         "report_date": report_date,
         "home_path": str(home_path),
         "daily_path": str(daily_path),
+        "archive_path": str(archive_path),
         "css_path": str(css_path),
         "js_path": str(js_path),
         "manifest_path": str(manifest_path),

@@ -56,9 +56,13 @@ fundraising_commitment_total,title_or_excerpt,contains,약정총액,3,topic,GP,�
 fundraising_co_invest,title_or_excerpt,contains,공동투자,2,topic,GP,공동투자 펀드 또는 co-investment 기사입니다.,1,GP Fundraising keyword
 fundraising_blind_fund_build,title_or_excerpt,contains,블라인드펀드 조성,3,topic,GP,블라인드펀드 조성 기사입니다.,1,GP Fundraising keyword
 fundraising_fund_challenge,title_or_excerpt,contains,펀드 도전,2,topic,GP,펀드레이징 목표 또는 신규 펀드 추진 기사입니다.,1,GP Fundraising keyword
+fundraising_fund_challenge_gap,title_or_excerpt,regex,"펀드.{0,5}도전",3,topic,GP,펀드 명칭 뒤 도전 표현이 붙은 신규 펀드 추진 기사입니다.,1,GP Fundraising keyword with title punctuation
+fundraising_fund_challenge_gap_topic,title_or_excerpt,regex,"펀드.{0,5}도전",0,topic,Fundraising,펀드레이징 목표 또는 신규 펀드 추진 기사입니다.,1,GP Fundraising facet
 fundraising_fund_start,title_or_excerpt,contains,펀드 시동,3,topic,GP,신규 펀드 조성 착수 기사입니다.,1,GP Fundraising keyword
 fundraising_fund_launch,title_or_excerpt,contains,펀드 출격,3,topic,GP,신규 펀드 출자사업 또는 조성 기사입니다.,1,GP Fundraising keyword
 fundraising_fund_increase,title_or_excerpt,contains,펀드 증액,3,topic,GP,펀드 조성 규모 확대 기사입니다.,1,GP Fundraising keyword
+fundraising_funding_goal,title_or_excerpt,contains,펀딩 목표,3,topic,GP,펀딩 목표 또는 신규 자펀드 조성 기사입니다.,1,GP Fundraising keyword
+fundraising_subfund,title_or_excerpt,contains,자펀드,3,topic,Fundraising,국민성장펀드 등 정책 출자를 활용한 자펀드 조성 기사입니다.,1,GP Fundraising facet
 fundraising_ai_fund,title_or_excerpt,contains,AI펀드,3,topic,GP,AI 테마 펀드 조성 기사입니다.,1,GP Fundraising keyword
 fundraising_investor_call,title_or_excerpt,contains,러브콜,2,topic,GP,펀드 출자 수요 또는 펀드레이징 기사입니다.,1,GP Fundraising keyword
 gp_ef_pe,title_or_excerpt,contains,E&F PE,4,topic,GP,E&F PE 관련 GP 기사입니다.,1,GP name and fundraising safety net
@@ -71,6 +75,9 @@ gp_aurora_partners,title_or_excerpt,contains,오로라파트너스,3,topic,GP,�
 gp_gravity_pe,title_or_excerpt,contains,그래비티PE,4,topic,GP,그래비티PE 관련 GP 기사입니다.,1,Named GP safety net
 gp_kcgi_asset_management,title_or_excerpt,contains,KCGI자산운용,3,topic,GP,KCGI자산운용 관련 운용사 기사입니다.,1,Named GP/asset-manager safety net
 gp_opus_nh_pe,title_or_excerpt,contains,오퍼스-NH PE,4,topic,GP,오퍼스-NH PE 관련 GP 기사입니다.,1,Named GP safety net
+gp_atinum,title_or_excerpt,contains,에이티넘,3,topic,GP,에이티넘 관련 GP 기사입니다.,1,Named GP safety net
+gp_500_global_ko,title_or_excerpt,contains,500글로벌,3,topic,GP,500글로벌 관련 GP/VC 기사입니다.,1,Named GP/VC safety net
+gp_500_global_en,title_or_excerpt,contains,500 Global,3,topic,GP,500 Global 관련 GP/VC 기사입니다.,1,Named GP/VC safety net
 lp_asset_management_head,title_or_excerpt,contains,자산운용본부장,4,topic,LP,LP 자산운용 조직 인사 또는 채용 기사입니다.,1,LP personnel and allocator operations keyword
 lp_cio,title_or_excerpt,contains,CIO,2,topic,LP,LP 또는 금융사 투자책임자 인사 기사일 수 있습니다.,1,LP people and allocator operations keyword
 lp_cio_recruitment,title_or_excerpt,regex,CIO.*공개모집|공개모집.*CIO,3,topic,LP,LP 투자책임자 공개모집 기사입니다.,1,LP people and governance keyword
@@ -86,6 +93,8 @@ lp_scope,title_or_excerpt,contains,LP Scope,4,topic,LP,LP Scope 출자자 기사
 lp_venture_mother_fund,title_or_excerpt,contains,벤처모펀드,3,topic,LP,민간 벤처모펀드 출자사업 기사입니다.,1,LP commitment keyword
 lp_cio_public_search,title_or_excerpt,contains,CIO 공개모집,3,topic,LP,LP 투자책임자 공개모집 기사입니다.,1,LP people and governance keyword
 lp_fund_management_eval,title_or_excerpt,contains,기금운용평가,2,topic,LP,연기금 운용 성과 평가 기사입니다.,1,LP performance keyword
+lp_retirement_plan,title_or_excerpt,contains,퇴직연금,3,topic,LP,퇴직연금의 사모펀드 접근 또는 자산배분 기사입니다.,1,LP allocator policy keyword
+lp_401k,title_or_excerpt,regex,401\s*\(?k\)?,3,topic,LP,401k 퇴직연금의 사모펀드 접근 또는 자산배분 기사입니다.,1,LP allocator policy keyword
 ai_pe_gaic,title_or_excerpt,contains,GAIC,1,topic,AI_PE,AI와 PE 투자전략 관련 컨퍼런스 기사입니다.,1,AI & PE conference keyword
 credit_private_credit,title_or_excerpt,contains,프라이빗크레딧,3,topic,Credit,프라이빗크레딧 관련 기사입니다.,1,Deal financing keyword
 credit_private_credit_english,title_or_excerpt,contains,private credit,3,topic,Credit,Private credit 관련 기사입니다.,1,Deal financing keyword
@@ -93,7 +102,9 @@ credit_private_debt_samo,title_or_excerpt,contains,사모대출,3,topic,Credit,�
 credit_acquisition_finance,title_or_excerpt,contains,인수금융,2,topic,Credit,인수금융 또는 레버리지 조달 기사입니다.,1,Deal financing keyword
 credit_refinancing,title_or_excerpt,contains,리파이낸싱,2,topic,Credit,리파이낸싱 관련 기사입니다.,1,Deal financing keyword
 credit_mezzanine,title_or_excerpt,contains,메자닌,2,topic,Credit,메자닌 투자 또는 조달 기사입니다.,1,Deal financing keyword
+deal_cb_investment,title_or_excerpt,regex,CB.*(투입|인수|투자),3,topic,Deal,전환사채 또는 메자닌 투자 집행 기사입니다.,1,Deal financing keyword
 deal_continuation_fund,title_or_excerpt,contains,컨티뉴에이션 펀드,3,topic,Deal,컨티뉴에이션 펀드 또는 기존 자산 이전 거래 기사입니다.,1,Deal process keyword
+market_otc_derivatives_license,title_or_excerpt,contains,장외파생상품,3,topic,Market,장외파생상품 인가 또는 라이선스 관련 시장·규제 기사입니다.,1,Market regulation keyword
 reg_fsc,any_text,contains,금융위원회,2,topic,Market,금융위 발표 또는 규제 변화와 연결됩니다.,1,Market regulation keyword
 reg_fss,any_text,contains,금융감독원,2,topic,Market,금감원 발표 또는 감독 이슈와 연결됩니다.,1,Market regulation keyword
 reg_compliance,any_text,contains,내부통제,2,topic,Market,내부통제 이슈로 실무 체크 가치가 있습니다.,1,Market regulation keyword

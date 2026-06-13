@@ -29,7 +29,8 @@ This intentionally does **not** include weekly deep-dives, LP org charts, people
 - `services/newsletter/data/news_keyword_rules.csv`
 - `services/newsletter/data/news_manual_overrides.csv`
 - `services/newsletter/data/news_gp_alias_overrides.csv`
-- `services/newsletter/src/daily_news_common.py`
+- `services/shared/src/daily_news_common.py`
+- `services/newsletter/src/daily_news_common.py` compatibility shim
 - `services/newsletter/src/run_daily_news_pipeline.py`
 
 ## Initial Source Strategy

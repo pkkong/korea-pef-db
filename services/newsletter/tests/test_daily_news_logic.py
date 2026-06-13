@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = SERVICE_ROOT / "src"
@@ -19,6 +21,8 @@ if str(LEGACY_SCRIPTS_DIR) not in sys.path:
 
 from run_daily_news_pipeline import (
     EXPORT_MIN_QUALITY_SCORE,
+    assert_source_family_readiness,
+    build_scoring_excerpt,
     coverage_window_label,
     editorial_quality,
     event_dedupe_key,
@@ -26,20 +30,26 @@ from run_daily_news_pipeline import (
     extract_google_news_decode_params,
     google_query_for_report_date,
     google_news_encoded_id,
+    infer_publisher,
     is_in_coverage_window,
     is_previous_export,
     load_previous_export_keys,
+    normalize_export_classification,
     normalize_title_key,
     parse_google_news_batch_response,
     primary_section,
     render_markdown,
     select_brief_rows,
     select_review_rows,
+    should_skip_previous_export,
     should_export_row,
 )
+from news_taxonomy import TAG_TAXONOMY_VERSION
 from daily_news_common import (
+    DEFAULT_SOURCES,
     DEFAULT_RULES,
     load_gp_aliases,
+    load_sources,
     load_rules,
     match_gp_entities,
     normalize_url,
@@ -50,6 +60,7 @@ from build_newsletter_deploy import (
     consolidate_lp_notice_display_items,
     display_asset_classes,
     filter_service_context_profile_links,
+    lp_notice_business_round_name,
     lp_notice_program_label,
     lp_notice_specific_program_name,
     public_coverage_label,
@@ -60,9 +71,17 @@ from build_newsletter_deploy import (
     render_lp_notice_card,
 )
 from build_service_site import editorial_section
+from build_service_site import editorial_subtype
 from build_service_site import article_payload_rows
+from build_service_site import public_article_summary_lines
+from build_service_site import read_ai_enrichment_context
 from apply_daily_news_review import normalize_category
+from brand_assets import brand_logo_url
 from lp_public_visibility import is_public_lp_notice_row
+from validate_daily_news_pipeline import Validation, check_classification_quality
+from enrich_daily_news_ai import audit_rows, enrichment_prompt, memo_summary_lines, normalize_ai_articles
+from backtest_newsletter_ai import summarize_date
+from evaluate_news_classification_goldens import evaluate as evaluate_classification_goldens, read_csv_rows as read_golden_csv_rows
 
 
 def test_coverage_window() -> None:
@@ -115,6 +134,32 @@ def test_previous_export_keys_ignore_review_candidates() -> None:
             {"source_url": "https://example.com/review", "normalized_source_url": "", "title": "Review Candidate"},
             previous_keys,
         )
+
+
+def test_force_include_previous_export_only_repeats_inside_current_window() -> None:
+    previous_keys = {
+        "urls": {"https://view.asiae.co.kr/article/2026052611385718194"},
+        "titles": set(),
+    }
+    old_manual = {
+        "source_url": "https://view.asiae.co.kr/article/2026052611385718194",
+        "normalized_source_url": "https://view.asiae.co.kr/article/2026052611385718194",
+        "title": "국내 금융권 등 해외 사모대출 56조…당국 시스템 리스크 가능성 낮아",
+        "published_at": "2026-05-26T11:38:00+09:00",
+        "review_status": "force_include",
+    }
+    current_manual = {
+        **old_manual,
+        "source_url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=458008",
+        "normalized_source_url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=458008",
+        "published_at": "2026-06-06T13:59:57+09:00",
+    }
+    current_previous_keys = {
+        "urls": {"https://www.pinpointnews.co.kr/news/articleView.html?idxno=458008"},
+        "titles": set(),
+    }
+    assert should_skip_previous_export(old_manual, previous_keys, "2026-06-07")
+    assert not should_skip_previous_export(current_manual, current_previous_keys, "2026-06-07")
 
 
 def test_google_news_decode_helpers() -> None:
@@ -180,6 +225,7 @@ def test_gp_alias_overrides_cover_common_short_names() -> None:
                     (51, "골든루트인베스트먼트"),
                     (52, "대신프라이빗에쿼티"),
                     (53, "에스케이에스프라이빗에쿼티"),
+                    (54, "미래에셋자산운용"),
                     (7987, "어펄마캐피탈매니져스코리아"),
                     (6358, "헬리오스프라이빗에쿼티"),
                 ],
@@ -236,6 +282,15 @@ def test_gp_alias_overrides_cover_common_short_names() -> None:
             aliases,
         )
         assert [str(match["entity_name"]) for match in daishin_matches] == ["대신프라이빗에쿼티"]
+
+        prior_role_matches = match_gp_entities(
+            "美 VC 500글로벌, 韓 총괄에 안성우 미래에셋PE 대표 선임",
+            "미국 벤처캐피털 500 글로벌은 안성우 전 미래에셋자산운용 사모펀드(PE) 부문 대표를 한국 사무소 총괄 파트너로 선임했다고 밝혔다.",
+            "",
+            aliases,
+        )
+        prior_role_names = {str(match["entity_name"]) for match in prior_role_matches}
+        assert "미래에셋자산운용" not in prior_role_names
 
 
 def test_lp_directory_includes_seed_only_profiles_without_empty_profile_pages() -> None:
@@ -302,18 +357,29 @@ def test_lp_public_labels_do_not_expose_internal_taxonomy() -> None:
     assert public_coverage_label(0, 0) == "0개"
 
 
-def test_official_lp_candidates_are_public_on_notice_surfaces() -> None:
+def test_official_lp_candidates_require_explicit_public_notice_allowance() -> None:
     official_candidate = {
         "source_type": "official",
+        "source_code": "kgrowth_notice",
         "event_type": "new_notice",
         "monitor_status": "candidate",
         "confidence": "medium",
         "public_visible": "1",
     }
-    assert is_public_lp_notice_row(official_candidate, require_official=True)
+    assert not is_public_lp_notice_row(official_candidate, require_official=True)
+    assert is_public_lp_notice_row(
+        official_candidate,
+        require_official=True,
+        allow_official_candidates=True,
+    )
     assert not is_public_lp_notice_row(official_candidate, require_official=False)
     assert not is_public_lp_notice_row({**official_candidate, "confidence": "low"}, require_official=True)
     assert not is_public_lp_notice_row({**official_candidate, "event_type": "candidate"}, require_official=True)
+    assert not is_public_lp_notice_row(
+        {**official_candidate, "source_code": "vcs_investment_notice"},
+        require_official=True,
+        allow_official_candidates=True,
+    )
     assert not is_public_lp_notice_row(
         {**official_candidate, "source_type": "news", "monitor_status": "candidate"},
         require_official=True,
@@ -345,6 +411,27 @@ def test_lp_notice_title_program_beats_generic_platform() -> None:
     assert '<p class="lp-notice-program">국민성장펀드 3차</p>' not in rendered
 
 
+def test_lp_notice_no_space_round_still_finds_specific_program() -> None:
+    row = {
+        "noticeId": "space-less-round",
+        "lpCode": "kgrowth",
+        "lpName": "한국성장금융",
+        "sourceType": "official",
+        "eventType": "new_notice",
+        "eventDate": "2026-06-04",
+        "title": "[서울자치]은행권 중견기업 밸류업펀드3차 서류심사 결과",
+        "programName": "국민성장펀드",
+        "roundName": "",
+        "url": "https://www.kgrowth.or.kr/notice/value-up-space-3",
+    }
+
+    assert lp_notice_specific_program_name(row) == "은행권 중견기업 밸류업펀드"
+    assert lp_notice_business_round_name(row) == "3차"
+    merged = consolidate_lp_notice_display_items([row])
+    assert len(merged) == 1
+    assert lp_notice_program_label(merged[0]) == "은행권 중견기업 밸류업펀드 3차"
+
+
 def test_lp_notice_fund_series_round_beats_generic_page_round() -> None:
     row = {
         "noticeId": "content",
@@ -362,6 +449,94 @@ def test_lp_notice_fund_series_round_beats_generic_page_round() -> None:
     merged = consolidate_lp_notice_display_items([row])
     assert lp_notice_program_label(merged[0]) == "K-콘텐츠 미디어 전략펀드 3호"
     assert "3호 2차" not in render_lp_notice_card(merged[0], "2026-06-05")
+
+
+def test_lp_notice_specific_program_wins_when_qualities_are_tied() -> None:
+    rows = [
+        {
+            "noticeId": "generic",
+            "lpCode": "kgrowth",
+            "lpName": "한국성장금융",
+            "sourceType": "official",
+            "eventType": "new_notice",
+            "eventDate": "2026-06-04",
+            "title": "【선정공고】「국민성장펀드」 위탁운용사 선정 계획 공고",
+            "programName": "국민성장펀드",
+            "roundName": "3차",
+        },
+        {
+            "noticeId": "specific",
+            "lpCode": "kgrowth",
+            "lpName": "한국성장금융",
+            "sourceType": "official",
+            "eventType": "new_notice",
+            "eventDate": "2026-06-04",
+            "title": "【선정공고】「은행권 중견기업 밸류업펀드(3차)」 위탁운용사 선정계획 공고",
+            "programName": "국민성장펀드",
+            "roundName": "3차",
+        },
+    ]
+    merged = consolidate_lp_notice_display_items(rows)
+    assert len(merged) == 1
+    assert lp_notice_program_label(merged[0]) == "은행권 중견기업 밸류업펀드 3차"
+
+
+def test_lp_notice_round_not_duplicated_when_program_already_includes_round() -> None:
+    row = {
+        "noticeId": "round-dup",
+        "lpCode": "kvic",
+        "lpName": "한국벤처투자",
+        "sourceType": "official",
+        "eventType": "new_notice",
+        "eventDate": "2026-04-10",
+        "title": "모태펀드(우주항공청 등) 2026년 2차 정시 출자사업 계획 공고",
+        "programName": "모태펀드(우주항공청 등)",
+    }
+
+    assert lp_notice_specific_program_name(row) == "모태펀드(우주항공청 등) 2026년 2차 정시 출자사업"
+    assert lp_notice_business_round_name(row) == "2차"
+    assert lp_notice_program_label(row) == "모태펀드(우주항공청 등) 2026년 2차 정시 출자사업"
+
+
+def test_lp_notice_placeholder_round_is_not_a_new_business_card() -> None:
+    rows = [
+        {
+            "noticeId": "notice-1",
+            "lpCode": "kgrowth",
+            "lpName": "한국성장금융",
+            "sourceType": "official",
+            "eventType": "new_notice",
+            "eventDate": "2026-06-04",
+            "title": "【선정공고】「은행권 중견기업 밸류업펀드(3차)」 위탁운용사 선정계획 공고",
+            "programName": "국민성장펀드",
+            "roundName": "3차",
+            "url": "https://www.kgrowth.or.kr/notice/value-up-3",
+        },
+        {
+            "noticeId": "notice-2",
+            "lpCode": "kgrowth",
+            "lpName": "한국성장금융",
+            "sourceType": "official",
+            "eventType": "deadline_closed",
+            "eventDate": "2026-05-08",
+            "title": "은행권 중견기업 밸류업펀드 위탁운용사 선정계획 공고",
+            "programName": "모태펀드",
+            "roundName": "수시",
+            "url": "https://www.vcs.go.kr/web/portal/bbs/invtnotice/12810",
+        },
+    ]
+
+    merged = consolidate_lp_notice_display_items(rows)
+    assert len(merged) == 1
+    assert lp_notice_business_round_name(merged[0]) == "3차"
+    assert lp_notice_program_label(merged[0]) == "은행권 중견기업 밸류업펀드 3차"
+    rendered = render_lp_notice_card(merged[0], "2026-06-05")
+    assert "수시" not in rendered
+
+
+def test_lp_notice_placeholder_round_value_is_normalized_to_empty() -> None:
+    assert lp_notice_business_round_name({"title": "은행권 중견기업 밸류업펀드 공고", "roundName": "수시"}) == ""
+    assert lp_notice_business_round_name({"title": "서울회생펀드 상반기 공고", "roundName": ""}) == ""
 
 
 def test_lp_notice_lifecycle_events_roll_into_one_business_card() -> None:
@@ -436,6 +611,232 @@ def test_article_payload_does_not_render_lp_as_gp_chip() -> None:
     )
     assert payload[0]["gpNames"] == ["아이엠엠프라이빗에쿼티"]
     assert payload[0]["lpNames"] == ["한국산업은행"]
+
+
+def test_article_summary_lines_use_investment_memo_tone() -> None:
+    lines = public_article_summary_lines(
+        "성장금융이 국민성장펀드 매칭 출자를 개시했다. 블라인드 GP당 최대 300억원을 지원한다. 선정 GP의 민간 펀딩 부담이 완화될 전망이다.",
+        "성장금융, 국민성장펀드 매칭 출자",
+    )
+    assert 2 <= len(lines) <= 3
+    assert lines == [
+        "성장금융이 국민성장펀드 매칭 출자를 개시",
+        "블라인드 GP당 최대 300억원을 지원",
+        "선정 GP의 민간 펀딩 부담이 완화될 전망",
+    ]
+    forbidden = ["했어요", "해요", "입니다", "했다", "전망이다", "사례다", ".", "。"]
+    assert not any(token in line for line in lines for token in forbidden)
+
+
+def test_article_summary_lines_strip_newsroom_boilerplate() -> None:
+    lines = public_article_summary_lines(
+        "<앵커>공정거래위원회의 불허로 무산됐던 롯데렌탈의 매각 작업이 재개됐습니다.여러 사모펀드와 대기업이 인수 의향을 전하고 실사도 진행 중인 것으로 한국경제TV 취재 결과 확인됐습니다.사안 단독 취재한 산업부 기자 연결합니다.",
+        "롯데렌탈 재매각 착수",
+    )
+    joined = " ".join(lines)
+    assert lines[0] == "공정거래위원회의 불허로 무산됐던 롯데렌탈의 매각 작업이 재개"
+    assert lines[1].startswith("여러 사모펀드와 대기업이 인수 의향을 전하고 실사도 진행 중인")
+    assert "<앵커>" not in joined
+    assert "됐습니다" not in joined
+
+
+def test_ai_local_summary_falls_back_when_source_text_is_title_echo() -> None:
+    auction_lines = memo_summary_lines(
+        "애큐온캐피탈 매각 본입찰에 메리츠·한화생명 참여-인베스트조선",
+        "애큐온캐피탈 매각 본입찰에 메리츠·한화생명 참여",
+    )
+    private_credit_lines = memo_summary_lines(
+        "美 사모대출 운용사 대출 기준 강화한다, 박신영 기자, 국제",
+        "美 사모대출 운용사 대출 기준 강화한다",
+    )
+    assert auction_lines == ["애큐온캐피탈 매각 본입찰 경쟁 구도"]
+    assert private_credit_lines == ["사모대출 운용사 대출 심사 기준 강화"]
+
+
+def test_article_payload_carries_summary_lines_contract() -> None:
+    url = "https://dealsite.co.kr/articles/summary-test"
+    payload = article_payload_rows(
+        [
+            {
+                "title": "성장금융, 국민성장펀드 매칭 출자",
+                "source": "딜사이트",
+                "url": url,
+                "section": "국민성장펀드",
+            }
+        ],
+        {
+            url: {
+                "summaryText": "성장금융이 국민성장펀드 매칭 출자를 개시했다. 블라인드 GP당 최대 300억원을 지원한다. 선정 GP의 민간 펀딩 부담이 완화될 전망이다.",
+                "gpNames": [],
+                "lpNames": [],
+                "peopleCount": 0,
+                "searchTerms": [],
+            }
+        },
+    )
+    assert payload[0]["summaryText"]
+    assert payload[0]["summaryLines"] == [
+        "성장금융이 국민성장펀드 매칭 출자를 개시",
+        "블라인드 GP당 최대 300억원을 지원",
+        "선정 GP의 민간 펀딩 부담이 완화될 전망",
+    ]
+
+
+def test_ai_enrichment_summary_lines_override_review_summary() -> None:
+    url = "https://dealsite.co.kr/articles/ai-enrichment-test"
+    with TemporaryDirectory() as tmp:
+        out_dir = Path(tmp)
+        (out_dir / "daily_news_ai_enrichment_20260611.json").write_text(
+            json.dumps(
+                {
+                    "report_date": "2026-06-11",
+                    "provider": "local-rule",
+                    "articles": [
+                        {
+                            "source_url": url,
+                            "normalized_source_url": url,
+                            "summary_text": "기존 요약문은 보강 파일에서 내려온 문장입니다",
+                            "summary_lines": ["출자사업 이벤트 확정", "GP 선정 절차 진행", "LP 관점 후속 추적 필요"],
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        context = read_ai_enrichment_context(out_dir)
+    payload = article_payload_rows(
+        [{"title": "AI 보강 테스트", "source": "딜사이트", "url": url, "section": "LP"}],
+        context,
+    )
+    assert payload[0]["summaryLines"] == ["출자사업 이벤트 확정", "GP 선정 절차 진행", "LP 관점 후속 추적 필요"]
+    assert payload[0]["summaryText"] == "기존 요약문은 보강 파일에서 내려온 문장입니다"
+
+
+def test_ai_enrichment_summary_lines_reject_public_tone_violations() -> None:
+    url = "https://dealsite.co.kr/articles/ai-summary-sanitize-test"
+    title = "성장금융, 국민성장펀드 매칭 출자"
+    with TemporaryDirectory() as tmp:
+        out_dir = Path(tmp)
+        (out_dir / "daily_news_ai_enrichment_20260611.json").write_text(
+            json.dumps(
+                {
+                    "report_date": "2026-06-11",
+                    "provider": "command",
+                    "articles": [
+                        {
+                            "title": title,
+                            "source_url": url,
+                            "normalized_source_url": url,
+                            "summary_lines": [
+                                title,
+                                "오늘 좋은 기사가 나왔어요",
+                                "source evidence 확인 필요",
+                                "블라인드 GP당 최대 300억원 매칭",
+                                "민간 펀딩 부담 완화 포인트",
+                            ],
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        context = read_ai_enrichment_context(out_dir)
+    payload = article_payload_rows(
+        [{"title": title, "source": "딜사이트", "url": url, "section": "국민성장펀드"}],
+        context,
+    )
+    assert payload[0]["summaryLines"] == [
+        "블라인드 GP당 최대 300억원 매칭",
+        "민간 펀딩 부담 완화 포인트",
+    ]
+    rejected_text = " ".join(payload[0]["summaryLines"])
+    assert title not in rejected_text
+    assert "나왔어요" not in rejected_text
+    assert "source evidence" not in rejected_text
+
+
+def test_ai_enrichment_section_suggestion_is_optional_public_override() -> None:
+    url = "https://dealsite.co.kr/articles/ai-section-override-test"
+    title = "국민성장펀드 잡은 IMM…레버리지는 없다"
+    with TemporaryDirectory() as tmp:
+        out_dir = Path(tmp)
+        (out_dir / "daily_news_ai_enrichment_20260611.json").write_text(
+            json.dumps(
+                {
+                    "report_date": "2026-06-11",
+                    "provider": "notebooklm-cli",
+                    "articles": [
+                        {
+                            "title": title,
+                            "source_url": url,
+                            "normalized_source_url": url,
+                            "section_suggestion": "GP",
+                            "summary_lines": ["IMM의 국민성장펀드 출자 기반 펀드레이징 전략"],
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        context = read_ai_enrichment_context(out_dir)
+    row = {"title": title, "source": "딜사이트", "url": url, "section": "국민성장펀드"}
+    previous = os.environ.get("NEWSLETTER_AI_APPLY_SECTIONS")
+    try:
+        os.environ.pop("NEWSLETTER_AI_APPLY_SECTIONS", None)
+        default_payload = article_payload_rows([row], context)
+        assert default_payload[0]["section"] == "국민성장펀드"
+
+        os.environ["NEWSLETTER_AI_APPLY_SECTIONS"] = "1"
+        applied_payload = article_payload_rows([row], context)
+        assert applied_payload[0]["section"] == "GP"
+        assert applied_payload[0]["subCategory"] == "Strategy"
+    finally:
+        if previous is None:
+            os.environ.pop("NEWSLETTER_AI_APPLY_SECTIONS", None)
+        else:
+            os.environ["NEWSLETTER_AI_APPLY_SECTIONS"] = previous
+
+
+def test_ai_enrichment_audit_marks_category_conflicts() -> None:
+    rows = audit_rows(
+        [
+            {
+                "news_id": "n1",
+                "title": "국민성장펀드 잡은 IMM…레버리지는 없다",
+                "current_category": "국민성장펀드",
+                "section_tags": "NationalGrowthFund",
+                "section_suggestion": "GP",
+                "confidence": 0.82,
+                "source_url": "https://example.com/imm",
+            }
+        ]
+    )
+    assert rows[0]["status"] == "conflict"
+    assert rows[0]["current_section"] == "NationalGrowthFund"
+    assert rows[0]["section_suggestion"] == "GP"
+
+
+def test_ai_enrichment_prompt_contains_classification_boundaries() -> None:
+    prompt = enrichment_prompt(
+        "2026-06-11",
+        [
+            {
+                "news_id": "n1",
+                "title": "국민성장펀드 잡은 IMM…레버리지는 없다",
+                "section_tags": "NationalGrowthFund",
+                "summary_text": "IMM의 펀드레이징 전략이 핵심이다",
+            }
+        ],
+    )
+    assert "Classify by the article's main subject" in prompt
+    assert "choose GP" in prompt
+    assert "국민성장펀드 잡은 IMM" in prompt
+    assert "investment professional scanning deal flow" in prompt
+    assert "Do not repeat the article title" in prompt
+    assert "event, line 2 numbers/parties/status, line 3 why it matters" in prompt
 
 
 def test_kic_lp_alias_seed_feeds_article_context() -> None:
@@ -775,6 +1176,31 @@ def test_finalized_markdown_section_is_preserved_for_public_site() -> None:
     ) == "GP"
 
 
+def test_public_payload_uses_brief_section_as_canonical() -> None:
+    title = "[150조 머니무브] 에이티넘, '1조 펀드' 도전…관건은 하드캡"
+    payload = article_payload_rows(
+        [
+            {
+                "title": title,
+                "source": "블로터",
+                "url": "https://www.bloter.net/news/articleView.html?idxno=664361",
+                "section": "GP",
+            }
+        ]
+    )
+    assert payload[0]["section"] == "GP"
+    assert payload[0]["rawSection"] == "GP"
+    assert payload[0]["subCategory"] == "Fundraising"
+
+
+def test_deal_value_reassessment_subtype_is_not_acquisition() -> None:
+    row = {
+        "title": "F&F 숨겨진 가치...테일러메이드에서 터질까",
+        "section": "Deal",
+    }
+    assert editorial_subtype(row, "Deal") == "Ownership"
+
+
 def test_company_gap_titles_keep_expected_sections_and_quality() -> None:
     cases = [
         (
@@ -855,6 +1281,58 @@ def test_company_gap_keyword_rules_cover_ai_fund_lp_scope_and_private_debt() -> 
         scored = score_document(title, "", "", rules, [])
         tags = {tag["tag_value"] for tag in scored["tags"]}
         assert expected_tag in tags
+
+
+def test_meta_description_pef_signal_feeds_scoring_excerpt() -> None:
+    rules = load_rules(DEFAULT_RULES)
+    scoring_excerpt = build_scoring_excerpt(
+        "",
+        "국내 사모펀드(PEF) 운용사가 인수 후 첫 밸류업 과제로 광고 수익성 개선을 설정했다.",
+        "사모펀드 운용사의 포트폴리오 밸류업 기사다.",
+    )
+    scored = score_document("에이치PE, 디시인사이드 광고 수익성 손본다", scoring_excerpt, "", rules, [])
+    tags = {tag["tag_value"] for tag in scored["tags"] if tag["tag_type"] == "topic"}
+
+    assert scored["score"] >= 8
+    assert "PEF" in tags
+    assert "Deal" in tags
+
+
+def test_recent_gap_publishers_and_sources_are_configured() -> None:
+    assert infer_publisher("https://www.sentv.co.kr/article/view/sentv202606050046") == "서울경제TV"
+    assert infer_publisher("https://www.kbanker.co.kr/news/articleView.html?idxno=225136") == "대한금융신문"
+    assert infer_publisher("https://www.autodaily.co.kr/news/articleView.html?idxno=544665") == "엠투데이"
+    assert infer_publisher("https://www.pinpointnews.co.kr/news/articleView.html?idxno=458008") == "핀포인트뉴스"
+
+    sources = {source.source_code: source for source in load_sources(DEFAULT_SOURCES)}
+    for source_code in [
+        "naver_publisher_4th_pef",
+        "naver_publisher_ebn_hahn",
+        "naver_publisher_kbanker_pef",
+        "naver_publisher_newstof_imm",
+        "naver_pef_blockdeal",
+        "naver_pef_portfolio_rental",
+    ]:
+        assert source_code in sources
+        assert sources[source_code].is_active
+    assert "인베스트조선" in sources["naver_pef_growth_fund"].allowed_publishers
+
+
+def test_recent_gap_publishers_have_brand_icons() -> None:
+    urls = [
+        "https://www.pinpointnews.co.kr/news/articleView.html?idxno=458008",
+        "https://www.ebn.co.kr/news/articleView.html?idxno=1711446",
+        "https://www.autodaily.co.kr/news/articleView.html?idxno=544665",
+        "https://www.junggi.co.kr/news/articleView.html?idxno=36670",
+        "https://www.4th.kr/news/articleView.html?idxno=2112782",
+        "https://www.kbanker.co.kr/news/articleView.html?idxno=225136",
+        "https://www.hani.co.kr/arti/society/labor/1262172.html",
+        "https://www.mt.co.kr/world/2026/06/07/2026060115404184841",
+        "https://www.asiae.co.kr/article/2026060823584349025",
+    ]
+    icons = [brand_logo_url(url) for url in urls]
+    assert all(icons)
+    assert not any(icon.lower().endswith(".ico") for icon in icons)
 
 
 def test_gpu_or_etf_text_does_not_match_gp_or_pe_tokens() -> None:
@@ -1121,6 +1599,873 @@ def test_gp_fundraising_beats_deal_word_when_title_is_fund_build() -> None:
     }
     assert primary_section(row) == "GP"
     assert editorial_section({"title": str(row["title"]), "section": "GP"}) == "GP"
+
+
+def test_quoted_fund_challenge_is_gp_fundraising() -> None:
+    title = "[150조 머니무브] 에이티넘, '1조 펀드' 도전…관건은 하드캡"
+    row = {
+        "publisher": "블로터",
+        "title": title,
+        "summary_text": "에이티넘인베스트먼트가 신규 블라인드펀드 조성과 펀드레이징에 나선다.",
+        "relevance_score": 9,
+        "section_tags": "LP",
+        "topic_tags": "LP,PEF",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.bloter.net/news/articleView.html?idxno=664361",
+        "review_status": "auto",
+    }
+    rules = load_rules(DEFAULT_RULES)
+    scored = score_document(title, row["summary_text"], "", rules, [])
+    topics = {str(tag["tag_value"]) for tag in scored["tags"] if str(tag["tag_type"]) == "topic"}
+    assert "GP" in topics
+    assert "Fundraising" in topics
+    assert primary_section(row) == "GP"
+    assert editorial_section({"title": title, "section": "LP"}) == "GP"
+    assert editorial_subtype({"title": title, "section": "GP"}, "GP") == "Fundraising"
+
+
+def test_retirement_plan_private_equity_access_is_lp_not_deal() -> None:
+    title = "트럼프식 '투자의 민주화'...퇴직연금을 사모펀드에 개방하면?"
+    row = {
+        "publisher": "머니투데이",
+        "title": title,
+        "summary_text": "401k 퇴직연금의 사모펀드 접근 허용과 개인 투자자 자산배분 변화를 다룬다.",
+        "relevance_score": 8,
+        "section_tags": "Deal",
+        "topic_tags": "Deal,PEF",
+        "document_type_tags": "report",
+        "gp_names": "",
+        "source_url": "https://www.mt.co.kr/stock/test",
+        "review_status": "auto",
+    }
+    rules = load_rules(DEFAULT_RULES)
+    scored = score_document(title, row["summary_text"], "", rules, [])
+    topics = {str(tag["tag_value"]) for tag in scored["tags"] if str(tag["tag_type"]) == "topic"}
+    assert "LP" in topics
+    assert primary_section(row) == "LP"
+    assert editorial_section({"title": title, "section": "Deal"}) == "LP"
+    assert editorial_subtype({"title": title, "section": "LP"}, "LP") == "Allocation"
+
+
+def test_20260608_category_regressions() -> None:
+    rows = [
+        (
+            {
+                "publisher": "딜사이트",
+                "title": "3년 만의 귀환…스카이레이크 5000+α 펀드레이징",
+                "summary_text": "국민성장펀드서 2000억 확보하며 하반기까지 멀티 클로징 전략을 세웠다.",
+                "section_tags": "LP",
+                "topic_tags": "GP,NationalGrowthFund,PEF",
+                "document_type_tags": "",
+                "gp_names": "스카이레이크에쿼티파트너스",
+                "source_url": "https://dealsite.co.kr/articles/163035",
+                "review_status": "auto",
+            },
+            "GP",
+            "Fundraising",
+        ),
+        (
+            {
+                "publisher": "딜사이트",
+                "title": "[2026 농모태펀드] 농금원 GP 도전하는 송현…연패 사슬 끊는다",
+                "summary_text": "송현인베스트먼트가 농업정책보험금융원 출자 사업에 지원하며 신규 펀드 결성에 도전한다.",
+                "section_tags": "Market",
+                "topic_tags": "GP,LP,PEF",
+                "document_type_tags": "",
+                "gp_names": "송현인베스트먼트",
+                "source_url": "https://dealsite.co.kr/articles/163079",
+                "review_status": "auto",
+            },
+            "GP",
+            "Fundraising",
+        ),
+        (
+            {
+                "publisher": "딜사이트",
+                "title": "[2026 농모태펀드] 비전벤처스 티인베와 손잡고…첫 200억 블라인드",
+                "summary_text": "비전벤처스가 티인베스트먼트와 함께 농모태펀드 출자사업에 도전하며 200억원 규모 블라인드펀드 결성을 추진한다.",
+                "section_tags": "LP",
+                "topic_tags": "GP,LP,PEF",
+                "document_type_tags": "",
+                "gp_names": "비전벤처스, 티인베스트먼트",
+                "source_url": "https://dealsite.co.kr/articles/163015",
+                "review_status": "auto",
+            },
+            "GP",
+            "Fundraising",
+        ),
+        (
+            {
+                "publisher": "블로터",
+                "title": "미래에셋벤처, 3000억 펀딩 목표…프리IPO·메자닌 '5대5' 배분",
+                "summary_text": "국민성장펀드 위탁운용사로 선정되며 3000억원 규모의 자펀드를 조성한다는 목표다.",
+                "section_tags": "LP",
+                "topic_tags": "Credit,Deal,PEF",
+                "document_type_tags": "",
+                "gp_names": "미래에셋벤처투자",
+                "source_url": "https://www.bloter.net/news/articleView.html?idxno=664499",
+                "review_status": "auto",
+            },
+            "GP",
+            "Fundraising",
+        ),
+        (
+            {
+                "publisher": "뉴스톱",
+                "title": "스틱인베스트, 랩지노믹스 CB 200억 투입",
+                "summary_text": "스틱인베스트먼트가 랩지노믹스 전환사채(CB)를 인수했다.",
+                "section_tags": "GP",
+                "topic_tags": "Credit",
+                "document_type_tags": "",
+                "gp_names": "스틱인베스트먼트",
+                "source_url": "https://www.newstopkorea.com/news/articleView.html?idxno=45377",
+                "review_status": "auto",
+            },
+            "Deal",
+            "Financing",
+        ),
+        (
+            {
+                "publisher": "이투데이",
+                "title": "[단독] 장외파생상품 진출 노리는 한양증권, 연내 라이선스 획득 '청신호'",
+                "summary_text": "금감원 사전 협의 등 인프라 구축에 나섰다.",
+                "section_tags": "Deal",
+                "topic_tags": "GP,PEF",
+                "document_type_tags": "press_release",
+                "gp_names": "케이씨지아이",
+                "source_url": "https://www.etoday.co.kr/news/view/2590880",
+                "review_status": "auto",
+            },
+            "Market",
+            "Regulation",
+        ),
+    ]
+    for row, expected_section, expected_subtype in rows:
+        assert primary_section(row) == expected_section
+        public_section = editorial_section({"title": str(row["title"]), "section": expected_section})
+        assert public_section == {"NationalGrowthFund": "국민성장펀드"}.get(expected_section, expected_section)
+        assert editorial_subtype({"title": str(row["title"]), "section": public_section}, public_section) == expected_subtype
+        normalized = dict(row)
+        normalize_export_classification(normalized)
+        assert normalized["section_tags"] == expected_section
+        topics = {value for value in str(normalized["topic_tags"]).split(",") if value}
+        if expected_section in {"Deal", "GP", "LP", "NationalGrowthFund"}:
+            assert expected_section in topics
+        if expected_section == "GP":
+            assert "LP" not in topics
+        if expected_section == "Deal":
+            assert "GP" not in topics
+
+    ownership = {"title": "에이치PE, 디시인사이드 ‘광고 수익성’ 손본다", "section": "Deal"}
+    assert editorial_subtype(ownership, "Deal") == "Ownership"
+    assert (
+        editorial_subtype({"title": "1조원대 애큐온 매각 본입찰에 메리츠·한화생명 참여 [시그널]", "section": "Deal"}, "Deal")
+        == "Auction"
+    )
+    assert (
+        editorial_subtype({"title": "현대모비스 범퍼사업부 매각, '통인수 제안' 막판 변수로", "section": "Deal"}, "Deal")
+        == "Auction"
+    )
+
+
+def test_20260609_editorial_quality_regressions() -> None:
+    insurance = {
+        "publisher": "한국경제",
+        "title": '"계약 맺은후가 더 무서워"…M&A 보험 시장 커진다',
+        "summary_text": "매도인 진술·보장 허위 때 보험사가 배상하는 시장 동향을 다룬다.",
+        "relevance_score": 16,
+        "section_tags": "Deal",
+        "topic_tags": "Deal,PEF",
+        "document_type_tags": "",
+        "gp_names": "한국투자증권",
+        "source_url": "https://www.hankyung.com/article/2026060840731",
+        "review_status": "auto",
+    }
+    assert primary_section(insurance) == "Market"
+    normalized_insurance = dict(insurance)
+    normalize_export_classification(normalized_insurance)
+    assert normalized_insurance["section_tags"] == "Market"
+    assert "Deal" not in str(normalized_insurance["topic_tags"]).split(",")
+    assert editorial_section({"title": str(insurance["title"]), "section": "Deal"}) == "Market"
+
+    ai_market = {
+        "publisher": "이데일리",
+        "title": "AI 공포에 얼어붙은 PE…소프트웨어 M&A, 팬데믹 이후 '최저'",
+        "summary_text": "AI가 소프트웨어 PE 인수 시장을 위축시켰다는 시장 통계 기사다.",
+        "relevance_score": 10,
+        "section_tags": "Deal",
+        "topic_tags": "Deal,PEF",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.edaily.co.kr/News/Read?newsId=03578486645479752&mediaCodeNo=257",
+        "review_status": "auto",
+    }
+    assert primary_section(ai_market) == "AI_PE"
+    assert editorial_section({"title": str(ai_market["title"]), "section": "Deal"}) == "AI & PE"
+
+    renaissance = {
+        "publisher": "연합인포맥스",
+        "title": "르네상스운용, '천보비엘에스' 800억 베팅…기관전용 PEF확장 '신호탄'",
+        "summary_text": "르네상스자산운용이 천보비엘에스에 800억원을 투자했다.",
+        "relevance_score": 18,
+        "section_tags": "Market",
+        "topic_tags": "",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://news.einfomax.co.kr/news/articleView.html?idxno=4418967",
+        "review_status": "auto",
+    }
+    assert primary_section(renaissance) == "Deal"
+    assert editorial_section({"title": str(renaissance["title"]), "section": "Market"}) == "Deal"
+
+    law_firm = {
+        "publisher": "조선비즈",
+        "title": "법무법인 광장, 최대현 전 산업은행 수석부행장 영입",
+        "summary_text": "기업금융·사모펀드(PEF)·해외투자 자문 역량 강화를 위한 고문 영입 기사다.",
+        "relevance_score": 14,
+        "section_tags": "GP",
+        "topic_tags": "GP,PEF",
+        "document_type_tags": "",
+        "gp_names": "한국산업은행",
+        "source_url": "https://biz.chosun.com/topics/law_firm/2026/06/08/example",
+        "review_status": "auto",
+    }
+    quality_score, quality_reason = editorial_quality(law_firm)
+    assert primary_section(law_firm) == "Market"
+    assert quality_score < EXPORT_MIN_QUALITY_SCORE, quality_reason
+    assert not should_export_row({**law_firm, "quality_score": quality_score})
+    normalized_law_firm = dict(law_firm)
+    normalize_export_classification(normalized_law_firm)
+    assert normalized_law_firm["section_tags"] == "Market"
+    assert "GP" not in str(normalized_law_firm["topic_tags"]).split(",")
+
+    pwc = {
+        "publisher": "더벨",
+        "title": "삼일PwC, 곽윤구·최창윤·홍진오 앞세워 딜 리더십 재편",
+        "summary_text": "대형 사모펀드(PEF) 대상 자문 조직 리더십 개편 기사다.",
+        "relevance_score": 10,
+        "section_tags": "Deal",
+        "topic_tags": "Deal,PEF",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.thebell.co.kr/free/content/ArticleView.asp?key=202606051433525040104894",
+        "review_status": "auto",
+    }
+    pwc_quality, pwc_reason = editorial_quality(pwc)
+    assert primary_section(pwc) == "Market"
+    assert pwc_quality < EXPORT_MIN_QUALITY_SCORE, pwc_reason
+
+    bkl = {
+        "publisher": "이투데이",
+        "title": "태평양, 해외투자·M&A 자문 전력 보강…강형석·이진욱 변호사 영입",
+        "summary_text": "법무법인 태평양이 기업 자문 및 인수·합병 분야 전력을 보강했다.",
+        "relevance_score": 19,
+        "section_tags": "Market",
+        "topic_tags": "",
+        "document_type_tags": "press_release",
+        "gp_names": "",
+        "source_url": "https://www.etoday.co.kr/news/view/2592500",
+        "review_status": "auto",
+    }
+    bkl_quality, bkl_reason = editorial_quality(bkl)
+    assert primary_section(bkl) == "Market"
+    assert bkl_quality < EXPORT_MIN_QUALITY_SCORE, bkl_reason
+    assert not should_export_row({**bkl, "quality_score": bkl_quality})
+
+    kakao_lp = {"title": "카카오인베, 미국서 정용진 맞손 '이마트 주도 사모펀드 출자'", "section": "LP"}
+    assert editorial_section(kakao_lp) == "LP"
+    assert editorial_subtype(kakao_lp, "LP") == "Allocation"
+
+
+def test_advisory_people_event_dedupe_key() -> None:
+    chosun = {
+        "title": "법무법인 광장, 최대현 전 산업은행 수석부행장 영입",
+        "summary_text": "KDB인베스트먼트 대표를 역임한 최대현 고문 영입",
+        "section_tags": "GP",
+    }
+    mk = {
+        "title": "최대현 前 산은 수석부행장, 법무법인 광장 고문으로 합류",
+        "summary_text": "기업금융·사모펀드(PEF)·해외투자 등 역량 강화",
+        "section_tags": "Deal",
+    }
+    assert event_dedupe_key(chosun) == "advisory_people:gwangjang_choi_daehyun"
+    assert event_dedupe_key(chosun) == event_dedupe_key(mk)
+
+
+def test_gp_continuation_fund_drops_conflicting_deal_topic() -> None:
+    row = {
+        "publisher": "블로터",
+        "title": "큐캐피탈, 두산건설 장기보유로 가닥…'컨티뉴에이션 펀드' 이관",
+        "summary_text": "큐캐피탈파트너스가 포트폴리오인 두산건설을 장기 보유하기 위해 컨티뉴에이션 펀드로 이관하는 방안을 고려하고 있다.",
+        "relevance_score": 10,
+        "section_tags": "GP",
+        "topic_tags": "Deal,GP,PEF,Fundraising",
+        "document_type_tags": "",
+        "gp_names": "큐캐피탈파트너스",
+        "source_url": "https://www.bloter.net/news/articleView.html?idxno=664856",
+        "review_status": "auto",
+    }
+    assert primary_section(row) == "GP"
+    normalized = dict(row)
+    normalize_export_classification(normalized)
+    topic_tags = set(str(normalized["topic_tags"]).split(","))
+    assert normalized["section_tags"] == "GP"
+    assert normalized["tag_version"] == TAG_TAXONOMY_VERSION
+    assert "GP" in topic_tags
+    assert "Fundraising" in topic_tags
+    assert "Deal" not in topic_tags
+
+
+def test_article_payload_carries_gp_profile_link_contract() -> None:
+    payload = article_payload_rows(
+        [
+            {
+                "section": "GP",
+                "title": "스톤브릿지, 블라인드펀드 결성",
+                "source": "더벨",
+                "url": "https://example.com/article",
+            }
+        ],
+        {
+            "https://example.com/article": {
+                "gpNames": ["스톤브릿지캐피탈"],
+                "gpProfileLinks": [
+                    {"id": "42", "name": "스톤브릿지캐피탈", "url": "gp-42.html"},
+                ],
+                "lpNames": [],
+                "lpProfileLinks": [],
+                "searchTerms": [],
+            }
+        },
+    )
+    assert payload[0]["tagVersion"] == TAG_TAXONOMY_VERSION
+    assert payload[0]["gpNames"] == ["스톤브릿지캐피탈"]
+    assert payload[0]["gpProfileLinks"] == [{"id": "42", "name": "스톤브릿지캐피탈", "url": "gp-42.html"}]
+
+
+def test_naver_source_readiness_requires_credentials() -> None:
+    old_id = os.environ.pop("NAVER_CLIENT_ID", None)
+    old_secret = os.environ.pop("NAVER_CLIENT_SECRET", None)
+    try:
+        try:
+            assert_source_family_readiness(
+                [SimpleNamespace(source_kind="naver_news_api", source_code="naver_pef_core_samo")]
+            )
+        except RuntimeError as exc:
+            assert "NAVER_CLIENT_ID" in str(exc)
+        else:
+            raise AssertionError("Naver readiness check did not fail without credentials")
+    finally:
+        if old_id is not None:
+            os.environ["NAVER_CLIENT_ID"] = old_id
+        if old_secret is not None:
+            os.environ["NAVER_CLIENT_SECRET"] = old_secret
+
+
+def test_validation_quality_gate_catches_category_tag_and_archive_mismatches() -> None:
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        out_dir = root / "exports"
+        site_dir = root / "site"
+        out_dir.mkdir()
+        site_dir.mkdir()
+        report_date = "2026-06-08"
+        dated = report_date.replace("-", "")
+        gp_title = "미래에셋벤처, 3000억 펀딩 목표…프리IPO·메자닌 '5대5' 배분"
+        deal_title = "1조원대 애큐온 매각 본입찰에 메리츠·한화생명 참여 [시그널]"
+
+        (out_dir / f"daily_news_brief_{dated}.md").write_text(
+            "\n".join(
+                [
+                    f"일자 : {report_date}",
+                    "",
+                    "[GP]",
+                    f"- [{gp_title}](https://example.com/gp)",
+                    "  출처: 블로터",
+                    "",
+                    "[Deal]",
+                    f"- [{deal_title}](https://example.com/deal)",
+                    "  출처: 서울경제",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (out_dir / f"daily_news_review_queue_{dated}.csv").write_text(
+            "\n".join(
+                [
+                    "publisher,title,source_url,normalized_source_url,current_category,section_tags,topic_tags",
+                    f"블로터,\"{gp_title}\",https://example.com/gp,https://example.com/gp,GP,LP,\"GP,LP,PEF\"",
+                    f"서울경제,\"{deal_title}\",https://example.com/deal,https://example.com/deal,Deal,Deal,\"Deal,PEF\"",
+                ]
+            ),
+            encoding="utf-8-sig",
+        )
+        (site_dir / "health.json").write_text(
+            json.dumps({"report_date": report_date, "article_count": 2}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (site_dir / "archive.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "reportDate": report_date,
+                        "articles": [
+                            {"title": gp_title, "url": "https://example.com/gp", "section": "GP", "subCategory": "Fundraising"},
+                            {"title": deal_title, "url": "https://example.com/deal", "section": "Deal", "subCategory": "Exit"},
+                        ],
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = Validation()
+        check_classification_quality(result, out_dir, report_date, site_dir)
+        assert any("classification mismatch" in error for error in result.errors)
+        assert any("topic tag conflicts" in error for error in result.errors)
+        assert any("subCategory mismatch" in error and "expected=Auction" in error for error in result.errors)
+
+
+def test_validation_warns_on_ai_category_conflicts() -> None:
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        out_dir = root / "exports"
+        out_dir.mkdir()
+        report_date = "2026-06-11"
+        dated = report_date.replace("-", "")
+        title = "국민성장펀드 잡은 IMM…레버리지는 없다"
+        (out_dir / f"daily_news_brief_{dated}.md").write_text(
+            "\n".join([f"일자 : {report_date}", "", "[국민성장펀드]", f"- [{title}](https://example.com/imm)", "  출처: 딜사이트", ""]),
+            encoding="utf-8",
+        )
+        (out_dir / f"daily_news_review_queue_{dated}.csv").write_text(
+            "\n".join(
+                [
+                    "publisher,title,source_url,normalized_source_url,current_category,section_tags,topic_tags",
+                    f"딜사이트,\"{title}\",https://example.com/imm,https://example.com/imm,국민성장펀드,NationalGrowthFund,NationalGrowthFund",
+                ]
+            ),
+            encoding="utf-8-sig",
+        )
+        (out_dir / f"daily_news_ai_enrichment_{dated}.json").write_text(
+            json.dumps(
+                {
+                    "report_date": report_date,
+                    "provider": "command",
+                    "articles": [
+                        {
+                            "news_id": "n1",
+                            "title": title,
+                            "source_url": "https://example.com/imm",
+                            "normalized_source_url": "https://example.com/imm",
+                            "section_suggestion": "GP",
+                            "summary_lines": ["IMM의 국민성장펀드 출자 기반 펀드레이징 전략", "레버리지 없이 민간 매칭 부담을 관리"],
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        result = Validation()
+        check_classification_quality(result, out_dir, report_date, None)
+        assert not result.errors
+        assert any("AI category conflict" in warning for warning in result.warnings)
+
+
+def test_ai_enrichment_invalid_category_is_preserved_and_validation_errors() -> None:
+    source_rows = [
+        {
+            "news_id": "n1",
+            "title": "국민성장펀드 잡은 IMM…레버리지는 없다",
+            "source_url": "https://example.com/imm",
+            "normalized_source_url": "https://example.com/imm",
+            "current_category": "국민성장펀드",
+            "section_tags": "NationalGrowthFund",
+            "summary_text": "IMM의 펀드레이징 전략이 핵심이다",
+        }
+    ]
+    articles = normalize_ai_articles(
+        {"articles": [{"news_id": "n1", "section_suggestion": "WrongCategory", "summary_lines": ["IMM 펀드레이징 전략"]}]},
+        source_rows,
+        "notebooklm-cli",
+    )
+    assert articles[0]["section_suggestion"] == ""
+    assert articles[0]["section_suggestion_raw"] == "WrongCategory"
+    assert articles[0]["suggestion_status"] == "invalid"
+
+    with TemporaryDirectory() as tmp:
+        out_dir = Path(tmp)
+        report_date = "2026-06-11"
+        dated = report_date.replace("-", "")
+        title = source_rows[0]["title"]
+        (out_dir / f"daily_news_brief_{dated}.md").write_text(
+            "\n".join([f"일자 : {report_date}", "", "[국민성장펀드]", f"- [{title}](https://example.com/imm)", ""]),
+            encoding="utf-8",
+        )
+        (out_dir / f"daily_news_review_queue_{dated}.csv").write_text(
+            "\n".join(
+                [
+                    "news_id,publisher,title,source_url,normalized_source_url,current_category,section_tags,topic_tags",
+                    f"n1,딜사이트,\"{title}\",https://example.com/imm,https://example.com/imm,국민성장펀드,NationalGrowthFund,NationalGrowthFund",
+                ]
+            ),
+            encoding="utf-8-sig",
+        )
+        (out_dir / f"daily_news_ai_enrichment_{dated}.json").write_text(
+            json.dumps({"report_date": report_date, "provider": "notebooklm-cli", "articles": articles}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        result = Validation()
+        check_classification_quality(result, out_dir, report_date, None)
+        assert any("invalid category" in error for error in result.errors)
+
+
+def test_ai_enrichment_partial_external_output_is_validation_error() -> None:
+    source_rows = [
+        {
+            "news_id": "n1",
+            "title": "국민성장펀드 잡은 IMM…레버리지는 없다",
+            "source_url": "https://example.com/imm",
+            "normalized_source_url": "https://example.com/imm",
+            "current_category": "국민성장펀드",
+            "section_tags": "NationalGrowthFund",
+            "summary_text": "IMM의 펀드레이징 전략이 핵심이다",
+        },
+        {
+            "news_id": "n2",
+            "title": "사모대출 시장 경고등",
+            "source_url": "https://example.com/credit",
+            "normalized_source_url": "https://example.com/credit",
+            "current_category": "Market",
+            "section_tags": "Market",
+            "summary_text": "사모대출 시장 리스크가 커지고 있다",
+        },
+    ]
+    articles = normalize_ai_articles(
+        {"articles": [{"news_id": "n1", "section_suggestion": "GP", "summary_lines": ["IMM 펀드레이징 전략"]}]},
+        source_rows,
+        "notebooklm-cli",
+    )
+    assert len(articles) == 2
+    assert articles[1]["suggestion_status"] == "missing"
+
+    with TemporaryDirectory() as tmp:
+        out_dir = Path(tmp)
+        report_date = "2026-06-11"
+        dated = report_date.replace("-", "")
+        (out_dir / f"daily_news_brief_{dated}.md").write_text(
+            "\n".join(
+                [
+                    f"일자 : {report_date}",
+                    "",
+                    "[국민성장펀드]",
+                    "- [국민성장펀드 잡은 IMM…레버리지는 없다](https://example.com/imm)",
+                    "[Market]",
+                    "- [사모대출 시장 경고등](https://example.com/credit)",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (out_dir / f"daily_news_review_queue_{dated}.csv").write_text(
+            "\n".join(
+                [
+                    "news_id,publisher,title,source_url,normalized_source_url,current_category,section_tags,topic_tags",
+                    "n1,딜사이트,\"국민성장펀드 잡은 IMM…레버리지는 없다\",https://example.com/imm,https://example.com/imm,국민성장펀드,NationalGrowthFund,NationalGrowthFund",
+                    "n2,한국경제,\"사모대출 시장 경고등\",https://example.com/credit,https://example.com/credit,Market,Market,Market",
+                ]
+            ),
+            encoding="utf-8-sig",
+        )
+        (out_dir / f"daily_news_ai_enrichment_{dated}.json").write_text(
+            json.dumps({"report_date": report_date, "provider": "notebooklm-cli", "articles": articles}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        result = Validation()
+        check_classification_quality(result, out_dir, report_date, None)
+        assert any("missing category suggestion" in error for error in result.errors)
+
+
+def test_validation_allows_archive_ai_section_when_apply_mode_is_enabled() -> None:
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        out_dir = root / "exports"
+        site_dir = root / "site"
+        out_dir.mkdir()
+        site_dir.mkdir()
+        report_date = "2026-06-11"
+        dated = report_date.replace("-", "")
+        title = "국민성장펀드 잡은 IMM…레버리지는 없다"
+        (out_dir / f"daily_news_brief_{dated}.md").write_text(
+            "\n".join([f"일자 : {report_date}", "", "[국민성장펀드]", f"- [{title}](https://example.com/imm)", "  출처: 딜사이트", ""]),
+            encoding="utf-8",
+        )
+        (out_dir / f"daily_news_review_queue_{dated}.csv").write_text(
+            "\n".join(
+                [
+                    "publisher,title,source_url,normalized_source_url,current_category,section_tags,topic_tags",
+                    f"딜사이트,\"{title}\",https://example.com/imm,https://example.com/imm,국민성장펀드,NationalGrowthFund,NationalGrowthFund",
+                ]
+            ),
+            encoding="utf-8-sig",
+        )
+        (out_dir / f"daily_news_ai_enrichment_{dated}.json").write_text(
+            json.dumps(
+                {
+                    "report_date": report_date,
+                    "provider": "notebooklm-cli",
+                    "articles": [
+                        {
+                            "title": title,
+                            "source_url": "https://example.com/imm",
+                            "normalized_source_url": "https://example.com/imm",
+                            "section_suggestion": "GP",
+                            "summary_lines": ["IMM의 국민성장펀드 출자 기반 펀드레이징 전략"],
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (site_dir / "health.json").write_text(
+            json.dumps({"report_date": report_date, "article_count": 1}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (site_dir / "archive.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "reportDate": report_date,
+                        "articles": [
+                            {"title": title, "url": "https://example.com/imm", "section": "GP", "subCategory": "Strategy"}
+                        ],
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        previous = os.environ.get("NEWSLETTER_AI_APPLY_SECTIONS")
+        try:
+            os.environ["NEWSLETTER_AI_APPLY_SECTIONS"] = "1"
+            result = Validation()
+            check_classification_quality(result, out_dir, report_date, site_dir)
+            assert not result.errors
+            assert any("AI category conflict" in warning for warning in result.warnings)
+        finally:
+            if previous is None:
+                os.environ.pop("NEWSLETTER_AI_APPLY_SECTIONS", None)
+            else:
+                os.environ["NEWSLETTER_AI_APPLY_SECTIONS"] = previous
+
+
+def test_validation_blocks_archive_ai_field_and_summary_leakage() -> None:
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        out_dir = root / "exports"
+        site_dir = root / "site"
+        out_dir.mkdir()
+        site_dir.mkdir()
+        report_date = "2026-06-11"
+        dated = report_date.replace("-", "")
+        title = "성장금융, 국민성장펀드 매칭 출자"
+        (out_dir / f"daily_news_brief_{dated}.md").write_text(
+            "\n".join([f"일자 : {report_date}", "", "[국민성장펀드]", f"- [{title}](https://example.com/ngf)", ""]),
+            encoding="utf-8",
+        )
+        (out_dir / f"daily_news_review_queue_{dated}.csv").write_text(
+            "\n".join(
+                [
+                    "publisher,title,source_url,normalized_source_url,current_category,section_tags,topic_tags",
+                    f"딜사이트,\"{title}\",https://example.com/ngf,https://example.com/ngf,국민성장펀드,NationalGrowthFund,NationalGrowthFund",
+                ]
+            ),
+            encoding="utf-8-sig",
+        )
+        (out_dir / f"daily_news_ai_enrichment_{dated}.json").write_text(
+            json.dumps(
+                {
+                    "report_date": report_date,
+                    "provider": "local-rule",
+                    "articles": [
+                        {
+                            "title": title,
+                            "source_url": "https://example.com/ngf",
+                            "normalized_source_url": "https://example.com/ngf",
+                            "section_suggestion": "NationalGrowthFund",
+                            "summary_lines": ["성장금융 매칭 출자"],
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (site_dir / "health.json").write_text(
+            json.dumps({"report_date": report_date, "article_count": 1}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (site_dir / "archive.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "reportDate": report_date,
+                        "articles": [
+                            {
+                                "title": title,
+                                "url": "https://example.com/ngf",
+                                "section": "국민성장펀드",
+                                "subCategory": "정책펀드",
+                                "provider": "notebooklm-cli",
+                                "summaryLines": [title, "오늘 좋은 기사가 나왔어요"],
+                            }
+                        ],
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        result = Validation()
+        check_classification_quality(result, out_dir, report_date, site_dir)
+        assert any("leaks internal AI fields" in error for error in result.errors)
+        assert any("unusable public summaryLines" in error for error in result.errors)
+
+
+def test_ai_backtest_summary_counts_audit_statuses() -> None:
+    with TemporaryDirectory() as tmp:
+        out_dir = Path(tmp)
+        report_date = "2026-06-11"
+        dated = report_date.replace("-", "")
+        (out_dir / f"daily_news_review_queue_{dated}.csv").write_text(
+            "\n".join(
+                [
+                    "news_id,publisher,title,source_url,normalized_source_url,current_category,section_tags,topic_tags",
+                    "n1,딜사이트,\"국민성장펀드 잡은 IMM…레버리지는 없다\",https://example.com/imm,https://example.com/imm,국민성장펀드,NationalGrowthFund,NationalGrowthFund",
+                    "n2,한국경제,\"사모대출 시장 경고등\",https://example.com/credit,https://example.com/credit,Market,Market,Market",
+                ]
+            ),
+            encoding="utf-8-sig",
+        )
+        (out_dir / f"daily_news_ai_enrichment_{dated}.json").write_text(
+            json.dumps(
+                {
+                    "report_date": report_date,
+                    "provider": "notebooklm-cli",
+                    "article_count": 2,
+                    "articles": [
+                        {
+                            "title": "국민성장펀드 잡은 IMM…레버리지는 없다",
+                            "source_url": "https://example.com/imm",
+                            "section_suggestion": "GP",
+                            "summary_lines": ["IMM의 국민성장펀드 기반 펀드레이징 전략"],
+                        },
+                        {
+                            "title": "사모대출 시장 경고등",
+                            "source_url": "https://example.com/credit",
+                            "section_suggestion": "Market",
+                            "summary_lines": ["사모대출 시장 리스크 확대"],
+                        },
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (out_dir / f"daily_news_ai_enrichment_audit_{dated}.csv").write_text(
+            "\n".join(
+                [
+                    "news_id,title,current_section,section_suggestion,section_suggestion_raw,suggestion_status,status,confidence,notes,source_url",
+                    "n1,\"국민성장펀드 잡은 IMM…레버리지는 없다\",NationalGrowthFund,GP,GP,conflict,conflict,0.8,,https://example.com/imm",
+                    "n2,\"사모대출 시장 경고등\",Market,Market,Market,ok,ok,0.9,,https://example.com/credit",
+                ]
+            ),
+            encoding="utf-8-sig",
+        )
+        row = summarize_date(report_date, out_dir)
+        assert row["provider"] == "notebooklm-cli"
+        assert row["review_count"] == 2
+        assert row["article_count"] == 2
+        assert row["status_ok"] == 1
+        assert row["status_conflict"] == 1
+        assert row["summary_missing"] == 0
+
+
+def test_news_classification_golden_cases_pass_local_rules() -> None:
+    golden_path = SERVICE_ROOT / "data" / "news_classification_golden.csv"
+    rows = evaluate_classification_goldens(read_golden_csv_rows(golden_path), [])
+    failures = [row for row in rows if row["local_status"] != "pass"]
+    assert not failures
+
+
+def test_validation_quality_gate_blocks_low_value_editorial_patterns() -> None:
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        out_dir = root / "exports"
+        site_dir = root / "site"
+        out_dir.mkdir()
+        site_dir.mkdir()
+        report_date = "2026-06-09"
+        dated = report_date.replace("-", "")
+        advisory_title = "법무법인 광장, 최대현 전 산업은행 수석부행장 영입"
+        market_title = '"계약 맺은후가 더 무서워"…M&A 보험 시장 커진다'
+
+        (out_dir / f"daily_news_brief_{dated}.md").write_text(
+            "\n".join(
+                [
+                    f"일자 : {report_date}",
+                    "",
+                    "[Market]",
+                    f"- [{advisory_title}](https://example.com/advisory)",
+                    "  출처: 조선비즈",
+                    "",
+                    "[Deal]",
+                    f"- [{market_title}](https://example.com/insurance)",
+                    "  출처: 한국경제",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (out_dir / f"daily_news_review_queue_{dated}.csv").write_text(
+            "\n".join(
+                [
+                    "include_in_brief,publisher,title,source_url,normalized_source_url,current_category,section_tags,topic_tags",
+                    f"Y,조선비즈,\"{advisory_title}\",https://example.com/advisory,https://example.com/advisory,Market,Market,\"\"",
+                    f"Y,한국경제,\"{market_title}\",https://example.com/insurance,https://example.com/insurance,Deal,Deal,\"Deal,PEF\"",
+                ]
+            ),
+            encoding="utf-8-sig",
+        )
+        (site_dir / "health.json").write_text(
+            json.dumps({"report_date": report_date, "article_count": 2}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (site_dir / "archive.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "reportDate": report_date,
+                        "articles": [
+                            {"title": advisory_title, "url": "https://example.com/advisory", "section": "Market", "subCategory": "Market View"},
+                            {"title": market_title, "url": "https://example.com/insurance", "section": "Deal", "subCategory": "Acquisition"},
+                        ],
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = Validation()
+        check_classification_quality(result, out_dir, report_date, site_dir)
+        assert any("advisory people story" in error for error in result.errors)
+        assert any("M&A market commentary" in error for error in result.errors)
 
 
 def test_national_growth_fund_named_in_gp_strategy_is_not_dedicated_section() -> None:
@@ -1532,6 +2877,7 @@ def main() -> int:
         test_google_backtest_window,
         test_google_backtest_window_catches_weekend_on_monday,
         test_previous_export_keys_ignore_review_candidates,
+        test_force_include_previous_export_only_repeats_inside_current_window,
         test_google_news_decode_helpers,
         test_sedaily_mobile_amp_url_normalizes_to_desktop_article,
         test_common_news_tracking_params_are_removed,
@@ -1540,11 +2886,19 @@ def main() -> int:
         test_gp_alias_overrides_cover_common_short_names,
         test_lp_directory_includes_seed_only_profiles_without_empty_profile_pages,
         test_lp_public_labels_do_not_expose_internal_taxonomy,
-        test_official_lp_candidates_are_public_on_notice_surfaces,
+        test_official_lp_candidates_require_explicit_public_notice_allowance,
         test_lp_notice_title_program_beats_generic_platform,
         test_lp_notice_fund_series_round_beats_generic_page_round,
         test_lp_notice_lifecycle_events_roll_into_one_business_card,
         test_article_payload_does_not_render_lp_as_gp_chip,
+        test_article_summary_lines_use_investment_memo_tone,
+        test_article_summary_lines_strip_newsroom_boilerplate,
+        test_article_payload_carries_summary_lines_contract,
+        test_ai_enrichment_summary_lines_override_review_summary,
+        test_ai_enrichment_summary_lines_reject_public_tone_violations,
+        test_ai_enrichment_section_suggestion_is_optional_public_override,
+        test_ai_enrichment_audit_marks_category_conflicts,
+        test_ai_enrichment_prompt_contains_classification_boundaries,
         test_kic_lp_alias_seed_feeds_article_context,
         test_national_growth_section_does_not_attach_kdb_context,
         test_context_only_lp_keeps_name_without_broken_profile_link,
@@ -1562,8 +2916,13 @@ def main() -> int:
         test_private_credit_conference_is_market_not_lp,
         test_gp_named_venture_mother_fund_start_is_gp,
         test_finalized_markdown_section_is_preserved_for_public_site,
+        test_public_payload_uses_brief_section_as_canonical,
+        test_deal_value_reassessment_subtype_is_not_acquisition,
         test_company_gap_titles_keep_expected_sections_and_quality,
         test_company_gap_keyword_rules_cover_ai_fund_lp_scope_and_private_debt,
+        test_meta_description_pef_signal_feeds_scoring_excerpt,
+        test_recent_gap_publishers_and_sources_are_configured,
+        test_recent_gap_publishers_have_brand_icons,
         test_render_markdown_uses_canonical_article_url,
         test_ai_pe_strategy_is_not_demoted_by_opportunity_language,
         test_ai_pe_section_priority,
@@ -1574,6 +2933,23 @@ def main() -> int:
         test_ai_pe_reserved_in_brief_selection,
         test_lp_and_gp_reserved_in_full_brief_selection,
         test_gp_fundraising_beats_deal_word_when_title_is_fund_build,
+        test_quoted_fund_challenge_is_gp_fundraising,
+        test_retirement_plan_private_equity_access_is_lp_not_deal,
+        test_20260608_category_regressions,
+        test_20260609_editorial_quality_regressions,
+        test_advisory_people_event_dedupe_key,
+        test_gp_continuation_fund_drops_conflicting_deal_topic,
+        test_article_payload_carries_gp_profile_link_contract,
+        test_naver_source_readiness_requires_credentials,
+        test_validation_quality_gate_catches_category_tag_and_archive_mismatches,
+        test_validation_warns_on_ai_category_conflicts,
+        test_ai_enrichment_invalid_category_is_preserved_and_validation_errors,
+        test_ai_enrichment_partial_external_output_is_validation_error,
+        test_validation_allows_archive_ai_section_when_apply_mode_is_enabled,
+        test_validation_blocks_archive_ai_field_and_summary_leakage,
+        test_ai_backtest_summary_counts_audit_statuses,
+        test_news_classification_golden_cases_pass_local_rules,
+        test_validation_quality_gate_blocks_low_value_editorial_patterns,
         test_national_growth_fund_named_in_gp_strategy_is_not_dedicated_section,
         test_partner_suffix_does_not_turn_specific_investment_into_gp,
         test_acquisition_profile_title_with_pumneun_stays_deal,

@@ -7,6 +7,7 @@ Set-Location $RepoRoot
 $ReportDate = Get-Date -Format "yyyy-MM-dd"
 
 python -m py_compile `
+    services\shared\src\daily_news_common.py `
     services\newsletter\src\daily_news_common.py `
     services\newsletter\src\run_daily_news_pipeline.py `
     services\newsletter\src\backtest_daily_news.py `

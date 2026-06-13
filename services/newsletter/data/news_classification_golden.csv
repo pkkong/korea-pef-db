@@ -1,0 +1,13 @@
+case_id,publisher,title,summary_text,section_tags,topic_tags,gp_names,expected_section,reason
+ngf_gp_imm,dealsite,국민성장펀드 잡은 IMM…레버리지는 없다,IMM의 국민성장펀드 출자 기반 펀드레이징 전략이 핵심이다,NationalGrowthFund,"NationalGrowthFund,GP,Fundraising",아이엠엠인베스트먼트,GP,국민성장펀드보다 GP 펀드레이징 전략이 기사 주제
+private_credit_market_ask,한국경제,"먼로캐피탈 ""자산유동화대출은 일시적 유행 아닌 대체투자 핵심 대안""[ASK 2026]",자산 담보 대출과 사모대출 시장을 설명하는 컨퍼런스 코멘트다,Credit,"Credit,LP,Market,daily,private_credit",,Market,특정 딜이 아니라 사모대출 시장 코멘터리
+kiwoom_venture_mother_gp,딜사이트,키움인베 600억 벤처모펀드 출격,키움인베스트먼트가 600억 규모 벤처모펀드를 조성하고 GP 출자에 나선다,Market,"GP,LP,daily,publisher_watch",키움인베스트먼트,GP,운용사 펀드 조성 기사
+court_doc_market,서울경제,"법원, 고려아연에 원아시아 펀드 투자 문서 제출 명령 [시그널]",고려아연의 투자 문서 제출 명령과 지배구조 분쟁이 핵심이다,GP,"PEF,daily,gp_watch","원아시아파트너스,엠비케이파트너스",Market,LP 출자활동이 아니라 분쟁·거버넌스 이슈
+gp_stake_market,한국경제,"보나코드 “GP 스테이크, 단순 자금 조달 넘어선 기업 성장 핵심 전략”",PEF 운용사 지분 투자와 GP 스테이크 시장 구조를 다룬다,GP,"PEF,daily,market_news",,Market,GP 스테이크는 운용사 지분투자 시장 구조
+daishin_ai_fund_gp,이투데이,2000억대 체급 깬 대신PE AI·반도체 4000억 펀드 시동…역대 최대 블라인드 도전,대신프라이빗에쿼티가 AI·반도체 블라인드펀드 조성에 나섰다,AI_PE,"AI_PE,GP,Fundraising",대신프라이빗에쿼티,GP,AI 키워드보다 GP 블라인드펀드 조성이 기사 주제
+paratus_ngf,뉴스톱,"국민성장펀드 잡은 파라투스, 최대 3000억 펀딩 탄력",파라투스인베스트먼트가 국민성장펀드 운용사로 선정돼 정책자금 확보가 가능해졌다,GP,"NationalGrowthFund,LP,GP",파라투스인베스트먼트,NationalGrowthFund,국민성장펀드 운용사 선정·정책자금 확보가 중심
+asiae_private_debt_market,아시아경제,국내 금융권 등 해외 사모대출 56조…당국 시스템 리스크 가능성 낮아,해외 사모대출 시장과 금융권 리스크를 점검한다,LP,"Credit,Market",,Market,특정 LP 출자나 딜이 아닌 금융권 사모대출 시장 점검
+exina_funding_deal,조선비즈,"“목표액 2배로 모았다” 엑시나, 2000억 투자유치… 신규 FI 10곳 이상",엑시나 투자유치와 신규 재무적투자자 참여 기사다,Market,Deal,,Deal,특정 회사의 투자유치 거래 이벤트
+kic_cio_lp,매일경제,KIC 새 CIO 뽑는다…다음달 11일까지 공개모집,한국투자공사 최고투자책임자 공개모집 기사다,Market,"LP,allocator",한국투자공사,LP,국부펀드 운용 책임자 인선은 LP 거버넌스
+pef_association_market,매일경제,"[단독] 세 불리는 PEF협의회 … 웰투시 등 7곳 승선",PEF협의회와 업계 단체 확대를 다룬다,GP,"GP,PEF,daily",웰투시인베스트먼트,Market,특정 운용사보다 업계 단체·시장 구조가 주제
+lotte_rental_deal,한국경제TV,롯데렌탈 재매각 착수...“PEF·대기업 인수 의향”,롯데렌탈 매각 작업 재개와 원매자 실사 진행 기사다,Market,"Deal,PEF",,Deal,구체적인 매각 프로세스가 핵심

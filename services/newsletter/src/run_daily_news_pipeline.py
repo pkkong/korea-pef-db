@@ -71,6 +71,10 @@ from daily_news_common import (
 )
 from build_news_gp_update_worklist import build as build_news_gp_update_worklist
 from build_service_integration_worklist import build as build_service_integration_worklist
+from news_taxonomy import (
+    TAG_TAXONOMY_VERSION,
+    build_classification,
+)
 
 
 def init_db(conn: sqlite3.Connection, schema_path: Path) -> None:
@@ -417,6 +421,7 @@ PUBLISHER_BY_DOMAIN = {
     "biz.chosun.com": "조선비즈",
     "asiae.co.kr": "아시아경제",
     "fnnews.com": "파이낸셜뉴스",
+    "sentv.co.kr": "서울경제TV",
     "wowtv.co.kr": "한국경제TV",
     "news.einfomax.co.kr": "연합인포맥스",
     "mt.co.kr": "머니투데이",
@@ -425,12 +430,18 @@ PUBLISHER_BY_DOMAIN = {
     "investchosun.com": "인베스트조선",
     "kgnews.co.kr": "경기신문",
     "4th.kr": "포쓰저널",
+    "asiatime.co.kr": "아시아타임즈",
     "newstof.com": "뉴스톱",
     "etoday.co.kr": "이투데이",
     "joseilbo.com": "조세일보",
+    "kbanker.co.kr": "대한금융신문",
     "dealsitetv.com": "DealSite경제TV",
     "greened.kr": "녹색경제신문",
     "joongangenews.com": "중앙이코노미뉴스",
+    "ilyo.co.kr": "일요신문",
+    "autodaily.co.kr": "엠투데이",
+    "junggi.co.kr": "중기이코노미",
+    "mediapen.com": "미디어펜",
     "dailypop.kr": "데일리팝",
     "dailybrief.co.kr": "데일리브리프",
     "businesspost.co.kr": "비즈니스포스트",
@@ -461,6 +472,9 @@ PUBLISHER_BY_DOMAIN = {
     "hani.co.kr": "한겨레",
     "newsfreezone.co.kr": "뉴스프리존",
     "g-enews.com": "글로벌이코노믹",
+    "cstimes.com": "컨슈머타임스",
+    "pinpointnews.co.kr": "핀포인트뉴스",
+    "kpinews.kr": "KPI뉴스",
     "medicopharma.co.kr": "메디코파마",
     "biotimes.co.kr": "바이오타임즈",
     "segyebiz.com": "세계비즈",
@@ -719,6 +733,24 @@ def load_run_candidate_rows(conn: sqlite3.Connection, run_id: str, report_date: 
     return rows
 
 
+def assert_source_family_readiness(sources: list[object]) -> None:
+    active_naver_sources = [
+        getattr(source, "source_code", "")
+        for source in sources
+        if getattr(source, "source_kind", "") == "naver_news_api"
+    ]
+    if active_naver_sources and (
+        not os.environ.get("NAVER_CLIENT_ID", "").strip()
+        or not os.environ.get("NAVER_CLIENT_SECRET", "").strip()
+    ):
+        preview = ", ".join(active_naver_sources[:8])
+        suffix = "" if len(active_naver_sources) <= 8 else f" 외 {len(active_naver_sources) - 8}개"
+        raise RuntimeError(
+            "NAVER_CLIENT_ID and NAVER_CLIENT_SECRET are required for active Naver News sources: "
+            f"{preview}{suffix}"
+        )
+
+
 def build_export_rows(
     conn: sqlite3.Connection,
     run_id: str,
@@ -734,7 +766,7 @@ def build_export_rows(
         quality_score, quality_reason = editorial_quality(row)
         row["quality_score"] = quality_score
         row["quality_reason"] = quality_reason
-        if is_previous_export(row, previous_keys) and str(row.get("review_status", "")) != "force_include":
+        if should_skip_previous_export(row, previous_keys, report_date):
             continue
         if should_export_row(row, allow_google_news_redirects=allow_google_news_redirects):
             eligible.append(row)
@@ -781,6 +813,14 @@ def is_previous_export(row: dict[str, object], previous_keys: dict[str, set[str]
     if normalized_url and normalized_url in previous_keys["urls"]:
         return True
     return bool(title_key and title_key in previous_keys["titles"])
+
+
+def should_skip_previous_export(row: dict[str, object], previous_keys: dict[str, set[str]], report_date: str) -> bool:
+    if not is_previous_export(row, previous_keys):
+        return False
+    if str(row.get("review_status", "")) != "force_include":
+        return True
+    return not is_in_coverage_window(str(row.get("published_at", "")), str(row.get("discovered_at", "")), report_date)
 
 
 SECTION_ORDER = ["AI_PE", "NationalGrowthFund", "Deal", "LP", "GP", "Market"]
@@ -949,6 +989,27 @@ WEAK_CONTEXT_TITLE_KEYWORDS = [
     "주가",
     "실적",
 ]
+ADVISORY_PEOPLE_ORG_KEYWORDS = [
+    "법무법인",
+    "회계법인",
+    "PwC",
+    "삼일",
+    "광장",
+    "김앤장",
+    "태평양",
+    "세종",
+    "율촌",
+]
+ADVISORY_PEOPLE_EVENT_KEYWORDS = [
+    "영입",
+    "고문",
+    "합류",
+    "리더십 재편",
+    "부대표",
+    "대표 선임",
+    "파트너 선임",
+    "승진",
+]
 TITLE_RISK_KEYWORDS = [
     "법원",
     "제출 명령",
@@ -1101,6 +1162,13 @@ SECTION_KEYWORDS = {
         "공제회",
         "중소기업중앙회",
         "노란우산공제",
+        "퇴직연금",
+        "401k",
+        "401K",
+        "401(k)",
+        "retirement plan",
+        "retirement plans",
+        "defined contribution",
         "경찰공제회",
         "신협중앙회",
         "국민연금",
@@ -1123,6 +1191,7 @@ SECTION_KEYWORDS = {
     ],
     "Fundraising": [
         "블라인드펀드",
+        "블라인드",
         "펀드 결성",
         "결성",
         "펀드레이징",
@@ -1133,6 +1202,10 @@ SECTION_KEYWORDS = {
         "펀드 시동",
         "펀드 출격",
         "펀드 증액",
+        "펀딩",
+        "펀딩 목표",
+        "자펀드",
+        "GP 도전",
         "AI펀드",
         "약정총액",
         "목표액",
@@ -1210,6 +1283,16 @@ SECTION_KEYWORDS = {
         "영입",
     ],
 }
+FUNDRAISING_FUND_CHALLENGE_RE = re.compile(r"펀드[\"'’”\)\]\s]{0,4}도전")
+RETIREMENT_ALLOCATOR_KEYWORDS = [
+    "퇴직연금",
+    "401k",
+    "401K",
+    "401(k)",
+    "retirement plan",
+    "retirement plans",
+    "defined contribution",
+]
 
 STRONG_DEAL_KEYWORDS = [
     "M&A",
@@ -1315,6 +1398,11 @@ MARKET_COMMENTARY_KEYWORDS = [
     "시장 동향",
     "시장 구조",
     "사모 시장",
+    "M&A 보험",
+    "보험 시장",
+    "진술·보장",
+    "진술 보장",
+    "W&I",
     "사모대출은",
     "프라이빗크레딧 시장",
     "은행이 못 채운 공백",
@@ -1344,6 +1432,7 @@ CREDIT_TRANSACTION_KEYWORDS = [
     "조달",
     "제공",
     "주선",
+    "투입",
     "리파이낸싱 완료",
     "리캡 완료",
     "차환",
@@ -1540,7 +1629,7 @@ AI_SHORT_RE = re.compile(r"(?<![A-Za-z])AI(?![A-Za-z])", re.IGNORECASE)
 EQUITY_STAKE_TRANSACTION_RE = re.compile(
     r"(?:투자.*지분\s*\d+(?:\.\d+)?%|지분\s*\d+(?:\.\d+)?%.*확보)"
 )
-AMOUNTED_INVESTMENT_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:조|억|억원)\s*(?:규모\s*)?투자")
+AMOUNTED_INVESTMENT_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:조|억|억원)\s*(?:규모\s*)?(?:투자|베팅|투입|집행)")
 
 
 def contains_any_keyword(text: str, keywords: list[str]) -> bool:
@@ -1565,9 +1654,13 @@ def split_csv_values(value: str) -> list[str]:
 
 
 def has_fundraising_title_signal(title: str) -> bool:
-    return contains_any_keyword(title, SECTION_KEYWORDS["Fundraising"]) or (
+    return contains_any_keyword(title, SECTION_KEYWORDS["Fundraising"]) or bool(FUNDRAISING_FUND_CHALLENGE_RE.search(title)) or (
         "펀드" in title and contains_any_keyword(title, ["결성", "모집", "소진", "펀딩", "조성", "시동", "출격", "증액", "확보", "러브콜"])
     )
+
+
+def has_retirement_allocator_signal(text: str) -> bool:
+    return contains_any_keyword(text, RETIREMENT_ALLOCATOR_KEYWORDS)
 
 
 def has_ai_signal(text: str) -> bool:
@@ -1595,6 +1688,8 @@ def has_ai_pe_theme(title: str, text: str) -> bool:
 def title_has_non_ai_lp_priority(title: str) -> bool:
     if has_ai_signal(title):
         return False
+    if has_retirement_allocator_signal(title):
+        return True
     return contains_any_keyword(
         title,
         [
@@ -1613,6 +1708,13 @@ def title_has_non_ai_lp_priority(title: str) -> bool:
             "새마을금고",
             "중소기업중앙회",
             "노란우산공제",
+            "퇴직연금",
+            "401k",
+            "401K",
+            "401(k)",
+            "retirement plan",
+            "retirement plans",
+            "defined contribution",
             "KIC",
             "한국투자공사",
             "국부펀드",
@@ -1670,6 +1772,8 @@ def has_lp_event_signal(text: str) -> bool:
 
 
 def has_explicit_lp_focus_signal(text: str) -> bool:
+    if has_retirement_allocator_signal(text):
+        return True
     return contains_any_keyword(
         text,
         [
@@ -1688,6 +1792,13 @@ def has_explicit_lp_focus_signal(text: str) -> bool:
             "새마을금고",
             "중소기업중앙회",
             "노란우산공제",
+            "퇴직연금",
+            "401k",
+            "401K",
+            "401(k)",
+            "retirement plan",
+            "retirement plans",
+            "defined contribution",
             "KIC",
             "한국투자공사",
             "모태펀드",
@@ -1740,12 +1851,66 @@ def has_market_commentary_signal(text: str) -> bool:
     return contains_any_keyword(text, MARKET_COMMENTARY_KEYWORDS)
 
 
+def has_advisory_people_signal(text: str) -> bool:
+    return contains_any_keyword(text, ADVISORY_PEOPLE_ORG_KEYWORDS) and contains_any_keyword(
+        text,
+        ADVISORY_PEOPLE_EVENT_KEYWORDS,
+    )
+
+
+def has_deal_market_commentary_signal(text: str) -> bool:
+    if not contains_any_keyword(text, ["M&A", "인수합병"]):
+        return False
+    if contains_any_keyword(
+        text,
+        [
+            "예비입찰",
+            "본입찰",
+            "우선협상",
+            "우협",
+            "주식매매계약",
+            "본계약",
+            "인수 추진",
+            "매각 추진",
+            "인수 완료",
+            "경영권 인수",
+        ],
+    ):
+        return False
+    return contains_any_keyword(
+        text,
+        [
+            "시장",
+            "규모",
+            "최저",
+            "급증",
+            "커진다",
+            "얼어붙",
+            "쪼그라",
+            "팬데믹",
+            "보험",
+            "의뢰건수",
+        ],
+    )
+
+
 def has_credit_signal(text: str) -> bool:
     return contains_any_keyword(text, SECTION_KEYWORDS["Credit"])
 
 
 def has_credit_transaction_signal(text: str) -> bool:
     return has_credit_signal(text) and contains_any_keyword(text, CREDIT_TRANSACTION_KEYWORDS)
+
+
+def has_financial_license_market_signal(text: str) -> bool:
+    return contains_any_keyword(text, ["장외파생상품"]) and contains_any_keyword(text, ["라이선스", "인가", "금감원", "금융위"])
+
+
+def has_gp_lp_program_fundraise_signal(text: str) -> bool:
+    return contains_any_keyword(text, ["농모태펀드", "모태펀드", "출자 사업", "출자사업"]) and contains_any_keyword(
+        text,
+        ["GP 도전", "블라인드", "펀딩", "펀드레이징", "펀드 결성", "자펀드"],
+    )
 
 
 def has_specific_equity_transaction_signal(text: str) -> bool:
@@ -1757,6 +1922,8 @@ def has_external_funding_deal_signal(text: str) -> bool:
 
 
 def has_title_transaction_signal(title: str) -> bool:
+    if has_deal_market_commentary_signal(title):
+        return False
     if contains_any_keyword(title, ["인수 기회", "투자 기회"]):
         return False
     if (
@@ -1822,10 +1989,19 @@ def has_regulatory_market_signal(text: str) -> bool:
     )
 
 
-def has_gp_national_growth_fund_strategy_signal(title: str, content: str, raw_sections: list[str]) -> bool:
+def has_gp_national_growth_fund_strategy_signal(
+    title: str,
+    content: str,
+    raw_sections: list[str],
+    gp_names: str = "",
+) -> bool:
     if not contains_any_keyword(title, SECTION_KEYWORDS["NationalGrowthFund"]):
         return False
-    return contains_any_keyword(content, ["GP", "운용사", "PEF", "PE하우스", "프라이빗에쿼티"]) and contains_any_keyword(
+    has_gp_context = bool(str(gp_names or "").strip()) or "GP" in raw_sections or contains_any_keyword(
+        content,
+        ["GP", "운용사", "PEF", "PE하우스", "프라이빗에쿼티"],
+    )
+    return has_gp_context and contains_any_keyword(
         content,
         ["노리는", "드라이 파우더", "레버리지", "전략"],
     )
@@ -1857,22 +2033,49 @@ def primary_section(row: dict[str, object]) -> str:
             str(row.get("gp_names", "")),
         ]
     )
-    if has_gp_national_growth_fund_strategy_signal(title, content, raw_sections):
+    gp_names_text = str(row.get("gp_names", ""))
+    if has_gp_national_growth_fund_strategy_signal(title, content, raw_sections, gp_names_text):
         return "GP"
     if has_national_growth_fund_theme(title, raw_sections):
         return "NationalGrowthFund"
+    if (
+        has_external_funding_deal_signal(title)
+        and not (gp_names_text.strip() and has_fundraising_title_signal(title))
+        and "GP" not in topics
+        and "GP" not in raw_sections
+        and not has_gp_capital_event_signal(title, gp_names_text)
+    ):
+        return "Deal"
+    if (
+        not has_national_growth_fund_theme(title, raw_sections)
+        and has_fundraising_title_signal(title)
+        and (gp_names_text.strip() or "GP" in topics or "GP" in raw_sections or has_gp_focus_signal(title))
+    ):
+        return "GP"
     if (
         "NationalGrowthFund" in topics
         and contains_any_keyword(content, SECTION_KEYWORDS["NationalGrowthFund"])
         and has_national_growth_body_primary_signal(content)
         and not has_primary_lp_event_signal(title)
-        and not has_allocator_selection_signal(title)
+            and not has_allocator_selection_signal(title)
     ):
         return "NationalGrowthFund"
+    if has_gp_lp_program_fundraise_signal(content) and (
+        str(row.get("gp_names", "")).strip() or "GP" in topics or "GP" in raw_sections or has_gp_focus_signal(content)
+    ):
+        return "GP"
     if has_primary_lp_event_signal(title) or has_allocator_selection_signal(title):
         return "LP"
+    if has_retirement_allocator_signal(title):
+        return "LP"
+    if has_financial_license_market_signal(title):
+        return "Market"
     if has_regulatory_market_signal(title):
         return "Market"
+    if has_advisory_people_signal(title):
+        return "Market"
+    if has_deal_market_commentary_signal(title):
+        return "AI_PE" if has_ai_pe_theme(title, content) else "Market"
     if has_gp_capital_event_signal(title, str(row.get("gp_names", ""))):
         return "GP"
     if has_fundraising_title_signal(title) and (
@@ -1977,21 +2180,29 @@ def should_keep_topic_tag(value: str, source: str, section: str, title: str, con
     if value == "Deal":
         if section == "Market" and has_regulatory_market_signal(title):
             return False
+        if section in {"AI_PE", "Market"} and has_deal_market_commentary_signal(title):
+            return False
         if section == "LP" and has_allocator_selection_signal(title):
             return False
-        return section == "Deal" or has_title_transaction_signal(title)
+        if section == "LP" and has_retirement_allocator_signal(title):
+            return False
+        return section == "Deal"
     if value == "Fundraising":
         return section == "GP" and has_fundraising_title_signal(title)
     if value == "GP":
+        if has_advisory_people_signal(title):
+            return False
         if section == "GP":
             return True
         return bool(gp_names.strip()) and (has_gp_focus_signal(title) or has_fundraising_title_signal(title))
     if value == "LP":
         if section == "LP":
             return True
+        if section in {"Deal", "GP"}:
+            return False
         if has_aggregate_credit_market_signal(title) and section == "Market":
             return False
-        return has_primary_lp_event_signal(title) or title_has_non_ai_lp_priority(title)
+        return has_primary_lp_event_signal(title) or title_has_non_ai_lp_priority(title) or has_retirement_allocator_signal(content)
     if value == "Portfolio":
         return section == "Deal" and contains_any_keyword(content, SECTION_KEYWORDS["Portfolio"])
     if value == "Regulation":
@@ -1999,6 +2210,60 @@ def should_keep_topic_tag(value: str, source: str, section: str, title: str, con
     if value == "PEF":
         return section in {"Deal", "GP", "LP", "NationalGrowthFund"}
     return value in PUBLIC_TOPIC_TAGS
+
+
+PRIMARY_TOPIC_BY_SECTION = {
+    "AI_PE": "AI_PE",
+    "NationalGrowthFund": "NationalGrowthFund",
+    "Deal": "Deal",
+    "LP": "LP",
+    "GP": "GP",
+}
+
+
+def canonical_section_tag(value: str) -> str:
+    return SECTION_LABEL_TO_CODE.get(value, value)
+
+
+def public_topic_values_for_section(row: dict[str, object], section: str) -> list[str]:
+    title = str(row.get("title", ""))
+    gp_text = str(row.get("gp_names", ""))
+    content = " ".join([title, str(row.get("summary_text", "")), gp_text])
+    values: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: str) -> None:
+        if value and value not in seen:
+            values.append(value)
+            seen.add(value)
+
+    for value in split_csv_values(str(row.get("topic_tags", ""))):
+        if should_keep_topic_tag(value, "export_refine", section, title, content, gp_text):
+            add(value)
+
+    primary_topic = PRIMARY_TOPIC_BY_SECTION.get(section)
+    if primary_topic:
+        add(primary_topic)
+    if section == "GP" and has_fundraising_title_signal(title):
+        add("Fundraising")
+    if section in {"Deal", "GP", "Market"} and has_credit_signal(title):
+        add("Credit")
+    return values
+
+
+def normalize_export_classification(row: dict[str, object]) -> str:
+    section = primary_section(row)
+    classification = build_classification(
+        section=section,
+        topic_tags=public_topic_values_for_section(row, section),
+        gp_entities=split_semicolon(str(row.get("gp_names", "")).replace(",", ";")),
+        lp_entities=split_semicolon(str(row.get("lp_names", "")).replace(",", ";")),
+    )
+    row["current_category"] = SECTION_LABELS.get(classification.section, classification.section)
+    row["section_tags"] = classification.section
+    row["topic_tags"] = ",".join(classification.topic_tags)
+    row["tag_version"] = classification.tag_version
+    return classification.section
 
 
 def refine_news_tags(
@@ -2023,17 +2288,24 @@ def refine_news_tags(
         tag_type = str(tag.get("tag_type") or "").strip()
         value = str(tag.get("tag_value") or "").strip()
         source = str(tag.get("tag_source") or "").strip()
+        if tag_type == "section" and canonical_section_tag(value) != section:
+            continue
         if tag_type == "topic" and not should_keep_topic_tag(value, source, section, title, content, gp_text):
             continue
         refined.append(tag)
-    primary_topic_by_section = {
-        "AI_PE": "AI_PE",
-        "NationalGrowthFund": "NationalGrowthFund",
-        "Deal": "Deal",
-        "LP": "LP",
-        "GP": "GP",
-    }
-    primary_topic = primary_topic_by_section.get(section)
+    if not any(
+        str(tag.get("tag_type") or "") == "section" and canonical_section_tag(str(tag.get("tag_value") or "")) == section
+        for tag in refined
+    ):
+        refined.append(
+            {
+                "tag_type": "section",
+                "tag_value": section,
+                "tag_source": "classifier_refine",
+                "confidence": 0.85,
+            }
+        )
+    primary_topic = PRIMARY_TOPIC_BY_SECTION.get(section)
     if primary_topic and not any(
         str(tag.get("tag_type") or "") == "topic" and str(tag.get("tag_value") or "") == primary_topic
         for tag in refined
@@ -2133,6 +2405,9 @@ def editorial_quality(row: dict[str, object]) -> tuple[float, str]:
     if contains_any_keyword(title, LOW_VALUE_TITLE_KEYWORDS) and not title_has_direct_signal:
         score -= 2.0
         reasons.append("weak headline")
+    if has_advisory_people_signal(title):
+        score -= 18.0
+        reasons.append("advisory people story")
     if signal_strength == "body" and not high_value_headline:
         if contains_any_keyword(title, WEAK_CONTEXT_TITLE_KEYWORDS):
             score -= 8.0
@@ -2165,6 +2440,8 @@ def should_export_row(row: dict[str, object], allow_google_news_redirects: bool 
         return False
     if review_status == "force_include":
         return True
+    if has_advisory_people_signal(str(row.get("title", ""))):
+        return False
     if str(row.get("source_url", "")).startswith("https://news.google.com/") and not allow_google_news_redirects:
         return False
     return float(row.get("quality_score", 0) or 0) >= EXPORT_MIN_QUALITY_SCORE
@@ -2175,6 +2452,13 @@ def event_dedupe_key(row: dict[str, object]) -> str:
     summary = str(row.get("summary_text", ""))
     text = f"{title} {summary}"
     raw_sections = [SECTION_LABEL_TO_CODE.get(value, value) for value in split_csv_values(str(row.get("section_tags", "")))]
+    if has_advisory_people_signal(title):
+        if contains_any_keyword(text, ["법무법인 광장", "광장"]) and contains_any_keyword(
+            text,
+            ["최대현", "최대한", "산은", "KDB인베"],
+        ):
+            return "advisory_people:gwangjang_choi_daehyun"
+        return ""
     if has_national_growth_fund_theme(title, raw_sections):
         if contains_any_keyword(title, ["2차", "두 번째"]) and contains_any_keyword(title, ["출자사업", "위탁운용", "운용사"]):
             return "national_growth_fund:indirect_round_2_notice"
@@ -2503,11 +2787,7 @@ def build_review_rows(
         quality_score, quality_reason = editorial_quality(row)
         row["quality_score"] = quality_score
         row["quality_reason"] = quality_reason
-    rows = [
-        row
-        for row in rows
-        if not is_previous_export(row, previous_keys) or str(row.get("review_status", "")) == "force_include"
-    ]
+    rows = [row for row in rows if not should_skip_previous_export(row, previous_keys, report_date)]
     rows.sort(key=quality_sort_key)
     review_rows: list[dict[str, object]] = []
     for row in select_review_rows(rows, review_limit):
@@ -2682,6 +2962,7 @@ def main() -> int:
         sources = sync_sources(conn, args.sources)
         selected_source_codes = {code.strip() for code in args.source_code.split(",") if code.strip()}
         sources = filter_sources(sources, selected_source_codes)
+        assert_source_family_readiness(sources)
         rules = load_rules(args.rules)
         overrides = load_manual_overrides(args.overrides)
         gp_aliases = load_gp_aliases(args.db, args.gp_alias_overrides)
@@ -2777,7 +3058,8 @@ def main() -> int:
                     and is_generic_aggregator_text(summary_text)
                 ):
                     continue
-                score_result = score_document(title, excerpt_text, body_text, rules, source.default_tags)
+                scoring_excerpt = build_scoring_excerpt(excerpt_text, meta_description, summary_text)
+                score_result = score_document(title, scoring_excerpt, body_text, rules, source.default_tags)
                 entity_links = match_gp_entities(title, summary_text, body_text, gp_aliases)
 
                 override = overrides.get(normalized_source_url, {})
@@ -2873,6 +3155,8 @@ def main() -> int:
             args.out_dir,
             allow_google_news_redirects=args.allow_google_news_redirects,
         )
+        for row in rows:
+            normalize_export_classification(row)
         review_rows = build_review_rows(conn, run_id, args.date, args.review_limit, rows, args.out_dir)
         markdown_path = args.out_dir / f"daily_news_brief_{args.date.replace('-', '')}.md"
         html_path = args.out_dir / f"daily_news_brief_{args.date.replace('-', '')}.html"
@@ -2905,9 +3189,11 @@ def main() -> int:
                 "source_url",
                 "normalized_source_url",
                 "published_at",
+                "current_category",
                 "section_tags",
                 "section_override_tags",
                 "topic_tags",
+                "tag_version",
                 "document_type_tags",
                 "gp_names",
                 "quality_score",
@@ -2931,9 +3217,11 @@ def main() -> int:
                     "source_url",
                     "normalized_source_url",
                     "published_at",
+                    "current_category",
                     "section_tags",
                     "section_override_tags",
                     "topic_tags",
+                    "tag_version",
                     "document_type_tags",
                     "gp_names",
                     "quality_score",
@@ -3024,6 +3312,10 @@ def main() -> int:
 def body_hash(title: str, summary_text: str, body_text: str) -> str:
     raw = "\n".join([title, summary_text, body_text[:4000]])
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def build_scoring_excerpt(excerpt_text: str, meta_description: str, summary_text: str) -> str:
+    return normalize_whitespace(" ".join(part for part in [excerpt_text, meta_description, summary_text] if part))
 
 
 if __name__ == "__main__":

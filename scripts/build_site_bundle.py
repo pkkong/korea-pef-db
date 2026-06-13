@@ -31,7 +31,8 @@ from services.newsletter.src.daily_news_common import today_seoul  # noqa: E402
 from services.wiki.src.build_wiki_service_pages import build_wiki_service_pages  # noqa: E402
 
 
-DEFAULT_SERVICE_ORDER = ("newsletter", "lp", "gp", "wiki")
+DEFAULT_SERVICE_ORDER = ("newsletter", "lp", "gp")
+ALL_SERVICE_ORDER = ("newsletter", "lp", "gp", "wiki")
 SERVICE_ALIASES = {
     "brief": "newsletter",
     "news": "newsletter",
@@ -94,8 +95,10 @@ def existing_health_result(site_dir: Path, report_date: str) -> dict[str, str]:
     return result
 
 
-def write_shared_support(site_dir: Path, result: dict[str, str]) -> None:
-    write_public_db_page(site_dir)
+def write_shared_support(site_dir: Path, result: dict[str, str], requested_services: list[str]) -> None:
+    integrated_site = any(service in requested_services for service in ("lp", "gp", "wiki"))
+    if integrated_site:
+        write_public_db_page(site_dir)
     (site_dir / "admin.html").unlink(missing_ok=True)
     write_health_file(site_dir, result)
     if (site_dir / "index.html").exists():
@@ -103,7 +106,7 @@ def write_shared_support(site_dir: Path, result: dict[str, str]) -> None:
     else:
         (site_dir / ".nojekyll").write_text("", encoding="utf-8")
         (site_dir / "robots.txt").write_text("User-agent: *\nDisallow:\n", encoding="utf-8")
-    if (site_dir / "index.html").exists() and (site_dir / "daily-news.html").exists():
+    if "newsletter" in requested_services and (site_dir / "index.html").exists() and (site_dir / "daily-news.html").exists():
         assert_newsletter_only(site_dir)
 
 
@@ -124,7 +127,7 @@ def build_site_bundle(
     deploy_dir.mkdir(parents=True, exist_ok=True)
 
     result = existing_health_result(site_dir, effective_date)
-    for service in DEFAULT_SERVICE_ORDER:
+    for service in ALL_SERVICE_ORDER:
         if service not in requested_services:
             continue
         if service == "newsletter":
@@ -146,7 +149,7 @@ def build_site_bundle(
     result["report_date"] = effective_date
     result["services"] = ",".join(requested_services)
 
-    write_shared_support(site_dir, result)
+    write_shared_support(site_dir, result, requested_services)
     zip_path = zip_site(deploy_dir, site_dir)
 
     manifest = {

@@ -103,7 +103,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 if str(LEGACY_SCRIPTS_DIR) not in sys.path:
     sys.path.append(str(LEGACY_SCRIPTS_DIR))
-from brand_assets import brand_logo_url, brand_style_attr  # noqa: E402
+from brand_assets import brand_logo_url, brand_style_attr, prepare_brand_asset_cache  # noqa: E402
 from build_service_site import (  # noqa: E402
     DEFAULT_ARCHIVE_LIMIT,
     DEFAULT_EXPORT_DIR,
@@ -490,6 +490,14 @@ def db_object_exists(conn: sqlite3.Connection, name: str) -> bool:
     return row is not None
 
 
+def db_object_columns(conn: sqlite3.Connection, name: str) -> set[str]:
+    return {str(row[1]) for row in conn.execute(f"PRAGMA table_info({name})").fetchall()}
+
+
+def select_column(columns: set[str], name: str, fallback: str = "''") -> str:
+    return name if name in columns else f"{fallback} AS {name}"
+
+
 def fetch_dicts(conn: sqlite3.Connection, query: str, params: tuple[object, ...] = ()) -> list[dict[str, object]]:
     cursor = conn.execute(query, params)
     headers = [desc[0] for desc in cursor.description]
@@ -513,7 +521,11 @@ def safe_float(value: object) -> float:
 def lp_notice_stats(rows: list[dict[str, object]]) -> dict[str, dict[str, object]]:
     stats: dict[str, dict[str, object]] = {}
     for row in rows:
-        if not is_public_lp_notice_row(row, require_official=True):
+        if not is_public_lp_notice_row(
+            row,
+            require_official=True,
+            allow_official_candidates=True,
+        ):
             continue
         lp_code = str(row.get("lp_code") or "").strip()
         if not lp_code:
@@ -635,6 +647,13 @@ ASSET_CLASS_LABELS = {
 def public_lp_type(value: object) -> str:
     text = str(value or "").strip()
     return LP_TYPE_LABELS.get(text, text or "LP")
+
+
+def public_lp_legal_type(profile: dict[str, object]) -> str:
+    legal_type = clean_public_lp_text(profile.get("legal_lp_category") or "")
+    if legal_type:
+        return legal_type
+    return public_lp_type(profile.get("lp_type") or "LP")
 
 
 def public_asset_class(value: object) -> str:
@@ -893,28 +912,36 @@ def read_lp_directory_items(db_path: Path = DEFAULT_DB) -> list[dict[str, object
     try:
         if not db_object_exists(conn, "v_lp_profile_summary"):
             return []
+        columns = db_object_columns(conn, "v_lp_profile_summary")
+        selected_columns = ",\n                ".join(
+            [
+                select_column(columns, "lp_code"),
+                select_column(columns, "lp_name"),
+                select_column(columns, "lp_type"),
+                select_column(columns, "legal_lp_category"),
+                select_column(columns, "legal_lp_basis"),
+                select_column(columns, "ownership_type"),
+                select_column(columns, "homepage_url"),
+                select_column(columns, "notice_url"),
+                select_column(columns, "default_team"),
+                select_column(columns, "focus_asset_classes"),
+                select_column(columns, "service_priority", "0"),
+                select_column(columns, "coverage_tier"),
+                select_column(columns, "display_enabled", "1"),
+                select_column(columns, "notice_tracking_enabled", "1"),
+                select_column(columns, "profile_status"),
+                select_column(columns, "notice_count", "0"),
+                select_column(columns, "allocation_amount_krw_100mn", "0"),
+                select_column(columns, "latest_event_date"),
+                select_column(columns, "fact_count", "0"),
+                select_column(columns, "source_count", "0"),
+            ]
+        )
         rows = fetch_dicts(
             conn,
-            """
+            f"""
             SELECT
-                lp_code,
-                lp_name,
-                lp_type,
-                ownership_type,
-                homepage_url,
-                notice_url,
-                default_team,
-                focus_asset_classes,
-                service_priority,
-                coverage_tier,
-                display_enabled,
-                notice_tracking_enabled,
-                profile_status,
-                notice_count,
-                allocation_amount_krw_100mn,
-                latest_event_date,
-                fact_count,
-                source_count
+                {selected_columns}
             FROM v_lp_profile_summary
             WHERE COALESCE(display_enabled, 1) = 1
             ORDER BY service_priority DESC, lp_name
@@ -1017,6 +1044,8 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
                     lp_name,
                     lp_name_en,
                     lp_type,
+                    legal_lp_category,
+                    legal_lp_basis,
                     ownership_type,
                     homepage_url,
                     notice_url,
@@ -1066,6 +1095,8 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
                     li.lp_name,
                     li.lp_name_en,
                     li.lp_type,
+                    li.legal_lp_category,
+                    li.legal_lp_basis,
                     li.ownership_type,
                     li.homepage_url,
                     li.notice_url,
@@ -1152,7 +1183,15 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
             if db_object_exists(conn, "v_lp_commitment_notice_public")
             else []
         )
-        notices = [row for row in notices if is_public_lp_notice_row(row, require_official=True)]
+        notices = [
+            row
+            for row in notices
+            if is_public_lp_notice_row(
+                row,
+                require_official=True,
+                allow_official_candidates=True,
+            )
+        ]
 
         yearly = yearly_stats_from_notices(notices)
 
@@ -1166,6 +1205,8 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
                     lp_code,
                     lp_name,
                     lp_type,
+                    legal_lp_category,
+                    legal_lp_basis,
                     ownership_type,
                     default_team,
                     focus_asset_classes,
@@ -1480,7 +1521,11 @@ def render_ktcu_annual_highlights(notices: list[dict[str, object]], year: int) -
 
 
 def split_asset_classes(value: object) -> list[str]:
-    parts = [public_asset_class(part) for part in str(value or "").split(";") if part.strip()]
+    parts = [
+        public_asset_class(part)
+        for part in str(value or "").split(";")
+        if part.strip() and part.strip().upper() != "OCIO"
+    ]
     deduped = list(dict.fromkeys(parts))
     return deduped or ["자산군 미표시"]
 
@@ -1516,7 +1561,7 @@ def render_lp_peer_rows(peers: list[dict[str, object]], active_code: str) -> str
         rows.append(
             f"""          <a class="ktcu-peer-row{active_class}" href="lp-{html_escape(lp_code)}.html">
             <strong>{html_escape(str(row.get("lp_name") or lp_code))}</strong>
-            <span data-label="유형">{html_escape(public_lp_type(row.get("lp_type") or "LP"))}</span>
+            <span data-label="유형">{html_escape(public_lp_legal_type(row))}</span>
             <span data-label="출자공고">{html_escape(str(row.get("visible_notice_count", row.get("notice_count") or 0)))}건</span>
             <span data-label="규모" title="최신 공고일 {html_escape(latest)}">{html_escape(amount)}</span>
           </a>"""
@@ -1766,7 +1811,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
 
     lp_code = str(profile.get("lp_code") or "")
     lp_name = str(profile.get("lp_name") or "LP")
-    lp_type = public_lp_type(profile.get("lp_type") or "LP")
+    lp_type = public_lp_legal_type(profile)
     lp_logo_url = directory_logo_url(profile.get("homepage_url"))
     lp_avatar_label = directory_avatar_label(lp_short_label(lp_code, lp_name), "LP")
     lp_avatar_tone = directory_avatar_tone(lp_code or lp_name)
@@ -2245,6 +2290,7 @@ def render_ktcu_page(report_date: str, payload: dict[str, object], nav_items: li
 
 
 def write_lp_profile_pages(site_dir: Path, report_date: str) -> int:
+    prepare_brand_asset_cache(site_dir)
     fact_count = 0
     profile_codes = read_lp_profile_codes()
     nav_items = read_lp_profile_nav(profile_codes=profile_codes)
@@ -2272,7 +2318,7 @@ def write_lp_profile_pages(site_dir: Path, report_date: str) -> int:
 def render_lp_directory_card(item: dict[str, object]) -> str:
     lp_code = str(item.get("lp_code") or "")
     lp_name = str(item.get("lp_name") or lp_code or "LP")
-    lp_type = public_lp_type(item.get("lp_type") or "LP")
+    lp_type = public_lp_legal_type(item)
     ownership = str(item.get("ownership_type") or "")
     ownership_label = {
         "public": "공공",
@@ -2291,7 +2337,8 @@ def render_lp_directory_card(item: dict[str, object]) -> str:
     profile_url = f"lp-{lp_code}.html" if lp_code else "lp-notices.html"
     avatar_label = directory_avatar_label(lp_short_label(lp_code, lp_name), "LP")
     avatar_markup = directory_avatar_markup(homepage_url, avatar_label, lp_code or lp_name)
-    search_blob = " ".join([lp_name, lp_type, ownership_label, default_team, focus, coverage_tier])
+    legal_basis = str(item.get("legal_lp_basis") or "")
+    search_blob = " ".join([lp_name, lp_type, legal_basis, ownership_label, default_team, focus, coverage_tier])
     title_markup = (
         f'<a href="{html_escape(profile_url)}">{html_escape(lp_name)}</a>'
         if item.get("has_public_profile", True)
@@ -2332,9 +2379,9 @@ def render_lp_notices_page(
     }
     notice_groups = [
         ("open", "공고중", [item for item in notices if lp_notice_public_status(item, report_date) == "open"]),
-        ("closed", "접수마감", [item for item in notices if lp_notice_public_status(item, report_date) == "closed"]),
         ("shortlist", "1차 선정", [item for item in notices if lp_notice_public_status(item, report_date) == "shortlist"]),
         ("result", "선정완료", [item for item in notices if lp_notice_public_status(item, report_date) == "result"]),
+        ("closed", "접수마감", [item for item in notices if lp_notice_public_status(item, report_date) == "closed"]),
         (
             "cancellation",
             "취소",
@@ -2381,7 +2428,6 @@ def render_lp_notices_page(
     tracked_count = len(directory_rows)
     tier_counts = {
         "core": len([item for item in directory_rows if str(item.get("coverage_tier") or "") == "core"]),
-        "ocio": len([item for item in directory_rows if str(item.get("coverage_tier") or "") == "ocio"]),
         "policy": len([item for item in directory_rows if str(item.get("coverage_tier") or "") == "policy"]),
     }
     visible_notice_count = len(notices)
@@ -2391,9 +2437,9 @@ def render_lp_notices_page(
         <div class="lp-notice-status-tabs" role="tablist" aria-label="출자공고 상태">
           <button class="lp-notice-status-tab" type="button" data-status="all">전체</button>
           <button class="lp-notice-status-tab" type="button" data-status="open">공고중</button>
-          <button class="lp-notice-status-tab" type="button" data-status="closed">접수마감</button>
           <button class="lp-notice-status-tab" type="button" data-status="shortlist">1차 선정</button>
           <button class="lp-notice-status-tab" type="button" data-status="result">선정완료</button>
+          <button class="lp-notice-status-tab" type="button" data-status="closed">접수마감</button>
           <button class="lp-notice-status-tab" type="button" data-status="cancellation">취소</button>
           <button class="lp-notice-status-tab" type="button" data-status="history">히스토리</button>
         </div>"""
@@ -2410,11 +2456,11 @@ def render_lp_notices_page(
         notice_summary_html = ""
     else:
         hero_title = f'<h1 class="lp-directory-title"><strong>{tracked_count}개</strong> 출자기관</h1>'
-        hero_meta = f'<p class="lp-directory-meta">핵심 LP {tier_counts["core"]}개 · OCIO/공적기금 {tier_counts["ocio"]}개 · 정책펀드 {tier_counts["policy"]}개 · 공식 공고 {visible_notice_count}건 · {html_escape(report_date)} 기준</p>'
+        hero_meta = f'<p class="lp-directory-meta">핵심 LP {tier_counts["core"]}개 · 정책펀드 {tier_counts["policy"]}개 · 공식 공고 {visible_notice_count}건 · {html_escape(report_date)} 기준</p>'
         hero_kpis = f"""
         <div class="lp-directory-kpis">
           <div><span>대상 기관</span><strong>{tracked_count}개</strong></div>
-          <div><span>OCIO/공적기금</span><strong>{tier_counts["ocio"]}개</strong></div>
+          <div><span>핵심 LP</span><strong>{tier_counts["core"]}개</strong></div>
           <div><span>공고 기준 규모</span><strong>{html_escape(public_amount_label(total_amount, fallback="-"))}</strong></div>
           <div><span>출자공고</span><strong>{visible_notice_count}건</strong></div>
         </div>"""
@@ -2465,7 +2511,6 @@ def render_lp_notices_page(
             <select id="lpFilter" aria-label="필터">
               <option value="all">전체</option>
               <option value="core">핵심 LP</option>
-              <option value="ocio">OCIO/공적기금</option>
               <option value="policy">정책펀드</option>
               <option value="1">공고 추적</option>
             </select>
@@ -4782,6 +4827,30 @@ def lp_notice_primary_source_url(item: dict[str, object]) -> str:
     return str(item.get("url") or item.get("documentUrl") or "")
 
 
+LP_NOTICE_EVENT_TITLE_NOISE_TERMS = [
+    "벤처투자포털",
+    "벤처투자종합포털",
+    "벤처투자마트",
+    "주식유통정보",
+    "비상장주식거래플랫폼",
+    "출자공고 |",
+    "| 출자사업 |",
+    "목록에서 발견",
+    "동의하지 않은 경우",
+    "부합하는 경우",
+]
+
+
+def lp_notice_public_event_title(event: dict[str, object]) -> str:
+    title = clean_public_lp_text(event.get("title") or "")
+    if not title:
+        return ""
+    if any(term in title for term in LP_NOTICE_EVENT_TITLE_NOISE_TERMS):
+        return ""
+    title = re.sub(r"\s*\|\s*(?:벤처투자포털|벤처투자종합포털|출자사업).*$", "", title)
+    return clean_public_lp_text(title)
+
+
 def lp_notice_preview_events(item: dict[str, object], limit: int = 3) -> str:
     events = [event for event in item.get("events") if isinstance(event, dict)] if isinstance(item.get("events"), list) else []
     if not events:
@@ -4793,7 +4862,7 @@ def lp_notice_preview_events(item: dict[str, object], limit: int = 3) -> str:
     )
     items: list[str] = []
     for event in sorted_events[:limit]:
-        event_title = clean_public_lp_text(event.get("title") or "")
+        event_title = lp_notice_public_event_title(event)
         if not event_title:
             continue
         event_date = str(event.get("eventDate") or "")[:10]
@@ -4979,9 +5048,11 @@ def render_lp_notice_detail_page(report_date: str, item: dict[str, object]) -> s
     if events:
         timeline_items = []
         for event in events:
-            event_title = clean_public_lp_text(event.get("title") or "")
+            event_title = lp_notice_public_event_title(event)
             event_date_label = korean_date_label(str(event.get("eventDate") or "")[:10]) or "-"
             event_stage = clean_public_lp_text(event.get("stageLabel") or "") or lp_event_label(event.get("eventType"))
+            if not event_title:
+                event_title = event_stage
             timeline_items.append(
                 f"""          <li>
             <time>{html_escape(event_date_label)}</time>
@@ -5135,6 +5206,7 @@ def write_lp_notice_detail_pages(site_dir: Path, report_date: str, notices: list
 
 
 def write_lp_notices_page(site_dir: Path, report_date: str) -> int:
+    prepare_brand_asset_cache(site_dir)
     notices = read_lp_monitor(DEFAULT_LP_COMMITMENT_MONITOR, limit=None)
     nav_items = read_lp_profile_nav()
     directory_items = read_lp_directory_items()

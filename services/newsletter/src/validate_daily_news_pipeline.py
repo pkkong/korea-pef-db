@@ -14,19 +14,27 @@ from pathlib import Path
 from daily_news_common import (
     DEFAULT_DB,
     DEFAULT_ENV,
-DEFAULT_EXPORT_DIR,
+    DEFAULT_EXPORT_DIR,
     DEFAULT_SOURCES,
     REPO_ROOT,
+    clean_investment_memo_summary_lines,
     normalize_url,
     read_csv_rows,
     today_seoul,
 )
 from run_daily_news_pipeline import (
     EXPORT_MIN_QUALITY_SCORE,
-    SECTION_LABELS,
     coverage_window_label,
+    has_advisory_people_signal,
+    has_deal_market_commentary_signal,
     is_near_duplicate_title_key,
     normalize_title_key,
+)
+from news_taxonomy import (
+    PRIMARY_SECTION_TOPICS,
+    SECTION_LABELS,
+    TAG_TAXONOMY_VERSION,
+    canonical_section,
 )
 
 
@@ -38,7 +46,22 @@ REQUIRED_TABLES = [
     "news_entity_link",
 ]
 VALID_CATEGORY_LABELS = set(SECTION_LABELS.values())
+FORBIDDEN_PUBLIC_ARTICLE_FIELDS = {
+    "provider",
+    "confidence",
+    "notes",
+    "section_suggestion",
+    "sectionSuggestion",
+    "sectionSuggestionRaw",
+    "suggestion_status",
+}
 MARKDOWN_LINK_RE = re.compile(r"- \[(?P<title>.+?)\]\((?P<url>https?://[^)]+)\)")
+BRIEF_SECTION_RE = re.compile(r"^\[(?P<section>[^\]]+)\]\s*$")
+
+AUCTION_TITLE_RE = re.compile(r"(?:본입찰|예비입찰|입찰|원매자|인수의향|우선협상|숏리스트|주관사|매각주관|제안)")
+FINANCING_TITLE_RE = re.compile(r"(?:CB|전환사채|메자닌).*(?:투입|인수|투자|조달)|(?:투입|인수|투자|조달).*(?:CB|전환사채|메자닌)", re.IGNORECASE)
+GP_FUNDRAISING_TITLE_RE = re.compile(r"(?:펀딩 목표|펀드레이징|자펀드|블라인드|GP 도전|펀드.{0,5}도전)")
+OWNERSHIP_TITLE_RE = re.compile(r"(?:수익성|수익성 개선|손본다|밸류업|PMI|구조조정|운영 개선|가치 재평가|재평가)", re.IGNORECASE)
 
 
 class Validation:
@@ -103,6 +126,321 @@ def markdown_links(markdown_text: str) -> list[dict[str, str]]:
         if current is not None and line.startswith("  출처:"):
             current["publisher"] = line.split(":", 1)[1].strip()
     return links
+
+
+def markdown_articles(markdown_text: str) -> list[dict[str, str]]:
+    articles: list[dict[str, str]] = []
+    current_section = ""
+    current: dict[str, str] | None = None
+    for line in markdown_text.splitlines():
+        section_match = BRIEF_SECTION_RE.match(line.strip())
+        if section_match:
+            current_section = canonical_section(section_match.group("section"))
+            current = None
+            continue
+        link_match = MARKDOWN_LINK_RE.match(line)
+        if link_match:
+            current = link_match.groupdict()
+            current["publisher"] = ""
+            current["section"] = current_section
+            articles.append(current)
+            continue
+        if current is not None and line.startswith("  출처:"):
+            current["publisher"] = line.split(":", 1)[1].strip()
+    return articles
+
+
+def split_csv_values(value: str) -> list[str]:
+    return [item.strip() for item in str(value or "").split(",") if item.strip()]
+
+
+def article_keys(title: str, *urls: str) -> list[str]:
+    keys: list[str] = []
+    for url in urls:
+        normalized = normalize_url(str(url or ""))
+        if normalized and normalized not in keys:
+            keys.append(normalized)
+    title_key = normalize_title_key(title)
+    if title_key:
+        keys.append(f"title:{title_key}")
+    return keys
+
+
+def index_rows_by_article(rows: list[dict[str, str]]) -> dict[str, dict[str, str]]:
+    index: dict[str, dict[str, str]] = {}
+    for row in rows:
+        for key in article_keys(
+            row.get("title", ""),
+            row.get("normalized_source_url", ""),
+            row.get("source_url", ""),
+            row.get("url", ""),
+        ):
+            index.setdefault(key, row)
+    return index
+
+
+def first_match(index: dict[str, dict[str, str]], title: str, *urls: str) -> dict[str, str] | None:
+    for key in article_keys(title, *urls):
+        row = index.get(key)
+        if row is not None:
+            return row
+    return None
+
+
+def expected_subcategory(title: str, section: str) -> str:
+    if section == "Deal":
+        if FINANCING_TITLE_RE.search(title):
+            return "Financing"
+        if OWNERSHIP_TITLE_RE.search(title):
+            return "Ownership"
+        if AUCTION_TITLE_RE.search(title):
+            return "Auction"
+    if section == "GP" and GP_FUNDRAISING_TITLE_RE.search(title):
+        return "Fundraising"
+    if section == "Market" and "장외파생상품" in title and any(token in title for token in ["라이선스", "인가", "금감원", "금융위"]):
+        return "Regulation"
+    return ""
+
+
+def check_review_classification_quality(result: Validation, queue_rows: list[dict[str, str]]) -> None:
+    for row in queue_rows:
+        title = row.get("title", "")
+        section = canonical_section(row.get("current_category", ""))
+        section_tags = [canonical_section(value) for value in split_csv_values(row.get("section_tags", ""))]
+        topic_tags = split_csv_values(row.get("topic_tags", ""))
+        if not section:
+            result.error(f"missing current_category: {title}")
+            continue
+        if len(section_tags) != 1 or section_tags[0] != section:
+            result.error(
+                f"classification mismatch for '{title}': current_category={section}, section_tags={','.join(section_tags) or '-'}"
+            )
+        conflicts = [topic for topic in topic_tags if topic in PRIMARY_SECTION_TOPICS and topic != section]
+        if conflicts:
+            result.error(
+                f"topic tag conflicts with category for '{title}': current_category={section}, topic_tags={','.join(conflicts)}"
+            )
+        tag_version = row.get("tag_version", "").strip()
+        if tag_version and tag_version != TAG_TAXONOMY_VERSION:
+            result.error(
+                f"taxonomy version mismatch for '{title}': tag_version={tag_version}, expected={TAG_TAXONOMY_VERSION}"
+            )
+        if section == "GP" and GP_FUNDRAISING_TITLE_RE.search(title) and "Fundraising" not in topic_tags:
+            result.error(f"missing Fundraising topic for GP fundraising article: {title}")
+        if section == "Deal" and FINANCING_TITLE_RE.search(title) and "Credit" not in topic_tags:
+            result.warning(f"Deal financing article has no Credit topic: {title}")
+        if row.get("include_in_brief", "").upper() == "Y" and has_advisory_people_signal(title):
+            result.error(f"advisory people story should not be included in brief: {title}")
+        if section == "Deal" and has_deal_market_commentary_signal(title):
+            result.error(f"M&A market commentary is classified as Deal: {title}")
+
+
+def check_brief_review_alignment(
+    result: Validation,
+    brief_articles: list[dict[str, str]],
+    queue_rows: list[dict[str, str]],
+) -> None:
+    queue_index = index_rows_by_article(queue_rows)
+    for article in brief_articles:
+        title = article.get("title", "")
+        brief_section = canonical_section(article.get("section", ""))
+        row = first_match(queue_index, title, article.get("url", ""))
+        if row is None:
+            result.error(f"brief article is missing from review queue: {title}")
+            continue
+        queue_section = canonical_section(row.get("current_category", ""))
+        if brief_section and queue_section and brief_section != queue_section:
+            result.error(
+                f"brief section does not match review queue for '{title}': brief={brief_section}, review={queue_section}"
+            )
+
+
+def read_current_archive(site_dir: Path, report_date: str) -> tuple[list[dict[str, str]], str]:
+    health_path = site_dir / "health.json"
+    archive_path = site_dir / "archive.json"
+    if not health_path.exists() or not archive_path.exists():
+        return [], ""
+    try:
+        health = json.loads(health_path.read_text(encoding="utf-8"))
+        archive = json.loads(archive_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return [], ""
+    if str(health.get("report_date") or "") != report_date:
+        return [], str(health.get("report_date") or "")
+    entry = next((row for row in archive if row.get("reportDate") == report_date), None)
+    if not isinstance(entry, dict):
+        return [], report_date
+    rows = entry.get("articles", [])
+    if not isinstance(rows, list):
+        return [], report_date
+    return [row for row in rows if isinstance(row, dict)], report_date
+
+
+def check_archive_classification_quality(
+    result: Validation,
+    site_dir: Path,
+    out_dir: Path,
+    report_date: str,
+    brief_articles: list[dict[str, str]],
+    queue_rows: list[dict[str, str]],
+) -> None:
+    archive_rows, archive_report_date = read_current_archive(site_dir, report_date)
+    if not archive_report_date:
+        result.warning(f"deploy archive not available for classification check: {site_dir / 'archive.json'}")
+        return
+    if archive_report_date != report_date:
+        result.warning(f"deploy archive is for {archive_report_date}, not {report_date}; skipping archive classification check")
+        return
+    brief_index = index_rows_by_article(brief_articles)
+    queue_index = index_rows_by_article(queue_rows)
+    apply_ai_sections = str(os.environ.get("NEWSLETTER_AI_APPLY_SECTIONS", "0")).strip().lower() in {"1", "true", "yes", "on"}
+    ai_index = index_rows_by_article(read_ai_enrichment_articles(out_dir, report_date)) if apply_ai_sections else {}
+    if len(archive_rows) != len(brief_articles):
+        result.error(f"archive article count {len(archive_rows)} does not match brief count {len(brief_articles)}")
+    for article in archive_rows:
+        title = str(article.get("title") or "")
+        section = canonical_section(str(article.get("section") or ""))
+        subcategory = str(article.get("subCategory") or "").strip()
+        source_url = str(article.get("url") or article.get("sourceUrl") or "")
+        leaked_fields = sorted(field for field in FORBIDDEN_PUBLIC_ARTICLE_FIELDS if field in article)
+        if leaked_fields:
+            result.error(f"archive article leaks internal AI fields for '{title}': {','.join(leaked_fields)}")
+        summary_lines = article.get("summaryLines") or []
+        if isinstance(summary_lines, list):
+            raw_summary_lines = [str(line or "").strip() for line in summary_lines if str(line or "").strip()]
+        elif isinstance(summary_lines, str):
+            raw_summary_lines = [line.strip() for line in re.split(r"\n+|\s*\|\s*", summary_lines) if line.strip()]
+        else:
+            raw_summary_lines = []
+        cleaned_summary_lines = clean_investment_memo_summary_lines(raw_summary_lines, title, limit=3)
+        if raw_summary_lines and len(cleaned_summary_lines) != len(raw_summary_lines):
+            result.error(f"archive article has unusable public summaryLines for '{title}'")
+        if not raw_summary_lines:
+            result.warning(f"archive article has no summaryLines: {title}")
+        ai_row = first_match(ai_index, title, source_url) if apply_ai_sections else None
+        ai_section = canonical_section(str(ai_row.get("section_suggestion") or "")) if ai_row is not None else ""
+        ai_section_applied = bool(apply_ai_sections and ai_section and section == ai_section)
+        if not section:
+            result.error(f"archive article has no section: {title}")
+        if not subcategory:
+            result.error(f"archive article has no subCategory: {title}")
+        if has_advisory_people_signal(title):
+            result.error(f"archive includes advisory people story: {title}")
+        if section == "Deal" and has_deal_market_commentary_signal(title):
+            result.error(f"archive classifies M&A market commentary as Deal: {title}")
+        brief_row = first_match(brief_index, title, source_url)
+        if brief_row is not None:
+            brief_section = canonical_section(brief_row.get("section", ""))
+            if section and brief_section and section != brief_section and not ai_section_applied:
+                result.error(f"archive section does not match brief for '{title}': archive={section}, brief={brief_section}")
+        queue_row = first_match(queue_index, title, source_url)
+        if queue_row is not None:
+            queue_section = canonical_section(queue_row.get("current_category", ""))
+            if section and queue_section and section != queue_section and not ai_section_applied:
+                result.error(f"archive section does not match review queue for '{title}': archive={section}, review={queue_section}")
+        if apply_ai_sections and ai_section and section != ai_section:
+            result.error(f"archive section does not match AI suggestion for '{title}': archive={section}, ai={ai_section}")
+        expected = expected_subcategory(title, section)
+        if expected and subcategory != expected:
+            result.error(f"archive subCategory mismatch for '{title}': expected={expected}, actual={subcategory}")
+
+
+def read_ai_enrichment_articles(out_dir: Path, report_date: str) -> list[dict[str, object]]:
+    path = out_dir / f"daily_news_ai_enrichment_{compact_date(report_date)}.json"
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    articles = data.get("articles") if isinstance(data, dict) else []
+    if not isinstance(articles, list):
+        return []
+    return [row for row in articles if isinstance(row, dict)]
+
+
+def check_ai_enrichment_classification_quality(
+    result: Validation,
+    out_dir: Path,
+    report_date: str,
+    queue_rows: list[dict[str, str]],
+) -> None:
+    articles = read_ai_enrichment_articles(out_dir, report_date)
+    if not articles:
+        result.warning("AI enrichment output is missing; summary/category second-pass was not available")
+        return
+    ai_payload_path = out_dir / f"daily_news_ai_enrichment_{compact_date(report_date)}.json"
+    try:
+        ai_payload = json.loads(ai_payload_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        ai_payload = {}
+    provider = str(ai_payload.get("provider") or "") if isinstance(ai_payload, dict) else ""
+    is_external_provider = provider not in {"", "local-rule"}
+    if len(articles) != len(queue_rows):
+        message = f"AI enrichment article count {len(articles)} does not match review queue count {len(queue_rows)}"
+        if is_external_provider:
+            result.error(message)
+        else:
+            result.warning(message)
+    queue_index = index_rows_by_article(queue_rows)
+    conflict_count = 0
+    invalid_count = 0
+    missing_count = 0
+    missing_summary_count = 0
+    for article in articles:
+        title = str(article.get("title") or "")
+        suggestion = canonical_section(str(article.get("section_suggestion") or ""))
+        raw_suggestion = str(article.get("section_suggestion_raw") or "").strip()
+        suggestion_status = str(article.get("suggestion_status") or "").strip()
+        if suggestion_status == "invalid" or (raw_suggestion and not suggestion):
+            invalid_count += 1
+            result.error(f"AI enrichment invalid category for '{title}': raw={raw_suggestion}")
+            continue
+        if suggestion_status == "missing":
+            missing_count += 1
+            if is_external_provider:
+                result.error(f"AI enrichment missing category suggestion for '{title}'")
+            continue
+        if suggestion and suggestion not in SECTION_LABELS:
+            invalid_count += 1
+            result.error(f"AI enrichment suggested unknown category for '{title}': {suggestion}")
+            continue
+        row = first_match(
+            queue_index,
+            title,
+            str(article.get("normalized_source_url") or ""),
+            str(article.get("source_url") or ""),
+        )
+        current = canonical_section(row.get("current_category", "")) if row is not None else canonical_section(str(article.get("current_category") or ""))
+        if suggestion and current and suggestion != current:
+            conflict_count += 1
+            result.warning(f"AI category conflict for '{title}': current={current}, ai={suggestion}")
+        summary_lines = article.get("summary_lines") or article.get("summaryLines") or []
+        cleaned_summary_lines = clean_investment_memo_summary_lines(summary_lines, title, limit=3)
+        if len(cleaned_summary_lines) < 1:
+            missing_summary_count += 1
+            if is_external_provider:
+                result.error(f"AI enrichment has no usable public summary_lines for '{title}'")
+    result.note(
+        f"AI enrichment checked: provider={provider or 'unknown'}, articles={len(articles)}, conflicts={conflict_count}, invalid={invalid_count}, missing={missing_count}, missing_summaries={missing_summary_count}"
+    )
+    if missing_summary_count:
+        result.warning(f"AI enrichment has {missing_summary_count} articles without summary_lines")
+
+
+def check_classification_quality(result: Validation, out_dir: Path, report_date: str, site_dir: Path | None) -> None:
+    dated = compact_date(report_date)
+    brief_path = out_dir / f"daily_news_brief_{dated}.md"
+    queue_path = out_dir / f"daily_news_review_queue_{dated}.csv"
+    if not brief_path.exists() or not queue_path.exists():
+        return
+    brief_articles = markdown_articles(read_text(brief_path))
+    queue_rows = read_csv_rows(queue_path)
+    check_review_classification_quality(result, queue_rows)
+    check_brief_review_alignment(result, brief_articles, queue_rows)
+    check_ai_enrichment_classification_quality(result, out_dir, report_date, queue_rows)
+    if site_dir is not None:
+        check_archive_classification_quality(result, site_dir, out_dir, report_date, brief_articles, queue_rows)
 
 
 def check_env_and_sources(result: Validation, env_path: Path, sources_path: Path) -> None:
@@ -324,12 +662,14 @@ def main() -> int:
     parser.add_argument("--env", type=Path, default=DEFAULT_ENV)
     parser.add_argument("--sources", type=Path, default=DEFAULT_SOURCES)
     parser.add_argument("--public-dir", type=Path, default=REPO_ROOT / "public")
+    parser.add_argument("--site-dir", type=Path, default=None, help="Optional built deploy site directory for archive.json classification checks")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     result = Validation()
     check_env_and_sources(result, args.env, args.sources)
     check_artifacts(result, args.out_dir, args.date)
+    check_classification_quality(result, args.out_dir, args.date, args.site_dir)
     check_public_site(result, args.public_dir, args.date)
     check_database(result, args.db, args.date)
     check_scheduler(result)

@@ -77,6 +77,20 @@ TRACKING_PARAMS = {
     "input",
     "click",
 }
+SUMMARY_INTERNAL_TERM_RE = re.compile(
+    r"(?:AI\s*generated|source\s*/?\s*evidence|confidence|provider|operator|AUM\s*proxy|관리자|자동\s*생성|검토\s*대기|보강\s*필요)",
+    re.IGNORECASE,
+)
+SUMMARY_CASUAL_TONE_RE = re.compile(
+    r"(?:했어요|해요|이에요|예요|입니다|네요|군요|나왔어요|봤어요|있어요|없어요|됐어요|하죠|보죠)(?:$|[.!?。])"
+)
+SUMMARY_ARTICLE_ENDING_RE = re.compile(
+    r"(?:했습니다|하였습니다|했다|합니다|한다|된다|됐습니다|됐다|나섰다|밝혔다|전했다|알려졌다|분석된다|풀이된다|예정이다)$"
+)
+SUMMARY_NEWSROOM_BOILERPLATE_RE = re.compile(
+    r"(?:기자\s*연결|단독\s*취재한|취재한\s+[가-힣A-Za-z]{1,12}$|기사\s*제보|뉴스룸)",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -338,6 +352,68 @@ def parse_default_tags(value: str) -> list[tuple[str, str]]:
 
 def normalize_whitespace(value: str) -> str:
     return re.sub(r"\s+", " ", unescape(value or "")).strip()
+
+
+def summary_line_key(value: object) -> str:
+    return re.sub(r"[\s·ㆍ.,!?。:;()\\[\\]{}'\"`“”‘’|]+", "", str(value or "").strip()).lower()
+
+
+def is_summary_title_echo(line: object, title: object = "") -> bool:
+    line_key = summary_line_key(line)
+    title_key = summary_line_key(title)
+    if not line_key or not title_key:
+        return False
+    if line_key == title_key:
+        return True
+    shorter, longer = (line_key, title_key) if len(line_key) <= len(title_key) else (title_key, line_key)
+    return len(shorter) >= 8 and shorter in longer and (len(shorter) / max(len(longer), 1)) >= 0.72
+
+
+def clean_investment_memo_summary_line(value: object, title: object = "", max_length: int = 74) -> str:
+    line = normalize_whitespace(str(value or "")).strip(" \t\r\n-–—·,.;:。")
+    if not line or len(line) < 4:
+        return ""
+    line = re.sub(r"<[^>]+>", " ", line)
+    line = re.sub(r"^\[[^\]]+\]\s*", "", line)
+    line = re.sub(r"^[가-힣A-Za-z·\s]{2,18}\s*기자\s*=\s*", "", line)
+    line = re.sub(r"\[[^\]]*본 기사는[^\]]*\]", " ", line)
+    line = normalize_whitespace(line).strip(" \t\r\n-–—·,.;:。\"“”‘’")
+    if not line or len(line) < 4:
+        return ""
+    if SUMMARY_INTERNAL_TERM_RE.search(line) or SUMMARY_CASUAL_TONE_RE.search(line) or SUMMARY_NEWSROOM_BOILERPLATE_RE.search(line):
+        return ""
+    if is_summary_title_echo(line, title):
+        return ""
+    line = re.sub(r"(전망된다|전망이다)$", "전망", line).strip()
+    line = re.sub(r"(가능성이 있다|가능성이다)$", "가능성", line).strip()
+    line = re.sub(r"(것으로 보인다|것으로 풀이된다)$", "", line).strip()
+    line = re.sub(r"것으로 전망된다$", "전망", line).strip()
+    line = SUMMARY_ARTICLE_ENDING_RE.sub("", line).strip(" \t\r\n-–—·,.;:。")
+    if not line or len(line) < 8:
+        return ""
+    if is_summary_title_echo(line, title):
+        return ""
+    if len(line) > max_length:
+        line = line[: max_length - 1].rstrip(" ,.;:·") + "…"
+    return line
+
+
+def clean_investment_memo_summary_lines(value: object, title: object = "", limit: int = 3) -> list[str]:
+    if isinstance(value, str):
+        raw_values = re.split(r"\n+|\s*\|\s*", value)
+    elif isinstance(value, (list, tuple)):
+        raw_values = [str(item or "") for item in value]
+    else:
+        raw_values = []
+    lines: list[str] = []
+    for raw in raw_values:
+        line = clean_investment_memo_summary_line(raw, title)
+        if not line or line in lines:
+            continue
+        lines.append(line)
+        if len(lines) >= limit:
+            break
+    return lines
 
 
 def strip_html_tags(value: str) -> str:
@@ -955,6 +1031,8 @@ def match_gp_entities(title: str, excerpt_text: str, body_text: str, aliases: li
                 confidence = 0.74
         if not match_field:
             continue
+        if is_prior_role_context(raw_fields.get(match_field, ""), alias.alias_name, match_field):
+            continue
         key = (alias.gp_id, alias.canonical_name)
         if key in seen:
             continue
@@ -972,6 +1050,13 @@ def match_gp_entities(title: str, excerpt_text: str, body_text: str, aliases: li
         )
     suppress_secondary_body_matches = bool(normalize_whitespace(body_text)) and len(normalize_whitespace(body_text)) >= 280
     return prioritize_gp_entity_matches(matches, suppress_secondary_body_matches=suppress_secondary_body_matches)[:8]
+
+
+def is_prior_role_context(text: str, alias_name: str, match_field: str) -> bool:
+    if match_field == "title" or not text or not alias_name:
+        return False
+    pattern = rf"전\s*.{{0,12}}{re.escape(alias_name)}.{{0,28}}(?:대표|파트너|본부장|부문|임원|CIO|CEO)"
+    return re.search(pattern, text, flags=re.IGNORECASE) is not None
 
 
 def prioritize_gp_entity_matches(

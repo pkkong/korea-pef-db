@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
+from brand_assets import BRAND_MARKS
+
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SERVICE_ROOT.parents[1]
@@ -38,6 +40,14 @@ def icon_status(site_dir: Path, icon_url: str) -> tuple[str, str]:
             return "weak_asset_type", f"Asset is {asset_path.suffix.lower()}, prefer official PNG/SVG logo."
     if icon_url.lower().endswith(".ico"):
         return "weak_favicon", "ICO favicon is present but should be replaced with official CI/logo when possible."
+    return "ok", ""
+
+
+def registry_icon_status(domain: str, icon_url: str) -> tuple[str, str]:
+    if not icon_url:
+        return "missing_registry_icon", f"{domain} has no curated logo URL."
+    if icon_url.lower().endswith(".ico"):
+        return "weak_favicon", f"{domain} uses an ICO favicon; prefer official PNG/SVG logo."
     return "ok", ""
 
 
@@ -81,6 +91,7 @@ def main() -> int:
     parser.add_argument("--report-date", default="")
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--fail-on-missing", action="store_true")
+    parser.add_argument("--check-registry", action="store_true")
     args = parser.parse_args()
 
     articles = load_articles(args.site_dir, args.report_date)
@@ -102,6 +113,24 @@ def main() -> int:
                 "reason": reason,
             }
         )
+
+    if args.check_registry:
+        for domain, mark in BRAND_MARKS.items():
+            status, reason = registry_icon_status(domain, str(mark.get("logo_url", "") or ""))
+            if status == "ok":
+                continue
+            issue_rows.append(
+                {
+                    "report_date": args.report_date or "",
+                    "status": status,
+                    "publisher": domain,
+                    "domain": domain,
+                    "title": "",
+                    "url": "",
+                    "icon_url": mark.get("logo_url", ""),
+                    "reason": reason,
+                }
+            )
 
     dated = (args.report_date or "latest").replace("-", "")
     csv_path = args.out_dir / f"newsletter_icon_report_{dated}.csv"
