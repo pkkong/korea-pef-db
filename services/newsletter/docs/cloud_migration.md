@@ -2,9 +2,13 @@
 
 ## 결론
 
-현재 로컬 MVP는 매일 08:30 Windows 스케줄러로 실행된다. 따라서 PC가 꺼져 있거나 절전 상태면 뉴스 수집도 멈춘다.
+현재 정식 운영 경로는 GitHub Actions다. 매일 08:30 KST 수집, 분류,
+정적 HTML 생성, GitHub Pages 배포까지 repository workflow에서 처리한다.
+개인 Mac, Windows 예약 작업, 로컬 자동 push는 운영 경로에서 제외한다.
 
-서비스처럼 운영하려면 수집 실행 위치를 개인 PC에서 클라우드 서버로 옮겨야 한다.
+이 문서는 GitHub Actions를 넘어 전용 Cloud Run Job, Railway Cron,
+Cloud SQL/Supabase 같은 별도 클라우드 운영으로 확장할 때 참고하는
+미래 전환 메모다.
 
 ## 추천 구조
 
@@ -21,10 +25,10 @@ Cloud Scheduler
 
 - `services/newsletter/deploy/site/index.html`: 서비스 랜딩 페이지
 - `services/newsletter/deploy/site/daily-news.html`: 오늘자 Daily Clipping 페이지
-- `scripts/build_service_site.py`: 매일 수집 후 public 페이지 자동 갱신
-- `services/newsletter/src/validate_daily_news_pipeline.py`: 수집 결과, public 페이지, DB, 스케줄러 상태 검증
+- `scripts/build_site_bundle.py`: 서비스별 정적 페이지 bundle 생성
+- `services/newsletter/src/validate_daily_news_pipeline.py`: 수집 결과, public 페이지, DB 검증
 
-이 단계는 여전히 PC가 켜져 있어야 한다.
+이 단계는 GitHub Actions에서 실행되므로 개인 PC가 켜져 있을 필요가 없다.
 
 ## 2단계: 클라우드 이전 MVP
 
@@ -35,12 +39,13 @@ Cloud Scheduler
 - 정적 페이지: Cloudflare Pages, Vercel, Netlify, 또는 같은 서버에서 호스팅
 - 비밀키: 플랫폼의 Environment Variables에 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` 저장
 
-이렇게 하면 PC가 꺼져 있어도 매일 수집이 돈다.
+이렇게 하면 GitHub Actions보다 더 강한 서버 운영, 장기 DB, 이메일 발송
+큐까지 확장할 수 있다.
 
 ## 3단계: 앱 구조
 
 ```text
-/public
+services/newsletter/deploy/site
   index.html
   daily-news.html
 

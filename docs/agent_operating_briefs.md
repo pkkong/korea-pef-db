@@ -266,7 +266,7 @@
 
 ## 매일 운영 흐름
 
-1. 뉴스 수집: `services/newsletter/src/run_daily_news_pipeline.py` 또는 `services/newsletter/scripts/run_daily_news_today.ps1`로 수집하고 `data/raw/daily_news/YYYY-MM-DD/`, `db/private_equity.db`, `exports/daily_news/`를 갱신한다.
+1. 뉴스 수집: 정식 운영은 GitHub Actions가 `services/newsletter/src/run_daily_news_pipeline.py`를 실행해 수집, 분류, bundle 생성, public mirror 배포까지 처리한다. `services/newsletter/scripts/run_daily_news_today.ps1`은 로컬 진단용이며 운영 스케줄러가 아니다.
 2. 발행 후보 검토: 뉴스 담당은 `exports/daily_news/daily_news_review_latest.html`과 `exports/daily_news/daily_news_review_queue_latest.csv`를 검토해 발행 포함/제외와 분류를 확정한다.
 3. GP update queue 생성: 뉴스 담당은 `exports/daily_news/news_gp_update_worklist_latest.csv`에 `source_gp_id`, `standard_gp_name`, `source_url`, 갱신 액션을 남긴다.
 4. 통합 작업 큐 생성: 운영자는 `scripts/build_service_integration_worklist.py`로 `exports/service_integration_worklist_latest.csv`를 갱신한다. 이 파일이 뉴스 담당, GP 프로필 담당, People DB 담당의 공통 작업판이다.

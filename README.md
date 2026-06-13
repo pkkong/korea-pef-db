@@ -9,14 +9,16 @@ small maintained CSV inputs only. Runtime secrets, SQLite databases, downloaded
 source files, generated exports, logs, and deploy bundles are local artifacts
 and are ignored by git.
 
-Local-only files commonly needed for operation:
+Ignored local artifacts that may be produced during diagnostics or rebuilds:
 
-- `services/newsletter/config/daily_news.env`
 - `db/private_equity.db`
 - `data/raw/fss_pef/*`
 - `data/raw/daily_news/*`
 - `exports/*`
 - `logs/*`
+
+Newsletter production secrets live in GitHub Actions repository secrets. Local
+`.env` files are not part of the operating path and must not be committed.
 
 To rebuild from public FSS source files in a clean checkout:
 
@@ -48,7 +50,7 @@ The newsletter service is separated under `services/newsletter/`:
 - `services/newsletter/src/`: collection, review, validation, delivery, and deploy builders
 - `services/newsletter/data/`: source lists, keyword rules, manual overrides, GP alias overrides
 - `services/newsletter/schema/`: newsletter SQLite schema
-- `services/newsletter/scripts/`: Windows/PowerShell operating entrypoints
+- `services/newsletter/scripts/`: manual diagnostics and compatibility helpers
 - `services/newsletter/deploy/`: Docker/Nginx files and generated static site bundle
 - `services/newsletter/docs/`: newsletter-specific operating and deployment docs
 
@@ -158,19 +160,19 @@ python scripts/build_aum_analytics.py
 
 These exports use FSS commitment amount as the AUM-style proxy, not NAV.
 
-12. Build and serve the local dashboards:
+12. Build and preview the generated public service bundle:
 
-For the public-facing service prototype, double-click:
+The public website is generated under `services/newsletter/deploy/site/` and
+published to GitHub Pages by GitHub Actions. To preview the already generated
+bundle locally, double-click:
 
 ```text
 open_public_dashboard.bat
 ```
 
-This opens `http://127.0.0.1:8010/public/`. The public surface is the
-Korea PEF Intelligence user-facing service: `public/index.html` and
-`public/daily-news.html` show the selected daily news, while `public/db.html`
-is the public GP/Fund/LP/People DB view. It reads `public/data/service_data.json`,
-which intentionally excludes operator queues and rebuild metadata.
+This opens `http://127.0.0.1:8010/` and serves the generated bundle from
+`services/newsletter/deploy/site/`. It is only a local smoke preview; it is not
+the production publishing path.
 Shared typography, color, and layout rules for the public dashboard and daily
 news outputs are tracked in `docs/design_system.md`.
 
@@ -190,6 +192,7 @@ python scripts/build_lp_commitment_monitor.py
 python scripts/build_dashboard_data.py
 python scripts/build_public_service_data.py
 python scripts/build_standalone_dashboard.py
+python scripts/build_site_bundle.py --services newsletter,lp,gp
 python scripts/serve_dashboard.py
 ```
 

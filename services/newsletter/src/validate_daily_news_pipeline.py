@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Validate daily news clipping outputs and local automation health."""
+"""Validate daily news clipping outputs and generated public files."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import json
 import os
 import re
 import sqlite3
-import subprocess
 from pathlib import Path
 
 from daily_news_common import (
@@ -445,8 +444,6 @@ def check_classification_quality(result: Validation, out_dir: Path, report_date:
 
 def check_env_and_sources(result: Validation, env_path: Path, sources_path: Path) -> None:
     env_values = parse_env_file(env_path)
-    if not env_path.exists():
-        result.warning(f"env file missing: {env_path}")
     active_sources = [row for row in read_csv_rows(sources_path) if row.get("is_active", "1") == "1"]
     active_naver = [row for row in active_sources if row.get("source_kind") == "naver_news_api"]
     if active_naver:
@@ -606,30 +603,6 @@ def check_database(result: Validation, db_path: Path, report_date: str) -> None:
         conn.close()
 
 
-def check_scheduler(result: Validation) -> None:
-    if os.name != "nt":
-        return
-    command = [
-        "powershell",
-        "-NoProfile",
-        "-Command",
-        "Get-ScheduledTask -TaskName 'Private Equity Daily News Clipping' | Select-Object -ExpandProperty State",
-    ]
-    completed = subprocess.run(command, text=True, capture_output=True, timeout=30)
-    if completed.returncode != 0:
-        stderr = completed.stderr.strip()
-        if "Access is denied" in stderr or "액세스가 거부" in stderr:
-            result.note("Windows scheduled task check skipped because access was denied in this shell")
-        else:
-            result.warning("Windows scheduled task was not found or could not be read")
-        return
-    state = completed.stdout.strip()
-    if state not in {"Ready", "Running"}:
-        result.warning(f"Windows scheduled task state is {state}")
-    else:
-        result.note(f"Windows scheduled task state: {state}")
-
-
 def parse_float(value: str) -> float:
     try:
         return float(value)
@@ -672,7 +645,6 @@ def main() -> int:
     check_classification_quality(result, args.out_dir, args.date, args.site_dir)
     check_public_site(result, args.public_dir, args.date)
     check_database(result, args.db, args.date)
-    check_scheduler(result)
 
     if args.json:
         print(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))

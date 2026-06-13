@@ -122,15 +122,15 @@ KPEF Daily의 1차 섹션은 `AI & PE`, `국민성장펀드`, `Deal`, `LP`, `GP`
 - 매일 발행 작업은 `scripts/build_site_bundle.py --services newsletter`로 `services/newsletter/deploy/site/`의 뉴스레터 산출물을 갱신하고 public mirror `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 push한다.
 - LP 공고 모니터는 뉴스레터 핵심 콘텐츠가 아니므로 daily newsletter publish 안에서 필수 단계로 묶지 않는다. LP/GP 갱신은 별도 collector 또는 수동 통합 빌드로 처리하고, 이 실패가 당일 뉴스레터 공개를 막으면 안 된다. Wiki는 루틴 갱신 대상이 아니다.
 - 발행 완료 기준은 로컬 파일 생성이 아니라 공개 `https://pkkong.github.io/kpef-newsletter/health.json`의 `report_date`가 당일이고 `archive.json`에 당일 기사 수가 존재하는 것이다. GitHub Actions는 push 후 이 공개 확인까지 통과해야 완료로 끝난다.
-- publish 스크립트는 종료 시 `exports/daily_news/ops_status/newsletter_ops_status_YYYYMMDD.md`와 `newsletter_ops_status_latest.md`를 쓴다. 이 파일은 수집, 로컬 번들, 공개 사이트, 아이콘/태그 품질, hard failure를 한 화면에 모은 운영 기준 파일이다.
+- GitHub Actions 발행 작업은 종료 시 job summary와 검증 로그를 남긴다. 로컬 `exports/daily_news/ops_status/*` 파일은 진단용 산출물일 뿐이며, 발행 완료 기준은 공개 `health.json`과 `archive.json` 확인이다.
 - 별도 LP 공고 탭은 `new_notice`, `deadline_soon`, `shortlist`, `final_selection` 등 이벤트 타입을 우선 노출한다. `program_size`는 정책펀드 전체 규모로 보관하되, 공개 출자규모 합산에는 `allocation_amount`만 사용한다.
 - 공개 Daily 화면은 최근 날짜별 `daily_news_brief_YYYYMMDD.md`를 함께 포함하므로, 사용자는 날짜 선택으로 과거 브리프의 주요 뉴스도 볼 수 있다.
 - 매일 뉴스 파이프라인은 `scripts/build_service_integration_worklist.py`도 실행해서 뉴스 노출 GP, People DB 커버리지, 담당자별 다음 액션을 하나의 작업 큐로 갱신한다.
 - 공개 뉴스 화면은 확인된 GP/관련 인물 같은 독자용 맥락만 표시한다. `프로필 보강`, `식별자 보강`, 리뷰 큐, 작업 담당자 같은 운영 상태는 공개 화면에 노출하지 않는다.
 - 공개 DB/서비스 화면은 통합 빌드가 만든 `services/newsletter/deploy/site/` bundle을 기준으로 배포한다. root `public/` 경로는 source repo에서 쓰지 않는 ignored 생성물이다.
-- 당일 산출물과 자동화 상태를 수동으로 점검하려면 `services/newsletter/scripts/validate_daily_news_today.ps1`을 실행한다.
-- 코드 변경 후 전체 점검은 `services/newsletter/scripts/check_daily_news_pipeline.ps1`을 실행한다. 이 스크립트는 Python 컴파일, 핵심 로직 테스트, 당일 산출물 검증을 순서대로 실행한다.
-- 검증 항목은 산출물 존재 여부, 최근 24시간 기준 문구, 중복 링크, Google News 중계 링크, 리뷰 카테고리 값, DB 최신 실행 상태, 네이버 API 설정, Windows 예약 작업 상태다.
+- 당일 산출물을 로컬에서 수동 점검하려면 `services/newsletter/scripts/validate_daily_news_today.ps1`을 진단용으로 실행할 수 있다. 이 스크립트는 운영 스케줄러가 아니다.
+- 코드 변경 후 전체 점검은 `services/newsletter/scripts/check_daily_news_pipeline.ps1`을 진단용으로 실행한다. 이 스크립트는 Python 컴파일, 핵심 로직 테스트, 당일 산출물 검증을 순서대로 실행한다.
+- 검증 항목은 산출물 존재 여부, 최근 24시간 기준 문구, 중복 링크, Google News 중계 링크, 리뷰 카테고리 값, DB 최신 실행 상태, 네이버 API 설정이다.
 - 백테스트는 운영 산출물을 덮어쓰지 않도록 `exports/daily_news/backtests/` 아래 별도 폴더에 저장된다.
 - PC 의존성을 없애는 클라우드 이전 계획은 `services/newsletter/docs/cloud_migration.md`에 정리했다.
 
@@ -166,9 +166,9 @@ python3 services/newsletter/src/newsletter_ops_status.py --date YYYY-MM-DD --sit
 
 - 기본값은 `NEWSLETTER_AI_PROVIDER=local`이며 외부 로그인 없이 `summary_lines` 계약을 만든다.
 - NotebookLM CLI를 쓰려면 `notebooklm-mcp-cli` 설치, `nlm login`, `NEWSLETTER_NOTEBOOKLM_NOTEBOOK_ID` 설정이 필요하다.
-- 이 프로젝트에서는 전역 Python 3.9 대신 `.venv/`의 Python 3.12 환경에 `notebooklm-mcp-cli`를 설치해 쓰는 구성이 안전하다. 스크립트는 NotebookLM provider에서 프로젝트 `.venv/bin/nlm`이 있으면 우선 사용하므로 전역 PATH에 의존하지 않는다.
-- Google 로그인은 한 번 수동으로 필요하다. 예: `.venv/bin/nlm login --profile default`
-- 로그인 점검은 `python3 services/newsletter/src/enrich_daily_news_ai.py --provider notebooklm --nlm-bin .venv/bin/nlm --nlm-profile default --notebook-id NOTEBOOK_ID --check-only`로 한다.
+- NotebookLM은 정식 08:30 발행 경로가 아니다. 프로젝트 repo 안에 전용 `.venv`나 MCP 서버를 유지하지 않으며, 실험할 때만 외부 CLI 경로를 `NEWSLETTER_NLM_BIN` 또는 `--nlm-bin`으로 명시한다.
+- Google 로그인은 한 번 수동으로 필요하다. 예: `nlm login --profile default`
+- 로그인 점검은 `python3 services/newsletter/src/enrich_daily_news_ai.py --provider notebooklm --nlm-bin nlm --nlm-profile default --notebook-id NOTEBOOK_ID --check-only`로 한다.
 - NotebookLM은 빈 노트북에 질의할 수 없다. 작업용 노트북을 만들고 뉴스레터 분류 기준 같은 텍스트 소스를 1개 이상 넣어야 한다.
 - NotebookLM CLI는 답변 JSON을 `{ "answer": "..." }`로 감싸서 돌려줄 수 있으므로, 파서는 `answer` 내부 JSON까지 풀어야 한다.
 - NotebookLM은 긴 프롬프트나 짧은 시간의 반복 질의에서 `INVALID_ARGUMENT` 또는 `RESOURCE_EXHAUSTED`가 날 수 있다. 기본 배치는 5건 이하, 프롬프트 6,500자 이하, 묶음 간 5초 지연, 2회 재시도다. 대량 전량 처리는 제한에 걸릴 수 있으므로 운영 기본은 품질검사/요약 보강용이다.
@@ -182,15 +182,15 @@ python3 services/newsletter/src/newsletter_ops_status.py --date YYYY-MM-DD --sit
 
 ```bash
 python3 services/newsletter/src/enrich_daily_news_ai.py --date YYYY-MM-DD --provider local
-NEWSLETTER_AI_PROVIDER=notebooklm NEWSLETTER_NLM_BIN=.venv/bin/nlm NEWSLETTER_NLM_PROFILE=default NEWSLETTER_NOTEBOOKLM_NOTEBOOK_ID=... python3 services/newsletter/src/enrich_daily_news_ai.py --date YYYY-MM-DD
+NEWSLETTER_AI_PROVIDER=notebooklm NEWSLETTER_NLM_BIN=nlm NEWSLETTER_NLM_PROFILE=default NEWSLETTER_NOTEBOOKLM_NOTEBOOK_ID=... python3 services/newsletter/src/enrich_daily_news_ai.py --date YYYY-MM-DD
 ```
 
 NotebookLM 인증 후 확인 순서:
 
 ```bash
-.venv/bin/nlm login --check --profile default
-.venv/bin/nlm list notebooks --json --profile default
-.venv/bin/nlm notebook query "$NOTEBOOK_ID" \
+nlm login --check --profile default
+nlm list notebooks --json --profile default
+nlm notebook query "$NOTEBOOK_ID" \
   'Reply with strict JSON only: {"ok": true, "purpose": "newsletter-ai-smoke-test"}' \
   --timeout 120 \
   --profile default
@@ -205,7 +205,7 @@ python3 services/newsletter/src/backtest_newsletter_ai.py \
   --start-date YYYY-MM-DD \
   --end-date YYYY-MM-DD \
   --provider notebooklm \
-  --nlm-bin .venv/bin/nlm \
+  --nlm-bin nlm \
   --nlm-profile default \
   --notebook-id NOTEBOOK_ID
 ```
@@ -259,5 +259,5 @@ PY
 
 ## 발송
 
-아직 자동 발송은 초안 생성과 분리했다. 최종본을 확정한 뒤 발송하려면 `services/newsletter/scripts/send_daily_news_final.ps1`을 사용한다.
+아직 자동 발송은 초안 생성과 분리했다. `services/newsletter/scripts/send_daily_news_final.ps1`은 로컬 진단/수동 실험용이며, 정식 발송은 별도 이메일 서비스나 GitHub Actions 기반 발송 경로를 설계한 뒤 연결한다.
 `daily_news_final_latest.*`가 최신 초안보다 오래된 경우에는 최종본 확정이 먼저 필요하다.

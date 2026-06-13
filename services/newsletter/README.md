@@ -27,7 +27,7 @@ GitHub Actions 자동 발행에는 원본 저장소 Secrets에 아래 값이 필
 - `src/`: Python implementation for collection, review, validation, delivery, source audit, and static deploy bundle generation
 - `data/`: maintained newsletter inputs such as source definitions, keyword rules, manual overrides, and GP alias overrides
 - `schema/`: SQLite schema for newsletter tables
-- `scripts/`: service operating and verification entrypoints
+- `scripts/`: manual diagnostics and verification entrypoints
 - `deploy/`: Docker/Nginx runtime files plus ignored generated site artifacts
 - `docs/`: service-specific operating, cloud migration, MVP, and deployment notes
 - `tests/`: no-network business rule checks

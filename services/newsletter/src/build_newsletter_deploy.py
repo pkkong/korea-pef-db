@@ -25,6 +25,7 @@ SRC_DIR = Path(__file__).resolve().parent
 DEFAULT_DEPLOY_DIR = SERVICE_ROOT / "deploy"
 DEFAULT_SITE_DIR = DEFAULT_DEPLOY_DIR / "site"
 DEFAULT_DB = REPO_ROOT / "db" / "private_equity.db"
+DEFAULT_LP_INSTITUTIONS = REPO_ROOT / "data" / "lp_institutions.csv"
 DEFAULT_LP_SELECTED_GP_EXCLUSIONS = REPO_ROOT / "data" / "lp_selected_gp_non_gp_exclusions.csv"
 DEFAULT_ARCHIVE_SEED_URL = os.environ.get(
     "NEWSLETTER_ARCHIVE_SEED_URL",
@@ -305,23 +306,35 @@ def useful_lp_alias(alias: str) -> bool:
     return len(alias) >= 2
 
 
-def read_lp_alias_patterns(db_path: Path = DEFAULT_DB) -> list[dict[str, object]]:
-    if not db_path.exists():
+def read_lp_institution_seed_rows(path: Path = DEFAULT_LP_INSTITUTIONS) -> list[dict[str, object]]:
+    if not path.exists():
         return []
-    conn = sqlite3.connect(db_path)
-    try:
-        if not db_object_exists(conn, "lp_institution"):
-            return []
-        rows = fetch_dicts(
-            conn,
-            """
-            SELECT lp_code, lp_name, aliases
-            FROM lp_institution
-            ORDER BY service_priority DESC, lp_name
-            """,
-        )
-    finally:
-        conn.close()
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def read_lp_alias_patterns(db_path: Path = DEFAULT_DB) -> list[dict[str, object]]:
+    rows: list[dict[str, object]]
+    if not db_path.exists():
+        rows = read_lp_institution_seed_rows()
+    else:
+        conn = sqlite3.connect(db_path)
+        try:
+            if db_object_exists(conn, "lp_institution"):
+                rows = fetch_dicts(
+                    conn,
+                    """
+                    SELECT lp_code, lp_name, aliases
+                    FROM lp_institution
+                    ORDER BY service_priority DESC, lp_name
+                    """,
+                )
+            else:
+                rows = read_lp_institution_seed_rows()
+        finally:
+            conn.close()
+    if not rows:
+        rows = []
     extras = {
         "kvic": ["모태펀드", "한국모태펀드"],
         "kgrowth": ["성장금융"],

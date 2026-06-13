@@ -37,8 +37,6 @@ DEFAULT_NOTEBOOKLM_MAX_PROMPT_CHARS = 6500
 DEFAULT_NOTEBOOKLM_BATCH_DELAY_SECONDS = 5
 DEFAULT_NOTEBOOKLM_RETRIES = 2
 SCRIPT_PATH = Path(__file__).resolve()
-REPO_ROOT = SCRIPT_PATH.parents[3]
-PROJECT_NLM_BIN = REPO_ROOT / ".venv" / "bin" / "nlm"
 
 
 def compact_date(value: str) -> str:
@@ -369,7 +367,7 @@ def command_enrich(command: str, prompt: str, rows: list[dict[str, str]]) -> lis
 
 
 def resolve_nlm_bin(value: str = "") -> str:
-    candidates = [value, os.environ.get("NEWSLETTER_NLM_BIN", ""), str(PROJECT_NLM_BIN), "nlm"]
+    candidates = [value, os.environ.get("NEWSLETTER_NLM_BIN", ""), "nlm"]
     for candidate in candidates:
         text = str(candidate or "").strip()
         if not text:

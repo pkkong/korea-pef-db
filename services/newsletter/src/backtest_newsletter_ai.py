@@ -18,12 +18,10 @@ from daily_news_common import DEFAULT_EXPORT_DIR, clean_investment_memo_summary_
 
 
 SCRIPT_PATH = Path(__file__).resolve()
-REPO_ROOT = SCRIPT_PATH.parents[3]
 ENRICH_SCRIPT = SCRIPT_PATH.with_name("enrich_daily_news_ai.py")
 BACKTEST_DIRNAME = "ai_backtests"
 EXTERNAL_PROVIDERS = {"notebooklm", "notebooklm-cli", "nlm", "command", "custom"}
 NOTEBOOKLM_PROVIDERS = {"notebooklm", "notebooklm-cli", "nlm"}
-PROJECT_NLM_BIN = REPO_ROOT / ".venv" / "bin" / "nlm"
 
 
 def compact_date(value: str) -> str:
@@ -75,9 +73,7 @@ def provider_key(value: str) -> str:
 
 
 def default_nlm_bin_for_project(provider: str, current: str = "") -> str:
-    if current or provider_key(provider) not in NOTEBOOKLM_PROVIDERS:
-        return current
-    return str(PROJECT_NLM_BIN) if PROJECT_NLM_BIN.exists() and os.access(PROJECT_NLM_BIN, os.X_OK) else ""
+    return current
 
 
 def run_provider_check(args: argparse.Namespace) -> tuple[bool, str]:

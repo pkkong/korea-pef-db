@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Open the public-facing dashboard with a local static server."""
+"""Open the generated public site bundle with a local static server."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_ROOT = REPO_ROOT / "public"
+PUBLIC_ROOT = REPO_ROOT / "services" / "newsletter" / "deploy" / "site"
 PORT = 8010
 URL = f"http://127.0.0.1:{PORT}/"
 
@@ -25,8 +25,6 @@ def url_is_live() -> bool:
 
 
 def start_server() -> None:
-    log_dir = REPO_ROOT / "public"
-    log_dir.mkdir(parents=True, exist_ok=True)
     command = [
         sys.executable,
         str(REPO_ROOT / "scripts" / "serve_dashboard.py"),
@@ -56,13 +54,11 @@ def start_server() -> None:
         )
         return
 
-    stdout = (log_dir / "server_stdout.log").open("a", encoding="utf-8")
-    stderr = (log_dir / "server_stderr.log").open("a", encoding="utf-8")
     subprocess.Popen(
         command,
         cwd=str(REPO_ROOT),
-        stdout=stdout,
-        stderr=stderr,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         stdin=subprocess.DEVNULL,
         close_fds=True,
     )
@@ -99,15 +95,23 @@ def open_browser(url: str) -> None:
 
 
 def main() -> int:
+    if not PUBLIC_ROOT.exists():
+        print(
+            "Generated public site bundle is missing. "
+            "Run `python scripts/build_site_bundle.py --services newsletter,lp,gp` first.",
+            flush=True,
+        )
+        return 1
+
     if not url_is_live():
-        print("Starting public dashboard server...", flush=True)
+        print("Starting generated site preview server...", flush=True)
         start_server()
         if not wait_for_server():
-            print("Public dashboard server did not start.")
+            print("Generated site preview server did not start.")
             return 1
 
     open_browser(URL)
-    print(f"Public dashboard opened: {URL}", flush=True)
+    print(f"Generated site preview opened: {URL}", flush=True)
     return 0
 
 

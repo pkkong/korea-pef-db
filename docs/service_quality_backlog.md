@@ -25,7 +25,7 @@
 ## 최근 처리
 
 - 2026-06-11: 뉴스레터 자동 발행 장애를 정리했다. 08:30 수집·검증은 성공했지만 아시아경제 `www.asiae.co.kr` 로고 1건 missing icon hard gate 때문에 public push 전 중단됐다. 아시아경제 도메인 매핑을 추가하고, 아이콘 검사는 기본적으로 품질 리포트만 남기며 당일 공개 배포를 막지 않도록 바꿨다. 최종 공개 배포 `ae5d291`은 `health.json report_date=2026-06-11`, 기사 30건으로 확인했다.
-- 2026-06-11: `newsletter_ops_status.py`를 추가해 수집/로컬 빌드/public 배포/품질 경고/hard failure를 매 발행 종료 시 `exports/daily_news/ops_status/newsletter_ops_status_latest.md`에 남긴다. 다음 장애 진단은 이 파일을 1차 기준으로 삼는다.
+- 2026-06-11: `newsletter_ops_status.py`는 로컬 진단 산출물을 남길 수 있다. 정식 발행 완료 기준은 GitHub Actions 로그와 공개 `health.json`/`archive.json` 확인이며, 개인 컴퓨터의 로컬 빌드 상태를 운영 기준으로 삼지 않는다.
 - 2026-06-10: `newsletter-only`와 `integrated-site` 빌드 계약을 분리했다. 뉴스레터 단독 빌드는 LP/GP 산출물을 요구하지 않고, 배포 mirror에서는 기존 LP/GP 파일을 보존한 채 브리프 파일만 갱신한다.
 - 2026-06-10: 운영 체계 문서를 추가했다. 제품 책임선은 `docs/product_operating_model.md`, DB/public-view/build 계약은 `docs/data_operating_model.md`를 기준으로 한다. Wiki는 기본 공개 빌드에서 제외하고 명시 요청 시에만 빌드한다.
 - 2026-06-10: 뉴스레터 public archive contract를 강화했다. `tagVersion=news-taxonomy-v1`, GP/LP entity chip link contract, publisher icon, Google News redirect 금지를 `scripts/check_public_frontend.py`에서 검사한다.

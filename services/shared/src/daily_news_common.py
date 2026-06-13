@@ -37,8 +37,7 @@ DEFAULT_GP_ALIAS_OVERRIDES = NEWSLETTER_ROOT / "data" / "news_gp_alias_overrides
 DEFAULT_RAW_DIR = REPO_ROOT / "data" / "raw" / "daily_news"
 DEFAULT_EXPORT_DIR = REPO_ROOT / "exports" / "daily_news"
 SERVICE_ENV = NEWSLETTER_ROOT / "config" / "daily_news.env"
-LEGACY_ENV = REPO_ROOT / "config" / "daily_news.env"
-DEFAULT_ENV = SERVICE_ENV if SERVICE_ENV.exists() else LEGACY_ENV
+DEFAULT_ENV = SERVICE_ENV
 SEOUL_TZ = ZoneInfo("Asia/Seoul")
 MEDIA_TITLE_PREFIXES = {
     "더벨",
