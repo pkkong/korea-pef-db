@@ -79,7 +79,17 @@ from apply_daily_news_review import normalize_category
 from brand_assets import brand_logo_url
 from lp_public_visibility import is_public_lp_notice_row
 from validate_daily_news_pipeline import Validation, check_classification_quality
-from enrich_daily_news_ai import audit_rows, enrichment_prompt, memo_summary_lines, normalize_ai_articles
+from enrich_daily_news_ai import (
+    audit_rows,
+    cached_notebooklm_payload,
+    enrichment_prompt,
+    memo_summary_lines,
+    normalize_ai_articles,
+    notebooklm_review_question,
+    notebooklm_source_pack_text,
+    write_notebooklm_source_files,
+    write_outputs,
+)
 from backtest_newsletter_ai import summarize_date
 from evaluate_news_classification_goldens import evaluate as evaluate_classification_goldens, read_csv_rows as read_golden_csv_rows
 
@@ -2870,6 +2880,78 @@ def test_render_markdown_uses_clean_display_url() -> None:
     assert "ref=naver" not in text
 
 
+def test_notebooklm_source_pack_and_cache_contract() -> None:
+    rows = [
+        {
+            "news_id": "n1",
+            "title": "국민성장펀드 잡은 IMM…레버리지는 없다",
+            "publisher": "딜사이트",
+            "source_url": "https://example.com/a",
+            "normalized_source_url": "https://example.com/a",
+            "current_category": "GP",
+            "section_tags": "GP",
+            "topic_tags": "NationalGrowthFund,GP",
+            "gp_names": "아이엠엠인베스트먼트",
+            "summary_text": "국민성장펀드 선정 이후 IMM의 펀드레이징 전략을 다룬다.",
+        },
+        {
+            "news_id": "n2",
+            "title": "엑시나 2000억 투자유치",
+            "publisher": "조선비즈",
+            "source_url": "https://example.com/b?utm_source=naver",
+            "normalized_source_url": "https://example.com/b",
+            "current_category": "Deal",
+            "section_tags": "Deal",
+            "topic_tags": "Deal",
+            "summary_text": "신규 재무적투자자들이 회사 투자유치에 참여했다.",
+        },
+    ]
+    pack = notebooklm_source_pack_text("2026-06-13", rows)
+    assert "# KPEF Newsletter Source Pack - 2026-06-13" in pack
+    assert "### Article 1: 국민성장펀드 잡은 IMM" in pack
+    assert "- news_id: n1" in pack
+    assert "- current_section: GP" in pack
+    assert "국민성장펀드 선정 이후 IMM" in pack
+
+    question = notebooklm_review_question("2026-06-13", rows)
+    assert "Return strict JSON only" in question
+    assert "Expected news_id order" in question
+    assert "- n1" in question and "- n2" in question
+
+    with TemporaryDirectory() as tmp:
+        out_dir = Path(tmp)
+        rules = out_dir / "rules.md"
+        rules.write_text("# Rules\n\nUse GP for GP fundraising.\n", encoding="utf-8")
+        metadata = write_notebooklm_source_files(out_dir=out_dir, report_date="2026-06-13", rows=rows, rules_path=rules)
+        assert Path(str(metadata["source_pack_path"])).exists()
+        assert Path(str(metadata["rules_path"])).exists()
+        assert len(str(metadata["source_pack_fingerprint"])) == 64
+        articles = local_articles = [
+            {
+                **rows[0],
+                "provider": "notebooklm-notebook",
+                "section_suggestion": "GP",
+                "summary_lines": ["IMM 펀드레이징 전략", "국민성장펀드 선정 이후 후속 조성", "GP fundraising signal"],
+                "confidence": 0.8,
+            }
+        ]
+        write_outputs(
+            out_dir=out_dir,
+            report_date="2026-06-13",
+            provider="notebooklm-notebook",
+            rows=rows,
+            articles=articles,
+            prompt=question,
+            write_latest=False,
+            metadata=metadata,
+        )
+        cached = cached_notebooklm_payload(out_dir, "2026-06-13", str(metadata["source_pack_fingerprint"]))
+        assert cached is not None
+        assert cached["articles"][0]["news_id"] == "n1"
+        assert cached_notebooklm_payload(out_dir, "2026-06-13", "0" * 64) is None
+        assert local_articles[0]["provider"] == "notebooklm-notebook"
+
+
 def main() -> int:
     tests = [
         test_coverage_window,
@@ -2968,6 +3050,7 @@ def main() -> int:
         test_google_news_redirect_not_auto_exported,
         test_render_markdown_coverage,
         test_render_markdown_uses_clean_display_url,
+        test_notebooklm_source_pack_and_cache_contract,
     ]
     for test in tests:
         test()

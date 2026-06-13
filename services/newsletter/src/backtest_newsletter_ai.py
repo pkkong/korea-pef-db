@@ -267,8 +267,11 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=int(os.environ.get("NEWSLETTER_AI_TIMEOUT_SECONDS", "180")))
     parser.add_argument("--no-run", action="store_true", help="Only summarize existing enrichment files")
     parser.add_argument("--continue-on-error", action="store_true", help="Continue dates even when enrichment fails")
+    parser.add_argument("--allow-notebooklm-run", action="store_true", help="Allow multi-date NotebookLM execution. Default is blocked to avoid query-limit exhaustion.")
     args = parser.parse_args()
     args.nlm_bin = default_nlm_bin_for_project(args.provider, args.nlm_bin)
+    if provider_key(args.provider) in NOTEBOOKLM_PROVIDERS and not args.no_run and not args.allow_notebooklm_run:
+        raise SystemExit("NotebookLM multi-date backtest is blocked by default. Use --no-run to summarize cached outputs or --allow-notebooklm-run for an explicit manual experiment.")
 
     if args.start_date or args.end_date:
         if not args.start_date or not args.end_date:

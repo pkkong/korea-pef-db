@@ -180,8 +180,8 @@ python3 services/newsletter/src/newsletter_ops_status.py --date YYYY-MM-DD --sit
 - NotebookLM은 내부 API와 브라우저 쿠키 인증을 쓰므로 장애가 나도 당일 발행 전체가 무너지면 안 된다.
 - GitHub Actions workflow는 외부 AI 보강이 실패하면 기본적으로 local-rule 보강으로 fallback한다. AI 실패를 발행 차단으로 볼 때만 `NEWSLETTER_AI_STRICT=1`을 둔다.
 - 공개 화면은 provider, confidence, notes 같은 내부 필드를 보여주지 않고 `summaryLines`만 사용한다.
-- NotebookLM의 `section_suggestion`은 기본적으로 audit에만 남긴다. 최근 기사 백테스트에서 충돌 품질이 확인된 뒤 `NEWSLETTER_AI_APPLY_SECTIONS=1`을 켜면 공개 기사 섹션에 반영할 수 있다.
-- 기본 운영에서는 카테고리 자동 변경을 hard apply하지 않는다. AI가 제안한 `section_suggestion`은 우선 품질 검토용으로 쓰고, 반복 오분류가 확인되면 규칙과 테스트로 고정한다. NotebookLM 백테스트가 충분히 통과한 뒤에만 `NEWSLETTER_AI_APPLY_SECTIONS=1`로 공개 섹션 적용을 켠다.
+- NotebookLM의 `section_suggestion`은 기본적으로 audit에만 남긴다. 공개 섹션에 바로 hard apply하지 않는다.
+- 기본 운영에서는 카테고리 자동 변경을 hard apply하지 않는다. AI가 제안한 `section_suggestion`은 우선 품질 검토용으로 쓰고, 반복 오분류가 확인되면 규칙과 테스트로 고정한다.
 
 NotebookLM 질문 출력 스키마:
 
@@ -190,6 +190,7 @@ NotebookLM 질문 출력 스키마:
   "articles": [
     {
       "url": "canonical article URL",
+      "news_id": "same news_id from source pack",
       "summary_lines": ["line 1", "line 2", "line 3"],
       "short_summary_100": "100자 이내 핵심 요약",
       "section_suggestion": "AI_PE | NationalGrowthFund | Deal | LP | GP | Market",
@@ -207,6 +208,21 @@ local-rule 수동 실행:
 ```bash
 python3 services/newsletter/src/enrich_daily_news_ai.py --date YYYY-MM-DD --provider local
 ```
+
+NotebookLM 날짜 리뷰 수동 실행:
+
+```bash
+NEWSLETTER_NLM_BIN=nlm python3 services/newsletter/src/enrich_daily_news_ai.py \
+  --date YYYY-MM-DD \
+  --provider notebooklm \
+  --nlm-profile default
+```
+
+이 명령은 `exports/daily_news/notebooklm_sources/YYYYMMDD/` 아래에 source pack,
+classification rules 복사본, query 파일, fingerprint metadata를 만들고,
+`KPEF Newsletter Review YYYY-MM-DD` 노트북에 두 source를 업로드한 뒤 한 번만 질문한다.
+NotebookLM이 `RESOURCE_EXHAUSTED` 등으로 실패하면 `NEWSLETTER_AI_STRICT=1`이 아닌 한
+local-rule 결과로 fallback하고 실패 사유를 JSON에 남긴다.
 
 NotebookLM 실험을 다시 할 때의 확인 순서:
 

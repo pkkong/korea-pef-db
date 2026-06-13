@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -32,11 +32,16 @@ from daily_news_common import (
 
 SECTION_CHOICES = ("AI_PE", "NationalGrowthFund", "Deal", "LP", "GP", "Market")
 DEFAULT_TIMEOUT_SECONDS = 180
-DEFAULT_NOTEBOOKLM_BATCH_SIZE = 5
-DEFAULT_NOTEBOOKLM_MAX_PROMPT_CHARS = 6500
-DEFAULT_NOTEBOOKLM_BATCH_DELAY_SECONDS = 5
-DEFAULT_NOTEBOOKLM_RETRIES = 2
+DEFAULT_NOTEBOOKLM_REVIEW_QUERY_LIMIT = 1
 SCRIPT_PATH = Path(__file__).resolve()
+SERVICE_ROOT = SCRIPT_PATH.parents[1]
+DEFAULT_CLASSIFICATION_RULES = SERVICE_ROOT / "data" / "newsletter_classification_rules.md"
+
+
+class NotebookLMReviewError(RuntimeError):
+    def __init__(self, message: str, metadata: dict[str, object] | None = None) -> None:
+        super().__init__(message)
+        self.metadata = metadata or {}
 
 
 def compact_date(value: str) -> str:
@@ -206,6 +211,176 @@ def enrichment_prompt(report_date: str, rows: list[dict[str, str]]) -> str:
         "articles": [base_article(row) for row in rows],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def notebooklm_source_pack_text(report_date: str, rows: list[dict[str, str]]) -> str:
+    lines = [
+        f"# KPEF Newsletter Source Pack - {report_date}",
+        "",
+        "This source pack is generated from the newsletter review queue.",
+        "Use it as the authoritative article packet for summary and classification.",
+        "",
+        "## Classification Choices",
+        "",
+        "- AI_PE",
+        "- NationalGrowthFund",
+        "- Deal",
+        "- LP",
+        "- GP",
+        "- Market",
+        "",
+        "## Articles",
+        "",
+    ]
+    for index, row in enumerate(rows, start=1):
+        title = normalize_whitespace(row.get("title", ""))
+        url = normalize_whitespace(row.get("normalized_source_url") or row.get("source_url", ""))
+        publisher = normalize_whitespace(row.get("publisher", ""))
+        summary = normalize_whitespace(row.get("summary_text", ""))
+        current_section = normalize_whitespace(row.get("section_tags") or row.get("current_category", ""))
+        candidate_tags = normalize_whitespace(row.get("topic_tags", ""))
+        gp_names = normalize_whitespace(row.get("gp_names", ""))
+        published_at = normalize_whitespace(row.get("published_at") or row.get("published") or row.get("published_at_iso", ""))
+        news_id = normalize_whitespace(row.get("news_id", ""))
+        excerpt = normalize_whitespace(
+            row.get("body_excerpt")
+            or row.get("excerpt")
+            or row.get("snippet")
+            or row.get("description")
+            or summary
+        )
+        lines.extend(
+            [
+                f"### Article {index}: {title or news_id or url}",
+                "",
+                f"- news_id: {news_id}",
+                f"- url: {url}",
+                f"- publisher: {publisher}",
+                f"- published_at: {published_at}",
+                f"- current_section: {current_section}",
+                f"- candidate_tags: {candidate_tags}",
+                f"- gp_names: {gp_names}",
+                "",
+                "#### Excerpt",
+                "",
+                excerpt[:2400] if excerpt else "(no excerpt available)",
+                "",
+            ]
+        )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def notebooklm_review_question(report_date: str, rows: list[dict[str, str]]) -> str:
+    article_ids = [str(row.get("news_id") or "").strip() for row in rows]
+    return (
+        f"You are reviewing the KPEF daily newsletter for {report_date}.\n"
+        "Use only the uploaded classification rules and source pack.\n"
+        "For every article in the source pack, Return strict JSON only with this exact top-level schema:\n"
+        "{\n"
+        '  "articles": [\n'
+        "    {\n"
+        '      "news_id": "same news_id from source pack",\n'
+        '      "section_suggestion": "AI_PE | NationalGrowthFund | Deal | LP | GP | Market",\n'
+        '      "summary_lines": ["Korean memo line 1", "Korean memo line 2", "Korean memo line 3"],\n'
+        '      "short_summary_100": "Korean summary within 100 characters",\n'
+        '      "gp_names": [],\n'
+        '      "lp_names": [],\n'
+        '      "deal_targets": [],\n'
+        '      "confidence": 0.0,\n'
+        '      "notes": "one short Korean reason for classification"\n'
+        "    }\n"
+        "  ]\n"
+        "}\n\n"
+        "Rules:\n"
+        "- Return one article object for every news_id below, in the same order.\n"
+        "- Classify by the main subject, not incidental keywords.\n"
+        "- Do not use full article prose endings such as 했다, 한다, 전망이다, 사례다.\n"
+        "- Use concise investment memo fragments.\n"
+        "- If information is thin, write two useful summary lines rather than inventing a third.\n"
+        "- Do not include markdown fences or commentary outside JSON.\n\n"
+        "Expected news_id order:\n"
+        + "\n".join(f"- {news_id}" for news_id in article_ids if news_id)
+    )
+
+
+def write_notebooklm_source_files(
+    *,
+    out_dir: Path,
+    report_date: str,
+    rows: list[dict[str, str]],
+    rules_path: Path = DEFAULT_CLASSIFICATION_RULES,
+) -> dict[str, object]:
+    dated = compact_date(report_date)
+    source_dir = out_dir / "notebooklm_sources" / dated
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source_pack = notebooklm_source_pack_text(report_date, rows)
+    rules_text = rules_path.read_text(encoding="utf-8") if rules_path.exists() else fallback_classification_rules_text()
+    source_pack_path = source_dir / f"daily_news_source_pack_{dated}.md"
+    rules_out_path = source_dir / "newsletter_classification_rules.md"
+    question_path = source_dir / f"notebooklm_review_question_{dated}.txt"
+    source_pack_path.write_text(source_pack, encoding="utf-8")
+    rules_out_path.write_text(rules_text.rstrip() + "\n", encoding="utf-8")
+    question = notebooklm_review_question(report_date, rows)
+    question_path.write_text(question + "\n", encoding="utf-8")
+    fingerprint = hashlib.sha256(
+        "\n---rules---\n".join([rules_text, source_pack, question]).encode("utf-8")
+    ).hexdigest()
+    metadata = {
+        "report_date": report_date,
+        "article_count": len(rows),
+        "source_pack_path": str(source_pack_path),
+        "rules_path": str(rules_out_path),
+        "question_path": str(question_path),
+        "source_pack_fingerprint": fingerprint,
+    }
+    metadata_path = source_dir / f"notebooklm_source_pack_{dated}.json"
+    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return {
+        **metadata,
+        "source_pack_text": source_pack,
+        "rules_text": rules_text,
+        "question": question,
+        "source_pack_path_obj": source_pack_path,
+        "rules_path_obj": rules_out_path,
+        "question_path_obj": question_path,
+        "metadata_path": str(metadata_path),
+    }
+
+
+def fallback_classification_rules_text() -> str:
+    return """# KPEF Newsletter Classification Rules
+
+Use one representative section per article.
+
+## Sections
+
+- AI_PE: AI is the investment or private market theme itself.
+- NationalGrowthFund: the national growth fund program is the main subject.
+- Deal: specific acquisition, sale, financing, IPO, block trade, or transaction process.
+- LP: allocator activity, LP commitments, CIO changes, pension/fund allocation, mandate selection.
+- GP: managers, GP fundraising, fund closes, GP strategy, GP personnel, GP-level performance.
+- Market: regulation, market structure, private credit commentary, conferences, broad trend pieces.
+
+Classify by the main subject. Incidental keywords do not control the section.
+"""
+
+
+def cached_notebooklm_payload(out_dir: Path, report_date: str, fingerprint: str) -> dict[str, Any] | None:
+    dated = compact_date(report_date)
+    output_path = out_dir / f"daily_news_ai_enrichment_{dated}.json"
+    if not output_path.exists():
+        return None
+    try:
+        payload = json.loads(output_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if payload.get("provider") != "notebooklm-notebook":
+        return None
+    if payload.get("source_pack_fingerprint") != fingerprint:
+        return None
+    if not isinstance(payload.get("articles"), list):
+        return None
+    return payload
 
 
 def section_from_source_row(row: dict[str, str]) -> str:
@@ -383,13 +558,11 @@ def resolve_nlm_bin(value: str = "") -> str:
     return ""
 
 
-def notebooklm_readiness(notebook_id: str, nlm_bin: str = "", profile: str = "", timeout: int = 30) -> tuple[bool, str]:
+def run_nlm_command(args: list[str], *, nlm_bin: str = "", profile: str = "", timeout: int = 120) -> str:
     resolved = resolve_nlm_bin(nlm_bin)
     if not resolved:
-        return False, "nlm command is not installed. Install notebooklm-mcp-cli and run nlm login first."
-    if not notebook_id:
-        return False, "NotebookLM provider requires --notebook-id or NEWSLETTER_NOTEBOOKLM_NOTEBOOK_ID."
-    command = [resolved, "login", "--check"]
+        raise RuntimeError("nlm command is not installed. Install notebooklm-mcp-cli and run nlm login first.")
+    command = [resolved, *args]
     if profile:
         command.extend(["--profile", profile])
     completed = subprocess.run(
@@ -402,98 +575,160 @@ def notebooklm_readiness(notebook_id: str, nlm_bin: str = "", profile: str = "",
     )
     if completed.returncode != 0:
         detail = normalize_whitespace(completed.stderr or completed.stdout)
-        return False, detail or "NotebookLM login check failed. Run nlm login."
-    return True, f"NotebookLM CLI ready: {resolved}"
+        raise RuntimeError(detail or f"nlm command failed with exit {completed.returncode}: {' '.join(args)}")
+    return completed.stdout
 
 
-def notebooklm_enrich(
-    notebook_id: str,
-    prompt: str,
-    rows: list[dict[str, str]],
-    timeout: int,
-    nlm_bin: str = "",
-    profile: str = "",
-) -> list[dict[str, Any]]:
-    resolved = resolve_nlm_bin(nlm_bin)
-    if not resolved:
-        raise RuntimeError("nlm command is not installed. Install notebooklm-mcp-cli and run nlm login first.")
+def notebooklm_readiness(nlm_bin: str = "", profile: str = "", timeout: int = 30) -> tuple[bool, str]:
+    try:
+        output = run_nlm_command(["login", "--check"], nlm_bin=nlm_bin, profile=profile, timeout=timeout)
+    except RuntimeError as exc:
+        return False, str(exc)
+    return True, normalize_whitespace(output) or "NotebookLM CLI ready"
+
+
+def parse_notebook_id_from_create(output: str) -> str:
+    text = output.strip()
+    if not text:
+        return ""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        data = None
+    if isinstance(data, dict):
+        for key in ("id", "notebook_id", "notebookId"):
+            if data.get(key):
+                return str(data[key])
+    match = re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", text)
+    return match.group(0) if match else ""
+
+
+def notebooklm_list_notebooks(nlm_bin: str = "", profile: str = "", timeout: int = 60) -> list[dict[str, Any]]:
+    try:
+        output = run_nlm_command(["notebook", "list", "--json"], nlm_bin=nlm_bin, profile=profile, timeout=timeout)
+        data = json.loads(output)
+    except (RuntimeError, json.JSONDecodeError):
+        return []
+    return data if isinstance(data, list) else []
+
+
+def notebooklm_find_notebook_by_title(title: str, nlm_bin: str = "", profile: str = "") -> str:
+    for row in notebooklm_list_notebooks(nlm_bin, profile):
+        if isinstance(row, dict) and str(row.get("title") or "") == title and row.get("id"):
+            return str(row["id"])
+    return ""
+
+
+def notebooklm_create_notebook(title: str, nlm_bin: str = "", profile: str = "", timeout: int = 60) -> str:
+    output = run_nlm_command(["notebook", "create", title, "--json"], nlm_bin=nlm_bin, profile=profile, timeout=timeout)
+    notebook_id = parse_notebook_id_from_create(output)
     if not notebook_id:
-        raise RuntimeError("NotebookLM provider requires --notebook-id or NEWSLETTER_NOTEBOOKLM_NOTEBOOK_ID.")
-    command = [resolved, "notebook", "query", notebook_id, prompt, "--timeout", str(timeout)]
-    if profile:
-        command.extend(["--profile", profile])
-    completed = subprocess.run(
-        command,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=max(timeout + 20, DEFAULT_TIMEOUT_SECONDS),
-        check=False,
-    )
-    if completed.returncode != 0:
-        detail = normalize_whitespace(completed.stderr or completed.stdout)
-        raise RuntimeError(detail or f"nlm query failed with exit {completed.returncode}")
-    return normalize_ai_articles(extract_json_object(completed.stdout), rows, "notebooklm-cli")
+        raise RuntimeError("Could not parse NotebookLM notebook id from create output")
+    return notebook_id
 
 
-def notebooklm_row_batches(
-    report_date: str,
-    rows: list[dict[str, str]],
-    *,
-    batch_size: int = DEFAULT_NOTEBOOKLM_BATCH_SIZE,
-    max_prompt_chars: int = DEFAULT_NOTEBOOKLM_MAX_PROMPT_CHARS,
-) -> list[list[dict[str, str]]]:
-    batches: list[list[dict[str, str]]] = []
-    current: list[dict[str, str]] = []
-    safe_batch_size = max(1, batch_size)
-    for row in rows:
-        candidate = current + [row]
-        prompt_too_long = len(enrichment_prompt(report_date, candidate)) > max_prompt_chars
-        batch_too_large = len(candidate) > safe_batch_size
-        if current and (prompt_too_long or batch_too_large):
-            batches.append(current)
-            current = [row]
-        else:
-            current = candidate
-    if current:
-        batches.append(current)
-    return batches
-
-
-def notebooklm_enrich_batched(
+def notebooklm_add_file_source(
     notebook_id: str,
+    path: Path,
+    *,
+    nlm_bin: str = "",
+    profile: str = "",
+    timeout: int = 600,
+) -> None:
+    run_nlm_command(
+        ["source", "add", notebook_id, "--file", str(path), "--wait", "--wait-timeout", str(timeout)],
+        nlm_bin=nlm_bin,
+        profile=profile,
+        timeout=max(timeout + 30, 120),
+    )
+
+
+def notebooklm_query_once(
+    notebook_id: str,
+    question: str,
+    *,
+    nlm_bin: str = "",
+    profile: str = "",
+    timeout: int = DEFAULT_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    output = run_nlm_command(
+        ["notebook", "query", notebook_id, question, "--json", "--timeout", str(timeout)],
+        nlm_bin=nlm_bin,
+        profile=profile,
+        timeout=max(timeout + 30, DEFAULT_TIMEOUT_SECONDS),
+    )
+    return extract_json_object(output)
+
+
+def notebooklm_enrich_daily_notebook(
+    *,
     report_date: str,
     rows: list[dict[str, str]],
+    out_dir: Path,
     timeout: int,
     nlm_bin: str = "",
     profile: str = "",
-    batch_size: int = DEFAULT_NOTEBOOKLM_BATCH_SIZE,
-    max_prompt_chars: int = DEFAULT_NOTEBOOKLM_MAX_PROMPT_CHARS,
-    batch_delay_seconds: float = DEFAULT_NOTEBOOKLM_BATCH_DELAY_SECONDS,
-    retries: int = DEFAULT_NOTEBOOKLM_RETRIES,
-) -> list[dict[str, Any]]:
-    articles: list[dict[str, Any]] = []
-    batches = notebooklm_row_batches(
-        report_date,
-        rows,
-        batch_size=batch_size,
-        max_prompt_chars=max_prompt_chars,
+    notebook_id: str = "",
+    rules_path: Path = DEFAULT_CLASSIFICATION_RULES,
+) -> tuple[list[dict[str, Any]], str, dict[str, object]]:
+    source_files = write_notebooklm_source_files(
+        out_dir=out_dir,
+        report_date=report_date,
+        rows=rows,
+        rules_path=rules_path,
     )
-    for index, batch in enumerate(batches, start=1):
-        if index > 1 and batch_delay_seconds > 0:
-            time.sleep(batch_delay_seconds)
-        batch_prompt = enrichment_prompt(report_date, batch)
-        for attempt in range(max(1, retries + 1)):
-            try:
-                articles.extend(notebooklm_enrich(notebook_id, batch_prompt, batch, timeout, nlm_bin, profile))
-                break
-            except RuntimeError as exc:
-                message = str(exc)
-                retryable = "RESOURCE_EXHAUSTED" in message or "INVALID_ARGUMENT" in message
-                if not retryable or attempt >= retries:
-                    raise RuntimeError(f"NotebookLM batch {index}/{len(batches)} failed: {exc}") from exc
-                time.sleep(batch_delay_seconds + (30 * (attempt + 1)))
-    return articles
+    fingerprint = str(source_files["source_pack_fingerprint"])
+    cached = cached_notebooklm_payload(out_dir, report_date, fingerprint)
+    if cached:
+        return list(cached["articles"]), str(source_files["question"]), {
+            **source_files,
+            "cache_hit": True,
+            "notebook_id": str(cached.get("notebook_id") or ""),
+            "notebook_title": str(cached.get("notebook_title") or ""),
+        }
+
+    title = f"KPEF Newsletter Review {report_date}"
+    actual_notebook_id = ""
+    try:
+        actual_notebook_id = notebook_id or notebooklm_find_notebook_by_title(title, nlm_bin, profile)
+        if not actual_notebook_id:
+            actual_notebook_id = notebooklm_create_notebook(title, nlm_bin, profile, timeout=min(timeout, 120))
+        notebooklm_add_file_source(
+            actual_notebook_id,
+            Path(str(source_files["rules_path_obj"])),
+            nlm_bin=nlm_bin,
+            profile=profile,
+        )
+        notebooklm_add_file_source(
+            actual_notebook_id,
+            Path(str(source_files["source_pack_path_obj"])),
+            nlm_bin=nlm_bin,
+            profile=profile,
+        )
+        data = notebooklm_query_once(
+            actual_notebook_id,
+            str(source_files["question"]),
+            nlm_bin=nlm_bin,
+            profile=profile,
+            timeout=timeout,
+        )
+    except RuntimeError as exc:
+        raise NotebookLMReviewError(
+            str(exc),
+            {
+                **source_files,
+                "cache_hit": False,
+                "notebook_id": actual_notebook_id,
+                "notebook_title": title,
+            },
+        ) from exc
+    articles = normalize_ai_articles(data, rows, "notebooklm-notebook")
+    return articles, str(source_files["question"]), {
+        **source_files,
+        "cache_hit": False,
+        "notebook_id": actual_notebook_id,
+        "notebook_title": title,
+    }
 
 
 def write_outputs(
@@ -505,6 +740,7 @@ def write_outputs(
     articles: list[dict[str, Any]],
     prompt: str,
     write_latest: bool,
+    metadata: dict[str, object] | None = None,
 ) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     dated = compact_date(report_date)
@@ -515,6 +751,11 @@ def write_outputs(
         "article_count": len(articles),
         "articles": articles,
     }
+    if metadata:
+        for key, value in metadata.items():
+            if key.endswith("_obj") or key in {"source_pack_text", "rules_text", "question"}:
+                continue
+            payload[key] = value
     output_path = out_dir / f"daily_news_ai_enrichment_{dated}.json"
     prompt_path = out_dir / f"daily_news_ai_enrichment_prompt_{dated}.json"
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -539,23 +780,10 @@ def main() -> int:
     parser.add_argument("--notebook-id", default=os.environ.get("NEWSLETTER_NOTEBOOKLM_NOTEBOOK_ID", ""))
     parser.add_argument("--nlm-bin", default=os.environ.get("NEWSLETTER_NLM_BIN", ""))
     parser.add_argument("--nlm-profile", default=os.environ.get("NEWSLETTER_NLM_PROFILE", ""))
-    parser.add_argument("--notebooklm-batch-size", type=int, default=int(os.environ.get("NEWSLETTER_NOTEBOOKLM_BATCH_SIZE", str(DEFAULT_NOTEBOOKLM_BATCH_SIZE))))
-    parser.add_argument(
-        "--notebooklm-max-prompt-chars",
-        type=int,
-        default=int(os.environ.get("NEWSLETTER_NOTEBOOKLM_MAX_PROMPT_CHARS", str(DEFAULT_NOTEBOOKLM_MAX_PROMPT_CHARS))),
-    )
-    parser.add_argument(
-        "--notebooklm-batch-delay",
-        type=float,
-        default=float(os.environ.get("NEWSLETTER_NOTEBOOKLM_BATCH_DELAY_SECONDS", str(DEFAULT_NOTEBOOKLM_BATCH_DELAY_SECONDS))),
-    )
-    parser.add_argument(
-        "--notebooklm-retries",
-        type=int,
-        default=int(os.environ.get("NEWSLETTER_NOTEBOOKLM_RETRIES", str(DEFAULT_NOTEBOOKLM_RETRIES))),
-    )
+    parser.add_argument("--classification-rules", type=Path, default=DEFAULT_CLASSIFICATION_RULES)
+    parser.add_argument("--notebooklm-review-query-limit", type=int, default=int(os.environ.get("NEWSLETTER_NOTEBOOKLM_REVIEW_QUERY_LIMIT", str(DEFAULT_NOTEBOOKLM_REVIEW_QUERY_LIMIT))))
     parser.add_argument("--timeout", type=int, default=int(os.environ.get("NEWSLETTER_AI_TIMEOUT_SECONDS", "180")))
+    parser.add_argument("--strict", action="store_true", default=os.environ.get("NEWSLETTER_AI_STRICT", "0") == "1")
     parser.add_argument("--check-only", action="store_true", help="Check provider readiness without reading or writing news artifacts")
     parser.add_argument("--no-latest", action="store_true")
     args = parser.parse_args()
@@ -575,7 +803,7 @@ def main() -> int:
             print("ai_enrichment_check=fail provider=command reason=missing_command")
             return 1
         if provider in {"notebooklm", "notebooklm-cli", "nlm"}:
-            ok, message = notebooklm_readiness(args.notebook_id, args.nlm_bin, args.nlm_profile, min(args.timeout, 60))
+            ok, message = notebooklm_readiness(args.nlm_bin, args.nlm_profile, min(args.timeout, 60))
             print(f"ai_enrichment_check={'ok' if ok else 'fail'} provider=notebooklm message={message}")
             return 0 if ok else 1
         print(f"ai_enrichment_check=fail provider={args.provider} reason=unknown_provider")
@@ -583,6 +811,7 @@ def main() -> int:
     review_file = args.review_file or args.out_dir / f"daily_news_review_queue_{compact_date(args.date)}.csv"
     rows = read_csv(review_file)
     prompt = enrichment_prompt(args.date, rows)
+    metadata: dict[str, object] = {}
     if provider in {"local", "local-rule", "fallback"}:
         articles = local_enrich(rows)
         provider_name = "local-rule"
@@ -592,19 +821,33 @@ def main() -> int:
         articles = command_enrich(args.command, prompt, rows)
         provider_name = "command"
     elif provider in {"notebooklm", "notebooklm-cli", "nlm"}:
-        articles = notebooklm_enrich_batched(
-            args.notebook_id,
-            args.date,
-            rows,
-            args.timeout,
-            args.nlm_bin,
-            args.nlm_profile,
-            args.notebooklm_batch_size,
-            args.notebooklm_max_prompt_chars,
-            args.notebooklm_batch_delay,
-            args.notebooklm_retries,
-        )
-        provider_name = "notebooklm-cli"
+        if args.notebooklm_review_query_limit != 1:
+            raise SystemExit("--notebooklm-review-query-limit must be 1 for date-notebook review mode")
+        try:
+            articles, prompt, metadata = notebooklm_enrich_daily_notebook(
+                report_date=args.date,
+                rows=rows,
+                out_dir=args.out_dir,
+                timeout=args.timeout,
+                nlm_bin=args.nlm_bin,
+                profile=args.nlm_profile,
+                notebook_id=args.notebook_id,
+                rules_path=args.classification_rules,
+            )
+            provider_name = "notebooklm-notebook"
+        except RuntimeError as exc:
+            if args.strict:
+                raise
+            articles = local_enrich(rows)
+            provider_name = "local-rule"
+            error_metadata = exc.metadata if isinstance(exc, NotebookLMReviewError) else {}
+            metadata = {
+                **error_metadata,
+                "fallback_from": "notebooklm-notebook",
+                "fallback_reason": normalize_whitespace(str(exc))[:1000],
+            }
+    elif provider in {"notebooklm-batch", "notebooklm-cli-batch", "nlm-batch"}:
+        raise SystemExit("NotebookLM batch query mode is disabled. Use provider=notebooklm for one date notebook review.")
     else:
         raise SystemExit(f"Unknown AI provider: {args.provider}")
     output_path = write_outputs(
@@ -615,6 +858,7 @@ def main() -> int:
         articles=articles,
         prompt=prompt,
         write_latest=not args.no_latest,
+        metadata=metadata,
     )
     print(f"ai_enrichment_status=ok provider={provider_name} articles={len(articles)} output={output_path}")
     return 0
