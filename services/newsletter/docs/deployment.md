@@ -21,7 +21,7 @@ python services\newsletter\src\build_newsletter_deploy.py --date 2026-05-22
 ## GitHub Pages Deploy
 
 뉴스레터는 기본적으로 GitHub Actions가 매일 만들고, 공개 가능한 정적 파일만 별도 public mirror 저장소에 올린다.
-Mac launchd 발행은 GitHub Actions 장애, Secret 문제 복구, 또는 수동 긴급 복구가 필요할 때 쓰는 백업 경로다.
+Mac은 개발과 수동 긴급 복구에만 쓴다. 매일 발행 서비스의 운영 주체가 아니다.
 비개발자는 GitHub Pages 주소만 확인하면 된다.
 
 - 원본 저장소: private repo `pkkong/korea-pef-db`
@@ -30,8 +30,8 @@ Mac launchd 발행은 GitHub Actions 장애, Secret 문제 복구, 또는 수동
 - Public URL: `https://pkkong.github.io/kpef-newsletter/`
 - Primary automation workflow: `.github/workflows/deploy-newsletter-pages.yml`
 - Workflow name: `Deploy newsletter to GitHub Pages`
-- Local backup publisher: `services/newsletter/scripts/publish_newsletter_pages_local.sh`
-- macOS backup scheduler installer: `services/newsletter/scripts/install_newsletter_local_publisher_launchd.sh`
+- Local manual publisher: `services/newsletter/scripts/publish_newsletter_pages_local.sh`
+- macOS emergency scheduler installer: `services/newsletter/scripts/install_newsletter_local_publisher_launchd.sh`
 
 현재 private 원본 저장소는 GitHub Pages endpoint가 열리지 않을 수 있으므로, 공개 가능한 뉴스레터 산출물만
 `pkkong/kpef-newsletter`에 복사해서 보여준다. Public mirror에는 `services/newsletter/deploy/site/`의
@@ -55,7 +55,7 @@ GitHub Actions 화면에서 수동 실행도 그대로 사용할 수 있다. pri
 `Actions` → `Deploy newsletter to GitHub Pages` → `Run workflow`를 누르면 실행된다. `report_date`를 비워 두면
 한국시간 기준 오늘 날짜로 생성되고, 필요한 경우 `YYYY-MM-DD` 형식으로 날짜를 직접 넣을 수 있다.
 
-Mac launchd 백업 설치:
+Mac launchd는 기본 운영에 사용하지 않는다. GitHub Actions 장애가 길어져 임시로 Mac을 운영 주체로 바꿔야 할 때만 아래 설치 스크립트를 쓴다.
 설치:
 
 ```bash
