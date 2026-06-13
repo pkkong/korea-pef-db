@@ -165,27 +165,50 @@ python3 services/newsletter/src/newsletter_ops_status.py --date YYYY-MM-DD --sit
 뉴스레터 발행의 기본 엔진은 수집, 규칙 분류, 회귀 테스트다. NotebookLM 같은 외부 AI는 발행을 대체하지 않고 `exports/daily_news/daily_news_ai_enrichment_YYYYMMDD.json` 보강 파일을 만드는 보조 단계로만 둔다.
 
 - 기본값은 `NEWSLETTER_AI_PROVIDER=local`이며 외부 로그인 없이 `summary_lines` 계약을 만든다.
-- NotebookLM CLI를 쓰려면 `notebooklm-mcp-cli` 설치, `nlm login`, `NEWSLETTER_NOTEBOOKLM_NOTEBOOK_ID` 설정이 필요하다.
+- NotebookLM은 기사별 query API처럼 쓰지 않는다. 날짜별 리뷰 노트북 하나를 만들고, 그날 기사 source pack과 분류 기준을 자료로 넣은 뒤, 한 번의 구조화 질문으로 전체 기사 요약/분류 결과를 받는 방식만 허용한다.
+- 노트북 이름은 `KPEF Newsletter Review YYYY-MM-DD` 형식으로 둔다.
+- 업로드 자료는 최소 2개다: `newsletter_classification_rules.md`, `daily_news_source_pack_YYYYMMDD.md`.
+- source pack에는 기사별 `url`, `title`, `publisher`, `published_at`, `current_section`, `candidate_tags`, 수집한 snippet/body excerpt를 넣는다. URL만 추가하면 paywall, bot 차단, 동적 렌더링 때문에 NotebookLM이 기사 본문을 충분히 못 읽을 수 있으므로 source pack이 기준이다.
+- 질문은 "각 기사에 대해 3줄 요약, 100자 이내 핵심 요약, 대표 섹션, GP/LP/Deal/AI/국민성장펀드 관련 엔티티를 JSON 배열로 반환"처럼 날짜 전체를 한 번에 처리하도록 설계한다.
+- 같은 날짜/같은 source pack fingerprint로 이미 결과가 있으면 다시 묻지 않고 캐시된 `daily_news_ai_enrichment_YYYYMMDD.json`을 쓴다.
+- NotebookLM 호출 상한은 기본 하루 1회다. 실패 시 자동 재시도 루프를 돌리지 않고 local-rule 결과로 발행한다.
+- 기존 batch query 방식은 legacy experiment로만 본다. 전량 백테스트나 5개 기사 단위 반복 query는 채팅 한도를 빠르게 소모하므로 사용하지 않는다.
 - NotebookLM은 정식 08:30 발행 경로가 아니다. 프로젝트 repo 안에 전용 `.venv`나 MCP 서버를 유지하지 않으며, 실험할 때만 외부 CLI 경로를 `NEWSLETTER_NLM_BIN` 또는 `--nlm-bin`으로 명시한다.
-- Google 로그인은 한 번 수동으로 필요하다. 예: `nlm login --profile default`
-- 로그인 점검은 `python3 services/newsletter/src/enrich_daily_news_ai.py --provider notebooklm --nlm-bin nlm --nlm-profile default --notebook-id NOTEBOOK_ID --check-only`로 한다.
-- NotebookLM은 빈 노트북에 질의할 수 없다. 작업용 노트북을 만들고 뉴스레터 분류 기준 같은 텍스트 소스를 1개 이상 넣어야 한다.
+- Google 로그인은 한 번 수동으로 필요하다. 예: `nlm login --profile default`.
+- NotebookLM은 빈 노트북에 질의할 수 없다. 작업용 노트북을 만들고 분류 기준/source pack 같은 텍스트 소스를 1개 이상 넣어야 한다.
 - NotebookLM CLI는 답변 JSON을 `{ "answer": "..." }`로 감싸서 돌려줄 수 있으므로, 파서는 `answer` 내부 JSON까지 풀어야 한다.
-- NotebookLM은 긴 프롬프트나 짧은 시간의 반복 질의에서 `INVALID_ARGUMENT` 또는 `RESOURCE_EXHAUSTED`가 날 수 있다. 기본 배치는 5건 이하, 프롬프트 6,500자 이하, 묶음 간 5초 지연, 2회 재시도다. 대량 전량 처리는 제한에 걸릴 수 있으므로 운영 기본은 품질검사/요약 보강용이다.
 - NotebookLM은 내부 API와 브라우저 쿠키 인증을 쓰므로 장애가 나도 당일 발행 전체가 무너지면 안 된다.
 - GitHub Actions workflow는 외부 AI 보강이 실패하면 기본적으로 local-rule 보강으로 fallback한다. AI 실패를 발행 차단으로 볼 때만 `NEWSLETTER_AI_STRICT=1`을 둔다.
 - 공개 화면은 provider, confidence, notes 같은 내부 필드를 보여주지 않고 `summaryLines`만 사용한다.
 - NotebookLM의 `section_suggestion`은 기본적으로 audit에만 남긴다. 최근 기사 백테스트에서 충돌 품질이 확인된 뒤 `NEWSLETTER_AI_APPLY_SECTIONS=1`을 켜면 공개 기사 섹션에 반영할 수 있다.
 - 기본 운영에서는 카테고리 자동 변경을 hard apply하지 않는다. AI가 제안한 `section_suggestion`은 우선 품질 검토용으로 쓰고, 반복 오분류가 확인되면 규칙과 테스트로 고정한다. NotebookLM 백테스트가 충분히 통과한 뒤에만 `NEWSLETTER_AI_APPLY_SECTIONS=1`로 공개 섹션 적용을 켠다.
 
-수동 실행:
+NotebookLM 질문 출력 스키마:
+
+```json
+{
+  "articles": [
+    {
+      "url": "canonical article URL",
+      "summary_lines": ["line 1", "line 2", "line 3"],
+      "short_summary_100": "100자 이내 핵심 요약",
+      "section_suggestion": "AI_PE | NationalGrowthFund | Deal | LP | GP | Market",
+      "gp_names": [],
+      "lp_names": [],
+      "deal_targets": [],
+      "reason": "분류 근거 1문장"
+    }
+  ]
+}
+```
+
+local-rule 수동 실행:
 
 ```bash
 python3 services/newsletter/src/enrich_daily_news_ai.py --date YYYY-MM-DD --provider local
-NEWSLETTER_AI_PROVIDER=notebooklm NEWSLETTER_NLM_BIN=nlm NEWSLETTER_NLM_PROFILE=default NEWSLETTER_NOTEBOOKLM_NOTEBOOK_ID=... python3 services/newsletter/src/enrich_daily_news_ai.py --date YYYY-MM-DD
 ```
 
-NotebookLM 인증 후 확인 순서:
+NotebookLM 실험을 다시 할 때의 확인 순서:
 
 ```bash
 nlm login --check --profile default
@@ -197,18 +220,6 @@ nlm notebook query "$NOTEBOOK_ID" \
 ```
 
 `Profile not found: default` 또는 `Login timeout`이면 코드 문제가 아니라 Google/NotebookLM 인증이 끝나지 않은 상태다. 이 경우 공개 발행은 local-rule 보강으로 계속 가고, NotebookLM provider 백테스트만 보류한다.
-
-NotebookLM 로그인 후 최근 며칠치 분류 품질을 확인할 때는 백테스트를 먼저 돌린다. 이 결과에서 `invalid`, `missing`, `summary missing`이 0이고, `conflict`가 실제로 기존 오분류를 고치는 방향인지 확인한 뒤에만 `NEWSLETTER_AI_APPLY_SECTIONS=1`을 켠다.
-
-```bash
-python3 services/newsletter/src/backtest_newsletter_ai.py \
-  --start-date YYYY-MM-DD \
-  --end-date YYYY-MM-DD \
-  --provider notebooklm \
-  --nlm-bin nlm \
-  --nlm-profile default \
-  --notebook-id NOTEBOOK_ID
-```
 
 결과 파일:
 
