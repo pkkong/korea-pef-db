@@ -2,8 +2,8 @@
 
 ## 매일 흐름
 
-1. 자동 작업이 오전 8:30에 `services/newsletter/scripts/run_daily_news_today.ps1`로 초안을 생성한다.
-2. `services/newsletter/scripts/start_daily_news_review.ps1`을 실행해 리뷰 화면을 연다.
+1. GitHub Actions가 오전 8:30 KST에 뉴스 수집, 분류, 요약 보강, 정적 사이트 생성을 실행한다.
+2. 수동 검토가 필요하면 GitHub Actions 결과물 또는 로컬 개발 산출물의 리뷰 화면을 연다.
 3. 리뷰 화면 상단의 날짜 선택에서 오늘 또는 과거 클리핑 날짜를 고른다.
 4. 리뷰 화면에서 각 기사별로 필요하면 `포함`, `제외`, 카테고리 변경을 선택한다.
 5. `저장`을 누른다.
@@ -117,11 +117,11 @@ KPEF Daily의 1차 섹션은 `AI & PE`, `국민성장펀드`, `Deal`, `LP`, `GP`
 
 ## 검증
 
-- 매일 로컬 Mac 발행 작업은 `services/newsletter/scripts/publish_newsletter_pages_local.sh` 기본값인 `--services newsletter` 기준으로 돌린다. 통합 사이트 전체 갱신이 필요할 때만 명시적으로 `--services all` 또는 `--services newsletter,lp,gp`를 사용한다. Wiki는 재기획 전까지 명시적으로 `--services wiki`를 줄 때만 빌드한다.
-- 매일 로컬 Mac 발행 작업은 초안 생성 직후 `services/newsletter/src/validate_daily_news_pipeline.py` 기준 검증을 남긴다. 검증이 실패하면 public mirror push가 중단되므로, 그날 안에 원인 규칙을 고치고 같은 날짜로 재발행해야 한다.
-- 매일 로컬 Mac 발행 작업은 `scripts/build_site_bundle.py --services newsletter`로 `services/newsletter/deploy/site/`의 뉴스레터 산출물을 갱신하고 public mirror `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 push한다.
+- 매일 발행 작업은 GitHub Actions에서 `NEWSLETTER_BUILD_SERVICES=newsletter` 기준으로 돈다. 통합 사이트 전체 갱신이 필요할 때만 명시적으로 `newsletter,lp,gp`를 사용한다. Wiki는 재기획 전까지 명시적으로 `wiki`를 줄 때만 빌드한다.
+- 매일 발행 작업은 초안 생성 직후 `services/newsletter/src/validate_daily_news_pipeline.py` 기준 검증을 남긴다. 검증이 실패하면 public mirror push가 중단되므로, 그날 안에 원인 규칙을 고치고 같은 날짜로 재발행해야 한다.
+- 매일 발행 작업은 `scripts/build_site_bundle.py --services newsletter`로 `services/newsletter/deploy/site/`의 뉴스레터 산출물을 갱신하고 public mirror `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 push한다.
 - LP 공고 모니터는 뉴스레터 핵심 콘텐츠가 아니므로 daily newsletter publish 안에서 필수 단계로 묶지 않는다. LP/GP 갱신은 별도 collector 또는 수동 통합 빌드로 처리하고, 이 실패가 당일 뉴스레터 공개를 막으면 안 된다. Wiki는 루틴 갱신 대상이 아니다.
-- 발행 완료 기준은 로컬 파일 생성이 아니라 공개 `https://pkkong.github.io/kpef-newsletter/health.json`의 `report_date`가 당일이고 `archive.json`에 당일 기사 수가 존재하는 것이다. 로컬 publish 스크립트는 push 후 이 공개 확인까지 통과해야 완료로 끝난다.
+- 발행 완료 기준은 로컬 파일 생성이 아니라 공개 `https://pkkong.github.io/kpef-newsletter/health.json`의 `report_date`가 당일이고 `archive.json`에 당일 기사 수가 존재하는 것이다. GitHub Actions는 push 후 이 공개 확인까지 통과해야 완료로 끝난다.
 - publish 스크립트는 종료 시 `exports/daily_news/ops_status/newsletter_ops_status_YYYYMMDD.md`와 `newsletter_ops_status_latest.md`를 쓴다. 이 파일은 수집, 로컬 번들, 공개 사이트, 아이콘/태그 품질, hard failure를 한 화면에 모은 운영 기준 파일이다.
 - 별도 LP 공고 탭은 `new_notice`, `deadline_soon`, `shortlist`, `final_selection` 등 이벤트 타입을 우선 노출한다. `program_size`는 정책펀드 전체 규모로 보관하되, 공개 출자규모 합산에는 `allocation_amount`만 사용한다.
 - 공개 Daily 화면은 최근 날짜별 `daily_news_brief_YYYYMMDD.md`를 함께 포함하므로, 사용자는 날짜 선택으로 과거 브리프의 주요 뉴스도 볼 수 있다.
@@ -173,7 +173,7 @@ python3 services/newsletter/src/newsletter_ops_status.py --date YYYY-MM-DD --sit
 - NotebookLM CLI는 답변 JSON을 `{ "answer": "..." }`로 감싸서 돌려줄 수 있으므로, 파서는 `answer` 내부 JSON까지 풀어야 한다.
 - NotebookLM은 긴 프롬프트나 짧은 시간의 반복 질의에서 `INVALID_ARGUMENT` 또는 `RESOURCE_EXHAUSTED`가 날 수 있다. 기본 배치는 5건 이하, 프롬프트 6,500자 이하, 묶음 간 5초 지연, 2회 재시도다. 대량 전량 처리는 제한에 걸릴 수 있으므로 운영 기본은 품질검사/요약 보강용이다.
 - NotebookLM은 내부 API와 브라우저 쿠키 인증을 쓰므로 장애가 나도 당일 발행 전체가 무너지면 안 된다.
-- `publish_newsletter_pages_local.sh`는 외부 AI 보강이 실패하면 기본적으로 local-rule 보강으로 fallback한다. AI 실패를 발행 차단으로 볼 때만 `NEWSLETTER_AI_STRICT=1`을 둔다.
+- GitHub Actions workflow는 외부 AI 보강이 실패하면 기본적으로 local-rule 보강으로 fallback한다. AI 실패를 발행 차단으로 볼 때만 `NEWSLETTER_AI_STRICT=1`을 둔다.
 - 공개 화면은 provider, confidence, notes 같은 내부 필드를 보여주지 않고 `summaryLines`만 사용한다.
 - NotebookLM의 `section_suggestion`은 기본적으로 audit에만 남긴다. 최근 기사 백테스트에서 충돌 품질이 확인된 뒤 `NEWSLETTER_AI_APPLY_SECTIONS=1`을 켜면 공개 기사 섹션에 반영할 수 있다.
 - 기본 운영에서는 카테고리 자동 변경을 hard apply하지 않는다. AI가 제안한 `section_suggestion`은 우선 품질 검토용으로 쓰고, 반복 오분류가 확인되면 규칙과 테스트로 고정한다. NotebookLM 백테스트가 충분히 통과한 뒤에만 `NEWSLETTER_AI_APPLY_SECTIONS=1`로 공개 섹션 적용을 켠다.

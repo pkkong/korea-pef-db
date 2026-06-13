@@ -7,6 +7,18 @@ REPO_ROOT="$(cd "$SERVICE_ROOT/../.." && pwd)"
 
 cd "$REPO_ROOT"
 
+if [ "${NEWSLETTER_ALLOW_LOCAL_PUBLISH:-0}" != "1" ]; then
+  cat >&2 <<'MSG'
+Local newsletter publishing is disabled for routine operation.
+Production newsletter collection and publishing must run in GitHub Actions.
+
+This script is kept only for one-off emergency recovery. Set
+NEWSLETTER_ALLOW_LOCAL_PUBLISH=1 explicitly if the Project Lead has decided to
+run a manual recovery build.
+MSG
+  exit 2
+fi
+
 REPORT_DATE="${NEWSLETTER_REPORT_DATE:-$(TZ=Asia/Seoul date +%F)}"
 PUBLIC_REPO_URL="${NEWSLETTER_PUBLIC_REPO_URL:-https://github.com/pkkong/kpef-newsletter.git}"
 PUBLIC_BRANCH="${NEWSLETTER_PUBLIC_BRANCH:-gh-pages}"
@@ -42,6 +54,7 @@ Options:
   -h, --help           Show this help.
 
 Environment overrides:
+  NEWSLETTER_ALLOW_LOCAL_PUBLISH=1 is required for any local manual recovery run.
   NEWSLETTER_PUBLIC_REPO_URL, NEWSLETTER_PUBLIC_BRANCH, NEWSLETTER_PUBLIC_BASE_URL
   NEWSLETTER_PUBLIC_VERIFY_TIMEOUT_SECONDS, NEWSLETTER_PUBLIC_VERIFY_INTERVAL_SECONDS, PYTHON_BIN
   NEWSLETTER_LOCAL_LIMIT_PER_SOURCE, NEWSLETTER_LOCAL_BRIEF_LIMIT
@@ -411,7 +424,7 @@ if [ "$NO_PUSH" -eq 1 ]; then
   exit 0
 fi
 
-git commit -m "Deploy newsletter $REPORT_DATE from local Mac"
+git commit -m "Deploy newsletter $REPORT_DATE from manual recovery"
 git push origin "$PUBLIC_BRANCH"
 echo "public_mirror_status=pushed"
 echo "public_url=$PUBLIC_BASE_URL/"
