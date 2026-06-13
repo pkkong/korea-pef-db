@@ -22,7 +22,7 @@ prefer the service path.
 ## Layout
 
 - `src/`: Python implementation for collecting, normalizing, storing, and exporting LP notice candidates
-- `scripts/`: macOS/background runners for recurring LP collection and publishing
+- `scripts/`: reserved for service-level utilities. Recurring collection and publishing run through GitHub-managed workflows, not a local Mac.
 - `docs/`: service-specific operating notes
 
 ## Common Commands
@@ -33,24 +33,12 @@ python3 services/lp/src/build_lp_commitment_monitor.py --skip-source-fetch
 python3 services/lp/src/build_lp_profile_backlog.py
 ```
 
-## Background Collection
+## Profile Backlog
 
-LP profiles should not stop at the current public sample set. The background
-collector refreshes official LP notices, writes a prioritized profile research
-backlog, rebuilds the newsletter/LP/GP static bundle, and can push the GitHub
-Pages mirror.
-
-Run one local validation without pushing:
-
-```bash
-services/lp/scripts/run_lp_background_collector.sh --no-push
-```
-
-Install the recurring macOS job:
-
-```bash
-services/lp/scripts/install_lp_background_collector_launchd.sh --interval-hours 6
-```
+LP profiles should not stop at the current public sample set. The profile
+backlog builder writes a prioritized research queue. Recurring collection and
+publication are GitHub workflow responsibilities; this service does not ship a
+local Mac scheduler or publisher.
 
 The generated backlog files are:
 

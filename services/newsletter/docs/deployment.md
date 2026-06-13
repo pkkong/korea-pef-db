@@ -53,9 +53,8 @@ GitHub Actions 화면에서 수동 실행도 그대로 사용할 수 있다. pri
 `Actions` → `Deploy newsletter to GitHub Pages` → `Run workflow`를 누르면 실행된다. `report_date`를 비워 두면
 한국시간 기준 오늘 날짜로 생성되고, 필요한 경우 `YYYY-MM-DD` 형식으로 날짜를 직접 넣을 수 있다.
 
-로컬 수동 발행 스크립트는 정식 운영 경로가 아니며 기본적으로 실행이 차단된다.
-GitHub Actions 장애 중 Project Lead가 일회성 복구를 결정한 경우에만 `NEWSLETTER_ALLOW_LOCAL_PUBLISH=1`을 명시해 사용한다.
-macOS launchd 자동 발행 경로는 제거했다.
+로컬 수동 발행과 macOS launchd 자동 발행 경로는 제거했다. 장애 복구도 같은 GitHub Actions workflow의
+`Run workflow`로 처리한다.
 
 ## Required GitHub Secrets
 
@@ -170,7 +169,7 @@ curl http://127.0.0.1/health.json
 매일 갱신은 GitHub Actions scheduled workflow가 처리한다. Repository secrets와 public mirror token이 정상이어야
 뉴스 수집, 정적 사이트 생성, public mirror push가 순서대로 실행된다.
 수동 `Run workflow`는 같은 workflow의 수동 실행 경로로 유지한다.
-Mac launchd는 사용하지 않는다.
+Mac launchd와 로컬 publish는 사용하지 않는다.
 
 GitHub-only 운영 기준과 로컬 진단 제한은
 `services/newsletter/docs/local_vs_github_quality.md`에 정리한다.

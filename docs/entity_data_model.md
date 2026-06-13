@@ -3,7 +3,9 @@
 ## Purpose
 
 This document translates the service structure into a practical data model.
-It is the working data dictionary for Korea PEF Intelligence.
+It is the working data dictionary for Korea PEF Intelligence. The operating
+contract between raw data, canonical entities, public views, and static HTML is
+maintained in `docs/data_operating_model.md`.
 
 The rule is simple:
 
@@ -419,6 +421,14 @@ Rule:
 
 An investment, acquisition, sale, exit, recapitalization, or other transaction
 connected to GP/fund activity.
+
+### Current Direction
+
+LP Notice must move from row/event thinking to business lifecycle thinking.
+`lp_commitment_notice` currently behaves like an event table. Public screens
+should read a lifecycle public view that groups one commitment business into one
+card. A future canonical `lp_commitment_program` layer should make that grouping
+explicit.
 
 ### Proposed Tables
 

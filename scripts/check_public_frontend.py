@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import re
 import sys
@@ -12,25 +13,29 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+from lp_public_visibility import is_public_lp_notice_row
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_DIR = REPO_ROOT / "public"
 NEWSLETTER_SITE_DIR = REPO_ROOT / "services" / "newsletter" / "deploy" / "site"
+PUBLIC_DIR = NEWSLETTER_SITE_DIR
+FSS_SOURCE_REGISTRY = REPO_ROOT / "data" / "source_registry_fss_pef.csv"
 REQUIRED_PUBLIC_FILES = [
     "index.html",
     "daily-news.html",
-    "db.html",
-    "pef-wiki.html",
+    "lp-notices.html",
+    "lp-official-notices.html",
+    "gps.html",
+    "market.html",
     "site.webmanifest",
     "apple-touch-icon.png",
-    "assets/app.css",
-    "assets/app.js",
     "assets/service.css",
     "assets/service.js",
-    "data/service_data.json",
 ]
 BOTTOM_NAV_LABELS = ["브리프", "LP", "GP"]
-PUBLIC_HTML_FILES = ["index.html", "daily-news.html", "db.html", "pef-wiki.html"]
+PUBLIC_CORE_HTML_FILES = ["index.html", "daily-news.html"]
+PUBLIC_SERVICE_HTML_FILES = ["lp-notices.html", "lp-official-notices.html", "gps.html", "market.html"]
+PUBLIC_HTML_FILES = PUBLIC_CORE_HTML_FILES + PUBLIC_SERVICE_HTML_FILES
 FORBIDDEN_VISIBLE_TEXT = [
     "NPL_RESTRUCTURING_AND_PE_MANAGER",
     "commitment_aum_proxy_trn_krw",
@@ -38,11 +43,10 @@ FORBIDDEN_VISIBLE_TEXT = [
     "services/newsletter",
     "localhost",
     "TODO",
-    "운영자",
     "내부용",
     "FSS 출자약정액",
     "GP 원문",
-    "관측",
+    "OCIO",
 ]
 FORBIDDEN_PUBLIC_SOURCE_TERMS = [
     "작업 큐",
@@ -57,6 +61,33 @@ FORBIDDEN_PUBLIC_SOURCE_TERMS = [
     "open_public_dashboard",
     "admin.html",
 ]
+LP_NOTICE_FORBIDDEN_TEXT = [
+    "벤처투자포털",
+    "벤처투자종합포털",
+    "벤처투자마트",
+    "신청 정보 확인",
+    "주식유통정보",
+    "비상장주식거래플랫폼",
+    "동의하지 않은 경우",
+    "가치형이나 고배당형",
+    "목록에서 발견",
+    "source/evidence",
+    "monitor_status",
+    "candidate",
+    "confidence",
+    "OCIO",
+]
+LP_PUBLIC_JSON_FORBIDDEN_KEYS = {
+    "raw_excerpt",
+    "confidence",
+    "confidence_note",
+    "public_visible",
+    "monitor_status",
+    "source_code",
+    "discovered_at",
+    "updated_at",
+}
+GOOGLE_NEWS_HOST_RE = re.compile(r"https?://news\.google\.com/")
 
 
 class CheckFailure(Exception):
@@ -128,7 +159,7 @@ def check_visible_text() -> list[str]:
 
 
 def check_public_source_terms() -> list[str]:
-    paths = PUBLIC_HTML_FILES + ["assets/app.js", "assets/service.js"]
+    paths = PUBLIC_HTML_FILES + ["assets/service.js"]
     violations: list[str] = []
     for relative_path in paths:
         text = read_public_text(relative_path)
@@ -140,34 +171,113 @@ def check_public_source_terms() -> list[str]:
     return [f"source_text_files={len(paths)}"]
 
 
-def check_public_db_amount_contract() -> list[str]:
-    payload = json.loads((PUBLIC_DIR / "data" / "service_data.json").read_text(encoding="utf-8"))
-    latest_period = payload.get("meta", {}).get("latest_period")
-    rows = [
-        row
-        for row in payload.get("gp_period_primary", [])
-        if row.get("period_label") == latest_period
-    ]
-    if not rows:
-        raise CheckFailure(f"No GP rows for latest period {latest_period!r}")
-    top = max(rows, key=lambda row: float(row.get("commitment_trn_krw") or 0))
-    amount = float(top.get("commitment_trn_krw") or 0)
-    if amount <= 0:
-        raise CheckFailure(f"Top GP amount is not positive for {latest_period}: {top}")
-
-    app_js = read_public_text("assets/app.js")
-    legacy_refs = [line.strip() for line in app_js.splitlines() if "commitment_aum_proxy_trn_krw" in line]
-    if legacy_refs != ["return num(row?.commitment_trn_krw ?? row?.commitment_aum_proxy_trn_krw);"]:
-        raise CheckFailure(f"Unexpected legacy amount-field references: {legacy_refs}")
-    return [f"top_gp={top.get('gp_name')} amount_trn={amount:g}"]
-
-
 def check_brief_initial_date_guard() -> list[str]:
     service_js = read_public_text("assets/service.js")
     expected = 'const initialDate = queryDate || (dateSelect && dateSelect.value) || (dateInput && dateInput.value) || "";'
     if expected not in service_js:
         raise CheckFailure("Brief initial date guard missing")
     return ["brief_initial_date_guard=ok"]
+
+
+def check_newsletter_frontend_contract() -> list[str]:
+    archive_path = PUBLIC_DIR / "archive.json"
+    if not archive_path.exists():
+        archive_path = NEWSLETTER_SITE_DIR / "archive.json"
+    if not archive_path.exists():
+        raise CheckFailure("archive.json missing for newsletter contract check")
+    archive = json.loads(archive_path.read_text(encoding="utf-8"))
+    if not isinstance(archive, list):
+        raise CheckFailure("archive.json is not a list")
+    article_count = 0
+    violations: list[str] = []
+    for entry in archive:
+        if not isinstance(entry, dict):
+            continue
+        for article in entry.get("articles") or []:
+            if not isinstance(article, dict):
+                continue
+            article_count += 1
+            title = str(article.get("title") or "")
+            if GOOGLE_NEWS_HOST_RE.search(str(article.get("url") or "")):
+                violations.append(f"google_news_redirect:{title}")
+            if not str(article.get("sourceIconUrl") or "").strip():
+                violations.append(f"missing_source_icon:{title}")
+            if str(article.get("tagVersion") or "") != "news-taxonomy-v1":
+                violations.append(f"taxonomy_version:{title}")
+    service_js_path = PUBLIC_DIR / "assets" / "service.js"
+    if not service_js_path.exists():
+        service_js_path = NEWSLETTER_SITE_DIR / "assets" / "service.js"
+    service_js = service_js_path.read_text(encoding="utf-8") if service_js_path.exists() else ""
+    for required in ["article.gpProfileLinks", 'appendLinkChip(item.name, item.url, "gp-chip")', 'appendLinkChip(item.name, item.url, "lp-chip")']:
+        if required not in service_js:
+            violations.append(f"service.js missing {required}")
+    if violations:
+        raise CheckFailure(f"Newsletter contract violations: {', '.join(violations[:20])}")
+    return [f"newsletter_contract=ok articles_checked={article_count}"]
+
+
+def check_public_lp_json_contract() -> list[str]:
+    data_path = PUBLIC_DIR / "data" / "service_data.json"
+    if not data_path.exists():
+        data_path = NEWSLETTER_SITE_DIR / "data" / "service_data.json"
+    if not data_path.exists():
+        return ["lp_public_json_contract=skipped"]
+    payload = json.loads(data_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise CheckFailure("service_data.json is not an object")
+    violations: list[str] = []
+    notices = payload.get("lp_commitment_notices") or []
+    if not isinstance(notices, list):
+        raise CheckFailure("lp_commitment_notices is not a list")
+    for index, row in enumerate(notices, start=1):
+        if not isinstance(row, dict):
+            violations.append(f"lp_commitment_notices[{index}]:not_object")
+            continue
+        leaked = sorted(key for key in LP_PUBLIC_JSON_FORBIDDEN_KEYS if key in row)
+        if leaked:
+            violations.append(f"lp_commitment_notices[{index}]:internal_keys={','.join(leaked)}")
+        if not is_public_lp_notice_row(row, require_official=True, allow_official_candidates=True):
+            violations.append(f"lp_commitment_notices[{index}]:visibility")
+        event_type = str(row.get("event_type") or "")
+        event_date = str(row.get("event_date") or row.get("announced_date") or "")[:10]
+        deadline = str(row.get("application_deadline") or "")[:10]
+        if event_type in {"new_notice", "deadline_soon"} and re.fullmatch(r"20\d{2}-\d{2}-\d{2}", event_date) and re.fullmatch(r"20\d{2}-\d{2}-\d{2}", deadline) and deadline < event_date:
+            violations.append(f"lp_commitment_notices[{index}]:stale_deadline")
+        title = " ".join(str(row.get(key) or "") for key in ["title", "program_name", "raw_excerpt"])
+        for needle in LP_NOTICE_FORBIDDEN_TEXT:
+            if needle in title:
+                violations.append(f"lp_commitment_notices[{index}]:{needle}")
+    profiles = payload.get("lp_profiles") or []
+    for index, row in enumerate(profiles, start=1):
+        if not isinstance(row, dict):
+            violations.append(f"lp_profiles[{index}]:not_object")
+            continue
+        status_text = " ".join(str(row.get(key) or "") for key in ["profile_status", "notes"])
+        if "candidate" in status_text.lower() or "후보" in status_text:
+            violations.append(f"lp_profiles[{index}]:candidate_profile")
+        row_text = json.dumps(row, ensure_ascii=False)
+        if "OCIO" in row_text or "placeholder" in row_text.lower():
+            violations.append(f"lp_profiles[{index}]:weak_public_profile_text")
+    for index, row in enumerate(payload.get("lp_institution_stats") or [], start=1):
+        if isinstance(row, dict):
+            row_text = json.dumps(row, ensure_ascii=False)
+            if "OCIO" in row_text or "placeholder" in row_text.lower():
+                violations.append(f"lp_institution_stats[{index}]:weak_public_profile_text")
+    if violations:
+        raise CheckFailure(f"LP public JSON violations: {', '.join(violations[:20])}")
+    return [f"lp_public_json_contract=ok notices_checked={len(notices)} profiles_checked={len(profiles)}"]
+
+
+def latest_fss_registry_period() -> str:
+    if not FSS_SOURCE_REGISTRY.exists():
+        return ""
+    latest = ""
+    with FSS_SOURCE_REGISTRY.open("r", encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            period = str(row.get("period_label") or row.get("period") or "").strip()
+            if period > latest:
+                latest = period
+    return latest
 
 
 def check_generated_gp_contract() -> list[str]:
@@ -180,6 +290,7 @@ def check_generated_gp_contract() -> list[str]:
 
     gps_html = gps_path.read_text(encoding="utf-8")
     market_html = market_path.read_text(encoding="utf-8")
+    latest_registry_period = latest_fss_registry_period()
     labels = bottom_nav_labels(gps_html)
     if labels != BOTTOM_NAV_LABELS:
         raise CheckFailure(f"gps.html bottom nav mismatch: expected {BOTTOM_NAV_LABELS}, got {labels}")
@@ -201,7 +312,6 @@ def check_generated_gp_contract() -> list[str]:
         "verification",
         "research",
         "자동 생성",
-        "신호",
     ]
     violations = [needle for needle in forbidden if needle in gps_html]
     violations.extend(f"market.html:{needle}" for needle in forbidden if needle in market_html)
@@ -211,9 +321,9 @@ def check_generated_gp_contract() -> list[str]:
     if '<strong class="service-title">GP</strong>' not in gps_html:
         raise CheckFailure("GP directory service title missing")
     tabs = gp_service_tabs(gps_html)
-    if tabs != ["MARKET", "GP", "PEOPLE"]:
-        raise CheckFailure(f"GP service tabs mismatch: expected MARKET/GP/PEOPLE, got {tabs}")
-    if gp_service_tabs(market_html) != ["MARKET", "GP", "PEOPLE"]:
+    if tabs != ["MARKET", "GP"]:
+        raise CheckFailure(f"GP service tabs mismatch: expected MARKET/GP, got {tabs}")
+    if gp_service_tabs(market_html) != ["MARKET", "GP"]:
         raise CheckFailure("Market service tabs mismatch")
     gps_text = strip_tags(gps_html)
     if not re.search(r"\d[\d,]*개 PEF 운용사", gps_text):
@@ -232,6 +342,13 @@ def check_generated_gp_contract() -> list[str]:
     for required in ["Overview", "분기별 시장 추이", "상위 GP", "연도별 신규 펀드"]:
         if required not in market_html:
             raise CheckFailure(f"market.html missing required section: {required}")
+    for required in ["market-trend-chart", "market-rank-chart", "대표 운용사 집계", "프로필/제휴 기준"]:
+        if required not in market_html:
+            raise CheckFailure(f"market.html missing GP market contract text/markup: {required}")
+    if latest_registry_period and latest_registry_period not in market_html:
+        raise CheckFailure(f"market.html does not show latest FSS period {latest_registry_period}")
+    if "PEOPLE" in tabs or ">PEOPLE<" in gps_html or ">PEOPLE<" in market_html:
+        raise CheckFailure("People tab must stay hidden until the public coverage gate is met")
     if "PEF 시장 통계" in market_html:
         violations.append("market.html:PEF 시장 통계")
     if 'font-variant-numeric: tabular-nums' not in gps_html:
@@ -250,7 +367,7 @@ def check_generated_gp_contract() -> list[str]:
                 violations.append(f"{detail_path.name}:{needle}")
         if '<header class="kpef-product-header' in html:
             violations.append(f"{detail_path.name}:kpef-product-header")
-        if gp_service_tabs(html) != ["MARKET", "GP", "PEOPLE"]:
+        if gp_service_tabs(html) != ["MARKET", "GP"]:
             violations.append(f"{detail_path.name}:gp-service-tabs")
 
     if violations:
@@ -264,16 +381,14 @@ def check_generated_gp_contract() -> list[str]:
 def check_generated_lp_wiki_contract() -> list[str]:
     lp_path = NEWSLETTER_SITE_DIR / "lp-notices.html"
     lp_notice_path = NEWSLETTER_SITE_DIR / "lp-official-notices.html"
-    wiki_path = NEWSLETTER_SITE_DIR / "pef-wiki.html"
-    if not lp_path.exists() or not lp_notice_path.exists() or not wiki_path.exists():
-        return ["generated_lp_wiki_contract=skipped"]
+    if not lp_path.exists() or not lp_notice_path.exists():
+        return ["generated_lp_contract=skipped"]
 
     violations: list[str] = []
     lp_html = lp_path.read_text(encoding="utf-8")
     lp_notice_html = lp_notice_path.read_text(encoding="utf-8")
-    wiki_html = wiki_path.read_text(encoding="utf-8")
 
-    for name, html in [("lp-notices.html", lp_html), ("lp-official-notices.html", lp_notice_html), ("pef-wiki.html", wiki_html)]:
+    for name, html in [("lp-notices.html", lp_html), ("lp-official-notices.html", lp_notice_html)]:
         labels = bottom_nav_labels(html)
         if labels != BOTTOM_NAV_LABELS:
             raise CheckFailure(f"{name} bottom nav mismatch: expected {BOTTOM_NAV_LABELS}, got {labels}")
@@ -293,12 +408,38 @@ def check_generated_lp_wiki_contract() -> list[str]:
         violations.append("lp-official-notices.html:notice tab not current")
     if "lp-notice-row" not in lp_notice_html:
         violations.append("lp-official-notices.html:notice rows missing")
+    for needle in LP_NOTICE_FORBIDDEN_TEXT:
+        if needle in lp_notice_html:
+            violations.append(f"lp-official-notices.html:{needle}")
+    notice_articles = re.findall(r'<article class="lp-notice-row"[^>]*>.*?</article>', lp_notice_html, re.DOTALL)
+    for index, article in enumerate(notice_articles[:80], start=1):
+        article_text = strip_tags(article)
+        if "2026년 국민연금기금 벤처펀드" in article_text and any(term in article_text for term in ["부동산", "국내사모투자"]):
+            violations.append(f"lp-official-notices.html:nps_overmerged_card_{index}")
+        if re.search(r"\([^)]*$", article_text):
+            violations.append(f"lp-official-notices.html:unclosed_parenthesis_{index}")
     if re.search(r'data-kind="[^"]*\b(public|private|mutual_aid)\b', lp_html):
         violations.append("lp-notices.html:raw ownership token")
     if "출자기관 프로필" in lp_html:
         violations.append("lp-notices.html:profile label in directory")
 
-    profile_paths = sorted(path for path in NEWSLETTER_SITE_DIR.glob("lp-*.html") if path.name != "lp-notices.html")[:3]
+    detail_paths = sorted(NEWSLETTER_SITE_DIR.glob("lp-notice-*.html"))[:8]
+    for detail_path in detail_paths:
+        html = detail_path.read_text(encoding="utf-8")
+        labels = bottom_nav_labels(html)
+        if labels != BOTTOM_NAV_LABELS:
+            raise CheckFailure(
+                f"{detail_path.name} bottom nav mismatch: expected {BOTTOM_NAV_LABELS}, got {labels}"
+            )
+        for needle in LP_NOTICE_FORBIDDEN_TEXT:
+            if needle in html:
+                violations.append(f"{detail_path.name}:{needle}")
+
+    profile_paths = sorted(
+        path
+        for path in NEWSLETTER_SITE_DIR.glob("lp-*.html")
+        if path.name not in {"lp-notices.html", "lp-official-notices.html"} and not path.name.startswith("lp-notice-")
+    )[:3]
     for profile_path in profile_paths:
         html = profile_path.read_text(encoding="utf-8")
         labels = bottom_nav_labels(html)
@@ -313,16 +454,9 @@ def check_generated_lp_wiki_contract() -> list[str]:
         if 'font-variant-numeric: tabular-nums' not in html:
             violations.append(f"{profile_path.name}:tabular-nums")
 
-    if '<strong class="service-title">Wiki</strong>' not in wiki_html:
-        raise CheckFailure("Wiki service title missing")
-    if gp_service_tabs(wiki_html) != ["개요", "법령", "보고", "세무", "체크리스트"]:
-        raise CheckFailure(f"Wiki topic tabs mismatch: got {gp_service_tabs(wiki_html)}")
-    if wiki_html.count('id="wikiSearch"') != 1:
-        violations.append("pef-wiki.html:duplicate wikiSearch")
-
     if violations:
-        raise CheckFailure(f"Forbidden generated LP/Wiki wording/markup: {', '.join(violations)}")
-    return [f"generated_lp_wiki_contract=ok lp_profiles_checked={len(profile_paths)} wiki=ok"]
+        raise CheckFailure(f"Forbidden generated LP wording/markup: {', '.join(violations)}")
+    return [f"generated_lp_contract=ok lp_profiles_checked={len(profile_paths)} lp_notice_details_checked={len(detail_paths)}"]
 
 
 def check_remote(base_url: str) -> list[str]:
@@ -330,7 +464,7 @@ def check_remote(base_url: str) -> list[str]:
         return []
     base = base_url.rstrip("/") + "/"
     checked: list[str] = []
-    for relative_path in ["", "market.html", "gps.html", "db.html", "pef-wiki.html"]:
+    for relative_path in ["", "market.html", "gps.html", "lp-official-notices.html"]:
         url = base + relative_path
         request = Request(url, headers={"User-Agent": "kpef-public-frontend-check/1.0"})
         try:
@@ -347,16 +481,25 @@ def check_remote(base_url: str) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check public frontend publishing contract")
     parser.add_argument("--base-url", default="", help="Optional deployed site URL to smoke-check")
+    parser.add_argument(
+        "--public-dir",
+        type=Path,
+        default=NEWSLETTER_SITE_DIR,
+        help="Local static site directory to check. Defaults to services/newsletter/deploy/site.",
+    )
     args = parser.parse_args()
+    global PUBLIC_DIR
+    PUBLIC_DIR = args.public_dir
 
     checks = [
         check_required_files,
         check_bottom_nav,
         check_visible_text,
         check_public_source_terms,
+        check_newsletter_frontend_contract,
+        check_public_lp_json_contract,
         check_generated_gp_contract,
         check_generated_lp_wiki_contract,
-        check_public_db_amount_contract,
         check_brief_initial_date_guard,
     ]
     output: list[str] = []

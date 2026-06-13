@@ -14,6 +14,36 @@ LP_NON_PUBLIC_MONITOR_STATUSES = {
     "unvalidated",
     "draft",
 }
+LP_OFFICIAL_CANDIDATE_SOURCE_DENYLIST = {
+    # The venture portal listing feed is useful as a discovery source, but its
+    # scraped rows often carry portal navigation text instead of a clean
+    # business title. Keep it out of public pages until rows are reviewed.
+    "vcs_investment_notice",
+}
+LP_OFFICIAL_CANDIDATE_SOURCE_ALLOWLIST = {
+    "cu_notice",
+    "cwma_asset_manager_selection",
+    "geps_manager_selection_result",
+    "kafi_apfs_notice",
+    "kbiz_notice",
+    "kdb_ngf_notice",
+    "kdb_notice",
+    "kdic_notice",
+    "kexim_notice",
+    "kfcc_mg_notice",
+    "kfcc_tender_notice",
+    "kgrowth_notice",
+    "kobc_notice",
+    "koreapost_asset_notice",
+    "ktcu_notice",
+    "kvic_notice",
+    "moel_asset_notice",
+    "nps_manager_selection",
+    "pmaa_bid_notice",
+    "sema_bid_notice",
+    "sema_kofia_notice",
+    "tp_notice",
+}
 
 
 def public_visible_value(value: object) -> bool:
@@ -27,9 +57,8 @@ def is_public_lp_notice_row(
 ) -> bool:
     """Return True for public LP notice rows.
 
-    News-derived candidates stay hidden until reviewed. Official-channel
-    candidates can be displayed on official-notice surfaces because the source
-    itself is the validation anchor.
+    Candidate rows stay hidden unless the caller explicitly opts into official
+    candidates and the source parser is public-ready.
     """
     if not public_visible_value(row.get("public_visible", 1)):
         return False
@@ -44,7 +73,14 @@ def is_public_lp_notice_row(
         return False
     monitor_status = str(row.get("monitor_status") or "").strip().lower()
     if monitor_status in LP_NON_PUBLIC_MONITOR_STATUSES:
-        if (require_official or allow_official_candidates) and source_type == "official" and monitor_status == "candidate":
+        source_code = str(row.get("source_code") or "").strip().lower()
+        if (
+            allow_official_candidates
+            and source_type == "official"
+            and monitor_status == "candidate"
+            and source_code in LP_OFFICIAL_CANDIDATE_SOURCE_ALLOWLIST
+            and source_code not in LP_OFFICIAL_CANDIDATE_SOURCE_DENYLIST
+        ):
             return True
         return False
     return True

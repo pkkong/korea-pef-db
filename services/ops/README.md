@@ -5,14 +5,8 @@ product area.
 
 ## Nightly Data Refresh
 
-The nightly refresh keeps GP, LP, People, dashboard, and public-safe service
-data moving even when the newsletter is not being actively edited.
-
-Install the macOS job:
-
-```bash
-services/ops/scripts/install_data_nightly_refresh_launchd.sh --hour 1 --minute 30
-```
+The refresh script is a manual source rebuild utility. It is not a scheduler and
+does not publish to GitHub Pages. Recurring operation belongs in GitHub Actions.
 
 Run once without installing:
 
@@ -20,6 +14,5 @@ Run once without installing:
 services/ops/scripts/run_data_nightly_refresh.sh
 ```
 
-By default this job does not push the public newsletter mirror. It refreshes
-local DB-derived outputs and rebuilds the deploy bundle so the scheduled
-newsletter publisher can publish one consistent site.
+It refreshes DB-derived outputs and rebuilds the deploy bundle for validation.
+Use the central GitHub Actions workflow for publication.

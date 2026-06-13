@@ -9,7 +9,6 @@ CSV monitor for downstream site builders.
 - Compatibility path: `python3 scripts/build_lp_commitment_monitor.py`
 - Service path: `python3 services/lp/src/build_lp_commitment_monitor.py`
 - Profile backlog: `python3 services/lp/src/build_lp_profile_backlog.py`
-- Background runner: `services/lp/scripts/run_lp_background_collector.sh`
 
 Both entrypoints call the same implementation in
 `services/lp/src/build_lp_commitment_monitor.py`.
@@ -31,14 +30,16 @@ validation run from deleting the historical official notice set.
 
 ## Profile Expansion Model
 
-The public LP service shows every tracked LP institution, even when a profile is
-still thin. Profile quality grows through a separate backlog instead of hiding
-unfilled LPs:
+The public LP service does not show every tracked LP institution. Public
+directory visibility requires `display_enabled=1`, a direct GP/manager selection
+role or an explicit strategic exception, and enough public facts to avoid an
+empty profile. Thin or unproven institutions stay in the candidate/OCIO pool and
+grow through a separate backlog:
 
 - `profile_ready`: enough public facts and at least one notice signal
 - `profile_gap`: some public facts exist, but one or more target sections are missing
 - `notice_only`: official/news notices exist, but the profile facts are not built yet
-- `seed_only`: the LP is in the tracked universe, but facts and notices are still empty
+- `seed_only`: the LP is in the tracked universe, but facts and notices are still empty; keep hidden unless explicitly approved
 
 Build the profile backlog:
 
@@ -51,26 +52,15 @@ This writes `exports/lp_profile_backlog_latest.csv` and
 reviewer or a research agent to add source-backed rows to
 `data/lp_profile_facts.csv`.
 
-## Background Job
+## Operating Schedule
 
-For continuous collection on the local Mac, install the LP collector:
-
-```bash
-services/lp/scripts/install_lp_background_collector_launchd.sh --interval-hours 6
-```
-
-The job runs:
+Recurring LP collection and public publishing should be handled by GitHub-managed workflows, not a local Mac scheduler.
+The operating sequence is:
 
 1. LP commitment notice monitor
 2. LP profile research backlog builder
-3. Newsletter/LP/GP static bundle rebuild
-4. GitHub Pages mirror publish, unless `LP_COLLECTOR_PUBLISH=0`
-
-Use `--no-push` on the runner for a validation pass:
-
-```bash
-services/lp/scripts/run_lp_background_collector.sh --no-push
-```
+3. LP static bundle rebuild
+4. GitHub Pages mirror publish through the central deployment workflow
 
 ## CSV Review Queue
 

@@ -127,7 +127,7 @@ KPEF Daily의 1차 섹션은 `AI & PE`, `국민성장펀드`, `Deal`, `LP`, `GP`
 - 공개 Daily 화면은 최근 날짜별 `daily_news_brief_YYYYMMDD.md`를 함께 포함하므로, 사용자는 날짜 선택으로 과거 브리프의 주요 뉴스도 볼 수 있다.
 - 매일 뉴스 파이프라인은 `scripts/build_service_integration_worklist.py`도 실행해서 뉴스 노출 GP, People DB 커버리지, 담당자별 다음 액션을 하나의 작업 큐로 갱신한다.
 - 공개 뉴스 화면은 확인된 GP/관련 인물 같은 독자용 맥락만 표시한다. `프로필 보강`, `식별자 보강`, 리뷰 큐, 작업 담당자 같은 운영 상태는 공개 화면에 노출하지 않는다.
-- 공개 DB/서비스 화면은 통합 빌드가 만든 `services/newsletter/deploy/site/` bundle을 기준으로 배포한다. legacy `public/` 경로는 로컬 확인이나 호환 산출물일 수 있으므로 최신 배포 원천으로 보지 않는다.
+- 공개 DB/서비스 화면은 통합 빌드가 만든 `services/newsletter/deploy/site/` bundle을 기준으로 배포한다. root `public/` 경로는 source repo에서 쓰지 않는 ignored 생성물이다.
 - 당일 산출물과 자동화 상태를 수동으로 점검하려면 `services/newsletter/scripts/validate_daily_news_today.ps1`을 실행한다.
 - 코드 변경 후 전체 점검은 `services/newsletter/scripts/check_daily_news_pipeline.ps1`을 실행한다. 이 스크립트는 Python 컴파일, 핵심 로직 테스트, 당일 산출물 검증을 순서대로 실행한다.
 - 검증 항목은 산출물 존재 여부, 최근 24시간 기준 문구, 중복 링크, Google News 중계 링크, 리뷰 카테고리 값, DB 최신 실행 상태, 네이버 API 설정, Windows 예약 작업 상태다.

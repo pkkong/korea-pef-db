@@ -29,6 +29,21 @@ NOTICE_BUSINESS_STOP_TERMS = [
     "결과",
 ]
 
+PROGRAM_NOISE_TERMS = [
+    "벤처투자마트",
+    "벤처투자종합포털",
+    "주식유통정보",
+    "비상장주식거래플랫폼",
+    "VC구주유통망",
+    "신청 정보 확인",
+    "동의하지 않은 경우",
+    "경우에는 본회",
+    "부합하는 경우",
+    "목록에서 발견",
+    "고객센터",
+    "FAQ",
+]
+
 LP_NON_BUSINESS_ROUNDS = {"상반기", "하반기", "정시", "수시"}
 
 LP_NOTICE_NOISE_PATTERNS = [
@@ -173,6 +188,8 @@ def normalized_notice_text(value: object) -> str:
 def program_is_business_specific(candidate: str) -> bool:
     if not candidate:
         return False
+    if any(term in candidate for term in PROGRAM_NOISE_TERMS):
+        return False
     normalized = normalize_program_name_text(normalized_notice_text(candidate))
     if not normalized or is_generic_program_name(normalized):
         return False
@@ -182,6 +199,8 @@ def program_is_business_specific(candidate: str) -> bool:
     if re.search(r"(최종|선정|선정결과|서류심사|결과|공고|개최|운영|자료)", cleaned):
         return False
     if re.search(r"(운용계획상|투자하고자|보유하고|최근\s*3년|이해관계|제반\s*장치|대응방안)", cleaned):
+        return False
+    if re.search(r"(가치형이나|고배당형에|동의하지|신청\s*정보|공지\s*-|FAQ)", cleaned):
         return False
     if re.search(r"(목록에서\s*발견|법령|위반|자산건전성|도덕적|사회적\s*물의|운용사로서|사실상)", cleaned):
         return False
@@ -345,8 +364,7 @@ def notice_platform_name(row: dict[str, object]) -> str:
 
 def infer_notice_program_name(row: dict[str, object]) -> str:
     stored = clean_program_candidate(row.get("program_name", row.get("programName")))
-    if stored and program_is_specific_and_not_platform_only(stored):
-        return stored
+    best_title_candidate = ""
     for key in ["title", "displayTitle"]:
         title_text = normalize_whitespace(row.get(key))
         if not title_text:
@@ -358,14 +376,25 @@ def infer_notice_program_name(row: dict[str, object]) -> str:
             if program_is_specific_and_not_platform_only(clean_program_candidate(candidate))
         ]
         if title_specific_candidates:
-            return max(title_specific_candidates, key=len)
+            candidate = max(title_specific_candidates, key=len)
+            if len(candidate) > len(best_title_candidate):
+                best_title_candidate = candidate
         title_fallback = clean_program_candidate(title_text)
         if (
             title_fallback
             and program_is_specific_and_not_platform_only(title_fallback)
             and any(term in title_text for term in ["운용사", "출자사업", "공모", "투자조합", "대체투자상품", "대체투자"])
         ):
-            return title_fallback
+            if len(title_fallback) > len(best_title_candidate):
+                best_title_candidate = title_fallback
+    if stored and program_is_specific_and_not_platform_only(stored):
+        title_blob = business_key_text(" ".join(str(row.get(key) or "") for key in ["title", "displayTitle", "raw_excerpt", "rawExcerpt"]))
+        stored_key = business_key_text(stored)
+        if best_title_candidate and stored_key and stored_key not in title_blob:
+            return best_title_candidate
+        return stored
+    if best_title_candidate:
+        return best_title_candidate
     text = normalize_whitespace(
         " ".join(
             str(value or "")

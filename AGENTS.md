@@ -74,7 +74,7 @@ Every non-trivial subagent task should state:
 - GP Profile / Market Data owns GP identity, alias, profile evidence, fund/manager market data, `scripts/build_gp_profile_master.py`, `scripts/apply_gp_profile_evidence.py`, `data/gp_profile_evidence.csv`, and `data/gp_alias_merge_rules.csv`.
 - PEF Wiki Documentation owns wiki content, source-linked practical guidance, glossary, and `services/newsletter/src/pef_wiki_pages.py` until the wiki is moved to a separate markdown source structure.
 - Verifier / Deploy owns test selection, build checks, public-site checks, deployment readiness, and post-publish verification. Verifier does not decide product content.
-- The Project Lead owns cross-service sequencing and may lock shared outputs such as `services/newsletter/deploy/site/`, `public/`, generated exports, and deployment branches to avoid conflicts.
+- The Project Lead owns cross-service sequencing and may lock shared outputs such as `services/newsletter/deploy/site/`, generated exports, and deployment branches to avoid conflicts.
 
 ## Coordination Rules
 
@@ -85,7 +85,7 @@ Every non-trivial subagent task should state:
 - If the worktree is dirty, stage and commit only the files that belong to the current task.
 - Keep generated runtime artifacts, local secrets, databases, logs, and deploy bundles out of source commits unless the user explicitly asks otherwise.
 - Do not let two agents edit the same file or generated output at the same time.
-- For generated public/deploy files, finish source edits first, then have Verifier/Deploy validate or publish in a controlled final step.
+- For generated deploy files, finish source edits first, then have Verifier/Deploy validate or publish in a controlled final step.
 - If the user gives several independent tasks, keep at least one subagent working in the background while the Project Lead handles the next user-facing or integration task.
 - If no delegation is used for a non-trivial task, explain briefly why the task was too tightly coupled, urgent, or small to split.
 
@@ -95,14 +95,17 @@ Every non-trivial subagent task should state:
 - Newsletter deployment publishes the generated static site to `pkkong/kpef-newsletter` on the `gh-pages` branch.
 - Public pages are static generated HTML. Crawlers, CSV imports, or DB updates do not update the public website by themselves; a source build and publish step must regenerate and deploy the HTML.
 - Public view taxonomy is a durable product rule: articles use list views, GP/LP directories use table-like directory views, GP/LP entities use profile detail views, LP notices use row-card notice views, and Wiki uses document views.
-- Local secrets are not committed. The local daily news env file is `config/daily_news.env`; GitHub Actions uses repository secrets.
+- Local secrets are not committed. Newsletter operating secrets live in GitHub Actions repository secrets; `config/daily_news.env` is not an operating path.
 - Product and role-specific operating briefs are in `docs/agent_operating_briefs.md`.
+- Product/service responsibility boundaries are in `docs/product_operating_model.md`.
+- DB/public-view/build data contracts are in `docs/data_operating_model.md`.
 - The Project Lead control document is `docs/project_lead_control_center.md`. Use it as the current source of truth for active service ownership, product decisions, verification commands, deployment state, and handoff notes before starting or delegating substantial work.
 - Public UX/UI rules are durable instructions in `docs/design_system.md`: benchmark the public service against InnoForest-style data directories, keep the unified `브리프 / LP / GP` bottom nav while Wiki is hidden, use table-like rows for LP/GP directories, avoid card-heavy layouts, and remove operator/internal wording from public pages.
+- Wiki is not an active routine public-build target until the user re-plans it. Preserve explicit Wiki builder support, but do not include Wiki in default active public builds or navigation.
 
 ## Cross-Chat / Handoff Discipline
 
 - If the user moves a service to another chat or asks another agent to work on it, treat that as a coordination event, not as lost context.
-- The Project Lead must keep `docs/project_lead_control_center.md`, `docs/service_quality_backlog.md`, and any service-specific rules current enough that another chat can start without asking the user to repeat decisions.
+- The Project Lead must keep `docs/project_lead_control_center.md`, `docs/product_operating_model.md`, `docs/data_operating_model.md`, `docs/service_quality_backlog.md`, and any service-specific rules current enough that another chat can start without asking the user to repeat decisions.
 - Any handoff to another chat, subagent, or future run must include current product decisions, owned files, forbidden files, verification commands, known regressions, and deployment status.
 - When a service is owned in another chat, do not silently diverge. Read the control center first, update durable docs when decisions change, and only integrate changes after source build and verification.

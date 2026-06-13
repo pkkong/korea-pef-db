@@ -155,8 +155,6 @@ jobs:
               "assets/service.js",
               "apple-touch-icon.png",
           }
-          if requested_services & {"lp", "gp", "wiki"}:
-              required.update({"db.html", "assets/app.css", "assets/app.js", "data/service_data.json"})
           if "lp" in requested_services:
               required.update({"lp-notices.html", "lp-official-notices.html"})
           if "gp" in requested_services:

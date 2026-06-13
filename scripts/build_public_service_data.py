@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from lp_public_visibility import is_public_lp_notice_row, public_visible_value
@@ -16,7 +17,7 @@ from lp_public_visibility import is_public_lp_notice_row, public_visible_value
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_IN = ROOT / "dashboard" / "data" / "dashboard_data.json"
-DEFAULT_OUT = ROOT / "public" / "data" / "service_data.json"
+DEFAULT_OUT = ROOT / "services" / "newsletter" / "deploy" / "site" / "data" / "service_data.json"
 
 PUBLIC_KEYS = [
     "meta",
@@ -88,7 +89,6 @@ LP_PROFILE_KEYS = [
     "focus_asset_classes",
     "service_priority",
     "aliases",
-    "notes",
     "notice_count",
     "official_notice_count",
     "news_notice_count",
@@ -99,10 +99,24 @@ LP_PROFILE_KEYS = [
     "commitment_amount_krw_100mn",
     "latest_event_date",
     "latest_announced_date",
-    "latest_discovered_at",
     "latest_notice_title",
     "latest_notice_url",
     "latest_notice_event_type",
+]
+LP_PUBLIC_ASSET_CLASS_BLOCKLIST = {"OCIO"}
+
+LP_NOTICE_NOISE_TERMS = [
+    "제출서식",
+    "제출서류",
+    "FAQ",
+    "담당팀 연락처",
+    "동의하지 않은 경우",
+    "가치형이나 고배당형",
+    "벤처투자마트",
+    "벤처투자종합포털",
+    "주식유통정보",
+    "비상장주식거래플랫폼",
+    "신청 정보 확인",
 ]
 
 LP_NOTICE_KEYS = [
@@ -111,7 +125,6 @@ LP_NOTICE_KEYS = [
     "lp_name",
     "lp_type",
     "default_team",
-    "source_code",
     "source_type",
     "event_type",
     "event_date",
@@ -131,16 +144,9 @@ LP_NOTICE_KEYS = [
     "program_size_krw_100mn",
     "allocation_amount_krw_100mn",
     "amount_type",
-    "amount_confidence",
     "commitment_amount_krw_100mn",
     "selected_gp_names",
     "contact_team",
-    "confidence",
-    "confidence_note",
-    "public_visible",
-    "raw_excerpt",
-    "discovered_at",
-    "updated_at",
 ]
 
 LP_FACT_KEYS = [
@@ -152,11 +158,8 @@ LP_FACT_KEYS = [
     "as_of_date",
     "source_name",
     "source_url",
-    "confidence",
     "notes",
     "sort_order",
-    "public_visible",
-    "updated_at",
 ]
 
 LP_NOTICE_GP_LINK_KEYS = [
@@ -166,8 +169,6 @@ LP_NOTICE_GP_LINK_KEYS = [
     "gp_name",
     "matched_alias",
     "link_source",
-    "confidence",
-    "created_at",
 ]
 
 LP_NOTICE_NEWS_LINK_KEYS = [
@@ -204,19 +205,13 @@ LP_SELECTED_GP_COMPARE_KEYS = [
     "commitment_amount_krw_100mn",
     "amount_krw_100mn",
     "amount_type",
-    "amount_confidence",
     "source_gp_id",
     "gp_name",
     "matched_alias",
-    "gp_link_confidence",
-    "confidence",
     "source_type",
-    "source_code",
     "notice_title",
     "source_url",
     "document_url",
-    "discovered_at",
-    "updated_at",
 ]
 
 LP_LIFECYCLE_COMPARE_KEYS = [
@@ -245,7 +240,6 @@ LP_LIFECYCLE_COMPARE_KEYS = [
     "latest_notice_date",
     "latest_event_type",
     "latest_stage",
-    "latest_confidence",
     "next_application_deadline",
     "latest_application_deadline",
     "deadline_status",
@@ -309,6 +303,47 @@ def notice_year(row: dict[str, object]) -> int | None:
         if len(value) >= 4 and value[:4].isdigit():
             return int(value[:4])
     return None
+
+
+def is_public_lp_profile(row: dict[str, object]) -> bool:
+    if str(row.get("display_enabled") or "1").strip().lower() in {"0", "false", "no", "n"}:
+        return False
+    if str(row.get("profile_status") or "").strip().lower() in {"candidate", "draft", "internal"}:
+        return False
+    notes = str(row.get("notes") or "").lower()
+    note_marks_candidate = "candidate" in notes or "후보" in notes or "ocio" in notes
+    if note_marks_candidate and int(numeric(row.get("notice_count"))) <= 0:
+        return False
+    return True
+
+
+def public_lp_asset_classes(value: object) -> str:
+    parts = [
+        part.strip()
+        for part in str(value or "").split(";")
+        if part.strip() and part.strip().upper() not in LP_PUBLIC_ASSET_CLASS_BLOCKLIST
+    ]
+    return ";".join(parts)
+
+
+def is_stale_public_notice_deadline(row: dict[str, object]) -> bool:
+    event_type = str(row.get("event_type") or "")
+    if event_type not in {"new_notice", "deadline_soon"}:
+        return False
+    event_date = str(row.get("event_date") or row.get("announced_date") or "")[:10]
+    deadline = str(row.get("application_deadline") or "")[:10]
+    return bool(
+        re.fullmatch(r"20\d{2}-\d{2}-\d{2}", event_date)
+        and re.fullmatch(r"20\d{2}-\d{2}-\d{2}", deadline)
+        and deadline < event_date
+    )
+
+
+def is_clean_public_lp_notice(row: dict[str, object]) -> bool:
+    if is_stale_public_notice_deadline(row):
+        return False
+    text = " ".join(str(row.get(key) or "") for key in ["title", "program_name", "raw_excerpt"])
+    return not any(term in text for term in LP_NOTICE_NOISE_TERMS)
 
 
 def build_lp_notice_stats(notices: list[dict[str, object]]) -> dict[str, dict[str, object]]:
@@ -394,7 +429,7 @@ def build_lp_institution_stats(
                 "lp_name": institution.get("lp_name") or "",
                 "lp_type": institution.get("lp_type") or "",
                 "default_team": institution.get("default_team") or "",
-                "focus_asset_classes": institution.get("focus_asset_classes") or "",
+                "focus_asset_classes": public_lp_asset_classes(institution.get("focus_asset_classes")),
                 "service_priority": institution.get("service_priority") or "",
                 "notice_count": stats.get("notice_count", 0),
                 "allocation_amount_krw_100mn": stats.get("allocation_amount_krw_100mn", 0),
@@ -448,7 +483,9 @@ def build_payload(data: dict[str, object]) -> dict[str, object]:
     public_lp_notice_rows = [
         row
         for row in data.get("lp_commitment_notices", [])
-        if isinstance(row, dict) and is_public_lp_notice_row(row, allow_official_candidates=True)
+        if isinstance(row, dict)
+        and is_public_lp_notice_row(row, require_official=True, allow_official_candidates=True)
+        and is_clean_public_lp_notice(row)
     ]
     public_lp_notice_ids = {str(row.get("notice_id") or "") for row in public_lp_notice_rows if row.get("notice_id") not in {None, ""}}
     lp_notice_stats = build_lp_notice_stats(public_lp_notice_rows)
@@ -465,9 +502,12 @@ def build_payload(data: dict[str, object]) -> dict[str, object]:
         if isinstance(row, dict)
     ]
     payload["lp_profiles"] = [
-        project(with_lp_notice_stats(row, lp_notice_stats), LP_PROFILE_KEYS)
+        project(merged_row, LP_PROFILE_KEYS)
         for row in data.get("lp_profiles", [])
         if isinstance(row, dict)
+        for merged_row in [with_lp_notice_stats(row, lp_notice_stats)]
+        for merged_row in [{**merged_row, "focus_asset_classes": public_lp_asset_classes(merged_row.get("focus_asset_classes"))}]
+        if is_public_lp_profile(merged_row)
     ]
     payload["lp_institution_stats"] = build_lp_institution_stats(lp_institutions, lp_notice_stats)
     payload["lp_commitment_yearly_stats"] = build_lp_yearly_stats(public_lp_notice_rows)

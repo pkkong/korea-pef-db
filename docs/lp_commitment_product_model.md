@@ -15,7 +15,7 @@ LP는 GP Stat의 보조 필터가 아니라 별도 제품 축이다. 본체는 �
   공개 인물, 확인 필요 데이터 공백.
 - 공고 소스 레지스트리: 국민연금 거래기관 선정공고, 벤처투자종합포털 출자공고.
 - 후보 생성: 공식 공고 목록과 최근 뉴스 클리핑에서 출자사업/위탁운용/선정/숏리스트 관련 항목을 `lp_commitment_notice`에 적재.
-- 서비스 노출: `dashboard/data/dashboard_data.json`, `public/data/service_data.json`, 공개 DB LP 탭.
+- 서비스 노출: `services/newsletter/deploy/site/` 공개 bundle, LP 디렉토리, LP 출자공고.
 
 ## 핵심 테이블
 

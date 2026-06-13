@@ -78,7 +78,7 @@ HTML files at build time.
 - Do not show Wiki in public navigation until the Wiki product is re-planned.
 - Do not add top-level service tabs above public content.
 - Page-local controls may exist, but they must be scoped to the current screen:
-  for example `시장 / GP / 펀드 / LP / 비교` inside `db.html`.
+  for example service-local tabs inside GP or LP pages.
 - The same bottom nav should appear on mobile and desktop.
 - `저장` is not a global tab until saved items work across news, LP profiles, GP
   profiles, and Wiki documents. Do not show news-only bookmark controls in the
@@ -174,9 +174,10 @@ variants.
 - Newsletter top tabs may remain as placeholders for planned views, but inactive
   tabs should be low-contrast text tabs rather than heavy disabled controls.
 - Bottom navigation is reserved for primary service destinations. Keep it to
-  Brief, LP, GP, and Wiki until saved items work across news, LP profiles, GP
-  profiles, and wiki documents. News-only saved/bookmark controls should stay
-  hidden from the public newsletter until that destination exists.
+  Brief, LP, and GP while Wiki is hidden. Saved items can become a global tab
+  only after they work across news, LP profiles, GP profiles, and future wiki
+  documents. News-only saved/bookmark controls should stay hidden from the
+  public newsletter until that destination exists.
 
 ## Row Anatomy
 
@@ -281,6 +282,11 @@ Use the newsletter screen as the reference for shared public UI polish.
   historical commitments and official notices, known GP relationships,
   decision-makers and consultants when public, resources/RFPs/minutes/reports,
   and directly related news.
+- LP notice screens are the primary workflow surface for the LP service. Keep
+  the institution directory unchanged unless explicitly requested, and improve
+  notices by grouping current/open notices, selected results, and historical
+  notices with clear deadline, amount, institution, source, and attachment
+  affordances.
 - Profile fact rows should not print long source strings such as source name,
   date, and confidence under every value. When a fact needs a public source
   link, use a small icon-only link for homepage, document, article, or LinkedIn

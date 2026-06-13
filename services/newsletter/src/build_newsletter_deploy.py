@@ -187,7 +187,6 @@ def write_health_file(site_dir: Path, result: dict[str, str]) -> None:
         "gp_active_count": int(result.get("active_gp_count", "0") or 0),
         "gp_profile_page_count": int(result.get("top_gp_page_count", "0") or 0),
         "gp_news_link_count": int(result.get("news_link_count", "0") or 0),
-        "public_db_page": (site_dir / "db.html").exists(),
     }
     (site_dir / "health.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -432,24 +431,14 @@ def write_pef_wiki_page(site_dir: Path, report_date: str) -> None:
     )
 
 
-def write_public_db_page(site_dir: Path) -> None:
-    public_dir = REPO_ROOT / "public"
-    required = [
-        public_dir / "db.html",
-        public_dir / "assets" / "app.css",
-        public_dir / "assets" / "app.js",
-        public_dir / "data" / "service_data.json",
-    ]
-    missing = [str(path.relative_to(REPO_ROOT)) for path in required if not path.exists()]
-    if missing:
-        raise FileNotFoundError(f"Missing public DB files: {', '.join(missing)}")
-
-    (site_dir / "assets").mkdir(parents=True, exist_ok=True)
-    (site_dir / "data").mkdir(parents=True, exist_ok=True)
-    shutil.copy2(public_dir / "db.html", site_dir / "db.html")
-    shutil.copy2(public_dir / "assets" / "app.css", site_dir / "assets" / "app.css")
-    shutil.copy2(public_dir / "assets" / "app.js", site_dir / "assets" / "app.js")
-    shutil.copy2(public_dir / "data" / "service_data.json", site_dir / "data" / "service_data.json")
+def remove_legacy_public_db_files(site_dir: Path) -> None:
+    for relative_path in [
+        "db.html",
+        "assets/app.css",
+        "assets/app.js",
+        "data/service_data.json",
+    ]:
+        (site_dir / relative_path).unlink(missing_ok=True)
 
 
 def load_selected_gp_exclusion_names(path: Path = DEFAULT_LP_SELECTED_GP_EXCLUSIONS) -> set[str]:
@@ -5411,7 +5400,7 @@ def main() -> int:
     result["ktcu_fact_count"] = str(len(read_ktcu_payload(lp_code=KTCU_CODE, profile_codes=read_lp_profile_codes()).get("facts") or []))
     result.update({key: str(value) for key, value in write_gp_pages(site_dir, DEFAULT_DB, args.date).items()})
     write_pef_wiki_page(site_dir, args.date)
-    write_public_db_page(site_dir)
+    remove_legacy_public_db_files(site_dir)
     (site_dir / "admin.html").unlink(missing_ok=True)
     write_health_file(site_dir, result)
     write_static_support_files(site_dir)

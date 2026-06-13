@@ -15,7 +15,6 @@ LP_MONITOR_DAYS="${DATA_REFRESH_LP_MONITOR_DAYS:-365}"
 LP_LIMIT_PER_SOURCE="${DATA_REFRESH_LP_LIMIT_PER_SOURCE:-80}"
 GP_PROFILE_LIMIT="${DATA_REFRESH_GP_PROFILE_LIMIT:-120}"
 ARCHIVE_LIMIT="${NEWSLETTER_ARCHIVE_LIMIT:-30}"
-PUBLISH="${DATA_REFRESH_PUBLISH:-0}"
 LOCK_DIR="$REPO_ROOT/exports/ops/data-nightly-refresh.lock"
 
 usage() {
@@ -25,11 +24,11 @@ Usage: services/ops/scripts/run_data_nightly_refresh.sh [options]
 Options:
   --date YYYY-MM-DD       Data refresh date. Defaults to today's date in Asia/Seoul.
   --site-date YYYY-MM-DD  Newsletter site date to rebuild. Defaults to latest local brief date.
-  --publish               Also push the public newsletter mirror after rebuilding.
+  --publish               Disabled. Publishing runs only in GitHub Actions.
   -h, --help              Show this help.
 
 Environment overrides:
-  DATA_REFRESH_REPORT_DATE, DATA_REFRESH_SITE_DATE, DATA_REFRESH_PUBLISH
+  DATA_REFRESH_REPORT_DATE, DATA_REFRESH_SITE_DATE
   DATA_REFRESH_LP_MONITOR_DAYS, DATA_REFRESH_LP_LIMIT_PER_SOURCE
   DATA_REFRESH_GP_PROFILE_LIMIT, NEWSLETTER_ARCHIVE_LIMIT, PYTHON_BIN
 USAGE
@@ -46,8 +45,8 @@ while [ "$#" -gt 0 ]; do
       shift 2
       ;;
     --publish)
-      PUBLISH=1
-      shift
+      echo "Local publishing is disabled. Use the GitHub Actions workflow instead." >&2
+      exit 2
       ;;
     -h|--help)
       usage
@@ -93,15 +92,7 @@ echo "data_nightly_refresh_start=$(date -u +%FT%TZ)"
 echo "repo_root=$REPO_ROOT"
 echo "report_date=$REPORT_DATE"
 echo "site_date=$SITE_DATE"
-echo "publish=$PUBLISH"
 echo "log_file=$LOG_FILE"
-
-if [ -f "$REPO_ROOT/config/daily_news.env" ]; then
-  set -a
-  # shellcheck disable=SC1091
-  . "$REPO_ROOT/config/daily_news.env"
-  set +a
-fi
 
 "$PYTHON_BIN" scripts/run_pipeline.py \
   --lp-monitor-days "$LP_MONITOR_DAYS" \
@@ -114,10 +105,6 @@ fi
 "$PYTHON_BIN" scripts/build_site_bundle.py \
   --date "$SITE_DATE" \
   --archive-limit "$ARCHIVE_LIMIT" \
-  --services newsletter,lp,gp,wiki
-
-if [ "$PUBLISH" = "1" ]; then
-  services/newsletter/scripts/publish_newsletter_pages_local.sh --date "$SITE_DATE" --skip-generate
-fi
+  --services newsletter,lp,gp
 
 echo "data_nightly_refresh_finish=$(date -u +%FT%TZ)"

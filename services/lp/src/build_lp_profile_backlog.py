@@ -16,7 +16,7 @@ REPO_ROOT = SERVICE_ROOT.parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from services.newsletter.src.daily_news_common import today_seoul, write_csv_rows  # noqa: E402
+from services.shared.src.daily_news_common import today_seoul, write_csv_rows  # noqa: E402
 
 
 DEFAULT_DB = REPO_ROOT / "db" / "private_equity.db"

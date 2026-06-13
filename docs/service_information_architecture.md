@@ -21,13 +21,16 @@ The corresponding entity data dictionary is maintained in `entity_data_model.md`
 
 ## Current Public IA
 
-The public service has four primary user-facing destinations:
+The current public service has three active user-facing destinations:
 
 - `브리프`: daily market/news reading. News-only saved articles are a local
   brief utility, not a global destination.
 - `LP`: LP directory, official commitment notices, selected-GP evidence, and LP facts.
 - `GP`: GP directory/profile, current commitment amount, funds, people, and source evidence.
-- `Wiki`: practical guides and definitions linked from the public service.
+
+`Wiki` is a planned document service, but it is hidden from public navigation and
+routine public builds until the user re-plans it. The current operating source
+of truth is `docs/product_operating_model.md`.
 
 The global bottom navigation order is fixed as `브리프 / LP / GP` on both
 mobile and desktop. Wiki should not appear in public navigation until it is
@@ -41,25 +44,28 @@ layout for LP/GP directories. Detailed visual rules live in `design_system.md`.
 ## Public Build Ownership
 
 The public site is one static GitHub Pages product, but build ownership is split
-by service.
+by service. The data/public-view contract is maintained in
+`docs/data_operating_model.md`.
 
 - Newsletter owns daily brief collection, article classification, archive data,
   and `index.html` / `daily-news.html`.
 - LP owns LP directory pages, official notice pages, notice detail pages, and LP
   profile pages.
 - GP owns Market, GP directory, and GP profile pages.
-- Wiki owns document pages and source-linked practical guidance.
+- Wiki owns document pages and source-linked practical guidance only when
+  explicitly selected. It is not part of the active routine public build.
 - Shared build/deploy owns the final site bundle, common static support files,
   health metadata, zip artifact, and GitHub Pages publishing contract.
 
 The preferred build entry point is:
 
 ```bash
-python3 scripts/build_site_bundle.py --services newsletter,lp,gp,wiki --date YYYY-MM-DD
+python3 scripts/build_site_bundle.py --services newsletter,lp,gp --date YYYY-MM-DD
 ```
 
 Use a narrower service list for targeted rebuilds, such as `--services lp`.
-Generated HTML in `public/` or `services/newsletter/deploy/site/` should not be
+Use `--services wiki` only when Wiki work is explicitly reopened.
+Generated HTML in `services/newsletter/deploy/site/` should not be
 hand-edited; service source renderers and the integrated bundle builder are the
 durable control points.
 
@@ -343,8 +349,9 @@ Core data:
 
 Current status:
 
-- Not built.
-- Should be built as source-linked markdown first, not as a complex app.
+- Existing renderer can still create `pef-wiki.html` when explicitly requested.
+- Wiki is not an active public navigation item or routine build target.
+- Reopen this section only after a separate Wiki product plan is approved.
 
 ## Cross-Entity Links
 
@@ -400,7 +407,9 @@ Every major record should have a visible confidence level.
 
 ## Current Product Boundary
 
-The current working product should be treated as an operator-assisted prototype.
+The current working product is public-facing for the core brief, LP, GP, and
+market flows, but still operator-assisted for data collection and review. Wiki is
+hidden until replanned.
 
 Public-facing enough:
 

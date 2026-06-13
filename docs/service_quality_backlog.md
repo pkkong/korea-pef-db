@@ -1,18 +1,44 @@
 # Service Quality Backlog
 
-이 문서는 뉴스레터, LP, GP, PEF Wiki 담당 에이전트가 다음 작업을 이어받기 위한 제품 품질 백로그다. 공개 화면에는 운영 상태, 제작자 설명, 원천 데이터 필드명을 노출하지 않는 것을 기본 원칙으로 한다.
+이 문서는 뉴스레터, LP, GP 담당 에이전트가 다음 작업을 이어받기 위한 제품 품질 백로그다. 공개 화면에는 운영 상태, 제작자 설명, 원천 데이터 필드명을 노출하지 않는 것을 기본 원칙으로 한다. Wiki는 재기획 전까지 active backlog가 아니라 parked backlog로 둔다.
 
 ## 공통
 
 - 하단 메뉴는 `브리프 → LP → GP` 순서를 모든 서비스에서 고정한다. Wiki는 재기획 전까지 공개 메뉴에 노출하지 않는다.
 - Project Lead는 작업 전후에 `docs/project_lead_control_center.md`를 확인하고, 서비스별 소유자·검증·배포 상태·반복 오류를 갱신한다.
+- Project Lead는 별도 채팅방이 맡은 서비스를 방치하지 않는다. 해당 서비스는 그 채팅방이 구현하되, 이 문서와 control center에는 소유권, 통합 조건, 검증 조건, 남은 리스크를 유지한다.
 - 별도 채팅방이나 서브에이전트에 업무를 넘길 때는 control center의 handoff template을 사용한다. 사용자가 같은 결정을 다시 설명하게 만들면 운영 실패로 본다.
 - 공개 UX/UI 개선은 `docs/design_system.md`를 기준으로 한다. 뉴스레터에서 정리한 flat list, 원형 아이콘, restrained typography, table-like row 원칙을 LP/GP/Wiki에 확장한다.
 - 공개 화면 금지 표현은 `docs/agent_operating_briefs.md`의 공개 화면 문구 원칙을 따른다.
 - 생성 HTML 기준 금지 표현 스캔, 모바일 렌더링, 콘솔 에러 확인을 배포 전 필수 검증으로 둔다.
+- 새 아이디어는 담당 서비스, public-view 계약, 검증 방법이 정해지기 전까지 바로 화면이나 DB에 섞지 않는다. 먼저 `docs/product_operating_model.md`와 `docs/data_operating_model.md` 기준으로 분류한다.
+
+## 현재 우선순위
+
+1. 운영 체계 고정: 서비스 책임선, public view, build contract가 문서와 코드에서 같은 말을 하게 한다.
+2. LP Notice를 사업 단위 서비스로 안정화한다. 같은 사업의 공고, 서류심사, 선정결과, 정정, 취소가 여러 카드로 흩어지면 실패다.
+3. LP Notice 상태를 최신 이벤트와 마감일 기준으로 다시 검증한다. 2025년 마감 공고가 현재 모집중처럼 보이면 실패다.
+4. LP Notice 상세 페이지의 모바일 레이아웃을 목록 페이지와 같은 shell로 맞춘다.
+5. GP/LP 디렉토리는 뉴스레터에서 정리한 타이포그래피와 로고 슬롯 규칙을 유지한다.
+6. 뉴스레터 별도 채팅방 결과는 이 프로젝트의 통합 빌드와 공개 검증을 통과해야만 배포 완료로 본다.
+
+## 최근 처리
+
+- 2026-06-11: 뉴스레터 자동 발행 장애를 정리했다. 08:30 수집·검증은 성공했지만 아시아경제 `www.asiae.co.kr` 로고 1건 missing icon hard gate 때문에 public push 전 중단됐다. 아시아경제 도메인 매핑을 추가하고, 아이콘 검사는 기본적으로 품질 리포트만 남기며 당일 공개 배포를 막지 않도록 바꿨다. 최종 공개 배포 `ae5d291`은 `health.json report_date=2026-06-11`, 기사 30건으로 확인했다.
+- 2026-06-11: `newsletter_ops_status.py`를 추가해 수집/로컬 빌드/public 배포/품질 경고/hard failure를 매 발행 종료 시 `exports/daily_news/ops_status/newsletter_ops_status_latest.md`에 남긴다. 다음 장애 진단은 이 파일을 1차 기준으로 삼는다.
+- 2026-06-10: `newsletter-only`와 `integrated-site` 빌드 계약을 분리했다. 뉴스레터 단독 빌드는 LP/GP 산출물을 요구하지 않고, 배포 mirror에서는 기존 LP/GP 파일을 보존한 채 브리프 파일만 갱신한다.
+- 2026-06-10: 운영 체계 문서를 추가했다. 제품 책임선은 `docs/product_operating_model.md`, DB/public-view/build 계약은 `docs/data_operating_model.md`를 기준으로 한다. Wiki는 기본 공개 빌드에서 제외하고 명시 요청 시에만 빌드한다.
+- 2026-06-10: 뉴스레터 public archive contract를 강화했다. `tagVersion=news-taxonomy-v1`, GP/LP entity chip link contract, publisher icon, Google News redirect 금지를 `scripts/check_public_frontend.py`에서 검사한다.
+- 2026-06-10: LP public JSON은 공식 source, 승인된 candidate parser, stale deadline 제거, supporting document/noise 제거, 내부 필드 제거 조건을 통과해야 한다. renderer가 숨기는 방식만으로는 공개 품질을 통과한 것으로 보지 않는다.
+- 2026-06-10: GP Market 페이지는 금감원 최신 source registry 기간, 대표 운용사 기준 GP count 문구, People disabled 상태, 정적 trend/top-GP chart markup을 공개 검증에서 확인한다.
+- 2026-06-09: LP Notice 공개 게이트를 조정해 공식 후보라도 명시 허용된 public-ready 소스만 노출한다. `vcs_investment_notice` 후보는 공개에서 제외한다.
+- 2026-06-09: LP Notice 사업명 추출에서 포털 메뉴, 약관/동의 문구, 투자성향 설명문이 사업명으로 들어오는 경우를 차단했다.
+- 2026-06-09: LP Notice 카드 병합 키에 자산군과 연도를 포함해 서로 다른 연도·자산군 공고가 한 카드에 섞이는 위험을 줄였다.
+- 2026-06-09: Wiki가 숨겨진 상태이므로 public frontend check에서 Wiki 필수 검사를 제거하고 LP Notice 전용 금지 문구 검사를 추가했다.
 
 ## 뉴스레터
 
+- 현재 뉴스레터 분류·태그 품질 개선은 별도 채팅방이 active owner다. 이 문서는 통합 기준과 회귀 조건만 유지한다.
 - 태그 더보기 버튼을 작은 텍스트형 컨트롤로 정리한다. `+N`만 보이는 어두운 버튼은 쓰지 않는다.
 - 0건 날짜는 아카이브에서 숨기거나 `발행 없음` 상태로 명확히 표시한다.
 - 과거 백테스트 기사에도 최신 GP/LP 태그 로직을 다시 적용한다.
@@ -22,11 +48,15 @@
 
 ## LP
 
+- 출자기관 디렉토리는 직접 GP/위탁운용사를 선정하는 LP만 보여준다. OCIO 또는 전담운용사가 하위 운용사 선정 실무를 맡는 공적기금·위임형 자금 주체는 `coverage_tier=ocio`, `display_enabled=0`으로 별도 pool에 보관하고 공개 기본 목록에서 제외한다.
+- 출자기관 공개 노출은 공식 기관 성격이 아니라 실제 PE/VC/대체 출자공고·선정 이력 기준으로 판단한다. 이력 0건 기관은 후보로 숨기고, KIC·수협·캠코처럼 사용자가 명시한 전략기관만 예외로 공개 유지한다.
+- 기관 분류는 자본시장법상 기관전용 사모집합투자기구 LP 적격 유형을 기준으로 `legal_lp_category`에 둔다. 공개 여부와 서비스 중요도는 `display_enabled`, `coverage_tier`에서 따로 관리한다.
 - LP 디렉토리를 `docs/design_system.md`의 LP/GP shared row contract에 맞춘다. 카드형 KPI와 가로 스크롤을 줄이고, 모바일에서도 핵심 컬럼이 남는 표형 row를 우선한다.
 - LP 유형과 자산군은 화면에 한국어 라벨로 표시한다. 예: `정책금융기관`, `공제회`, `사모대출`, `부동산`, `모태펀드`.
 - `0/0`, `자료 정리 중`, `검증 필요` 같은 운영 상태를 공개 화면에 노출하지 않는다.
 - 18개 LP 전체에 일반현황, 투자현황, 담당 조직, 출자공고, 선정 GP 히스토리의 최소 커버리지를 맞춘다.
 - 공고 모니터와 LP 프로필은 연결하되, 공고 수집 상태는 운영 화면으로 분리한다.
+- 다음 LP Notice 과제는 `candidate`를 무조건 많이 보여주는 것이 아니라, 소스별 parser readiness를 올려 공개 가능한 공고 수를 다시 늘리는 것이다. 특히 `vcs_investment_notice`는 좋은 discovery source지만 현재 public parser로는 부적합하다.
 
 ## GP
 
@@ -36,8 +66,9 @@
 - 상위 120개 GP부터 홈페이지, 대표자, 법인명, 회사 설명, 출처를 보강한다.
 - 공개 화면에 enum, proxy, source/evidence 영문 라벨이 나오지 않게 생성 HTML 회귀 검사를 둔다.
 
-## PEF Wiki
+## Parked: PEF Wiki
 
+- Wiki는 재기획 전까지 공개 메뉴와 routine build에서 제외한다.
 - Wiki는 PDF 링크 모음이 아니라 본문형 문서 서비스다.
 - 다음 구조는 `services/newsletter/content/wiki/` 아래 markdown 소스로 분리한다.
 - 우선 문서 범위는 실무안내 제1장, 관련 법률·규정, 세무신고, 금감원·금융위원회 보고, 실무 체크리스트다.

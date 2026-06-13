@@ -19,8 +19,8 @@ Cloud Scheduler
 
 ## 1단계: 지금 바로 가능한 개선
 
-- `public/index.html`: 서비스 랜딩 페이지
-- `public/daily-news.html`: 오늘자 Daily Clipping 페이지
+- `services/newsletter/deploy/site/index.html`: 서비스 랜딩 페이지
+- `services/newsletter/deploy/site/daily-news.html`: 오늘자 Daily Clipping 페이지
 - `scripts/build_service_site.py`: 매일 수집 후 public 페이지 자동 갱신
 - `services/newsletter/src/validate_daily_news_pipeline.py`: 수집 결과, public 페이지, DB, 스케줄러 상태 검증
 

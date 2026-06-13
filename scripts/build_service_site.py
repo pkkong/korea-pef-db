@@ -35,7 +35,7 @@ from brand_assets import brand_logo_url, brand_style_string, domain_from_url, pr
 from news_taxonomy import SECTION_LABELS, TAG_TAXONOMY_VERSION, canonical_section  # noqa: E402
 from pef_wiki_pages import render_pef_wiki_page  # noqa: E402
 
-DEFAULT_PUBLIC_DIR = REPO_ROOT / "public"
+DEFAULT_PUBLIC_DIR = REPO_ROOT / "services" / "newsletter" / "deploy" / "site"
 DEFAULT_SERVICE_INTEGRATION_WORKLIST = REPO_ROOT / "exports" / "service_integration_worklist_latest.csv"
 DEFAULT_LP_COMMITMENT_MONITOR = REPO_ROOT / "exports" / "lp_commitment_monitor_latest.csv"
 DEFAULT_ARCHIVE_LIMIT = 30

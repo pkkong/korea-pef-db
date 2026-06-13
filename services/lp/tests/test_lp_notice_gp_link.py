@@ -12,7 +12,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from services.lp.src.build_lp_commitment_monitor import apply_schema, refresh_notice_links
-from services.newsletter.src.daily_news_common import GpAlias
+from services.shared.src.daily_news_common import GpAlias
 
 
 def test_refresh_notice_links_matches_comma_and_normalized_gp_aliases() -> None:

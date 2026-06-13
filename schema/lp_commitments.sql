@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS lp_institution (
     lp_name TEXT NOT NULL,
     lp_name_en TEXT,
     lp_type TEXT,
+    legal_lp_category TEXT,
+    legal_lp_basis TEXT,
     ownership_type TEXT,
     homepage_url TEXT,
     notice_url TEXT,
@@ -145,6 +147,8 @@ SELECT
     lcn.lp_code,
     COALESCE(li.lp_name, '') AS lp_name,
     COALESCE(li.lp_type, '') AS lp_type,
+    COALESCE(li.coverage_tier, '') AS coverage_tier,
+    COALESCE(li.display_enabled, 1) AS lp_display_enabled,
     COALESCE(li.default_team, lcn.contact_team, '') AS default_team,
     lcn.source_code,
     lcn.source_type,
@@ -184,7 +188,8 @@ LEFT JOIN lp_institution li
 CREATE VIEW v_lp_commitment_notice_public AS
 SELECT *
 FROM v_lp_commitment_notice_enriched
-WHERE public_visible = 1;
+WHERE public_visible = 1
+  AND COALESCE(lp_display_enabled, 1) = 1;
 
 CREATE VIEW v_lp_commitment_selected_gp_compare AS
 SELECT
@@ -545,6 +550,8 @@ SELECT
     li.lp_code,
     li.lp_name,
     li.lp_type,
+    li.legal_lp_category,
+    li.legal_lp_basis,
     li.default_team,
     li.focus_asset_classes,
     li.service_priority,
@@ -592,6 +599,8 @@ SELECT
     li.lp_name,
     li.lp_name_en,
     li.lp_type,
+    li.legal_lp_category,
+    li.legal_lp_basis,
     li.ownership_type,
     li.homepage_url,
     li.notice_url,
@@ -631,6 +640,8 @@ SELECT
     lp_code,
     lp_name,
     lp_type,
+    legal_lp_category,
+    legal_lp_basis,
     ownership_type,
     default_team,
     focus_asset_classes,

@@ -25,6 +25,7 @@ exports/
 logs/
 dashboard/data/*.json
 dashboard/pef_dashboard_standalone.html
+public/
 public/data/*.json
 deploy/newsletter/site/
 deploy/newsletter/*.zip
@@ -32,6 +33,7 @@ deploy/newsletter/deploy-manifest.json
 services/newsletter/deploy/site/
 services/newsletter/deploy/*.zip
 services/newsletter/deploy/deploy-manifest.json
+tmp/
 
 # Runtime logs
 *.log

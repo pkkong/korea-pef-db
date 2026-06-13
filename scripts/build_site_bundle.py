@@ -21,8 +21,8 @@ from services.newsletter.src.build_newsletter_deploy import (  # noqa: E402
     DEFAULT_DB,
     DEFAULT_DEPLOY_DIR,
     assert_newsletter_only,
+    remove_legacy_public_db_files,
     write_health_file,
-    write_public_db_page,
     write_static_support_files,
     zip_site,
 )
@@ -96,9 +96,7 @@ def existing_health_result(site_dir: Path, report_date: str) -> dict[str, str]:
 
 
 def write_shared_support(site_dir: Path, result: dict[str, str], requested_services: list[str]) -> None:
-    integrated_site = any(service in requested_services for service in ("lp", "gp", "wiki"))
-    if integrated_site:
-        write_public_db_page(site_dir)
+    remove_legacy_public_db_files(site_dir)
     (site_dir / "admin.html").unlink(missing_ok=True)
     write_health_file(site_dir, result)
     if (site_dir / "index.html").exists():

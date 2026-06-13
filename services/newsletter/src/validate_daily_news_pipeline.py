@@ -661,7 +661,7 @@ def main() -> int:
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument("--env", type=Path, default=DEFAULT_ENV)
     parser.add_argument("--sources", type=Path, default=DEFAULT_SOURCES)
-    parser.add_argument("--public-dir", type=Path, default=REPO_ROOT / "public")
+    parser.add_argument("--public-dir", type=Path, default=REPO_ROOT / "services" / "newsletter" / "deploy" / "site")
     parser.add_argument("--site-dir", type=Path, default=None, help="Optional built deploy site directory for archive.json classification checks")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
