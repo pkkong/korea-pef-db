@@ -76,6 +76,12 @@ Build active public site bundle:
 python3 scripts/build_site_bundle.py --date YYYY-MM-DD --services newsletter,lp,gp --archive-limit 30
 ```
 
+Build newsletter-only public bundle for daily GitHub Actions:
+
+```bash
+python3 scripts/build_newsletter_bundle.py --date YYYY-MM-DD --archive-limit 30
+```
+
 Build Wiki only when explicitly re-planned:
 
 ```bash
@@ -161,6 +167,7 @@ The receiving chat must not rely on conversation memory. It should read `AGENTS.
 - 2026-06-14 newsletter Actions validation fix: `validate_daily_news_pipeline.py` checks whether active Naver sources have credentials, so the static build/validation workflow step must receive `NAVER_CLIENT_ID` and `NAVER_CLIENT_SECRET` just like the collection step. Without that env, collection can succeed but validation fails before public publish.
 - 2026-06-14 newsletter GitHub Actions publish verified: workflow run `27484616263` succeeded on source commit `398056a` and published public mirror commit `b7dccb9`. Public `health.json` confirms `report_date=2026-06-14`, `article_count=2`, and `archive.json` latest entry has 2 articles. The run discovered 946 candidates, fetched 265, selected 2, and icon check reported 0 issues. The low selected count is a clipping-quality follow-up, not a deploy failure.
 - 2026-06-14 newsletter isolation refactor: daily GitHub Actions publication now uses `scripts/build_newsletter_bundle.py`, a newsletter-only builder that does not import LP, GP, Wiki, or the legacy `build_newsletter_deploy.py` monolith. `scripts/build_site_bundle.py` remains available for integrated builds but lazy-imports service builders only after service selection, so unselected LP/GP/Wiki import errors should not block newsletter-only builds.
+- 2026-06-14 newsletter-only refactor deploy verified: source commit `966398b` passed GitHub Actions workflow run `27486984563` and published public mirror commit `ad48099`. Public `health.json` confirms `services=newsletter`, `report_date=2026-06-14`, `article_count=2`, and all LP/GP/Wiki counts are 0 for the newsletter-only bundle. Public `archive.json` latest entry is 2026-06-14 with 2 articles across 30 archive entries. Actions logs confirm the static build step calls `python3 scripts/build_newsletter_bundle.py --date "2026-06-14"` and public verification ended with `public_verify_status=ok`.
 
 ## Project Lead Closeout Checklist
 
