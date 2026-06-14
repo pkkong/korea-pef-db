@@ -30,6 +30,7 @@ env:
   NEWSLETTER_AI_PROVIDER: local
   NEWSLETTER_AI_APPLY_SECTIONS: "0"
   NEWSLETTER_STRICT_ICON_CHECK: "0"
+  NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS: "1"
 
 jobs:
   build-and-publish:
@@ -131,7 +132,10 @@ jobs:
 
       - name: Build static newsletter site
         run: |
-          python3 scripts/build_site_bundle.py --date "${{ steps.date.outputs.report_date }}" --services "${NEWSLETTER_BUILD_SERVICES}"
+          echo "::group::Build site bundle"
+          timeout 300 python3 scripts/build_site_bundle.py --date "${{ steps.date.outputs.report_date }}" --services "${NEWSLETTER_BUILD_SERVICES}"
+          echo "::endgroup::"
+          echo "::group::Check generated files"
           python3 - <<'PY'
           import json
           import os
@@ -172,13 +176,18 @@ jobs:
           archive = json.loads((site / "archive.json").read_text(encoding="utf-8"))
           print(f"archive_count={len(archive)}")
           PY
-          python3 services/newsletter/src/validate_daily_news_pipeline.py \
+          echo "::endgroup::"
+          echo "::group::Validate newsletter pipeline"
+          timeout 120 python3 services/newsletter/src/validate_daily_news_pipeline.py \
             --date "${{ steps.date.outputs.report_date }}" \
             --public-dir services/newsletter/deploy/site \
             --site-dir services/newsletter/deploy/site
-          python3 services/newsletter/src/check_newsletter_brand_icons.py \
+          echo "::endgroup::"
+          echo "::group::Check brand icons"
+          timeout 120 python3 services/newsletter/src/check_newsletter_brand_icons.py \
             --site-dir services/newsletter/deploy/site \
             --report-date "${{ steps.date.outputs.report_date }}"
+          echo "::endgroup::"
 
       - name: Publish public newsletter mirror
         shell: bash

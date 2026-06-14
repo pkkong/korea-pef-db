@@ -211,6 +211,7 @@
 - 검증은 `services/newsletter/tests/test_daily_news_logic.py`, `services/newsletter/src/validate_daily_news_pipeline.py`, `services/newsletter/src/check_newsletter_brand_icons.py`를 실행해야 한다. `validate_daily_news_pipeline.py` 실패는 발행 차단이고, 아이콘 검사의 missing/weak 리포트는 품질 보완 backlog로 남기되 당일 뉴스레터 공개를 막지 않는다. 아이콘 이슈까지 강제 차단하려면 `NEWSLETTER_STRICT_ICON_CHECK=1`을 명시한다. 분류·태그·서브카테고리를 고친 날에는 `test_daily_news_logic.py`에 해당 기사 제목 기반 회귀 테스트를 추가한 뒤 통과시킨다.
 - 매일 08:30 KST 뉴스레터 발행은 GitHub Actions workflow에서 `NEWSLETTER_BUILD_SERVICES=newsletter`로 실행한다. LP/GP/Wiki 수집·빌드 실패가 당일 뉴스레터 공개를 막으면 운영 실패로 본다.
 - 뉴스레터 자동 발행은 많이 긁는 것보다 반드시 끝나는 것이 우선이다. GitHub Actions에서는 소스별 후보 fetch 상한과 collection step timeout을 둔다. 수집 단계가 멈춘 것처럼 보이면 먼저 Actions 로그의 `daily_news_source_start`, `daily_news_source_listing`, `daily_news_source_done` 라인을 보고 병목 소스를 확인한다.
+- GitHub Actions 정적 빌드에서는 원격 브랜드 로고 다운로드를 하지 않는다. `NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS=1`을 유지하고, 로고 누락·약한 favicon 문제는 `check_newsletter_brand_icons.py` 리포트 기반 별도 sweep에서 보완한다.
 - 발행 완료는 로컬 `daily_news_brief_YYYYMMDD.md` 생성이 아니라 public mirror push와 공개 확인까지다. GitHub Actions는 공개 `health.json`의 `report_date`와 `article_count`, `archive.json`의 당일 entry를 확인한 뒤에만 성공 종료해야 한다.
 - 매일 발행 후 `exports/daily_news/ops_status/newsletter_ops_status_latest.md`를 우선 확인한다. 이 파일의 `Status`가 `ok`이고 hard failure가 없어야 “수집/공개 완료”로 보고할 수 있다. 사용자가 “오늘 수집 안 된 것 같다”고 하면 로그부터 파지 말고 이 status report의 Collection, Local, Public, Quality 섹션을 먼저 본다.
 

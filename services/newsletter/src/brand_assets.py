@@ -8,6 +8,7 @@ generic favicon service.
 
 from __future__ import annotations
 
+import os
 import re
 import ssl
 from pathlib import Path
@@ -2143,6 +2144,12 @@ def prepare_brand_asset_cache(output_dir: Path, asset_prefix: str = "assets/bran
     BRAND_ASSET_CACHE.clear()
     asset_dir = output_dir / asset_prefix
     asset_dir.mkdir(parents=True, exist_ok=True)
+    if os.environ.get("NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS", "").strip().lower() in {"1", "true", "yes", "y"}:
+        for key in BRAND_MARKS:
+            cached_path = _cached_asset_path(asset_dir, key)
+            if cached_path:
+                BRAND_ASSET_CACHE[key] = f"{asset_prefix}/{cached_path.name}"
+        return
     for key, mark in BRAND_MARKS.items():
         cached_path = _cached_asset_path(asset_dir, key)
         if cached_path:
