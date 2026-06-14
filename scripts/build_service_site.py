@@ -3528,7 +3528,7 @@ def service_js() -> str:
       text
         .toLowerCase()
         .replace(/[()[\\]'"“”‘’….,·:：]/g, " ")
-        .split(/\s+/)
+        .split(/\\s+/)
         .map((token) => token.trim())
         .filter((token) => token.length >= 2 && !issueStopwords.has(token))
     );
