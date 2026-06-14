@@ -136,7 +136,7 @@ jobs:
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         run: |
           echo "::group::Build site bundle"
-          timeout 300 python3 scripts/build_site_bundle.py --date "${{ steps.date.outputs.report_date }}" --services "${NEWSLETTER_BUILD_SERVICES}"
+          timeout 300 python3 scripts/build_newsletter_bundle.py --date "${{ steps.date.outputs.report_date }}"
           echo "::endgroup::"
           echo "::group::Check generated files"
           python3 - <<'PY'

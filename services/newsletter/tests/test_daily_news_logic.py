@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -2952,6 +2953,37 @@ def test_notebooklm_source_pack_and_cache_contract() -> None:
         assert local_articles[0]["provider"] == "notebooklm-notebook"
 
 
+def test_newsletter_bundle_import_isolation() -> None:
+    code = """
+import importlib
+import json
+import sys
+
+importlib.import_module("scripts.build_newsletter_bundle")
+bad = sorted(
+    name
+    for name in sys.modules
+    if name == "services.lp"
+    or name.startswith("services.lp.")
+    or name == "services.gp"
+    or name.startswith("services.gp.")
+    or name == "services.wiki"
+    or name.startswith("services.wiki.")
+    or name.endswith("build_newsletter_deploy")
+)
+print(json.dumps(bad, ensure_ascii=False))
+raise SystemExit(1 if bad else 0)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=SERVICE_ROOT.parents[1],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def main() -> int:
     tests = [
         test_coverage_window,
@@ -3051,6 +3083,7 @@ def main() -> int:
         test_render_markdown_coverage,
         test_render_markdown_uses_clean_display_url,
         test_notebooklm_source_pack_and_cache_contract,
+        test_newsletter_bundle_import_isolation,
     ]
     for test in tests:
         test()

@@ -13,22 +13,18 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from services.gp.src.build_gp_service_pages import build_gp_service_pages  # noqa: E402
-from services.lp.src.build_lp_service_pages import build_lp_service_pages  # noqa: E402
-from services.newsletter.src.build_newsletter_deploy import (  # noqa: E402
+from services.newsletter.src.newsletter_site_support import (  # noqa: E402
     DEFAULT_ARCHIVE_LIMIT,
     DEFAULT_ARCHIVE_SEED_URL,
-    DEFAULT_DB,
     DEFAULT_DEPLOY_DIR,
     assert_newsletter_only,
     remove_legacy_public_db_files,
     write_health_file,
     write_static_support_files,
-    zip_site,
+    zip_newsletter_site,
+    zip_site_tree,
 )
-from services.newsletter.src.build_newsletter_service_pages import build_newsletter_service_pages  # noqa: E402
-from services.newsletter.src.daily_news_common import today_seoul  # noqa: E402
-from services.wiki.src.build_wiki_service_pages import build_wiki_service_pages  # noqa: E402
+from services.shared.src.daily_news_common import DEFAULT_DB, today_seoul  # noqa: E402
 
 
 DEFAULT_SERVICE_ORDER = ("newsletter", "lp", "gp")
@@ -129,6 +125,8 @@ def build_site_bundle(
         if service not in requested_services:
             continue
         if service == "newsletter":
+            from services.newsletter.src.build_newsletter_service_pages import build_newsletter_service_pages
+
             result.update(
                 build_newsletter_service_pages(
                     site_dir,
@@ -139,16 +137,25 @@ def build_site_bundle(
                 )
             )
         elif service == "lp":
+            from services.lp.src.build_lp_service_pages import build_lp_service_pages
+
             result.update({key: str(value) for key, value in build_lp_service_pages(site_dir, effective_date).items()})
         elif service == "gp":
+            from services.gp.src.build_gp_service_pages import build_gp_service_pages
+
             result.update({key: str(value) for key, value in build_gp_service_pages(site_dir, db_path, effective_date).items()})
         elif service == "wiki":
+            from services.wiki.src.build_wiki_service_pages import build_wiki_service_pages
+
             result.update({key: str(value) for key, value in build_wiki_service_pages(site_dir, effective_date).items()})
     result["report_date"] = effective_date
     result["services"] = ",".join(requested_services)
 
     write_shared_support(site_dir, result, requested_services)
-    zip_path = zip_site(deploy_dir, site_dir)
+    if requested_services == ["newsletter"]:
+        zip_path = zip_newsletter_site(deploy_dir, site_dir)
+    else:
+        zip_path = zip_site_tree(deploy_dir, site_dir)
 
     manifest = {
         **result,

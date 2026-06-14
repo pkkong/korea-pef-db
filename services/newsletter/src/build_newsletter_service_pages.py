@@ -4,25 +4,25 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
-from services.newsletter.src.build_newsletter_deploy import (
+from services.newsletter.src.daily_news_common import DEFAULT_EXPORT_DIR, REPO_ROOT, today_seoul
+from services.newsletter.src.newsletter_site_support import (
     DEFAULT_ARCHIVE_LIMIT,
     DEFAULT_ARCHIVE_SEED_URL,
     DEFAULT_DEPLOY_DIR,
-    DEFAULT_EXPORT_DIR,
     archive_article_count,
     merge_archives,
     read_archive_seed,
     read_embedded_archive,
-    rewrite_site_archive,
 )
-from services.newsletter.src.daily_news_common import today_seoul
 
-try:
-    from build_service_site import build
-except ModuleNotFoundError:  # pragma: no cover - package import path fallback
-    from scripts.build_service_site import build  # type: ignore
+SCRIPTS_DIR = REPO_ROOT / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+from build_service_site import build, rewrite_newsletter_archive  # noqa: E402
 
 
 def build_newsletter_service_pages(
@@ -47,7 +47,7 @@ def build_newsletter_service_pages(
     seed_archive = read_archive_seed(archive_seed_url) if use_archive_seed else []
     archive_entries = merge_archives(local_archive, seed_archive, archive_limit)
     if archive_entries:
-        rewrite_site_archive(site_dir, effective_date, archive_entries)
+        rewrite_newsletter_archive(site_dir, DEFAULT_EXPORT_DIR, effective_date, archive_entries)
         result["article_count"] = str(
             archive_article_count(
                 archive_entries,

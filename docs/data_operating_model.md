@@ -92,7 +92,7 @@ python3 scripts/build_site_bundle.py --services newsletter,lp,gp --date YYYY-MM-
 뉴스레터 단독 발행은 LP/GP 실패와 분리한다.
 
 ```bash
-python3 scripts/build_site_bundle.py --services newsletter --date YYYY-MM-DD
+python3 scripts/build_newsletter_bundle.py --date YYYY-MM-DD
 ```
 
 Wiki는 재기획 전까지 루틴에서 제외한다. 필요할 때만 명시적으로 실행한다.

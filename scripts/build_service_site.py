@@ -25,15 +25,12 @@ from daily_news_common import (
     split_news_title_badges,
     today_seoul,
 )
-from lp_public_visibility import is_public_lp_notice_row
-
 NEWSLETTER_SRC = REPO_ROOT / "services" / "newsletter" / "src"
 if str(NEWSLETTER_SRC) not in sys.path:
     sys.path.append(str(NEWSLETTER_SRC))
 
 from brand_assets import brand_logo_url, brand_style_string, domain_from_url, prepare_brand_asset_cache  # noqa: E402
 from news_taxonomy import SECTION_LABELS, TAG_TAXONOMY_VERSION, canonical_section  # noqa: E402
-from pef_wiki_pages import render_pef_wiki_page  # noqa: E402
 
 DEFAULT_PUBLIC_DIR = REPO_ROOT / "services" / "newsletter" / "deploy" / "site"
 DEFAULT_SERVICE_INTEGRATION_WORKLIST = REPO_ROOT / "exports" / "service_integration_worklist_latest.csv"
@@ -130,6 +127,20 @@ PUBLISHER_BADGES = {
     "뉴스톱": "톱",
     "뉴스토마토": "토",
 }
+
+
+def is_public_lp_notice_row(
+    row: dict[str, object],
+    require_official: bool = False,
+    allow_official_candidates: bool = False,
+) -> bool:
+    from lp_public_visibility import is_public_lp_notice_row as _is_public_lp_notice_row
+
+    return _is_public_lp_notice_row(
+        row,
+        require_official=require_official,
+        allow_official_candidates=allow_official_candidates,
+    )
 
 
 def app_head_meta() -> str:
@@ -1955,6 +1966,54 @@ def build_archive_payload(
             }
         )
     return payload
+
+
+def refresh_archive_entries_with_context(
+    out_dir: Path,
+    archive_entries: list[dict[str, object]],
+    service_context: dict[str, dict[str, object]],
+) -> list[dict[str, object]]:
+    refreshed: list[dict[str, object]] = []
+    for entry in archive_entries:
+        report_date = str(entry.get("reportDate") or "")
+        markdown_path = brief_markdown_path(out_dir, report_date)
+        if not report_date or not markdown_path.exists():
+            refreshed.append(entry)
+            continue
+        rows = parse_brief(markdown_path)
+        next_entry = dict(entry)
+        next_entry["visibleDate"] = str(next_entry.get("visibleDate") or display_date(report_date))
+        next_entry["articles"] = article_payload_rows(rows, service_context, f"clip-{compact_date(report_date)}")
+        refreshed.append(next_entry)
+    return refreshed
+
+
+def rewrite_newsletter_archive(
+    public_dir: Path,
+    out_dir: Path,
+    report_date: str,
+    archive_entries: list[dict[str, object]],
+) -> None:
+    markdown_path = brief_markdown_path(out_dir, report_date)
+    articles = parse_brief(markdown_path)
+    basis_text = parse_brief_basis(markdown_path)
+    service_context = read_review_queue_context(out_dir)
+    archive_entries = refresh_archive_entries_with_context(out_dir, archive_entries, service_context)
+    html = render_app(
+        report_date,
+        articles,
+        basis_text,
+        service_context,
+        archive_entries,
+        [],
+        newsletter_only=True,
+    )
+    (public_dir / "index.html").write_text(html, encoding="utf-8")
+    (public_dir / "daily-news.html").write_text(html, encoding="utf-8")
+    (public_dir / "archive.json").write_text(
+        json.dumps(archive_entries, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def render_app(
@@ -3999,11 +4058,15 @@ def build(
     markdown_path = brief_markdown_path(out_dir, report_date)
     articles = parse_brief(markdown_path)
     basis_text = parse_brief_basis(markdown_path)
-    service_context = merge_service_context(
-        read_service_context(service_integration_worklist),
-        read_review_queue_context(out_dir),
-    )
-    lp_monitor = read_lp_monitor(lp_commitment_monitor)
+    if newsletter_only:
+        service_context = read_review_queue_context(out_dir)
+        lp_monitor: list[dict[str, object]] = []
+    else:
+        service_context = merge_service_context(
+            read_service_context(service_integration_worklist),
+            read_review_queue_context(out_dir),
+        )
+        lp_monitor = read_lp_monitor(lp_commitment_monitor)
     archive_entries = build_archive_payload(out_dir, report_date, service_context, archive_limit)
     assets_dir = public_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
@@ -4025,6 +4088,8 @@ def build(
     js_path.write_text(service_js(), encoding="utf-8")
     manifest_path.write_text(app_web_manifest(), encoding="utf-8")
     if include_wiki:
+        from pef_wiki_pages import render_pef_wiki_page
+
         wiki_path.write_text(render_pef_wiki_page(report_date, app_asset_version()), encoding="utf-8")
     result = {
         "report_date": report_date,

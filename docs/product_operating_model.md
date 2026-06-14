@@ -33,7 +33,7 @@ Last updated: 2026-06-10 KST
 
 각 서비스는 자기 산출물만 만든다.
 
-- Brief builder: `index.html`, `daily-news.html`, `archive.json`, 뉴스 전용 assets.
+- Brief builder: `scripts/build_newsletter_bundle.py` creates `index.html`, `daily-news.html`, `archive.json`, `health.json`, and newsletter assets without importing LP, GP, Wiki, or the legacy deploy monolith.
 - LP builder: `lp-*.html`, `lp-notices.html`, `lp-official-notices.html`,
   `lp-notice-*.html`, LP public data.
 - GP builder: `market.html`, `gps.html`, `gp-*.html`, GP public data.
