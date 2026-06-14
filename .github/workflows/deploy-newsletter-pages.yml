@@ -131,6 +131,9 @@ jobs:
               --provider "${NEWSLETTER_AI_PROVIDER}"
 
       - name: Build static newsletter site
+        env:
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         run: |
           echo "::group::Build site bundle"
           timeout 300 python3 scripts/build_site_bundle.py --date "${{ steps.date.outputs.report_date }}" --services "${NEWSLETTER_BUILD_SERVICES}"
