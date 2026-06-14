@@ -1,6 +1,6 @@
 # Project Lead Control Center
 
-Last updated: 2026-06-13 KST
+Last updated: 2026-06-14 KST
 
 이 문서는 Project Lead가 현재 프로젝트 상태를 잃지 않기 위한 운영판이다. 새 채팅방, 서브에이전트, 별도 담당자가 작업을 시작할 때는 먼저 이 문서를 읽고, 작업이 끝나면 필요한 변경을 여기에 반영한다.
 
@@ -11,7 +11,7 @@ Last updated: 2026-06-13 KST
 - Public mirror repo: `pkkong/kpef-newsletter`, branch `gh-pages`
 - Navigation source change verified: `998acb2 Hide Wiki from public navigation`
 - Public deploy verified for navigation: `dfa868b`
-- Latest public mirror deploy verified: `ae5d291` on 2026-06-11 KST
+- Latest public mirror deploy verified: `b7dccb9` on 2026-06-14 KST
 - Public bottom navigation: `브리프 / LP / GP`
 - Wiki is hidden from public navigation until the user re-plans it.
 - Operating model source of truth added on 2026-06-10:
@@ -159,6 +159,7 @@ The receiving chat must not rely on conversation memory. It should read `AGENTS.
 - 2026-06-13 NotebookLM design correction: do not use NotebookLM as a stateless batch query API. If used again, create one date-specific notebook such as `KPEF Newsletter Review YYYY-MM-DD`, add classification rules and a daily article source pack as notebook sources, then ask one structured question for all articles. Cache by source pack fingerprint, cap NotebookLM to one review query per date, and keep failures out of the 08:30 publishing critical path.
 - 2026-06-14 newsletter Actions hardening: a manual GitHub Actions rerun for 2026-06-14 reached the newsletter collection step but was cancelled after 10 minutes because the collection stage had no per-source progress output and an oversized candidate budget. `run_daily_news_pipeline.py` now prints source start/listing/done progress and supports `--candidate-limit-per-source`. The public workflow runs newsletter-only with `NEWSLETTER_LIMIT_PER_SOURCE=20`, `NEWSLETTER_CANDIDATE_LIMIT_PER_SOURCE=8`, and a 720-second collection timeout so daily publication does not silently hang before build/publish. The static build step skips remote brand-asset downloads in Actions via `NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS=1`; logo completeness is a separate quality sweep, not a publication blocker.
 - 2026-06-14 newsletter Actions validation fix: `validate_daily_news_pipeline.py` checks whether active Naver sources have credentials, so the static build/validation workflow step must receive `NAVER_CLIENT_ID` and `NAVER_CLIENT_SECRET` just like the collection step. Without that env, collection can succeed but validation fails before public publish.
+- 2026-06-14 newsletter GitHub Actions publish verified: workflow run `27484616263` succeeded on source commit `398056a` and published public mirror commit `b7dccb9`. Public `health.json` confirms `report_date=2026-06-14`, `article_count=2`, and `archive.json` latest entry has 2 articles. The run discovered 946 candidates, fetched 265, selected 2, and icon check reported 0 issues. The low selected count is a clipping-quality follow-up, not a deploy failure.
 
 ## Project Lead Closeout Checklist
 
