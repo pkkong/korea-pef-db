@@ -12,6 +12,7 @@ import re
 import sqlite3
 import ssl
 import sys
+import time
 from difflib import SequenceMatcher
 from datetime import date, datetime, timedelta
 from html import unescape
@@ -2931,6 +2932,12 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_EXPORT_DIR)
     parser.add_argument("--date", default=today_seoul(), help="Report date in YYYY-MM-DD format")
     parser.add_argument("--limit-per-source", type=int, default=30)
+    parser.add_argument(
+        "--candidate-limit-per-source",
+        type=int,
+        default=0,
+        help="Maximum filtered candidates to fetch per source. Defaults to --limit-per-source.",
+    )
     parser.add_argument("--brief-limit", type=int, default=12)
     parser.add_argument("--review-limit", type=int, default=80)
     parser.add_argument("--min-score", type=float, default=2.0)
@@ -2968,7 +2975,16 @@ def main() -> int:
         gp_aliases = load_gp_aliases(args.db, args.gp_alias_overrides)
         run_id = start_run(conn, args.date)
 
-        for source in sources:
+        candidate_limit_per_source = args.candidate_limit_per_source or args.limit_per_source
+        print(
+            "daily_news_pipeline_start "
+            f"date={args.date} sources={len(sources)} "
+            f"limit_per_source={args.limit_per_source} "
+            f"candidate_limit_per_source={candidate_limit_per_source}",
+            flush=True,
+        )
+
+        for source_index, source in enumerate(sources, start=1):
             source_stats[source.source_code] = {
                 "source_name": source.source_name,
                 "discovered_count": 0,
@@ -2979,6 +2995,12 @@ def main() -> int:
                 "warning_count": 0,
             }
             candidate_budget = 0
+            source_started = time.monotonic()
+            print(
+                f"daily_news_source_start {source_index}/{len(sources)} "
+                f"code={source.source_code} kind={source.source_kind}",
+                flush=True,
+            )
             try:
                 items = fetch_source_items(
                     source,
@@ -2995,6 +3017,10 @@ def main() -> int:
                 continue
             discovered_count += len(items)
             source_stats[source.source_code]["discovered_count"] = len(items)
+            print(
+                f"daily_news_source_listing code={source.source_code} discovered={len(items)}",
+                flush=True,
+            )
             for item in items:
                 source_url = str(item.get("link", "") or item.get("source_url", "")).strip()
                 feed_publisher = str(item.get("publisher", "")).strip()
@@ -3007,7 +3033,7 @@ def main() -> int:
                 if not matches_allowed_publishers(source.allowed_publishers, publisher_for_filter):
                     continue
                 candidate_budget += 1
-                if candidate_budget > args.limit_per_source:
+                if candidate_budget > candidate_limit_per_source:
                     break
                 source_stats[source.source_code]["candidate_count"] = int(source_stats[source.source_code]["candidate_count"]) + 1
 
@@ -3145,6 +3171,16 @@ def main() -> int:
                 is_relevant_now = choose_relevance_label(candidate["relevance_score"], args.min_score, force_include, force_exclude)[0]
                 relevant_count += 1 if is_relevant_now else 0
                 source_stats[source.source_code]["relevant_count"] = int(source_stats[source.source_code]["relevant_count"]) + (1 if is_relevant_now else 0)
+            print(
+                f"daily_news_source_done code={source.source_code} "
+                f"candidates={source_stats[source.source_code]['candidate_count']} "
+                f"fetched={source_stats[source.source_code]['fetched_count']} "
+                f"cached={source_stats[source.source_code]['cached_count']} "
+                f"relevant={source_stats[source.source_code]['relevant_count']} "
+                f"warnings={source_stats[source.source_code]['warning_count']} "
+                f"elapsed_seconds={time.monotonic() - source_started:.1f}",
+                flush=True,
+            )
 
         conn.commit()
         rows = build_export_rows(

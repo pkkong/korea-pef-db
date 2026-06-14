@@ -23,7 +23,9 @@ env:
   NEWSLETTER_PUBLIC_BRANCH: gh-pages
   NEWSLETTER_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter/
   NEWSLETTER_BUILD_SERVICES: newsletter
-  NEWSLETTER_LIMIT_PER_SOURCE: "50"
+  NEWSLETTER_LIMIT_PER_SOURCE: "20"
+  NEWSLETTER_CANDIDATE_LIMIT_PER_SOURCE: "8"
+  NEWSLETTER_RUN_TIMEOUT_SECONDS: "720"
   NEWSLETTER_LP_LIMIT_PER_SOURCE: "50"
   NEWSLETTER_AI_PROVIDER: local
   NEWSLETTER_AI_APPLY_SECTIONS: "0"
@@ -109,9 +111,10 @@ jobs:
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         run: |
           mkdir -p db data/raw/daily_news exports/daily_news
-          python3 services/newsletter/src/run_daily_news_pipeline.py \
+          timeout "${NEWSLETTER_RUN_TIMEOUT_SECONDS}" python3 services/newsletter/src/run_daily_news_pipeline.py \
             --date "${{ steps.date.outputs.report_date }}" \
             --limit-per-source "${NEWSLETTER_LIMIT_PER_SOURCE}" \
+            --candidate-limit-per-source "${NEWSLETTER_CANDIDATE_LIMIT_PER_SOURCE}" \
             --brief-limit 30 \
             --review-limit 80 \
             --allow-insecure-ssl \
