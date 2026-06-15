@@ -181,9 +181,10 @@
 
 ### 품질 기준
 
-- 발행물은 매일 같은 최근 24시간 오전 브리핑 기준을 따른다. 발행 시간이 확인되는 기사는 전일 08:30 KST부터 당일 08:30 KST까지의 운영 창에 맞춰 필터링하고, 시간이 없으면 발견일 기준으로 처리한다.
+- 발행물은 매일 같은 최근 24시간 오전 브리핑 기준을 따른다. 발행 시간이 확인되는 기사는 전일 08:30 KST부터 당일 08:30 KST까지의 운영 창에 맞춰 필터링한다. 발행 시간이 없을 때는 시간까지 포함된 발견 시각만 보조 기준으로 쓰고, 날짜만 있는 발견값은 발행 근거로 쓰지 않는다.
 - 현재 자동 발행은 토요일과 일요일에도 매일 08:30 KST에 돈다. 따라서 월요일도 예외적인 72시간 창을 쓰지 않는다. 주말 수집 실패, 검색 반영 지연, 소스 오류를 회수해야 할 때는 일일 발행 파이프라인을 넓히지 말고 별도 백필/audit 작업으로 처리한다.
 - GitHub Actions는 매번 깨끗한 runner에서 실행되므로 로컬 `exports/` 파일만으로 이전 발행 중복을 막을 수 없다. daily pipeline은 public `archive.json`을 previous export 원장으로 함께 읽어, 이전 날짜에 공개된 URL 또는 사실상 같은 제목을 당일 브리프에서 제외해야 한다.
+- GitHub Actions 운영 경로에서는 public archive를 못 읽으면 조용히 계속 발행하지 않는다. 수집 단계는 `--require-previous-archive`, 정적 빌드 단계는 `--require-archive-seed`로 fail-closed 해야 하며, 이 실패는 중복 방지 원장 접근 장애로 처리한다.
 - 각 기사에는 제목, 출처, 날짜, `source_url`, 관련 GP, 분류, 포함/제외 판단이 있어야 한다.
 - 중복 제거는 세 단계로 본다. 먼저 매체별 모바일·AMP·카테고리 suffix·추적 파라미터를 제거한 `normalized_source_url`로 같은 기사를 합치고, 다음으로 같은 매체의 거의 같은 제목을 제거하며, 마지막으로 국민성장펀드 운용사 선정처럼 여러 매체가 같은 이벤트를 반복 보도하는 경우 이벤트 단위로 묶어 발행 밀도를 낮춘다.
 - 회사 담당자 또는 외부 클리핑 리스트와 대조할 때는 `미수집`, `DB 수집`, `리뷰 후보`, `발행`, `운영창 밖`을 분리해서 판단한다. 오전 브리핑 운영창인 08:30 이후 기사나 전일 이전 기사는 같은 날짜 발행 누락으로 보지 않고, 다음 발행 창 또는 과거 백필 대상인지 따로 표시한다.
@@ -271,13 +272,13 @@
 
 ## 매일 운영 흐름
 
-1. 뉴스 수집: 정식 운영은 GitHub Actions가 `services/newsletter/src/run_daily_news_pipeline.py`를 실행해 수집, 분류, bundle 생성, public mirror 배포까지 처리한다. `services/newsletter/scripts/run_daily_news_today.ps1`은 로컬 진단용이며 운영 스케줄러가 아니다.
+1. 뉴스 수집: 정식 운영은 GitHub Actions가 `services/newsletter/src/run_daily_news_pipeline.py --require-previous-archive`를 실행해 수집, 분류, public archive 기준 중복 제거를 처리한다. `scripts/run_daily_news_today.ps1`은 로컬 진단용이며 운영 스케줄러가 아니다.
 2. 발행 후보 검토: 뉴스 담당은 `exports/daily_news/daily_news_review_latest.html`과 `exports/daily_news/daily_news_review_queue_latest.csv`를 검토해 발행 포함/제외와 분류를 확정한다.
 3. GP update queue 생성: 뉴스 담당은 `exports/daily_news/news_gp_update_worklist_latest.csv`에 `source_gp_id`, `standard_gp_name`, `source_url`, 갱신 액션을 남긴다.
 4. 통합 작업 큐 생성: 운영자는 `scripts/build_service_integration_worklist.py`로 `exports/service_integration_worklist_latest.csv`를 갱신한다. 이 파일이 뉴스 담당, GP 프로필 담당, People DB 담당의 공통 작업판이다.
 5. People worklist 생성: People 담당은 통합 큐와 기존 People 산출물을 대조해 `exports/people_research_worklist_top50.csv` 또는 입력 CSV 갱신 후보를 만든다.
 6. People DB 반영: People 담당은 `data/people_input.csv`, `data/person_role_input.csv`, `data/person_education_input.csv`를 출처 기반으로 갱신하고 `scripts/import_people_csv.py`, `scripts/export_people_views.py`를 실행한다.
-7. newsletter public mirror 반영: GitHub Actions가 `services/newsletter/src/build_newsletter_deploy.py`와 `scripts/build_site_bundle.py`로 `services/newsletter/deploy/site/`를 만들고 public mirror `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 push한다.
+7. newsletter public mirror 반영: GitHub Actions가 `scripts/build_newsletter_bundle.py --require-archive-seed`로 newsletter-only 정적 사이트를 만들고, `services/newsletter/src/validate_daily_news_pipeline.py --site-dir services/newsletter/deploy/site` 검증 후 public mirror `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 push한다. 로컬에서 공개 산출물만 빠르게 볼 때는 `services/newsletter/src/validate_daily_news_pipeline.py --site-only --site-dir services/newsletter/deploy/site`를 쓴다.
 8. 공개 사이트 반영: 운영자는 서비스별 builder와 `scripts/build_site_bundle.py`를 통해 `services/newsletter/deploy/site/` 번들을 최신 상태로 만든다.
 9. 상태 점검: `scripts/build_operational_status_report.py`로 `exports/operational_status_latest.md`를 갱신하고, 뉴스와 People의 미처리 `update_action`을 다음날 작업 목록으로 넘긴다.
 

@@ -107,15 +107,25 @@ def read_embedded_archive(html_path: Path) -> list[dict[str, object]]:
     return payload if isinstance(payload, list) else []
 
 
-def read_archive_seed(seed_url: str) -> list[dict[str, object]]:
+def read_archive_seed(seed_url: str, required: bool = False) -> list[dict[str, object]]:
     if not seed_url:
+        if required:
+            raise RuntimeError("archive seed URL is required for newsletter publish")
         return []
     try:
         with urlopen(seed_url, timeout=10) as response:
             payload = json.loads(response.read().decode("utf-8"))
-    except Exception:
+    except Exception as exc:
+        if required:
+            raise RuntimeError(f"archive seed unavailable url={seed_url}: {exc}") from exc
         return []
-    return payload if isinstance(payload, list) else []
+    if not isinstance(payload, list):
+        if required:
+            raise RuntimeError(f"archive seed is not a list: {seed_url}")
+        return []
+    if required and not payload:
+        raise RuntimeError(f"archive seed has no entries: {seed_url}")
+    return payload
 
 
 def merge_archives(
@@ -143,6 +153,7 @@ def merge_archives(
 
 def remove_cross_date_duplicate_articles(by_date: dict[str, dict[str, object]]) -> None:
     seen_urls: set[str] = set()
+    seen_titles: set[str] = set()
     for report_date in sorted(by_date):
         articles = by_date[report_date].get("articles")
         if not isinstance(articles, list):
@@ -153,12 +164,25 @@ def remove_cross_date_duplicate_articles(by_date: dict[str, dict[str, object]]) 
                 deduped.append(article)
                 continue
             normalized = normalize_url(str(article.get("url") or article.get("sourceUrl") or ""))
+            title_key = normalize_archive_title_key(str(article.get("title") or ""))
             if normalized and normalized in seen_urls:
+                continue
+            if title_key and title_key in seen_titles:
                 continue
             if normalized:
                 seen_urls.add(normalized)
+            if title_key:
+                seen_titles.add(title_key)
             deduped.append(article)
         by_date[report_date]["articles"] = deduped
+
+
+def normalize_archive_title_key(title: str) -> str:
+    value = re.sub(r"\s+-\s+[^-]+$", "", title or "")
+    value = re.sub(r"\s*\[[^\]]*(?:\]|$)", "", value)
+    value = re.sub(r"\.{2,}|…+", "", value)
+    value = re.sub(r"[\[\]\"'‘’“”<>(){}|·:：,\s]+", "", value)
+    return value.lower()[:42]
 
 
 def archive_article_count(archive_entries: list[dict[str, object]], report_date: str, fallback: int) -> int:

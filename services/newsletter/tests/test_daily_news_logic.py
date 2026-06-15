@@ -53,6 +53,7 @@ from daily_news_common import (
     load_gp_aliases,
     load_sources,
     load_rules,
+    matches_allowed_publishers,
     match_gp_entities,
     normalize_url,
     score_document,
@@ -80,8 +81,14 @@ from build_service_site import read_ai_enrichment_context
 from apply_daily_news_review import normalize_category
 from brand_assets import brand_logo_url
 from lp_public_visibility import is_public_lp_notice_row
-from validate_daily_news_pipeline import Validation, check_archive_previous_duplicates, check_classification_quality
-from newsletter_site_support import merge_archives
+from validate_daily_news_pipeline import (
+    Validation,
+    check_built_site_bundle,
+    check_archive_classification_quality,
+    check_archive_previous_duplicates,
+    check_classification_quality,
+)
+from newsletter_site_support import merge_archives, read_archive_seed
 from enrich_daily_news_ai import (
     audit_rows,
     cached_notebooklm_payload,
@@ -101,6 +108,8 @@ def test_coverage_window() -> None:
     assert "2026-04-29 08:30 ~ 2026-04-30 08:30" in coverage_window_label("2026-04-30")
     assert is_in_coverage_window("2026-04-29T14:00:00+09:00", "", "2026-04-30")
     assert not is_in_coverage_window("2026-04-30T09:00:00+09:00", "", "2026-04-30")
+    assert not is_in_coverage_window("", "2026-04-30", "2026-04-30")
+    assert is_in_coverage_window("", "2026-04-29T14:00:00+09:00", "2026-04-30")
 
 
 def test_monday_coverage_window_stays_daily_when_weekend_publishes() -> None:
@@ -199,6 +208,43 @@ def test_previous_export_keys_include_public_archive_seed() -> None:
         )
 
 
+def test_previous_export_keys_include_public_archive_event_key() -> None:
+    with TemporaryDirectory() as tmp:
+        out_dir = Path(tmp)
+        archive_path = out_dir / "archive.json"
+        archive_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "reportDate": "2026-06-13",
+                        "articles": [
+                            {
+                                "title": "국민성장펀드 1차 운용사 11곳 선정",
+                                "summaryText": "국민성장펀드 위탁운용사 11곳과 2.4조 GP 선정 결과가 발표됐다.",
+                                "section": "국민성장펀드",
+                                "url": "https://example.com/old-national-growth",
+                            }
+                        ],
+                    }
+                ],
+            ),
+            encoding="utf-8",
+        )
+
+        previous_keys = load_previous_export_keys(out_dir, "2026-06-15", str(archive_path))
+
+        assert is_previous_export(
+            {
+                "title": "국민성장펀드 위탁운용사 명단 확정",
+                "summary_text": "국민성장펀드 1차 GP 선정 결과로 11곳이 확정됐다.",
+                "section_tags": "NationalGrowthFund",
+                "source_url": "https://example.com/new-national-growth",
+                "normalized_source_url": "https://example.com/new-national-growth",
+            },
+            previous_keys,
+        )
+
+
 def test_archive_validation_blocks_previous_public_duplicate() -> None:
     with TemporaryDirectory() as tmp:
         site_dir = Path(tmp)
@@ -227,6 +273,69 @@ def test_archive_validation_blocks_previous_public_duplicate() -> None:
         assert any("repeats previously published URL from 2026-06-13" in error for error in result.errors)
 
 
+def test_archive_validation_requires_current_archive_when_site_dir_is_provided() -> None:
+    with TemporaryDirectory() as tmp:
+        site_dir = Path(tmp)
+        result = Validation()
+
+        check_archive_classification_quality(result, site_dir, site_dir, "2026-06-15", [], [])
+
+        assert any("deploy archive not available" in error for error in result.errors)
+
+    with TemporaryDirectory() as tmp:
+        site_dir = Path(tmp)
+        (site_dir / "health.json").write_text(json.dumps({"report_date": "2026-06-14"}), encoding="utf-8")
+        (site_dir / "archive.json").write_text(json.dumps([]), encoding="utf-8")
+        result = Validation()
+
+        check_archive_classification_quality(result, site_dir, site_dir, "2026-06-15", [], [])
+
+        assert any("deploy archive is for 2026-06-14, not 2026-06-15" in error for error in result.errors)
+
+
+def test_site_only_validation_checks_health_archive_contract() -> None:
+    with TemporaryDirectory() as tmp:
+        site_dir = Path(tmp)
+        (site_dir / "health.json").write_text(
+            json.dumps(
+                {
+                    "report_date": "2026-06-15",
+                    "services": "newsletter",
+                    "article_count": 1,
+                    "lp_monitor_count": 0,
+                    "gp_count": 0,
+                    "gp_profile_page_count": 0,
+                }
+            ),
+            encoding="utf-8",
+        )
+        (site_dir / "archive.json").write_text(
+            json.dumps([{"reportDate": "2026-06-15", "articles": [{"title": "오늘 기사", "url": "https://example.com/a"}]}]),
+            encoding="utf-8",
+        )
+        result = Validation()
+
+        check_built_site_bundle(result, site_dir, "2026-06-15")
+
+        assert not result.errors
+
+    with TemporaryDirectory() as tmp:
+        site_dir = Path(tmp)
+        (site_dir / "health.json").write_text(
+            json.dumps({"report_date": "2026-06-15", "services": "newsletter", "article_count": 2}),
+            encoding="utf-8",
+        )
+        (site_dir / "archive.json").write_text(
+            json.dumps([{"reportDate": "2026-06-15", "articles": [{"title": "오늘 기사", "url": "https://example.com/a"}]}]),
+            encoding="utf-8",
+        )
+        result = Validation()
+
+        check_built_site_bundle(result, site_dir, "2026-06-15")
+
+        assert any("does not match archive count" in error for error in result.errors)
+
+
 def test_archive_merge_keeps_duplicate_url_on_first_publication_date() -> None:
     duplicate = {
         "title": "\"이건 AI가 못 할걸요\"…남들 반도체·데이터센터 몰려갈 때 큰 손들이 ...",
@@ -250,7 +359,42 @@ def test_archive_merge_keeps_duplicate_url_on_first_publication_date() -> None:
     assert by_date["2026-06-15"]["articles"][0]["title"] == "오늘 기사"
 
 
-def test_force_include_previous_export_only_repeats_inside_current_window() -> None:
+def test_archive_merge_removes_cross_date_duplicate_title_even_when_url_differs() -> None:
+    duplicate_title = "같은 제목 반복 기사"
+    merged = merge_archives(
+        local_entries=[
+            {"reportDate": "2026-06-15", "articles": [{"title": duplicate_title, "url": "https://example.com/new-url"}]},
+        ],
+        seed_entries=[
+            {"reportDate": "2026-06-13", "articles": [{"title": duplicate_title, "url": "https://example.com/old-url"}]},
+        ],
+        archive_limit=30,
+    )
+    by_date = {str(entry["reportDate"]): entry for entry in merged}
+
+    assert len(by_date["2026-06-13"]["articles"]) == 1
+    assert len(by_date["2026-06-15"]["articles"]) == 0
+
+
+def test_required_archive_inputs_fail_closed() -> None:
+    with TemporaryDirectory() as tmp:
+        missing_archive = Path(tmp) / "missing-archive.json"
+        try:
+            load_previous_export_keys(Path(tmp), "2026-06-15", str(missing_archive), require_previous_archive=True)
+        except RuntimeError as exc:
+            assert "previous archive unavailable" in str(exc)
+        else:
+            raise AssertionError("required previous archive did not fail")
+
+        try:
+            read_archive_seed(str(missing_archive), required=True)
+        except RuntimeError as exc:
+            assert "archive seed unavailable" in str(exc)
+        else:
+            raise AssertionError("required archive seed did not fail")
+
+
+def test_force_include_previous_export_is_still_skipped() -> None:
     previous_keys = {
         "urls": {"https://www.asiae.co.kr/article/2026052611385718194"},
         "titles": set(),
@@ -273,7 +417,7 @@ def test_force_include_previous_export_only_repeats_inside_current_window() -> N
         "titles": set(),
     }
     assert should_skip_previous_export(old_manual, previous_keys, "2026-06-07")
-    assert not should_skip_previous_export(current_manual, current_previous_keys, "2026-06-07")
+    assert should_skip_previous_export(current_manual, current_previous_keys, "2026-06-07")
 
 
 def test_google_news_decode_helpers() -> None:
@@ -310,6 +454,11 @@ def test_common_news_tracking_params_are_removed() -> None:
     assert normalize_url("http://www.enewstoday.co.kr/news/articleView.html?idxno=2434987") == (
         "https://www.enewstoday.co.kr/news/articleView.html?idxno=2434987"
     )
+
+
+def test_allowed_publishers_require_exact_normalized_name() -> None:
+    assert matches_allowed_publishers(["뉴스톱"], "뉴스톱")
+    assert not matches_allowed_publishers(["뉴스톱"], "가짜뉴스톱경제")
 
 
 def test_dealsite_category_suffix_url_normalizes_to_article() -> None:
@@ -3098,12 +3247,18 @@ def main() -> int:
         test_google_backtest_window_stays_daily_on_monday,
         test_previous_export_keys_ignore_review_candidates,
         test_previous_export_keys_include_public_archive_seed,
+        test_previous_export_keys_include_public_archive_event_key,
         test_archive_validation_blocks_previous_public_duplicate,
+        test_archive_validation_requires_current_archive_when_site_dir_is_provided,
+        test_site_only_validation_checks_health_archive_contract,
         test_archive_merge_keeps_duplicate_url_on_first_publication_date,
-        test_force_include_previous_export_only_repeats_inside_current_window,
+        test_archive_merge_removes_cross_date_duplicate_title_even_when_url_differs,
+        test_required_archive_inputs_fail_closed,
+        test_force_include_previous_export_is_still_skipped,
         test_google_news_decode_helpers,
         test_sedaily_mobile_amp_url_normalizes_to_desktop_article,
         test_common_news_tracking_params_are_removed,
+        test_allowed_publishers_require_exact_normalized_name,
         test_dealsite_category_suffix_url_normalizes_to_article,
         test_truncated_media_suffix_does_not_split_title_duplicates,
         test_gp_alias_overrides_cover_common_short_names,

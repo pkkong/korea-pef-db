@@ -83,22 +83,35 @@ jobs:
           reason = "manual run" if event_name != "schedule" else "scheduled freshness check"
           public_date = ""
           article_count = 0
+          archive_count = 0
+
+          def fetch_json(path: str):
+              req = Request(
+                  f"{base_url}/{path}?freshness={int(time.time())}-{report_date}",
+                  headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
+              )
+              with urlopen(req, timeout=15) as response:
+                  return json.loads(response.read().decode("utf-8"))
 
           if event_name == "schedule":
               try:
-                  req = Request(
-                      f"{base_url}/health.json?freshness={int(time.time())}-{report_date}",
-                      headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
-                  )
-                  with urlopen(req, timeout=15) as response:
-                      health = json.loads(response.read().decode("utf-8"))
+                  health = fetch_json("health.json")
+                  archive = fetch_json("archive.json")
                   public_date = str(health.get("report_date") or "")
                   article_count = int(health.get("article_count") or 0)
-                  if public_date == report_date and article_count > 0:
+                  entry = next(
+                      (row for row in archive if isinstance(row, dict) and row.get("reportDate") == report_date),
+                      None,
+                  )
+                  archive_count = len(entry.get("articles") or []) if isinstance(entry, dict) else 0
+                  if public_date == report_date and article_count > 0 and archive_count == article_count:
                       should_run = False
                       reason = f"public newsletter already fresh ({public_date}, {article_count} articles)"
                   else:
-                      reason = f"public newsletter stale (public={public_date or 'missing'}, expected={report_date})"
+                      reason = (
+                          "public newsletter stale "
+                          f"(public={public_date or 'missing'}, health={article_count}, archive={archive_count}, expected={report_date})"
+                      )
               except (OSError, URLError, json.JSONDecodeError, ValueError) as exc:
                   reason = f"freshness check failed; run publish path ({exc})"
 
@@ -107,6 +120,7 @@ jobs:
               output.write(f"reason={reason}\n")
               output.write(f"public_date={public_date}\n")
               output.write(f"public_article_count={article_count}\n")
+              output.write(f"public_archive_count={archive_count}\n")
 
           print(f"newsletter_freshness should_run={should_run} reason={reason}")
           PY
@@ -180,7 +194,8 @@ jobs:
             --brief-limit 30 \
             --review-limit 80 \
             --allow-insecure-ssl \
-            --google-date-window
+            --google-date-window \
+            --require-previous-archive
 
       - name: Build newsletter quality files
         if: steps.freshness.outputs.should_run == 'true'
@@ -199,7 +214,9 @@ jobs:
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         run: |
           echo "::group::Build site bundle"
-          timeout 300 python3 scripts/build_newsletter_bundle.py --date "${{ steps.date.outputs.report_date }}"
+          timeout 300 python3 scripts/build_newsletter_bundle.py \
+            --date "${{ steps.date.outputs.report_date }}" \
+            --require-archive-seed
           echo "::endgroup::"
           echo "::group::Check generated files"
           python3 - <<'PY'
@@ -330,15 +347,22 @@ jobs:
                   archive = fetch_json("archive.json")
                   if health.get("report_date") != report_date:
                       raise RuntimeError(f"health report_date={health.get('report_date')} expected={report_date}")
+                  if health.get("services") != "newsletter":
+                      raise RuntimeError(f"health services={health.get('services')} expected=newsletter")
                   article_count = int(health.get("article_count") or 0)
                   if article_count <= 0:
                       raise RuntimeError("health article_count is 0")
+                  for key in ["lp_monitor_count", "gp_count", "gp_profile_page_count"]:
+                      if int(health.get(key) or 0) != 0:
+                          raise RuntimeError(f"newsletter-only health {key}={health.get(key)} expected=0")
                   entry = next((row for row in archive if isinstance(row, dict) and row.get("reportDate") == report_date), None)
                   if entry is None:
                       raise RuntimeError(f"archive missing reportDate={report_date}")
                   archive_count = len(entry.get("articles") or [])
                   if archive_count <= 0:
                       raise RuntimeError("archive article_count is 0")
+                  if archive_count != article_count:
+                      raise RuntimeError(f"archive article_count={archive_count} does not match health article_count={article_count}")
                   print(f"public_verify_status=ok report_date={report_date} health_articles={article_count} archive_articles={archive_count}")
                   raise SystemExit(0)
               except Exception as exc:

@@ -330,13 +330,23 @@ def check_archive_classification_quality(
     brief_articles: list[dict[str, str]],
     queue_rows: list[dict[str, str]],
 ) -> None:
-    archive_rows, archive_report_date = read_current_archive(site_dir, report_date)
-    if not archive_report_date:
-        result.warning(f"deploy archive not available for classification check: {site_dir / 'archive.json'}")
+    health, archive = read_site_archive(site_dir)
+    if not health:
+        result.error(f"deploy archive not available for classification check: {site_dir / 'archive.json'}")
         return
+    archive_report_date = str(health.get("report_date") or "")
     if archive_report_date != report_date:
-        result.warning(f"deploy archive is for {archive_report_date}, not {report_date}; skipping archive classification check")
+        result.error(f"deploy archive is for {archive_report_date}, not {report_date}")
         return
+    entry = next((row for row in archive if isinstance(row, dict) and row.get("reportDate") == report_date), None)
+    if not isinstance(entry, dict):
+        result.error(f"deploy archive missing reportDate={report_date}")
+        return
+    entry_articles = entry.get("articles")
+    if not isinstance(entry_articles, list):
+        result.error(f"deploy archive reportDate={report_date} has no article list")
+        return
+    archive_rows = [row for row in entry_articles if isinstance(row, dict)]
     check_archive_previous_duplicates(result, site_dir, report_date, archive_rows)
     brief_index = index_rows_by_article(brief_articles)
     queue_index = index_rows_by_article(queue_rows)
@@ -609,6 +619,55 @@ def check_public_site(result: Validation, public_dir: Path, report_date: str) ->
                 result.warning(f"{label} exposes internal wording: {forbidden}")
 
 
+def parse_int(value: object) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def check_built_site_bundle(result: Validation, site_dir: Path, report_date: str) -> None:
+    health, archive = read_site_archive(site_dir)
+    if not health:
+        result.error(f"site health/archive files are not readable: {site_dir}")
+        return
+    if not archive:
+        result.error(f"site archive is empty or unreadable: {site_dir / 'archive.json'}")
+        return
+
+    health_date = str(health.get("report_date") or "").strip()
+    if health_date != report_date:
+        result.error(f"site health report_date is {health_date or '-'}, not {report_date}")
+
+    services = str(health.get("services") or "").strip()
+    if services != "newsletter":
+        result.error(f"site health services is {services or '-'}, not newsletter")
+
+    for field in ["lp_monitor_count", "gp_count", "gp_profile_page_count"]:
+        if parse_int(health.get(field)) != 0:
+            result.error(f"newsletter-only bundle should not publish {field}={health.get(field)}")
+
+    health_count = parse_int(health.get("article_count"))
+    if health_count <= 0:
+        result.error("site health article_count is zero")
+
+    entry = next((row for row in archive if isinstance(row, dict) and row.get("reportDate") == report_date), None)
+    if not isinstance(entry, dict):
+        result.error(f"site archive missing reportDate={report_date}")
+        return
+    articles = entry.get("articles")
+    if not isinstance(articles, list):
+        result.error(f"site archive reportDate={report_date} has no article list")
+        return
+    archive_rows = [row for row in articles if isinstance(row, dict)]
+    if not archive_rows:
+        result.error(f"site archive reportDate={report_date} has no articles")
+    if health_count != len(archive_rows):
+        result.error(f"site health article_count {health_count} does not match archive count {len(archive_rows)}")
+    check_archive_previous_duplicates(result, site_dir, report_date, archive_rows)
+    result.note(f"site bundle checked: report_date={report_date}, articles={len(archive_rows)}")
+
+
 def check_database(result: Validation, db_path: Path, report_date: str) -> None:
     if not db_path.exists():
         result.error(f"database missing: {db_path}")
@@ -684,15 +743,21 @@ def main() -> int:
     parser.add_argument("--sources", type=Path, default=DEFAULT_SOURCES)
     parser.add_argument("--public-dir", type=Path, default=REPO_ROOT / "services" / "newsletter" / "deploy" / "site")
     parser.add_argument("--site-dir", type=Path, default=None, help="Optional built deploy site directory for archive.json classification checks")
+    parser.add_argument("--site-only", action="store_true", help="Validate only the generated public site bundle")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     result = Validation()
-    check_env_and_sources(result, args.env, args.sources)
-    check_artifacts(result, args.out_dir, args.date)
-    check_classification_quality(result, args.out_dir, args.date, args.site_dir)
-    check_public_site(result, args.public_dir, args.date)
-    check_database(result, args.db, args.date)
+    if args.site_only:
+        site_dir = args.site_dir or args.public_dir
+        check_public_site(result, site_dir, args.date)
+        check_built_site_bundle(result, site_dir, args.date)
+    else:
+        check_env_and_sources(result, args.env, args.sources)
+        check_artifacts(result, args.out_dir, args.date)
+        check_classification_quality(result, args.out_dir, args.date, args.site_dir)
+        check_public_site(result, args.public_dir, args.date)
+        check_database(result, args.db, args.date)
 
     if args.json:
         print(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))

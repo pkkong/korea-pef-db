@@ -710,13 +710,13 @@ def matches_must_contain(must_contain: Iterable[str], *values: str) -> bool:
 
 
 def matches_allowed_publishers(allowed_publishers: Iterable[str], publisher: str) -> bool:
-    publishers = [value.lower() for value in allowed_publishers if value]
+    publishers = [normalize_whitespace(value).lower() for value in allowed_publishers if normalize_whitespace(value)]
     if not publishers:
         return True
-    publisher_norm = str(publisher or "").strip().lower()
+    publisher_norm = normalize_whitespace(str(publisher or "")).lower()
     if not publisher_norm:
         return False
-    return any(value in publisher_norm for value in publishers)
+    return any(value == publisher_norm for value in publishers)
 
 
 def sentence_candidates(text: str) -> list[str]:

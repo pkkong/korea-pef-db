@@ -31,6 +31,7 @@ def build_newsletter_service_pages(
     archive_limit: int = DEFAULT_ARCHIVE_LIMIT,
     archive_seed_url: str = DEFAULT_ARCHIVE_SEED_URL,
     use_archive_seed: bool = True,
+    require_archive_seed: bool = False,
 ) -> dict[str, str]:
     """Write Newsletter pages while preserving the current public URLs."""
     site_dir.mkdir(parents=True, exist_ok=True)
@@ -44,7 +45,7 @@ def build_newsletter_service_pages(
         include_wiki=False,
     )
     local_archive = read_embedded_archive(site_dir / "index.html")
-    seed_archive = read_archive_seed(archive_seed_url) if use_archive_seed else []
+    seed_archive = read_archive_seed(archive_seed_url, required=require_archive_seed) if use_archive_seed else []
     archive_entries = merge_archives(local_archive, seed_archive, archive_limit)
     if archive_entries:
         rewrite_newsletter_archive(site_dir, DEFAULT_EXPORT_DIR, effective_date, archive_entries)
@@ -66,6 +67,7 @@ def main() -> int:
     parser.add_argument("--archive-limit", type=int, default=DEFAULT_ARCHIVE_LIMIT)
     parser.add_argument("--archive-seed-url", default=DEFAULT_ARCHIVE_SEED_URL)
     parser.add_argument("--no-archive-seed", action="store_true")
+    parser.add_argument("--require-archive-seed", action="store_true")
     args = parser.parse_args()
 
     result = build_newsletter_service_pages(
@@ -74,6 +76,7 @@ def main() -> int:
         args.archive_limit,
         args.archive_seed_url,
         not args.no_archive_seed,
+        args.require_archive_seed,
     )
     for key, value in result.items():
         print(f"{key}={value}")

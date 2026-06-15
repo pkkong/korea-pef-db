@@ -602,7 +602,7 @@ def reuse_cached_document_for_run(
     normalized = normalize_url(source_url)
     row = conn.execute(
         """
-        SELECT news_id
+        SELECT news_id, published_at, discovered_at
         FROM news_document
         WHERE normalized_source_url = ?
            OR source_url = ?
@@ -617,6 +617,8 @@ def reuse_cached_document_for_run(
         (normalized, source_url, source_url),
     ).fetchone()
     if row is None:
+        return False
+    if not is_in_coverage_window(str(row[1] or ""), str(row[2] or ""), report_date):
         return False
     conn.execute(
         """
@@ -760,9 +762,15 @@ def build_export_rows(
     out_dir: Path,
     allow_google_news_redirects: bool = False,
     previous_archive_url: str = "",
+    require_previous_archive: bool = False,
 ) -> list[dict[str, object]]:
     candidates = load_run_candidate_rows(conn, run_id, report_date)
-    previous_keys = load_previous_export_keys(out_dir, report_date, previous_archive_url)
+    previous_keys = load_previous_export_keys(
+        out_dir,
+        report_date,
+        previous_archive_url,
+        require_previous_archive=require_previous_archive,
+    )
     eligible: list[dict[str, object]] = []
     for row in candidates:
         quality_score, quality_reason = editorial_quality(row)
@@ -776,7 +784,12 @@ def build_export_rows(
     return select_brief_rows(eligible, brief_limit)
 
 
-def load_previous_export_keys(out_dir: Path, report_date: str, previous_archive_url: str = "") -> dict[str, set[str]]:
+def load_previous_export_keys(
+    out_dir: Path,
+    report_date: str,
+    previous_archive_url: str = "",
+    require_previous_archive: bool = False,
+) -> dict[str, set[str]]:
     report_key = report_date.replace("-", "")
     url_keys: set[str] = set()
     title_keys: set[str] = set()
@@ -796,7 +809,8 @@ def load_previous_export_keys(out_dir: Path, report_date: str, previous_archive_
                 match_line = re.match(r"- \[(.+?)\]\((.+?)\)", line.strip())
                 if match_line:
                     add_previous_key(match_line.group(2), match_line.group(1), url_keys, title_keys)
-    for entry in load_previous_archive_entries(previous_archive_url):
+    event_keys: set[str] = set()
+    for entry in load_previous_archive_entries(previous_archive_url, required=require_previous_archive):
         archive_date = str(entry.get("reportDate") or "").strip()
         if not archive_date or archive_date >= report_date:
             continue
@@ -806,6 +820,7 @@ def load_previous_export_keys(out_dir: Path, report_date: str, previous_archive_
         for article in articles:
             if not isinstance(article, dict):
                 continue
+            title = str(article.get("title") or "")
             add_previous_key(
                 str(
                     article.get("url")
@@ -814,16 +829,27 @@ def load_previous_export_keys(out_dir: Path, report_date: str, previous_archive_
                     or article.get("link")
                     or ""
                 ),
-                str(article.get("title") or ""),
+                title,
                 url_keys,
                 title_keys,
             )
-    return {"urls": url_keys, "titles": title_keys}
+            event_key = event_dedupe_key(
+                {
+                    "title": title,
+                    "summary_text": str(article.get("summaryText") or ""),
+                    "section_tags": str(article.get("rawSection") or article.get("section") or ""),
+                }
+            )
+            if event_key:
+                event_keys.add(event_key)
+    return {"urls": url_keys, "titles": title_keys, "events": event_keys}
 
 
-def load_previous_archive_entries(previous_archive_url: str) -> list[dict[str, object]]:
+def load_previous_archive_entries(previous_archive_url: str, required: bool = False) -> list[dict[str, object]]:
     previous_archive_url = (previous_archive_url or "").strip()
     if not previous_archive_url:
+        if required:
+            raise RuntimeError("previous archive URL is required for newsletter publish")
         return []
     try:
         if previous_archive_url.startswith(("http://", "https://")):
@@ -835,9 +861,18 @@ def load_previous_archive_entries(previous_archive_url: str) -> list[dict[str, o
                 archive_path = REPO_ROOT / archive_path
             payload = json.loads(archive_path.read_text(encoding="utf-8"))
     except Exception as exc:
+        if required:
+            raise RuntimeError(f"previous archive unavailable url={previous_archive_url}: {exc}") from exc
         print(f"WARNING: previous archive unavailable url={previous_archive_url} error={exc}", file=sys.stderr)
         return []
-    return [entry for entry in payload if isinstance(entry, dict)] if isinstance(payload, list) else []
+    if not isinstance(payload, list):
+        if required:
+            raise RuntimeError(f"previous archive is not a list: {previous_archive_url}")
+        return []
+    entries = [entry for entry in payload if isinstance(entry, dict)]
+    if required and not entries:
+        raise RuntimeError(f"previous archive has no valid entries: {previous_archive_url}")
+    return entries
 
 
 def add_previous_key(url: str, title: str, url_keys: set[str], title_keys: set[str]) -> None:
@@ -853,17 +888,16 @@ def is_previous_export(row: dict[str, object], previous_keys: dict[str, set[str]
     url = str(row.get("normalized_source_url") or row.get("source_url") or "")
     normalized_url = normalize_url(url) if url else ""
     title_key = normalize_title_key(str(row.get("title", "")))
+    event_key = event_dedupe_key(row)
     if normalized_url and normalized_url in previous_keys["urls"]:
         return True
-    return bool(title_key and title_key in previous_keys["titles"])
+    if title_key and title_key in previous_keys["titles"]:
+        return True
+    return bool(event_key and event_key in previous_keys.get("events", set()))
 
 
 def should_skip_previous_export(row: dict[str, object], previous_keys: dict[str, set[str]], report_date: str) -> bool:
-    if not is_previous_export(row, previous_keys):
-        return False
-    if str(row.get("review_status", "")) != "force_include":
-        return True
-    return not is_in_coverage_window(str(row.get("published_at", "")), str(row.get("discovered_at", "")), report_date)
+    return is_previous_export(row, previous_keys)
 
 
 SECTION_ORDER = ["AI_PE", "NationalGrowthFund", "Deal", "LP", "GP", "Market"]
@@ -2702,7 +2736,11 @@ def is_in_coverage_window(published_at: str, discovered_at: str, report_date: st
     published_dt = parse_coverage_datetime(published_at)
     if published_dt:
         return start <= published_dt < end
-    return normalize_date_for_report(discovered_at) == report_date
+    discovered_value = (discovered_at or "").strip()
+    if "T" not in discovered_value and not re.search(r"\d{1,2}:\d{2}", discovered_value):
+        return False
+    discovered_dt = parse_coverage_datetime(discovered_value)
+    return bool(discovered_dt and start <= discovered_dt < end)
 
 
 def render_markdown(report_date: str, rows: list[dict[str, object]]) -> str:
@@ -2828,9 +2866,15 @@ def build_review_rows(
     brief_rows: list[dict[str, object]],
     out_dir: Path,
     previous_archive_url: str = "",
+    require_previous_archive: bool = False,
 ) -> list[dict[str, object]]:
     brief_urls = {str(row.get("normalized_source_url") or "") for row in brief_rows}
-    previous_keys = load_previous_export_keys(out_dir, report_date, previous_archive_url)
+    previous_keys = load_previous_export_keys(
+        out_dir,
+        report_date,
+        previous_archive_url,
+        require_previous_archive=require_previous_archive,
+    )
     rows = load_run_candidate_rows(conn, run_id, report_date)
     for row in rows:
         quality_score, quality_reason = editorial_quality(row)
@@ -2998,6 +3042,11 @@ def main() -> int:
         default=DEFAULT_PREVIOUS_ARCHIVE_URL,
         help="Public archive.json URL or local path used to suppress previously published articles.",
     )
+    parser.add_argument(
+        "--require-previous-archive",
+        action="store_true",
+        help="Fail instead of publishing when --previous-archive-url cannot be read.",
+    )
     parser.add_argument("--no-latest", action="store_true", help="Do not update daily_news_*_latest export files")
     parser.add_argument("--gp-worklist-days", type=int, default=7)
     parser.add_argument("--service-integration-out-dir", type=Path, default=DEFAULT_EXPORT_DIR.parent)
@@ -3112,6 +3161,9 @@ def main() -> int:
                 canonical_url = normalize_url(article_meta.get("canonical_url", ""))
                 if canonical_url:
                     normalized_source_url = canonical_url
+                    publisher_name = infer_publisher(normalized_source_url, publisher_name)
+                if not matches_allowed_publishers(source.allowed_publishers, publisher_name):
+                    continue
                 raw_html_path = save_raw_html(args.raw_dir, args.date, normalized_source_url, bytes(article_response["raw_bytes"]))
 
                 feed_title = str(item.get("title", "")).strip()
@@ -3245,6 +3297,7 @@ def main() -> int:
             args.out_dir,
             allow_google_news_redirects=args.allow_google_news_redirects,
             previous_archive_url=args.previous_archive_url,
+            require_previous_archive=args.require_previous_archive,
         )
         for row in rows:
             normalize_export_classification(row)
@@ -3256,6 +3309,7 @@ def main() -> int:
             rows,
             args.out_dir,
             previous_archive_url=args.previous_archive_url,
+            require_previous_archive=args.require_previous_archive,
         )
         markdown_path = args.out_dir / f"daily_news_brief_{args.date.replace('-', '')}.md"
         html_path = args.out_dir / f"daily_news_brief_{args.date.replace('-', '')}.html"

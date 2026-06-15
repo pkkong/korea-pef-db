@@ -34,6 +34,7 @@ def build_newsletter_bundle(
     archive_limit: int = DEFAULT_ARCHIVE_LIMIT,
     archive_seed_url: str = DEFAULT_ARCHIVE_SEED_URL,
     use_archive_seed: bool = True,
+    require_archive_seed: bool = False,
 ) -> dict[str, str]:
     effective_date = report_date or today_seoul()
     site_dir = deploy_dir / "site"
@@ -46,6 +47,7 @@ def build_newsletter_bundle(
         archive_limit,
         archive_seed_url,
         use_archive_seed,
+        require_archive_seed,
     )
     result["report_date"] = effective_date
     result["services"] = "newsletter"
@@ -76,6 +78,7 @@ def main() -> int:
     parser.add_argument("--archive-limit", type=int, default=DEFAULT_ARCHIVE_LIMIT)
     parser.add_argument("--archive-seed-url", default=DEFAULT_ARCHIVE_SEED_URL)
     parser.add_argument("--no-archive-seed", action="store_true")
+    parser.add_argument("--require-archive-seed", action="store_true")
     args = parser.parse_args()
 
     manifest = build_newsletter_bundle(
@@ -84,6 +87,7 @@ def main() -> int:
         archive_limit=args.archive_limit,
         archive_seed_url=args.archive_seed_url,
         use_archive_seed=not args.no_archive_seed,
+        require_archive_seed=args.require_archive_seed,
     )
     for key, value in manifest.items():
         print(f"{key}={value}")

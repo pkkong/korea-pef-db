@@ -1,6 +1,6 @@
 # Project Lead Control Center
 
-Last updated: 2026-06-14 KST
+Last updated: 2026-06-15 KST
 
 이 문서는 Project Lead가 현재 프로젝트 상태를 잃지 않기 위한 운영판이다. 새 채팅방, 서브에이전트, 별도 담당자가 작업을 시작할 때는 먼저 이 문서를 읽고, 작업이 끝나면 필요한 변경을 여기에 반영한다.
 
@@ -11,7 +11,7 @@ Last updated: 2026-06-14 KST
 - Public mirror repo: `pkkong/kpef-newsletter`, branch `gh-pages`
 - Navigation source change verified: `998acb2 Hide Wiki from public navigation`
 - Public deploy verified for navigation: `dfa868b`
-- Latest public mirror deploy verified: `b7dccb9` on 2026-06-14 KST
+- Latest public mirror deploy verified: `db45ac9` on 2026-06-15 KST
 - Public bottom navigation: `브리프 / LP / GP`
 - Wiki is hidden from public navigation until the user re-plans it.
 - Operating model source of truth added on 2026-06-10:
