@@ -35,6 +35,7 @@ from run_daily_news_pipeline import (
     is_in_coverage_window,
     is_previous_export,
     load_previous_export_keys,
+    load_previous_archive_entries,
     normalize_export_classification,
     normalize_title_key,
     parse_google_news_batch_response,
@@ -79,7 +80,7 @@ from build_service_site import read_ai_enrichment_context
 from apply_daily_news_review import normalize_category
 from brand_assets import brand_logo_url
 from lp_public_visibility import is_public_lp_notice_row
-from validate_daily_news_pipeline import Validation, check_classification_quality
+from validate_daily_news_pipeline import Validation, check_archive_previous_duplicates, check_classification_quality
 from enrich_daily_news_ai import (
     audit_rows,
     cached_notebooklm_payload,
@@ -101,13 +102,13 @@ def test_coverage_window() -> None:
     assert not is_in_coverage_window("2026-04-30T09:00:00+09:00", "", "2026-04-30")
 
 
-def test_monday_coverage_window_catches_weekend() -> None:
+def test_monday_coverage_window_stays_daily_when_weekend_publishes() -> None:
     label = coverage_window_label("2026-05-25")
-    assert "주말 포함 최근 72시간 브리핑" in label
-    assert "2026-05-22 08:30 ~ 2026-05-25 08:30" in label
-    assert is_in_coverage_window("2026-05-22T09:00:00+09:00", "", "2026-05-25")
+    assert "최근 24시간 브리핑" in label
+    assert "2026-05-24 08:30 ~ 2026-05-25 08:30" in label
+    assert not is_in_coverage_window("2026-05-22T09:00:00+09:00", "", "2026-05-25")
     assert is_in_coverage_window("2026-05-24T23:00:00+09:00", "", "2026-05-25")
-    assert not is_in_coverage_window("2026-05-22T08:00:00+09:00", "", "2026-05-25")
+    assert not is_in_coverage_window("2026-05-25T09:00:00+09:00", "", "2026-05-25")
 
 
 def test_google_backtest_window() -> None:
@@ -117,9 +118,9 @@ def test_google_backtest_window() -> None:
     assert "when:1d" not in query
 
 
-def test_google_backtest_window_catches_weekend_on_monday() -> None:
+def test_google_backtest_window_stays_daily_on_monday() -> None:
     query = google_query_for_report_date("사모펀드 when:1d", "2026-05-25")
-    assert "after:2026-05-22" in query
+    assert "after:2026-05-24" in query
     assert "before:2026-05-26" in query
     assert "when:1d" not in query
 
@@ -147,9 +148,87 @@ def test_previous_export_keys_ignore_review_candidates() -> None:
         )
 
 
+def test_previous_export_keys_include_public_archive_seed() -> None:
+    with TemporaryDirectory() as tmp:
+        out_dir = Path(tmp)
+        archive_path = out_dir / "archive.json"
+        archive_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "reportDate": "2026-06-13",
+                        "articles": [
+                            {
+                                "title": "\"이건 AI가 못 할걸요\"…남들 반도체·데이터센터 몰려갈 때 큰 손들이 ...",
+                                "url": "https://www.asiae.co.kr/article/2026061211064410472",
+                            }
+                        ],
+                    },
+                    {
+                        "reportDate": "2026-06-15",
+                        "articles": [
+                            {
+                                "title": "같은 날짜 재빌드는 이전 발행으로 보지 않는다",
+                                "url": "https://example.com/current-day",
+                            }
+                        ],
+                    },
+                ],
+            ),
+            encoding="utf-8",
+        )
+
+        previous_keys = load_previous_export_keys(out_dir, "2026-06-15", str(archive_path))
+        assert load_previous_archive_entries(str(archive_path))
+        assert is_previous_export(
+            {
+                "source_url": "https://view.asiae.co.kr/article/2026061211064410472",
+                "normalized_source_url": "",
+                "title": "\"이건 AI가 못 할걸요\"…남들 반도체·데이터센터 몰려갈 때 큰 손들이 ...",
+            },
+            previous_keys,
+        )
+        assert not is_previous_export(
+            {
+                "source_url": "https://example.com/current-day",
+                "normalized_source_url": "",
+                "title": "같은 날짜 재빌드는 이전 발행으로 보지 않는다",
+            },
+            previous_keys,
+        )
+
+
+def test_archive_validation_blocks_previous_public_duplicate() -> None:
+    with TemporaryDirectory() as tmp:
+        site_dir = Path(tmp)
+        (site_dir / "health.json").write_text(
+            json.dumps({"report_date": "2026-06-15"}),
+            encoding="utf-8",
+        )
+        duplicate_article = {
+            "title": "\"이건 AI가 못 할걸요\"…남들 반도체·데이터센터 몰려갈 때 큰 손들이 ...",
+            "url": "https://www.asiae.co.kr/article/2026061211064410472",
+        }
+        (site_dir / "archive.json").write_text(
+            json.dumps(
+                [
+                    {"reportDate": "2026-06-15", "articles": [duplicate_article]},
+                    {"reportDate": "2026-06-13", "articles": [duplicate_article]},
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        result = Validation()
+
+        check_archive_previous_duplicates(result, site_dir, "2026-06-15", [duplicate_article])
+
+        assert any("repeats previously published URL from 2026-06-13" in error for error in result.errors)
+
+
 def test_force_include_previous_export_only_repeats_inside_current_window() -> None:
     previous_keys = {
-        "urls": {"https://view.asiae.co.kr/article/2026052611385718194"},
+        "urls": {"https://www.asiae.co.kr/article/2026052611385718194"},
         "titles": set(),
     }
     old_manual = {
@@ -196,7 +275,10 @@ def test_common_news_tracking_params_are_removed() -> None:
         == "https://www.edaily.co.kr/News/Read?mediaCodeNo=257&newsId=04759286645477456"
     )
     assert normalize_url("https://view.asiae.co.kr/article/2026052611385718194?input=1195m") == (
-        "https://view.asiae.co.kr/article/2026052611385718194"
+        "https://www.asiae.co.kr/article/2026052611385718194"
+    )
+    assert normalize_url("https://view.asiae.co.kr/article/2026061211064410472") == (
+        "https://www.asiae.co.kr/article/2026061211064410472"
     )
     assert normalize_url("https://www.thebell.co.kr/front/newsview.asp?click=F&key=202605280841565440103110") == (
         "https://www.thebell.co.kr/front/newsview.asp?key=202605280841565440103110"
@@ -2987,10 +3069,12 @@ raise SystemExit(1 if bad else 0)
 def main() -> int:
     tests = [
         test_coverage_window,
-        test_monday_coverage_window_catches_weekend,
+        test_monday_coverage_window_stays_daily_when_weekend_publishes,
         test_google_backtest_window,
-        test_google_backtest_window_catches_weekend_on_monday,
+        test_google_backtest_window_stays_daily_on_monday,
         test_previous_export_keys_ignore_review_candidates,
+        test_previous_export_keys_include_public_archive_seed,
+        test_archive_validation_blocks_previous_public_duplicate,
         test_force_include_previous_export_only_repeats_inside_current_window,
         test_google_news_decode_helpers,
         test_sedaily_mobile_amp_url_normalizes_to_desktop_article,

@@ -254,15 +254,22 @@ def check_brief_review_alignment(
             )
 
 
-def read_current_archive(site_dir: Path, report_date: str) -> tuple[list[dict[str, str]], str]:
+def read_site_archive(site_dir: Path) -> tuple[dict[str, object], list[dict[str, object]]]:
     health_path = site_dir / "health.json"
     archive_path = site_dir / "archive.json"
     if not health_path.exists() or not archive_path.exists():
-        return [], ""
+        return {}, []
     try:
         health = json.loads(health_path.read_text(encoding="utf-8"))
         archive = json.loads(archive_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
+        return {}, []
+    return (health if isinstance(health, dict) else {}, archive if isinstance(archive, list) else [])
+
+
+def read_current_archive(site_dir: Path, report_date: str) -> tuple[list[dict[str, object]], str]:
+    health, archive = read_site_archive(site_dir)
+    if not health or not archive:
         return [], ""
     if str(health.get("report_date") or "") != report_date:
         return [], str(health.get("report_date") or "")
@@ -273,6 +280,46 @@ def read_current_archive(site_dir: Path, report_date: str) -> tuple[list[dict[st
     if not isinstance(rows, list):
         return [], report_date
     return [row for row in rows if isinstance(row, dict)], report_date
+
+
+def check_archive_previous_duplicates(
+    result: Validation,
+    site_dir: Path,
+    report_date: str,
+    current_rows: list[dict[str, object]],
+) -> None:
+    _health, archive = read_site_archive(site_dir)
+    if not archive:
+        return
+    previous_urls: dict[str, str] = {}
+    previous_titles: dict[str, str] = {}
+    for entry in archive:
+        if not isinstance(entry, dict):
+            continue
+        archive_date = str(entry.get("reportDate") or "").strip()
+        if not archive_date or archive_date >= report_date:
+            continue
+        articles = entry.get("articles")
+        if not isinstance(articles, list):
+            continue
+        for article in articles:
+            if not isinstance(article, dict):
+                continue
+            title = str(article.get("title") or "")
+            url = normalize_url(str(article.get("url") or article.get("sourceUrl") or ""))
+            title_key = normalize_title_key(title)
+            if url:
+                previous_urls.setdefault(url, archive_date)
+            if title_key:
+                previous_titles.setdefault(title_key, archive_date)
+    for article in current_rows:
+        title = str(article.get("title") or "")
+        url = normalize_url(str(article.get("url") or article.get("sourceUrl") or ""))
+        title_key = normalize_title_key(title)
+        if url and url in previous_urls:
+            result.error(f"archive repeats previously published URL from {previous_urls[url]}: {title}")
+        elif title_key and title_key in previous_titles:
+            result.error(f"archive repeats previously published title from {previous_titles[title_key]}: {title}")
 
 
 def check_archive_classification_quality(
@@ -290,6 +337,7 @@ def check_archive_classification_quality(
     if archive_report_date != report_date:
         result.warning(f"deploy archive is for {archive_report_date}, not {report_date}; skipping archive classification check")
         return
+    check_archive_previous_duplicates(result, site_dir, report_date, archive_rows)
     brief_index = index_rows_by_article(brief_articles)
     queue_index = index_rows_by_article(queue_rows)
     apply_ai_sections = str(os.environ.get("NEWSLETTER_AI_APPLY_SECTIONS", "0")).strip().lower() in {"1", "true", "yes", "on"}

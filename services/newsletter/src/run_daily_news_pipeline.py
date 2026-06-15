@@ -759,9 +759,10 @@ def build_export_rows(
     brief_limit: int,
     out_dir: Path,
     allow_google_news_redirects: bool = False,
+    previous_archive_url: str = "",
 ) -> list[dict[str, object]]:
     candidates = load_run_candidate_rows(conn, run_id, report_date)
-    previous_keys = load_previous_export_keys(out_dir, report_date)
+    previous_keys = load_previous_export_keys(out_dir, report_date, previous_archive_url)
     eligible: list[dict[str, object]] = []
     for row in candidates:
         quality_score, quality_reason = editorial_quality(row)
@@ -775,7 +776,7 @@ def build_export_rows(
     return select_brief_rows(eligible, brief_limit)
 
 
-def load_previous_export_keys(out_dir: Path, report_date: str) -> dict[str, set[str]]:
+def load_previous_export_keys(out_dir: Path, report_date: str, previous_archive_url: str = "") -> dict[str, set[str]]:
     report_key = report_date.replace("-", "")
     url_keys: set[str] = set()
     title_keys: set[str] = set()
@@ -795,7 +796,48 @@ def load_previous_export_keys(out_dir: Path, report_date: str) -> dict[str, set[
                 match_line = re.match(r"- \[(.+?)\]\((.+?)\)", line.strip())
                 if match_line:
                     add_previous_key(match_line.group(2), match_line.group(1), url_keys, title_keys)
+    for entry in load_previous_archive_entries(previous_archive_url):
+        archive_date = str(entry.get("reportDate") or "").strip()
+        if not archive_date or archive_date >= report_date:
+            continue
+        articles = entry.get("articles")
+        if not isinstance(articles, list):
+            continue
+        for article in articles:
+            if not isinstance(article, dict):
+                continue
+            add_previous_key(
+                str(
+                    article.get("url")
+                    or article.get("sourceUrl")
+                    or article.get("source_url")
+                    or article.get("link")
+                    or ""
+                ),
+                str(article.get("title") or ""),
+                url_keys,
+                title_keys,
+            )
     return {"urls": url_keys, "titles": title_keys}
+
+
+def load_previous_archive_entries(previous_archive_url: str) -> list[dict[str, object]]:
+    previous_archive_url = (previous_archive_url or "").strip()
+    if not previous_archive_url:
+        return []
+    try:
+        if previous_archive_url.startswith(("http://", "https://")):
+            with urlopen(previous_archive_url, timeout=10) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        else:
+            archive_path = Path(previous_archive_url)
+            if not archive_path.is_absolute():
+                archive_path = REPO_ROOT / archive_path
+            payload = json.loads(archive_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"WARNING: previous archive unavailable url={previous_archive_url} error={exc}", file=sys.stderr)
+        return []
+    return [entry for entry in payload if isinstance(entry, dict)] if isinstance(payload, list) else []
 
 
 def add_previous_key(url: str, title: str, url_keys: set[str], title_keys: set[str]) -> None:
@@ -829,6 +871,13 @@ SECTION_DISPLAY_LIMIT = 12
 SECTION_MIN_SELECTION = {"AI_PE": 1, "NationalGrowthFund": 1, "LP": 2, "GP": 2}
 BRIEFING_CUTOFF_HOUR = 8
 BRIEFING_CUTOFF_MINUTE = 30
+DEFAULT_PREVIOUS_ARCHIVE_URL = os.environ.get(
+    "NEWSLETTER_PREVIOUS_ARCHIVE_URL",
+    os.environ.get(
+        "NEWSLETTER_ARCHIVE_SEED_URL",
+        "https://raw.githubusercontent.com/pkkong/kpef-newsletter/gh-pages/archive.json",
+    ),
+)
 SECTION_LABELS = {
     "AI_PE": "AI & PE",
     "NationalGrowthFund": "국민성장펀드",
@@ -2618,8 +2667,7 @@ def coverage_window(report_date: str) -> tuple[datetime, datetime]:
         BRIEFING_CUTOFF_MINUTE,
         tzinfo=SEOUL_TZ,
     )
-    lookback_days = 3 if parsed.weekday() == 0 else 1
-    return end - timedelta(days=lookback_days), end
+    return end - timedelta(days=1), end
 
 
 def coverage_window_label(report_date: str) -> str:
@@ -2627,9 +2675,8 @@ def coverage_window_label(report_date: str) -> str:
         start, end = coverage_window(report_date)
     except ValueError:
         return "기준 : 최근 24시간 브리핑"
-    label = "주말 포함 최근 72시간 브리핑" if end - start >= timedelta(days=3) else "최근 24시간 브리핑"
     return (
-        f"기준 : {label} "
+        "기준 : 최근 24시간 브리핑 "
         f"({start.strftime('%Y-%m-%d %H:%M')} ~ {end.strftime('%Y-%m-%d %H:%M')}, KST)"
     )
 
@@ -2780,9 +2827,10 @@ def build_review_rows(
     review_limit: int,
     brief_rows: list[dict[str, object]],
     out_dir: Path,
+    previous_archive_url: str = "",
 ) -> list[dict[str, object]]:
     brief_urls = {str(row.get("normalized_source_url") or "") for row in brief_rows}
-    previous_keys = load_previous_export_keys(out_dir, report_date)
+    previous_keys = load_previous_export_keys(out_dir, report_date, previous_archive_url)
     rows = load_run_candidate_rows(conn, run_id, report_date)
     for row in rows:
         quality_score, quality_reason = editorial_quality(row)
@@ -2945,6 +2993,11 @@ def main() -> int:
     parser.add_argument("--source-code", default="", help="Comma-separated source_code filter for targeted testing")
     parser.add_argument("--google-date-window", action="store_true", help="Use Google News after/before operators based on --date")
     parser.add_argument("--allow-google-news-redirects", action="store_true", help="Allow unresolved Google News redirect URLs in exported briefs")
+    parser.add_argument(
+        "--previous-archive-url",
+        default=DEFAULT_PREVIOUS_ARCHIVE_URL,
+        help="Public archive.json URL or local path used to suppress previously published articles.",
+    )
     parser.add_argument("--no-latest", action="store_true", help="Do not update daily_news_*_latest export files")
     parser.add_argument("--gp-worklist-days", type=int, default=7)
     parser.add_argument("--service-integration-out-dir", type=Path, default=DEFAULT_EXPORT_DIR.parent)
@@ -2980,7 +3033,8 @@ def main() -> int:
             "daily_news_pipeline_start "
             f"date={args.date} sources={len(sources)} "
             f"limit_per_source={args.limit_per_source} "
-            f"candidate_limit_per_source={candidate_limit_per_source}",
+            f"candidate_limit_per_source={candidate_limit_per_source} "
+            f"previous_archive={'on' if args.previous_archive_url else 'off'}",
             flush=True,
         )
 
@@ -3190,10 +3244,19 @@ def main() -> int:
             args.brief_limit,
             args.out_dir,
             allow_google_news_redirects=args.allow_google_news_redirects,
+            previous_archive_url=args.previous_archive_url,
         )
         for row in rows:
             normalize_export_classification(row)
-        review_rows = build_review_rows(conn, run_id, args.date, args.review_limit, rows, args.out_dir)
+        review_rows = build_review_rows(
+            conn,
+            run_id,
+            args.date,
+            args.review_limit,
+            rows,
+            args.out_dir,
+            previous_archive_url=args.previous_archive_url,
+        )
         markdown_path = args.out_dir / f"daily_news_brief_{args.date.replace('-', '')}.md"
         html_path = args.out_dir / f"daily_news_brief_{args.date.replace('-', '')}.html"
         csv_path = args.out_dir / f"daily_news_review_queue_{args.date.replace('-', '')}.csv"
