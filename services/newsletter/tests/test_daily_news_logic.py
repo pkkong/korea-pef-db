@@ -81,6 +81,7 @@ from apply_daily_news_review import normalize_category
 from brand_assets import brand_logo_url
 from lp_public_visibility import is_public_lp_notice_row
 from validate_daily_news_pipeline import Validation, check_archive_previous_duplicates, check_classification_quality
+from newsletter_site_support import merge_archives
 from enrich_daily_news_ai import (
     audit_rows,
     cached_notebooklm_payload,
@@ -224,6 +225,29 @@ def test_archive_validation_blocks_previous_public_duplicate() -> None:
         check_archive_previous_duplicates(result, site_dir, "2026-06-15", [duplicate_article])
 
         assert any("repeats previously published URL from 2026-06-13" in error for error in result.errors)
+
+
+def test_archive_merge_keeps_duplicate_url_on_first_publication_date() -> None:
+    duplicate = {
+        "title": "\"이건 AI가 못 할걸요\"…남들 반도체·데이터센터 몰려갈 때 큰 손들이 ...",
+        "url": "https://www.asiae.co.kr/article/2026061211064410472",
+    }
+    merged = merge_archives(
+        local_entries=[
+            {"reportDate": "2026-06-15", "articles": [duplicate, {"title": "오늘 기사", "url": "https://example.com/today"}]},
+        ],
+        seed_entries=[
+            {"reportDate": "2026-06-14", "articles": [{**duplicate, "url": "https://view.asiae.co.kr/article/2026061211064410472"}]},
+            {"reportDate": "2026-06-13", "articles": [duplicate]},
+        ],
+        archive_limit=30,
+    )
+    by_date = {str(entry["reportDate"]): entry for entry in merged}
+
+    assert len(by_date["2026-06-13"]["articles"]) == 1
+    assert len(by_date["2026-06-14"]["articles"]) == 0
+    assert len(by_date["2026-06-15"]["articles"]) == 1
+    assert by_date["2026-06-15"]["articles"][0]["title"] == "오늘 기사"
 
 
 def test_force_include_previous_export_only_repeats_inside_current_window() -> None:
@@ -3075,6 +3099,7 @@ def main() -> int:
         test_previous_export_keys_ignore_review_candidates,
         test_previous_export_keys_include_public_archive_seed,
         test_archive_validation_blocks_previous_public_duplicate,
+        test_archive_merge_keeps_duplicate_url_on_first_publication_date,
         test_force_include_previous_export_only_repeats_inside_current_window,
         test_google_news_decode_helpers,
         test_sedaily_mobile_amp_url_normalizes_to_desktop_article,

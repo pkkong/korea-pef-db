@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.request import urlopen
 
+from services.newsletter.src.daily_news_common import normalize_url
+
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SERVICE_ROOT.parents[1]
@@ -132,10 +134,31 @@ def merge_archives(
         if existing and isinstance(existing_articles, list) and existing_articles and not articles:
             continue
         by_date[report_date] = entry
+    remove_cross_date_duplicate_articles(by_date)
     merged = [by_date[date] for date in sorted(by_date, reverse=True)]
     if archive_limit > 0:
         merged = merged[:archive_limit]
     return merged
+
+
+def remove_cross_date_duplicate_articles(by_date: dict[str, dict[str, object]]) -> None:
+    seen_urls: set[str] = set()
+    for report_date in sorted(by_date):
+        articles = by_date[report_date].get("articles")
+        if not isinstance(articles, list):
+            continue
+        deduped: list[object] = []
+        for article in articles:
+            if not isinstance(article, dict):
+                deduped.append(article)
+                continue
+            normalized = normalize_url(str(article.get("url") or article.get("sourceUrl") or ""))
+            if normalized and normalized in seen_urls:
+                continue
+            if normalized:
+                seen_urls.add(normalized)
+            deduped.append(article)
+        by_date[report_date]["articles"] = deduped
 
 
 def archive_article_count(archive_entries: list[dict[str, object]], report_date: str, fallback: int) -> int:
