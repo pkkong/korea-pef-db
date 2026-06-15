@@ -4,6 +4,12 @@ on:
   schedule:
     # Daily 08:30 Asia/Seoul.
     - cron: "30 23 * * *"
+    # GitHub scheduled workflows can be delayed or skipped under load.
+    # These retry windows keep the daily issue fresh without relying on one slot.
+    - cron: "0 0 * * *"
+    - cron: "30 0 * * *"
+    - cron: "0 1 * * *"
+    - cron: "0 2 * * *"
   workflow_dispatch:
     inputs:
       report_date:
@@ -57,7 +63,61 @@ jobs:
             echo "report_date=$(TZ=Asia/Seoul date +%F)" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check public freshness
+        id: freshness
+        shell: bash
+        run: |
+          python3 - "${{ steps.date.outputs.report_date }}" "${NEWSLETTER_PUBLIC_URL}" "${{ github.event_name }}" <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          from urllib.error import URLError
+          from urllib.request import Request, urlopen
+
+          report_date = sys.argv[1]
+          base_url = sys.argv[2].rstrip("/")
+          event_name = sys.argv[3]
+
+          should_run = True
+          reason = "manual run" if event_name != "schedule" else "scheduled freshness check"
+          public_date = ""
+          article_count = 0
+
+          if event_name == "schedule":
+              try:
+                  req = Request(
+                      f"{base_url}/health.json?freshness={int(time.time())}-{report_date}",
+                      headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
+                  )
+                  with urlopen(req, timeout=15) as response:
+                      health = json.loads(response.read().decode("utf-8"))
+                  public_date = str(health.get("report_date") or "")
+                  article_count = int(health.get("article_count") or 0)
+                  if public_date == report_date and article_count > 0:
+                      should_run = False
+                      reason = f"public newsletter already fresh ({public_date}, {article_count} articles)"
+                  else:
+                      reason = f"public newsletter stale (public={public_date or 'missing'}, expected={report_date})"
+              except (OSError, URLError, json.JSONDecodeError, ValueError) as exc:
+                  reason = f"freshness check failed; run publish path ({exc})"
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"should_run={'true' if should_run else 'false'}\n")
+              output.write(f"reason={reason}\n")
+              output.write(f"public_date={public_date}\n")
+              output.write(f"public_article_count={article_count}\n")
+
+          print(f"newsletter_freshness should_run={should_run} reason={reason}")
+          PY
+
+      - name: Skip already fresh scheduled issue
+        if: steps.freshness.outputs.should_run != 'true'
+        run: |
+          echo "Skipping scheduled publish: ${{ steps.freshness.outputs.reason }}"
+
       - name: Check automation readiness
+        if: steps.freshness.outputs.should_run == 'true'
         env:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
@@ -107,6 +167,7 @@ jobs:
           fi
 
       - name: Build daily newsletter data
+        if: steps.freshness.outputs.should_run == 'true'
         env:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
@@ -122,6 +183,7 @@ jobs:
             --google-date-window
 
       - name: Build newsletter quality files
+        if: steps.freshness.outputs.should_run == 'true'
         run: |
           python3 services/newsletter/src/build_newsletter_source_audit.py \
             --date "${{ steps.date.outputs.report_date }}"
@@ -131,6 +193,7 @@ jobs:
               --provider "${NEWSLETTER_AI_PROVIDER}"
 
       - name: Build static newsletter site
+        if: steps.freshness.outputs.should_run == 'true'
         env:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
@@ -193,6 +256,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Publish public newsletter mirror
+        if: steps.freshness.outputs.should_run == 'true'
         shell: bash
         env:
           NEWSLETTER_PUBLIC_REPO_TOKEN: ${{ secrets.NEWSLETTER_PUBLIC_REPO_TOKEN }}
@@ -238,6 +302,7 @@ jobs:
           echo "Published ${NEWSLETTER_PUBLIC_URL}"
 
       - name: Verify public newsletter
+        if: steps.freshness.outputs.should_run == 'true'
         shell: bash
         run: |
           python3 - "${{ steps.date.outputs.report_date }}" "${NEWSLETTER_PUBLIC_URL}" <<'PY'
