@@ -11,7 +11,9 @@ Last updated: 2026-06-15 KST
 - Public mirror repo: `pkkong/kpef-newsletter`, branch `gh-pages`
 - Navigation source change verified: `998acb2 Hide Wiki from public navigation`
 - Public deploy verified for navigation: `dfa868b`
-- Latest public mirror deploy verified: `db45ac9` on 2026-06-15 KST
+- Latest newsletter source deploy verified: `6fe250e Harden newsletter publish guards`
+- Latest GitHub Actions verification: `27553627676` succeeded on 2026-06-15 KST
+- Latest public mirror deploy verified: `deb1d8f` on 2026-06-15 KST
 - Public bottom navigation: `브리프 / LP / GP`
 - Wiki is hidden from public navigation until the user re-plans it.
 - Operating model source of truth added on 2026-06-10:
