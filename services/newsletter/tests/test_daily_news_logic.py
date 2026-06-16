@@ -73,11 +73,13 @@ from build_newsletter_deploy import (
     read_lp_profile_codes,
     render_lp_notice_card,
 )
-from build_service_site import editorial_section
-from build_service_site import editorial_subtype
-from build_service_site import article_payload_rows
-from build_service_site import public_article_summary_lines
-from build_service_site import read_ai_enrichment_context
+from newsletter_renderer import (
+    article_payload_rows,
+    editorial_section,
+    editorial_subtype,
+    public_article_summary_lines,
+    read_ai_enrichment_context,
+)
 from apply_daily_news_review import normalize_category
 from brand_assets import brand_logo_url
 from lp_public_visibility import is_public_lp_notice_row
@@ -3224,6 +3226,8 @@ bad = sorted(
     or name.startswith("services.gp.")
     or name == "services.wiki"
     or name.startswith("services.wiki.")
+    or name == "build_service_site"
+    or name == "scripts.build_service_site"
     or name.endswith("build_newsletter_deploy")
 )
 print(json.dumps(bad, ensure_ascii=False))

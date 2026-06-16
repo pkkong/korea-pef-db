@@ -4,10 +4,10 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
-from services.newsletter.src.daily_news_common import DEFAULT_EXPORT_DIR, REPO_ROOT, today_seoul
+from services.newsletter.src.daily_news_common import DEFAULT_EXPORT_DIR, today_seoul
+from services.newsletter.src.newsletter_renderer import build_newsletter_site, rewrite_newsletter_archive
 from services.newsletter.src.newsletter_site_support import (
     DEFAULT_ARCHIVE_LIMIT,
     DEFAULT_ARCHIVE_SEED_URL,
@@ -17,12 +17,6 @@ from services.newsletter.src.newsletter_site_support import (
     read_archive_seed,
     read_embedded_archive,
 )
-
-SCRIPTS_DIR = REPO_ROOT / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-from build_service_site import build, rewrite_newsletter_archive  # noqa: E402
 
 
 def build_newsletter_service_pages(
@@ -36,13 +30,11 @@ def build_newsletter_service_pages(
     """Write Newsletter pages while preserving the current public URLs."""
     site_dir.mkdir(parents=True, exist_ok=True)
     effective_date = report_date or today_seoul()
-    result = build(
-        public_dir=site_dir,
+    result = build_newsletter_site(
+        site_dir,
         out_dir=DEFAULT_EXPORT_DIR,
         report_date=effective_date,
         archive_limit=archive_limit,
-        newsletter_only=True,
-        include_wiki=False,
     )
     local_archive = read_embedded_archive(site_dir / "index.html")
     seed_archive = read_archive_seed(archive_seed_url, required=require_archive_seed) if use_archive_seed else []

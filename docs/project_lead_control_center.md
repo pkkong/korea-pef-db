@@ -1,6 +1,6 @@
 # Project Lead Control Center
 
-Last updated: 2026-06-15 KST
+Last updated: 2026-06-16 KST
 
 이 문서는 Project Lead가 현재 프로젝트 상태를 잃지 않기 위한 운영판이다. 새 채팅방, 서브에이전트, 별도 담당자가 작업을 시작할 때는 먼저 이 문서를 읽고, 작업이 끝나면 필요한 변경을 여기에 반영한다.
 
@@ -14,6 +14,7 @@ Last updated: 2026-06-15 KST
 - Latest newsletter source deploy verified: `6fe250e Harden newsletter publish guards`
 - Latest GitHub Actions verification: `27553627676` succeeded on 2026-06-15 KST
 - Latest public mirror deploy verified: `deb1d8f` on 2026-06-15 KST
+- Newsletter production renderer split started on 2026-06-16: `services/newsletter/src/newsletter_renderer.py` owns newsletter-only HTML/CSS/JS generation and the production bundle path must not import `scripts/build_service_site.py`.
 - Public bottom navigation: `브리프 / LP / GP`
 - Wiki is hidden from public navigation until the user re-plans it.
 - Operating model source of truth added on 2026-06-10:
