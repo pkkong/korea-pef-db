@@ -11,11 +11,11 @@ Last updated: 2026-06-16 KST
 - Public mirror repo: `pkkong/kpef-newsletter`, branch `gh-pages`
 - Navigation source change verified: `998acb2 Hide Wiki from public navigation`
 - Public deploy verified for navigation: `dfa868b`
-- Latest newsletter source deploy verified: `26bdd7f Extract newsletter static renderer`
-- Latest GitHub Actions verification: `27593032001` succeeded on 2026-06-16 KST
-- Latest public mirror deploy verified: `a8fbcf1` on 2026-06-16 KST
+- Latest newsletter daily workflow verification: `27593924087` succeeded on source `9e769c6` on 2026-06-16 KST.
+- Latest public mirror deploy verified: `eb693ca` on 2026-06-16 KST.
+- Latest source workflow commit: `46b24a6 Add newsletter Vercel deploy workflow`.
 - Newsletter production renderer split completed on 2026-06-16: `services/newsletter/src/newsletter_renderer.py` owns newsletter-only HTML/CSS/JS generation and the production bundle path must not import `scripts/build_service_site.py`.
-- Newsletter Vercel/Supabase migration path started on 2026-06-16: `services/newsletter/web/` is the standalone Flask/Vercel app, `services/newsletter/supabase/` owns the public read-model schema, and `services/newsletter/src/sync_newsletter_supabase.py` syncs generated archive rows to Supabase when GitHub Actions secrets are configured.
+- Newsletter Vercel/Supabase migration path started on 2026-06-16: `services/newsletter/web/` is the standalone Flask/Vercel app, `services/newsletter/supabase/` owns the public read-model schema, and `services/newsletter/src/sync_newsletter_supabase.py` syncs generated archive rows to Supabase when GitHub Actions secrets are configured. `Deploy newsletter Vercel app` is active in GitHub Actions as workflow `296703720`, but production Vercel deployment still requires Vercel/Supabase secrets.
 - Public bottom navigation: `브리프 / LP / GP`
 - Wiki is hidden from public navigation until the user re-plans it.
 - Operating model source of truth added on 2026-06-10:
