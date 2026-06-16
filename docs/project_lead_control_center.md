@@ -11,10 +11,10 @@ Last updated: 2026-06-16 KST
 - Public mirror repo: `pkkong/kpef-newsletter`, branch `gh-pages`
 - Navigation source change verified: `998acb2 Hide Wiki from public navigation`
 - Public deploy verified for navigation: `dfa868b`
-- Latest newsletter source deploy verified: `6fe250e Harden newsletter publish guards`
-- Latest GitHub Actions verification: `27553627676` succeeded on 2026-06-15 KST
-- Latest public mirror deploy verified: `deb1d8f` on 2026-06-15 KST
-- Newsletter production renderer split started on 2026-06-16: `services/newsletter/src/newsletter_renderer.py` owns newsletter-only HTML/CSS/JS generation and the production bundle path must not import `scripts/build_service_site.py`.
+- Latest newsletter source deploy verified: `26bdd7f Extract newsletter static renderer`
+- Latest GitHub Actions verification: `27593032001` succeeded on 2026-06-16 KST
+- Latest public mirror deploy verified: `a8fbcf1` on 2026-06-16 KST
+- Newsletter production renderer split completed on 2026-06-16: `services/newsletter/src/newsletter_renderer.py` owns newsletter-only HTML/CSS/JS generation and the production bundle path must not import `scripts/build_service_site.py`.
 - Public bottom navigation: `브리프 / LP / GP`
 - Wiki is hidden from public navigation until the user re-plans it.
 - Operating model source of truth added on 2026-06-10:
