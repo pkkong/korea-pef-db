@@ -15,6 +15,7 @@ Last updated: 2026-06-16 KST
 - Latest GitHub Actions verification: `27593032001` succeeded on 2026-06-16 KST
 - Latest public mirror deploy verified: `a8fbcf1` on 2026-06-16 KST
 - Newsletter production renderer split completed on 2026-06-16: `services/newsletter/src/newsletter_renderer.py` owns newsletter-only HTML/CSS/JS generation and the production bundle path must not import `scripts/build_service_site.py`.
+- Newsletter Vercel/Supabase migration path started on 2026-06-16: `services/newsletter/web/` is the standalone Flask/Vercel app, `services/newsletter/supabase/` owns the public read-model schema, and `services/newsletter/src/sync_newsletter_supabase.py` syncs generated archive rows to Supabase when GitHub Actions secrets are configured.
 - Public bottom navigation: `브리프 / LP / GP`
 - Wiki is hidden from public navigation until the user re-plans it.
 - Operating model source of truth added on 2026-06-10:
@@ -83,6 +84,12 @@ Build newsletter-only public bundle for daily GitHub Actions:
 
 ```bash
 python3 scripts/build_newsletter_bundle.py --date YYYY-MM-DD --archive-limit 30
+```
+
+Build newsletter Supabase payload:
+
+```bash
+python3 services/newsletter/src/sync_newsletter_supabase.py --date YYYY-MM-DD --archive services/newsletter/deploy/site/archive.json
 ```
 
 Build Wiki only when explicitly re-planned:

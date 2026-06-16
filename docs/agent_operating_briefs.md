@@ -218,6 +218,8 @@
 - GitHub Actions 정적 빌드에서는 원격 브랜드 로고 다운로드를 하지 않는다. `NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS=1`을 유지하고, 로고 누락·약한 favicon 문제는 `check_newsletter_brand_icons.py` 리포트 기반 별도 sweep에서 보완한다.
 - GitHub Actions 검증 단계도 수집 단계와 같은 Naver credentials를 받아야 한다. `validate_daily_news_pipeline.py`는 active Naver sources와 `NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET` 존재 여부를 함께 검사하므로, collection step만 env를 주고 validation/static build step에는 빼는 구성을 만들면 안 된다.
 - 발행 완료는 로컬 `daily_news_brief_YYYYMMDD.md` 생성이 아니라 public mirror push와 공개 확인까지다. GitHub Actions는 공개 `health.json`의 `report_date`와 `article_count`, `archive.json`의 당일 entry를 확인한 뒤에만 성공 종료해야 한다.
+- Vercel/Supabase 전환 경로에서 Vercel은 사용자 화면만 담당한다. 느린 뉴스 수집, 분류, 중복 제거, 발행 검증은 GitHub Actions가 계속 담당하고, `services/newsletter/src/sync_newsletter_supabase.py`가 공개 archive를 Supabase read model로 싱크한다.
+- `services/newsletter/web/`은 독립 Vercel Flask app이다. 이 앱은 LP/GP/Wiki, legacy monolith, local SQLite DB를 import하지 않고 Supabase `newsletter_public_issue_articles` 또는 기존 public `archive.json`만 읽는다. `SUPABASE_SERVICE_ROLE_KEY`는 GitHub Actions 전용이고 Vercel에는 넣지 않는다.
 - 매일 발행 후 `exports/daily_news/ops_status/newsletter_ops_status_latest.md`를 우선 확인한다. 이 파일의 `Status`가 `ok`이고 hard failure가 없어야 “수집/공개 완료”로 보고할 수 있다. 사용자가 “오늘 수집 안 된 것 같다”고 하면 로그부터 파지 말고 이 status report의 Collection, Local, Public, Quality 섹션을 먼저 본다.
 
 ### 금지사항

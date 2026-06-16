@@ -6,9 +6,15 @@
 정적 HTML 생성, GitHub Pages 배포까지 repository workflow에서 처리한다.
 개인 Mac, Windows 예약 작업, 로컬 자동 push는 운영 경로에서 제외한다.
 
-이 문서는 GitHub Actions를 넘어 전용 Cloud Run Job, Railway Cron,
-Cloud SQL/Supabase 같은 별도 클라우드 운영으로 확장할 때 참고하는
-미래 전환 메모다.
+이 문서는 GitHub Actions를 넘어 Vercel/Supabase 또는 전용 Cloud Run Job,
+Railway Cron 같은 별도 클라우드 운영으로 확장할 때 참고하는 전환 메모다.
+
+2026-06-16 기준 1차 전환 경로는 Vercel + Supabase다.
+
+- `services/newsletter/web/`: Vercel Flask app. LP/GP/Wiki를 import하지 않는다.
+- `services/newsletter/supabase/migrations/`: Supabase public read model schema.
+- `services/newsletter/src/sync_newsletter_supabase.py`: generated archive를 Supabase read model로 싱크한다.
+- GitHub Actions는 Supabase secret이 없으면 기존 GitHub Pages 발행을 계속하고, secret이 있으면 read model sync를 추가 실행한다.
 
 ## 추천 구조
 
@@ -30,41 +36,66 @@ Cloud Scheduler
 
 이 단계는 GitHub Actions에서 실행되므로 개인 PC가 켜져 있을 필요가 없다.
 
-## 2단계: 클라우드 이전 MVP
+## 2단계: Vercel/Supabase 이전 MVP
 
 가장 현실적인 구조는 다음이다.
 
-- 실행: Cloud Run Job 또는 Railway Cron
-- DB: Supabase Postgres 또는 Cloud SQL Postgres
-- 정적 페이지: Cloudflare Pages, Vercel, Netlify, 또는 같은 서버에서 호스팅
+- 수집 실행: 기존 GitHub Actions 유지
+- 공개 DB: Supabase Postgres
+- 웹앱: Vercel Flask app
 - 비밀키: 플랫폼의 Environment Variables에 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` 저장
 
-이렇게 하면 GitHub Actions보다 더 강한 서버 운영, 장기 DB, 이메일 발송
-큐까지 확장할 수 있다.
+이 단계에서는 수집 파이프라인을 Vercel request runtime으로 옮기지 않는다.
+Vercel은 사용자가 보는 화면만 담당하고, 느린 수집/분류는 GitHub Actions가
+계속 처리한다. 이렇게 해야 사용자 페이지 로딩과 크롤링 실패가 분리된다.
 
 ## 3단계: 앱 구조
 
 ```text
-services/newsletter/deploy/site
-  index.html
-  daily-news.html
+services/newsletter/web
+  index.py
+  app.py
+  newsletter_data.py
 
 services/newsletter/src
   run_daily_news_pipeline.py
   validate_daily_news_pipeline.py
+  sync_newsletter_supabase.py
 
 scripts
-  build_service_site.py
+  build_newsletter_bundle.py
 
 /db
   local SQLite for development only
 
-Cloud DB
-  news_document
-  news_run
-  news_tag
-  news_entity_link
+Supabase read model
+  newsletter_issues
+  newsletter_articles
+  newsletter_issue_articles
+  newsletter_article_tags
+  newsletter_article_entities
+  newsletter_public_issue_articles
 ```
+
+## Vercel Runtime Env
+
+Vercel에는 아래 public read env만 둔다.
+
+```text
+SUPABASE_URL=
+SUPABASE_PUBLISHABLE_KEY=
+NEWSLETTER_ARCHIVE_URL=https://pkkong.github.io/kpef-newsletter/archive.json
+NEWSLETTER_CACHE_SECONDS=300
+```
+
+GitHub Actions에는 backend write secret을 둔다.
+
+```text
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+`SUPABASE_SERVICE_ROLE_KEY`는 Vercel public app에 넣지 않는다.
 
 ## Apps Script 선택지
 

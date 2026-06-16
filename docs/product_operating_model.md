@@ -34,6 +34,7 @@ Last updated: 2026-06-10 KST
 각 서비스는 자기 산출물만 만든다.
 
 - Brief builder: `scripts/build_newsletter_bundle.py` creates `index.html`, `daily-news.html`, `archive.json`, `health.json`, and newsletter assets without importing LP, GP, Wiki, or the legacy deploy monolith.
+- Brief Vercel app: `services/newsletter/web/` is the standalone runtime for a Vercel/Supabase version of the newsletter. It reads Supabase public views first and falls back to the existing public `archive.json`; it does not crawl news or import LP/GP/Wiki code.
 - LP builder: `lp-*.html`, `lp-notices.html`, `lp-official-notices.html`,
   `lp-notice-*.html`, LP public data.
 - GP builder: `market.html`, `gps.html`, `gp-*.html`, GP public data.

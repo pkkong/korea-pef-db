@@ -272,6 +272,30 @@ jobs:
             --report-date "${{ steps.date.outputs.report_date }}"
           echo "::endgroup::"
 
+      - name: Build Supabase newsletter payload
+        if: steps.freshness.outputs.should_run == 'true'
+        run: |
+          python3 services/newsletter/src/sync_newsletter_supabase.py \
+            --date "${{ steps.date.outputs.report_date }}" \
+            --archive services/newsletter/deploy/site/archive.json \
+            --payload-out exports/daily_news/newsletter_supabase_payload.json
+
+      - name: Sync Supabase newsletter read model
+        if: steps.freshness.outputs.should_run == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "Supabase secrets are not configured; skipping optional newsletter read-model sync."
+            exit 0
+          fi
+          python3 services/newsletter/src/sync_newsletter_supabase.py \
+            --date "${{ steps.date.outputs.report_date }}" \
+            --archive services/newsletter/deploy/site/archive.json \
+            --payload-out exports/daily_news/newsletter_supabase_payload.json \
+            --apply
+
       - name: Publish public newsletter mirror
         if: steps.freshness.outputs.should_run == 'true'
         shell: bash

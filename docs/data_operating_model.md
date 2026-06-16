@@ -81,6 +81,18 @@ Renderer는 public read model을 HTML로 표현하는 역할만 한다.
   `자동 생성`, `검토 대기` 같은 내부 표현을 노출하지 않는다.
 - 공개 숫자와 목록은 손으로 HTML에 박지 않는다. source data에서 읽어 빌드한다.
 
+## Newsletter Supabase Read Model
+
+뉴스레터의 Vercel/Supabase 전환은 운영 DB 전체 이전이 아니라 public read model부터 시작한다.
+
+- `newsletter_issues`: 발행일 단위 issue.
+- `newsletter_articles`: URL 기준 canonical article.
+- `newsletter_issue_articles`: 특정 issue에 노출되는 기사와 순서.
+- `newsletter_article_tags`, `newsletter_article_entities`: 공개 가능한 태그와 GP/LP 링크.
+- `newsletter_public_issue_articles`: Vercel 앱이 읽는 public view.
+
+GitHub Actions가 기존 archive를 만든 뒤 `sync_newsletter_supabase.py`로 이 read model을 갱신한다. Vercel app은 이 view를 읽고, Supabase가 비어 있거나 장애일 때는 기존 public `archive.json`으로 fallback한다.
+
 ## Build Contract
 
 기본 공개 통합 빌드는 active public services만 포함한다.
