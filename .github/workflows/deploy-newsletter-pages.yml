@@ -346,14 +346,31 @@ jobs:
         if: steps.freshness.outputs.should_run == 'true'
         shell: bash
         run: |
-          python3 - "${{ steps.date.outputs.report_date }}" "${NEWSLETTER_PUBLIC_URL}" <<'PY'
+          python3 - "${{ steps.date.outputs.report_date }}" "${NEWSLETTER_PUBLIC_URL}" \
+            "services/newsletter/deploy/site/health.json" \
+            "services/newsletter/deploy/site/archive.json" <<'PY'
           import json
           import sys
           import time
+          from pathlib import Path
           from urllib.request import Request, urlopen
 
           report_date = sys.argv[1]
           base_url = sys.argv[2].rstrip("/")
+          expected_health = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"))
+          expected_archive = json.loads(Path(sys.argv[4]).read_text(encoding="utf-8"))
+          expected_built_at = str(expected_health.get("built_at") or "")
+          expected_article_count = int(expected_health.get("article_count") or 0)
+          expected_entry = next(
+              (row for row in expected_archive if isinstance(row, dict) and row.get("reportDate") == report_date),
+              None,
+          )
+          expected_archive_count = len(expected_entry.get("articles") or []) if isinstance(expected_entry, dict) else 0
+          if expected_article_count <= 0 or expected_archive_count != expected_article_count:
+              raise SystemExit(
+                  "local newsletter artifact is invalid before public verification "
+                  f"(health={expected_article_count}, archive={expected_archive_count})"
+              )
           deadline = time.time() + 180
           last_error = ""
 
@@ -373,9 +390,15 @@ jobs:
                       raise RuntimeError(f"health report_date={health.get('report_date')} expected={report_date}")
                   if health.get("services") != "newsletter":
                       raise RuntimeError(f"health services={health.get('services')} expected=newsletter")
+                  if str(health.get("built_at") or "") != expected_built_at:
+                      raise RuntimeError(
+                          f"health built_at={health.get('built_at')} expected={expected_built_at}"
+                      )
                   article_count = int(health.get("article_count") or 0)
-                  if article_count <= 0:
-                      raise RuntimeError("health article_count is 0")
+                  if article_count != expected_article_count:
+                      raise RuntimeError(
+                          f"health article_count={article_count} expected={expected_article_count}"
+                      )
                   for key in ["lp_monitor_count", "gp_count", "gp_profile_page_count"]:
                       if int(health.get(key) or 0) != 0:
                           raise RuntimeError(f"newsletter-only health {key}={health.get(key)} expected=0")
@@ -383,10 +406,8 @@ jobs:
                   if entry is None:
                       raise RuntimeError(f"archive missing reportDate={report_date}")
                   archive_count = len(entry.get("articles") or [])
-                  if archive_count <= 0:
-                      raise RuntimeError("archive article_count is 0")
-                  if archive_count != article_count:
-                      raise RuntimeError(f"archive article_count={archive_count} does not match health article_count={article_count}")
+                  if archive_count != expected_archive_count:
+                      raise RuntimeError(f"archive article_count={archive_count} expected={expected_archive_count}")
                   print(f"public_verify_status=ok report_date={report_date} health_articles={article_count} archive_articles={archive_count}")
                   raise SystemExit(0)
               except Exception as exc:

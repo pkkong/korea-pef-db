@@ -7,15 +7,17 @@ Last updated: 2026-06-16 KST
 ## Current Public Product
 
 - Public site: `https://pkkong.github.io/kpef-newsletter/`
+- Newsletter Vercel app: `https://kpef-newsletter.vercel.app`
 - Source repo: `pkkong/korea-pef-db`
 - Public mirror repo: `pkkong/kpef-newsletter`, branch `gh-pages`
 - Navigation source change verified: `998acb2 Hide Wiki from public navigation`
 - Public deploy verified for navigation: `dfa868b`
-- Latest newsletter daily workflow verification: `27593924087` succeeded on source `9e769c6` on 2026-06-16 KST.
-- Latest public mirror deploy verified: `eb693ca` on 2026-06-16 KST.
-- Latest source workflow commit: `46b24a6 Add newsletter Vercel deploy workflow`.
+- Latest newsletter daily workflow verification: `27626356669` succeeded on source `60990ea` on 2026-06-16 KST. It collected/build/synced newsletter-only output, inserted the Supabase read model, and published the GitHub Pages mirror.
+- Latest public mirror deploy verified: `43cf86c` on 2026-06-16 KST.
+- Latest Vercel deploy workflow verification: `27626108900` succeeded on source `60990ea` on 2026-06-16 KST.
+- Latest source workflow commit: `60990ea Trigger newsletter Vercel redeploy`.
 - Newsletter production renderer split completed on 2026-06-16: `services/newsletter/src/newsletter_renderer.py` owns newsletter-only HTML/CSS/JS generation and the production bundle path must not import `scripts/build_service_site.py`.
-- Newsletter Vercel/Supabase migration path started on 2026-06-16: `services/newsletter/web/` is the standalone Flask/Vercel app, `services/newsletter/supabase/` owns the public read-model schema, and `services/newsletter/src/sync_newsletter_supabase.py` syncs generated archive rows to Supabase when GitHub Actions secrets are configured. `Deploy newsletter Vercel app` is active in GitHub Actions as workflow `296703720`, but production Vercel deployment still requires Vercel/Supabase secrets. `Check newsletter Vercel readiness` is the non-deploying preflight workflow for the same path.
+- Newsletter Vercel/Supabase migration path is active as of 2026-06-16: `services/newsletter/web/` is the standalone Flask/Vercel app, `services/newsletter/supabase/` owns the public read-model schema, and `services/newsletter/src/sync_newsletter_supabase.py` syncs generated archive rows to Supabase. Vercel project `kpef-newsletter` uses root `services/newsletter/web`, and Supabase project `fhigakwodmfjwtttwyyj` stores the newsletter read model. `Deploy newsletter Vercel app` is active in GitHub Actions as workflow `296703720`; `Check newsletter Vercel readiness` is the non-deploying preflight workflow for the same path.
 - Public bottom navigation: `브리프 / LP / GP`
 - Wiki is hidden from public navigation until the user re-plans it.
 - Operating model source of truth added on 2026-06-10:
