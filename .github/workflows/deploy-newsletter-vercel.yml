@@ -1,0 +1,92 @@
+name: Deploy newsletter Vercel app
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: newsletter-vercel
+  cancel-in-progress: false
+
+jobs:
+  deploy-vercel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NEWSLETTER_ARCHIVE_URL: https://pkkong.github.io/kpef-newsletter/archive.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Set up Node for Vercel CLI
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install newsletter web dependencies
+        working-directory: services/newsletter/web
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements.txt
+
+      - name: Check Vercel/Supabase readiness
+        run: |
+          python3 services/newsletter/scripts/check_vercel_supabase_readiness.py
+
+      - name: Smoke test Flask app
+        working-directory: services/newsletter/web
+        run: |
+          python3 - <<'PY'
+          from app import app
+
+          client = app.test_client()
+          for path in ["/", "/daily-news.html", "/health.json", "/archive.json"]:
+              response = client.get(path)
+              if response.status_code != 200:
+                  raise SystemExit(f"{path} returned {response.status_code}")
+          health = client.get("/health.json").get_json()
+          if health.get("service") != "newsletter":
+              raise SystemExit(f"unexpected health payload: {health}")
+          print(f"newsletter_vercel_smoke=ok report_date={health.get('report_date')} articles={health.get('article_count')}")
+          PY
+
+      - name: Apply Supabase newsletter migration
+        if: env.SUPABASE_DB_URL != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          psql "$SUPABASE_DB_URL" \
+            --set ON_ERROR_STOP=1 \
+            --file services/newsletter/supabase/migrations/20260616090000_newsletter_read_model.sql
+
+      - name: Skip Supabase migration when DB URL is missing
+        if: env.SUPABASE_DB_URL == ''
+        run: |
+          echo "SUPABASE_DB_URL is not configured; skipping Supabase migration apply."
+
+      - name: Stop if Vercel credentials are missing
+        if: env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID == ''
+        run: |
+          echo "::error::VERCEL_TOKEN, VERCEL_ORG_ID, and VERCEL_PROJECT_ID are required for Vercel deploy."
+          exit 1
+
+      - name: Deploy newsletter app to Vercel
+        working-directory: services/newsletter/web
+        run: |
+          npm install --global vercel@latest
+          vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+          vercel deploy --prod --token "$VERCEL_TOKEN"

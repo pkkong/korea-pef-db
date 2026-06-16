@@ -92,6 +92,12 @@ Build newsletter Supabase payload:
 python3 services/newsletter/src/sync_newsletter_supabase.py --date YYYY-MM-DD --archive services/newsletter/deploy/site/archive.json
 ```
 
+Deploy standalone newsletter Vercel app:
+
+```bash
+GitHub Actions → Deploy newsletter Vercel app → Run workflow
+```
+
 Build Wiki only when explicitly re-planned:
 
 ```bash

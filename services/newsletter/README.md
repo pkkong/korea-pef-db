@@ -26,6 +26,10 @@ GitHub Actions 자동 발행에는 원본 저장소 Secrets에 아래 값이 필
 `Deploy newsletter to GitHub Pages` 워크플로를 선택한 뒤 `Run workflow`를 누른다.
 날짜를 비워 두면 한국시간 기준 오늘 날짜로 생성된다.
 
+Vercel 앱 배포는 별도 workflow인 `Deploy newsletter Vercel app`에서 처리한다.
+이 workflow는 GitHub Pages daily publish와 분리되어 있고, `VERCEL_TOKEN`,
+`VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`가 설정된 뒤 실행한다.
+
 ## Layout
 
 - `src/`: Python implementation for collection, review, validation, delivery, source audit, and static deploy bundle generation

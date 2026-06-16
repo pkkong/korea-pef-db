@@ -28,6 +28,24 @@ Vercel은 수집기를 돌리지 않는다. Vercel은 사용자가 보는 웹 �
 5. GitHub Actions `Deploy newsletter to GitHub Pages`를 수동 실행해 Supabase sync 로그를 확인한다.
 6. Vercel `/health.json`에서 `data_source=supabase`와 최신 `report_date`를 확인한다.
 
+## 자동 배포 Workflow
+
+`Deploy newsletter Vercel app` workflow는 Vercel 앱만 배포한다. 매일 08:30
+뉴스레터 발행 workflow와 분리되어 있으므로, Vercel 쪽 장애가 daily publish를
+막지 않는다.
+
+필요한 GitHub Actions secrets:
+
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+- `SUPABASE_DB_URL` optional: migration SQL을 Actions에서 직접 적용할 때 사용
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
+
+`SUPABASE_DB_URL`이 없으면 migration 적용만 건너뛴다. `VERCEL_*` 3개가 없으면
+Vercel deploy 단계는 실패 처리한다.
+
 ## 장애 기준
 
 - Supabase sync가 실패해도 GitHub Pages 발행은 계속된다.
