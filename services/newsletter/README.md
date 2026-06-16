@@ -29,6 +29,7 @@ GitHub Actions 자동 발행에는 원본 저장소 Secrets에 아래 값이 필
 Vercel 앱 배포는 별도 workflow인 `Deploy newsletter Vercel app`에서 처리한다.
 이 workflow는 GitHub Pages daily publish와 분리되어 있고, `VERCEL_TOKEN`,
 `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`가 설정된 뒤 실행한다.
+계정 연결 전 상태 점검은 `Check newsletter Vercel readiness` workflow를 실행한다.
 
 ## Layout
 

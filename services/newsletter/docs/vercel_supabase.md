@@ -30,6 +30,10 @@ Vercel은 수집기를 돌리지 않는다. Vercel은 사용자가 보는 웹 �
 
 ## 자동 배포 Workflow
 
+`Check newsletter Vercel readiness` workflow는 계정 연결 전에도 성공해야 하는
+preflight다. 파일 존재, Python compile, import isolation, Flask smoke test,
+필요 secret의 존재 여부를 보여준다.
+
 `Deploy newsletter Vercel app` workflow는 Vercel 앱만 배포한다. 매일 08:30
 뉴스레터 발행 workflow와 분리되어 있으므로, Vercel 쪽 장애가 daily publish를
 막지 않는다.

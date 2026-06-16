@@ -1,0 +1,83 @@
+name: Check newsletter Vercel readiness
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: newsletter-vercel-readiness
+  cancel-in-progress: false
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NEWSLETTER_ARCHIVE_URL: https://pkkong.github.io/kpef-newsletter/archive.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install newsletter web dependencies
+        working-directory: services/newsletter/web
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements.txt
+
+      - name: Check standalone app readiness
+        run: |
+          python3 services/newsletter/scripts/check_vercel_supabase_readiness.py | tee readiness.json
+
+      - name: Smoke test Flask app
+        working-directory: services/newsletter/web
+        run: |
+          python3 - <<'PY'
+          from app import app
+
+          client = app.test_client()
+          for path in ["/", "/daily-news.html", "/health.json", "/archive.json"]:
+              response = client.get(path)
+              if response.status_code != 200:
+                  raise SystemExit(f"{path} returned {response.status_code}")
+          health = client.get("/health.json").get_json()
+          if health.get("service") != "newsletter":
+              raise SystemExit(f"unexpected health payload: {health}")
+          print(f"newsletter_vercel_smoke=ok report_date={health.get('report_date')} articles={health.get('article_count')}")
+          PY
+
+      - name: Summarize credential state
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("readiness.json").read_text(encoding="utf-8"))
+          print("### Newsletter Vercel/Supabase readiness")
+          print("")
+          print("| Check | Status |")
+          print("| --- | --- |")
+          for key in ["files", "compile", "import_isolation"]:
+              print(f"| `{key}` | {payload.get(key)} |")
+          print("")
+          print("| Secret | Status |")
+          print("| --- | --- |")
+          for key, value in sorted((payload.get("env") or {}).items()):
+              print(f"| `{key}` | {value} |")
+          print("")
+          if any(value == "missing" for value in (payload.get("env") or {}).values()):
+              print("Missing secrets are expected before production Vercel/Supabase connection.")
+          PY
