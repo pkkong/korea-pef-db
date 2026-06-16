@@ -85,8 +85,8 @@ jobs:
           exit 1
 
       - name: Deploy newsletter app to Vercel
-        working-directory: services/newsletter/web
         run: |
           npm install --global vercel@latest
+          # Run from repo root because the Vercel project already has Root Directory set.
           vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
           vercel deploy --prod --token "$VERCEL_TOKEN"
