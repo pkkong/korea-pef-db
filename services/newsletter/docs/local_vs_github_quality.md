@@ -1,14 +1,16 @@
-# GitHub-Only Newsletter Operations
+# Cloud Newsletter Operations
 
 ## Short Answer
 
-뉴스레터의 정식 운영 경로는 GitHub Actions 하나다. Mac은 매일 수집, 발행, 배포 경로에서 제외한다.
+뉴스레터의 정식 수집/발행 경로는 GitHub Actions다. Mac은 매일 수집, 발행, 배포 경로에서 제외한다.
 
 운영 기준은 다음과 같다.
 
-- GitHub Actions: 매일 08:30 KST 자동 수집, 분류, 정적 사이트 생성, public mirror push를 담당한다.
+- GitHub Actions: 매일 08:37 KST 자동 수집, 분류, 정적 사이트 생성, public mirror push, Supabase sync를 담당한다.
 - GitHub Actions 수동 실행: 같은 workflow의 `Run workflow`로 특정 날짜를 재발행한다.
 - 로컬 실행: 운영 발행에는 사용하지 않는다. 개발 진단은 가능하지만 publish/push 경로는 없다.
+- Vercel: 사용자가 보는 primary app이다. 수집은 하지 않고 Supabase read model을 읽는다.
+- GitHub Pages: 정적 백업 미러다.
 
 ## Operating Contract
 
@@ -43,7 +45,8 @@ GitHub Actions는 다음 조건을 검사한다.
 - 특정 날짜 재발행: GitHub Actions `Run workflow`
 - 소스 품질, 분류, 키워드 룰 테스트: 로컬 개발 실행 후 source repo에 반영
 - GitHub Actions 장애 복구: workflow 수정 또는 `Run workflow` 재실행
-- 사용자에게 보여줄 최종 URL 확인: GitHub Pages public URL
+- 사용자에게 보여줄 최종 URL 확인: Vercel app URL
+- 백업 미러 확인: GitHub Pages public URL
 
 ## Direction
 

@@ -71,7 +71,7 @@ Last updated: 2026-06-10 KST
 
 ## Operating Rhythm
 
-- 매일 08:30 KST: Brief 수집, 분류, 발행, public mirror 확인.
+- 매일 08:37 KST: Brief 수집, 분류, 발행, Supabase sync, Vercel app과 public mirror 확인.
 - 하루 1-3회: LP 공고 수집, 사업 상태 갱신, public-ready 공고만 공개 빌드.
 - 주기적: GP/LP 프로필, 로고, People, 뉴스 연결 보강.
 - 필요 시: 통합 사이트 빌드와 배포.

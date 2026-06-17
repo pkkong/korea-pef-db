@@ -1,0 +1,188 @@
+name: Newsletter publish watchdog
+
+on:
+  schedule:
+    # GitHub-only fallback checks after the primary newsletter publish windows.
+    # Use off-peak minutes to reduce the chance of GitHub schedule drops.
+    - cron: "52 23 * * *" # 08:52 Asia/Seoul
+    - cron: "22 0 * * *"  # 09:22 Asia/Seoul
+    - cron: "52 0 * * *"  # 09:52 Asia/Seoul
+    - cron: "22 1 * * *"  # 10:22 Asia/Seoul
+    - cron: "52 1 * * *"  # 10:52 Asia/Seoul
+    - cron: "22 2 * * *"  # 11:22 Asia/Seoul
+  workflow_dispatch:
+    inputs:
+      report_date:
+        description: "Report date in YYYY-MM-DD. Leave blank for today's date in Asia/Seoul."
+        required: false
+        type: string
+      dry_run:
+        description: "Only report whether dispatch would happen."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: newsletter-watchdog
+  cancel-in-progress: false
+
+env:
+  NEWSLETTER_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter
+  NEWSLETTER_APP_URL: https://kpef-newsletter.vercel.app
+  NEWSLETTER_PUBLISH_WORKFLOW: Deploy newsletter to GitHub Pages
+  NEWSLETTER_SYNC_WORKFLOW: Sync newsletter Supabase read model
+
+jobs:
+  check-and-dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve report date
+        id: date
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.report_date }}" ]; then
+            echo "report_date=${{ inputs.report_date }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "report_date=$(TZ=Asia/Seoul date +%F)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check newsletter public freshness
+        id: freshness
+        shell: bash
+        run: |
+          python3 - "${{ steps.date.outputs.report_date }}" "${NEWSLETTER_PUBLIC_URL}" "${NEWSLETTER_APP_URL}" <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          from urllib.error import URLError
+          from urllib.request import Request, urlopen
+
+          report_date = sys.argv[1]
+          mirror_base_url = sys.argv[2].rstrip("/")
+          app_base_url = sys.argv[3].rstrip("/")
+
+          def fetch_json(url: str) -> object:
+              req = Request(
+                  f"{url}{'&' if '?' in url else '?'}watchdog={int(time.time())}-{report_date}",
+                  headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
+              )
+              with urlopen(req, timeout=20) as response:
+                  return json.loads(response.read().decode("utf-8"))
+
+          mirror_fresh = False
+          app_fresh = False
+          mirror_status = "missing"
+          app_status = "missing"
+
+          try:
+              health = fetch_json(f"{mirror_base_url}/health.json")
+              archive = fetch_json(f"{mirror_base_url}/archive.json")
+              mirror_date = str(health.get("report_date") or "")
+              mirror_articles = int(health.get("article_count") or 0)
+              entry = next(
+                  (row for row in archive if isinstance(row, dict) and row.get("reportDate") == report_date),
+                  None,
+              )
+              archive_articles = len(entry.get("articles") or []) if isinstance(entry, dict) else 0
+              mirror_fresh = mirror_date == report_date and mirror_articles > 0 and archive_articles == mirror_articles
+              mirror_status = f"{mirror_date or 'missing'}/{mirror_articles}/{archive_articles}"
+          except (OSError, URLError, json.JSONDecodeError, ValueError) as exc:
+              mirror_status = f"error:{exc}"
+
+          try:
+              health = fetch_json(f"{app_base_url}/health.json?refresh=1")
+              app_date = str(health.get("report_date") or "")
+              app_articles = int(health.get("article_count") or 0)
+              app_source = str(health.get("data_source") or "")
+              app_fresh = app_date == report_date and app_articles > 0 and app_source == "supabase"
+              app_status = f"{app_date or 'missing'}/{app_articles}/{app_source or 'missing'}"
+          except (OSError, URLError, json.JSONDecodeError, ValueError) as exc:
+              app_status = f"error:{exc}"
+
+          stale = not (mirror_fresh and app_fresh)
+          reason = (
+              f"expected={report_date} mirror={mirror_status} app={app_status} "
+              f"stale={'true' if stale else 'false'}"
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"stale={'true' if stale else 'false'}\n")
+              output.write(f"mirror_fresh={'true' if mirror_fresh else 'false'}\n")
+              output.write(f"app_fresh={'true' if app_fresh else 'false'}\n")
+              output.write(f"reason={reason}\n")
+
+          print(f"newsletter_watchdog {reason}")
+          PY
+
+      - name: Dispatch full publish if mirror is stale
+        if: steps.freshness.outputs.stale == 'true' && steps.freshness.outputs.mirror_fresh != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WATCHDOG_DRY_RUN: ${{ inputs.dry_run }}
+        shell: bash
+        run: |
+          echo "Newsletter stale: ${{ steps.freshness.outputs.reason }}"
+          active_run="$(gh run list \
+            --repo "${GITHUB_REPOSITORY}" \
+            --workflow "${NEWSLETTER_PUBLISH_WORKFLOW}" \
+            --json databaseId,status,createdAt,event \
+            --limit 10 \
+            | python3 -c 'import json, sys; runs = json.load(sys.stdin); active = next((row for row in runs if row.get("status") in {"queued", "in_progress", "waiting"}), None); print(active.get("databaseId") if active else "")'
+          )"
+
+          if [ -n "${active_run}" ]; then
+            echo "Publish workflow already active: ${active_run}"
+            exit 0
+          fi
+
+          if [ "${WATCHDOG_DRY_RUN:-false}" = "true" ]; then
+            echo "Dry run: would dispatch ${NEWSLETTER_PUBLISH_WORKFLOW} for ${{ steps.date.outputs.report_date }}"
+            exit 0
+          fi
+
+          gh workflow run "${NEWSLETTER_PUBLISH_WORKFLOW}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref main \
+            -f report_date="${{ steps.date.outputs.report_date }}"
+          echo "Dispatched ${NEWSLETTER_PUBLISH_WORKFLOW} for ${{ steps.date.outputs.report_date }}"
+
+      - name: Dispatch Supabase sync if only Vercel app is stale
+        if: steps.freshness.outputs.stale == 'true' && steps.freshness.outputs.mirror_fresh == 'true' && steps.freshness.outputs.app_fresh != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WATCHDOG_DRY_RUN: ${{ inputs.dry_run }}
+        shell: bash
+        run: |
+          echo "Newsletter app stale while mirror is fresh: ${{ steps.freshness.outputs.reason }}"
+          active_run="$(gh run list \
+            --repo "${GITHUB_REPOSITORY}" \
+            --workflow "${NEWSLETTER_SYNC_WORKFLOW}" \
+            --json databaseId,status,createdAt,event \
+            --limit 10 \
+            | python3 -c 'import json, sys; runs = json.load(sys.stdin); active = next((row for row in runs if row.get("status") in {"queued", "in_progress", "waiting"}), None); print(active.get("databaseId") if active else "")'
+          )"
+
+          if [ -n "${active_run}" ]; then
+            echo "Supabase sync workflow already active: ${active_run}"
+            exit 0
+          fi
+
+          if [ "${WATCHDOG_DRY_RUN:-false}" = "true" ]; then
+            echo "Dry run: would dispatch ${NEWSLETTER_SYNC_WORKFLOW} for ${{ steps.date.outputs.report_date }}"
+            exit 0
+          fi
+
+          gh workflow run "${NEWSLETTER_SYNC_WORKFLOW}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref main \
+            -f report_date="${{ steps.date.outputs.report_date }}"
+          echo "Dispatched ${NEWSLETTER_SYNC_WORKFLOW} for ${{ steps.date.outputs.report_date }}"
+
+      - name: Report fresh
+        if: steps.freshness.outputs.stale != 'true'
+        run: |
+          echo "Newsletter already fresh: ${{ steps.freshness.outputs.reason }}"

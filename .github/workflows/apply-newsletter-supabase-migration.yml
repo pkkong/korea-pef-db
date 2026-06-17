@@ -1,0 +1,42 @@
+name: Apply newsletter Supabase migration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: newsletter-supabase-migration
+  cancel-in-progress: false
+
+jobs:
+  apply-migration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Stop if database URL is missing
+        if: env.SUPABASE_DB_URL == ''
+        run: |
+          echo "::error::SUPABASE_DB_URL is required to apply the newsletter Supabase migration."
+          exit 1
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Apply newsletter read model migration
+        run: |
+          psql "$SUPABASE_DB_URL" \
+            --set ON_ERROR_STOP=1 \
+            --file services/newsletter/supabase/migrations/20260616090000_newsletter_read_model.sql
+
+      - name: Report migration status
+        run: |
+          echo "newsletter_supabase_migration=ok"

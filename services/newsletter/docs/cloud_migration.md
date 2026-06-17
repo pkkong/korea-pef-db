@@ -2,8 +2,8 @@
 
 ## 결론
 
-현재 정식 운영 경로는 GitHub Actions다. 매일 08:30 KST 수집, 분류,
-정적 HTML 생성, GitHub Pages 배포까지 repository workflow에서 처리한다.
+현재 정식 수집/발행 경로는 GitHub Actions다. 매일 수집, 분류,
+정적 HTML 생성, Supabase sync, GitHub Pages mirror 배포까지 repository workflow에서 처리한다.
 개인 Mac, Windows 예약 작업, 로컬 자동 push는 운영 경로에서 제외한다.
 
 이 문서는 GitHub Actions를 넘어 Vercel/Supabase 또는 전용 Cloud Run Job,

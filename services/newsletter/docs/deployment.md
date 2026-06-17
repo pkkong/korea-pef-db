@@ -18,18 +18,21 @@ python services\newsletter\src\build_newsletter_deploy.py --date 2026-05-22
 - `services/newsletter/deploy/Dockerfile`: Docker 배포용
 - `services/newsletter/deploy/nginx.conf`: Nginx 설정
 
-## GitHub Pages Deploy
+## Cloud Publish
 
-뉴스레터는 GitHub Actions가 매일 만들고, 공개 가능한 정적 파일만 별도 public mirror 저장소에 올린다.
-Mac은 정식 운영 경로에서 제외한다.
-비개발자는 GitHub Pages 주소만 확인하면 된다.
+뉴스레터는 GitHub Actions가 매일 만들고, Supabase read model과 public static mirror를 갱신한다.
+Mac은 정식 운영 경로에서 제외한다. 비개발자가 보는 기본 주소는 Vercel 앱이고, GitHub Pages는
+장애 시 확인 가능한 백업 미러다.
 
 - 원본 저장소: private repo `pkkong/korea-pef-db`
 - Public mirror repository: `pkkong/kpef-newsletter`
 - Public mirror publish branch: `gh-pages`
-- Public URL: `https://pkkong.github.io/kpef-newsletter/`
+- Primary app URL: `https://kpef-newsletter.vercel.app/`
+- Static mirror URL: `https://pkkong.github.io/kpef-newsletter/`
 - Primary automation workflow: `.github/workflows/deploy-newsletter-pages.yml`
-- Workflow name: `Deploy newsletter to GitHub Pages`
+- Workflow name: `Deploy newsletter to GitHub Pages` (운영상 daily newsletter publish orchestrator)
+- Fallback scheduler: `.github/workflows/newsletter-watchdog.yml`
+- Supabase-only recovery: `.github/workflows/sync-newsletter-supabase.yml`
 
 현재 private 원본 저장소는 GitHub Pages endpoint가 열리지 않을 수 있으므로, 공개 가능한 뉴스레터 산출물만
 `pkkong/kpef-newsletter`에 복사해서 보여준다. Public mirror에는 `services/newsletter/deploy/site/`의
@@ -40,14 +43,16 @@ GitHub Actions 자동 발행은 다음 순서로 실행된다.
 ```text
 1. run_daily_news_pipeline.py로 그날의 뉴스 데이터를 만든다.
 2. build_newsletter_source_audit.py와 enrich_daily_news_ai.py로 품질 점검과 3줄 요약 보강 파일을 만든다.
-3. scripts/build_site_bundle.py --services newsletter로 정적 사이트 파일을 만든다.
-4. services/newsletter/deploy/site/ 결과물만 모은다.
-5. NEWSLETTER_PUBLIC_REPO_TOKEN으로 public mirror pkkong/kpef-newsletter의 `gh-pages` 브랜치에 push한다.
-6. 공개 `health.json`과 `archive.json`이 오늘 날짜와 기사 수를 보여주는지 확인한다.
-7. GitHub Pages가 https://pkkong.github.io/kpef-newsletter/ 주소로 보여준다.
+3. scripts/build_newsletter_bundle.py로 뉴스레터 전용 정적 사이트 파일을 만든다.
+4. NEWSLETTER_PUBLIC_REPO_TOKEN으로 public mirror pkkong/kpef-newsletter의 `gh-pages` 브랜치에 push한다.
+5. GitHub Pages mirror의 `health.json`과 `archive.json`이 오늘 날짜와 기사 수를 보여주는지 확인한다.
+6. 같은 archive를 Supabase read model에 동기화한다.
+7. Vercel 앱의 `/health.json?refresh=1`이 `data_source=supabase`, 오늘 날짜, 같은 기사 수를 보여주는지 확인한다.
 ```
 
-자동 실행은 GitHub Actions schedule이 담당한다. 기본 설정은 매일 한국시간 오전 8:30 실행이다.
+자동 실행은 GitHub Actions schedule이 담당한다. 기본 설정은 매일 한국시간 오전 8:37 실행이고,
+GitHub schedule 지연/누락에 대비해 09:17, 09:47, 10:17, 11:17 KST retry window를 둔다.
+별도 watchdog은 08:52부터 mirror와 Vercel 상태를 확인해 필요한 recovery workflow만 실행한다.
 
 GitHub Actions 화면에서 수동 실행도 그대로 사용할 수 있다. private 원본 저장소의 GitHub 화면에서
 `Actions` → `Deploy newsletter to GitHub Pages` → `Run workflow`를 누르면 실행된다. `report_date`를 비워 두면
@@ -87,7 +92,7 @@ Branch를 `gh-pages`, Folder를 `/ (root)`로 둔다.
 python3 services/newsletter/scripts/check_github_actions_readiness.py
 ```
 
-정상이라면 `schedule trigger present`, `daily 08:30 KST cron present`, `manual workflow_dispatch trigger present`, 세 Secret 이름이 모두 `[OK]`로 나온다.
+정상이라면 `schedule trigger present`, `manual workflow_dispatch trigger present`, 세 Secret 이름이 모두 `[OK]`로 나온다.
 `gh CLI not found` 또는 `GitHub secret names not checked`가 나오면 로컬에서 이름 확인만 못 한 상태다. 이때는 GitHub 화면에서
 아래 경로로 확인한다.
 

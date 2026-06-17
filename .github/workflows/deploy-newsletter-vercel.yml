@@ -18,10 +18,8 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       NEWSLETTER_ARCHIVE_URL: https://pkkong.github.io/kpef-newsletter/archive.json
     steps:
       - name: Checkout
@@ -63,20 +61,6 @@ jobs:
               raise SystemExit(f"unexpected health payload: {health}")
           print(f"newsletter_vercel_smoke=ok report_date={health.get('report_date')} articles={health.get('article_count')}")
           PY
-
-      - name: Apply Supabase newsletter migration
-        if: env.SUPABASE_DB_URL != ''
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
-          psql "$SUPABASE_DB_URL" \
-            --set ON_ERROR_STOP=1 \
-            --file services/newsletter/supabase/migrations/20260616090000_newsletter_read_model.sql
-
-      - name: Skip Supabase migration when DB URL is missing
-        if: env.SUPABASE_DB_URL == ''
-        run: |
-          echo "SUPABASE_DB_URL is not configured; skipping Supabase migration apply."
 
       - name: Stop if Vercel credentials are missing
         if: env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID == ''

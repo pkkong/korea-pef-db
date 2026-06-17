@@ -182,7 +182,7 @@
 ### 품질 기준
 
 - 발행물은 매일 같은 최근 24시간 오전 브리핑 기준을 따른다. 발행 시간이 확인되는 기사는 전일 08:30 KST부터 당일 08:30 KST까지의 운영 창에 맞춰 필터링한다. 발행 시간이 없을 때는 시간까지 포함된 발견 시각만 보조 기준으로 쓰고, 날짜만 있는 발견값은 발행 근거로 쓰지 않는다.
-- 현재 자동 발행은 토요일과 일요일에도 매일 08:30 KST에 돈다. 따라서 월요일도 예외적인 72시간 창을 쓰지 않는다. 주말 수집 실패, 검색 반영 지연, 소스 오류를 회수해야 할 때는 일일 발행 파이프라인을 넓히지 말고 별도 백필/audit 작업으로 처리한다.
+- 현재 자동 발행은 토요일과 일요일에도 매일 돈다. 따라서 월요일도 예외적인 72시간 창을 쓰지 않는다. 주말 수집 실패, 검색 반영 지연, 소스 오류를 회수해야 할 때는 일일 발행 파이프라인을 넓히지 말고 별도 백필/audit 작업으로 처리한다.
 - GitHub Actions는 매번 깨끗한 runner에서 실행되므로 로컬 `exports/` 파일만으로 이전 발행 중복을 막을 수 없다. daily pipeline은 public `archive.json`을 previous export 원장으로 함께 읽어, 이전 날짜에 공개된 URL 또는 사실상 같은 제목을 당일 브리프에서 제외해야 한다.
 - GitHub Actions 운영 경로에서는 public archive를 못 읽으면 조용히 계속 발행하지 않는다. 수집 단계는 `--require-previous-archive`, 정적 빌드 단계는 `--require-archive-seed`로 fail-closed 해야 하며, 이 실패는 중복 방지 원장 접근 장애로 처리한다.
 - 뉴스레터 공개 사이트 생성 경로는 `services/newsletter/src/newsletter_renderer.py`를 기준으로 한다. `scripts/build_newsletter_bundle.py`와 `services/newsletter/src/build_newsletter_service_pages.py`는 `scripts/build_service_site.py`, `build_newsletter_deploy.py`, LP/GP/Wiki 서비스 모듈을 import하면 안 된다.
@@ -212,12 +212,12 @@
 - 하단 메뉴는 1차 서비스 이동만 담당한다. 뉴스 기사만 저장하는 기능은 전역 `저장` 탭이나 뉴스레터 헤더 유틸리티로 노출하지 않는다. 전역 저장함은 LP/GP/Wiki 저장까지 구현된 뒤에만 하단 메뉴로 승격한다.
 - 매일 발행 후 `services/newsletter/src/build_newsletter_source_audit.py`를 실행해 더벨, 딜사이트, 인베스트조선, 블로터, 뉴스토마토, 뉴스톱 등 핵심 매체가 수집/리뷰/브리프 단계에서 어디까지 도달했는지 확인한다.
 - 검증은 `services/newsletter/tests/test_daily_news_logic.py`, `services/newsletter/src/validate_daily_news_pipeline.py`, `services/newsletter/src/check_newsletter_brand_icons.py`를 실행해야 한다. `validate_daily_news_pipeline.py` 실패는 발행 차단이고, 아이콘 검사의 missing/weak 리포트는 품질 보완 backlog로 남기되 당일 뉴스레터 공개를 막지 않는다. 아이콘 이슈까지 강제 차단하려면 `NEWSLETTER_STRICT_ICON_CHECK=1`을 명시한다. 분류·태그·서브카테고리를 고친 날에는 `test_daily_news_logic.py`에 해당 기사 제목 기반 회귀 테스트를 추가한 뒤 통과시킨다.
-- 매일 뉴스레터 발행은 GitHub Actions workflow에서 `NEWSLETTER_BUILD_SERVICES=newsletter`로 실행한다. 08:30 KST가 1차 목표이고, GitHub schedule 지연/누락에 대비해 09:00, 09:30, 10:00, 11:00 KST retry window를 둔다. Schedule run은 public `health.json`을 먼저 확인해 오늘자가 이미 발행됐으면 수집·빌드·배포를 건너뛴다. LP/GP/Wiki 수집·빌드 실패가 당일 뉴스레터 공개를 막으면 운영 실패로 본다.
-- 매일 08:30 KST 뉴스레터 정적 빌드는 `scripts/build_newsletter_bundle.py`만 사용한다. 이 빌더가 `services.lp`, `services.gp`, `services.wiki`, 또는 legacy `build_newsletter_deploy.py`를 import하면 회귀로 본다.
+- 매일 뉴스레터 발행은 GitHub Actions workflow에서 `NEWSLETTER_BUILD_SERVICES=newsletter`로 실행한다. 08:37 KST가 1차 실행이고, GitHub schedule 지연/누락에 대비해 09:17, 09:47, 10:17, 11:17 KST retry window를 둔다. 별도 watchdog은 Vercel app과 GitHub Pages mirror를 확인해 mirror가 stale이면 full publish를, mirror는 fresh인데 Vercel app만 stale이면 Supabase sync만 실행한다. Schedule run은 Vercel app과 public mirror의 `health.json`을 먼저 확인해 오늘자가 이미 발행됐으면 수집·빌드·배포를 건너뛴다. LP/GP/Wiki 수집·빌드 실패가 당일 뉴스레터 공개를 막으면 운영 실패로 본다.
+- 매일 뉴스레터 정적 빌드는 `scripts/build_newsletter_bundle.py`만 사용한다. 이 빌더가 `services.lp`, `services.gp`, `services.wiki`, 또는 legacy `build_newsletter_deploy.py`를 import하면 회귀로 본다.
 - 뉴스레터 자동 발행은 많이 긁는 것보다 반드시 끝나는 것이 우선이다. GitHub Actions에서는 소스별 후보 fetch 상한과 collection step timeout을 둔다. 수집 단계가 멈춘 것처럼 보이면 먼저 Actions 로그의 `daily_news_source_start`, `daily_news_source_listing`, `daily_news_source_done` 라인을 보고 병목 소스를 확인한다.
 - GitHub Actions 정적 빌드에서는 원격 브랜드 로고 다운로드를 하지 않는다. `NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS=1`을 유지하고, 로고 누락·약한 favicon 문제는 `check_newsletter_brand_icons.py` 리포트 기반 별도 sweep에서 보완한다.
 - GitHub Actions 검증 단계도 수집 단계와 같은 Naver credentials를 받아야 한다. `validate_daily_news_pipeline.py`는 active Naver sources와 `NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET` 존재 여부를 함께 검사하므로, collection step만 env를 주고 validation/static build step에는 빼는 구성을 만들면 안 된다.
-- 발행 완료는 로컬 `daily_news_brief_YYYYMMDD.md` 생성이 아니라 public mirror push와 공개 확인까지다. GitHub Actions는 공개 `health.json`의 `report_date`와 `article_count`, `archive.json`의 당일 entry를 확인한 뒤에만 성공 종료해야 한다.
+- 발행 완료는 로컬 `daily_news_brief_YYYYMMDD.md` 생성이 아니라 Vercel app과 GitHub Pages mirror가 모두 오늘 날짜와 같은 기사 수를 보여주는 상태다. GitHub Actions는 mirror `health.json`/`archive.json`을 먼저 검증하고, Supabase sync 뒤 Vercel `/health.json?refresh=1`의 `data_source=supabase`, `report_date`, `article_count`를 확인한 뒤에만 성공 종료해야 한다.
 - Vercel/Supabase 전환 경로에서 Vercel은 사용자 화면만 담당한다. 느린 뉴스 수집, 분류, 중복 제거, 발행 검증은 GitHub Actions가 계속 담당하고, `services/newsletter/src/sync_newsletter_supabase.py`가 공개 archive를 Supabase read model로 싱크한다.
 - `services/newsletter/web/`은 독립 Vercel Flask app이다. 이 앱은 LP/GP/Wiki, legacy monolith, local SQLite DB를 import하지 않고 Supabase `newsletter_public_issue_articles` 또는 기존 public `archive.json`만 읽는다. `SUPABASE_SERVICE_ROLE_KEY`는 GitHub Actions 전용이고 Vercel에는 넣지 않는다.
 - 매일 발행 후 `exports/daily_news/ops_status/newsletter_ops_status_latest.md`를 우선 확인한다. 이 파일의 `Status`가 `ok`이고 hard failure가 없어야 “수집/공개 완료”로 보고할 수 있다. 사용자가 “오늘 수집 안 된 것 같다”고 하면 로그부터 파지 말고 이 status report의 Collection, Local, Public, Quality 섹션을 먼저 본다.

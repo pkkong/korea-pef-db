@@ -30,8 +30,15 @@ Vercel
 -> Supabase newsletter_public_issue_articles
 ```
 
-Vercel은 수집기를 돌리지 않는다. Vercel은 사용자가 보는 웹 화면만 담당한다.
-수집, 분류, 중복 제거, 발행 검증은 GitHub Actions가 계속 담당한다.
+역할은 아래처럼 고정한다.
+
+- GitHub Actions: 기사 수집, 분류, 중복 제거, 정적 미러 생성, Supabase 동기화, 공개 검증
+- Supabase: 뉴스레터 read model 저장
+- Vercel: 사용자가 보는 웹 화면. 수집기나 장시간 빌드를 돌리지 않는 읽기 전용 런타임
+- GitHub Pages: 정적 백업 미러와 archive fallback. canonical app은 Vercel
+
+Vercel과 GitHub Pages가 모두 공개 URL을 갖지만 책임은 다르다. Vercel은 primary app이고,
+GitHub Pages는 장애 시 확인 가능한 static mirror다.
 
 ## Supabase 적용 순서
 
@@ -39,8 +46,9 @@ Vercel은 수집기를 돌리지 않는다. Vercel은 사용자가 보는 웹 �
 2. GitHub Actions secrets에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`를 넣는다.
 3. Vercel project root를 `services/newsletter/web`로 잡는다.
 4. Vercel env에 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`를 넣는다.
-5. GitHub Actions `Deploy newsletter to GitHub Pages`를 수동 실행해 Supabase sync 로그를 확인한다.
-6. Vercel `/health.json`에서 `data_source=supabase`와 최신 `report_date`를 확인한다.
+5. DB schema를 바꿔야 할 때만 GitHub Actions `Apply newsletter Supabase migration`을 수동 실행한다.
+6. GitHub Actions `Deploy newsletter to GitHub Pages`를 수동 실행해 Supabase sync 로그를 확인한다.
+7. Vercel `/health.json`에서 `data_source=supabase`와 최신 `report_date`를 확인한다.
 
 운영 검증 기준:
 
@@ -56,9 +64,26 @@ Vercel은 수집기를 돌리지 않는다. Vercel은 사용자가 보는 웹 �
 preflight다. 파일 존재, Python compile, import isolation, Flask smoke test,
 필요 secret의 존재 여부를 보여준다.
 
-`Deploy newsletter Vercel app` workflow는 Vercel 앱만 배포한다. 매일 08:30
+`Deploy newsletter Vercel app` workflow는 Vercel 앱만 배포한다. 매일 08:37
 뉴스레터 발행 workflow와 분리되어 있으므로, Vercel 쪽 장애가 daily publish를
 막지 않는다.
+
+`Apply newsletter Supabase migration` workflow는 Supabase schema 변경만 담당한다.
+Vercel 앱 배포와 DB migration을 섞지 않는다.
+
+`Deploy newsletter to GitHub Pages` workflow는 이름과 달리 운영상 newsletter
+publish workflow다. 실제 책임은 수집, Supabase sync, GitHub Pages static mirror
+publish, Vercel app health 검증이다. Vercel에서 수집을 실행하지 않는다.
+
+`Newsletter publish watchdog` workflow는 GitHub-only fallback scheduler다. primary
+publish schedule이 GitHub 내부 지연/누락으로 실행되지 않았을 때 Vercel app과
+GitHub Pages mirror의 health를 확인한다. mirror가 stale이면 full publish workflow를
+dispatch하고, mirror는 fresh인데 Vercel app만 stale이면 `Sync newsletter Supabase
+read model` workflow만 dispatch한다. 이 watchdog도 수집을 직접 하지 않는다.
+
+`Sync newsletter Supabase read model` workflow는 GitHub Pages mirror의 verified
+`archive.json`을 읽어 Supabase read model만 다시 동기화하고 Vercel health를 확인한다.
+Vercel/Supabase만 뒤처졌을 때 전체 뉴스 수집을 다시 돌리지 않기 위한 복구 경로다.
 
 필요한 GitHub Actions secrets:
 
@@ -70,11 +95,14 @@ preflight다. 파일 존재, Python compile, import isolation, Flask smoke test,
 - `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
-`SUPABASE_DB_URL`이 없으면 migration 적용만 건너뛴다. `VERCEL_*` 3개가 없으면
-Vercel deploy 단계는 실패 처리한다.
+`SUPABASE_DB_URL`은 `Apply newsletter Supabase migration`에만 필요하다. `VERCEL_*`
+3개가 없으면 Vercel deploy 단계는 실패 처리한다.
 
 ## 장애 기준
 
-- Supabase sync가 실패해도 GitHub Pages 발행은 계속된다.
+- Supabase sync가 실패해도 GitHub Pages mirror 발행은 이미 끝난 뒤여야 한다.
 - Vercel app은 Supabase가 비어 있거나 장애일 때 기존 public `archive.json`으로 fallback한다.
 - Supabase service role key는 GitHub Actions에만 둔다. Vercel에는 publishable key만 둔다.
+- Daily publish 완료 기준은 Vercel `/health.json?refresh=1`의 `data_source=supabase`,
+  최신 `report_date`, 최신 `article_count`와 GitHub Pages `health.json`/`archive.json`
+  일치 여부다.
