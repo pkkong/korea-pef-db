@@ -13,11 +13,13 @@ from pathlib import Path
 
 
 WORKFLOW_PATH = Path(".github/workflows/deploy-newsletter-pages.yml")
-EXPECTED_CRON = "30 23 * * *"
+EXPECTED_CRON = "37 23 * * *"
 EXPECTED_SECRETS = (
     "NAVER_CLIENT_ID",
     "NAVER_CLIENT_SECRET",
     "NEWSLETTER_PUBLIC_REPO_TOKEN",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
 )
 
 
@@ -126,10 +128,7 @@ def main() -> int:
                 "manual workflow_dispatch trigger present",
                 re.search(r"(?m)^  workflow_dispatch:\s*$", workflow_text),
             ),
-            (
-                f"daily 08:30 KST cron present ({EXPECTED_CRON})",
-                EXPECTED_CRON in workflow_text,
-            ),
+            (f"daily 08:37 KST cron present ({EXPECTED_CRON})", EXPECTED_CRON in workflow_text),
         )
         for message, ok in checks:
             if ok:
