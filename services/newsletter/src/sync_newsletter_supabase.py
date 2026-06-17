@@ -247,6 +247,15 @@ def _upsert(table: str, rows: list[dict[str, Any]], on_conflict: str, select: st
     )
 
 
+def _delete(table: str, query: dict[str, str]) -> None:
+    _rest_request(
+        table,
+        method="DELETE",
+        query=query,
+        prefer="return=minimal",
+    )
+
+
 def apply_payload(payload: dict[str, list[dict[str, Any]]]) -> dict[str, int]:
     _upsert("newsletter_issues", payload["issues"], "issue_date")
     returned_articles = _upsert(
@@ -260,6 +269,16 @@ def apply_payload(payload: dict[str, list[dict[str, Any]]]) -> dict[str, int]:
         for row in returned_articles or []
         if isinstance(row, dict)
     }
+
+    for issue in payload["issues"]:
+        issue_date = _clean_text(issue.get("issue_date"))
+        if issue_date:
+            _delete("newsletter_issue_articles", {"issue_date": f"eq.{issue_date}"})
+
+    for article_id in article_id_by_url.values():
+        if article_id:
+            _delete("newsletter_article_tags", {"article_id": f"eq.{article_id}"})
+            _delete("newsletter_article_entities", {"article_id": f"eq.{article_id}"})
 
     issue_article_rows: list[dict[str, Any]] = []
     for row in payload["issue_articles"]:

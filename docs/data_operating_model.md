@@ -91,7 +91,7 @@ Renderer는 public read model을 HTML로 표현하는 역할만 한다.
 - `newsletter_article_tags`, `newsletter_article_entities`: 공개 가능한 태그와 GP/LP 링크.
 - `newsletter_public_issue_articles`: Vercel 앱이 읽는 public view.
 
-GitHub Actions가 기존 archive를 만들고 GitHub Pages mirror를 먼저 검증한 뒤 `sync_newsletter_supabase.py`로 이 read model을 갱신한다. Vercel app은 이 view를 읽고, Supabase가 비어 있거나 장애일 때는 기존 public `archive.json`으로 fallback한다. Mirror는 최신인데 Vercel/Supabase만 뒤처졌을 때는 full publish가 아니라 `Sync newsletter Supabase read model` recovery workflow로 read model만 다시 맞춘다.
+GitHub Actions가 기존 archive를 만들고 GitHub Pages mirror를 먼저 검증한 뒤 `sync_newsletter_supabase.py`로 이 read model을 갱신한다. Vercel app은 이 view를 읽고, Supabase가 비어 있거나 장애일 때는 기존 public `archive.json`으로 fallback한다. Mirror는 최신인데 Vercel/Supabase만 뒤처졌을 때는 full publish가 아니라 `Sync newsletter Supabase read model` recovery workflow로 read model만 다시 맞춘다. 같은 발행일을 재동기화할 때는 기존 `newsletter_issue_articles` 연결을 먼저 지우고 archive 기준으로 다시 넣어야 한다. 그렇지 않으면 public mirror보다 Supabase/Vercel 기사 수가 많아지는 stale link가 생긴다.
 
 ## Build Contract
 

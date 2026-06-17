@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from services.newsletter.src import sync_newsletter_supabase as supabase_sync  # noqa: E402
 from services.newsletter.src.sync_newsletter_supabase import prepare_payload  # noqa: E402
 
 
@@ -80,9 +81,84 @@ def test_prepare_payload_filters_selected_date() -> None:
     assert payload["articles"][0]["title"] == "선택 날짜 기사"
 
 
+def test_apply_payload_resets_issue_links_and_article_metadata() -> None:
+    calls: list[tuple[str, str, dict[str, str] | None]] = []
+
+    def fake_rest_request(
+        table: str,
+        *,
+        method: str = "GET",
+        query: dict[str, str] | None = None,
+        payload: object | None = None,
+        prefer: str | None = None,
+    ) -> object:
+        calls.append((method, table, query))
+        if method == "POST" and table == "newsletter_articles":
+            return [{"article_id": "00000000-0000-0000-0000-000000000001", "normalized_url": "https://example.com/a"}]
+        return []
+
+    original_rest_request = supabase_sync._rest_request
+    supabase_sync._rest_request = fake_rest_request
+    try:
+        result = supabase_sync.apply_payload(
+            {
+                "issues": [
+                    {
+                        "issue_date": "2026-06-17",
+                        "visible_date": "2026년 6월 17일",
+                        "basis": "KST",
+                        "status": "published",
+                        "article_count": 1,
+                    }
+                ],
+                "articles": [
+                    {
+                        "normalized_url": "https://example.com/a",
+                        "source_url": "https://example.com/a",
+                        "title": "신규 기사",
+                        "section": "Market",
+                    }
+                ],
+                "issue_articles": [
+                    {
+                        "issue_date": "2026-06-17",
+                        "normalized_url": "https://example.com/a",
+                        "rank": 0,
+                        "section_order": 1,
+                    }
+                ],
+                "tags": [
+                    {
+                        "normalized_url": "https://example.com/a",
+                        "tag_type": "section",
+                        "tag_value": "Market",
+                        "tag_source": "archive",
+                    }
+                ],
+                "entities": [],
+            }
+        )
+    finally:
+        supabase_sync._rest_request = original_rest_request
+
+    assert result["issue_articles"] == 1
+    assert ("DELETE", "newsletter_issue_articles", {"issue_date": "eq.2026-06-17"}) in calls
+    assert (
+        "DELETE",
+        "newsletter_article_tags",
+        {"article_id": "eq.00000000-0000-0000-0000-000000000001"},
+    ) in calls
+    assert (
+        "DELETE",
+        "newsletter_article_entities",
+        {"article_id": "eq.00000000-0000-0000-0000-000000000001"},
+    ) in calls
+
+
 def main() -> int:
     test_prepare_payload_dedupes_issue_urls()
     test_prepare_payload_filters_selected_date()
+    test_apply_payload_resets_issue_links_and_article_metadata()
     print("supabase sync tests passed")
     return 0
 
