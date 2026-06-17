@@ -41,6 +41,13 @@ def _clean_list(value: object) -> list[str]:
     return rows
 
 
+def _clean_int(value: object, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _request_json(url: str, headers: dict[str, str] | None = None, timeout: int = 20) -> Any:
     request = Request(url, headers=headers or {})
     with urlopen(request, timeout=timeout) as response:
@@ -94,11 +101,8 @@ def archive_from_supabase_rows(
                 "articles": [],
             },
         )
-        rank = row.get("rank")
-        try:
-            rank_int = int(rank)
-        except (TypeError, ValueError):
-            rank_int = len(entry["articles"])
+        rank_int = _clean_int(row.get("rank"), len(entry["articles"]))
+        section_order = _clean_int(row.get("section_order"), 999)
         article = {
             "id": _clean_text(row.get("article_id")) or f"article-{issue_date}-{rank_int}",
             "rank": rank_int,
@@ -113,7 +117,7 @@ def archive_from_supabase_rows(
             "summaryText": _clean_text(row.get("summary_text")),
             "summaryLines": _clean_list(row.get("summary_lines")),
             "tagVersion": _clean_text(row.get("tag_version")),
-            "sectionOrder": row.get("section_order") or 999,
+            "sectionOrder": section_order,
             "gpNames": _clean_list(row.get("gp_names")),
             "lpNames": _clean_list(row.get("lp_names")),
             "searchTerms": _clean_list(row.get("search_terms")),

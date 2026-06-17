@@ -82,6 +82,7 @@ def test_archive_from_supabase_rows_groups_issues() -> None:
             "issue_date": "2026-06-16",
             "visible_date": "2026년 6월 16일",
             "rank": 0,
+            "section_order": 0,
             "article_id": "a",
             "title": "첫 기사",
             "publisher": "테스트신문",
@@ -100,6 +101,7 @@ def test_archive_from_supabase_rows_groups_issues() -> None:
     assert archive[0]["articles"] == []
     assert archive[1]["reportDate"] == "2026-06-16"
     assert [row["title"] for row in archive[1]["articles"]] == ["첫 기사", "둘째 기사"]
+    assert archive[1]["articles"][0]["sectionOrder"] == 0
 
 
 def test_filter_and_group_articles() -> None:
