@@ -16,7 +16,7 @@ Last updated: 2026-06-17 KST
 - Latest public mirror deploy verified: `efe188d` on 2026-06-17 KST.
 - Latest Vercel deploy workflow verification: `27626108900` succeeded on source `60990ea` on 2026-06-16 KST.
 - Latest newsletter workflow code verified: `503bf96 Reset newsletter Supabase issue links on sync`.
-- Newsletter production renderer split completed on 2026-06-16: `services/newsletter/src/newsletter_renderer.py` owns newsletter-only HTML/CSS/JS generation and the production bundle path must not import `scripts/build_service_site.py`.
+- Newsletter production UI source unified on 2026-06-17: `services/newsletter/web/newsletter_ui.py` owns the shared newsletter HTML/CSS/JS used by both the Vercel app and GitHub Pages mirror. `services/newsletter/src/newsletter_renderer.py` delegates public UI to that module. Do not recreate Vercel-only Jinja templates or `web/static/service.css`.
 - Newsletter Vercel/Supabase migration path is active as of 2026-06-17: `services/newsletter/web/` is the standalone Flask/Vercel app, `services/newsletter/supabase/` owns the public read-model schema, and `services/newsletter/src/sync_newsletter_supabase.py` syncs generated archive rows to Supabase. Vercel project `kpef-newsletter` uses root `services/newsletter/web`, and Supabase project `fhigakwodmfjwtttwyyj` stores the newsletter read model. `Deploy newsletter Vercel app` deploys only the app, `Apply newsletter Supabase migration` owns DB schema changes, `Sync newsletter Supabase read model` owns Supabase-only recovery, and `Newsletter publish watchdog` decides whether to dispatch full publish or Supabase-only recovery.
 - Public bottom navigation: `브리프 / LP / GP`
 - Wiki is hidden from public navigation until the user re-plans it.
@@ -91,7 +91,7 @@ python3 scripts/build_newsletter_bundle.py --date YYYY-MM-DD --archive-limit 30
 Build newsletter Supabase payload:
 
 ```bash
-python3 services/newsletter/src/sync_newsletter_supabase.py --date YYYY-MM-DD --archive services/newsletter/deploy/site/archive.json
+python3 services/newsletter/src/sync_newsletter_supabase.py --archive services/newsletter/deploy/site/archive.json --issue-limit 30
 ```
 
 Deploy standalone newsletter Vercel app:
@@ -109,6 +109,7 @@ python3 scripts/build_site_bundle.py --date YYYY-MM-DD --services wiki --archive
 Frontend contract check:
 
 ```bash
+python3 scripts/check_public_frontend.py --services newsletter
 python3 scripts/check_public_frontend.py
 ```
 

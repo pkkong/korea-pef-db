@@ -14,6 +14,7 @@ from urllib.request import Request, urlopen
 
 DEFAULT_ARCHIVE_URL = "https://pkkong.github.io/kpef-newsletter/archive.json"
 DEFAULT_CACHE_SECONDS = 300
+DEFAULT_SUPABASE_ROW_LIMIT = 1200
 
 _CACHE: dict[str, Any] = {
     "expires_at": 0.0,
@@ -91,16 +92,17 @@ def archive_from_supabase_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any
     return list(grouped.values())
 
 
-def fetch_supabase_archive(limit: int = 600) -> list[dict[str, Any]]:
+def fetch_supabase_archive(limit: int | None = None) -> list[dict[str, Any]]:
     base_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     public_key = os.environ.get("SUPABASE_PUBLISHABLE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
     if not base_url or not public_key:
         return []
+    row_limit = limit or int(os.environ.get("NEWSLETTER_SUPABASE_ROW_LIMIT", str(DEFAULT_SUPABASE_ROW_LIMIT)))
     query = urlencode(
         {
             "select": "*",
             "order": "issue_date.desc,rank.asc",
-            "limit": str(limit),
+            "limit": str(row_limit),
         }
     )
     url = f"{base_url}/rest/v1/newsletter_public_issue_articles?{query}"

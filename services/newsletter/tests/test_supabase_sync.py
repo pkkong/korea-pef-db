@@ -12,7 +12,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from services.newsletter.src import sync_newsletter_supabase as supabase_sync  # noqa: E402
-from services.newsletter.src.sync_newsletter_supabase import prepare_payload  # noqa: E402
+from services.newsletter.src.sync_newsletter_supabase import prepare_payload, select_sync_archive  # noqa: E402
 
 
 def test_prepare_payload_dedupes_issue_urls() -> None:
@@ -79,6 +79,29 @@ def test_prepare_payload_filters_selected_date() -> None:
 
     assert [row["issue_date"] for row in payload["issues"]] == ["2026-06-16"]
     assert payload["articles"][0]["title"] == "선택 날짜 기사"
+
+
+def test_select_sync_archive_keeps_rolling_range_by_default() -> None:
+    archive = [
+        {"reportDate": "2026-06-17", "articles": []},
+        {"reportDate": "2026-06-16", "articles": []},
+        {"reportDate": "2026-06-15", "articles": []},
+    ]
+
+    selected = select_sync_archive(archive, issue_limit=2)
+
+    assert [row["reportDate"] for row in selected] == ["2026-06-17", "2026-06-16"]
+
+
+def test_select_sync_archive_allows_single_issue_debug_sync() -> None:
+    archive = [
+        {"reportDate": "2026-06-17", "articles": []},
+        {"reportDate": "2026-06-16", "articles": []},
+    ]
+
+    selected = select_sync_archive(archive, issue_date="2026-06-16")
+
+    assert [row["reportDate"] for row in selected] == ["2026-06-16"]
 
 
 def test_apply_payload_resets_issue_links_and_article_metadata() -> None:
@@ -158,6 +181,8 @@ def test_apply_payload_resets_issue_links_and_article_metadata() -> None:
 def main() -> int:
     test_prepare_payload_dedupes_issue_urls()
     test_prepare_payload_filters_selected_date()
+    test_select_sync_archive_keeps_rolling_range_by_default()
+    test_select_sync_archive_allows_single_issue_debug_sync()
     test_apply_payload_resets_issue_links_and_article_metadata()
     print("supabase sync tests passed")
     return 0

@@ -101,6 +101,7 @@ Every non-trivial subagent task should state:
 - DB/public-view/build data contracts are in `docs/data_operating_model.md`.
 - The Project Lead control document is `docs/project_lead_control_center.md`. Use it as the current source of truth for active service ownership, product decisions, verification commands, deployment state, and handoff notes before starting or delegating substantial work.
 - Public UX/UI rules are durable instructions in `docs/design_system.md`: benchmark the public service against InnoForest-style data directories, keep the unified `브리프 / LP / GP` bottom nav while Wiki is hidden, use table-like rows for LP/GP directories, avoid card-heavy layouts, and remove operator/internal wording from public pages.
+- Newsletter UI source is singular: `services/newsletter/web/newsletter_ui.py` owns the public newsletter HTML/CSS/JS used by both Vercel and the GitHub Pages mirror. Do not create or restore Vercel-only Jinja templates or standalone `web/static/service.css`; those are product regressions unless explicitly replanned.
 - Wiki is not an active routine public-build target until the user re-plans it. Preserve explicit Wiki builder support, but do not include Wiki in default active public builds or navigation.
 
 ## Cross-Chat / Handoff Discipline

@@ -1,17 +1,38 @@
-"""Standalone newsletter web app for Vercel."""
+"""Standalone newsletter web app for Vercel.
+
+Vercel and the GitHub Pages mirror must render the newsletter through the same
+UI source. The Flask app only provides runtime data access and thin HTTP routes.
+"""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
-
-from newsletter_data import filter_articles, grouped_sections, load_archive, select_issue
-
+from flask import Flask, Response, jsonify, request
 
 WEB_ROOT = Path(__file__).resolve().parent
-app = Flask(__name__, static_folder=str(WEB_ROOT / "static"), template_folder=str(WEB_ROOT / "templates"))
+from newsletter_data import load_archive, select_issue  # noqa: E402
+from newsletter_ui import (  # noqa: E402
+    app_icon_png,
+    app_web_manifest,
+    render_app,
+    service_css,
+    service_js,
+)
+
+app = Flask(__name__, static_folder=None)
+
+
+def today_seoul() -> str:
+    return datetime.now(timezone(timedelta(hours=9))).date().isoformat()
+
+
+def _cache_headers(content_type: str) -> dict[str, str]:
+    return {
+        "Content-Type": content_type,
+        "Cache-Control": "public, max-age=300, stale-while-revalidate=3600",
+    }
 
 
 @app.get("/")
@@ -21,18 +42,46 @@ app = Flask(__name__, static_folder=str(WEB_ROOT / "static"), template_folder=st
 def daily_news():
     archive, data_source = load_archive(force_refresh=request.args.get("refresh") == "1")
     active_issue = select_issue(archive, request.args.get("date", ""))
-    query = request.args.get("q", "").strip()
-    articles = filter_articles(active_issue, query)
-    return render_template(
-        "daily_news.html",
-        archive=archive,
-        active_issue=active_issue,
-        query=query,
-        articles=articles,
-        sections=grouped_sections(articles),
-        data_source=data_source,
-        generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    report_date = str(active_issue.get("reportDate") or today_seoul())
+    html = render_app(
+        report_date,
+        [],
+        "",
+        {},
+        archive if archive else None,
+        [],
+        newsletter_only=True,
     )
+    response = Response(html, mimetype="text/html")
+    response.headers["X-Newsletter-Data-Source"] = data_source
+    response.headers["X-Generated-At"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return response
+
+
+@app.get("/assets/service.css")
+def service_css_asset():
+    return Response(service_css(), headers=_cache_headers("text/css; charset=utf-8"))
+
+
+@app.get("/assets/service.js")
+def service_js_asset():
+    return Response(service_js(), headers=_cache_headers("text/javascript; charset=utf-8"))
+
+
+@app.get("/static/service.css")
+def legacy_static_css_asset():
+    return service_css_asset()
+
+
+@app.get("/site.webmanifest")
+def manifest_asset():
+    return Response(app_web_manifest(), headers=_cache_headers("application/manifest+json; charset=utf-8"))
+
+
+@app.get("/apple-touch-icon.png")
+@app.get("/favicon.ico")
+def icon_asset():
+    return Response(app_icon_png(), headers=_cache_headers("image/png"))
 
 
 @app.get("/archive.json")

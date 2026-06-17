@@ -31,6 +31,7 @@ from services.newsletter.src.daily_news_common import normalize_url  # noqa: E40
 DEFAULT_ARCHIVE = REPO_ROOT / "services" / "newsletter" / "deploy" / "site" / "archive.json"
 DEFAULT_PAYLOAD_OUT = REPO_ROOT / "exports" / "daily_news" / "newsletter_supabase_payload.json"
 DEFAULT_ARCHIVE_URL = "https://pkkong.github.io/kpef-newsletter/archive.json"
+DEFAULT_ISSUE_LIMIT = 30
 
 
 def _clean_text(value: object) -> str:
@@ -185,6 +186,26 @@ def prepare_payload(archive: list[dict[str, Any]], issue_date: str | None = None
     }
 
 
+def select_sync_archive(
+    archive: list[dict[str, Any]],
+    *,
+    issue_date: str | None = None,
+    issue_limit: int = DEFAULT_ISSUE_LIMIT,
+) -> list[dict[str, Any]]:
+    """Select the issue range that should be written to Supabase.
+
+    Date-specific sync remains available for debugging. Routine operation uses
+    the same rolling archive depth as the static mirror so Vercel can render the
+    same date-navigation experience.
+    """
+
+    if issue_date:
+        return [row for row in archive if row.get("reportDate") == issue_date]
+    if issue_limit <= 0:
+        return list(archive)
+    return list(archive[:issue_limit])
+
+
 def _supabase_key() -> str:
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SECRET_KEY")
     if not key:
@@ -323,12 +344,23 @@ def main() -> int:
     parser.add_argument("--archive", type=Path, default=DEFAULT_ARCHIVE)
     parser.add_argument("--archive-url", default=DEFAULT_ARCHIVE_URL)
     parser.add_argument("--date", default="")
+    parser.add_argument(
+        "--issue-limit",
+        type=int,
+        default=DEFAULT_ISSUE_LIMIT,
+        help="Maximum recent issues to sync when --date is omitted. Use 0 for all issues.",
+    )
     parser.add_argument("--payload-out", type=Path, default=DEFAULT_PAYLOAD_OUT)
     parser.add_argument("--apply", action="store_true", help="Write to Supabase. Without this, only write a payload preview.")
     args = parser.parse_args()
 
     archive = read_archive(args.archive, args.archive_url)
-    payload = prepare_payload(archive, args.date or None)
+    selected_archive = select_sync_archive(
+        archive,
+        issue_date=args.date or None,
+        issue_limit=args.issue_limit,
+    )
+    payload = prepare_payload(selected_archive, args.date or None)
     if not payload["issues"]:
         selected = args.date or "all dates"
         raise SystemExit(f"No newsletter issues found for {selected}")

@@ -33,12 +33,17 @@ Vercel
 역할은 아래처럼 고정한다.
 
 - GitHub Actions: 기사 수집, 분류, 중복 제거, 정적 미러 생성, Supabase 동기화, 공개 검증
-- Supabase: 뉴스레터 read model 저장
+- Supabase: 뉴스레터 read model 저장. 기본 동기화 범위는 static mirror와 맞춘 최근 30개 이슈다.
 - Vercel: 사용자가 보는 웹 화면. 수집기나 장시간 빌드를 돌리지 않는 읽기 전용 런타임
 - GitHub Pages: 정적 백업 미러와 archive fallback. canonical app은 Vercel
 
 Vercel과 GitHub Pages가 모두 공개 URL을 갖지만 책임은 다르다. Vercel은 primary app이고,
 GitHub Pages는 장애 시 확인 가능한 static mirror다.
+
+두 공개 URL은 같은 UI 원본을 써야 한다. 뉴스레터 HTML/CSS/JS의 단일 원본은
+`services/newsletter/web/newsletter_ui.py`이며, Vercel Flask app과 GitHub Pages 정적
+builder가 모두 이 모듈을 사용한다. Vercel 전용 Jinja template이나 별도
+`web/static/service.css`를 만들지 않는다.
 
 ## Supabase 적용 순서
 
@@ -82,7 +87,7 @@ dispatch하고, mirror는 fresh인데 Vercel app만 stale이면 `Sync newsletter
 read model` workflow만 dispatch한다. 이 watchdog도 수집을 직접 하지 않는다.
 
 `Sync newsletter Supabase read model` workflow는 GitHub Pages mirror의 verified
-`archive.json`을 읽어 Supabase read model만 다시 동기화하고 Vercel health를 확인한다.
+`archive.json`을 읽어 최근 30개 이슈를 Supabase read model로 다시 동기화하고 Vercel health를 확인한다.
 Vercel/Supabase만 뒤처졌을 때 전체 뉴스 수집을 다시 돌리지 않기 위한 복구 경로다.
 
 필요한 GitHub Actions secrets:

@@ -2951,6 +2951,12 @@ def test_display_url_prefers_normalized_clean_article_url() -> None:
     assert display_url(row) == "https://www.sedaily.com/article/20048749"
 
 
+def test_mbn_publisher_icon_is_curated() -> None:
+    logo_url = brand_logo_url("https://mbn.co.kr/news/world/5200041", "매일경제")
+    assert logo_url
+    assert "google.com/s2" not in logo_url
+
+
 def test_pef_association_belongs_to_market_structure() -> None:
     row = {
         "publisher": "매일경제",
@@ -3341,6 +3347,7 @@ def main() -> int:
         test_new_gp_fund_start_is_export_quality_gp,
         test_kic_cio_people_story_is_lp,
         test_display_url_prefers_normalized_clean_article_url,
+        test_mbn_publisher_icon_is_curated,
         test_pef_association_belongs_to_market_structure,
         test_same_publisher_near_duplicate_title_is_selected_once,
         test_same_national_growth_fund_selection_event_is_selected_once,

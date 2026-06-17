@@ -13,25 +13,25 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from lp_public_visibility import is_public_lp_notice_row
-
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NEWSLETTER_SITE_DIR = REPO_ROOT / "services" / "newsletter" / "deploy" / "site"
 PUBLIC_DIR = NEWSLETTER_SITE_DIR
 FSS_SOURCE_REGISTRY = REPO_ROOT / "data" / "source_registry_fss_pef.csv"
-REQUIRED_PUBLIC_FILES = [
+NEWSLETTER_PUBLIC_FILES = [
     "index.html",
     "daily-news.html",
-    "lp-notices.html",
-    "lp-official-notices.html",
-    "gps.html",
-    "market.html",
     "site.webmanifest",
     "apple-touch-icon.png",
     "assets/service.css",
     "assets/service.js",
 ]
+SERVICE_PUBLIC_FILES = [
+    "lp-notices.html",
+    "lp-official-notices.html",
+    "gps.html",
+    "market.html",
+]
+REQUIRED_PUBLIC_FILES = NEWSLETTER_PUBLIC_FILES + SERVICE_PUBLIC_FILES
 BOTTOM_NAV_LABELS = ["브리프", "LP", "GP"]
 PUBLIC_CORE_HTML_FILES = ["index.html", "daily-news.html"]
 PUBLIC_SERVICE_HTML_FILES = ["lp-notices.html", "lp-official-notices.html", "gps.html", "market.html"]
@@ -103,11 +103,12 @@ def read_public_text(relative_path: str) -> str:
     return (PUBLIC_DIR / relative_path).read_text(encoding="utf-8")
 
 
-def check_required_files() -> list[str]:
-    missing = [path for path in REQUIRED_PUBLIC_FILES if not (PUBLIC_DIR / path).exists()]
+def check_required_files(required_files: list[str] | None = None) -> list[str]:
+    required_files = required_files or REQUIRED_PUBLIC_FILES
+    missing = [path for path in required_files if not (PUBLIC_DIR / path).exists()]
     if missing:
         raise CheckFailure(f"Missing public files: {', '.join(missing)}")
-    return [f"required_files={len(REQUIRED_PUBLIC_FILES)}"]
+    return [f"required_files={len(required_files)}"]
 
 
 def bottom_nav_labels(html: str) -> list[str]:
@@ -133,9 +134,10 @@ def gp_service_tabs(html: str) -> list[str]:
     ]
 
 
-def check_bottom_nav() -> list[str]:
+def check_bottom_nav(html_files: list[str] | None = None) -> list[str]:
+    html_files = html_files or PUBLIC_HTML_FILES
     checked: list[str] = []
-    for relative_path in PUBLIC_HTML_FILES:
+    for relative_path in html_files:
         html = read_public_text(relative_path)
         labels = bottom_nav_labels(html)
         if labels != BOTTOM_NAV_LABELS:
@@ -146,20 +148,22 @@ def check_bottom_nav() -> list[str]:
     return [f"bottom_nav_pages={len(checked)}"]
 
 
-def check_visible_text() -> list[str]:
+def check_visible_text(html_files: list[str] | None = None) -> list[str]:
+    html_files = html_files or PUBLIC_HTML_FILES
     violations: list[str] = []
-    for relative_path in PUBLIC_HTML_FILES:
+    for relative_path in html_files:
         text = read_public_text(relative_path)
         for needle in FORBIDDEN_VISIBLE_TEXT:
             if needle in text:
                 violations.append(f"{relative_path}:{needle}")
     if violations:
         raise CheckFailure(f"Forbidden public wording: {', '.join(violations)}")
-    return [f"visible_text_pages={len(PUBLIC_HTML_FILES)}"]
+    return [f"visible_text_pages={len(html_files)}"]
 
 
-def check_public_source_terms() -> list[str]:
-    paths = PUBLIC_HTML_FILES + ["assets/service.js"]
+def check_public_source_terms(html_files: list[str] | None = None) -> list[str]:
+    html_files = html_files or PUBLIC_HTML_FILES
+    paths = html_files + ["assets/service.js"]
     violations: list[str] = []
     for relative_path in paths:
         text = read_public_text(relative_path)
@@ -217,6 +221,8 @@ def check_newsletter_frontend_contract() -> list[str]:
 
 
 def check_public_lp_json_contract() -> list[str]:
+    from lp_public_visibility import is_public_lp_notice_row
+
     data_path = PUBLIC_DIR / "data" / "service_data.json"
     if not data_path.exists():
         data_path = NEWSLETTER_SITE_DIR / "data" / "service_data.json"
@@ -459,12 +465,13 @@ def check_generated_lp_wiki_contract() -> list[str]:
     return [f"generated_lp_contract=ok lp_profiles_checked={len(profile_paths)} lp_notice_details_checked={len(detail_paths)}"]
 
 
-def check_remote(base_url: str) -> list[str]:
+def check_remote(base_url: str, services: str = "all") -> list[str]:
     if not base_url:
         return []
     base = base_url.rstrip("/") + "/"
     checked: list[str] = []
-    for relative_path in ["", "market.html", "gps.html", "lp-official-notices.html"]:
+    paths = [""] if services == "newsletter" else ["", "market.html", "gps.html", "lp-official-notices.html"]
+    for relative_path in paths:
         url = base + relative_path
         request = Request(url, headers={"User-Agent": "kpef-public-frontend-check/1.0"})
         try:
@@ -487,26 +494,42 @@ def main() -> int:
         default=NEWSLETTER_SITE_DIR,
         help="Local static site directory to check. Defaults to services/newsletter/deploy/site.",
     )
+    parser.add_argument(
+        "--services",
+        choices=["all", "newsletter"],
+        default="all",
+        help="Use newsletter for newsletter-only static bundles.",
+    )
     args = parser.parse_args()
     global PUBLIC_DIR
     PUBLIC_DIR = args.public_dir
 
-    checks = [
-        check_required_files,
-        check_bottom_nav,
-        check_visible_text,
-        check_public_source_terms,
-        check_newsletter_frontend_contract,
-        check_public_lp_json_contract,
-        check_generated_gp_contract,
-        check_generated_lp_wiki_contract,
-        check_brief_initial_date_guard,
-    ]
+    if args.services == "newsletter":
+        checks = [
+            lambda: check_required_files(NEWSLETTER_PUBLIC_FILES),
+            lambda: check_bottom_nav(PUBLIC_CORE_HTML_FILES),
+            lambda: check_visible_text(PUBLIC_CORE_HTML_FILES),
+            lambda: check_public_source_terms(PUBLIC_CORE_HTML_FILES),
+            check_newsletter_frontend_contract,
+            check_brief_initial_date_guard,
+        ]
+    else:
+        checks = [
+            check_required_files,
+            check_bottom_nav,
+            check_visible_text,
+            check_public_source_terms,
+            check_newsletter_frontend_contract,
+            check_public_lp_json_contract,
+            check_generated_gp_contract,
+            check_generated_lp_wiki_contract,
+            check_brief_initial_date_guard,
+        ]
     output: list[str] = []
     try:
         for check in checks:
             output.extend(check())
-        output.extend(check_remote(args.base_url))
+        output.extend(check_remote(args.base_url, args.services))
     except CheckFailure as exc:
         print(f"FAIL public frontend check: {exc}", file=sys.stderr)
         return 1

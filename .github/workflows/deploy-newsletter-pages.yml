@@ -435,7 +435,6 @@ jobs:
         if: steps.freshness.outputs.should_run == 'true'
         run: |
           python3 services/newsletter/src/sync_newsletter_supabase.py \
-            --date "${{ steps.date.outputs.report_date }}" \
             --archive services/newsletter/deploy/site/archive.json \
             --payload-out exports/daily_news/newsletter_supabase_payload.json
 
@@ -451,7 +450,6 @@ jobs:
             exit 1
           fi
           python3 services/newsletter/src/sync_newsletter_supabase.py \
-            --date "${{ steps.date.outputs.report_date }}" \
             --archive services/newsletter/deploy/site/archive.json \
             --payload-out exports/daily_news/newsletter_supabase_payload.json \
             --apply

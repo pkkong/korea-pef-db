@@ -94,7 +94,6 @@ jobs:
             exit 1
           fi
           python3 services/newsletter/src/sync_newsletter_supabase.py \
-            --date "${{ steps.date.outputs.report_date }}" \
             --archive exports/daily_news/public_archive.json \
             --payload-out exports/daily_news/newsletter_supabase_payload.json \
             --apply

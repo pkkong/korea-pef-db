@@ -38,6 +38,11 @@ BRAND_MARKS: dict[str, dict[str, str]] = {
     "mk.co.kr": {
         "logo_url": "https://static.mk.co.kr/favicon_180180.png",
     },
+    "mbn.co.kr": {
+        "logo_url": "https://img.mbn.co.kr/2026/mbn_main/new_logo.svg",
+        "image_width": "30px",
+        "image_height": "12px",
+    },
     "dealsite.co.kr": {
         "logo_url": "https://dealsite.co.kr/static/images/favicon.svg",
     },
@@ -1741,6 +1746,7 @@ BRAND_MARKS: dict[str, dict[str, str]] = {
 PUBLISHER_DOMAINS: dict[str, str] = {
     "한국경제": "hankyung.com",
     "매일경제": "mk.co.kr",
+    "MBN": "mbn.co.kr",
     "딜사이트": "dealsite.co.kr",
     "더벨": "thebell.co.kr",
     "인베스트조선": "investchosun.com",
