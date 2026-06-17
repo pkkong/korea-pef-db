@@ -45,6 +45,10 @@ jobs:
         run: |
           python3 services/newsletter/scripts/check_vercel_supabase_readiness.py
 
+      - name: Run Vercel data and UI contract tests
+        run: |
+          python3 services/newsletter/web/tests/test_newsletter_data.py
+
       - name: Smoke test Flask app
         working-directory: services/newsletter/web
         run: |

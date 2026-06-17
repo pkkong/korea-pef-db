@@ -92,8 +92,8 @@ Every non-trivial subagent task should state:
 ## Project Context
 
 - The newsletter service lives under `services/newsletter/`.
-- Newsletter deployment publishes the generated static site to `pkkong/kpef-newsletter` on the `gh-pages` branch.
-- Public pages are static generated HTML. Crawlers, CSV imports, or DB updates do not update the public website by themselves; a source build and publish step must regenerate and deploy the HTML.
+- Newsletter official app is Vercel at `https://kpef-newsletter.vercel.app`; GitHub Pages at `pkkong/kpef-newsletter` on `gh-pages` is the static backup mirror and archive fallback.
+- Crawlers, CSV imports, or DB updates do not update public surfaces by themselves. GitHub Actions must build and verify the Pages mirror, sync the same archive into Supabase, then verify Vercel from Supabase.
 - Public view taxonomy is a durable product rule: articles use list views, GP/LP directories use table-like directory views, GP/LP entities use profile detail views, LP notices use row-card notice views, and Wiki uses document views.
 - Local secrets are not committed. Newsletter operating secrets live in GitHub Actions repository secrets; `config/daily_news.env` is not an operating path.
 - Product and role-specific operating briefs are in `docs/agent_operating_briefs.md`.
@@ -102,6 +102,7 @@ Every non-trivial subagent task should state:
 - The Project Lead control document is `docs/project_lead_control_center.md`. Use it as the current source of truth for active service ownership, product decisions, verification commands, deployment state, and handoff notes before starting or delegating substantial work.
 - Public UX/UI rules are durable instructions in `docs/design_system.md`: benchmark the public service against InnoForest-style data directories, keep the unified `브리프 / LP / GP` bottom nav while Wiki is hidden, use table-like rows for LP/GP directories, avoid card-heavy layouts, and remove operator/internal wording from public pages.
 - Newsletter UI source is singular: `services/newsletter/web/newsletter_ui.py` owns the public newsletter HTML/CSS/JS used by both Vercel and the GitHub Pages mirror. Do not create or restore Vercel-only Jinja templates or standalone `web/static/service.css`; those are product regressions unless explicitly replanned.
+- Newsletter Vercel archive data must preserve both `newsletter_issues` and `newsletter_public_issue_articles`: issue rows own date navigation, article rows own article content/order. Do not treat numeric `0` values such as `section_order=0` as missing values; doing so changes Vercel ordering while Pages remains correct.
 - Wiki is not an active routine public-build target until the user re-plans it. Preserve explicit Wiki builder support, but do not include Wiki in default active public builds or navigation.
 
 ## Cross-Chat / Handoff Discipline

@@ -15,15 +15,19 @@
 
 ## 현재 우선순위
 
-1. 운영 체계 고정: 서비스 책임선, public view, build contract가 문서와 코드에서 같은 말을 하게 한다.
-2. LP Notice를 사업 단위 서비스로 안정화한다. 같은 사업의 공고, 서류심사, 선정결과, 정정, 취소가 여러 카드로 흩어지면 실패다.
-3. LP Notice 상태를 최신 이벤트와 마감일 기준으로 다시 검증한다. 2025년 마감 공고가 현재 모집중처럼 보이면 실패다.
-4. LP Notice 상세 페이지의 모바일 레이아웃을 목록 페이지와 같은 shell로 맞춘다.
-5. GP/LP 디렉토리는 뉴스레터에서 정리한 타이포그래피와 로고 슬롯 규칙을 유지한다.
-6. 뉴스레터 별도 채팅방 결과는 이 프로젝트의 통합 빌드와 공개 검증을 통과해야만 배포 완료로 본다.
+1. Newsletter legacy UI 제거: `scripts/build_service_site.py`와 `services/newsletter/src/build_newsletter_deploy.py`에 남아 있는 과거 newsletter UI 정의를 서비스별 builder/shared UI로 분리해 제거한다. 단, LP/GP 통합 빌드 영향이 있으므로 별도 리팩터링으로 진행한다.
+2. 운영 체계 고정: 서비스 책임선, public view, build contract가 문서와 코드에서 같은 말을 하게 한다.
+3. LP Notice를 사업 단위 서비스로 안정화한다. 같은 사업의 공고, 서류심사, 선정결과, 정정, 취소가 여러 카드로 흩어지면 실패다.
+4. LP Notice 상태를 최신 이벤트와 마감일 기준으로 다시 검증한다. 2025년 마감 공고가 현재 모집중처럼 보이면 실패다.
+5. LP Notice 상세 페이지의 모바일 레이아웃을 목록 페이지와 같은 shell로 맞춘다.
+6. GP/LP 디렉토리는 뉴스레터에서 정리한 타이포그래피와 로고 슬롯 규칙을 유지한다.
+7. 뉴스레터 별도 채팅방 결과는 이 프로젝트의 통합 빌드와 공개 검증을 통과해야만 배포 완료로 본다.
 
 ## 최근 처리
 
+- 2026-06-17: 뉴스레터 Vercel/GitHub Pages UI 원본을 `services/newsletter/web/newsletter_ui.py`로 단일화했다. Vercel app은 공식 화면, GitHub Pages는 static backup mirror로 고정하고, 둘 다 같은 CSS/JS를 제공한다.
+- 2026-06-17: Vercel archive가 `newsletter_issues`와 `newsletter_public_issue_articles`를 함께 읽도록 고정했다. 기사 0건 issue도 archive에 남기고, `section_order=0`을 정상 값으로 보존해 Pages와 Vercel의 표시 순서가 달라지지 않게 했다.
+- 2026-06-17: Vercel data/UI contract test를 Actions readiness/deploy workflow에 연결했다. 별도 Vercel template/CSS 부활, LP/GP/Wiki/legacy import, empty issue 누락, `section_order=0` 손실을 회귀로 본다.
 - 2026-06-11: 뉴스레터 자동 발행 장애를 정리했다. 08:30 수집·검증은 성공했지만 아시아경제 `www.asiae.co.kr` 로고 1건 missing icon hard gate 때문에 public push 전 중단됐다. 아시아경제 도메인 매핑을 추가하고, 아이콘 검사는 기본적으로 품질 리포트만 남기며 당일 공개 배포를 막지 않도록 바꿨다. 최종 공개 배포 `ae5d291`은 `health.json report_date=2026-06-11`, 기사 30건으로 확인했다.
 - 2026-06-11: `newsletter_ops_status.py`는 로컬 진단 산출물을 남길 수 있다. 정식 발행 완료 기준은 GitHub Actions 로그와 공개 `health.json`/`archive.json` 확인이며, 개인 컴퓨터의 로컬 빌드 상태를 운영 기준으로 삼지 않는다.
 - 2026-06-10: `newsletter-only`와 `integrated-site` 빌드 계약을 분리했다. 뉴스레터 단독 빌드는 LP/GP 산출물을 요구하지 않고, 배포 mirror에서는 기존 LP/GP 파일을 보존한 채 브리프 파일만 갱신한다.

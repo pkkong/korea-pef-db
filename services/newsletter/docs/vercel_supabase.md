@@ -21,18 +21,19 @@ GitHub Actions
 -> run_daily_news_pipeline.py
 -> build_newsletter_bundle.py
 -> validate_daily_news_pipeline.py
--> sync_newsletter_supabase.py
 -> GitHub Pages mirror
+-> sync_newsletter_supabase.py
+-> Supabase newsletter_issues + newsletter_public_issue_articles
 
 Vercel
 -> services/newsletter/web/index.py
 -> services/newsletter/web/app.py
--> Supabase newsletter_public_issue_articles
+-> Supabase newsletter_issues + newsletter_public_issue_articles
 ```
 
 역할은 아래처럼 고정한다.
 
-- GitHub Actions: 기사 수집, 분류, 중복 제거, 정적 미러 생성, Supabase 동기화, 공개 검증
+- GitHub Actions: 기사 수집, 분류, 중복 제거, 정적 미러 생성/검증, GitHub Pages publish/verify, Supabase 동기화, Vercel health 검증
 - Supabase: 뉴스레터 read model 저장. 기본 동기화 범위는 static mirror와 맞춘 최근 30개 이슈다.
 - Vercel: 사용자가 보는 웹 화면. 수집기나 장시간 빌드를 돌리지 않는 읽기 전용 런타임
 - GitHub Pages: 정적 백업 미러와 archive fallback. canonical app은 Vercel
@@ -44,6 +45,15 @@ GitHub Pages는 장애 시 확인 가능한 static mirror다.
 `services/newsletter/web/newsletter_ui.py`이며, Vercel Flask app과 GitHub Pages 정적
 builder가 모두 이 모듈을 사용한다. Vercel 전용 Jinja template이나 별도
 `web/static/service.css`를 만들지 않는다.
+
+Vercel archive는 Supabase에서 두 계층을 읽어 복원한다.
+
+- `newsletter_issues`: 날짜 이동과 최근 30개 issue skeleton
+- `newsletter_public_issue_articles`: 기사 내용, `rank`, `section_order`
+
+`newsletter_public_issue_articles`만 읽으면 기사 0건 issue가 사라진다. `section_order=0`은
+첫 번째 섹션이라는 정상 값이므로 fallback으로 덮으면 안 된다. Vercel의 article order와
+section order는 GitHub Pages `archive.json`과 같아야 한다.
 
 ## Supabase 적용 순서
 
@@ -77,8 +87,8 @@ preflight다. 파일 존재, Python compile, import isolation, Flask smoke test,
 Vercel 앱 배포와 DB migration을 섞지 않는다.
 
 `Deploy newsletter to GitHub Pages` workflow는 이름과 달리 운영상 newsletter
-publish workflow다. 실제 책임은 수집, Supabase sync, GitHub Pages static mirror
-publish, Vercel app health 검증이다. Vercel에서 수집을 실행하지 않는다.
+publish workflow다. 실제 책임은 수집, 정적 미러 생성/검증, GitHub Pages static mirror
+publish/verify, Supabase sync, Vercel app health 검증이다. Vercel에서 수집을 실행하지 않는다.
 
 `Newsletter publish watchdog` workflow는 GitHub-only fallback scheduler다. primary
 publish schedule이 GitHub 내부 지연/누락으로 실행되지 않았을 때 Vercel app과
@@ -111,3 +121,5 @@ Vercel/Supabase만 뒤처졌을 때 전체 뉴스 수집을 다시 돌리지 않
 - Daily publish 완료 기준은 Vercel `/health.json?refresh=1`의 `data_source=supabase`,
   최신 `report_date`, 최신 `article_count`와 GitHub Pages `health.json`/`archive.json`
   일치 여부다.
+- Vercel archive의 최신 issue order와 article row order는 GitHub Pages `archive.json`과 같아야 한다.
+- 같은 날짜를 다시 sync할 때는 `newsletter_issue_articles`, tags, entities를 archive 기준으로 재생성하고 stale links를 남기지 않는다.

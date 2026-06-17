@@ -62,7 +62,7 @@
 
 - 공개 UX/UI의 기준 문서는 `docs/design_system.md`다. Newsletter, LP, GP, Wiki 담당은 공개 화면을 고치기 전에 이 문서의 navigation, typography, directory row, newsletter reference pattern을 먼저 적용한다.
 - 공개 화면의 기본 뷰 체계는 `docs/design_system.md`의 `View Taxonomy`를 따른다. 뉴스는 article list, LP/GP 목록은 directory table, LP/GP 상세는 profile detail, 출자공고는 notice row-card, Wiki는 document view로 본다.
-- 공개 사이트는 정적 생성물이다. 크롤러, DB, CSV가 갱신되어도 공개 화면은 자동으로 실시간 변경되지 않으며, source renderer 빌드와 GitHub Pages 배포가 끝나야 새 숫자와 새 행이 반영된다.
+- 공개 화면은 크롤러, DB, CSV 갱신만으로 자동 변경되지 않는다. LP/GP와 GitHub Pages mirror는 source renderer 빌드와 Pages 배포가 끝나야 반영되고, 공식 Brief 앱은 검증된 mirror archive가 Supabase read model로 동기화된 뒤 Vercel health 검증까지 끝나야 반영 완료로 본다.
 - 뉴스레터/LP/GP가 같이 쓰는 날짜, CSV, URL 정규화, GP alias, HTML parsing 유틸은 `services/shared/src/daily_news_common.py`를 기준 모듈로 둔다. `services/newsletter/src/daily_news_common.py`와 `scripts/daily_news_common.py`는 호환용 shim으로만 남기고, LP/GP 코드는 뉴스레터 내부 경로인 `services.newsletter.src.daily_news_common`를 직접 import하지 않는다.
 - 공개 서비스는 혁신의숲 같은 데이터룸/디렉토리 서비스 톤을 기준으로 한다. 뉴스레터, LP, GP, Wiki가 서로 다른 제품처럼 보이지 않게 폰트, 색상, 여백, 버튼, 탭, 표 header, row 스타일, 하단 메뉴를 맞춘다.
 - 주요 목록과 디렉토리는 카드 나열보다 표 또는 표에 가까운 row layout을 기본으로 한다. 모바일에서도 핵심 컬럼은 남기고, 불필요한 가로 스크롤을 만들지 않는다.
@@ -185,7 +185,7 @@
 - 현재 자동 발행은 토요일과 일요일에도 매일 돈다. 따라서 월요일도 예외적인 72시간 창을 쓰지 않는다. 주말 수집 실패, 검색 반영 지연, 소스 오류를 회수해야 할 때는 일일 발행 파이프라인을 넓히지 말고 별도 백필/audit 작업으로 처리한다.
 - GitHub Actions는 매번 깨끗한 runner에서 실행되므로 로컬 `exports/` 파일만으로 이전 발행 중복을 막을 수 없다. daily pipeline은 public `archive.json`을 previous export 원장으로 함께 읽어, 이전 날짜에 공개된 URL 또는 사실상 같은 제목을 당일 브리프에서 제외해야 한다.
 - GitHub Actions 운영 경로에서는 public archive를 못 읽으면 조용히 계속 발행하지 않는다. 수집 단계는 `--require-previous-archive`, 정적 빌드 단계는 `--require-archive-seed`로 fail-closed 해야 하며, 이 실패는 중복 방지 원장 접근 장애로 처리한다.
-- 뉴스레터 공개 사이트 생성 경로는 `services/newsletter/src/newsletter_renderer.py`를 기준으로 한다. `scripts/build_newsletter_bundle.py`와 `services/newsletter/src/build_newsletter_service_pages.py`는 `scripts/build_service_site.py`, `build_newsletter_deploy.py`, LP/GP/Wiki 서비스 모듈을 import하면 안 된다.
+- 뉴스레터 공개 UI 원본은 `services/newsletter/web/newsletter_ui.py` 하나다. `services/newsletter/src/newsletter_renderer.py`는 GitHub Pages mirror를 만드는 adapter이고, Vercel app도 같은 UI 원본을 import해야 한다. `scripts/build_newsletter_bundle.py`와 `services/newsletter/src/build_newsletter_service_pages.py`는 `scripts/build_service_site.py`, `build_newsletter_deploy.py`, LP/GP/Wiki 서비스 모듈을 import하면 안 된다.
 - 각 기사에는 제목, 출처, 날짜, `source_url`, 관련 GP, 분류, 포함/제외 판단이 있어야 한다.
 - 중복 제거는 세 단계로 본다. 먼저 매체별 모바일·AMP·카테고리 suffix·추적 파라미터를 제거한 `normalized_source_url`로 같은 기사를 합치고, 다음으로 같은 매체의 거의 같은 제목을 제거하며, 마지막으로 국민성장펀드 운용사 선정처럼 여러 매체가 같은 이벤트를 반복 보도하는 경우 이벤트 단위로 묶어 발행 밀도를 낮춘다.
 - 회사 담당자 또는 외부 클리핑 리스트와 대조할 때는 `미수집`, `DB 수집`, `리뷰 후보`, `발행`, `운영창 밖`을 분리해서 판단한다. 오전 브리핑 운영창인 08:30 이후 기사나 전일 이전 기사는 같은 날짜 발행 누락으로 보지 않고, 다음 발행 창 또는 과거 백필 대상인지 따로 표시한다.
@@ -219,7 +219,7 @@
 - GitHub Actions 검증 단계도 수집 단계와 같은 Naver credentials를 받아야 한다. `validate_daily_news_pipeline.py`는 active Naver sources와 `NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET` 존재 여부를 함께 검사하므로, collection step만 env를 주고 validation/static build step에는 빼는 구성을 만들면 안 된다.
 - 발행 완료는 로컬 `daily_news_brief_YYYYMMDD.md` 생성이 아니라 Vercel app과 GitHub Pages mirror가 모두 오늘 날짜와 같은 기사 수를 보여주는 상태다. GitHub Actions는 mirror `health.json`/`archive.json`을 먼저 검증하고, Supabase sync 뒤 Vercel `/health.json?refresh=1`의 `data_source=supabase`, `report_date`, `article_count`를 확인한 뒤에만 성공 종료해야 한다.
 - Vercel/Supabase 전환 경로에서 Vercel은 사용자 화면만 담당한다. 느린 뉴스 수집, 분류, 중복 제거, 발행 검증은 GitHub Actions가 계속 담당하고, `services/newsletter/src/sync_newsletter_supabase.py`가 공개 archive를 Supabase read model로 싱크한다.
-- `services/newsletter/web/`은 독립 Vercel Flask app이다. 이 앱은 LP/GP/Wiki, legacy monolith, local SQLite DB를 import하지 않고 Supabase `newsletter_public_issue_articles` 또는 기존 public `archive.json`만 읽는다. Supabase sync는 기본적으로 Pages mirror와 같은 최근 30개 이슈를 유지한다. 화면은 `services/newsletter/web/newsletter_ui.py`의 공통 HTML/CSS/JS만 사용한다. Vercel 전용 Jinja 템플릿이나 `web/static/service.css`를 다시 만들면 UI 단일화 회귀로 본다. `SUPABASE_SERVICE_ROLE_KEY`는 GitHub Actions 전용이고 Vercel에는 넣지 않는다.
+- `services/newsletter/web/`은 독립 Vercel Flask app이다. 이 앱은 LP/GP/Wiki, legacy monolith, local SQLite DB를 import하지 않고 Supabase read model 또는 기존 public `archive.json`만 읽는다. Supabase sync는 기본적으로 Pages mirror와 같은 최근 30개 이슈를 유지한다. Vercel은 `newsletter_issues`로 날짜 skeleton을 만들고 `newsletter_public_issue_articles`로 기사 content/order를 붙인다. `newsletter_public_issue_articles`만 읽으면 기사 0건 날짜가 사라지고, `section_order=0`을 빈 값처럼 처리하면 Vercel과 Pages 정렬이 달라진다. 화면은 `services/newsletter/web/newsletter_ui.py`의 공통 HTML/CSS/JS만 사용한다. Vercel 전용 Jinja 템플릿이나 `web/static/service.css`를 다시 만들면 UI 단일화 회귀로 본다. `SUPABASE_SERVICE_ROLE_KEY`는 GitHub Actions 전용이고 Vercel에는 넣지 않는다.
 - 매일 발행 후 `exports/daily_news/ops_status/newsletter_ops_status_latest.md`를 우선 확인한다. 이 파일의 `Status`가 `ok`이고 hard failure가 없어야 “수집/공개 완료”로 보고할 수 있다. 사용자가 “오늘 수집 안 된 것 같다”고 하면 로그부터 파지 말고 이 status report의 Collection, Local, Public, Quality 섹션을 먼저 본다.
 
 ### 금지사항
@@ -281,9 +281,10 @@
 4. 통합 작업 큐 생성: 운영자는 `scripts/build_service_integration_worklist.py`로 `exports/service_integration_worklist_latest.csv`를 갱신한다. 이 파일이 뉴스 담당, GP 프로필 담당, People DB 담당의 공통 작업판이다.
 5. People worklist 생성: People 담당은 통합 큐와 기존 People 산출물을 대조해 `exports/people_research_worklist_top50.csv` 또는 입력 CSV 갱신 후보를 만든다.
 6. People DB 반영: People 담당은 `data/people_input.csv`, `data/person_role_input.csv`, `data/person_education_input.csv`를 출처 기반으로 갱신하고 `scripts/import_people_csv.py`, `scripts/export_people_views.py`를 실행한다.
-7. newsletter public mirror 반영: GitHub Actions가 `scripts/build_newsletter_bundle.py --require-archive-seed`로 newsletter-only 정적 사이트를 만들고, 내부 렌더링은 `services/newsletter/src/newsletter_renderer.py`가 담당한다. 이후 `services/newsletter/src/validate_daily_news_pipeline.py --site-dir services/newsletter/deploy/site` 검증 후 public mirror `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 push한다. 로컬에서 공개 산출물만 빠르게 볼 때는 `services/newsletter/src/validate_daily_news_pipeline.py --site-only --site-dir services/newsletter/deploy/site`를 쓴다.
-8. 공개 사이트 반영: 운영자는 서비스별 builder와 `scripts/build_site_bundle.py`를 통해 `services/newsletter/deploy/site/` 번들을 최신 상태로 만든다.
-9. 상태 점검: `scripts/build_operational_status_report.py`로 `exports/operational_status_latest.md`를 갱신하고, 뉴스와 People의 미처리 `update_action`을 다음날 작업 목록으로 넘긴다.
+7. newsletter public mirror 반영: GitHub Actions가 `scripts/build_newsletter_bundle.py --require-archive-seed`로 newsletter-only 정적 사이트를 만든다. `services/newsletter/src/newsletter_renderer.py`는 정적 mirror build adapter이고, 실제 공개 newsletter HTML/CSS/JS 원본은 `services/newsletter/web/newsletter_ui.py`다. 이후 `services/newsletter/src/validate_daily_news_pipeline.py --site-dir services/newsletter/deploy/site` 검증 후 public mirror `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 push한다. 로컬에서 공개 산출물만 빠르게 볼 때는 `services/newsletter/src/validate_daily_news_pipeline.py --site-only --site-dir services/newsletter/deploy/site`를 쓴다.
+8. Supabase/Vercel 반영: GitHub Actions가 검증된 mirror `archive.json`을 `services/newsletter/src/sync_newsletter_supabase.py`로 Supabase에 동기화한다. 같은 issue를 다시 동기화할 때는 `newsletter_issue_articles`, tags, entities를 archive 기준으로 재생성한다. 이후 Vercel `/health.json?refresh=1`에서 `data_source=supabase`, `report_date`, `article_count`, archive issue count, article order를 확인한다.
+9. 공개 사이트 반영: 운영자는 서비스별 builder와 `scripts/build_site_bundle.py`를 통해 `services/newsletter/deploy/site/` 번들을 최신 상태로 만든다.
+10. 상태 점검: `scripts/build_operational_status_report.py`로 `exports/operational_status_latest.md`를 갱신하고, 뉴스와 People의 미처리 `update_action`을 다음날 작업 목록으로 넘긴다.
 
 ## repo 기준 핵심 경로
 

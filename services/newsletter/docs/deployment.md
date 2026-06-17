@@ -4,7 +4,7 @@
 
 운영 역할은 아래처럼 고정한다.
 
-- GitHub Actions: 뉴스 수집, 분류, 정적 미러 생성, Supabase 동기화, 공개 검증
+- GitHub Actions: 뉴스 수집, 분류, 정적 미러 생성/검증, GitHub Pages publish/verify, Supabase 동기화, Vercel health 검증
 - Supabase: Vercel 앱이 읽는 뉴스레터 read model DB
 - Vercel: 사용자가 보는 primary 뉴스레터 앱
 - GitHub Pages: 장애 시 확인 가능한 정적 백업 미러
@@ -29,10 +29,12 @@ Supabase read model 동기화 payload는 아래 스크립트가 만든다.
 
 ```bash
 python3 services/newsletter/src/sync_newsletter_supabase.py \
-  --date YYYY-MM-DD \
   --archive services/newsletter/deploy/site/archive.json \
   --payload-out exports/daily_news/newsletter_supabase_payload.json
 ```
+
+루틴 운영에서는 `--date`를 넣지 않는다. 기본값은 Pages mirror와 같은 최근 30개
+issue 동기화다. `--date YYYY-MM-DD`는 특정 날짜를 재현하거나 디버그할 때만 쓴다.
 
 ## Cloud Publish
 

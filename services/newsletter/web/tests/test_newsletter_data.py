@@ -3,11 +3,15 @@
 
 from __future__ import annotations
 
+import importlib
 import sys
 from pathlib import Path
 
 
 WEB_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 if str(WEB_ROOT) not in sys.path:
     sys.path.insert(0, str(WEB_ROOT))
 
@@ -49,7 +53,7 @@ def sample_archive() -> list[dict[str, object]]:
     ]
 
 
-def test_archive_from_supabase_rows_groups_issues() -> None:
+def test_archive_from_supabase_rows_keeps_issue_skeletons_and_zero_section_order() -> None:
     issue_rows = [
         {
             "issue_date": "2026-06-17",
@@ -154,10 +158,35 @@ def test_vercel_app_uses_common_newsletter_ui() -> None:
         web_app.load_archive = old_loader
 
 
+def test_vercel_app_imports_from_repo_root_package_path() -> None:
+    module = importlib.import_module("services.newsletter.web.app")
+    assert module.app.name == "services.newsletter.web.app"
+
+
+def test_vercel_runtime_has_no_standalone_ui_or_legacy_service_imports() -> None:
+    assert not (WEB_ROOT / "templates" / "daily_news.html").exists()
+    assert not (WEB_ROOT / "static" / "service.css").exists()
+
+    forbidden = [
+        "build_service_site",
+        "build_newsletter_deploy",
+        "services.lp",
+        "services.gp",
+        "services.wiki",
+        "pef_wiki",
+    ]
+    for path in [WEB_ROOT / "app.py", WEB_ROOT / "index.py", WEB_ROOT / "newsletter_data.py"]:
+        source = path.read_text(encoding="utf-8")
+        for token in forbidden:
+            assert token not in source, f"{path.name} must not import or mention {token}"
+
+
 def main() -> int:
-    test_archive_from_supabase_rows_groups_issues()
+    test_archive_from_supabase_rows_keeps_issue_skeletons_and_zero_section_order()
     test_filter_and_group_articles()
     test_vercel_app_uses_common_newsletter_ui()
+    test_vercel_app_imports_from_repo_root_package_path()
+    test_vercel_runtime_has_no_standalone_ui_or_legacy_service_imports()
     print("newsletter web data tests passed")
     return 0
 

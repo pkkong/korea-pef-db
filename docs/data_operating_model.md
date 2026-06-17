@@ -23,9 +23,10 @@ Last updated: 2026-06-10 KST
    - 공개 화면이 읽는 DB view, JSON export, archive contract.
    - 내부 상태와 후보 데이터를 제거한 후의 결과다.
 
-5. `Static site`
-   - public read model을 HTML로 구운 결과다.
-   - DB나 CSV가 바뀌어도 build/deploy 전까지 공개 사이트는 바뀌지 않는다.
+5. `Public surface`
+   - LP/GP와 GitHub Pages mirror는 public read model을 HTML로 구운 결과다.
+   - 공식 Brief 앱은 검증된 mirror archive를 Supabase public read model로 동기화한 뒤 Vercel에서 읽는 결과다.
+   - DB나 CSV가 바뀌어도 build, sync, deploy, public verification 전까지 공개 화면은 바뀌지 않는다.
 
 ## State Axes
 
@@ -89,9 +90,16 @@ Renderer는 public read model을 HTML로 표현하는 역할만 한다.
 - `newsletter_articles`: URL 기준 canonical article.
 - `newsletter_issue_articles`: 특정 issue에 노출되는 기사와 순서.
 - `newsletter_article_tags`, `newsletter_article_entities`: 공개 가능한 태그와 GP/LP 링크.
-- `newsletter_public_issue_articles`: Vercel 앱이 읽는 public view.
+- `newsletter_public_issue_articles`: Vercel 앱이 읽는 article-level public view.
 
-GitHub Actions가 기존 archive를 만들고 GitHub Pages mirror를 먼저 검증한 뒤 `sync_newsletter_supabase.py`로 이 read model을 갱신한다. 기본 동기화 범위는 Pages mirror와 맞춘 최근 30개 이슈다. Vercel app은 이 view를 읽고, Supabase가 비어 있거나 장애일 때는 기존 public `archive.json`으로 fallback한다. Mirror는 최신인데 Vercel/Supabase만 뒤처졌을 때는 full publish가 아니라 `Sync newsletter Supabase read model` recovery workflow로 read model만 다시 맞춘다. 같은 발행일을 재동기화할 때는 기존 `newsletter_issue_articles` 연결을 먼저 지우고 archive 기준으로 다시 넣어야 한다. 그렇지 않으면 public mirror보다 Supabase/Vercel 기사 수가 많아지는 stale link가 생긴다.
+GitHub Actions가 기존 archive를 만들고 GitHub Pages mirror를 먼저 검증한 뒤 `sync_newsletter_supabase.py`로 이 read model을 갱신한다. 기본 동기화 범위는 Pages mirror와 맞춘 최근 30개 이슈다. Vercel app은 Supabase를 우선 읽고, Supabase가 비어 있거나 장애일 때는 기존 public `archive.json`으로 fallback한다. Mirror는 최신인데 Vercel/Supabase만 뒤처졌을 때는 full publish가 아니라 `Sync newsletter Supabase read model` recovery workflow로 read model만 다시 맞춘다. 같은 발행일을 재동기화할 때는 기존 `newsletter_issue_articles` 연결을 먼저 지우고 archive 기준으로 다시 넣어야 한다. 그렇지 않으면 public mirror보다 Supabase/Vercel 기사 수가 많아지는 stale link가 생긴다.
+
+Vercel archive 재구성은 두 층을 함께 읽어야 한다.
+
+- `newsletter_issues`가 날짜 이동과 30일 archive skeleton의 source of truth다. 기사 0건인 날짜도 GitHub Pages archive와 동일하게 유지해야 한다.
+- `newsletter_public_issue_articles`는 기사 content와 `rank`, `section_order`를 제공한다. 이 view만 읽으면 article inner join 때문에 빈 issue가 사라진다.
+- `archive.json`은 발행일 순서, 섹션 순서, issue 안 기사 row 순서의 canonical source다. Vercel은 이 순서를 Supabase에서 복원해야 하며 독자적으로 재정렬하지 않는다.
+- `section_order=0`은 정상적인 첫 섹션 값이다. `0`을 falsy 값으로 처리해 `999` 같은 fallback으로 바꾸면 Vercel과 GitHub Pages가 같은 기사라도 다른 순서로 보인다.
 
 ## Build Contract
 

@@ -12,14 +12,12 @@ from pathlib import Path
 from flask import Flask, Response, jsonify, request
 
 WEB_ROOT = Path(__file__).resolve().parent
-from newsletter_data import load_archive, select_issue  # noqa: E402
-from newsletter_ui import (  # noqa: E402
-    app_icon_png,
-    app_web_manifest,
-    render_app,
-    service_css,
-    service_js,
-)
+try:  # Package import path used by repo-root tests.
+    from .newsletter_data import load_archive, select_issue  # type: ignore
+    from .newsletter_ui import app_icon_png, app_web_manifest, render_app, service_css, service_js  # type: ignore
+except ImportError:  # Flat import path used by Vercel root and local Flask runs.
+    from newsletter_data import load_archive, select_issue  # type: ignore  # noqa: E402
+    from newsletter_ui import app_icon_png, app_web_manifest, render_app, service_css, service_js  # type: ignore  # noqa: E402
 
 app = Flask(__name__, static_folder=None)
 

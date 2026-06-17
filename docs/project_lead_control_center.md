@@ -12,11 +12,11 @@ Last updated: 2026-06-17 KST
 - Public mirror repo: `pkkong/kpef-newsletter`, branch `gh-pages`
 - Navigation source change verified: `998acb2 Hide Wiki from public navigation`
 - Public deploy verified for navigation: `dfa868b`
-- Latest newsletter daily workflow verification: `27661501449` succeeded on source `503bf96` on 2026-06-17 KST. It collected 974 candidates, fetched 308, selected 22 articles, published and verified the GitHub Pages mirror, synced Supabase, and verified the Vercel app from Supabase.
-- Latest public mirror deploy verified: `efe188d` on 2026-06-17 KST.
-- Latest Vercel deploy workflow verification: `27626108900` succeeded on source `60990ea` on 2026-06-16 KST.
-- Latest newsletter workflow code verified: `503bf96 Reset newsletter Supabase issue links on sync`.
+- Latest newsletter full publish verification: GitHub Actions run `27692675935` succeeded on source `40d6e5b` on 2026-06-17 KST. Public GitHub Pages mirror `health.json` shows `report_date=2026-06-17`, `article_count=17`, `services=newsletter`, `built_at=2026-06-17T13:42:51+00:00`.
+- Latest Vercel app verification: GitHub Actions run `27694685414` succeeded on source `dbb2a9e` on 2026-06-17 KST. Public Vercel `health.json?refresh=1` shows `report_date=2026-06-17`, `article_count=17`, `issue_count=30`, `data_source=supabase`.
+- Latest newsletter workflow code verified: `dbb2a9e Fix Vercel newsletter section order`.
 - Newsletter production UI source unified on 2026-06-17: `services/newsletter/web/newsletter_ui.py` owns the shared newsletter HTML/CSS/JS used by both the Vercel app and GitHub Pages mirror. `services/newsletter/src/newsletter_renderer.py` delegates public UI to that module. Do not recreate Vercel-only Jinja templates or `web/static/service.css`.
+- Newsletter Vercel archive contract fixed on 2026-06-17: Vercel reads `newsletter_issues` for date navigation and `newsletter_public_issue_articles` for article rows. Empty issues must stay visible in the 30-issue archive, and `section_order=0` must remain `0`; otherwise Vercel and Pages will show the same articles in different visual order.
 - Newsletter Vercel/Supabase migration path is active as of 2026-06-17: `services/newsletter/web/` is the standalone Flask/Vercel app, `services/newsletter/supabase/` owns the public read-model schema, and `services/newsletter/src/sync_newsletter_supabase.py` syncs generated archive rows to Supabase. Vercel project `kpef-newsletter` uses root `services/newsletter/web`, and Supabase project `fhigakwodmfjwtttwyyj` stores the newsletter read model. `Deploy newsletter Vercel app` deploys only the app, `Apply newsletter Supabase migration` owns DB schema changes, `Sync newsletter Supabase read model` owns Supabase-only recovery, and `Newsletter publish watchdog` decides whether to dispatch full publish or Supabase-only recovery.
 - Public bottom navigation: `브리프 / LP / GP`
 - Wiki is hidden from public navigation until the user re-plans it.
@@ -73,7 +73,7 @@ Last updated: 2026-06-17 KST
 Compile check:
 
 ```bash
-python3 -m py_compile scripts/build_service_site.py services/newsletter/src/build_newsletter_deploy.py services/newsletter/src/gp_service_pages.py services/newsletter/src/pef_wiki_pages.py scripts/check_public_frontend.py
+python3 -m py_compile scripts/build_newsletter_bundle.py scripts/build_site_bundle.py scripts/check_public_frontend.py services/newsletter/web/app.py services/newsletter/web/index.py services/newsletter/web/newsletter_data.py services/newsletter/web/newsletter_ui.py services/newsletter/src/newsletter_renderer.py services/newsletter/src/sync_newsletter_supabase.py
 ```
 
 Build active public site bundle:
@@ -113,25 +113,29 @@ python3 scripts/check_public_frontend.py --services newsletter
 python3 scripts/check_public_frontend.py
 ```
 
-Publish to GitHub Pages:
+Run newsletter publish workflow:
 
 ```bash
 GitHub Actions → Deploy newsletter to GitHub Pages → Run workflow
 ```
 
-Remote check after deploy:
+This workflow publishes and verifies the GitHub Pages mirror, syncs Supabase, and verifies Vercel from Supabase.
+
+Remote checks after deploy:
 
 ```bash
 python3 scripts/check_public_frontend.py --base-url https://pkkong.github.io/kpef-newsletter/
+curl -fsS "https://kpef-newsletter.vercel.app/health.json?refresh=1"
 ```
 
 ## Required Verification Before Reporting Done
 
 - Python compile check passes.
-- Integrated bundle build passes.
+- Relevant source build passes: newsletter-only for Brief-only changes, integrated bundle for cross-service changes.
 - `scripts/check_public_frontend.py` passes.
 - Public major pages show bottom nav exactly `브리프 / LP / GP`.
 - If UI changed, inspect mobile 390px and desktop 1280px or provide a clear reason if not done.
+- If Brief/Vercel changed, Vercel and Pages must show the same `report_date`, `article_count`, archive issue count, issue order, article row order, CSS, and JS.
 - If deploy happened, verify `health.json` and at least `index.html`, `lp-notices.html`, `gps.html`, and `market.html` from the public URL after CDN cache updates.
 
 ## Cross-Chat Handoff Template
@@ -155,9 +159,9 @@ The receiving chat must not rely on conversation memory. It should read `AGENTS.
 ## Current Known Risks
 
 - The repo worktree often contains unrelated dirty changes from prior service work. Do not reset or revert them without explicit user instruction.
-- Public deployment source is the generated bundle under `services/newsletter/deploy/site/` and the `gh-pages` mirror. The legacy root `public/` directory is ignored generated output and must not be committed.
+- Static mirror deployment source is the generated bundle under `services/newsletter/deploy/site/` and the `gh-pages` mirror. Official Brief app state is Vercel reading the Supabase public read model synced from the verified mirror archive. The legacy root `public/` directory is ignored generated output and must not be committed.
 - Newsletter classification and tag quality remain active quality risks. Any classification logic change should add title-based regression tests in `services/newsletter/tests/test_daily_news_logic.py`.
-- Newsletter collection is not complete until GitHub Actions public mirror push and public `health.json`/`archive.json` verification pass. Missing or weak publisher icons should create a report and backlog item, but must not block the daily public newsletter unless `NEWSLETTER_STRICT_ICON_CHECK=1` is explicitly set.
+- Newsletter collection is not complete until GitHub Actions public mirror push, public `health.json`/`archive.json` verification, Supabase sync, and Vercel `health.json?refresh=1` verification pass. Missing or weak publisher icons should create a report and backlog item, but must not block the daily public newsletter unless `NEWSLETTER_STRICT_ICON_CHECK=1` is explicitly set.
 - Daily newsletter scheduling does not rely on a single GitHub cron slot. The primary run is 08:37 KST, with retry windows at 09:17, 09:47, 10:17, and 11:17 KST. Scheduled runs first check both Vercel app and GitHub Pages mirror health; if today's issue is already published with articles and Vercel is reading Supabase, the run skips collection/build/publish to avoid duplicate work. The watchdog checks from 08:52 KST and dispatches full publish only when the mirror is stale; if the mirror is fresh but Vercel/Supabase is stale, it dispatches Supabase-only sync.
 - Daily newsletter status source is `exports/daily_news/ops_status/newsletter_ops_status_latest.md`. Check it before diagnosing newsletter incidents; it separates collection, local build, public publish, hard failures, and soft warnings.
 - LP notice lifecycle and business-card grouping remain active quality risks. Do not split one LP business into multiple cards for 공고/서류심사/선정결과 unless it is truly a separate 사업. Current public gate intentionally excludes the noisy `vcs_investment_notice` candidate feed until the parser is reviewed.
@@ -195,7 +199,8 @@ The receiving chat must not rely on conversation memory. It should read `AGENTS.
 - 2026-06-15 duplicate guard deploy verified: source commit `56c1ba5` passed workflow run `27550021509` and published public mirror commit `6ff0966`. Actions generated `article_count=8`, validation reported `Daily news validation: OK`, icon issues 0, and the public site now confirms `health.json report_date=2026-06-15 article_count=8`. Public `archive.json` keeps `https://www.asiae.co.kr/article/2026061211064410472` only on 2026-06-13 and 2026-06-14; it is no longer present in the 2026-06-15 issue.
 - 2026-06-15 cross-date archive dedupe verified: source commit `1ae979d` passed workflow run `27551001811`; public `health.json` confirms `report_date=2026-06-15`, `article_count=8`, and `built_at=2026-06-15T14:00:23+00:00`. Public `archive.json` now keeps `https://www.asiae.co.kr/article/2026061211064410472` only on the first publication date, 2026-06-13, and removes the duplicate from 2026-06-14 and 2026-06-15.
 - 2026-06-17 cloud operations hardening completed: GitHub Actions now owns newsletter collection/build/static mirror/Supabase sync; Vercel owns app rendering only; Supabase owns the public read model; GitHub Pages is the backup static mirror. The full publish workflow publishes and verifies the Pages mirror before Supabase sync, then verifies Vercel from Supabase. `Newsletter publish watchdog` dispatches full publish only when the mirror is stale and dispatches `Sync newsletter Supabase read model` when only Vercel/Supabase is stale. DB schema changes are split into `Apply newsletter Supabase migration`, so `Deploy newsletter Vercel app` remains app-only.
-- 2026-06-17 stale Supabase issue-link bug fixed: same-date resync now deletes and rebuilds `newsletter_issue_articles` plus article tag/entity metadata before upserting current archive rows. This fixed the mismatch where Pages showed 22 articles but Vercel could still show 23 from a stale prior Supabase link. Verification: Supabase-only sync `27661473165` succeeded, then full publish `27661501449` succeeded with Pages `health.json` 2026-06-17/22, Vercel `health.json` 2026-06-17/22 and `data_source=supabase`.
+- 2026-06-17 stale Supabase issue-link bug fixed: same-date resync now deletes and rebuilds `newsletter_issue_articles` plus article tag/entity metadata before upserting current archive rows. This fixed the mismatch where Pages and Vercel could show different article counts after a resync.
+- 2026-06-17 Vercel/Pages UI and ordering unified: source commit `40d6e5b` removed Vercel-only HTML/CSS and routed Vercel plus Pages through `newsletter_ui.py`; source commit `2a1547d` preserved empty Supabase issues so both archives show 30 dates; source commit `dbb2a9e` preserved `section_order=0` so Vercel visual ordering matches Pages. Verification: Vercel and Pages both show `2026-06-17`, `17` articles, `30` archive entries, equal CSS/JS assets, and equal display order.
 
 ## Project Lead Closeout Checklist
 

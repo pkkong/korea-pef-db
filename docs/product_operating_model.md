@@ -34,7 +34,7 @@ Last updated: 2026-06-10 KST
 각 서비스는 자기 산출물만 만든다.
 
 - Brief builder: `scripts/build_newsletter_bundle.py` creates `index.html`, `daily-news.html`, `archive.json`, `health.json`, and newsletter assets without importing LP, GP, Wiki, or the legacy deploy monolith.
-- Brief Vercel app: `services/newsletter/web/` is the standalone runtime for the Vercel/Supabase newsletter. It reads Supabase public views first and falls back to the existing public `archive.json`; it does not crawl news or import LP/GP/Wiki code. Supabase keeps the recent rolling archive, default 30 issues, so Vercel date navigation matches the GitHub Pages mirror. It must render through the same `services/newsletter/web/newsletter_ui.py` HTML/CSS/JS source used by the GitHub Pages mirror.
+- Brief Vercel app: `services/newsletter/web/` is the standalone runtime for the Vercel/Supabase newsletter. It reads Supabase public read-model rows first and falls back to the existing public `archive.json`; it does not crawl news or import LP/GP/Wiki code. Supabase keeps the recent rolling archive, default 30 issues, so Vercel date navigation matches the GitHub Pages mirror. Vercel must combine `newsletter_issues` for issue/date skeletons with `newsletter_public_issue_articles` for article content and ordering. It must render through the same `services/newsletter/web/newsletter_ui.py` HTML/CSS/JS source used by the GitHub Pages mirror.
 - LP builder: `lp-*.html`, `lp-notices.html`, `lp-official-notices.html`,
   `lp-notice-*.html`, LP public data.
 - GP builder: `market.html`, `gps.html`, `gp-*.html`, GP public data.

@@ -74,6 +74,8 @@ def archive_from_supabase_rows(
 ) -> list[dict[str, Any]]:
     grouped: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
 
+    # Issue rows are the date-navigation source of truth. Article rows are an
+    # inner join view, so dates with zero articles would otherwise disappear.
     for issue in issue_rows or []:
         issue_date = _clean_text(issue.get("issue_date"))
         if not issue_date:
