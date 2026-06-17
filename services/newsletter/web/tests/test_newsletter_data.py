@@ -50,6 +50,20 @@ def sample_archive() -> list[dict[str, object]]:
 
 
 def test_archive_from_supabase_rows_groups_issues() -> None:
+    issue_rows = [
+        {
+            "issue_date": "2026-06-17",
+            "visible_date": "2026년 6월 17일",
+            "basis": "전일",
+            "article_count": 0,
+        },
+        {
+            "issue_date": "2026-06-16",
+            "visible_date": "2026년 6월 16일",
+            "basis": "전일",
+            "article_count": 2,
+        },
+    ]
     rows = [
         {
             "issue_date": "2026-06-16",
@@ -79,11 +93,13 @@ def test_archive_from_supabase_rows_groups_issues() -> None:
         },
     ]
 
-    archive = archive_from_supabase_rows(rows)
+    archive = archive_from_supabase_rows(rows, issue_rows)
 
-    assert len(archive) == 1
-    assert archive[0]["reportDate"] == "2026-06-16"
-    assert [row["title"] for row in archive[0]["articles"]] == ["첫 기사", "둘째 기사"]
+    assert len(archive) == 2
+    assert archive[0]["reportDate"] == "2026-06-17"
+    assert archive[0]["articles"] == []
+    assert archive[1]["reportDate"] == "2026-06-16"
+    assert [row["title"] for row in archive[1]["articles"]] == ["첫 기사", "둘째 기사"]
 
 
 def test_filter_and_group_articles() -> None:
