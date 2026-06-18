@@ -52,77 +52,94 @@ def write_app_icon_assets(public_dir: Path) -> Path:
     return icon_path
 
 def app_icon_png(size: int = 180) -> bytes:
-    background_top = (17, 24, 39)
-    background_bottom = (31, 107, 99)
+    scale = 4
+    canvas_size = size * scale
+    background_top = (15, 23, 42)
+    background_bottom = (19, 31, 52)
     pixels: list[list[tuple[int, int, int, int]]] = []
-    for y in range(size):
-        t = y / max(1, size - 1)
+    for y in range(canvas_size):
+        t = y / max(1, canvas_size - 1)
         row = []
-        for x in range(size):
+        for x in range(canvas_size):
             base = tuple(round(background_top[i] * (1 - t) + background_bottom[i] * t) for i in range(3))
             row.append((base[0], base[1], base[2], 255))
         pixels.append(row)
 
-    def set_px(x: int, y: int, color: tuple[int, int, int, int]) -> None:
-        if 0 <= x < size and 0 <= y < size:
-            pixels[y][x] = color
+    def mix_pixel(x: int, y: int, color: tuple[int, int, int], alpha: float) -> None:
+        if not (0 <= x < canvas_size and 0 <= y < canvas_size):
+            return
+        alpha = max(0.0, min(1.0, alpha))
+        old = pixels[y][x]
+        pixels[y][x] = (
+            round(old[0] * (1 - alpha) + color[0] * alpha),
+            round(old[1] * (1 - alpha) + color[1] * alpha),
+            round(old[2] * (1 - alpha) + color[2] * alpha),
+            255,
+        )
 
-    def rounded_rect(x0: int, y0: int, x1: int, y1: int, radius: int, color: tuple[int, int, int, int]) -> None:
-        for y in range(y0, y1):
-            for x in range(x0, x1):
-                dx = max(x0 + radius - x, 0, x - (x1 - radius - 1))
-                dy = max(y0 + radius - y, 0, y - (y1 - radius - 1))
-                if dx * dx + dy * dy <= radius * radius:
-                    set_px(x, y, color)
+    def circle(center: tuple[int, int], radius: int, color: tuple[int, int, int]) -> None:
+        cx, cy = center[0] * scale, center[1] * scale
+        scaled_radius = radius * scale
+        pad = scaled_radius + 2 * scale
+        for y in range(max(0, cy - pad), min(canvas_size, cy + pad)):
+            for x in range(max(0, cx - pad), min(canvas_size, cx + pad)):
+                distance = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+                alpha = 1.0 - max(0.0, distance - scaled_radius + 1.5 * scale) / (3 * scale)
+                if alpha > 0:
+                    mix_pixel(x, y, color, alpha)
 
-    def rect(x0: int, y0: int, x1: int, y1: int, color: tuple[int, int, int, int]) -> None:
-        for y in range(y0, y1):
-            for x in range(x0, x1):
-                set_px(x, y, color)
+    def stroke(
+        start: tuple[int, int],
+        end: tuple[int, int],
+        width: int,
+        color: tuple[int, int, int],
+    ) -> None:
+        x1, y1 = start[0] * scale, start[1] * scale
+        x2, y2 = end[0] * scale, end[1] * scale
+        radius = width * scale / 2
+        pad = round(radius + 2 * scale)
+        min_x, max_x = max(0, round(min(x1, x2) - pad)), min(canvas_size, round(max(x1, x2) + pad))
+        min_y, max_y = max(0, round(min(y1, y2) - pad)), min(canvas_size, round(max(y1, y2) + pad))
+        dx = x2 - x1
+        dy = y2 - y1
+        length_sq = dx * dx + dy * dy
+        for y in range(min_y, max_y):
+            for x in range(min_x, max_x):
+                if length_sq == 0:
+                    distance = ((x - x1) ** 2 + (y - y1) ** 2) ** 0.5
+                else:
+                    t = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / length_sq))
+                    px = x1 + t * dx
+                    py = y1 + t * dy
+                    distance = ((x - px) ** 2 + (y - py) ** 2) ** 0.5
+                alpha = 1.0 - max(0.0, distance - radius + 1.5 * scale) / (3 * scale)
+                if alpha > 0:
+                    mix_pixel(x, y, color, alpha)
 
-    rounded_rect(28, 28, 152, 152, 22, (248, 250, 252, 255))
-    rect(43, 46, 51, 132, (31, 107, 99, 255))
-    rect(62, 92, 132, 100, (229, 231, 235, 255))
-    rect(62, 112, 121, 120, (229, 231, 235, 255))
-    rect(62, 132, 104, 140, (229, 231, 235, 255))
-    rect(110, 113, 122, 140, (31, 107, 99, 255))
-    rect(126, 99, 138, 140, (215, 189, 120, 255))
-    rect(94, 126, 106, 140, (17, 24, 39, 255))
-    draw_block_text(pixels, "PEF", 61, 52, 5, (17, 24, 39, 255))
+    stroke((58, 42), (58, 138), 17, (255, 255, 255))
+    stroke((67, 91), (121, 43), 17, (255, 255, 255))
+    stroke((67, 91), (124, 139), 17, (255, 255, 255))
+    stroke((102, 118), (135, 142), 17, (54, 181, 166))
+    circle((142, 142), 8, (54, 181, 166))
 
-    raw = b"".join(b"\x00" + bytes(channel for pixel in row for channel in pixel) for row in pixels)
+    downsampled: list[list[tuple[int, int, int, int]]] = []
+    for y in range(size):
+        row = []
+        for x in range(size):
+            total = [0, 0, 0, 0]
+            for yy in range(y * scale, (y + 1) * scale):
+                for xx in range(x * scale, (x + 1) * scale):
+                    pixel = pixels[yy][xx]
+                    total[0] += pixel[0]
+                    total[1] += pixel[1]
+                    total[2] += pixel[2]
+                    total[3] += pixel[3]
+            area = scale * scale
+            row.append(tuple(round(channel / area) for channel in total))  # type: ignore[arg-type]
+        downsampled.append(row)
+
+    raw = b"".join(b"\x00" + bytes(channel for pixel in row for channel in pixel) for row in downsampled)
     return make_png(size, size, raw)
-
-def draw_block_text(
-    pixels: list[list[tuple[int, int, int, int]]],
-    text: str,
-    x: int,
-    y: int,
-    scale: int,
-    color: tuple[int, int, int, int],
-) -> None:
-    glyphs = {
-        "P": ("11110", "10001", "10001", "11110", "10000", "10000", "10000"),
-        "E": ("11111", "10000", "10000", "11110", "10000", "10000", "11111"),
-        "F": ("11111", "10000", "10000", "11110", "10000", "10000", "10000"),
-    }
-    cursor = x
-    height = len(pixels)
-    width = len(pixels[0]) if pixels else 0
-    for char in text:
-        glyph = glyphs.get(char.upper())
-        if not glyph:
-            cursor += scale * 3
-            continue
-        for gy, row in enumerate(glyph):
-            for gx, mark in enumerate(row):
-                if mark != "1":
-                    continue
-                for py in range(y + gy * scale, y + (gy + 1) * scale):
-                    for px in range(cursor + gx * scale, cursor + (gx + 1) * scale):
-                        if 0 <= px < width and 0 <= py < height:
-                            pixels[py][px] = color
-        cursor += (len(glyph[0]) + 1) * scale
 
 def make_png(width: int, height: int, raw_scanlines: bytes) -> bytes:
     def chunk(kind: bytes, data: bytes) -> bytes:
