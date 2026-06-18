@@ -54,8 +54,8 @@ def write_app_icon_assets(public_dir: Path) -> Path:
 def app_icon_png(size: int = 180) -> bytes:
     scale = 4
     canvas_size = size * scale
-    background_top = (15, 23, 42)
-    background_bottom = (19, 31, 52)
+    background_top = (255, 255, 255)
+    background_bottom = (244, 245, 247)
     pixels: list[list[tuple[int, int, int, int]]] = []
     for y in range(canvas_size):
         t = y / max(1, canvas_size - 1)
@@ -116,11 +116,19 @@ def app_icon_png(size: int = 180) -> bytes:
                 if alpha > 0:
                     mix_pixel(x, y, color, alpha)
 
-    stroke((58, 42), (58, 138), 17, (255, 255, 255))
-    stroke((67, 91), (121, 43), 17, (255, 255, 255))
-    stroke((67, 91), (124, 139), 17, (255, 255, 255))
-    stroke((102, 118), (135, 142), 17, (54, 181, 166))
-    circle((142, 142), 8, (54, 181, 166))
+    # A single high-contrast mark reads better than small text on iOS home screens.
+    ink = (17, 24, 39)
+    accent = (16, 185, 129)
+    muted = (156, 163, 175)
+
+    stroke((55, 42), (55, 138), 15, ink)
+    stroke((66, 90), (121, 43), 15, ink)
+    stroke((66, 91), (124, 137), 15, ink)
+    stroke((96, 115), (128, 139), 11, accent)
+    circle((132, 141), 6, accent)
+
+    stroke((122, 66), (145, 66), 4, muted)
+    stroke((130, 82), (145, 82), 4, muted)
 
     downsampled: list[list[tuple[int, int, int, int]]] = []
     for y in range(size):
