@@ -17,7 +17,7 @@ from difflib import SequenceMatcher
 from datetime import date, datetime, timedelta
 from html import unescape
 from pathlib import Path
-from urllib.parse import quote, quote_plus, urlparse
+from urllib.parse import parse_qs, quote, quote_plus, urlparse
 from urllib.request import Request, urlopen
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +40,7 @@ from daily_news_common import (
     build_comment,
     build_summary,
     choose_relevance_label,
+    choose_public_news_title,
     clean_news_title,
     dedupe_tags,
     fetch_text,
@@ -2691,6 +2692,39 @@ def display_url(row: dict[str, object]) -> str:
     return source
 
 
+def thebell_mobile_url(url: str) -> str:
+    parsed = urlparse(str(url or ""))
+    if "thebell.co.kr" not in parsed.netloc:
+        return ""
+    query = parse_qs(parsed.query)
+    key = (query.get("key") or query.get("newskey") or [""])[0]
+    if not key:
+        return ""
+    return f"https://m.thebell.co.kr/m/newsview.asp?newskey={key}"
+
+
+def enrich_article_meta_from_mobile_fallback(
+    article_meta: dict[str, str],
+    article_url: str,
+    *,
+    verify_ssl: bool = True,
+) -> dict[str, str]:
+    title = str(article_meta.get("title") or "")
+    mobile_url = thebell_mobile_url(article_url)
+    if not mobile_url or (title and not is_generic_aggregator_text(title)):
+        return article_meta
+    try:
+        mobile_response = fetch_text(mobile_url, verify_ssl=verify_ssl)
+        mobile_meta = parse_article_html(str(mobile_response["text"]))
+    except Exception:
+        return article_meta
+    merged = dict(article_meta)
+    for key in ["title", "meta_description", "canonical_url", "published_at", "body_text"]:
+        if not str(merged.get(key) or "").strip() and str(mobile_meta.get(key) or "").strip():
+            merged[key] = str(mobile_meta.get(key) or "")
+    return merged
+
+
 def coverage_window(report_date: str) -> tuple[datetime, datetime]:
     parsed = date.fromisoformat(report_date)
     end = datetime(
@@ -3158,6 +3192,11 @@ def main() -> int:
                 publisher_name = infer_publisher(final_url, str(item.get("publisher", "") or source.publisher))
                 normalized_source_url = normalize_url(final_url)
                 article_meta = parse_article_html(str(article_response["text"]))
+                article_meta = enrich_article_meta_from_mobile_fallback(
+                    article_meta,
+                    final_url,
+                    verify_ssl=not args.allow_insecure_ssl,
+                )
                 canonical_url = normalize_url(article_meta.get("canonical_url", ""))
                 if canonical_url:
                     normalized_source_url = canonical_url
@@ -3168,15 +3207,7 @@ def main() -> int:
 
                 feed_title = str(item.get("title", "")).strip()
                 article_title = article_meta.get("title", "")
-                if feed_title and len(feed_title) > 180 and article_title and not is_generic_aggregator_text(article_title):
-                    title = article_title
-                elif feed_title and not is_generic_aggregator_text(feed_title):
-                    title = feed_title
-                elif article_title and not is_generic_aggregator_text(article_title):
-                    title = article_title
-                else:
-                    title = feed_title or article_title or normalized_source_url
-                title = clean_news_title(title, publisher_name) or title
+                title = choose_public_news_title(feed_title, article_title, publisher_name) or normalized_source_url
 
                 meta_description = article_meta.get("meta_description", "")
                 if is_generic_aggregator_text(meta_description):

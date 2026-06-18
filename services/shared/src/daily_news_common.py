@@ -90,6 +90,7 @@ SUMMARY_NEWSROOM_BOILERPLATE_RE = re.compile(
     r"(?:기자\s*연결|단독\s*취재한|취재한\s+[가-힣A-Za-z]{1,12}$|기사\s*제보|뉴스룸)",
     re.IGNORECASE,
 )
+TRUNCATED_NEWS_TITLE_RE = re.compile(r"(?:…|\.{3,})(?:\s*$|[\"'’”\)\]\s]*$)")
 
 
 @dataclass
@@ -438,6 +439,31 @@ def clean_news_title(title: str, publisher: str = "") -> str:
             break
         value = value[match.end():].lstrip()
     return normalize_whitespace(value)
+
+
+def is_truncated_news_title(title: object) -> bool:
+    value = normalize_whitespace(str(title or ""))
+    if not value:
+        return False
+    match = TRUNCATED_NEWS_TITLE_RE.search(value)
+    if match:
+        return len(value[: match.start()].strip()) >= 18
+    if re.search(r"(?:…|\.{3,})\s*[\]\)]", value):
+        return True
+    return False
+
+
+def choose_public_news_title(feed_title: object, article_title: object, publisher: str = "") -> str:
+    feed = clean_news_title(str(feed_title or ""), publisher)
+    article = clean_news_title(str(article_title or ""), publisher)
+    if article and not is_generic_aggregator_text(article):
+        if not feed or is_generic_aggregator_text(feed) or is_truncated_news_title(feed):
+            return article
+        if len(article) >= len(feed) + 8 and not is_truncated_news_title(article):
+            return article
+    if feed and not is_generic_aggregator_text(feed):
+        return feed
+    return article or feed
 
 
 def split_news_title_badges(title: str, publisher: str = "") -> tuple[str, list[str]]:

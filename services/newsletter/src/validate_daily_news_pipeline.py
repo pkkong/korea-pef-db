@@ -17,6 +17,7 @@ from daily_news_common import (
     DEFAULT_SOURCES,
     REPO_ROOT,
     clean_investment_memo_summary_lines,
+    is_truncated_news_title,
     normalize_url,
     read_csv_rows,
     today_seoul,
@@ -362,6 +363,8 @@ def check_archive_classification_quality(
         leaked_fields = sorted(field for field in FORBIDDEN_PUBLIC_ARTICLE_FIELDS if field in article)
         if leaked_fields:
             result.error(f"archive article leaks internal AI fields for '{title}': {','.join(leaked_fields)}")
+        if is_truncated_news_title(title):
+            result.error(f"archive article title is truncated; use the full source headline: {title}")
         summary_lines = article.get("summaryLines") or []
         if isinstance(summary_lines, list):
             raw_summary_lines = [str(line or "").strip() for line in summary_lines if str(line or "").strip()]

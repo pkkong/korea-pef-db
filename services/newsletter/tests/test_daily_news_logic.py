@@ -45,11 +45,14 @@ from run_daily_news_pipeline import (
     select_review_rows,
     should_skip_previous_export,
     should_export_row,
+    thebell_mobile_url,
 )
 from news_taxonomy import TAG_TAXONOMY_VERSION
 from daily_news_common import (
     DEFAULT_SOURCES,
     DEFAULT_RULES,
+    choose_public_news_title,
+    is_truncated_news_title,
     load_gp_aliases,
     load_sources,
     load_rules,
@@ -472,6 +475,29 @@ def test_truncated_media_suffix_does_not_split_title_duplicates() -> None:
     truncated = "대형 PEF, 롯데렌탈 눈독…공정위 기조·몸값 격차에 M&A는 안갯속[시그..."
     full = "대형 PEF, 롯데렌탈 눈독…공정위 기조·몸값 격차에 M&A는 안갯속[시그널]"
     assert normalize_title_key(truncated) == normalize_title_key(full)
+
+
+def test_public_news_title_uses_full_article_title_when_feed_is_truncated() -> None:
+    feed_title = "\"이건 AI가 못 할걸요\"…남들 반도체·데이터센터 몰려갈 때 큰 손들이 ..."
+    article_title = "\"이건 AI가 못 할걸요\"…남들 반도체·데이터센터 몰려갈 때 큰 손들이 꽂힌 투자처"
+    assert is_truncated_news_title(feed_title)
+    assert not is_truncated_news_title(article_title)
+    assert choose_public_news_title(feed_title, article_title, "한국경제") == article_title
+
+
+def test_public_news_title_keeps_non_truncated_dotdotdot_title() -> None:
+    title = "트럼프식 '투자의 민주화'...퇴직연금을 사모펀드에 개방하면?"
+    assert not is_truncated_news_title(title)
+    assert choose_public_news_title(title, "", "인베스트조선") == title
+
+
+def test_thebell_mobile_url_from_free_and_front_urls() -> None:
+    assert thebell_mobile_url("https://www.thebell.co.kr/free/content/ArticleView.asp?key=202606150731053580107281") == (
+        "https://m.thebell.co.kr/m/newsview.asp?newskey=202606150731053580107281"
+    )
+    assert thebell_mobile_url("https://www.thebell.co.kr/front/newsview.asp?click=F&key=202606160904558380101520") == (
+        "https://m.thebell.co.kr/m/newsview.asp?newskey=202606160904558380101520"
+    )
 
 
 def test_gp_alias_overrides_cover_common_short_names() -> None:
@@ -3305,6 +3331,9 @@ def main() -> int:
         test_allowed_publishers_require_exact_normalized_name,
         test_dealsite_category_suffix_url_normalizes_to_article,
         test_truncated_media_suffix_does_not_split_title_duplicates,
+        test_public_news_title_uses_full_article_title_when_feed_is_truncated,
+        test_public_news_title_keeps_non_truncated_dotdotdot_title,
+        test_thebell_mobile_url_from_free_and_front_urls,
         test_gp_alias_overrides_cover_common_short_names,
         test_lp_directory_includes_seed_only_profiles_without_empty_profile_pages,
         test_lp_public_labels_do_not_expose_internal_taxonomy,
