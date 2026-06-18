@@ -153,6 +153,16 @@ def fetch_supabase_issues(limit: int | None = None) -> list[dict[str, Any]]:
     return [row for row in rows if isinstance(row, dict)]
 
 
+def _filter_article_rows_to_issues(
+    rows: list[dict[str, Any]],
+    issue_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not issue_rows:
+        return rows
+    issue_dates = {_clean_text(row.get("issue_date")) for row in issue_rows}
+    return [row for row in rows if _clean_text(row.get("issue_date")) in issue_dates]
+
+
 def fetch_supabase_archive(limit: int | None = None) -> list[dict[str, Any]]:
     base_url, public_key = _supabase_config()
     if not base_url or not public_key:
@@ -173,7 +183,9 @@ def fetch_supabase_archive(limit: int | None = None) -> list[dict[str, Any]]:
     )
     if not isinstance(rows, list):
         return []
-    return archive_from_supabase_rows([row for row in rows if isinstance(row, dict)], issue_rows)
+    article_rows = [row for row in rows if isinstance(row, dict)]
+    article_rows = _filter_article_rows_to_issues(article_rows, issue_rows)
+    return archive_from_supabase_rows(article_rows, issue_rows)
 
 
 def fetch_archive_url() -> list[dict[str, Any]]:

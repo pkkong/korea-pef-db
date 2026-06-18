@@ -15,7 +15,13 @@ if str(REPO_ROOT) not in sys.path:
 if str(WEB_ROOT) not in sys.path:
     sys.path.insert(0, str(WEB_ROOT))
 
-from newsletter_data import archive_from_supabase_rows, filter_articles, grouped_sections, select_issue  # noqa: E402
+from newsletter_data import (  # noqa: E402
+    _filter_article_rows_to_issues,
+    archive_from_supabase_rows,
+    filter_articles,
+    grouped_sections,
+    select_issue,
+)
 import app as web_app  # noqa: E402
 
 
@@ -108,6 +114,38 @@ def test_archive_from_supabase_rows_keeps_issue_skeletons_and_zero_section_order
     assert archive[1]["articles"][0]["sectionOrder"] == 0
 
 
+def test_supabase_archive_filters_articles_to_selected_issue_window() -> None:
+    issue_rows = [{"issue_date": "2026-06-17"}, {"issue_date": "2026-06-16"}]
+    rows = [
+        {
+            "issue_date": "2026-06-17",
+            "rank": 0,
+            "article_id": "new",
+            "title": "최근 기사",
+            "publisher": "테스트신문",
+            "source_url": "https://example.com/new",
+        },
+        {
+            "issue_date": "2026-06-15",
+            "rank": 0,
+            "article_id": "old",
+            "title": "범위 밖 기사",
+            "publisher": "테스트신문",
+            "source_url": "https://example.com/old",
+        },
+    ]
+    filtered_rows = _filter_article_rows_to_issues(rows, issue_rows)
+    archive = archive_from_supabase_rows(
+        filtered_rows,
+        issue_rows,
+    )
+
+    assert [row["title"] for row in filtered_rows] == ["최근 기사"]
+    assert [issue["reportDate"] for issue in archive] == ["2026-06-17", "2026-06-16"]
+    assert [row["title"] for row in archive[0]["articles"]] == ["최근 기사"]
+    assert archive[1]["articles"] == []
+
+
 def test_filter_and_group_articles() -> None:
     issue = {
         "reportDate": "2026-06-16",
@@ -183,6 +221,7 @@ def test_vercel_runtime_has_no_standalone_ui_or_legacy_service_imports() -> None
 
 def main() -> int:
     test_archive_from_supabase_rows_keeps_issue_skeletons_and_zero_section_order()
+    test_supabase_archive_filters_articles_to_selected_issue_window()
     test_filter_and_group_articles()
     test_vercel_app_uses_common_newsletter_ui()
     test_vercel_app_imports_from_repo_root_package_path()
