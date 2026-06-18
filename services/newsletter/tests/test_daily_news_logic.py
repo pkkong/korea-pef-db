@@ -3275,6 +3275,36 @@ raise SystemExit(1 if bad else 0)
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_daily_pipeline_import_does_not_load_service_worklist_builders() -> None:
+    code = """
+import json
+import sys
+from pathlib import Path
+
+repo = Path.cwd()
+sys.path.insert(0, str(repo / "services" / "newsletter" / "src"))
+import run_daily_news_pipeline  # noqa: F401
+
+bad = sorted(
+    name
+    for name in sys.modules
+    if name in {"build_news_gp_update_worklist", "build_service_integration_worklist"}
+    or name.endswith(".build_news_gp_update_worklist")
+    or name.endswith(".build_service_integration_worklist")
+)
+print(json.dumps(bad, ensure_ascii=False))
+raise SystemExit(1 if bad else 0)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=SERVICE_ROOT.parents[1],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_newsletter_compat_wrappers_import_only_newsletter_builder() -> None:
     code = """
 import importlib
@@ -3422,6 +3452,7 @@ def main() -> int:
         test_render_markdown_uses_clean_display_url,
         test_notebooklm_source_pack_and_cache_contract,
         test_newsletter_bundle_import_isolation,
+        test_daily_pipeline_import_does_not_load_service_worklist_builders,
         test_newsletter_compat_wrappers_import_only_newsletter_builder,
     ]
     for test in tests:

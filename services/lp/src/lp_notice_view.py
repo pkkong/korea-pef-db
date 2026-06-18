@@ -1,16 +1,9 @@
 from __future__ import annotations
 
 import re
-import sys
 from datetime import datetime, timedelta
-from pathlib import Path
 
-from daily_news_common import normalize_whitespace, today_seoul
-
-REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
+from services.newsletter.src.daily_news_common import normalize_whitespace, today_seoul
 from services.lp.src.lp_notice_identity import (
     GENERIC_PROGRAM_NAMES as GENERIC_LP_PROGRAM_NAMES,
     business_key_text,

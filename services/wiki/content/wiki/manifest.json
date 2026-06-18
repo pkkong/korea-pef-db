@@ -2,7 +2,7 @@
   "version": 1,
   "title": "PEF Wiki",
   "content_status": "draft-source",
-  "visible_renderer": "services/newsletter/src/pef_wiki_pages.py",
+  "visible_renderer": "services/wiki/src/pef_wiki_pages.py",
   "pages": [
     {
       "id": "overview",

@@ -11,8 +11,8 @@ from collections import defaultdict
 from pathlib import Path
 from urllib.parse import urlparse
 
-from brand_assets import brand_logo_url, brand_style_attr, prepare_brand_asset_cache
-from daily_news_common import normalize_url
+from services.newsletter.src.brand_assets import brand_logo_url, brand_style_attr, prepare_brand_asset_cache
+from services.newsletter.src.daily_news_common import normalize_url
 
 
 REQUIRED_TABLES = ("gp_profile", "gp_house", "news_entity_link", "news_document")

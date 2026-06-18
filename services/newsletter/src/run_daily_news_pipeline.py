@@ -23,8 +23,6 @@ from urllib.request import Request, urlopen
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SERVICE_ROOT.parents[1]
 LEGACY_SCRIPTS_DIR = REPO_ROOT / "scripts"
-if str(LEGACY_SCRIPTS_DIR) not in sys.path:
-    sys.path.append(str(LEGACY_SCRIPTS_DIR))
 
 from daily_news_common import (
     DEFAULT_DB,
@@ -71,8 +69,6 @@ from daily_news_common import (
     to_iso_datetime,
     write_csv_rows,
 )
-from build_news_gp_update_worklist import build as build_news_gp_update_worklist
-from build_service_integration_worklist import build as build_service_integration_worklist
 from news_taxonomy import (
     TAG_TAXONOMY_VERSION,
     build_classification,
@@ -2892,6 +2888,43 @@ REVIEW_HEADERS = [
 ]
 
 
+def env_truthy(name: str, default: str = "0") -> bool:
+    return str(os.environ.get(name, default)).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def build_optional_service_worklists(args: argparse.Namespace) -> dict[str, str]:
+    """Build GP/service follow-up worklists outside the core newsletter publish path."""
+    for path in (REPO_ROOT, LEGACY_SCRIPTS_DIR):
+        if str(path) not in sys.path:
+            sys.path.append(str(path))
+
+    from build_service_integration_worklist import build as build_service_integration_worklist  # noqa: WPS433
+    from services.gp.src.build_news_gp_update_worklist import build as build_news_gp_update_worklist  # noqa: WPS433
+
+    gp_worklist = build_news_gp_update_worklist(
+        args.db,
+        args.out_dir,
+        args.date,
+        args.gp_worklist_days,
+        write_latest=not args.no_latest,
+    )
+    gp_worklist_path = Path(str(gp_worklist["dated_path"] if args.no_latest else gp_worklist["latest_path"]))
+    service_worklist = build_service_integration_worklist(
+        args.db,
+        gp_worklist_path,
+        args.service_integration_out_dir,
+        args.date,
+        args.service_integration_top_gp_limit,
+        write_latest=not args.no_latest,
+    )
+    return {
+        "gp_update_worklist_path": str(gp_worklist["dated_path"]),
+        "latest_gp_update_worklist_path": str(gp_worklist["latest_path"]),
+        "service_integration_worklist_path": str(service_worklist["dated_path"]),
+        "latest_service_integration_worklist_path": str(service_worklist["latest_path"]),
+    }
+
+
 def build_review_rows(
     conn: sqlite3.Connection,
     run_id: str,
@@ -3082,6 +3115,12 @@ def main() -> int:
         help="Fail instead of publishing when --previous-archive-url cannot be read.",
     )
     parser.add_argument("--no-latest", action="store_true", help="Do not update daily_news_*_latest export files")
+    parser.add_argument(
+        "--build-service-worklists",
+        action="store_true",
+        default=env_truthy("NEWSLETTER_BUILD_SERVICE_WORKLISTS", "0"),
+        help="Also build GP/service integration worklists. Disabled by default so Daily publish stays newsletter-only.",
+    )
     parser.add_argument("--gp-worklist-days", type=int, default=7)
     parser.add_argument("--service-integration-out-dir", type=Path, default=DEFAULT_EXPORT_DIR.parent)
     parser.add_argument("--service-integration-top-gp-limit", type=int, default=50)
@@ -3417,22 +3456,7 @@ def main() -> int:
                 ],
             )
             write_csv_rows(latest_review_actions_path, review_rows, REVIEW_HEADERS)
-        gp_worklist = build_news_gp_update_worklist(
-            args.db,
-            args.out_dir,
-            args.date,
-            args.gp_worklist_days,
-            write_latest=not args.no_latest,
-        )
-        gp_worklist_path = Path(str(gp_worklist["dated_path"] if args.no_latest else gp_worklist["latest_path"]))
-        service_worklist = build_service_integration_worklist(
-            args.db,
-            gp_worklist_path,
-            args.service_integration_out_dir,
-            args.date,
-            args.service_integration_top_gp_limit,
-            write_latest=not args.no_latest,
-        )
+        service_worklist_payload = build_optional_service_worklists(args) if args.build_service_worklists else {}
         finish_run(
             conn,
             run_id,
@@ -3466,10 +3490,7 @@ def main() -> int:
             "latest_review_html_path": str(latest_review_html_path),
             "source_stats_path": str(source_stats_path),
             "latest_source_stats_path": str(latest_source_stats_path),
-            "gp_update_worklist_path": gp_worklist["dated_path"],
-            "latest_gp_update_worklist_path": gp_worklist["latest_path"],
-            "service_integration_worklist_path": service_worklist["dated_path"],
-            "latest_service_integration_worklist_path": service_worklist["latest_path"],
+            **service_worklist_payload,
         }
         source_stats_json = json.dumps(result_payload, ensure_ascii=False, indent=2)
         source_stats_path.write_text(source_stats_json, encoding="utf-8")

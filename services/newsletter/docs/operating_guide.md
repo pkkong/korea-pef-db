@@ -117,15 +117,15 @@ KPEF Daily의 1차 섹션은 `AI & PE`, `국민성장펀드`, `Deal`, `LP`, `GP`
 
 ## 검증
 
-- 매일 발행 작업은 GitHub Actions에서 `NEWSLETTER_BUILD_SERVICES=newsletter` 기준으로 돈다. 통합 사이트 전체 갱신이 필요할 때만 명시적으로 `newsletter,lp,gp`를 사용한다. Wiki는 재기획 전까지 명시적으로 `wiki`를 줄 때만 빌드한다.
+- 매일 발행 작업은 GitHub Actions에서 뉴스레터 전용 workflow로 돈다. 통합 사이트 전체 갱신은 별도 workflow나 수동 통합 빌드에서 처리한다. Wiki는 재기획 전까지 루틴 빌드 대상이 아니다.
 - 매일 발행 작업은 초안 생성 직후 `services/newsletter/src/validate_daily_news_pipeline.py` 기준 검증을 남긴다. 검증이 실패하면 public mirror push가 중단되므로, 그날 안에 원인 규칙을 고치고 같은 날짜로 재발행해야 한다.
-- 매일 발행 작업은 `scripts/build_site_bundle.py --services newsletter`로 `services/newsletter/deploy/site/`의 뉴스레터 산출물을 갱신하고 public mirror `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 push한다.
+- 매일 발행 작업은 `scripts/build_newsletter_bundle.py`로 `services/newsletter/deploy/site/`의 뉴스레터 산출물만 갱신하고 public mirror `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 push한다.
 - LP 공고 모니터는 뉴스레터 핵심 콘텐츠가 아니므로 daily newsletter publish 안에서 필수 단계로 묶지 않는다. LP/GP 갱신은 별도 collector 또는 수동 통합 빌드로 처리하고, 이 실패가 당일 뉴스레터 공개를 막으면 안 된다. Wiki는 루틴 갱신 대상이 아니다.
 - 발행 완료 기준은 로컬 파일 생성이 아니라 공개 `https://pkkong.github.io/kpef-newsletter/health.json`의 `report_date`가 당일이고 `archive.json`에 당일 기사 수가 존재하는 것이다. GitHub Actions는 push 후 이 공개 확인까지 통과해야 완료로 끝난다.
 - GitHub Actions 발행 작업은 종료 시 job summary와 검증 로그를 남긴다. 로컬 `exports/daily_news/ops_status/*` 파일은 진단용 산출물일 뿐이며, 발행 완료 기준은 공개 `health.json`과 `archive.json` 확인이다.
 - 별도 LP 공고 탭은 `new_notice`, `deadline_soon`, `shortlist`, `final_selection` 등 이벤트 타입을 우선 노출한다. `program_size`는 정책펀드 전체 규모로 보관하되, 공개 출자규모 합산에는 `allocation_amount`만 사용한다.
 - 공개 Daily 화면은 최근 날짜별 `daily_news_brief_YYYYMMDD.md`를 함께 포함하므로, 사용자는 날짜 선택으로 과거 브리프의 주요 뉴스도 볼 수 있다.
-- 매일 뉴스 파이프라인은 `scripts/build_service_integration_worklist.py`도 실행해서 뉴스 노출 GP, People DB 커버리지, 담당자별 다음 액션을 하나의 작업 큐로 갱신한다.
+- 뉴스 노출 GP와 People DB 후속 작업 큐는 매일 발행 기본 경로에서 제외한다. 필요할 때만 `services/newsletter/src/run_daily_news_pipeline.py --build-service-worklists` 또는 별도 GP/People 운영 workflow에서 갱신한다.
 - 공개 뉴스 화면은 확인된 GP/관련 인물 같은 독자용 맥락만 표시한다. `프로필 보강`, `식별자 보강`, 리뷰 큐, 작업 담당자 같은 운영 상태는 공개 화면에 노출하지 않는다.
 - 공개 DB/서비스 화면은 통합 빌드가 만든 `services/newsletter/deploy/site/` bundle을 기준으로 배포한다. root `public/` 경로는 source repo에서 쓰지 않는 ignored 생성물이다.
 - 당일 산출물을 로컬에서 수동 점검하려면 `services/newsletter/scripts/validate_daily_news_today.ps1`을 진단용으로 실행할 수 있다. 이 스크립트는 운영 스케줄러가 아니다.

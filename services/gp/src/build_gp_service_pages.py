@@ -9,13 +9,12 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 DEFAULT_DB = REPO_ROOT / "db" / "private_equity.db"
-NEWSLETTER_SRC_DIR = REPO_ROOT / "services" / "newsletter" / "src"
-if str(NEWSLETTER_SRC_DIR) not in sys.path:
-    sys.path.append(str(NEWSLETTER_SRC_DIR))
 
-from daily_news_common import today_seoul  # noqa: E402
-from gp_service_pages import write_gp_pages  # noqa: E402
+from services.gp.src.gp_service_pages import write_gp_pages
+from services.newsletter.src.daily_news_common import today_seoul
 
 
 def build_gp_service_pages(site_dir: Path, db_path: Path = DEFAULT_DB, report_date: str | None = None) -> dict[str, int]:

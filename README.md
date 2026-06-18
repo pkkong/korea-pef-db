@@ -341,17 +341,16 @@ python services/newsletter/src/run_daily_news_pipeline.py
 ```
 
 This exports daily clipping files under `exports/daily_news/`. It also creates
-a GP update worklist so news-visible houses can be prioritized for profile
-maintenance:
+only newsletter-owned outputs by default. GP profile follow-up is a separate
+operating step so GP/People DB issues do not block daily newsletter publishing.
+
+To build a GP update worklist for news-visible houses:
 
 - `exports/daily_news/news_gp_update_worklist_latest.csv`
 - `exports/daily_news/news_gp_update_worklist_YYYYMMDD.csv`
 
-If news fetching is blocked by the local network/sandbox but the DB already has
-recent news rows, rebuild only the GP update worklist:
-
 ```powershell
-python services/newsletter/src/build_news_gp_update_worklist.py --days 7
+python services/gp/src/build_news_gp_update_worklist.py --days 7
 ```
 
 The worklist separates `프로필 우선 보강`, `식별자 보강`, `선택정보 보강`, and

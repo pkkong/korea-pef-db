@@ -13,19 +13,14 @@ import csv
 import hashlib
 import re
 import sqlite3
-import sys
 from html import escape as html_escape
 from pathlib import Path
 from urllib.parse import parse_qs, unquote_plus, urlparse
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-NEWSLETTER_SRC = REPO_ROOT / "services" / "newsletter" / "src"
-if str(NEWSLETTER_SRC) not in sys.path:
-    sys.path.insert(0, str(NEWSLETTER_SRC))
 
-from services.newsletter.src.daily_news_common import normalize_whitespace  # noqa: E402
-from services.newsletter.src.lp_notice_view import (  # noqa: E402
+from services.lp.src.lp_notice_view import (
     clean_public_lp_text,
     consolidate_lp_notice_display_items,
     lp_event_label,
@@ -41,6 +36,7 @@ from services.newsletter.src.lp_notice_view import (  # noqa: E402
     lp_notice_stage_label,
     lp_notice_status_label,
 )
+from services.newsletter.src.daily_news_common import normalize_whitespace  # noqa: E402
 
 
 DEFAULT_DB = REPO_ROOT / "db" / "private_equity.db"

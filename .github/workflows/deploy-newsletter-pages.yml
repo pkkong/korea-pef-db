@@ -28,7 +28,6 @@ env:
   NEWSLETTER_PUBLIC_REPO: pkkong/kpef-newsletter
   NEWSLETTER_PUBLIC_BRANCH: gh-pages
   NEWSLETTER_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter/
-  NEWSLETTER_BUILD_SERVICES: newsletter
   NEWSLETTER_LIMIT_PER_SOURCE: "20"
   NEWSLETTER_CANDIDATE_LIMIT_PER_SOURCE: "8"
   NEWSLETTER_RUN_TIMEOUT_SECONDS: "720"
@@ -230,18 +229,9 @@ jobs:
           echo "::group::Check generated files"
           python3 - <<'PY'
           import json
-          import os
           from pathlib import Path
 
           site = Path("services/newsletter/deploy/site")
-          requested_services = {
-              part.strip().lower()
-              for chunk in os.environ.get("NEWSLETTER_BUILD_SERVICES", "newsletter").split(",")
-              for part in chunk.split()
-              if part.strip()
-          }
-          if not requested_services or "all" in requested_services:
-              requested_services = {"newsletter", "lp", "gp"}
           health = json.loads((site / "health.json").read_text(encoding="utf-8"))
           print(json.dumps(health, ensure_ascii=False, indent=2))
           required = {
@@ -254,17 +244,11 @@ jobs:
               "assets/service.js",
               "apple-touch-icon.png",
           }
-          if "lp" in requested_services:
-              required.update({"lp-notices.html", "lp-official-notices.html"})
-          if "gp" in requested_services:
-              required.update({"gps.html", "market.html"})
           missing = [path for path in required if not (site / path).exists()]
           if missing:
               raise SystemExit(f"Missing generated files: {', '.join(sorted(missing))}")
           if health["article_count"] <= 0:
               raise SystemExit("article_count is 0; keeping the existing public newsletter instead of publishing an empty issue")
-          if "lp" in requested_services and health["lp_monitor_count"] <= 0:
-              print("WARNING: lp_monitor_count is 0; publishing can continue because LP monitor is not the core newsletter.")
           archive = json.loads((site / "archive.json").read_text(encoding="utf-8"))
           print(f"archive_count={len(archive)}")
           PY
@@ -289,30 +273,17 @@ jobs:
         run: |
           publish_dir="$(mktemp -d)"
           git clone --depth 1 --branch "${NEWSLETTER_PUBLIC_BRANCH}" "https://x-access-token:${NEWSLETTER_PUBLIC_REPO_TOKEN}@github.com/${NEWSLETTER_PUBLIC_REPO}.git" "$publish_dir/site-repo"
-          normalized_services="${NEWSLETTER_BUILD_SERVICES//[[:space:]]/}"
-          service_selected() {
-            local service="$1"
-            case ",$normalized_services," in
-              *,all,*|*,"$service",*) return 0 ;;
-              *) return 1 ;;
-            esac
-          }
-          if service_selected lp || service_selected gp || service_selected wiki; then
-            find "$publish_dir/site-repo" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-            cp -R services/newsletter/deploy/site/. "$publish_dir/site-repo"/
-          else
-            mkdir -p "$publish_dir/site-repo/assets"
-            for path in index.html daily-news.html archive.json health.json .nojekyll robots.txt 404.html site.webmanifest apple-touch-icon.png; do
-              if [ -e "services/newsletter/deploy/site/$path" ]; then
-                cp -R "services/newsletter/deploy/site/$path" "$publish_dir/site-repo/$path"
-              fi
-            done
-            cp services/newsletter/deploy/site/assets/service.css "$publish_dir/site-repo/assets/service.css"
-            cp services/newsletter/deploy/site/assets/service.js "$publish_dir/site-repo/assets/service.js"
-            if [ -d services/newsletter/deploy/site/assets/brand-marks ]; then
-              rm -rf "$publish_dir/site-repo/assets/brand-marks"
-              cp -R services/newsletter/deploy/site/assets/brand-marks "$publish_dir/site-repo/assets/brand-marks"
+          mkdir -p "$publish_dir/site-repo/assets"
+          for path in index.html daily-news.html archive.json health.json .nojekyll robots.txt 404.html site.webmanifest apple-touch-icon.png; do
+            if [ -e "services/newsletter/deploy/site/$path" ]; then
+              cp -R "services/newsletter/deploy/site/$path" "$publish_dir/site-repo/$path"
             fi
+          done
+          cp services/newsletter/deploy/site/assets/service.css "$publish_dir/site-repo/assets/service.css"
+          cp services/newsletter/deploy/site/assets/service.js "$publish_dir/site-repo/assets/service.js"
+          if [ -d services/newsletter/deploy/site/assets/brand-marks ]; then
+            rm -rf "$publish_dir/site-repo/assets/brand-marks"
+            cp -R services/newsletter/deploy/site/assets/brand-marks "$publish_dir/site-repo/assets/brand-marks"
           fi
           cd "$publish_dir/site-repo"
           touch .nojekyll

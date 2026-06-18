@@ -4,7 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from services.lp.src.lp_legacy_service_pages import (
     DEFAULT_LP_COMMITMENT_MONITOR,

@@ -82,7 +82,7 @@ Every non-trivial subagent task should state:
 - Newsletter Desk owns `services/newsletter/`, `services/newsletter/data/`, `services/newsletter/schema/`, newsletter rendering, search, tags, clipping quality, and generated newsletter deployment preparation.
 - LP Monitor / LP Research owns `services/lp/`, `schema/lp_commitments.sql`, `data/lp_institutions.csv`, `data/lp_commitment_sources.csv`, `data/lp_official_channels.csv`, `data/lp_profile_facts.csv`, and LP profile/notice exports.
 - GP Profile / Market Data owns GP identity, alias, profile evidence, fund/manager market data, `scripts/build_gp_profile_master.py`, `scripts/apply_gp_profile_evidence.py`, `data/gp_profile_evidence.csv`, and `data/gp_alias_merge_rules.csv`.
-- PEF Wiki Documentation owns wiki content, source-linked practical guidance, glossary, and `services/newsletter/src/pef_wiki_pages.py` until the wiki is moved to a separate markdown source structure.
+- PEF Wiki Documentation owns wiki content, source-linked practical guidance, glossary, `services/wiki/src/pef_wiki_pages.py`, and `services/wiki/content/wiki/`. Wiki is hidden from routine public builds until the user re-plans it.
 - Verifier / Deploy owns test selection, build checks, public-site checks, deployment readiness, and post-publish verification. Verifier does not decide product content.
 - The Project Lead owns cross-service sequencing and may lock shared outputs such as `services/newsletter/deploy/site/`, generated exports, and deployment branches to avoid conflicts.
 

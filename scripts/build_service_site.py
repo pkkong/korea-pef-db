@@ -4088,7 +4088,7 @@ def build(
     js_path.write_text(service_js(), encoding="utf-8")
     manifest_path.write_text(app_web_manifest(), encoding="utf-8")
     if include_wiki:
-        from pef_wiki_pages import render_pef_wiki_page
+        from services.wiki.src.pef_wiki_pages import render_pef_wiki_page
 
         wiki_path.write_text(render_pef_wiki_page(report_date, app_asset_version()), encoding="utf-8")
     result = {

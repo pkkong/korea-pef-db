@@ -10,13 +10,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-NEWSLETTER_SRC = REPO_ROOT / "services" / "newsletter" / "src"
-if str(NEWSLETTER_SRC) not in sys.path:
-    sys.path.insert(0, str(NEWSLETTER_SRC))
 
 from services.lp.src.build_lp_commitment_monitor import apply_schema, dedupe_stored_notices, infer_event_type, make_notice_row
 from services.lp.src.lp_notice_identity import infer_notice_program_name, infer_notice_round_name, notice_business_key
-from services.newsletter.src.lp_notice_view import (
+from services.lp.src.lp_notice_view import (
     consolidate_lp_notice_display_items,
     lp_notice_business_round_name,
     lp_notice_display_group_key,

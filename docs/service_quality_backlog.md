@@ -76,7 +76,7 @@
 
 - Wiki는 재기획 전까지 공개 메뉴와 routine build에서 제외한다.
 - Wiki는 PDF 링크 모음이 아니라 본문형 문서 서비스다.
-- 다음 구조는 `services/newsletter/content/wiki/` 아래 markdown 소스로 분리한다.
+- Wiki source was moved out of Newsletter. Future Wiki markdown and refs belong under `services/wiki/content/wiki/`.
 - 우선 문서 범위는 실무안내 제1장, 관련 법률·규정, 세무신고, 금감원·금융위원회 보고, 실무 체크리스트다.
 - 각 문서는 `본문`, `관련 조문`, `보고/제출`, `실무 확인`, `출처`로 이동 가능해야 한다.
 - 표는 원문이나 비교 구조상 꼭 필요한 경우에만 사용한다.

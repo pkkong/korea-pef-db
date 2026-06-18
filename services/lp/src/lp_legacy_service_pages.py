@@ -111,7 +111,6 @@ if str(NEWSLETTER_SRC) not in sys.path:
     sys.path.append(str(NEWSLETTER_SRC))
 if str(LEGACY_SCRIPTS_DIR) not in sys.path:
     sys.path.append(str(LEGACY_SCRIPTS_DIR))
-from brand_assets import brand_logo_url, brand_style_attr, prepare_brand_asset_cache  # noqa: E402
 from build_service_site import (  # noqa: E402
     DEFAULT_ARCHIVE_LIMIT,
     DEFAULT_EXPORT_DIR,
@@ -136,10 +135,8 @@ from build_service_site import (  # noqa: E402
     render_app,
     render_public_product_header,
 )
-from daily_news_common import normalize_whitespace, today_seoul  # noqa: E402
-from gp_service_pages import write_gp_pages  # noqa: E402
-from pef_wiki_pages import render_pef_wiki_page  # noqa: E402
-from lp_notice_view import (  # noqa: E402
+from services.gp.src.gp_service_pages import write_gp_pages  # noqa: E402
+from services.lp.src.lp_notice_view import (  # noqa: E402
     consolidate_lp_notice_display_items,
     is_generic_lp_program_name,
     korean_date_label,
@@ -163,6 +160,9 @@ from lp_notice_view import (  # noqa: E402
     lp_notice_status_label,
     split_notice_names,
 )
+from services.newsletter.src.brand_assets import brand_logo_url, brand_style_attr, prepare_brand_asset_cache  # noqa: E402
+from services.newsletter.src.daily_news_common import normalize_whitespace, today_seoul  # noqa: E402
+from services.wiki.src.pef_wiki_pages import render_pef_wiki_page  # noqa: E402
 
 
 ARCHIVE_SCRIPT_RE = re.compile(
