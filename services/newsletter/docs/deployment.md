@@ -1,10 +1,12 @@
 # Newsletter Deployment
 
-이 문서는 뉴스레터 단독 운영 기준이다. 뉴스레터 배포는 `Daily Brief`, archive, health, 정적 자산, Vercel 앱용 read model 동기화만 담당한다. LP/GP/Wiki 화면이나 LP 공고 서비스는 이 문서의 배포 범위가 아니다.
+이 문서는 뉴스레터 단독 운영 기준이다. 뉴스레터 운영은 `Daily Brief`, archive, health, 정적 자산, Vercel 앱용 read model을 다루지만, 실행 책임은 워크플로별로 분리한다. LP/GP/Wiki 화면이나 LP 공고 서비스는 이 문서의 배포 범위가 아니다.
 
 운영 역할은 아래처럼 고정한다.
 
-- GitHub Actions: 뉴스 수집, 분류, 정적 미러 생성/검증, GitHub Pages publish/verify, Supabase 동기화, Vercel health 검증
+- `Build newsletter mirror`: 뉴스 수집, 분류, 정적 미러 생성/검증, GitHub Pages publish/verify
+- `Sync newsletter Supabase read model`: verified mirror archive를 Supabase에 동기화하고 Vercel health 검증
+- `Deploy newsletter Vercel app`: Vercel 앱 코드 배포
 - Supabase: Vercel 앱이 읽는 뉴스레터 read model DB
 - Vercel: 사용자가 보는 primary 뉴스레터 앱
 - GitHub Pages: 장애 시 확인 가능한 정적 백업 미러
@@ -38,7 +40,7 @@ issue 동기화다. `--date YYYY-MM-DD`는 특정 날짜를 재현하거나 디�
 
 ## Cloud Publish
 
-뉴스레터는 GitHub Actions가 매일 만들고, Supabase read model과 public static mirror를 갱신한다.
+뉴스레터는 GitHub Actions가 매일 만들고, public static mirror를 먼저 갱신한다. Supabase read model과 Vercel 확인은 별도 후속 workflow가 담당한다.
 Mac은 정식 운영 경로에서 제외한다. 비개발자가 보는 기본 주소는 Vercel 앱이고, GitHub Pages는
 장애 시 확인 가능한 백업 미러다.
 
@@ -48,23 +50,27 @@ Mac은 정식 운영 경로에서 제외한다. 비개발자가 보는 기본 �
 - Primary app URL: `https://kpef-newsletter.vercel.app/`
 - Static mirror URL: `https://pkkong.github.io/kpef-newsletter/`
 - Primary automation workflow: `.github/workflows/deploy-newsletter-pages.yml`
-- Workflow name: `Deploy newsletter to GitHub Pages` (운영상 daily newsletter publish orchestrator)
+- Mirror workflow name: `Build newsletter mirror`
+- Supabase/Vercel sync workflow: `.github/workflows/sync-newsletter-supabase.yml`
+- Vercel app deploy workflow: `.github/workflows/deploy-newsletter-vercel.yml`
 - Fallback scheduler: `.github/workflows/newsletter-watchdog.yml`
-- Supabase-only recovery: `.github/workflows/sync-newsletter-supabase.yml`
 
 현재 private 원본 저장소는 GitHub Pages endpoint가 열리지 않을 수 있으므로, 공개 가능한 뉴스레터 산출물만
 `pkkong/kpef-newsletter`에 복사해서 보여준다. Public mirror에는 `services/newsletter/deploy/site/`의
 HTML/CSS/JS/health 파일만 올라간다. 로컬 SQLite DB, raw crawl cache, secrets, operator exports는 올리지 않는다.
 
-GitHub Actions 자동 발행은 다음 순서로 실행된다.
+GitHub Actions 자동 발행은 두 단계로 실행된다.
 
 ```text
+Mirror workflow: Build newsletter mirror
 1. run_daily_news_pipeline.py로 그날의 뉴스 데이터를 만든다.
 2. build_newsletter_source_audit.py와 enrich_daily_news_ai.py로 품질 점검과 3줄 요약 보강 파일을 만든다.
 3. scripts/build_newsletter_bundle.py로 뉴스레터 전용 정적 사이트 파일을 만든다.
 4. `NEWSLETTER_PUBLIC_REPO_TOKEN`으로 public mirror `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 push한다.
 5. GitHub Pages mirror의 `health.json`과 `archive.json`이 오늘 날짜와 기사 수를 보여주는지 확인한다.
-6. 같은 archive를 Supabase read model에 동기화한다. 같은 날짜 재동기화 때는 기존 issue-article link와 article metadata를 지우고 현재 archive 기준으로 다시 만든다.
+
+Sync workflow: Sync newsletter Supabase read model
+6. Verified mirror archive를 Supabase read model에 동기화한다. 같은 날짜 재동기화 때는 기존 issue-article link와 article metadata를 지우고 현재 archive 기준으로 다시 만든다.
 7. Vercel 앱의 `/health.json?refresh=1`이 `data_source=supabase`, 오늘 날짜, 같은 기사 수를 보여주는지 확인한다.
 ```
 
@@ -73,8 +79,9 @@ GitHub schedule 지연/누락에 대비해 09:17, 09:47, 10:17, 11:17 KST retry 
 별도 watchdog은 08:52부터 mirror와 Vercel 상태를 확인해 필요한 recovery workflow만 실행한다.
 
 GitHub Actions 화면에서 수동 실행도 그대로 사용할 수 있다. private 원본 저장소의 GitHub 화면에서
-`Actions` → `Deploy newsletter to GitHub Pages` → `Run workflow`를 누르면 실행된다. `report_date`를 비워 두면
-한국시간 기준 오늘 날짜로 생성되고, 필요한 경우 `YYYY-MM-DD` 형식으로 날짜를 직접 넣을 수 있다.
+`Actions` → `Build newsletter mirror` → `Run workflow`를 누르면 백업 미러 생성이 실행된다. `report_date`를 비워 두면
+한국시간 기준 오늘 날짜로 생성되고, 필요한 경우 `YYYY-MM-DD` 형식으로 날짜를 직접 넣을 수 있다. Mirror workflow가 새 mirror를 실제로 만들고 검증하면
+`Sync newsletter Supabase read model`을 후속 작업으로 dispatch한다.
 
 로컬 수동 발행과 macOS launchd 자동 발행 경로는 제거했다. 장애 복구도 같은 GitHub Actions workflow의
 `Run workflow`로 처리한다.
@@ -92,7 +99,7 @@ GitHub Actions 자동 발행에는 private 원본 저장소의 `Settings` → `S
 `NAVER_CLIENT_ID` 또는 `NAVER_CLIENT_SECRET`이 없으면 워크플로는 실패한다. Naver 소스를 빼고 발행하면 커버리지가 크게 낮아져서 자동 발행으로 인정하지 않는다.
 `NEWSLETTER_PUBLIC_REPO_TOKEN`이 없거나 public mirror에 push 권한이 없으면 뉴스레터 파일을 만들 수는 있어도
 `pkkong/kpef-newsletter`에 게시할 수 없다.
-`SUPABASE_URL` 또는 `SUPABASE_SERVICE_ROLE_KEY`가 없으면 Vercel 앱 갱신은 실패한다. 단, 현재 workflow는 GitHub Pages mirror publish/verify를 먼저 수행하므로 Supabase 장애가 정적 백업 미러 발행까지 막지는 않는다.
+`SUPABASE_URL` 또는 `SUPABASE_SERVICE_ROLE_KEY`가 없으면 Supabase/Vercel sync workflow는 실패한다. 단, 이 workflow는 GitHub Pages mirror workflow와 분리되어 있으므로 Supabase 장애가 정적 백업 미러 발행까지 막지는 않는다.
 
 Public mirror 저장소의 Pages 설정은 `Settings` → `Pages`에서 Source를 `Deploy from a branch`,
 Branch를 `gh-pages`, Folder를 `/ (root)`로 둔다.
@@ -102,9 +109,10 @@ Branch를 `gh-pages`, Folder를 `/ (root)`로 둔다.
 이 절차는 Secret 값을 열람하지 않고, private 원본 저장소에 필요한 Secret 이름이 있는지만 확인한다.
 정상 준비 기준은 아래 네 가지다.
 
-- Workflow `.github/workflows/deploy-newsletter-pages.yml`에 `schedule`과 `workflow_dispatch`가 모두 있다.
+- Workflow `.github/workflows/deploy-newsletter-pages.yml`의 이름은 `Build newsletter mirror`이고 `schedule`과 `workflow_dispatch`가 모두 있다.
+- Workflow `.github/workflows/sync-newsletter-supabase.yml`의 이름은 `Sync newsletter Supabase read model`이고 수동 실행과 mirror workflow의 explicit dispatch를 지원한다.
 - Repository secrets에 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `NEWSLETTER_PUBLIC_REPO_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` 이름이 있다.
-- `Actions` → `Deploy newsletter to GitHub Pages` 화면에 `Run workflow` 버튼이 보인다.
+- `Actions` → `Build newsletter mirror` 화면에 `Run workflow` 버튼이 보인다.
 - 실행 성공 후 `https://pkkong.github.io/kpef-newsletter/health.json`과 `https://kpef-newsletter.vercel.app/health.json`이 같은 날짜와 기사 수를 보여준다.
 
 터미널에서 한 번에 점검하려면 private 원본 저장소 루트에서 실행한다.
@@ -135,7 +143,7 @@ SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
 ```
 
-`Actions`에서 수동 점검을 할 때는 `Deploy newsletter to GitHub Pages` → `Run workflow`를 누르고,
+`Actions`에서 수동 점검을 할 때는 `Build newsletter mirror` → `Run workflow`를 누르고,
 `report_date`는 비워 두면 한국시간 오늘 날짜로 실행된다. 실행 상세 화면의 job summary에는
 `Newsletter GitHub Actions readiness` 표가 남으며, Secret 값은 표시하지 않고 `configured` 또는 `missing`만 표시한다.
 

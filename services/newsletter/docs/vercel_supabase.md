@@ -22,6 +22,8 @@ GitHub Actions
 -> build_newsletter_bundle.py
 -> validate_daily_news_pipeline.py
 -> GitHub Pages mirror
+
+GitHub Actions
 -> sync_newsletter_supabase.py
 -> Supabase newsletter_issues + newsletter_public_issue_articles
 
@@ -33,7 +35,9 @@ Vercel
 
 역할은 아래처럼 고정한다.
 
-- GitHub Actions: 기사 수집, 분류, 중복 제거, 정적 미러 생성/검증, GitHub Pages publish/verify, Supabase 동기화, Vercel health 검증
+- `Build newsletter mirror`: 기사 수집, 분류, 중복 제거, 정적 미러 생성/검증, GitHub Pages publish/verify
+- `Sync newsletter Supabase read model`: verified mirror archive를 Supabase에 동기화하고 Vercel health 검증
+- `Deploy newsletter Vercel app`: Vercel 앱 코드 배포
 - Supabase: 뉴스레터 read model 저장. 기본 동기화 범위는 static mirror와 맞춘 최근 30개 이슈다.
 - Vercel: 사용자가 보는 웹 화면. 수집기나 장시간 빌드를 돌리지 않는 읽기 전용 런타임
 - GitHub Pages: 정적 백업 미러와 archive fallback. canonical app은 Vercel
@@ -62,13 +66,15 @@ section order는 GitHub Pages `archive.json`과 같아야 한다.
 3. Vercel project root를 `services/newsletter/web`로 잡는다.
 4. Vercel env에 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`를 넣는다.
 5. DB schema를 바꿔야 할 때만 GitHub Actions `Apply newsletter Supabase migration`을 수동 실행한다.
-6. GitHub Actions `Deploy newsletter to GitHub Pages`를 수동 실행해 Supabase sync 로그를 확인한다.
-7. Vercel `/health.json`에서 `data_source=supabase`와 최신 `report_date`를 확인한다.
+6. GitHub Actions `Build newsletter mirror`를 수동 실행해 GitHub Pages mirror를 만든다.
+7. `Sync newsletter Supabase read model` workflow가 이어서 Supabase sync와 Vercel health 확인을 수행한다.
+8. Vercel `/health.json`에서 `data_source=supabase`와 최신 `report_date`를 확인한다.
 
 운영 검증 기준:
 
 - GitHub Actions `Deploy newsletter Vercel app`가 성공해야 한다.
-- GitHub Actions `Deploy newsletter to GitHub Pages`가 성공해야 한다.
+- GitHub Actions `Build newsletter mirror`가 성공해야 한다.
+- GitHub Actions `Sync newsletter Supabase read model`가 성공해야 한다.
 - `https://kpef-newsletter.vercel.app/health.json?refresh=1`이 `data_source=supabase`를 반환해야 한다.
 - `https://pkkong.github.io/kpef-newsletter/health.json`은 GitHub Pages CDN 반영 지연이 있을 수 있으므로,
   workflow 검증은 이번 빌드의 `built_at`과 `article_count`까지 비교한다.
@@ -86,13 +92,12 @@ preflight다. 파일 존재, Python compile, import isolation, Flask smoke test,
 `Apply newsletter Supabase migration` workflow는 Supabase schema 변경만 담당한다.
 Vercel 앱 배포와 DB migration을 섞지 않는다.
 
-`Deploy newsletter to GitHub Pages` workflow는 이름과 달리 운영상 newsletter
-publish workflow다. 실제 책임은 수집, 정적 미러 생성/검증, GitHub Pages static mirror
-publish/verify, Supabase sync, Vercel app health 검증이다. Vercel에서 수집을 실행하지 않는다.
+`Build newsletter mirror` workflow는 수집, 정적 미러 생성/검증, GitHub Pages static mirror
+publish/verify만 담당한다. Supabase sync와 Vercel app health 검증은 담당하지 않는다.
 
 `Newsletter publish watchdog` workflow는 GitHub-only fallback scheduler다. primary
 publish schedule이 GitHub 내부 지연/누락으로 실행되지 않았을 때 Vercel app과
-GitHub Pages mirror의 health를 확인한다. mirror가 stale이면 full publish workflow를
+GitHub Pages mirror의 health를 확인한다. mirror가 stale이면 mirror build workflow를
 dispatch하고, mirror는 fresh인데 Vercel app만 stale이면 `Sync newsletter Supabase
 read model` workflow만 dispatch한다. 이 watchdog도 수집을 직접 하지 않는다.
 

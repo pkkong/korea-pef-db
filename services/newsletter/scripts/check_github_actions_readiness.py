@@ -12,15 +12,19 @@ import sys
 from pathlib import Path
 
 
-WORKFLOW_PATH = Path(".github/workflows/deploy-newsletter-pages.yml")
+MIRROR_WORKFLOW_PATH = Path(".github/workflows/deploy-newsletter-pages.yml")
+SYNC_WORKFLOW_PATH = Path(".github/workflows/sync-newsletter-supabase.yml")
 EXPECTED_CRON = "37 23 * * *"
-EXPECTED_SECRETS = (
+MIRROR_EXPECTED_SECRETS = (
     "NAVER_CLIENT_ID",
     "NAVER_CLIENT_SECRET",
     "NEWSLETTER_PUBLIC_REPO_TOKEN",
+)
+SYNC_EXPECTED_SECRETS = (
     "SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
 )
+EXPECTED_SECRETS = MIRROR_EXPECTED_SECRETS + SYNC_EXPECTED_SECRETS
 
 
 def run(args: list[str], cwd: Path, timeout: int = 20) -> subprocess.CompletedProcess[str]:
@@ -109,26 +113,35 @@ def main() -> int:
 
     repo_root = find_repo_root()
     repo_name = args.repo or infer_repo_name(repo_root)
-    workflow_file = repo_root / WORKFLOW_PATH
+    mirror_workflow_file = repo_root / MIRROR_WORKFLOW_PATH
+    sync_workflow_file = repo_root / SYNC_WORKFLOW_PATH
 
     print("Newsletter GitHub Actions readiness")
     print(f"Repository: {repo_name}")
-    print(f"Workflow: {WORKFLOW_PATH}")
+    print(f"Mirror workflow: {MIRROR_WORKFLOW_PATH}")
+    print(f"Supabase sync workflow: {SYNC_WORKFLOW_PATH}")
 
     failures: list[str] = []
     unknowns: list[str] = []
 
-    if not workflow_file.exists():
-        failures.append(f"missing workflow file: {WORKFLOW_PATH}")
+    if not mirror_workflow_file.exists():
+        failures.append(f"missing workflow file: {MIRROR_WORKFLOW_PATH}")
     else:
-        workflow_text = workflow_file.read_text(encoding="utf-8")
+        workflow_text = mirror_workflow_file.read_text(encoding="utf-8")
         checks = (
+            ("mirror workflow named Build newsletter mirror", "name: Build newsletter mirror" in workflow_text),
             ("schedule trigger present", re.search(r"(?m)^  schedule:\s*$", workflow_text)),
             (
                 "manual workflow_dispatch trigger present",
                 re.search(r"(?m)^  workflow_dispatch:\s*$", workflow_text),
             ),
             (f"daily 08:37 KST cron present ({EXPECTED_CRON})", EXPECTED_CRON in workflow_text),
+            ("mirror workflow does not sync Supabase", "sync_newsletter_supabase.py" not in workflow_text),
+            ("mirror workflow does not verify Vercel app", "NEWSLETTER_APP_URL" not in workflow_text),
+            (
+                "mirror workflow dispatches separate Supabase sync",
+                'gh workflow run "Sync newsletter Supabase read model"' in workflow_text,
+            ),
         )
         for message, ok in checks:
             if ok:
@@ -136,11 +149,38 @@ def main() -> int:
             else:
                 failures.append(message)
 
-        for name in EXPECTED_SECRETS:
+        for name in MIRROR_EXPECTED_SECRETS:
             if f"secrets.{name}" in workflow_text:
-                status("OK", f"workflow references secret {name}")
+                status("OK", f"mirror workflow references secret {name}")
             else:
-                failures.append(f"workflow does not reference secret {name}")
+                failures.append(f"mirror workflow does not reference secret {name}")
+
+        for name in SYNC_EXPECTED_SECRETS:
+            if f"secrets.{name}" in workflow_text:
+                failures.append(f"mirror workflow should not reference sync secret {name}")
+
+    if not sync_workflow_file.exists():
+        failures.append(f"missing workflow file: {SYNC_WORKFLOW_PATH}")
+    else:
+        sync_text = sync_workflow_file.read_text(encoding="utf-8")
+        checks = (
+            ("sync workflow named Sync newsletter Supabase read model", "name: Sync newsletter Supabase read model" in sync_text),
+            ("sync workflow has manual dispatch", re.search(r"(?m)^  workflow_dispatch:\s*$", sync_text)),
+            ("sync workflow calls sync_newsletter_supabase.py", "sync_newsletter_supabase.py" in sync_text),
+            ("sync workflow verifies Vercel app", "NEWSLETTER_APP_URL" in sync_text),
+            ("sync workflow has no schedule", re.search(r"(?m)^  schedule:\s*$", sync_text) is None),
+        )
+        for message, ok in checks:
+            if ok:
+                status("OK", message)
+            else:
+                failures.append(message)
+
+        for name in SYNC_EXPECTED_SECRETS:
+            if f"secrets.{name}" in sync_text:
+                status("OK", f"sync workflow references secret {name}")
+            else:
+                failures.append(f"sync workflow does not reference secret {name}")
 
     if args.skip_secrets:
         unknowns.append("GitHub secret list skipped by --skip-secrets")

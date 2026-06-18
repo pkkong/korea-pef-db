@@ -3,7 +3,8 @@
 ## 결론
 
 현재 정식 수집/발행 경로는 GitHub Actions다. 매일 수집, 분류,
-정적 HTML 생성, Supabase sync, GitHub Pages mirror 배포까지 repository workflow에서 처리한다.
+정적 HTML 생성, GitHub Pages mirror 배포는 `Build newsletter mirror`가 처리하고,
+Supabase sync와 Vercel 검증은 별도 `Sync newsletter Supabase read model` workflow가 처리한다.
 개인 Mac, Windows 예약 작업, 로컬 자동 push는 운영 경로에서 제외한다.
 
 이 문서는 GitHub Actions를 넘어 Vercel/Supabase 또는 전용 Cloud Run Job,
@@ -14,7 +15,7 @@ Railway Cron 같은 별도 클라우드 운영으로 확장할 때 참고하는 
 - `services/newsletter/web/`: Vercel Flask app. LP/GP/Wiki를 import하지 않는다.
 - `services/newsletter/supabase/migrations/`: Supabase public read model schema.
 - `services/newsletter/src/sync_newsletter_supabase.py`: generated archive를 Supabase read model로 싱크한다.
-- GitHub Actions는 Supabase secret이 없으면 기존 GitHub Pages 발행을 계속하고, secret이 있으면 read model sync를 추가 실행한다.
+- GitHub Pages mirror 발행과 Supabase read model sync는 별도 workflow다. Supabase secret이 없어도 mirror 발행 경로는 유지되어야 한다.
 
 ## 추천 구조
 

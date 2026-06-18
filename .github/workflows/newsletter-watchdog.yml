@@ -33,7 +33,7 @@ concurrency:
 env:
   NEWSLETTER_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter
   NEWSLETTER_APP_URL: https://kpef-newsletter.vercel.app
-  NEWSLETTER_PUBLISH_WORKFLOW: Deploy newsletter to GitHub Pages
+  NEWSLETTER_PUBLISH_WORKFLOW: Build newsletter mirror
   NEWSLETTER_SYNC_WORKFLOW: Sync newsletter Supabase read model
 
 jobs:
@@ -118,7 +118,7 @@ jobs:
           print(f"newsletter_watchdog {reason}")
           PY
 
-      - name: Dispatch full publish if mirror is stale
+      - name: Dispatch mirror build if mirror is stale
         if: steps.freshness.outputs.stale == 'true' && steps.freshness.outputs.mirror_fresh != 'true'
         env:
           GH_TOKEN: ${{ github.token }}

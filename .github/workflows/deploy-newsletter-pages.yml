@@ -1,4 +1,4 @@
-name: Deploy newsletter to GitHub Pages
+name: Build newsletter mirror
 
 on:
   schedule:
@@ -17,6 +17,7 @@ on:
         type: string
 
 permissions:
+  actions: write
   contents: read
 
 concurrency:
@@ -27,7 +28,6 @@ env:
   NEWSLETTER_PUBLIC_REPO: pkkong/kpef-newsletter
   NEWSLETTER_PUBLIC_BRANCH: gh-pages
   NEWSLETTER_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter/
-  NEWSLETTER_APP_URL: https://kpef-newsletter.vercel.app
   NEWSLETTER_BUILD_SERVICES: newsletter
   NEWSLETTER_LIMIT_PER_SOURCE: "20"
   NEWSLETTER_CANDIDATE_LIMIT_PER_SOURCE: "8"
@@ -63,11 +63,11 @@ jobs:
             echo "report_date=$(TZ=Asia/Seoul date +%F)" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Check public freshness
+      - name: Check mirror freshness
         id: freshness
         shell: bash
         run: |
-          python3 - "${{ steps.date.outputs.report_date }}" "${NEWSLETTER_PUBLIC_URL}" "${NEWSLETTER_APP_URL}" "${{ github.event_name }}" <<'PY'
+          python3 - "${{ steps.date.outputs.report_date }}" "${NEWSLETTER_PUBLIC_URL}" "${{ github.event_name }}" <<'PY'
           import json
           import os
           import sys
@@ -77,17 +77,13 @@ jobs:
 
           report_date = sys.argv[1]
           mirror_base_url = sys.argv[2].rstrip("/")
-          app_base_url = sys.argv[3].rstrip("/")
-          event_name = sys.argv[4]
+          event_name = sys.argv[3]
 
           should_run = True
           reason = "manual run" if event_name != "schedule" else "scheduled freshness check"
           mirror_date = ""
           mirror_article_count = 0
           mirror_archive_count = 0
-          app_date = ""
-          app_article_count = 0
-          app_data_source = ""
 
           def fetch_json(url: str):
               req = Request(
@@ -99,9 +95,7 @@ jobs:
 
           if event_name == "schedule":
               mirror_fresh = False
-              app_fresh = False
               mirror_error = ""
-              app_error = ""
               try:
                   health = fetch_json(f"{mirror_base_url}/health.json")
                   archive = fetch_json(f"{mirror_base_url}/archive.json")
@@ -120,33 +114,14 @@ jobs:
               except (OSError, URLError, json.JSONDecodeError, ValueError) as exc:
                   mirror_error = str(exc)
 
-              try:
-                  app_health = fetch_json(f"{app_base_url}/health.json?refresh=1")
-                  app_date = str(app_health.get("report_date") or "")
-                  app_article_count = int(app_health.get("article_count") or 0)
-                  app_data_source = str(app_health.get("data_source") or "")
-                  app_fresh = (
-                      app_date == report_date
-                      and app_article_count > 0
-                      and app_data_source == "supabase"
-                  )
-              except (OSError, URLError, json.JSONDecodeError, ValueError) as exc:
-                  app_error = str(exc)
-
-              if mirror_fresh and app_fresh:
+              if mirror_fresh:
                   should_run = False
-                  reason = (
-                      "newsletter already fresh "
-                      f"(mirror={mirror_date}/{mirror_article_count}, "
-                      f"app={app_date}/{app_article_count}/{app_data_source})"
-                  )
+                  reason = f"mirror already fresh ({mirror_date}/{mirror_article_count})"
               else:
                   reason = (
-                      "newsletter stale "
+                      "mirror stale "
                       f"(mirror={mirror_date or 'missing'}/{mirror_article_count}/{mirror_archive_count}"
-                      f"{' error=' + mirror_error if mirror_error else ''}, "
-                      f"app={app_date or 'missing'}/{app_article_count}/{app_data_source or 'missing'}"
-                      f"{' error=' + app_error if app_error else ''}, expected={report_date})"
+                      f"{' error=' + mirror_error if mirror_error else ''}, expected={report_date})"
                   )
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
@@ -155,11 +130,8 @@ jobs:
               output.write(f"public_date={mirror_date}\n")
               output.write(f"public_article_count={mirror_article_count}\n")
               output.write(f"public_archive_count={mirror_archive_count}\n")
-              output.write(f"app_date={app_date}\n")
-              output.write(f"app_article_count={app_article_count}\n")
-              output.write(f"app_data_source={app_data_source}\n")
 
-          print(f"newsletter_freshness should_run={should_run} reason={reason}")
+          print(f"newsletter_mirror_freshness should_run={should_run} reason={reason}")
           PY
 
       - name: Skip already fresh scheduled issue
@@ -431,95 +403,21 @@ jobs:
           raise SystemExit(f"public verification failed: {last_error}")
           PY
 
-      - name: Build Supabase newsletter payload
-        if: steps.freshness.outputs.should_run == 'true'
-        run: |
-          python3 services/newsletter/src/sync_newsletter_supabase.py \
-            --archive services/newsletter/deploy/site/archive.json \
-            --payload-out exports/daily_news/newsletter_supabase_payload.json
-
-      - name: Sync Supabase newsletter read model
-        if: steps.freshness.outputs.should_run == 'true'
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
-            echo "::error::SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required to refresh the Vercel newsletter app."
-            echo "::notice::The GitHub Pages mirror was already published and verified before this Supabase step."
-            exit 1
-          fi
-          python3 services/newsletter/src/sync_newsletter_supabase.py \
-            --archive services/newsletter/deploy/site/archive.json \
-            --payload-out exports/daily_news/newsletter_supabase_payload.json \
-            --apply
-
-      - name: Verify Vercel newsletter app
+      - name: Report mirror handoff
         if: steps.freshness.outputs.should_run == 'true'
         shell: bash
         run: |
-          python3 - "${{ steps.date.outputs.report_date }}" "${NEWSLETTER_APP_URL}" \
-            "services/newsletter/deploy/site/health.json" \
-            "services/newsletter/deploy/site/archive.json" <<'PY'
-          import json
-          import sys
-          import time
-          from pathlib import Path
-          from urllib.request import Request, urlopen
+          echo "GitHub Pages mirror verified for ${{ steps.date.outputs.report_date }}."
+          echo "Supabase/Vercel refresh is owned by the separate 'Sync newsletter Supabase read model' workflow."
 
-          report_date = sys.argv[1]
-          app_base_url = sys.argv[2].rstrip("/")
-          expected_health = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"))
-          expected_archive = json.loads(Path(sys.argv[4]).read_text(encoding="utf-8"))
-          expected_article_count = int(expected_health.get("article_count") or 0)
-          expected_entry = next(
-              (row for row in expected_archive if isinstance(row, dict) and row.get("reportDate") == report_date),
-              None,
-          )
-          expected_archive_count = len(expected_entry.get("articles") or []) if isinstance(expected_entry, dict) else 0
-          if expected_article_count <= 0 or expected_archive_count != expected_article_count:
-              raise SystemExit(
-                  "local newsletter artifact is invalid before Vercel verification "
-                  f"(health={expected_article_count}, archive={expected_archive_count})"
-              )
-
-          deadline = time.time() + 180
-          last_error = ""
-
-          def fetch_json(path: str):
-              req = Request(
-                  f"{app_base_url}/{path}?refresh=1&verify={int(time.time())}-{report_date}",
-                  headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
-              )
-              with urlopen(req, timeout=20) as response:
-                  return json.loads(response.read().decode("utf-8"))
-
-          while time.time() <= deadline:
-              try:
-                  health = fetch_json("health.json")
-                  archive = fetch_json("archive.json")
-                  if health.get("report_date") != report_date:
-                      raise RuntimeError(f"app report_date={health.get('report_date')} expected={report_date}")
-                  if health.get("data_source") != "supabase":
-                      raise RuntimeError(f"app data_source={health.get('data_source')} expected=supabase")
-                  article_count = int(health.get("article_count") or 0)
-                  if article_count != expected_article_count:
-                      raise RuntimeError(f"app article_count={article_count} expected={expected_article_count}")
-                  entry = next((row for row in archive if isinstance(row, dict) and row.get("reportDate") == report_date), None)
-                  if entry is None:
-                      raise RuntimeError(f"app archive missing reportDate={report_date}")
-                  archive_count = len(entry.get("articles") or [])
-                  if archive_count != expected_archive_count:
-                      raise RuntimeError(f"app archive_count={archive_count} expected={expected_archive_count}")
-                  print(
-                      "vercel_verify_status=ok "
-                      f"report_date={report_date} health_articles={article_count} archive_articles={archive_count}"
-                  )
-                  raise SystemExit(0)
-              except Exception as exc:
-                  last_error = str(exc)
-                  print(f"vercel_verify_wait={last_error}")
-                  time.sleep(10)
-
-          raise SystemExit(f"vercel verification failed: {last_error}")
-          PY
+      - name: Dispatch Supabase and Vercel sync
+        if: steps.freshness.outputs.should_run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh workflow run "Sync newsletter Supabase read model" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref "${GITHUB_REF_NAME:-main}" \
+            -f report_date="${{ steps.date.outputs.report_date }}"
+          echo "Dispatched Sync newsletter Supabase read model for ${{ steps.date.outputs.report_date }}"

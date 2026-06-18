@@ -32,33 +32,34 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Resolve report date
-        id: date
+      - name: Resolve requested report date
+        id: requested_date
         shell: bash
+        env:
+          REQUESTED_REPORT_DATE: ${{ github.event.inputs.report_date || '' }}
         run: |
-          if [ -n "${{ inputs.report_date }}" ]; then
-            echo "report_date=${{ inputs.report_date }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "report_date=$(TZ=Asia/Seoul date +%F)" >> "$GITHUB_OUTPUT"
-          fi
+          echo "report_date=${REQUESTED_REPORT_DATE:-}" >> "$GITHUB_OUTPUT"
 
-      - name: Download verified public archive
+      - name: Download verified Pages mirror archive
+        id: archive
         shell: bash
         run: |
           mkdir -p exports/daily_news
-          python3 - "${{ steps.date.outputs.report_date }}" "${NEWSLETTER_PUBLIC_URL}" <<'PY'
+          python3 - "${{ steps.requested_date.outputs.report_date }}" "${NEWSLETTER_PUBLIC_URL}" <<'PY'
           import json
+          import os
           import sys
           import time
           from pathlib import Path
           from urllib.request import Request, urlopen
 
-          report_date = sys.argv[1]
+          requested_report_date = sys.argv[1]
           base_url = sys.argv[2].rstrip("/")
 
           def fetch_json(path: str):
+              cache_key = requested_report_date or str(int(time.time()))
               req = Request(
-                  f"{base_url}/{path}?sync={int(time.time())}-{report_date}",
+                  f"{base_url}/{path}?sync={int(time.time())}-{cache_key}",
                   headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
               )
               with urlopen(req, timeout=20) as response:
@@ -66,8 +67,12 @@ jobs:
 
           health = fetch_json("health.json")
           archive = fetch_json("archive.json")
-          if health.get("report_date") != report_date:
-              raise SystemExit(f"mirror report_date={health.get('report_date')} expected={report_date}")
+          mirror_report_date = str(health.get("report_date") or "")
+          report_date = requested_report_date or mirror_report_date
+          if not report_date:
+              raise SystemExit("mirror health.json does not contain report_date")
+          if mirror_report_date != report_date:
+              raise SystemExit(f"mirror report_date={mirror_report_date} expected={report_date}")
           article_count = int(health.get("article_count") or 0)
           entry = next(
               (row for row in archive if isinstance(row, dict) and row.get("reportDate") == report_date),
@@ -80,6 +85,9 @@ jobs:
               )
           out = Path("exports/daily_news/public_archive.json")
           out.write_text(json.dumps(archive, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"report_date={report_date}\n")
+              output.write(f"article_count={article_count}\n")
           print(f"public_archive=ok report_date={report_date} articles={article_count}")
           PY
 
@@ -101,7 +109,7 @@ jobs:
       - name: Verify Vercel newsletter app
         shell: bash
         run: |
-          python3 - "${{ steps.date.outputs.report_date }}" "${NEWSLETTER_APP_URL}" "${NEWSLETTER_PUBLIC_URL}" <<'PY'
+          python3 - "${{ steps.archive.outputs.report_date }}" "${NEWSLETTER_APP_URL}" "${NEWSLETTER_PUBLIC_URL}" <<'PY'
           import json
           import sys
           import time

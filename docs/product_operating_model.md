@@ -71,7 +71,9 @@ Last updated: 2026-06-10 KST
 
 ## Operating Rhythm
 
-- 매일 08:37 KST: Brief 수집, 분류, 발행, Supabase sync, Vercel app과 public mirror 확인.
+- 매일 08:37 KST: `Build newsletter mirror`가 Brief 수집, 분류, GitHub Pages 백업 미러 생성/검증만 수행한다.
+- Mirror가 새로 생성/검증된 경우: `Build newsletter mirror`가 `Sync newsletter Supabase read model`을 dispatch하고, sync workflow가 verified mirror archive를 Supabase에 복사한 뒤 Vercel 공식 앱을 검증한다.
+- 필요 시: `Deploy newsletter Vercel app`은 Vercel 앱 코드 배포만 수행한다. 뉴스 수집, Pages 미러 생성, Supabase 동기화는 하지 않는다.
 - 하루 1-3회: LP 공고 수집, 사업 상태 갱신, public-ready 공고만 공개 빌드.
 - 주기적: GP/LP 프로필, 로고, People, 뉴스 연결 보강.
 - 필요 시: 통합 사이트 빌드와 배포.

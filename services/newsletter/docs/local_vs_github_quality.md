@@ -6,7 +6,8 @@
 
 운영 기준은 다음과 같다.
 
-- GitHub Actions: 매일 08:37 KST 자동 수집, 분류, 정적 사이트 생성, public mirror push, Supabase sync를 담당한다.
+- `Build newsletter mirror`: 매일 08:37 KST 자동 수집, 분류, 정적 사이트 생성, public mirror push/verify를 담당한다.
+- `Sync newsletter Supabase read model`: verified public mirror archive를 Supabase에 복사하고 Vercel을 검증한다.
 - GitHub Actions 수동 실행: 같은 workflow의 `Run workflow`로 특정 날짜를 재발행한다.
 - 로컬 실행: 운영 발행에는 사용하지 않는다. 개발 진단은 가능하지만 publish/push 경로는 없다.
 - Vercel: 사용자가 보는 primary app이다. 수집은 하지 않고 Supabase read model을 읽는다.
@@ -14,7 +15,8 @@
 
 ## Operating Contract
 
-- 자동 발행은 `.github/workflows/deploy-newsletter-pages.yml`만 담당한다.
+- 자동 mirror 발행은 `.github/workflows/deploy-newsletter-pages.yml`의 `Build newsletter mirror`가 담당한다.
+- Supabase/Vercel 반영은 `.github/workflows/sync-newsletter-supabase.yml`의 `Sync newsletter Supabase read model`이 담당한다.
 - public mirror는 GitHub Actions가 `NEWSLETTER_PUBLIC_REPO_TOKEN`으로 push한다.
 - Naver API 키는 GitHub repository secrets에 둔다.
 - 로컬 DB/cache가 있어도 public website는 자동으로 바뀌지 않는다.
@@ -24,7 +26,7 @@
 ## Recovery Path
 
 장애 복구도 GitHub Actions에서 처리한다. private 원본 저장소의
-`Actions` → `Deploy newsletter to GitHub Pages` → `Run workflow`를 사용하고,
+`Actions` → `Build newsletter mirror` → `Run workflow`를 사용하고,
 필요하면 `report_date`를 `YYYY-MM-DD`로 지정한다.
 
 ## Deployment Guardrails

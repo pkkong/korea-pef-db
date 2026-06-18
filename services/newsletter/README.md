@@ -4,14 +4,14 @@ This folder owns the standalone Korea PEF daily newsletter service.
 
 ## Non-Developer Summary
 
-뉴스레터는 GitHub Actions가 매일 수집, 분류, public mirror 생성/검증, Supabase read model 동기화, Vercel 검증까지 처리하는 구조다. Mac은 정식 운영 경로에서 제외한다.
+뉴스레터는 역할을 겹치지 않게 나눈다. Mac은 정식 운영 경로에서 제외하고, 운영은 GitHub Actions, Supabase, Vercel이 각각 자기 일만 맡는다.
 
 1. GitHub Actions workflow가 매일 08:37 KST에 실행되고 retry/watchdog window가 보조한다.
-2. GitHub Actions가 뉴스 기사를 모으고 뉴스레터용 정적 HTML 파일을 만든다.
-3. 공개해도 되는 HTML/CSS/JS 파일만 public mirror 저장소인 `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 올리고 검증한다.
-4. 같은 archive를 Supabase의 뉴스레터 read model에 동기화한다.
-5. 사용자는 Vercel 공식 앱 `https://kpef-newsletter.vercel.app/`에서 최신 뉴스레터를 본다.
-6. GitHub Pages `https://pkkong.github.io/kpef-newsletter/`는 장애 시 확인하는 백업 미러와 archive fallback이다.
+2. `Build newsletter mirror`가 뉴스 기사를 모으고, 뉴스레터용 정적 HTML/CSS/JS를 만든 뒤 GitHub Pages 백업 미러만 갱신한다.
+3. `Sync newsletter Supabase read model`이 검증된 GitHub Pages archive를 Supabase DB에 복사하고 Vercel 화면이 같은 날짜/기사 수를 읽는지 확인한다.
+4. 사용자는 Vercel 공식 앱 `https://kpef-newsletter.vercel.app/`에서 최신 뉴스레터를 본다.
+5. GitHub Pages `https://pkkong.github.io/kpef-newsletter/`는 장애 시 확인하는 백업 미러와 archive fallback이다.
+6. `Deploy newsletter Vercel app`은 앱 코드 배포만 맡는다. 뉴스 수집이나 Supabase 동기화를 하지 않는다.
 7. `services/newsletter/web/` 앱은 Supabase read model을 먼저 읽고, Supabase가 없거나 장애이면 기존 public `archive.json`을 fallback으로 읽는다.
 8. LP 공고는 Daily 본문이 아니라 `lp-notices.html` 별도 탭/페이지로 분리한다.
 
@@ -25,8 +25,9 @@ GitHub Actions 자동 발행에는 원본 저장소 Secrets에 아래 값이 필
 - `SUPABASE_PUBLISHABLE_KEY`: Vercel 앱이 read model을 읽을 때 쓰는 public key
 
 자동 실행을 기다리지 않고 바로 만들려면 GitHub의 원본 저장소에서 `Actions` 탭으로 가서
-`Deploy newsletter to GitHub Pages` 워크플로를 선택한 뒤 `Run workflow`를 누른다.
-날짜를 비워 두면 한국시간 기준 오늘 날짜로 생성된다.
+`Build newsletter mirror` 워크플로를 선택한 뒤 `Run workflow`를 누른다.
+날짜를 비워 두면 한국시간 기준 오늘 날짜로 생성된다. 이 워크플로가 새 mirror를 실제로 만들고 검증하면
+`Sync newsletter Supabase read model`을 별도 후속 작업으로 dispatch해 Supabase와 Vercel을 갱신한다.
 
 Vercel 앱 배포는 별도 workflow인 `Deploy newsletter Vercel app`에서 처리한다.
 이 workflow는 GitHub Pages daily publish와 분리되어 있고, `VERCEL_TOKEN`,
