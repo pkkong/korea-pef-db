@@ -53,6 +53,10 @@ the Vercel app imports it directly. Do not add a separate Vercel template or
 Root-level `scripts/*daily_news*.py` files are compatibility wrappers. New jobs
 and docs should prefer the paths in this service folder.
 
+`services/newsletter/src/build_newsletter_deploy.py` is also only a compatibility
+wrapper. The old monolithic implementation was removed from the newsletter
+service; do not add LP, GP, Wiki, or public-site renderer code back there.
+
 ## Common Commands
 
 ```powershell

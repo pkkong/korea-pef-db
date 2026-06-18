@@ -6,9 +6,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from services.newsletter.src.build_newsletter_deploy import app_asset_version
 from services.newsletter.src.daily_news_common import today_seoul
 from services.newsletter.src.pef_wiki_pages import render_pef_wiki_page
+from services.newsletter.web.newsletter_ui import app_asset_version
 
 
 def build_wiki_service_pages(site_dir: Path, report_date: str | None = None, asset_version: str | None = None) -> dict[str, int]:

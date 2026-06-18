@@ -98,7 +98,7 @@
 - 공개 출자기관은 원칙적으로 확인된 PE/VC/대체투자 출자공고 또는 선정 이력이 있어야 한다. 다만 KIC, 수협, 캠코처럼 사용자가 전략적으로 필요하다고 지정한 기관은 `display_enabled=1` 예외로 유지할 수 있다. 그 외 출자 이력 0건 기관은 `coverage_tier=candidate`, `display_enabled=0`으로 후보 pool에 둔다.
 - `display_enabled=1`인 LP는 빈 상세 페이지로 두지 않는다. 최소 공개 facts는 `기관 유형`, `홈페이지`, `담당 조직`, `관심 자산군`이며, 공식 공고 채널이 확인된 경우 `공식 공고 채널`도 함께 넣는다. 총자산, 배분, 담당자, 선정 GP처럼 공식 근거가 부족한 값은 추정하지 않고 비워 둔다.
 - LP 서비스의 중심 화면은 출자공고다. 기관 목록은 디렉토리로 유지하고, 출자공고 화면은 `공고중`, `접수마감`, `1차 선정`, `선정완료`, `취소`, `히스토리`를 구분해 마감일, 규모, 기관, 원문, 첨부자료, 연결 GP가 체계적으로 보이게 한다.
-- LP Notice의 사업명 정규화와 라운드 판정은 `services/lp/src/lp_notice_identity.py`를 기준 모듈로 둔다. 공개 화면의 상태 판정과 공고/서류심사/선정결과 카드 병합은 `services/newsletter/src/lp_notice_view.py`에 두고, `services/newsletter/src/build_newsletter_deploy.py`에는 이 규칙을 다시 직접 붙이지 않고 화면 조립과 배포 산출물 생성만 남긴다.
+- LP Notice의 사업명 정규화와 라운드 판정은 `services/lp/src/lp_notice_identity.py`를 기준 모듈로 둔다. 공개 라벨, LP 디렉토리 helper, 공고 카드 렌더링은 `services/lp/src/lp_public_views.py`가 맡는다. 남아 있는 LP legacy page renderer는 `services/lp/src/lp_legacy_service_pages.py`에 격리하고, 뉴스레터 빌드나 테스트가 이를 import하면 회귀로 본다.
 - LP Notice 상태는 사업 lifecycle 기준으로 판단한다. `선정완료`와 `1차 선정`은 마감일보다 우선하고, 그 다음에 유효 마감일 기준으로 `공고중` 또는 `접수마감`을 판단한다. 마감일이 과거인 공고를 매일 `deadline_closed` 신규 이벤트처럼 만들지 않는다. 공고일이 없고 과거 마감일만 있는 공고는 `event_date=오늘`로 저장하지 않는다.
 - LP Notice 사업명은 저장된 특정 사업명이 깨끗하면 우선 사용하고, 본문 메뉴·지원자격·운용계획 문장에서 뽑힌 긴 후보는 버린다. 같은 사업 카드라도 최신 이벤트와 18개월 이상 떨어진 과거 이벤트/마감일은 현재 카드 상태와 진행 이력에 섞지 않는다.
 - LP/GP 상세 fact row에서 출처명, 날짜, `공식 확인` 같은 긴 메타 문자열을 값 아래 반복 노출하지 않는다. 필요한 출처는 홈페이지·자료·기사·LinkedIn을 구분하는 작은 아이콘 링크로 표시하고, 긴 출처 목록은 하단 `자료` 영역에 둔다.
@@ -116,7 +116,7 @@
 - 기본 통합 빌드 명령은 `python3 scripts/build_site_bundle.py --services newsletter,lp,gp --date YYYY-MM-DD`다. 특정 서비스만 다시 굽는 경우에는 `--services lp`, `--services gp`처럼 좁혀서 실행한다. Wiki는 사용자가 다시 기획했을 때만 `--services wiki`로 명시 실행한다.
 - 서비스별 source renderer를 고치지 않고 `services/newsletter/deploy/site/`의 생성 HTML을 직접 고치는 것은 금지한다. 생성물은 빌드 검증이나 배포 결과로만 다룬다.
 - Wiki는 뉴스레터처럼 매일 수집·재분류되는 서비스가 아니다. Wiki 본문이나 공통 shell이 바뀌었을 때만 Wiki builder를 실행하고, 루틴 뉴스/LP 갱신이 Wiki 콘텐츠를 불필요하게 다시 쓰지 않게 한다.
-- 기존 호환 파일인 `services/newsletter/src/build_newsletter_deploy.py`는 당분간 남길 수 있지만, 새 자동화와 새 작업은 서비스별 builder와 `scripts/build_site_bundle.py`를 우선한다.
+- 기존 호환 파일인 `services/newsletter/src/build_newsletter_deploy.py`는 얇은 wrapper만 허용한다. 이 파일에는 LP, GP, Wiki, CSS, HTML renderer, DB helper를 다시 넣지 않는다. 새 뉴스레터 자동화와 수동 실행은 `scripts/build_newsletter_bundle.py`를 우선한다.
 
 - `뉴스레터 데스크`: `services/newsletter/`, 뉴스 수집·분류·태그·검색·발행 화면·뉴스레터 배포 준비를 맡는다. LP/GP 원천 CSV와 People 입력 파일은 직접 대량 수정하지 않는다.
 - `LP Monitor / LP Research`: `services/lp/`, LP 기관 프로필, 출자공고, 출자 히스토리, 공식 채널, LP profile facts를 맡는다. 뉴스레터 편집 판단과 GP evidence 파일은 직접 바꾸지 않는다.

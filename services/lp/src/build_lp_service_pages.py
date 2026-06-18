@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from services.newsletter.src.build_newsletter_deploy import (
+from services.lp.src.lp_legacy_service_pages import (
     DEFAULT_LP_COMMITMENT_MONITOR,
     prepare_lp_notice_display_items,
     read_lp_monitor,

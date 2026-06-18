@@ -16,7 +16,7 @@
 
 ## 현재 우선순위
 
-1. Newsletter legacy UI 제거: `scripts/build_service_site.py`와 `services/newsletter/src/build_newsletter_deploy.py`에 남아 있는 과거 newsletter UI 정의를 서비스별 builder/shared UI로 분리해 제거한다. 단, LP/GP 통합 빌드 영향이 있으므로 별도 리팩터링으로 진행한다.
+1. Remaining legacy public-site cleanup: `scripts/build_service_site.py`에 남아 있는 과거 newsletter UI 정의를 shared UI 또는 서비스별 builder로 더 줄인다. 뉴스레터 폴더의 monolith는 제거됐고, `services/newsletter/src/build_newsletter_deploy.py`는 newsletter-only wrapper만 허용한다.
 2. 운영 체계 고정: 서비스 책임선, public view, build contract가 문서와 코드에서 같은 말을 하게 한다.
 3. LP Notice를 사업 단위 서비스로 안정화한다. 같은 사업의 공고, 서류심사, 선정결과, 정정, 취소가 여러 카드로 흩어지면 실패다.
 4. LP Notice 상태를 최신 이벤트와 마감일 기준으로 다시 검증한다. 2025년 마감 공고가 현재 모집중처럼 보이면 실패다.
@@ -26,6 +26,7 @@
 
 ## 최근 처리
 
+- 2026-06-18: 뉴스레터 독립화 정리를 추가로 진행했다. 큰 legacy `services/newsletter/src/build_newsletter_deploy.py` 파일은 `services/lp/src/lp_legacy_service_pages.py`로 이동했고, 뉴스레터 경로에는 `scripts/build_newsletter_bundle.py`로 위임하는 얇은 compatibility wrapper만 남겼다. LP 공개 helper는 `services/lp/src/lp_public_views.py`로 분리했으며, 뉴스레터 테스트는 더 이상 legacy deploy module을 import하지 않는다. Newsletter local scripts now call `scripts/build_newsletter_bundle.py`, not LP/dashboard/public-site builders.
 - 2026-06-17: 뉴스레터 Vercel/GitHub Pages UI 원본을 `services/newsletter/web/newsletter_ui.py`로 단일화했다. Vercel app은 공식 화면, GitHub Pages는 static backup mirror로 고정하고, 둘 다 같은 CSS/JS를 제공한다.
 - 2026-06-17: Vercel archive가 `newsletter_issues`와 `newsletter_public_issue_articles`를 함께 읽도록 고정했다. 기사 0건 issue도 archive에 남기고, `section_order=0`을 정상 값으로 보존해 Pages와 Vercel의 표시 순서가 달라지지 않게 했다.
 - 2026-06-17: Vercel data/UI contract test를 Actions readiness/deploy workflow에 연결했다. 별도 Vercel template/CSS 부활, LP/GP/Wiki/legacy import, empty issue 누락, `section_order=0` 손실을 회귀로 본다.

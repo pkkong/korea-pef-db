@@ -259,8 +259,9 @@ PY
 공개 payload 덤프:
 
 ```bash
-PYTHONPATH=scripts python3 - <<'PY'
-from scripts.build_service_site import DEFAULT_EXPORT_DIR, article_payload_rows, parse_brief
+PYTHONPATH=services/newsletter/src python3 - <<'PY'
+from daily_news_common import DEFAULT_EXPORT_DIR
+from newsletter_renderer import article_payload_rows, parse_brief
 rows = parse_brief(DEFAULT_EXPORT_DIR / "daily_news_brief_YYYYMMDD.md")
 for i, item in enumerate(article_payload_rows(rows), 1):
     print(i, item["section"], "/", item["subCategory"], "|", item["title"])

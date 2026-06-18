@@ -59,7 +59,7 @@ from daily_news_common import (
     score_document,
     to_iso_datetime,
 )
-from build_newsletter_deploy import (
+from services.lp.src.lp_public_views import (
     consolidate_lp_notice_display_items,
     display_asset_classes,
     filter_service_context_profile_links,
@@ -3249,6 +3249,40 @@ raise SystemExit(1 if bad else 0)
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_newsletter_compat_wrappers_import_only_newsletter_builder() -> None:
+    code = """
+import importlib
+import json
+import sys
+
+importlib.import_module("scripts.build_newsletter_deploy")
+importlib.import_module("services.newsletter.src.build_newsletter_deploy")
+bad = sorted(
+    name
+    for name in sys.modules
+    if name == "services.lp"
+    or name.startswith("services.lp.")
+    or name == "services.gp"
+    or name.startswith("services.gp.")
+    or name == "services.wiki"
+    or name.startswith("services.wiki.")
+    or name == "build_service_site"
+    or name == "scripts.build_service_site"
+    or name == "services.lp.src.lp_legacy_service_pages"
+)
+print(json.dumps(bad, ensure_ascii=False))
+raise SystemExit(1 if bad else 0)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=SERVICE_ROOT.parents[1],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def main() -> int:
     tests = [
         test_coverage_window,
@@ -3359,6 +3393,7 @@ def main() -> int:
         test_render_markdown_uses_clean_display_url,
         test_notebooklm_source_pack_and_cache_contract,
         test_newsletter_bundle_import_isolation,
+        test_newsletter_compat_wrappers_import_only_newsletter_builder,
     ]
     for test in tests:
         test()

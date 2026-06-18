@@ -31,36 +31,12 @@ if ($NewsletterAuditExitCode -ne 0) {
     exit $NewsletterAuditExitCode
 }
 
-python scripts\build_lp_commitment_monitor.py `
-    --date $ReportDate `
-    --days 180 `
-    --limit-per-source 50 *>&1 | Tee-Object -FilePath $LogFile -Append
-
-$LpMonitorExitCode = $LASTEXITCODE
-if ($LpMonitorExitCode -ne 0) {
-    exit $LpMonitorExitCode
-}
-
-python scripts\build_dashboard_data.py *>&1 | Tee-Object -FilePath $LogFile -Append
-
-$DashboardDataExitCode = $LASTEXITCODE
-if ($DashboardDataExitCode -ne 0) {
-    exit $DashboardDataExitCode
-}
-
-python scripts\build_service_site.py `
+python scripts\build_newsletter_bundle.py `
     --date $ReportDate *>&1 | Tee-Object -FilePath $LogFile -Append
 
 $SiteBuildExitCode = $LASTEXITCODE
 if ($SiteBuildExitCode -ne 0) {
     exit $SiteBuildExitCode
-}
-
-python scripts\build_public_service_data.py *>&1 | Tee-Object -FilePath $LogFile -Append
-
-$PublicDataExitCode = $LASTEXITCODE
-if ($PublicDataExitCode -ne 0) {
-    exit $PublicDataExitCode
 }
 
 python services\newsletter\src\validate_daily_news_pipeline.py `

@@ -19,7 +19,7 @@ $DockerfilePath = Join-Path $DeployDir "Dockerfile"
 $NginxPath = Join-Path $DeployDir "nginx.conf"
 
 if (-not $SkipBuild) {
-    python (Join-Path $ServiceRoot "src/build_newsletter_deploy.py")
+    python (Join-Path $RepoRoot "scripts/build_newsletter_bundle.py")
 }
 
 if (-not (Test-Path $ZipPath)) {
