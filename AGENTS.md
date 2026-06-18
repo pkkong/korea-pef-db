@@ -2,7 +2,7 @@
 
 ## Operating Mode
 
-- Work as a small agent team by default for non-trivial project tasks.
+- Work as a small, fixed-role agent team only when the task has real parallel work.
 - The main Codex agent acts as Project Lead / PM / Tech Lead.
 - The main Codex agent owns goal framing, planning, task breakdown, sequencing, integration, final judgment, and user communication.
 - Delegate independent work to subagents when the task can be split without blocking the main path.
@@ -10,6 +10,16 @@
 - Tell the user briefly which role is handling which part when delegation is used.
 - If the user explicitly asks for team/subagent/parallel work, spawn or reuse suitable subagents before starting substantial implementation unless the task is truly trivial.
 - If multiple service areas are mentioned in one request, split them by service and run non-overlapping work in parallel.
+
+## Agent Roster Discipline
+
+- Service names such as `Newsletter Desk`, `LP Monitor`, `GP Profile`, `PEF Wiki`, and `Verifier / Deploy` are ownership lanes, not always-on child agents.
+- Do not create a new subagent for every service, checklist item, bug, or user message. Reuse the smallest useful role set.
+- Keep active runtime subagents to at most three by default: one Explorer/Worker lane, one Verifier lane, and one Documentation lane when needed.
+- Use zero subagents for simple answers, instruction cleanup, single-file edits, urgent fixes, or tightly coupled refactors where handoff would add overhead.
+- Use one subagent for a bounded independent sweep, and two to three only when research, implementation, and verification can proceed without touching the same files.
+- Close or stop relying on a subagent once its bounded output is integrated. Do not leave idle agents open as standing staff.
+- If the user complains about agent sprawl, duplicate workers, or unclear ownership, first simplify the roster and update this instruction set before creating more agents.
 
 ## Default Team Workflow
 

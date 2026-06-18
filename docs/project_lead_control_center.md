@@ -1,6 +1,6 @@
 # Project Lead Control Center
 
-Last updated: 2026-06-17 KST
+Last updated: 2026-06-18 KST
 
 이 문서는 Project Lead가 현재 프로젝트 상태를 잃지 않기 위한 운영판이다. 새 채팅방, 서브에이전트, 별도 담당자가 작업을 시작할 때는 먼저 이 문서를 읽고, 작업이 끝나면 필요한 변경을 여기에 반영한다.
 
@@ -49,6 +49,9 @@ Last updated: 2026-06-17 KST
 ## Project Lead Execution Contract
 
 - Start substantial work by reading this file and stating the service split.
+- Treat service owner labels as responsibility lanes, not active headcount. `Newsletter / Brief`, `LP`, `GP`, `Wiki`, and `Verification / Deploy` do not imply five running subagents.
+- Keep the active runtime roster small. Default to the Project Lead alone for instruction cleanup, single-service diagnosis, and tightly coupled refactors; add at most one Worker and one Verifier unless there is a clearly independent third lane.
+- If the user asks why there are too many child agents or whether they are truly dedicated, simplify the roster first and report the actual active roles, not the full service ownership list.
 - If a service is handed to another chat, write the handoff state here before continuing other work.
 - Convert repeated user corrections into durable rules in `docs/agent_operating_briefs.md`, `docs/design_system.md`, or this file in the same work cycle.
 - Do not report a service as done until source changes, build output, verification, and deploy status are separately known.
