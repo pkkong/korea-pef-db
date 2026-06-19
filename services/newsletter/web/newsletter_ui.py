@@ -54,8 +54,8 @@ def write_app_icon_assets(public_dir: Path) -> Path:
 def app_icon_png(size: int = 180) -> bytes:
     scale = 4
     canvas_size = size * scale
-    background_top = (255, 255, 255)
-    background_bottom = (244, 245, 247)
+    background_top = (25, 25, 25)
+    background_bottom = (10, 10, 11)
     pixels: list[list[tuple[int, int, int, int]]] = []
     for y in range(canvas_size):
         t = y / max(1, canvas_size - 1)
@@ -77,58 +77,44 @@ def app_icon_png(size: int = 180) -> bytes:
             255,
         )
 
-    def circle(center: tuple[int, int], radius: int, color: tuple[int, int, int]) -> None:
-        cx, cy = center[0] * scale, center[1] * scale
-        scaled_radius = radius * scale
-        pad = scaled_radius + 2 * scale
-        for y in range(max(0, cy - pad), min(canvas_size, cy + pad)):
-            for x in range(max(0, cx - pad), min(canvas_size, cx + pad)):
-                distance = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
-                alpha = 1.0 - max(0.0, distance - scaled_radius + 1.5 * scale) / (3 * scale)
-                if alpha > 0:
-                    mix_pixel(x, y, color, alpha)
-
-    def stroke(
-        start: tuple[int, int],
-        end: tuple[int, int],
-        width: int,
+    def rounded_rect(
+        rect: tuple[int, int, int, int],
+        radius: int,
         color: tuple[int, int, int],
+        alpha: float = 1.0,
     ) -> None:
-        x1, y1 = start[0] * scale, start[1] * scale
-        x2, y2 = end[0] * scale, end[1] * scale
-        radius = width * scale / 2
-        pad = round(radius + 2 * scale)
-        min_x, max_x = max(0, round(min(x1, x2) - pad)), min(canvas_size, round(max(x1, x2) + pad))
-        min_y, max_y = max(0, round(min(y1, y2) - pad)), min(canvas_size, round(max(y1, y2) + pad))
-        dx = x2 - x1
-        dy = y2 - y1
-        length_sq = dx * dx + dy * dy
-        for y in range(min_y, max_y):
-            for x in range(min_x, max_x):
-                if length_sq == 0:
-                    distance = ((x - x1) ** 2 + (y - y1) ** 2) ** 0.5
-                else:
-                    t = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / length_sq))
-                    px = x1 + t * dx
-                    py = y1 + t * dy
-                    distance = ((x - px) ** 2 + (y - py) ** 2) ** 0.5
-                alpha = 1.0 - max(0.0, distance - radius + 1.5 * scale) / (3 * scale)
-                if alpha > 0:
-                    mix_pixel(x, y, color, alpha)
+        x0, y0, x1, y1 = (value * scale for value in rect)
+        scaled_radius = radius * scale
+        pad = 3 * scale
+        for y in range(max(0, y0 - pad), min(canvas_size, y1 + pad)):
+            for x in range(max(0, x0 - pad), min(canvas_size, x1 + pad)):
+                nearest_x = min(max(x, x0 + scaled_radius), x1 - scaled_radius)
+                nearest_y = min(max(y, y0 + scaled_radius), y1 - scaled_radius)
+                distance = ((x - nearest_x) ** 2 + (y - nearest_y) ** 2) ** 0.5 - scaled_radius
+                edge_alpha = 1.0 - max(0.0, distance + 1.5 * scale) / (3 * scale)
+                if edge_alpha > 0:
+                    mix_pixel(x, y, color, alpha * min(1.0, edge_alpha))
 
-    # A single high-contrast mark reads better than small text on iOS home screens.
-    ink = (17, 24, 39)
-    accent = (16, 185, 129)
-    muted = (156, 163, 175)
+    # The icon reads as a premium daily market brief: stacked sheets, article
+    # rows, and a capital-stack chart. Avoid text; iOS icon sizes make it noisy.
+    paper = (248, 248, 246)
+    rear_paper = (74, 74, 78)
+    ink = (20, 20, 20)
+    muted_ink = (96, 96, 100)
+    accent = (45, 212, 191)
 
-    stroke((55, 42), (55, 138), 15, ink)
-    stroke((66, 90), (121, 43), 15, ink)
-    stroke((66, 91), (124, 137), 15, ink)
-    stroke((96, 115), (128, 139), 11, accent)
-    circle((132, 141), 6, accent)
+    rounded_rect((52, 35, 141, 154), 14, rear_paper, 0.96)
+    rounded_rect((39, 25, 130, 146), 14, paper)
 
-    stroke((122, 66), (145, 66), 4, muted)
-    stroke((130, 82), (145, 82), 4, muted)
+    rounded_rect((58, 48, 106, 57), 4, ink)
+    rounded_rect((112, 48, 121, 57), 4, accent)
+    rounded_rect((58, 71, 116, 77), 3, ink)
+    rounded_rect((58, 88, 100, 94), 3, muted_ink)
+
+    rounded_rect((58, 132, 118, 138), 3, ink)
+    rounded_rect((63, 115, 74, 132), 4, ink)
+    rounded_rect((82, 105, 93, 132), 4, ink)
+    rounded_rect((101, 91, 112, 132), 4, accent)
 
     downsampled: list[list[tuple[int, int, int, int]]] = []
     for y in range(size):
