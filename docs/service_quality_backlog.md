@@ -1,6 +1,6 @@
-# Service Quality Backlog
+# 서비스 품질 백로그
 
-이 문서는 뉴스레터, LP, GP 담당 영역이 다음 작업을 이어받기 위한 제품 품질 백로그다. 담당 영역명은 실제로 계속 켜져 있는 하위에이전트가 아니라 서비스 소유권 라벨이다. 공개 화면에는 운영 상태, 제작자 설명, 원천 데이터 필드명을 노출하지 않는 것을 기본 원칙으로 한다. Wiki는 재기획 전까지 active backlog가 아니라 parked backlog로 둔다.
+이 문서는 뉴스레터, LP, GP 담당 영역이 다음 작업을 이어받기 위한 제품 품질 백로그다. 담당 영역명은 실제로 계속 켜져 있는 하위에이전트가 아니라 서비스 소유권 라벨이다. 공개 화면에는 운영 상태, 제작자 설명, 원천 데이터 필드명을 노출하지 않는 것을 기본 원칙으로 한다. Wiki는 재기획 전까지 현재 작업이 아니라 보류 작업으로 둔다.
 
 ## 공통
 
@@ -16,17 +16,18 @@
 
 ## 현재 우선순위
 
-1. Remaining legacy public-site cleanup: `scripts/build_service_site.py`에 남아 있는 과거 newsletter UI 정의를 shared UI 또는 서비스별 builder로 더 줄인다. 뉴스레터 폴더의 monolith는 제거됐고, `services/newsletter/src/build_newsletter_deploy.py`는 newsletter-only wrapper만 허용한다.
-2. 운영 체계 고정: 서비스 책임선, public view, build contract가 문서와 코드에서 같은 말을 하게 한다.
+1. `scripts/check_architecture_contracts.py`와 `scripts/check_public_frontend.py`가 실패하면 구조 리팩터링이나 UX 작업은 완료로 보지 않는다.
+2. 남은 legacy public-site cleanup은 `scripts/build_service_site.py`와 `services/lp/src/lp_legacy_service_pages.py`의 실행 시점 의존을 서비스별 helper로 더 줄이는 것이다. import-time 결합은 architecture contract로 차단한다.
 3. LP Notice를 사업 단위 서비스로 안정화한다. 같은 사업의 공고, 서류심사, 선정결과, 정정, 취소가 여러 카드로 흩어지면 실패다.
 4. LP Notice 상태를 최신 이벤트와 마감일 기준으로 다시 검증한다. 2025년 마감 공고가 현재 모집중처럼 보이면 실패다.
-5. LP Notice 상세 페이지의 모바일 레이아웃을 목록 페이지와 같은 shell로 맞춘다.
-6. GP/LP 디렉토리는 뉴스레터에서 정리한 타이포그래피와 로고 슬롯 규칙을 유지한다.
-7. 뉴스레터 별도 채팅방 결과는 이 프로젝트의 통합 빌드와 공개 검증을 통과해야만 배포 완료로 본다.
+5. LP/GP 디렉토리는 뉴스레터에서 정리한 타이포그래피, 40px 원형 로고 슬롯, table-like row 구조를 유지한다.
+6. 뉴스레터 별도 채팅방 결과는 이 프로젝트의 통합 빌드, architecture contract, 공개 frontend 검증을 통과해야만 배포 완료로 본다.
 
 ## 최근 처리
 
-- 2026-06-18: 뉴스레터 독립화 정리를 추가로 진행했다. 큰 legacy `services/newsletter/src/build_newsletter_deploy.py` 파일은 `services/lp/src/lp_legacy_service_pages.py`로 이동했고, 뉴스레터 경로에는 `scripts/build_newsletter_bundle.py`로 위임하는 얇은 compatibility wrapper만 남겼다. LP 공개 helper는 `services/lp/src/lp_public_views.py`로 분리했으며, 뉴스레터 테스트는 더 이상 legacy deploy module을 import하지 않는다. Newsletter local scripts now call `scripts/build_newsletter_bundle.py`, not LP/dashboard/public-site builders.
+- 2026-06-21: LP/GP/Market empty-state UX를 table-like shell 안에 고정했다. 로컬 DB나 export가 비어도 `lp-directory-card`, `gp-card`, Market chart container가 사라지지 않으며, `scripts/check_public_frontend.py`와 390px/1280px browser smoke가 이를 확인한다.
+- 2026-06-21: 구조 재발 방지 계약을 코드로 추가했다. `scripts/check_architecture_contracts.py`는 LP/GP/Wiki의 newsletter-private import, newsletter-only/Vercel import isolation, newsletter workflow 역할 침범, generated output tracking을 검사한다. Newsletter workflow의 mirror freshness, archive download, public mirror verification, Vercel verification, watchdog freshness 판단은 `services/newsletter/src/newsletter_public_status.py`로 이동했다.
+- 2026-06-18: 뉴스레터 독립화 정리를 추가로 진행했다. 큰 legacy `services/newsletter/src/build_newsletter_deploy.py` 파일은 `services/lp/src/lp_legacy_service_pages.py`로 이동했고, 뉴스레터 경로에는 `scripts/build_newsletter_bundle.py`로 위임하는 얇은 compatibility wrapper만 남겼다. LP 공개 helper는 `services/lp/src/lp_public_views.py`로 분리했으며, 뉴스레터 테스트는 더 이상 legacy deploy module을 import하지 않는다. 뉴스레터 로컬 스크립트도 LP/dashboard/public-site builder가 아니라 `scripts/build_newsletter_bundle.py`를 호출한다.
 - 2026-06-17: 뉴스레터 Vercel/GitHub Pages UI 원본을 `services/newsletter/web/newsletter_ui.py`로 단일화했다. Vercel app은 공식 화면, GitHub Pages는 static backup mirror로 고정하고, 둘 다 같은 CSS/JS를 제공한다.
 - 2026-06-17: Vercel archive가 `newsletter_issues`와 `newsletter_public_issue_articles`를 함께 읽도록 고정했다. 기사 0건 issue도 archive에 남기고, `section_order=0`을 정상 값으로 보존해 Pages와 Vercel의 표시 순서가 달라지지 않게 했다.
 - 2026-06-17: Vercel data/UI contract test를 Actions readiness/deploy workflow에 연결했다. 별도 Vercel template/CSS 부활, LP/GP/Wiki/legacy import, empty issue 누락, `section_order=0` 손실을 회귀로 본다.
@@ -72,11 +73,11 @@
 - 상위 120개 GP부터 홈페이지, 대표자, 법인명, 회사 설명, 출처를 보강한다.
 - 공개 화면에 enum, proxy, source/evidence 영문 라벨이 나오지 않게 생성 HTML 회귀 검사를 둔다.
 
-## Parked: PEF Wiki
+## 보류: PEF Wiki
 
 - Wiki는 재기획 전까지 공개 메뉴와 routine build에서 제외한다.
 - Wiki는 PDF 링크 모음이 아니라 본문형 문서 서비스다.
-- Wiki source was moved out of Newsletter. Future Wiki markdown and refs belong under `services/wiki/content/wiki/`.
+- Wiki source는 Newsletter 밖으로 이동했다. 앞으로 Wiki markdown과 refs는 `services/wiki/content/wiki/` 아래에 둔다.
 - 우선 문서 범위는 실무안내 제1장, 관련 법률·규정, 세무신고, 금감원·금융위원회 보고, 실무 체크리스트다.
 - 각 문서는 `본문`, `관련 조문`, `보고/제출`, `실무 확인`, `출처`로 이동 가능해야 한다.
 - 표는 원문이나 비교 구조상 꼭 필요한 경우에만 사용한다.

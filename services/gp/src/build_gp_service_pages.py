@@ -14,7 +14,7 @@ if str(REPO_ROOT) not in sys.path:
 DEFAULT_DB = REPO_ROOT / "db" / "private_equity.db"
 
 from services.gp.src.gp_service_pages import write_gp_pages
-from services.newsletter.src.daily_news_common import today_seoul
+from services.shared.src.daily_news_common import today_seoul
 
 
 def build_gp_service_pages(site_dir: Path, db_path: Path = DEFAULT_DB, report_date: str | None = None) -> dict[str, int]:

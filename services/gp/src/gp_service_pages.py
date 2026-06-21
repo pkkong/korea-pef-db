@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import html
+import csv
 import json
 import re
 import sqlite3
@@ -11,8 +12,8 @@ from collections import defaultdict
 from pathlib import Path
 from urllib.parse import urlparse
 
-from services.newsletter.src.brand_assets import brand_logo_url, brand_style_attr, prepare_brand_asset_cache
-from services.newsletter.src.daily_news_common import normalize_url
+from services.shared.src.brand_assets import brand_logo_url, brand_style_attr, prepare_brand_asset_cache
+from services.shared.src.daily_news_common import normalize_url
 
 
 REQUIRED_TABLES = ("gp_profile", "gp_house", "news_entity_link", "news_document")
@@ -48,6 +49,8 @@ DEAL_KEYWORDS = (
     "딜",
 )
 APP_ICON_FILE = "apple-touch-icon.png"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+FSS_SOURCE_REGISTRY = REPO_ROOT / "data" / "source_registry_fss_pef.csv"
 
 
 def _app_head_meta() -> str:
@@ -608,6 +611,19 @@ def _is_deal_news(row: dict[str, object]) -> bool:
 
 
 def _render_empty_directory(report_date: str, message: str) -> str:
+    empty_card = f"""      <article class="gp-card">
+        <span class="gp-avatar gp-avatar-fallback" aria-hidden="true">GP</span>
+        <div class="gp-card-main">
+          <div class="gp-card-title">
+            <h2>표시할 운용사가 없습니다</h2>
+          </div>
+          <p class="gp-empty-row-copy">기준일 {_e(report_date)}</p>
+        </div>
+        <dl class="gp-metrics">
+          <div><dt>약정액</dt><dd>-</dd></div>
+          <div><dt>펀드수</dt><dd>-</dd></div>
+        </dl>
+      </article>"""
     return f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -620,11 +636,60 @@ def _render_empty_directory(report_date: str, message: str) -> str:
 <body>
   <main class="gp-shell">
     {_render_service_header("gp")}
-    <section class="gp-empty">
-      <span>GP 디렉토리</span>
-      <h1>국내 PEF GP 디렉토리</h1>
-      <p>{_e(message)}</p>
-      <small>기준일 {_e(report_date)} · 공개 정보가 준비되면 운용사 순위, 펀드 수, 약정액 기준 지표, 관련 뉴스를 이 페이지에 표시합니다.</small>
+    <header class="gp-hero">
+      <div class="gp-hero-copy">
+        <h1 class="gp-directory-title"><strong>0개</strong> <span>PEF 운용사</span></h1>
+      </div>
+    </header>
+
+    <section class="gp-control-panel" aria-label="GP 필터">
+      <div class="gp-controls">
+        <label>
+          <span>기준일</span>
+          <select id="gpPeriod" aria-label="기준일">
+            <option value="{_e(report_date)}" selected>{_e(_format_date_dot(report_date) or report_date)}</option>
+          </select>
+        </label>
+        <label>
+          <span>누적/운용중</span>
+          <select id="gpScope" aria-label="누적 또는 운용중">
+            <option value="active" selected>운용중</option>
+            <option value="cumulative">누적</option>
+          </select>
+        </label>
+        <label>
+          <span>정렬기준</span>
+          <select id="gpSort" aria-label="정렬기준">
+            <option value="aum" selected>약정액 높은순</option>
+            <option value="funds">펀드수 많은순</option>
+            <option value="name">운용사명순</option>
+          </select>
+        </label>
+        <label>
+          <span>보기</span>
+          <select id="gpPageSize" aria-label="페이지당 표시">
+            <option value="30" selected>30개씩 보기</option>
+            <option value="50">50개씩 보기</option>
+            <option value="100">100개씩 보기</option>
+            <option value="all">전체 보기</option>
+          </select>
+        </label>
+      </div>
+      <div class="gp-control-head">
+        <span id="gpVisibleCount">0개 중 0</span>
+      </div>
+    </section>
+
+    <section class="gp-directory-table" aria-label="GP 목록">
+      <div class="gp-directory-head" aria-hidden="true">
+        <span></span>
+        <span>운용사명</span>
+        <span>약정액</span>
+        <span>펀드수</span>
+      </div>
+      <div class="gp-directory" id="gpDirectory">
+{empty_card}
+      </div>
     </section>
   </main>
   {_render_bottom_nav()}
@@ -635,30 +700,29 @@ def _render_empty_directory(report_date: str, message: str) -> str:
 
 
 def _render_empty_market(report_date: str, message: str) -> str:
-    return f"""<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Korea PEF Market</title>
-{_app_head_meta()}
-  {_base_styles()}
-</head>
-<body>
-  <main class="gp-shell">
-    {_render_service_header("market")}
-    <section class="gp-empty">
-      <span>Market</span>
-      <h1>Overview</h1>
-      <p>{_e(message)}</p>
-      <small>기준일 {_e(report_date)}</small>
-    </section>
-  </main>
-  {_render_bottom_nav()}
-  {_service_header_script(redirect_search=True)}
-</body>
-</html>
-"""
+    source = _latest_registry_source()
+    latest = {
+        "period_label": source.get("period_label") or "-",
+        "as_of_date": source.get("as_of_date") or report_date,
+    }
+    context = {
+        "latest": latest,
+        "sources": [source] if source else [],
+        "empty_message": message,
+    }
+    return _render_market_page(report_date, context)
+
+
+def _latest_registry_source() -> dict[str, str]:
+    if not FSS_SOURCE_REGISTRY.exists():
+        return {}
+    latest: dict[str, str] = {}
+    with FSS_SOURCE_REGISTRY.open("r", encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            period = _clean(row.get("period_label") or row.get("period"))
+            if period and period >= _clean(latest.get("period_label")):
+                latest = {key: _clean(value) for key, value in row.items()}
+    return latest
 
 
 def _bar_width(value: object, maximum: float) -> str:
@@ -671,7 +735,9 @@ def _bar_width(value: object, maximum: float) -> str:
 def _render_market_trend_chart(periods: list[dict[str, object]]) -> str:
     rows = periods[-8:]
     if not rows:
-        return ""
+        return """      <div class="market-chart market-trend-chart" aria-label="출자약정액 추이">
+        <div class="market-chart-empty">표시할 시장 추이가 없습니다.</div>
+      </div>"""
     max_commitment = max(_as_float(row.get("commitment_amount_krw_mn")) for row in rows)
     bars = "\n".join(
         f"""          <div class="market-chart-bar">
@@ -689,7 +755,9 @@ def _render_market_trend_chart(periods: list[dict[str, object]]) -> str:
 def _render_market_top_gp_bars(top_gps: list[dict[str, object]]) -> str:
     rows = top_gps[:8]
     if not rows:
-        return ""
+        return """      <div class="market-chart market-rank-chart" aria-label="상위 GP 약정액">
+        <div class="market-chart-empty">표시할 GP 순위가 없습니다.</div>
+      </div>"""
     max_commitment = max(_as_float(row.get("commitment_aum_proxy_trn_krw")) for row in rows)
     bars = "\n".join(
         f"""          <div class="market-rank-bar">
@@ -2256,6 +2324,12 @@ def _base_styles() -> str:
     }
     .gp-card h2 a { text-decoration: none; }
     .gp-card h2 a:hover { color: var(--accent); }
+    .gp-empty-row-copy {
+      margin: 4px 0 0;
+      color: var(--secondary);
+      font-size: 12px;
+      line-height: 1.4;
+    }
     .gp-chips {
       display: none;
       flex-wrap: wrap;
@@ -3501,6 +3575,16 @@ def _base_styles() -> str:
       font-weight: 720;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .market-chart-empty {
+      display: grid;
+      grid-column: 1 / -1;
+      min-height: 120px;
+      place-items: center;
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 650;
+      text-align: center;
     }
     .market-rank-chart {
       display: grid;

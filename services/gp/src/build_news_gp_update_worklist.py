@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from services.newsletter.src.daily_news_common import DEFAULT_DB, DEFAULT_EXPORT_DIR, today_seoul
+from services.shared.src.daily_news_common import DEFAULT_DB, DEFAULT_EXPORT_DIR, today_seoul
 
 
 DEFAULT_OUT_DIR = DEFAULT_EXPORT_DIR

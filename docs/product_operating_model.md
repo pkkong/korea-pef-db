@@ -1,11 +1,11 @@
-# Product Operating Model
+# 제품 운영 모델
 
-Last updated: 2026-06-10 KST
+최종 수정: 2026-06-21 KST
 
 이 문서는 제품 운영의 최상위 기준이다. 새 기능, 새 데이터 소스, 새 화면을
 추가하기 전에 먼저 이 문서의 서비스 책임선과 공개 정책을 확인한다.
 
-## Core Rule
+## 핵심 원칙
 
 공개 사이트는 하나의 제품이지만, 운영 책임은 서비스별로 분리한다.
 
@@ -20,7 +20,7 @@ Last updated: 2026-06-10 KST
 - `Wiki`: 재기획 전까지 공개 메뉴와 루틴 빌드에서 제외한다. 기존 코드는 보존하되
   새 작업 대상이 아니다.
 
-## Public Product Boundary
+## 공개 제품 범위
 
 현재 공개 1차 목적지는 `브리프 / LP / GP` 세 개다. Wiki와 저장함은 설계가
 다시 잡히기 전까지 전역 메뉴에 넣지 않는다.
@@ -29,37 +29,39 @@ Last updated: 2026-06-10 KST
 데이터, 내부 상태, source/evidence 필드명, 자동화 설명은 공개 화면으로 새면 안
 된다.
 
-## Service Interfaces
+## 서비스별 인터페이스
 
 각 서비스는 자기 산출물만 만든다.
 
-- Brief builder: `scripts/build_newsletter_bundle.py` creates `index.html`, `daily-news.html`, `archive.json`, `health.json`, and newsletter assets without importing LP, GP, Wiki, or the legacy deploy monolith.
-- Brief Vercel app: `services/newsletter/web/` is the standalone runtime for the Vercel/Supabase newsletter. It reads Supabase public read-model rows first and falls back to the existing public `archive.json`; it does not crawl news or import LP/GP/Wiki code. Supabase keeps the recent rolling archive, default 30 issues, so Vercel date navigation matches the GitHub Pages mirror. Vercel must combine `newsletter_issues` for issue/date skeletons with `newsletter_public_issue_articles` for article content and ordering. It must render through the same `services/newsletter/web/newsletter_ui.py` HTML/CSS/JS source used by the GitHub Pages mirror.
+- Brief builder: `scripts/build_newsletter_bundle.py`가 `index.html`, `daily-news.html`, `archive.json`, `health.json`, 뉴스레터 assets를 만든다. LP, GP, Wiki, legacy deploy monolith를 import하면 안 된다.
+- Brief Vercel app: `services/newsletter/web/`는 Vercel/Supabase 뉴스레터의 독립 runtime이다. Supabase 공개 read model row를 먼저 읽고, 장애나 빈 데이터가 있으면 기존 public `archive.json`으로 fallback한다. 뉴스 수집을 하지 않고 LP/GP/Wiki 코드를 import하지 않는다. Supabase는 기본 최근 30개 issue를 유지해 Vercel 날짜 이동이 GitHub Pages mirror와 같아야 한다. Vercel은 날짜 skeleton용 `newsletter_issues`와 기사 내용·순서용 `newsletter_public_issue_articles`를 함께 읽어야 한다. 화면은 GitHub Pages mirror와 같은 `services/newsletter/web/newsletter_ui.py` HTML/CSS/JS 원본으로 렌더링한다.
 - LP builder: `lp-*.html`, `lp-notices.html`, `lp-official-notices.html`,
   `lp-notice-*.html`, LP public data.
 - GP builder: `market.html`, `gps.html`, `gp-*.html`, GP public data.
 - Wiki builder: 명시적으로 요청될 때만 `pef-wiki.html`을 만든다.
 - Bundle builder: 서비스 산출물을 `services/newsletter/deploy/site/`로 모으고
   `health.json`, 공통 assets, zip artifact를 만든다.
+- 공개 상태 검사기: `services/newsletter/src/newsletter_public_status.py`가 뉴스레터 workflow에서 반복 쓰는 mirror freshness, verified archive, Vercel health, watchdog 검사를 담당한다.
+- 구조 검사기: `scripts/check_architecture_contracts.py`가 cross-service private import, newsletter workflow 역할 drift, generated output tracking을 막는다.
 
 서비스 renderer는 다른 서비스의 원천 데이터나 화면 규칙을 직접 고치지 않는다.
 다른 서비스 데이터가 필요하면 public view, export, shared helper를 통해 읽는다.
 
-## View Taxonomy
+## 화면 유형
 
 화면을 만들 때 먼저 뷰 타입을 고른다.
 
-- 기사: flat article list.
-- LP/GP 목록: table-like directory row.
+- 기사: 평평한 article list.
+- LP/GP 목록: 표에 가까운 directory row.
 - LP/GP 상세: profile detail.
-- LP 출자공고: business-level row-card.
-- Market: statistics sections and compact tables.
-- Wiki: document view, currently hidden.
+- LP 출자공고: 사업 단위 row-card.
+- Market: 통계 section과 compact table.
+- Wiki: 문서형 화면. 현재는 숨김.
 
 이 체계를 벗어나는 새 화면은 바로 구현하지 말고
 `docs/service_quality_backlog.md`에 먼저 적는다.
 
-## Change Intake
+## 새 아이디어 처리 기준
 
 새 아이디어는 즉시 공개 화면에 섞지 않는다.
 
@@ -69,7 +71,7 @@ Last updated: 2026-06-10 KST
 4. renderer 변경 전에 `docs/data_operating_model.md`와 `docs/design_system.md`를 확인한다.
 5. 구현 후 control center와 backlog를 갱신한다.
 
-## Operating Rhythm
+## 운영 흐름
 
 - 매일 08:37 KST: `Build newsletter mirror`가 Brief 수집, 분류, GitHub Pages 백업 미러 생성/검증만 수행한다.
 - Mirror가 새로 생성/검증된 경우: `Build newsletter mirror`가 `Sync newsletter Supabase read model`을 dispatch하고, sync workflow가 verified mirror archive를 Supabase에 복사한 뒤 Vercel 공식 앱을 검증한다.
@@ -79,7 +81,7 @@ Last updated: 2026-06-10 KST
 - 필요 시: 통합 사이트 빌드와 배포.
 - Wiki: Wiki 기획이나 본문 변경이 있을 때만 명시적으로 빌드.
 
-## Done Criteria
+## 완료 기준
 
 운영 체계상 완료는 소스 수정만으로 끝나지 않는다.
 

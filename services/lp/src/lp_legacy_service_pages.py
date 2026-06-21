@@ -135,7 +135,6 @@ from build_service_site import (  # noqa: E402
     render_app,
     render_public_product_header,
 )
-from services.gp.src.gp_service_pages import write_gp_pages  # noqa: E402
 from services.lp.src.lp_notice_view import (  # noqa: E402
     consolidate_lp_notice_display_items,
     is_generic_lp_program_name,
@@ -160,9 +159,8 @@ from services.lp.src.lp_notice_view import (  # noqa: E402
     lp_notice_status_label,
     split_notice_names,
 )
-from services.newsletter.src.brand_assets import brand_logo_url, brand_style_attr, prepare_brand_asset_cache  # noqa: E402
-from services.newsletter.src.daily_news_common import normalize_whitespace, today_seoul  # noqa: E402
-from services.wiki.src.pef_wiki_pages import render_pef_wiki_page  # noqa: E402
+from services.shared.src.brand_assets import brand_logo_url, brand_style_attr, prepare_brand_asset_cache  # noqa: E402
+from services.shared.src.daily_news_common import normalize_whitespace, today_seoul  # noqa: E402
 
 
 ARCHIVE_SCRIPT_RE = re.compile(
@@ -445,6 +443,8 @@ def write_static_support_files(site_dir: Path) -> None:
 
 
 def write_pef_wiki_page(site_dir: Path, report_date: str) -> None:
+    from services.wiki.src.pef_wiki_pages import render_pef_wiki_page
+
     (site_dir / "pef-wiki.html").write_text(
         render_pef_wiki_page(report_date, app_asset_version()),
         encoding="utf-8",
@@ -2429,10 +2429,18 @@ def render_lp_notices_page(
     lifecycle_summary = render_lp_lifecycle_summary(lifecycle_rows or [], report_date) if is_notice_view else ""
     directory_rows = directory_items or []
     directory_cards = "\n".join(render_lp_directory_card(item) for item in directory_rows) or (
-        """          <div class="empty-state visible">
-            <strong>출자기관 목록이 없습니다</strong>
-            <span>조건에 맞는 기관이 없습니다.</span>
-          </div>"""
+        """          <article class="lp-directory-card" data-empty="1" data-search="출자기관 없음" data-name="" data-lp="" data-asset="" data-kind="" data-tier="" data-tracking="0" data-notices="0" data-amount="0" data-latest="">
+            <span class="lp-directory-avatar" aria-hidden="true"><span>LP</span></span>
+            <div class="lp-directory-card-head">
+              <strong>표시할 출자기관이 없습니다</strong>
+            </div>
+            <p class="lp-directory-focus">-</p>
+            <span class="lp-directory-latest">-</span>
+            <dl class="lp-directory-metrics">
+              <div><dt>출자공고</dt><dd>0건</dd></div>
+              <div><dt>공고 규모</dt><dd>-</dd></div>
+            </dl>
+          </article>"""
     )
     tracked_count = len(directory_rows)
     tier_counts = {
@@ -4492,6 +4500,8 @@ def render_lp_notices_page(
       const noticeEmpty = document.getElementById("lpNoticeEmpty");
       const noticeLoadMore = document.getElementById("lpNoticeLoadMore");
       const directoryCards = Array.from(document.querySelectorAll(".lp-directory-card"));
+      const directoryDataCards = directoryCards.filter((card) => card.dataset.empty !== "1");
+      const directoryEmptyCards = directoryCards.filter((card) => card.dataset.empty === "1");
       const noticeCards = Array.from(document.querySelectorAll(".lp-notice-row"));
       const params = new URLSearchParams(window.location.search);
       const requestedStatus = params.get("status");
@@ -4531,21 +4541,25 @@ def render_lp_notices_page(
       }};
       const applyDirectorySort = () => {{
         const mode = sort?.value || "latest";
-        const sorted = [...directoryCards].sort((a, b) => {{
+        const sorted = [...directoryDataCards].sort((a, b) => {{
           if (mode === "amount") return num(b, "amount") - num(a, "amount");
           if (mode === "notices") return num(b, "notices") - num(a, "notices");
           if (mode === "name") return (a.dataset.name || "").localeCompare(b.dataset.name || "", "ko");
           return (b.dataset.latest || "").localeCompare(a.dataset.latest || "");
         }});
         sorted.forEach((card) => directory?.appendChild(card));
+        directoryEmptyCards.forEach((card) => directory?.appendChild(card));
       }};
       const applyDirectory = () => {{
         const active = filter?.value || "all";
         let count = 0;
-        directoryCards.forEach((card) => {{
+        directoryDataCards.forEach((card) => {{
           const visibleCard = fieldsMatch(card, active) && queryMatch(card);
           card.style.display = visibleCard ? "" : "none";
           if (visibleCard) count += 1;
+        }});
+        directoryEmptyCards.forEach((card) => {{
+          card.style.display = directoryDataCards.length === 0 ? "" : "none";
         }});
         if (visible) visible.textContent = `${{count.toLocaleString("ko-KR")}}개 표시`;
       }};
@@ -5418,6 +5432,8 @@ def main() -> int:
         )
     )
     result["ktcu_fact_count"] = str(len(read_ktcu_payload(lp_code=KTCU_CODE, profile_codes=read_lp_profile_codes()).get("facts") or []))
+    from services.gp.src.gp_service_pages import write_gp_pages
+
     result.update({key: str(value) for key, value in write_gp_pages(site_dir, DEFAULT_DB, args.date).items()})
     write_pef_wiki_page(site_dir, args.date)
     remove_legacy_public_db_files(site_dir)

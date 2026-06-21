@@ -54,69 +54,10 @@ jobs:
         id: freshness
         shell: bash
         run: |
-          python3 - "${{ steps.date.outputs.report_date }}" "${NEWSLETTER_PUBLIC_URL}" "${NEWSLETTER_APP_URL}" <<'PY'
-          import json
-          import os
-          import sys
-          import time
-          from urllib.error import URLError
-          from urllib.request import Request, urlopen
-
-          report_date = sys.argv[1]
-          mirror_base_url = sys.argv[2].rstrip("/")
-          app_base_url = sys.argv[3].rstrip("/")
-
-          def fetch_json(url: str) -> object:
-              req = Request(
-                  f"{url}{'&' if '?' in url else '?'}watchdog={int(time.time())}-{report_date}",
-                  headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
-              )
-              with urlopen(req, timeout=20) as response:
-                  return json.loads(response.read().decode("utf-8"))
-
-          mirror_fresh = False
-          app_fresh = False
-          mirror_status = "missing"
-          app_status = "missing"
-
-          try:
-              health = fetch_json(f"{mirror_base_url}/health.json")
-              archive = fetch_json(f"{mirror_base_url}/archive.json")
-              mirror_date = str(health.get("report_date") or "")
-              mirror_articles = int(health.get("article_count") or 0)
-              entry = next(
-                  (row for row in archive if isinstance(row, dict) and row.get("reportDate") == report_date),
-                  None,
-              )
-              archive_articles = len(entry.get("articles") or []) if isinstance(entry, dict) else 0
-              mirror_fresh = mirror_date == report_date and mirror_articles > 0 and archive_articles == mirror_articles
-              mirror_status = f"{mirror_date or 'missing'}/{mirror_articles}/{archive_articles}"
-          except (OSError, URLError, json.JSONDecodeError, ValueError) as exc:
-              mirror_status = f"error:{exc}"
-
-          try:
-              health = fetch_json(f"{app_base_url}/health.json?refresh=1")
-              app_date = str(health.get("report_date") or "")
-              app_articles = int(health.get("article_count") or 0)
-              app_source = str(health.get("data_source") or "")
-              app_fresh = app_date == report_date and app_articles > 0 and app_source == "supabase"
-              app_status = f"{app_date or 'missing'}/{app_articles}/{app_source or 'missing'}"
-          except (OSError, URLError, json.JSONDecodeError, ValueError) as exc:
-              app_status = f"error:{exc}"
-
-          stale = not (mirror_fresh and app_fresh)
-          reason = (
-              f"expected={report_date} mirror={mirror_status} app={app_status} "
-              f"stale={'true' if stale else 'false'}"
-          )
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"stale={'true' if stale else 'false'}\n")
-              output.write(f"mirror_fresh={'true' if mirror_fresh else 'false'}\n")
-              output.write(f"app_fresh={'true' if app_fresh else 'false'}\n")
-              output.write(f"reason={reason}\n")
-
-          print(f"newsletter_watchdog {reason}")
-          PY
+          python3 services/newsletter/src/newsletter_public_status.py watchdog-freshness \
+            --report-date "${{ steps.date.outputs.report_date }}" \
+            --mirror-url "${NEWSLETTER_PUBLIC_URL}" \
+            --app-url "${NEWSLETTER_APP_URL}"
 
       - name: Dispatch mirror build if mirror is stale
         if: steps.freshness.outputs.stale == 'true' && steps.freshness.outputs.mirror_fresh != 'true'

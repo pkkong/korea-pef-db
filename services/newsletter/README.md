@@ -64,7 +64,10 @@ service; do not add LP, GP, Wiki, or public-site renderer code back there.
 python services/newsletter/src/run_daily_news_pipeline.py
 python scripts/build_newsletter_bundle.py --date YYYY-MM-DD --archive-limit 30
 python services/newsletter/src/validate_daily_news_pipeline.py
+python services/newsletter/src/newsletter_public_status.py mirror-freshness --report-date YYYY-MM-DD --mirror-url https://pkkong.github.io/kpef-newsletter/ --event-name workflow_dispatch
 python services/newsletter/tests/test_daily_news_logic.py
+python services/newsletter/tests/test_public_status.py
 python services/newsletter/src/sync_newsletter_supabase.py --archive services/newsletter/deploy/site/archive.json
 python services/newsletter/web/tests/test_newsletter_data.py
+python scripts/check_architecture_contracts.py
 ```

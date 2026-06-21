@@ -202,7 +202,7 @@ def main() -> int:
 
     if failures:
         return 1
-    if unknowns:
+    if unknowns and not args.skip_secrets:
         return 2
     return 0
 

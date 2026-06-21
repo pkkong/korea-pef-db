@@ -11,15 +11,10 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from services.lp.src.lp_legacy_service_pages import (
-    DEFAULT_LP_COMMITMENT_MONITOR,
-    prepare_lp_notice_display_items,
-    read_lp_monitor,
-    write_lp_notice_detail_pages,
-    write_lp_notices_page,
-    write_lp_profile_pages,
-)
-from services.newsletter.src.daily_news_common import today_seoul
+from services.shared.src.daily_news_common import today_seoul
+
+
+DEFAULT_LP_COMMITMENT_MONITOR = REPO_ROOT / "exports" / "lp_commitment_monitor_latest.csv"
 
 
 def build_lp_service_pages(
@@ -28,6 +23,14 @@ def build_lp_service_pages(
     monitor_path: Path = DEFAULT_LP_COMMITMENT_MONITOR,
 ) -> dict[str, int]:
     """Write LP directory, notice, profile, and notice detail pages while preserving current public URLs."""
+    from services.lp.src.lp_legacy_service_pages import (
+        prepare_lp_notice_display_items,
+        read_lp_monitor,
+        write_lp_notice_detail_pages,
+        write_lp_notices_page,
+        write_lp_profile_pages,
+    )
+
     site_dir.mkdir(parents=True, exist_ok=True)
     effective_date = report_date or today_seoul()
     notice_count = write_lp_notices_page(site_dir, effective_date)

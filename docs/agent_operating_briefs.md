@@ -1,4 +1,4 @@
-# Agent Operating Briefs
+# 에이전트 운영 지침
 
 ## 목적
 
@@ -40,7 +40,7 @@
 - 장시간 데이터 보강, 로고 보강, 공개 사이트 QA처럼 반복 작업만 전담 Worker/Verifier에 맡긴다.
 - 사용자가 “하위에이전트가 너무 많다”, “놀고 있다”, “전담으로 쓰는 게 맞냐”고 지적하면, 새 작업을 시작하기 전에 현재 역할을 `Lead`, `Worker`, `Verifier` 수준으로 축소해 보고한다.
 
-## Project Lead Control Loop
+## 프로젝트 리드 운영 루프
 
 - 모든 실질 작업은 `상태 파악 → 작업 분배/직접 처리 판단 → 소스 수정 → 빌드/검증 → 문서 업데이트 → 커밋/배포 판단 → 사용자 보고` 순서로 닫는다.
 - `docs/project_lead_control_center.md`는 살아 있는 운영판이다. 메뉴 체계, 현재 공개 URL, 서비스별 소유자, 진행 중인 외부 채팅방, 최신 배포 커밋, 검증 명령, known issues를 최신으로 유지한다.
@@ -71,19 +71,19 @@
 ## 공통 UX/UI 원칙
 
 - 공개 UX/UI의 기준 문서는 `docs/design_system.md`다. Newsletter, LP, GP, Wiki 담당은 공개 화면을 고치기 전에 이 문서의 navigation, typography, directory row, newsletter reference pattern을 먼저 적용한다.
-- 공개 화면의 기본 뷰 체계는 `docs/design_system.md`의 `View Taxonomy`를 따른다. 뉴스는 article list, LP/GP 목록은 directory table, LP/GP 상세는 profile detail, 출자공고는 notice row-card, Wiki는 document view로 본다.
+- 공개 화면의 기본 뷰 체계는 `docs/design_system.md`의 `화면 유형`을 따른다. 뉴스는 article list, LP/GP 목록은 directory table, LP/GP 상세는 profile detail, 출자공고는 notice row-card, Wiki는 document view로 본다.
 - 공개 화면은 크롤러, DB, CSV 갱신만으로 자동 변경되지 않는다. LP/GP와 GitHub Pages mirror는 source renderer 빌드와 Pages 배포가 끝나야 반영되고, 공식 Brief 앱은 검증된 mirror archive가 Supabase read model로 동기화된 뒤 Vercel health 검증까지 끝나야 반영 완료로 본다.
 - 뉴스레터/LP/GP가 같이 쓰는 날짜, CSV, URL 정규화, GP alias, HTML parsing 유틸은 `services/shared/src/daily_news_common.py`를 기준 모듈로 둔다. `services/newsletter/src/daily_news_common.py`와 `scripts/daily_news_common.py`는 호환용 shim으로만 남기고, LP/GP 코드는 뉴스레터 내부 경로인 `services.newsletter.src.daily_news_common`를 직접 import하지 않는다.
 - 공개 서비스는 혁신의숲 같은 데이터룸/디렉토리 서비스 톤을 기준으로 한다. 뉴스레터, LP, GP, Wiki가 서로 다른 제품처럼 보이지 않게 폰트, 색상, 여백, 버튼, 탭, 표 header, row 스타일, 하단 메뉴를 맞춘다.
 - 주요 목록과 디렉토리는 카드 나열보다 표 또는 표에 가까운 row layout을 기본으로 한다. 모바일에서도 핵심 컬럼은 남기고, 불필요한 가로 스크롤을 만들지 않는다.
 - 공개 서비스의 주 메뉴는 `브리프 / LP / GP` 순서의 하단 메뉴 하나로 통일한다. Wiki는 재기획 전까지 공개 메뉴에 노출하지 않는다. 모바일과 PC 모두 같은 하단 메뉴를 쓰고, 상단 서비스 탭은 만들지 않는다. 상단·하단에 같은 서비스 메뉴가 동시에 보이면 회귀로 본다. 전역 저장함은 뉴스, LP, GP, Wiki 저장이 모두 구현되기 전까지 하단 메뉴에 두지 않는다.
 - 상단 제품 헤더는 모든 공개 페이지에서 같은 구조를 쓰되 브랜드, 검색, 홈/목차 버튼만 둔다. 서비스별로 별도 브랜드 바, 전체 기관 칩 목록, 과거 네비게이션을 중복 노출하지 말고, 세부 이동은 해당 페이지 안의 짧은 섹션 탭이나 문서 목차로 제한한다.
-- 뉴스레터 화면은 공개 UI의 기준 구현이다. LP, GP, Wiki 담당은 폰트, 색, 여백, 원형 로고 슬롯, 섹션 구분 밴드, row divider, 하단 메뉴를 바꿀 때 `docs/design_system.md`의 `Shared Tokens`, `Public Shell`, `Row Anatomy`, `Section Bands`를 먼저 따른다.
+- 뉴스레터 화면은 공개 UI의 기준 구현이다. LP, GP, Wiki 담당은 폰트, 색, 여백, 원형 로고 슬롯, 섹션 구분 밴드, row divider, 하단 메뉴를 바꿀 때 `docs/design_system.md`의 `공통 토큰`, `공개 화면 틀`, `디렉토리 row 규칙`, `뉴스레터 기준 패턴`을 먼저 따른다.
 - 타이포그래피는 서비스별 임의 크기를 금지한다. 공개 화면 기준 H1은 모바일 28px 안팎, PC 36-38px 안팎, 목록 row 제목은 15-16px, 보조 정보는 11-13px 범위로 맞춘다.
 - 대량 GP/LP 목록은 끝없이 긴 무한 스크롤로 두지 않는다. 검색·필터·정렬과 동기화되는 페이지네이션 또는 더보기 방식을 사용한다.
 - LP/GP 디렉토리 row는 혁신의숲처럼 원형 CI/로고 영역을 포함한 표형 row를 기본으로 한다. 공식 홈페이지가 있으면 공식 compact CI/로고를 우선하고, 공식 touch/app icon은 명확히 브랜드 소유이고 시각적으로 쓸 만할 때만 사용한다. 검증 로고가 없거나 로드 실패 시에는 동일 크기·얇은 링·절제된 톤의 임시 CI형 모노그램을 쓴다. 모바일에서도 이름, 최신/순위, 핵심 숫자 컬럼은 표 구조를 유지하고, 버튼·칩이 row 밖으로 튀거나 가로 overflow를 만들면 회귀로 본다.
 - 뉴스레터 언론사, LP 기관, GP 운용사 로고 슬롯은 같은 40px 원형 규칙을 쓴다. 로고가 있으면 기본은 혁신의숲/TheVC처럼 흰 원형 슬롯과 얇은 neutral border를 쓰고, 네이버·한국경제처럼 배경색이 명확한 로고는 도메인 기반 curated brand background로 원을 채운다. 작은 favicon을 억지로 넣어 품질을 낮추지 말고, 원 안에 별도 내부 원이나 링을 추가하지 않는다.
-- 로고 보완 작업은 `services/newsletter/src/brand_assets.py`를 단일 registry로 삼는다. 새 언론사/LP/GP 로고는 공식 홈페이지의 compact CI, 공식 touch/app icon 순으로 검증하고, HTTP-only 또는 hotlink 차단 가능성이 있는 자산은 정적 빌드의 `assets/brand-marks` 캐시를 거쳐 노출한다. Google S2, DuckDuckGo 같은 외부 favicon 서비스는 공개 산출물에 남기지 않는다. 검증된 로고가 없거나 40px 원형 슬롯에서 공식 워드마크가 너무 얇게 보여 품질이 떨어지면 억지로 채우지 말고 깨끗한 텍스트 슬롯으로 남긴다. 배포 전 뉴스/LP/GP 주요 화면에서 `google.com/s2`, `duckduckgo`, 외부 hotlink, 깨진 이미지, `fallback-only`가 보이는지 확인한다.
+- 로고 보완 작업에서 LP/GP/Wiki renderer는 `services/shared/src/brand_assets.py`를 공통 import 경로로 삼는다. 새 언론사/LP/GP 로고는 공식 홈페이지의 compact CI, 공식 touch/app icon 순으로 검증하고, HTTP-only 또는 hotlink 차단 가능성이 있는 자산은 정적 빌드의 `assets/brand-marks` 캐시를 거쳐 노출한다. Google S2, DuckDuckGo 같은 외부 favicon 서비스는 공개 산출물에 남기지 않는다. 검증된 로고가 없거나 40px 원형 슬롯에서 공식 워드마크가 너무 얇게 보여 품질이 떨어지면 억지로 채우지 말고 깨끗한 텍스트 슬롯으로 남긴다. 배포 전 뉴스/LP/GP 주요 화면에서 `google.com/s2`, `duckduckgo`, 외부 hotlink, 깨진 이미지, `fallback-only`가 보이는지 확인한다.
 - 공식 워드마크가 40px 슬롯에서 가독성이 떨어지는 경우에는 회사가 직접 제공하는 공식 심볼형 아이콘을 쓸 수 있다. 단, 단순 파비콘 수집을 로고 보완으로 간주하지 말고, 공식 소유·시각 품질·원형 슬롯 적합성을 함께 확인한다.
 - LP의 `ownership_type` 같은 `public/private` 성격값은 이름 셀 아래에 노출하지 않는다. 해당 값은 필터와 정렬 데이터로만 활용하고, 목록 row에는 기관명과 핵심 숫자 위주로 표시한다.
 - LP 상세는 기관명과 핵심 숫자 이후 `기본 정보 → 투자 현황 → 출자공고 → 관련 GP → 뉴스 → 기관 비교 → 자료` 순서로 정리한다. 자료 커버리지, 출처 링크, 참고사항은 상단 요약이 아니라 하단 보조 영역에 둔다.
@@ -115,6 +115,9 @@
 - 공개 사이트 빌드는 서비스별 빌드와 통합 배포를 분리한다. Newsletter, LP, GP는 active public builder entry point를 갖고, 최종 공개 산출물은 `scripts/build_site_bundle.py`가 한 폴더인 `services/newsletter/deploy/site/`로 합친다. Wiki builder는 보존하되 재기획 전까지 explicit-only다.
 - 기본 통합 빌드 명령은 `python3 scripts/build_site_bundle.py --services newsletter,lp,gp --date YYYY-MM-DD`다. 특정 서비스만 다시 굽는 경우에는 `--services lp`, `--services gp`처럼 좁혀서 실행한다. Wiki는 사용자가 다시 기획했을 때만 `--services wiki`로 명시 실행한다.
 - 서비스별 source renderer를 고치지 않고 `services/newsletter/deploy/site/`의 생성 HTML을 직접 고치는 것은 금지한다. 생성물은 빌드 검증이나 배포 결과로만 다룬다.
+- 구조 리팩터링이나 UX 작업은 `python3 scripts/check_architecture_contracts.py`와 관련 `scripts/check_public_frontend.py` 검증이 통과하기 전까지 완료로 보고하지 않는다.
+- 사용자가 전체 리팩터링을 요청했을 때는 `1차/2차/3차` 같은 단계별 축소 계획으로 답하지 않는다. 단일 목표 안에서 경계 검사, 코드 정리, 문서 정합성, UX 검증까지 닫는다.
+- 사용자가 판단해야 하는 완료 보고서, 운영 문서, handoff 문서는 한국어를 기본으로 쓴다. 파일명·명령어·코드 식별자는 그대로 두되, “무엇을 바꿨는지”, “왜 바꿨는지”, “어떻게 확인하는지”, “배포했는지”는 사용자가 바로 이해할 수 있는 한국어로 적는다.
 - Wiki는 뉴스레터처럼 매일 수집·재분류되는 서비스가 아니다. Wiki 본문이나 공통 shell이 바뀌었을 때만 Wiki builder를 실행하고, 루틴 뉴스/LP 갱신이 Wiki 콘텐츠를 불필요하게 다시 쓰지 않게 한다.
 - 기존 호환 파일인 `services/newsletter/src/build_newsletter_deploy.py`는 얇은 wrapper만 허용한다. 이 파일에는 LP, GP, Wiki, CSS, HTML renderer, DB helper를 다시 넣지 않는다. 새 뉴스레터 자동화와 수동 실행은 `scripts/build_newsletter_bundle.py`를 우선한다.
 

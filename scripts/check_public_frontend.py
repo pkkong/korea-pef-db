@@ -54,10 +54,17 @@ FORBIDDEN_PUBLIC_SOURCE_TERMS = [
     "보강 필요",
     "프로필 팩트",
     "자동 매칭",
+    "자동 생성",
     "데이터 수집",
     "관리자",
     "operator",
     "AUM proxy",
+    "source/evidence",
+    "monitor_status",
+    "review_status",
+    "public_visible",
+    "confidence",
+    "candidate",
     "open_public_dashboard",
     "admin.html",
 ]
@@ -326,6 +333,9 @@ def check_generated_gp_contract() -> list[str]:
         violations.append("kpef-product-header")
     if '<strong class="service-title">GP</strong>' not in gps_html:
         raise CheckFailure("GP directory service title missing")
+    for required_markup in ['class="gp-directory-table"', 'class="gp-directory-head"', 'id="gpDirectory"', 'class="gp-card"']:
+        if required_markup not in gps_html:
+            violations.append(f"gps.html:missing table-like directory markup {required_markup}")
     tabs = gp_service_tabs(gps_html)
     if tabs != ["MARKET", "GP"]:
         raise CheckFailure(f"GP service tabs mismatch: expected MARKET/GP, got {tabs}")
@@ -378,7 +388,7 @@ def check_generated_gp_contract() -> list[str]:
 
     if violations:
         raise CheckFailure(f"Forbidden generated GP wording/markup: {', '.join(violations)}")
-    if 'data-url="gp-' not in gps_html:
+    if 'data-url="gp-' not in gps_html and "0개 PEF 운용사" not in gps_text:
         raise CheckFailure("GP directory rows are missing clickable data-url links")
 
     return [f"generated_gp_contract=ok detail_pages_checked={len(detail_paths)} market=ok"]
@@ -405,6 +415,9 @@ def check_generated_lp_wiki_contract() -> list[str]:
 
     if '<strong class="service-title">LP</strong>' not in lp_html:
         raise CheckFailure("LP service title missing")
+    for required_markup in ['class="lp-directory-table"', 'class="lp-directory-head"', 'class="lp-directory-grid"', 'class="lp-directory-card"']:
+        if required_markup not in lp_html:
+            violations.append(f"lp-notices.html:missing table-like directory markup {required_markup}")
     expected_lp_tabs = ["출자기관", "출자공고", "선정결과"]
     if gp_service_tabs(lp_html) != expected_lp_tabs:
         raise CheckFailure(f"LP service tabs mismatch: got {gp_service_tabs(lp_html)}")

@@ -2,10 +2,11 @@
 
 This folder owns the LP commitment notice monitor service.
 
-## Current Split State
+## Current Service State
 
-This first split moves the implementation for `build_lp_commitment_monitor.py`
-under `services/lp/src/` while keeping existing runtime defaults intact.
+LP owns commitment notice collection, LP profile facts, public LP directory
+pages, official notice pages, and LP notice detail pages. New LP code belongs in
+`services/lp/src/` and should use `services/shared/src/` for shared helpers.
 
 The service still reads and writes the legacy root-level project paths:
 
@@ -19,6 +20,11 @@ The root script at `scripts/build_lp_commitment_monitor.py` is a compatibility
 wrapper. Existing jobs can keep calling it while new service docs and jobs can
 prefer the service path.
 
+`services/lp/src/lp_legacy_service_pages.py` remains a compatibility renderer
+for current public URLs. Importing LP service entrypoints must not load GP, Wiki,
+or the old public-site monolith; `scripts/check_architecture_contracts.py`
+enforces that boundary.
+
 ## Layout
 
 - `src/`: Python implementation for collecting, normalizing, storing, and exporting LP notice candidates
@@ -31,6 +37,7 @@ prefer the service path.
 python3 scripts/build_lp_commitment_monitor.py --skip-source-fetch
 python3 services/lp/src/build_lp_commitment_monitor.py --skip-source-fetch
 python3 services/lp/src/build_lp_profile_backlog.py
+python3 scripts/check_architecture_contracts.py
 ```
 
 ## Profile Backlog

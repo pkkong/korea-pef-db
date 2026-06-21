@@ -7,6 +7,7 @@ import json
 import os
 import py_compile
 import sys
+import argparse
 from pathlib import Path
 
 
@@ -55,7 +56,52 @@ def check_import_isolation() -> list[str]:
     ]
 
 
+def smoke_flask_app() -> None:
+    sys.path.insert(0, str(WEB_ROOT))
+    from app import app  # noqa: E402
+
+    client = app.test_client()
+    for path in ["/", "/daily-news.html", "/health.json", "/archive.json"]:
+        response = client.get(path)
+        if response.status_code != 200:
+            raise SystemExit(f"{path} returned {response.status_code}")
+    health = client.get("/health.json").get_json()
+    if health.get("service") != "newsletter":
+        raise SystemExit(f"unexpected health payload: {health}")
+    print(f"newsletter_vercel_smoke=ok report_date={health.get('report_date')} articles={health.get('article_count')}")
+
+
+def print_step_summary(payload_path: Path) -> None:
+    payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    print("### Newsletter Vercel/Supabase readiness")
+    print("")
+    print("| Check | Status |")
+    print("| --- | --- |")
+    for key in ["files", "compile", "import_isolation"]:
+        print(f"| `{key}` | {payload.get(key)} |")
+    print("")
+    print("| Secret | Status |")
+    print("| --- | --- |")
+    for key, value in sorted((payload.get("env") or {}).items()):
+        print(f"| `{key}` | {value} |")
+    print("")
+    if any(value == "missing" for value in (payload.get("env") or {}).values()):
+        print("Missing secrets are expected before production Vercel/Supabase connection.")
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Check standalone newsletter Vercel/Supabase readiness.")
+    parser.add_argument("--smoke-app", action="store_true", help="Smoke-test the Flask app routes and exit.")
+    parser.add_argument("--summary-from", type=Path, help="Write a GitHub step summary from readiness JSON and exit.")
+    args = parser.parse_args()
+
+    if args.smoke_app:
+        smoke_flask_app()
+        return 0
+    if args.summary_from:
+        print_step_summary(args.summary_from)
+        return 0
+
     missing_files = [
         str(path)
         for path in [

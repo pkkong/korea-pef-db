@@ -66,72 +66,10 @@ jobs:
         id: freshness
         shell: bash
         run: |
-          python3 - "${{ steps.date.outputs.report_date }}" "${NEWSLETTER_PUBLIC_URL}" "${{ github.event_name }}" <<'PY'
-          import json
-          import os
-          import sys
-          import time
-          from urllib.error import URLError
-          from urllib.request import Request, urlopen
-
-          report_date = sys.argv[1]
-          mirror_base_url = sys.argv[2].rstrip("/")
-          event_name = sys.argv[3]
-
-          should_run = True
-          reason = "manual run" if event_name != "schedule" else "scheduled freshness check"
-          mirror_date = ""
-          mirror_article_count = 0
-          mirror_archive_count = 0
-
-          def fetch_json(url: str):
-              req = Request(
-                  f"{url}{'&' if '?' in url else '?'}freshness={int(time.time())}-{report_date}",
-                  headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
-              )
-              with urlopen(req, timeout=15) as response:
-                  return json.loads(response.read().decode("utf-8"))
-
-          if event_name == "schedule":
-              mirror_fresh = False
-              mirror_error = ""
-              try:
-                  health = fetch_json(f"{mirror_base_url}/health.json")
-                  archive = fetch_json(f"{mirror_base_url}/archive.json")
-                  mirror_date = str(health.get("report_date") or "")
-                  mirror_article_count = int(health.get("article_count") or 0)
-                  entry = next(
-                      (row for row in archive if isinstance(row, dict) and row.get("reportDate") == report_date),
-                      None,
-                  )
-                  mirror_archive_count = len(entry.get("articles") or []) if isinstance(entry, dict) else 0
-                  mirror_fresh = (
-                      mirror_date == report_date
-                      and mirror_article_count > 0
-                      and mirror_archive_count == mirror_article_count
-                  )
-              except (OSError, URLError, json.JSONDecodeError, ValueError) as exc:
-                  mirror_error = str(exc)
-
-              if mirror_fresh:
-                  should_run = False
-                  reason = f"mirror already fresh ({mirror_date}/{mirror_article_count})"
-              else:
-                  reason = (
-                      "mirror stale "
-                      f"(mirror={mirror_date or 'missing'}/{mirror_article_count}/{mirror_archive_count}"
-                      f"{' error=' + mirror_error if mirror_error else ''}, expected={report_date})"
-                  )
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"should_run={'true' if should_run else 'false'}\n")
-              output.write(f"reason={reason}\n")
-              output.write(f"public_date={mirror_date}\n")
-              output.write(f"public_article_count={mirror_article_count}\n")
-              output.write(f"public_archive_count={mirror_archive_count}\n")
-
-          print(f"newsletter_mirror_freshness should_run={should_run} reason={reason}")
-          PY
+          python3 services/newsletter/src/newsletter_public_status.py mirror-freshness \
+            --report-date "${{ steps.date.outputs.report_date }}" \
+            --mirror-url "${NEWSLETTER_PUBLIC_URL}" \
+            --event-name "${{ github.event_name }}"
 
       - name: Skip already fresh scheduled issue
         if: steps.freshness.outputs.should_run != 'true'
@@ -227,31 +165,8 @@ jobs:
             --require-archive-seed
           echo "::endgroup::"
           echo "::group::Check generated files"
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          site = Path("services/newsletter/deploy/site")
-          health = json.loads((site / "health.json").read_text(encoding="utf-8"))
-          print(json.dumps(health, ensure_ascii=False, indent=2))
-          required = {
-              "index.html",
-              "daily-news.html",
-              "archive.json",
-              "health.json",
-              ".nojekyll",
-              "assets/service.css",
-              "assets/service.js",
-              "apple-touch-icon.png",
-          }
-          missing = [path for path in required if not (site / path).exists()]
-          if missing:
-              raise SystemExit(f"Missing generated files: {', '.join(sorted(missing))}")
-          if health["article_count"] <= 0:
-              raise SystemExit("article_count is 0; keeping the existing public newsletter instead of publishing an empty issue")
-          archive = json.loads((site / "archive.json").read_text(encoding="utf-8"))
-          print(f"archive_count={len(archive)}")
-          PY
+          python3 services/newsletter/src/newsletter_public_status.py check-local-artifacts \
+            --site-dir services/newsletter/deploy/site
           echo "::endgroup::"
           echo "::group::Validate newsletter pipeline"
           timeout 120 python3 services/newsletter/src/validate_daily_news_pipeline.py \
@@ -302,77 +217,11 @@ jobs:
         if: steps.freshness.outputs.should_run == 'true'
         shell: bash
         run: |
-          python3 - "${{ steps.date.outputs.report_date }}" "${NEWSLETTER_PUBLIC_URL}" \
-            "services/newsletter/deploy/site/health.json" \
-            "services/newsletter/deploy/site/archive.json" <<'PY'
-          import json
-          import sys
-          import time
-          from pathlib import Path
-          from urllib.request import Request, urlopen
-
-          report_date = sys.argv[1]
-          base_url = sys.argv[2].rstrip("/")
-          expected_health = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"))
-          expected_archive = json.loads(Path(sys.argv[4]).read_text(encoding="utf-8"))
-          expected_built_at = str(expected_health.get("built_at") or "")
-          expected_article_count = int(expected_health.get("article_count") or 0)
-          expected_entry = next(
-              (row for row in expected_archive if isinstance(row, dict) and row.get("reportDate") == report_date),
-              None,
-          )
-          expected_archive_count = len(expected_entry.get("articles") or []) if isinstance(expected_entry, dict) else 0
-          if expected_article_count <= 0 or expected_archive_count != expected_article_count:
-              raise SystemExit(
-                  "local newsletter artifact is invalid before public verification "
-                  f"(health={expected_article_count}, archive={expected_archive_count})"
-              )
-          deadline = time.time() + 180
-          last_error = ""
-
-          def fetch_json(path: str):
-              req = Request(
-                  f"{base_url}/{path}?verify={int(time.time())}-{report_date}",
-                  headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
-              )
-              with urlopen(req, timeout=15) as response:
-                  return json.loads(response.read().decode("utf-8"))
-
-          while time.time() <= deadline:
-              try:
-                  health = fetch_json("health.json")
-                  archive = fetch_json("archive.json")
-                  if health.get("report_date") != report_date:
-                      raise RuntimeError(f"health report_date={health.get('report_date')} expected={report_date}")
-                  if health.get("services") != "newsletter":
-                      raise RuntimeError(f"health services={health.get('services')} expected=newsletter")
-                  if str(health.get("built_at") or "") != expected_built_at:
-                      raise RuntimeError(
-                          f"health built_at={health.get('built_at')} expected={expected_built_at}"
-                      )
-                  article_count = int(health.get("article_count") or 0)
-                  if article_count != expected_article_count:
-                      raise RuntimeError(
-                          f"health article_count={article_count} expected={expected_article_count}"
-                      )
-                  for key in ["lp_monitor_count", "gp_count", "gp_profile_page_count"]:
-                      if int(health.get(key) or 0) != 0:
-                          raise RuntimeError(f"newsletter-only health {key}={health.get(key)} expected=0")
-                  entry = next((row for row in archive if isinstance(row, dict) and row.get("reportDate") == report_date), None)
-                  if entry is None:
-                      raise RuntimeError(f"archive missing reportDate={report_date}")
-                  archive_count = len(entry.get("articles") or [])
-                  if archive_count != expected_archive_count:
-                      raise RuntimeError(f"archive article_count={archive_count} expected={expected_archive_count}")
-                  print(f"public_verify_status=ok report_date={report_date} health_articles={article_count} archive_articles={archive_count}")
-                  raise SystemExit(0)
-              except Exception as exc:
-                  last_error = str(exc)
-                  print(f"public_verify_wait={last_error}")
-                  time.sleep(10)
-
-          raise SystemExit(f"public verification failed: {last_error}")
-          PY
+          python3 services/newsletter/src/newsletter_public_status.py verify-public-mirror \
+            --report-date "${{ steps.date.outputs.report_date }}" \
+            --mirror-url "${NEWSLETTER_PUBLIC_URL}" \
+            --expected-health services/newsletter/deploy/site/health.json \
+            --expected-archive services/newsletter/deploy/site/archive.json
 
       - name: Report mirror handoff
         if: steps.freshness.outputs.should_run == 'true'

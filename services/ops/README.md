@@ -16,3 +16,12 @@ services/ops/scripts/run_data_nightly_refresh.sh
 
 It refreshes DB-derived outputs and rebuilds the deploy bundle for validation.
 Use the central GitHub Actions workflow for publication.
+
+## Architecture Contracts
+
+Run this before reporting a structural refactor complete:
+
+```bash
+python3 scripts/check_architecture_contracts.py
+python3 scripts/check_public_frontend.py
+```

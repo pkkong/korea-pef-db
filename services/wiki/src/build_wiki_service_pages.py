@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from services.newsletter.src.daily_news_common import today_seoul
+from services.shared.src.daily_news_common import today_seoul
 from services.newsletter.web.newsletter_ui import app_asset_version
 from services.wiki.src.pef_wiki_pages import render_pef_wiki_page
 

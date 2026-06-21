@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta
 
-from services.newsletter.src.daily_news_common import normalize_whitespace, today_seoul
+from services.shared.src.daily_news_common import normalize_whitespace, today_seoul
 from services.lp.src.lp_notice_identity import (
     GENERIC_PROGRAM_NAMES as GENERIC_LP_PROGRAM_NAMES,
     business_key_text,

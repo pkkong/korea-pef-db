@@ -36,7 +36,7 @@ from services.lp.src.lp_notice_view import (
     lp_notice_stage_label,
     lp_notice_status_label,
 )
-from services.newsletter.src.daily_news_common import normalize_whitespace  # noqa: E402
+from services.shared.src.daily_news_common import normalize_whitespace  # noqa: E402
 
 
 DEFAULT_DB = REPO_ROOT / "db" / "private_equity.db"

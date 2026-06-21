@@ -1,34 +1,34 @@
-# Data Operating Model
+# 데이터 운영 모델
 
-Last updated: 2026-06-10 KST
+최종 수정: 2026-06-21 KST
 
 이 문서는 DB와 공개 화면 사이의 책임선을 정의한다. 핵심 원칙은
 `raw source -> canonical entity -> review/evidence -> public view -> static HTML`이다.
 
-## Data Layers
+## 데이터 흐름
 
-1. `Raw source`
+1. `Raw source` 원천 자료
    - 크롤러, 뉴스 원문, CSV, 금감원 자료, 공식 공고, PDF/HWP, 수동 seed URL.
    - 원문 보존이 목적이다. 공개 화면이 직접 읽지 않는다.
 
-2. `Canonical entity`
+2. `Canonical entity` 표준 entity
    - GP, Fund, LP Institution, LP Commitment Program, Notice Event, Person, News.
    - 안정적인 ID와 표준 이름을 갖는다.
 
-3. `Evidence / Review`
+3. `Evidence / Review` 근거와 검토
    - 어떤 값이 어디서 왔는지, 공개 가능한지, 검토가 필요한지 저장한다.
    - 추정값은 공개 facts로 승격하지 않는다.
 
-4. `Public read model`
+4. `Public read model` 공개 read model
    - 공개 화면이 읽는 DB view, JSON export, archive contract.
    - 내부 상태와 후보 데이터를 제거한 후의 결과다.
 
-5. `Public surface`
+5. `Public surface` 공개 화면
    - LP/GP와 GitHub Pages mirror는 public read model을 HTML로 구운 결과다.
    - 공식 Brief 앱은 검증된 mirror archive를 Supabase public read model로 동기화한 뒤 Vercel에서 읽는 결과다.
    - DB나 CSV가 바뀌어도 build, sync, deploy, public verification 전까지 공개 화면은 바뀌지 않는다.
 
-## State Axes
+## 상태값 분리 원칙
 
 상태값을 한 필드에 섞지 않는다.
 
@@ -42,7 +42,7 @@ Last updated: 2026-06-10 KST
 예를 들어 `coverage_tier=candidate`는 서비스 운영 등급이고, 법적 LP 유형이나
 공개 문구가 아니다. 공개 row에 등급 배지처럼 노출하지 않는다.
 
-## LP Commitment Model
+## LP 출자사업 모델
 
 LP Notice는 공고 row 목록이 아니라 출자사업 lifecycle이다.
 
@@ -61,7 +61,7 @@ LP Notice는 공고 row 목록이 아니라 출자사업 lifecycle이다.
 기존 notice row는 event로 연결한다. 그 전까지 public lifecycle view에서
 사업 단위 병합을 책임진다.
 
-## Public Visibility Gate
+## 공개 노출 기준
 
 공개 LP/Notice 데이터는 아래 조건을 통과해야 한다.
 
@@ -72,7 +72,7 @@ LP Notice는 공고 row 목록이 아니라 출자사업 lifecycle이다.
 - 후보 parser나 weak source에서 온 공고는 public-ready가 되기 전까지 숨긴다.
 - 과거 마감일만 있는 row를 오늘의 모집중 공고처럼 표시하지 않는다.
 
-## Public Renderer Contract
+## 공개 renderer 계약
 
 Renderer는 public read model을 HTML로 표현하는 역할만 한다.
 
@@ -82,7 +82,7 @@ Renderer는 public read model을 HTML로 표현하는 역할만 한다.
   `자동 생성`, `검토 대기` 같은 내부 표현을 노출하지 않는다.
 - 공개 숫자와 목록은 손으로 HTML에 박지 않는다. source data에서 읽어 빌드한다.
 
-## Newsletter Supabase Read Model
+## 뉴스레터 Supabase read model
 
 뉴스레터의 Vercel/Supabase 전환은 운영 DB 전체 이전이 아니라 public read model부터 시작한다.
 
@@ -101,7 +101,7 @@ Vercel archive 재구성은 두 층을 함께 읽어야 한다.
 - `archive.json`은 발행일 순서, 섹션 순서, issue 안 기사 row 순서의 canonical source다. Vercel은 이 순서를 Supabase에서 복원해야 하며 독자적으로 재정렬하지 않는다.
 - `section_order=0`은 정상적인 첫 섹션 값이다. `0`을 falsy 값으로 처리해 `999` 같은 fallback으로 바꾸면 Vercel과 GitHub Pages가 같은 기사라도 다른 순서로 보인다.
 
-## Build Contract
+## 빌드 계약
 
 기본 공개 통합 빌드는 active public services만 포함한다.
 
@@ -121,12 +121,11 @@ Wiki는 재기획 전까지 루틴에서 제외한다. 필요할 때만 명시�
 python3 scripts/build_site_bundle.py --services wiki --date YYYY-MM-DD
 ```
 
-## First Refactor Target
+## 구조 안전장치
 
-첫 번째 구조 개선 대상은 LP Notice다.
+구조 정리와 public read model 계약은 코드 검사로 함께 고정한다.
 
-1. 사업 단위 canonical key와 이벤트 병합 규칙을 고정한다.
-2. stale deadline, candidate source, OCIO pool을 public view에서 제거한다.
-3. `사업 1개 = 카드 1개` 회귀 테스트를 추가한다.
-4. LP Notice renderer가 lifecycle public view만 읽도록 좁힌다.
-5. 이 패턴을 GP/News public read model에도 확장한다.
+- `scripts/check_architecture_contracts.py`는 LP/GP/Wiki가 newsletter-private module을 직접 import하지 않는지, newsletter workflow가 자기 책임 밖 작업을 하지 않는지, generated output이 source tracking에 들어오지 않는지 확인한다.
+- `services/newsletter/src/newsletter_public_status.py`는 GitHub Pages mirror, Supabase sync, Vercel health, watchdog freshness 판단을 한 구현으로 묶는다.
+- `scripts/check_public_frontend.py`는 공개 화면의 내부 용어 유출과 LP/GP table-like directory 구조를 확인한다.
+- LP Notice는 계속 `사업 1개 = 공개 카드 1개`를 기준으로 삼고, 후보 source와 stale deadline은 public view/export 단계에서 제거한다.

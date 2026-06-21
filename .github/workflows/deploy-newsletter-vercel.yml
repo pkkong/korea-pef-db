@@ -50,21 +50,8 @@ jobs:
           python3 services/newsletter/web/tests/test_newsletter_data.py
 
       - name: Smoke test Flask app
-        working-directory: services/newsletter/web
         run: |
-          python3 - <<'PY'
-          from app import app
-
-          client = app.test_client()
-          for path in ["/", "/daily-news.html", "/health.json", "/archive.json"]:
-              response = client.get(path)
-              if response.status_code != 200:
-                  raise SystemExit(f"{path} returned {response.status_code}")
-          health = client.get("/health.json").get_json()
-          if health.get("service") != "newsletter":
-              raise SystemExit(f"unexpected health payload: {health}")
-          print(f"newsletter_vercel_smoke=ok report_date={health.get('report_date')} articles={health.get('article_count')}")
-          PY
+          python3 services/newsletter/scripts/check_vercel_supabase_readiness.py --smoke-app
 
       - name: Stop if Vercel credentials are missing
         if: env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID == ''

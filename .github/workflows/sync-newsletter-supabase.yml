@@ -45,51 +45,10 @@ jobs:
         shell: bash
         run: |
           mkdir -p exports/daily_news
-          python3 - "${{ steps.requested_date.outputs.report_date }}" "${NEWSLETTER_PUBLIC_URL}" <<'PY'
-          import json
-          import os
-          import sys
-          import time
-          from pathlib import Path
-          from urllib.request import Request, urlopen
-
-          requested_report_date = sys.argv[1]
-          base_url = sys.argv[2].rstrip("/")
-
-          def fetch_json(path: str):
-              cache_key = requested_report_date or str(int(time.time()))
-              req = Request(
-                  f"{base_url}/{path}?sync={int(time.time())}-{cache_key}",
-                  headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
-              )
-              with urlopen(req, timeout=20) as response:
-                  return json.loads(response.read().decode("utf-8"))
-
-          health = fetch_json("health.json")
-          archive = fetch_json("archive.json")
-          mirror_report_date = str(health.get("report_date") or "")
-          report_date = requested_report_date or mirror_report_date
-          if not report_date:
-              raise SystemExit("mirror health.json does not contain report_date")
-          if mirror_report_date != report_date:
-              raise SystemExit(f"mirror report_date={mirror_report_date} expected={report_date}")
-          article_count = int(health.get("article_count") or 0)
-          entry = next(
-              (row for row in archive if isinstance(row, dict) and row.get("reportDate") == report_date),
-              None,
-          )
-          archive_count = len(entry.get("articles") or []) if isinstance(entry, dict) else 0
-          if article_count <= 0 or archive_count != article_count:
-              raise SystemExit(
-                  f"mirror archive is not syncable: health={article_count} archive={archive_count}"
-              )
-          out = Path("exports/daily_news/public_archive.json")
-          out.write_text(json.dumps(archive, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"report_date={report_date}\n")
-              output.write(f"article_count={article_count}\n")
-          print(f"public_archive=ok report_date={report_date} articles={article_count}")
-          PY
+          python3 services/newsletter/src/newsletter_public_status.py download-verified-archive \
+            --requested-report-date "${{ steps.requested_date.outputs.report_date }}" \
+            --mirror-url "${NEWSLETTER_PUBLIC_URL}" \
+            --out exports/daily_news/public_archive.json
 
       - name: Sync Supabase newsletter read model
         env:
@@ -109,55 +68,7 @@ jobs:
       - name: Verify Vercel newsletter app
         shell: bash
         run: |
-          python3 - "${{ steps.archive.outputs.report_date }}" "${NEWSLETTER_APP_URL}" "${NEWSLETTER_PUBLIC_URL}" <<'PY'
-          import json
-          import sys
-          import time
-          from urllib.request import Request, urlopen
-
-          report_date = sys.argv[1]
-          app_base_url = sys.argv[2].rstrip("/")
-          mirror_base_url = sys.argv[3].rstrip("/")
-
-          def fetch_json(url: str):
-              req = Request(
-                  f"{url}{'&' if '?' in url else '?'}verify={int(time.time())}-{report_date}",
-                  headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
-              )
-              with urlopen(req, timeout=20) as response:
-                  return json.loads(response.read().decode("utf-8"))
-
-          mirror_health = fetch_json(f"{mirror_base_url}/health.json")
-          expected_article_count = int(mirror_health.get("article_count") or 0)
-          deadline = time.time() + 180
-          last_error = ""
-          while time.time() <= deadline:
-              try:
-                  health = fetch_json(f"{app_base_url}/health.json?refresh=1")
-                  archive = fetch_json(f"{app_base_url}/archive.json?refresh=1")
-                  if health.get("report_date") != report_date:
-                      raise RuntimeError(f"app report_date={health.get('report_date')} expected={report_date}")
-                  if health.get("data_source") != "supabase":
-                      raise RuntimeError(f"app data_source={health.get('data_source')} expected=supabase")
-                  article_count = int(health.get("article_count") or 0)
-                  if article_count != expected_article_count:
-                      raise RuntimeError(f"app article_count={article_count} expected={expected_article_count}")
-                  entry = next(
-                      (row for row in archive if isinstance(row, dict) and row.get("reportDate") == report_date),
-                      None,
-                  )
-                  archive_count = len(entry.get("articles") or []) if isinstance(entry, dict) else 0
-                  if archive_count != expected_article_count:
-                      raise RuntimeError(f"app archive_count={archive_count} expected={expected_article_count}")
-                  print(
-                      "supabase_recovery_verify_status=ok "
-                      f"report_date={report_date} articles={article_count}"
-                  )
-                  raise SystemExit(0)
-              except Exception as exc:
-                  last_error = str(exc)
-                  print(f"supabase_recovery_verify_wait={last_error}")
-                  time.sleep(10)
-
-          raise SystemExit(f"Vercel verification failed after Supabase sync: {last_error}")
-          PY
+          python3 services/newsletter/src/newsletter_public_status.py verify-vercel-app \
+            --report-date "${{ steps.archive.outputs.report_date }}" \
+            --app-url "${NEWSLETTER_APP_URL}" \
+            --mirror-url "${NEWSLETTER_PUBLIC_URL}"
