@@ -11,7 +11,7 @@
 - LP/GP/Wiki가 뉴스레터 내부 module에 직접 기대는 구조를 막았다.
 - 공개 화면에 내부 상태나 운영자 표현이 새는지 자동 검사하도록 강화했다.
 - 390px 모바일과 1280px 데스크톱에서 주요 화면을 실제 Chrome으로 확인했다.
-- production deploy는 하지 않았다.
+- 이후 사용자 지적에 따라 commit, push, production deploy까지 완료했다.
 
 ## 무엇을 고쳤나
 
@@ -176,14 +176,19 @@ python3 services/newsletter/src/sync_newsletter_supabase.py --archive services/n
 
 ## 아직 주의할 점
 
-- production deploy는 하지 않았다. 배포 후에는 공개 URL에서 다시 확인해야 한다.
 - 로컬 DB와 export가 비어 있어 이번 로컬 통합 빌드의 LP/GP 데이터 카운트는 0이다. 그래서 이번 UX 수정은 빈 데이터 상태에서도 화면 구조가 무너지지 않는지까지 검증했다.
 - `services/lp/src/lp_legacy_service_pages.py`는 아직 남아 있다. 다만 import-time 결합은 차단했고, 남은 cleanup은 별도 품질 backlog에 남겼다.
 - 새 아이디어는 바로 코드로 넣지 말고 담당 서비스, public read model, 화면 유형, 검증 명령이 정해진 뒤에 넣어야 한다.
 
 ## 배포 상태
 
-- GitHub Pages 배포: 실행하지 않음.
-- Vercel 배포: 실행하지 않음.
+- 커밋: `82e9737 refactor: enforce public service boundaries`.
+- 원격 반영: `main`에 push 완료.
+- GitHub Pages 백업 미러 배포: GitHub Actions run `27906187286` 성공.
+- Vercel 앱 코드 배포: GitHub Actions run `27906187275` 성공.
+- Supabase data sync: GitHub Actions run `27906477785` 성공.
 - Supabase schema migration: 실행하지 않음.
-- Supabase data sync: dry-run만 실행함.
+- 공개 URL 검증:
+  - Pages `health.json`: `report_date=2026-06-21`, `article_count=2`, `status=ok`.
+  - Vercel `health.json?refresh=1`: `report_date=2026-06-21`, `article_count=2`, `issue_count=30`, `data_source=supabase`, `status=ok`.
+  - `python3 scripts/check_public_frontend.py --base-url https://pkkong.github.io/kpef-newsletter/` 통과.
