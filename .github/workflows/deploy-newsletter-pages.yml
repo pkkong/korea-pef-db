@@ -40,7 +40,7 @@ env:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -221,7 +221,9 @@ jobs:
             --report-date "${{ steps.date.outputs.report_date }}" \
             --mirror-url "${NEWSLETTER_PUBLIC_URL}" \
             --expected-health services/newsletter/deploy/site/health.json \
-            --expected-archive services/newsletter/deploy/site/archive.json
+            --expected-archive services/newsletter/deploy/site/archive.json \
+            --deadline-seconds 900 \
+            --poll-seconds 15
 
       - name: Report mirror handoff
         if: steps.freshness.outputs.should_run == 'true'
