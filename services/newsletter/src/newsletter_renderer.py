@@ -1019,12 +1019,14 @@ def build_archive_payload(
     for report_date in dates:
         markdown_path = brief_markdown_path(out_dir, report_date)
         rows = parse_brief(markdown_path)
+        articles = article_payload_rows(rows, service_context, f"clip-{compact_date(report_date)}")
         payload.append(
             {
                 "reportDate": report_date,
                 "visibleDate": display_date(report_date),
                 "basis": "",
-                "articles": article_payload_rows(rows, service_context, f"clip-{compact_date(report_date)}"),
+                "articleCount": len(articles),
+                "articles": articles,
             }
         )
     return payload
@@ -1040,13 +1042,17 @@ def refresh_archive_entries_with_context(
         markdown_path = brief_markdown_path(out_dir, report_date)
         if not report_date or not markdown_path.exists():
             next_entry = dict(entry)
-            next_entry["articles"] = refresh_archive_article_assets(next_entry.get("articles"))
+            articles = refresh_archive_article_assets(next_entry.get("articles"))
+            next_entry["articles"] = articles
+            next_entry["articleCount"] = len(articles)
             refreshed.append(next_entry)
             continue
         rows = parse_brief(markdown_path)
+        articles = article_payload_rows(rows, service_context, f"clip-{compact_date(report_date)}")
         next_entry = dict(entry)
         next_entry["visibleDate"] = str(next_entry.get("visibleDate") or display_date(report_date))
-        next_entry["articles"] = article_payload_rows(rows, service_context, f"clip-{compact_date(report_date)}")
+        next_entry["articleCount"] = len(articles)
+        next_entry["articles"] = articles
         refreshed.append(next_entry)
     return refreshed
 

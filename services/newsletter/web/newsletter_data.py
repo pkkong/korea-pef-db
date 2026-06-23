@@ -86,6 +86,7 @@ def archive_from_supabase_rows(
                 "reportDate": issue_date,
                 "visibleDate": _clean_text(issue.get("visible_date")) or issue_date,
                 "basis": _clean_text(issue.get("basis")),
+                "articleCount": _clean_int(issue.get("article_count"), 0),
                 "articles": [],
             },
         )
@@ -100,6 +101,7 @@ def archive_from_supabase_rows(
                 "reportDate": issue_date,
                 "visibleDate": _clean_text(row.get("visible_date")) or issue_date,
                 "basis": _clean_text(row.get("basis")),
+                "articleCount": 0,
                 "articles": [],
             },
         )
@@ -128,6 +130,7 @@ def archive_from_supabase_rows(
             entry["articles"].append(article)
     for entry in grouped.values():
         entry["articles"].sort(key=lambda item: int(item.get("rank") or 0))
+        entry["articleCount"] = len(entry["articles"])
     return list(grouped.values())
 
 

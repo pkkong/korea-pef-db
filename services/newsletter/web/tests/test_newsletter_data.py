@@ -22,6 +22,7 @@ from newsletter_data import (  # noqa: E402
     grouped_sections,
     select_issue,
 )
+from newsletter_ui import render_app, service_js  # noqa: E402
 import app as web_app  # noqa: E402
 
 
@@ -108,8 +109,10 @@ def test_archive_from_supabase_rows_keeps_issue_skeletons_and_zero_section_order
 
     assert len(archive) == 2
     assert archive[0]["reportDate"] == "2026-06-17"
+    assert archive[0]["articleCount"] == 0
     assert archive[0]["articles"] == []
     assert archive[1]["reportDate"] == "2026-06-16"
+    assert archive[1]["articleCount"] == 2
     assert [row["title"] for row in archive[1]["articles"]] == ["첫 기사", "둘째 기사"]
     assert archive[1]["articles"][0]["sectionOrder"] == 0
 
@@ -183,6 +186,7 @@ def test_vercel_app_uses_common_newsletter_ui() -> None:
         assert 'href="lp-notices.html"' not in html
         assert 'href="gps.html"' not in html
         assert "/static/service.css" not in html
+        assert 'id="resultSummary"' in html
 
         css = client.get("/assets/service.css")
         legacy_css = client.get("/static/service.css")
@@ -194,6 +198,43 @@ def test_vercel_app_uses_common_newsletter_ui() -> None:
         assert "window.KPEF_DAILY_ARCHIVE" in js.get_data(as_text=True)
     finally:
         web_app.load_archive = old_loader
+
+
+def test_common_ui_marks_empty_issue_dates_for_public_users() -> None:
+    html = render_app(
+        "2026-06-17",
+        [],
+        "",
+        {},
+        [
+            {
+                "reportDate": "2026-06-17",
+                "visibleDate": "2026.06.17",
+                "articleCount": 0,
+                "articles": [],
+            },
+            {
+                "reportDate": "2026-06-16",
+                "visibleDate": "2026.06.16",
+                "articleCount": 1,
+                "articles": [
+                    {
+                        "title": "테스트 기사",
+                        "source": "테스트신문",
+                        "url": "https://example.com/a",
+                        "section": "Market",
+                    }
+                ],
+            },
+        ],
+        [],
+        newsletter_only=True,
+    )
+
+    assert "2026.06.17 · 발행 없음" in html
+    assert 'id="resultSummary"' in html
+    assert "전체 아카이브 검색" in service_js()
+    assert "발행 없음" in service_js()
 
 
 def test_vercel_app_imports_from_repo_root_package_path() -> None:
@@ -224,6 +265,7 @@ def main() -> int:
     test_supabase_archive_filters_articles_to_selected_issue_window()
     test_filter_and_group_articles()
     test_vercel_app_uses_common_newsletter_ui()
+    test_common_ui_marks_empty_issue_dates_for_public_users()
     test_vercel_app_imports_from_repo_root_package_path()
     test_vercel_runtime_has_no_standalone_ui_or_legacy_service_imports()
     print("newsletter web data tests passed")
