@@ -40,6 +40,9 @@ jobs:
   check-and-dispatch:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Resolve report date
         id: date
         shell: bash
