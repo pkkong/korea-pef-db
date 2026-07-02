@@ -13,12 +13,13 @@ import json
 import struct
 import zlib
 from datetime import date
+from functools import lru_cache
 from pathlib import Path
 
 APP_ICON_FILE = "apple-touch-icon.png"
 
 def app_head_meta() -> str:
-    return f"""  <meta name="theme-color" content="#ffffff">
+    return f"""  <meta name="theme-color" content="#eaf7ff">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="KPEF Brief">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -33,8 +34,8 @@ def app_web_manifest() -> str:
         "start_url": "./index.html",
         "scope": "./",
         "display": "standalone",
-        "background_color": "#ffffff",
-        "theme_color": "#ffffff",
+        "background_color": "#eaf7ff",
+        "theme_color": "#eaf7ff",
         "icons": [
             {
                 "src": APP_ICON_FILE,
@@ -51,17 +52,27 @@ def write_app_icon_assets(public_dir: Path) -> Path:
     icon_path.write_bytes(app_icon_png())
     return icon_path
 
+@lru_cache(maxsize=4)
 def app_icon_png(size: int = 180) -> bytes:
     scale = 4
     canvas_size = size * scale
-    background_top = (25, 25, 25)
-    background_bottom = (10, 10, 11)
+    background_top = (236, 249, 255)
+    background_mid = (117, 196, 255)
+    background_bottom = (25, 103, 220)
     pixels: list[list[tuple[int, int, int, int]]] = []
     for y in range(canvas_size):
-        t = y / max(1, canvas_size - 1)
+        ty = y / max(1, canvas_size - 1)
         row = []
         for x in range(canvas_size):
-            base = tuple(round(background_top[i] * (1 - t) + background_bottom[i] * t) for i in range(3))
+            tx = x / max(1, canvas_size - 1)
+            if ty < 0.58:
+                t = ty / 0.58
+                base = tuple(round(background_top[i] * (1 - t) + background_mid[i] * t) for i in range(3))
+            else:
+                t = (ty - 0.58) / 0.42
+                base = tuple(round(background_mid[i] * (1 - t) + background_bottom[i] * t) for i in range(3))
+            corner_shade = max(0.0, (tx + ty - 1.08)) * 38
+            base = tuple(max(0, round(channel - corner_shade)) for channel in base)
             row.append((base[0], base[1], base[2], 255))
         pixels.append(row)
 
@@ -76,6 +87,22 @@ def app_icon_png(size: int = 180) -> bytes:
             round(old[2] * (1 - alpha) + color[2] * alpha),
             255,
         )
+
+    def radial_glow(
+        center: tuple[int, int],
+        radius: int,
+        color: tuple[int, int, int],
+        alpha: float,
+    ) -> None:
+        cx, cy = (value * scale for value in center)
+        scaled_radius = radius * scale
+        for y in range(max(0, cy - scaled_radius), min(canvas_size, cy + scaled_radius)):
+            for x in range(max(0, cx - scaled_radius), min(canvas_size, cx + scaled_radius)):
+                distance = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+                if distance >= scaled_radius:
+                    continue
+                strength = (1 - distance / scaled_radius) ** 2
+                mix_pixel(x, y, color, alpha * strength)
 
     def rounded_rect(
         rect: tuple[int, int, int, int],
@@ -95,26 +122,60 @@ def app_icon_png(size: int = 180) -> bytes:
                 if edge_alpha > 0:
                     mix_pixel(x, y, color, alpha * min(1.0, edge_alpha))
 
-    # The icon reads as a premium daily market brief: stacked sheets, article
-    # rows, and a capital-stack chart. Avoid text; iOS icon sizes make it noisy.
-    paper = (248, 248, 246)
-    rear_paper = (74, 74, 78)
-    ink = (20, 20, 20)
-    muted_ink = (96, 96, 100)
-    accent = (45, 212, 191)
+    def ellipse(
+        center: tuple[int, int],
+        radii: tuple[int, int],
+        color: tuple[int, int, int],
+        alpha: float = 1.0,
+    ) -> None:
+        cx, cy = (value * scale for value in center)
+        rx, ry = (max(1, value * scale) for value in radii)
+        pad = 3 * scale
+        for y in range(max(0, cy - ry - pad), min(canvas_size, cy + ry + pad)):
+            for x in range(max(0, cx - rx - pad), min(canvas_size, cx + rx + pad)):
+                normalized = (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2) ** 0.5
+                distance = (normalized - 1.0) * min(rx, ry)
+                edge_alpha = 1.0 - max(0.0, distance + 1.5 * scale) / (3 * scale)
+                if edge_alpha > 0:
+                    mix_pixel(x, y, color, alpha * min(1.0, edge_alpha))
 
-    rounded_rect((52, 35, 141, 154), 14, rear_paper, 0.96)
-    rounded_rect((39, 25, 130, 146), 14, paper)
+    # Cute penguin app icon: soft mobile gradient, simple rounded shapes, and
+    # no lettering so it stays readable at iPhone home-screen sizes.
+    radial_glow((38, 18), 118, (255, 255, 255), 0.38)
+    radial_glow((142, 34), 82, (255, 255, 255), 0.14)
+    radial_glow((130, 152), 92, (0, 36, 130), 0.18)
+    rounded_rect((15, 15, 165, 165), 41, (255, 255, 255), 0.12)
+    rounded_rect((24, 27, 156, 159), 38, (255, 255, 255), 0.10)
 
-    rounded_rect((58, 48, 106, 57), 4, ink)
-    rounded_rect((112, 48, 121, 57), 4, accent)
-    rounded_rect((58, 71, 116, 77), 3, ink)
-    rounded_rect((58, 88, 100, 94), 3, muted_ink)
+    shadow = (0, 45, 139)
+    penguin = (16, 31, 58)
+    penguin_soft = (30, 48, 82)
+    belly = (255, 255, 255)
+    belly_soft = (244, 250, 255)
+    orange = (255, 173, 50)
+    orange_deep = (246, 136, 28)
+    blush = (255, 143, 165)
 
-    rounded_rect((58, 132, 118, 138), 3, ink)
-    rounded_rect((63, 115, 74, 132), 4, ink)
-    rounded_rect((82, 105, 93, 132), 4, ink)
-    rounded_rect((101, 91, 112, 132), 4, accent)
+    ellipse((90, 150), (40, 10), shadow, 0.20)
+    ellipse((54, 108), (13, 35), penguin_soft, 0.92)
+    ellipse((126, 108), (13, 35), penguin_soft, 0.92)
+    ellipse((90, 96), (47, 59), penguin, 0.98)
+    ellipse((90, 74), (40, 36), penguin, 1.0)
+    ellipse((90, 107), (32, 39), belly, 0.98)
+    ellipse((90, 76), (29, 27), belly, 0.98)
+    ellipse((75, 82), (16, 22), belly_soft, 0.98)
+    ellipse((105, 82), (16, 22), belly_soft, 0.98)
+    ellipse((75, 76), (4, 5), (10, 22, 42), 1.0)
+    ellipse((105, 76), (4, 5), (10, 22, 42), 1.0)
+    ellipse((77, 74), (1, 2), (255, 255, 255), 0.92)
+    ellipse((107, 74), (1, 2), (255, 255, 255), 0.92)
+    ellipse((90, 88), (11, 7), orange, 0.98)
+    rounded_rect((82, 88, 98, 94), 5, orange_deep, 0.72)
+    ellipse((69, 93), (7, 4), blush, 0.34)
+    ellipse((111, 93), (7, 4), blush, 0.34)
+    ellipse((73, 145), (18, 7), orange, 0.96)
+    ellipse((107, 145), (18, 7), orange, 0.96)
+    ellipse((72, 44), (10, 5), (255, 255, 255), 0.22)
 
     downsampled: list[list[tuple[int, int, int, int]]] = []
     for y in range(size):
@@ -1084,16 +1145,32 @@ button, input { font: inherit; }
   justify-content: center;
   overflow: hidden;
   box-sizing: border-box;
-  border: 1px solid var(--logo-border, #e2e5ea);
+  border: 1px solid var(--logo-border, rgba(216, 223, 234, 0.96));
   border-radius: 50%;
-  background: var(--logo-bg, #fff);
+  background: var(--logo-bg, radial-gradient(circle at 32% 18%, #ffffff 0%, #f8fafc 54%, #eef2f7 100%));
   color: var(--text);
   font-size: 11px;
   font-weight: 760;
   letter-spacing: 0;
   margin-top: 1px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.96),
+    0 1px 2px rgba(15,23,42,0.08);
+}
+.publisher-icon::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 32% 18%, rgba(255,255,255,0.82), rgba(255,255,255,0) 54%),
+    linear-gradient(180deg, rgba(255,255,255,0.34), rgba(255,255,255,0));
+  pointer-events: none;
 }
 .publisher-icon img {
+  position: relative;
+  z-index: 1;
   width: var(--logo-img-width, 27px);
   height: var(--logo-img-height, 27px);
   border: 0;
@@ -1102,12 +1179,27 @@ button, input { font: inherit; }
   mix-blend-mode: normal;
   object-fit: contain;
 }
-.publisher-icon.fallback,
+.publisher-icon.has-logo {
+  background: var(--logo-bg, radial-gradient(circle at 32% 18%, #ffffff 0%, #fafbfc 58%, #f0f3f8 100%));
+}
+.publisher-icon.fallback {
+  border-color: #d8e0ea;
+  background: radial-gradient(circle at 32% 18%, #ffffff 0%, #f8fafc 52%, #eef2f7 100%);
+  color: #263142;
+}
 .publisher-icon.fallback-only {
-  --logo-bg: #f4f6f8;
-  --logo-border: #dde3ea;
+  border-color: rgba(8, 77, 196, 0.28);
+  background:
+    radial-gradient(circle at 28% 18%, rgba(255,255,255,0.48), rgba(255,255,255,0) 44%),
+    linear-gradient(145deg, #1688ff 0%, #0a62df 52%, #092f96 100%);
+  color: #ffffff;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.38),
+    0 2px 6px rgba(8,77,196,0.22);
 }
 .publisher-fallback {
+  position: relative;
+  z-index: 1;
   display: none;
   width: 100%;
   height: 100%;
@@ -1116,9 +1208,11 @@ button, input { font: inherit; }
   border: 0;
   border-radius: 0;
   background: transparent;
-  font-size: 10px;
+  color: currentColor;
+  font-size: 10.5px;
   font-weight: 800;
   line-height: 1;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.12);
 }
 .publisher-icon.fallback img { display: none; }
 .publisher-icon.fallback .publisher-fallback,

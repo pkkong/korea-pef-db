@@ -46,7 +46,6 @@ FORBIDDEN_VISIBLE_TEXT = [
     "내부용",
     "FSS 출자약정액",
     "GP 원문",
-    "OCIO",
 ]
 FORBIDDEN_PUBLIC_SOURCE_TERMS = [
     "작업 큐",
