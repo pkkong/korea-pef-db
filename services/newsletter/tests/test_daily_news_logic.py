@@ -39,6 +39,7 @@ from run_daily_news_pipeline import (
     normalize_export_classification,
     normalize_title_key,
     parse_google_news_batch_response,
+    has_deal_market_commentary_signal,
     primary_section,
     render_markdown,
     select_brief_rows,
@@ -2082,6 +2083,23 @@ def test_20260609_editorial_quality_regressions() -> None:
     assert normalized_insurance["section_tags"] == "Market"
     assert "Deal" not in str(normalized_insurance["topic_tags"]).split(",")
     assert editorial_section({"title": str(insurance["title"]), "section": "Deal"}) == "Market"
+
+    specific_auction = {
+        "publisher": "더벨",
+        "title": "디앤티 다시 M&A 시장 나왔다…몸값 5000억 20일 입찰",
+        "summary_text": "디앤티가 매각 입찰에 다시 나선 개별 딜 기사다.",
+        "relevance_score": 16,
+        "section_tags": "Deal",
+        "topic_tags": "Deal,PEF",
+        "document_type_tags": "",
+        "gp_names": "",
+        "source_url": "https://www.thebell.co.kr/free/content/ArticleView.asp?key=202607131551321200109472",
+        "review_status": "auto",
+    }
+    assert has_deal_market_commentary_signal(str(specific_auction["title"])) is False
+    assert primary_section(specific_auction) == "Deal"
+    assert editorial_section({"title": str(specific_auction["title"]), "section": "Deal"}) == "Deal"
+    assert editorial_subtype({"title": str(specific_auction["title"]), "section": "Deal"}, "Deal") == "Auction"
 
     ai_market = {
         "publisher": "이데일리",

@@ -2,14 +2,8 @@ name: Newsletter publish watchdog
 
 on:
   schedule:
-    # GitHub-only fallback checks after the primary newsletter publish windows.
-    # Use off-peak minutes to reduce the chance of GitHub schedule drops.
-    - cron: "52 23 * * *" # 08:52 Asia/Seoul
+    # One fallback check after the primary newsletter publish window.
     - cron: "22 0 * * *"  # 09:22 Asia/Seoul
-    - cron: "52 0 * * *"  # 09:52 Asia/Seoul
-    - cron: "22 1 * * *"  # 10:22 Asia/Seoul
-    - cron: "52 1 * * *"  # 10:52 Asia/Seoul
-    - cron: "22 2 * * *"  # 11:22 Asia/Seoul
   workflow_dispatch:
     inputs:
       report_date:
@@ -80,6 +74,21 @@ jobs:
 
           if [ -n "${active_run}" ]; then
             echo "Publish workflow already active: ${active_run}"
+            exit 0
+          fi
+
+          recent_failed_run="$(gh run list \
+            --repo "${GITHUB_REPOSITORY}" \
+            --workflow "${NEWSLETTER_PUBLISH_WORKFLOW}" \
+            --json databaseId,status,conclusion,createdAt \
+            --limit 20 \
+            --jq '.[] | select(.status == "completed" and .conclusion == "failure" and ((now - (.createdAt | fromdateiso8601)) < 21600)) | .databaseId' \
+            | head -n 1
+          )"
+
+          if [ -n "${recent_failed_run}" ]; then
+            echo "Recent publish workflow already failed: ${recent_failed_run}"
+            echo "Skipping automatic redispatch to avoid repeated failure notifications."
             exit 0
           fi
 

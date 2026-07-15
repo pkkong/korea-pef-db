@@ -4,11 +4,6 @@ on:
   schedule:
     # Daily 08:37 Asia/Seoul. Avoid top-of-hour/half-hour slots, which GitHub can delay or drop under load.
     - cron: "37 23 * * *"
-    # Retry windows keep the daily issue fresh without relying on one scheduled slot.
-    - cron: "17 0 * * *"
-    - cron: "47 0 * * *"
-    - cron: "17 1 * * *"
-    - cron: "17 2 * * *"
   workflow_dispatch:
     inputs:
       report_date:
