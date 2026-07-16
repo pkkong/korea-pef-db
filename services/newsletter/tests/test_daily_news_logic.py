@@ -1579,6 +1579,30 @@ def test_company_gap_keyword_rules_cover_ai_fund_lp_scope_and_private_debt() -> 
         assert expected_tag in tags
 
 
+def test_employee_20260710_gap_titles_clear_newsletter_relevance_threshold() -> None:
+    rules = load_rules(DEFAULT_RULES)
+    samples = [
+        ("유암코·키스톤PE, 에어릭스 매각 추진… 5년 만에 엑시트 시동 - 조선비즈", "Deal"),
+        ('"저출산인데도…" PEF가 다시 웨딩홀로 몰린 이유는 [fn마켓워치] - 파이낸셜뉴스', "Market"),
+        ("[SK·KKR 에너지 동맹] PE 앞세워 손 안대고 코 풀기 - DealSite경제TV", "GP"),
+        ("앵커PE 닥터애그 매각한다…농민과 법적분쟁이 변수 - 딜사이트", "Deal"),
+        ("서룡전자·어펄마 동상이몽…주담대 부담에 세아FSI 딜 흔들 - 딜사이트", "Deal"),
+        ('국회 재가동 마주한 PEF업계…"무엇을 내주고 무엇을 얻어야 하나"-인베스트조선', "Market"),
+        ("한투PE·맥쿼리, K뷰티 ODM 화성코스메틱 인수 경쟁 [시그널] | 서울경제", "Deal"),
+        ("센트로이드 PE, 한화생명 '애큐온' 인수에 FI 참여 - 머니투데이", "Deal"),
+        ("PEF협의회 22일 정기총회…협회 전환 초읽기 - 매일경제", "Market"),
+        ("[LP Radar] 교직원공제회, 2년 연속 VC 출자 나서…1000억 배정", "LP"),
+        ("우본, 대형주형 위탁사 선발…자격 요건 '눈길'", "LP"),
+        ("총회연금, 대체투자 출자사업 개시…VC·PE·인프라·PD 1천억 배정", "LP"),
+        ("신한자산운용, 국내 첫 기업 사모대출 펀드 선보여", "Credit"),
+    ]
+    for title, expected_tag in samples:
+        scored = score_document(title, "", "", rules, [])
+        tags = {tag["tag_value"] for tag in scored["tags"]}
+        assert scored["score"] >= EXPORT_MIN_QUALITY_SCORE, title
+        assert expected_tag in tags
+
+
 def test_meta_description_pef_signal_feeds_scoring_excerpt() -> None:
     rules = load_rules(DEFAULT_RULES)
     scoring_excerpt = build_scoring_excerpt(
@@ -1599,6 +1623,10 @@ def test_recent_gap_publishers_and_sources_are_configured() -> None:
     assert infer_publisher("https://www.kbanker.co.kr/news/articleView.html?idxno=225136") == "대한금융신문"
     assert infer_publisher("https://www.autodaily.co.kr/news/articleView.html?idxno=544665") == "엠투데이"
     assert infer_publisher("https://www.pinpointnews.co.kr/news/articleView.html?idxno=458008") == "핀포인트뉴스"
+    assert infer_publisher("https://www.ngetnews.com/news/articleView.html?idxno=551253") == "뉴스저널리즘"
+    assert infer_publisher("https://www.fntimes.com/html/view.php?ud=202607091535466020179ad43907_18") == "한국금융신문"
+    assert infer_publisher("https://www.seoultimes.news/news/article.html?no=2000097606") == "서울타임스"
+    assert infer_publisher("https://www.topdaily.kr/articles/110911") == "톱데일리"
 
     sources = {source.source_code: source for source in load_sources(DEFAULT_SOURCES)}
     for source_code in [
@@ -1608,10 +1636,16 @@ def test_recent_gap_publishers_and_sources_are_configured() -> None:
         "naver_publisher_newstof_imm",
         "naver_pef_blockdeal",
         "naver_pef_portfolio_rental",
+        "google_lp_mandate_watch",
+        "google_pef_association_watch",
     ]:
         assert source_code in sources
         assert sources[source_code].is_active
     assert "인베스트조선" in sources["naver_pef_growth_fund"].allowed_publishers
+    assert "키스톤PE" in sources["google_pef_gp"].locator
+    assert "앵커PE" in sources["google_pef_named_gp_watch"].locator
+    assert "우본 위탁사" in sources["google_lp_mandate_watch"].locator
+    assert "PEF협의회" in sources["google_pef_association_watch"].locator
 
 
 def test_recent_gap_publishers_have_brand_icons() -> None:
@@ -3020,6 +3054,8 @@ def test_pef_association_belongs_to_market_structure() -> None:
     }
     assert primary_section(row) == "Market"
     assert editorial_section({"title": str(row["title"]), "section": "GP"}) == "Market"
+    assert editorial_section({"title": "PEF협의회 22일 정기총회…협회 전환 초읽기", "section": "GP"}) == "Market"
+    assert editorial_section({"title": "국회 재가동 마주한 PEF업계…무엇을 내주고 무엇을 얻어야 하나", "section": "GP"}) == "Market"
 
 
 def test_same_publisher_near_duplicate_title_is_selected_once() -> None:
@@ -3423,6 +3459,7 @@ def main() -> int:
         test_deal_value_reassessment_subtype_is_not_acquisition,
         test_company_gap_titles_keep_expected_sections_and_quality,
         test_company_gap_keyword_rules_cover_ai_fund_lp_scope_and_private_debt,
+        test_employee_20260710_gap_titles_clear_newsletter_relevance_threshold,
         test_meta_description_pef_signal_feeds_scoring_excerpt,
         test_recent_gap_publishers_and_sources_are_configured,
         test_recent_gap_publishers_have_brand_icons,

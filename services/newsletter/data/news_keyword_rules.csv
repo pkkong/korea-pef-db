@@ -8,6 +8,7 @@ pef_core_private_investment,title_or_excerpt,contains,사모투자,3,topic,PEF,�
 pef_core_pe_house,title_or_excerpt,contains,PE하우스,2,topic,PEF,PE 하우스 관련 기사일 가능성이 높습니다.,1,Core PEF keyword
 pef_core_gp,title_or_excerpt,contains, GP,2,topic,PEF,GP 관련 기사입니다.,1,GP is an entity/facet signal; use GP section only when the firm itself is the story
 pef_core_lp,title_or_excerpt,contains, LP,1,topic,LP,LP 관련 기사입니다.,1,LP is an allocator signal; use LP section for allocation/mandate/governance/portfolio/liquidity stories
+pef_core_standalone_pe,title_or_excerpt,regex,(?<![0-9A-Za-z가-힣])PE(?![0-9A-Za-z가-힣]),3,topic,PEF,독립 PE 약어가 직접 등장합니다.,1,Standalone PE abbreviation keyword
 gp_mbk,title_or_excerpt,contains,MBK,2,topic,PEF,주요 GP 관련 기사입니다.,1,GP name boosts relevance only; not a section signal
 gp_hahn,title_or_excerpt,contains,한앤컴퍼니,2,topic,PEF,주요 GP 관련 기사입니다.,1,GP name boosts relevance only; not a section signal
 gp_imm,title_or_excerpt,contains,IMM,2,topic,PEF,주요 GP 관련 기사입니다.,1,GP name boosts relevance only; not a section signal
@@ -78,6 +79,15 @@ gp_opus_nh_pe,title_or_excerpt,contains,오퍼스-NH PE,4,topic,GP,오퍼스-NH 
 gp_atinum,title_or_excerpt,contains,에이티넘,3,topic,GP,에이티넘 관련 GP 기사입니다.,1,Named GP safety net
 gp_500_global_ko,title_or_excerpt,contains,500글로벌,3,topic,GP,500글로벌 관련 GP/VC 기사입니다.,1,Named GP/VC safety net
 gp_500_global_en,title_or_excerpt,contains,500 Global,3,topic,GP,500 Global 관련 GP/VC 기사입니다.,1,Named GP/VC safety net
+gp_keystone_pe,title_or_excerpt,contains,키스톤PE,4,topic,GP,키스톤PE 관련 운용사 기사입니다.,1,Named GP safety net from employee clipping gap
+gp_keystone_private_equity,title_or_excerpt,contains,키스톤프라이빗에쿼티,4,topic,GP,키스톤프라이빗에쿼티 관련 운용사 기사입니다.,1,Named GP safety net from employee clipping gap
+gp_anchor_pe,title_or_excerpt,contains,앵커PE,4,topic,GP,앵커PE 관련 운용사 기사입니다.,1,Named GP safety net from employee clipping gap
+gp_corstone_asia,title_or_excerpt,contains,코스톤아시아,4,topic,GP,코스톤아시아 관련 운용사 기사입니다.,1,Named GP safety net from employee clipping gap
+gp_hantoo_pe,title_or_excerpt,contains,한투PE,4,topic,GP,한투PE 관련 운용사 기사입니다.,1,Named GP safety net from employee clipping gap
+gp_centroid_pe,title_or_excerpt,contains,센트로이드 PE,4,topic,GP,센트로이드PE 관련 운용사 기사입니다.,1,Named GP safety net from employee clipping gap
+gp_centroid_pe_compact,title_or_excerpt,contains,센트로이드PE,4,topic,GP,센트로이드PE 관련 운용사 기사입니다.,1,Named GP safety net from employee clipping gap
+gp_affirma,title_or_excerpt,contains,어펄마,4,topic,GP,어펄마 관련 운용사 기사입니다.,1,Named GP safety net from employee clipping gap
+gp_kkr,title_or_excerpt,regex,(?<![A-Za-z])KKR(?![A-Za-z]),5,topic,GP,KKR 관련 운용사 기사입니다.,1,Global GP safety net from employee clipping gap
 lp_asset_management_head,title_or_excerpt,contains,자산운용본부장,4,topic,LP,LP 자산운용 조직 인사 또는 채용 기사입니다.,1,LP personnel and allocator operations keyword
 lp_cio,title_or_excerpt,contains,CIO,2,topic,LP,LP 또는 금융사 투자책임자 인사 기사일 수 있습니다.,1,LP people and allocator operations keyword
 lp_cio_recruitment,title_or_excerpt,regex,CIO.*공개모집|공개모집.*CIO,3,topic,LP,LP 투자책임자 공개모집 기사입니다.,1,LP people and governance keyword
@@ -95,15 +105,31 @@ lp_cio_public_search,title_or_excerpt,contains,CIO 공개모집,3,topic,LP,LP �
 lp_fund_management_eval,title_or_excerpt,contains,기금운용평가,2,topic,LP,연기금 운용 성과 평가 기사입니다.,1,LP performance keyword
 lp_retirement_plan,title_or_excerpt,contains,퇴직연금,3,topic,LP,퇴직연금의 사모펀드 접근 또는 자산배분 기사입니다.,1,LP allocator policy keyword
 lp_401k,title_or_excerpt,regex,401\s*\(?k\)?,3,topic,LP,401k 퇴직연금의 사모펀드 접근 또는 자산배분 기사입니다.,1,LP allocator policy keyword
+lp_teachers_pension,title_or_excerpt,contains,교직원공제회,4,topic,LP,교직원공제회 출자 또는 운용사 선정 기사입니다.,1,LP institution safety net from employee clipping gap
+lp_post_office,title_or_excerpt,contains,우본,4,topic,LP,우본 출자 또는 위탁사 선정 기사입니다.,1,LP institution safety net from employee clipping gap
+lp_post_office_full,title_or_excerpt,contains,우정사업본부,4,topic,LP,우정사업본부 출자 또는 위탁사 선정 기사입니다.,1,LP institution safety net from employee clipping gap
+lp_general_assembly_pension,title_or_excerpt,contains,총회연금,4,topic,LP,총회연금 출자사업 기사입니다.,1,LP institution safety net from employee clipping gap
+lp_vc_commitment,title_or_excerpt,regex,VC.*출자|출자.*VC,3,topic,LP,VC 출자사업 또는 VC 위탁운용 기사입니다.,1,LP commitment keyword from employee clipping gap
+lp_mandate_manager_selection,title_or_excerpt,regex,위탁사\s*(선발|선정),4,topic,LP,위탁사 선발 또는 선정 기사입니다.,1,LP mandate keyword from employee clipping gap
 ai_pe_gaic,title_or_excerpt,contains,GAIC,1,topic,AI_PE,AI와 PE 투자전략 관련 컨퍼런스 기사입니다.,1,AI & PE conference keyword
 credit_private_credit,title_or_excerpt,contains,프라이빗크레딧,3,topic,Credit,프라이빗크레딧 관련 기사입니다.,1,Deal financing keyword
 credit_private_credit_english,title_or_excerpt,contains,private credit,3,topic,Credit,Private credit 관련 기사입니다.,1,Deal financing keyword
 credit_private_debt_samo,title_or_excerpt,contains,사모대출,3,topic,Credit,사모대출 시장 또는 투자전략 기사입니다.,1,Private debt market keyword
+credit_private_debt_fund,title_or_excerpt,regex,사모대출.*펀드|펀드.*사모대출,5,topic,Credit,사모대출 펀드 출시 또는 조성 기사입니다.,1,Private debt fund safety net from employee clipping gap
 credit_acquisition_finance,title_or_excerpt,contains,인수금융,2,topic,Credit,인수금융 또는 레버리지 조달 기사입니다.,1,Deal financing keyword
 credit_refinancing,title_or_excerpt,contains,리파이낸싱,2,topic,Credit,리파이낸싱 관련 기사입니다.,1,Deal financing keyword
 credit_mezzanine,title_or_excerpt,contains,메자닌,2,topic,Credit,메자닌 투자 또는 조달 기사입니다.,1,Deal financing keyword
 deal_cb_investment,title_or_excerpt,regex,CB.*(투입|인수|투자),3,topic,Deal,전환사채 또는 메자닌 투자 집행 기사입니다.,1,Deal financing keyword
 deal_continuation_fund,title_or_excerpt,contains,컨티뉴에이션 펀드,3,topic,Deal,컨티뉴에이션 펀드 또는 기존 자산 이전 거래 기사입니다.,1,Deal process keyword
+deal_exit_korean,title_or_excerpt,contains,엑시트,2,topic,Deal,엑시트 또는 투자금 회수 기사입니다.,1,Deal exit keyword from employee clipping gap
+deal_acquisition_competition,title_or_excerpt,regex,인수\s*경쟁|인수전,3,topic,Deal,인수 경쟁 구도 기사입니다.,1,Deal process keyword from employee clipping gap
+deal_failed_process,title_or_excerpt,regex,딜.*(틀어졌|무산|결렬|흔들)|M&A.*(불발|무산),4,topic,Deal,딜 무산 또는 거래 불확실성 기사입니다.,1,Deal issue keyword from employee clipping gap
+deal_legal_dispute,title_or_excerpt,contains,법적분쟁,3,topic,Deal,매각 또는 투자 관련 법적분쟁 기사입니다.,1,Deal issue keyword from employee clipping gap
+deal_fi_participation,title_or_excerpt,contains,FI 참여,3,topic,Deal,재무적투자자 참여 거래 기사입니다.,1,Deal participation keyword from employee clipping gap
+market_pef_association,title_or_excerpt,contains,PEF협의회,4,topic,Market,PEF협의회 또는 협회 전환 관련 시장구조 기사입니다.,1,Market-structure safety net from employee clipping gap
+market_pef_association_short,title_or_excerpt,contains,PEF협회,4,topic,Market,PEF협회 관련 시장구조 기사입니다.,1,Market-structure safety net from employee clipping gap
+market_pef_industry,title_or_excerpt,contains,PEF업계,4,topic,Market,PEF업계 정책 또는 제도 논의 기사입니다.,1,Market-structure safety net from employee clipping gap
+market_pef_wedding_hall,title_or_excerpt,regex,PEF.*웨딩홀|웨딩홀.*PEF,4,topic,Market,PEF의 웨딩홀 섹터 투자 테마 기사입니다.,1,Sector-theme safety net from employee clipping gap
 market_otc_derivatives_license,title_or_excerpt,contains,장외파생상품,3,topic,Market,장외파생상품 인가 또는 라이선스 관련 시장·규제 기사입니다.,1,Market regulation keyword
 reg_fsc,any_text,contains,금융위원회,2,topic,Market,금융위 발표 또는 규제 변화와 연결됩니다.,1,Market regulation keyword
 reg_fss,any_text,contains,금융감독원,2,topic,Market,금감원 발표 또는 감독 이슈와 연결됩니다.,1,Market regulation keyword
