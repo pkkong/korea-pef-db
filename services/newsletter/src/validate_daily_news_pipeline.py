@@ -59,7 +59,12 @@ MARKDOWN_LINK_RE = re.compile(r"- \[(?P<title>.+?)\]\((?P<url>https?://[^)]+)\)"
 BRIEF_SECTION_RE = re.compile(r"^\[(?P<section>[^\]]+)\]\s*$")
 
 AUCTION_TITLE_RE = re.compile(r"(?:본입찰|예비입찰|입찰|원매자|인수의향|우선협상|숏리스트|주관사|매각주관|제안)")
-FINANCING_TITLE_RE = re.compile(r"(?:CB|전환사채|메자닌).*(?:투입|인수|투자|조달)|(?:투입|인수|투자|조달).*(?:CB|전환사채|메자닌)", re.IGNORECASE)
+FINANCING_TITLE_RE = re.compile(
+    r"(?:리캡|리캡탈라이제이션|인수금융|리파이낸싱|파이낸싱|사모대출|프라이빗크레딧|private credit|대출)"
+    r"|(?:CB|전환사채|메자닌).*(?:투입|인수|투자|조달)"
+    r"|(?:투입|인수|투자|조달).*(?:CB|전환사채|메자닌)",
+    re.IGNORECASE,
+)
 GP_FUNDRAISING_TITLE_RE = re.compile(r"(?:펀딩 목표|펀드레이징|자펀드|블라인드|GP 도전|펀드.{0,5}도전)")
 OWNERSHIP_TITLE_RE = re.compile(r"(?:수익성|수익성 개선|손본다|밸류업|PMI|구조조정|운영 개선|가치 재평가|재평가)", re.IGNORECASE)
 

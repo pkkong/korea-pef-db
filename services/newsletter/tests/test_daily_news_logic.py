@@ -93,6 +93,7 @@ from validate_daily_news_pipeline import (
     check_archive_classification_quality,
     check_archive_previous_duplicates,
     check_classification_quality,
+    expected_subcategory,
 )
 from newsletter_site_support import merge_archives, read_archive_seed
 from enrich_daily_news_ai import (
@@ -2054,6 +2055,9 @@ def test_20260608_category_regressions() -> None:
 
     ownership = {"title": "에이치PE, 디시인사이드 ‘광고 수익성’ 손본다", "section": "Deal"}
     assert editorial_subtype(ownership, "Deal") == "Ownership"
+    recap_title = "UCK, 설빙 2차 리캡 완료…밸류업 집중한다"
+    assert editorial_subtype({"title": recap_title, "section": "Deal"}, "Deal") == "Financing"
+    assert expected_subcategory(recap_title, "Deal") == "Financing"
     assert (
         editorial_subtype({"title": "1조원대 애큐온 매각 본입찰에 메리츠·한화생명 참여 [시그널]", "section": "Deal"}, "Deal")
         == "Auction"
