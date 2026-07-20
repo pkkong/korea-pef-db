@@ -56,8 +56,8 @@ jobs:
             --mirror-url "${NEWSLETTER_PUBLIC_URL}" \
             --app-url "${NEWSLETTER_APP_URL}"
 
-      - name: Dispatch mirror build if mirror is stale
-        if: steps.freshness.outputs.stale == 'true' && steps.freshness.outputs.mirror_fresh != 'true'
+      - name: Dispatch mirror build if no syncable archive is fresh
+        if: steps.freshness.outputs.stale == 'true' && steps.freshness.outputs.sync_source_fresh != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           WATCHDOG_DRY_RUN: ${{ inputs.dry_run }}
@@ -104,7 +104,7 @@ jobs:
           echo "Dispatched ${NEWSLETTER_PUBLISH_WORKFLOW} for ${{ steps.date.outputs.report_date }}"
 
       - name: Dispatch Supabase sync if only Vercel app is stale
-        if: steps.freshness.outputs.stale == 'true' && steps.freshness.outputs.mirror_fresh == 'true' && steps.freshness.outputs.app_fresh != 'true'
+        if: steps.freshness.outputs.stale == 'true' && steps.freshness.outputs.sync_source_fresh == 'true' && steps.freshness.outputs.app_fresh != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           WATCHDOG_DRY_RUN: ${{ inputs.dry_run }}

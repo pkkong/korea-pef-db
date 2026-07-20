@@ -53,6 +53,15 @@ APP_HEALTH = {
     "article_count": 2,
     "issue_count": 2,
 }
+STALE_MIRROR_HEALTH = {
+    **MIRROR_HEALTH,
+    "built_at": "2026-06-20T00:00:00+00:00",
+    "report_date": "2026-06-20",
+    "article_count": 1,
+}
+STALE_ARCHIVE = [
+    {"reportDate": "2026-06-20", "articles": [{"title": "Old", "url": "https://example.com/old"}]},
+]
 
 
 def fake_fetcher(url: str, timeout: int = 20) -> object:
@@ -73,6 +82,26 @@ def stale_app_fetcher(url: str, timeout: int = 20) -> object:
         stale["report_date"] = "2026-06-20"
         return stale
     return fake_fetcher(url, timeout)
+
+
+def github_pages_lag_fetcher(url: str, timeout: int = 20) -> object:
+    if url.startswith("https://pkkong.github.io/kpef-newsletter/health.json"):
+        return dict(STALE_MIRROR_HEALTH)
+    if url.startswith("https://pkkong.github.io/kpef-newsletter/archive.json"):
+        return list(STALE_ARCHIVE)
+    if url.startswith("https://raw.githubusercontent.com/pkkong/kpef-newsletter/gh-pages/health.json"):
+        return dict(MIRROR_HEALTH)
+    if url.startswith("https://raw.githubusercontent.com/pkkong/kpef-newsletter/gh-pages/archive.json"):
+        return list(ARCHIVE)
+    return fake_fetcher(url, timeout)
+
+
+def github_pages_lag_stale_app_fetcher(url: str, timeout: int = 20) -> object:
+    if url.startswith("https://app.example/health.json"):
+        stale = dict(APP_HEALTH)
+        stale["report_date"] = "2026-06-20"
+        return stale
+    return github_pages_lag_fetcher(url, timeout)
 
 
 def test_mirror_freshness_skips_network_for_manual_runs() -> None:
@@ -115,6 +144,23 @@ def test_download_verified_archive_writes_syncable_archive() -> None:
 
         assert payload["report_date"] == REPORT_DATE
         assert payload["article_count"] == 2
+        assert payload["source"] == "pages_mirror"
+        assert json.loads(out.read_text(encoding="utf-8")) == ARCHIVE
+
+
+def test_download_verified_archive_uses_raw_github_pages_when_pages_lag() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "public_archive.json"
+        payload = download_verified_archive(
+            requested_report_date=REPORT_DATE,
+            mirror_url="https://pkkong.github.io/kpef-newsletter",
+            out_path=out,
+            fetcher=github_pages_lag_fetcher,
+        )
+
+        assert payload["report_date"] == REPORT_DATE
+        assert payload["article_count"] == 2
+        assert payload["source"] == "raw_github_pages"
         assert json.loads(out.read_text(encoding="utf-8")) == ARCHIVE
 
 
@@ -152,6 +198,20 @@ def test_verify_vercel_app_requires_supabase_and_mirror_count_match() -> None:
     assert payload["archive_count"] == 2
 
 
+def test_verify_vercel_app_uses_raw_github_pages_count_when_pages_lag() -> None:
+    payload = verify_vercel_app(
+        report_date=REPORT_DATE,
+        app_url="https://app.example",
+        mirror_url="https://pkkong.github.io/kpef-newsletter",
+        deadline_seconds=0,
+        fetcher=github_pages_lag_fetcher,
+    )
+
+    assert payload["article_count"] == 2
+    assert payload["archive_count"] == 2
+    assert payload["source"] == "raw_github_pages"
+
+
 def test_watchdog_freshness_dispatches_only_stale_side() -> None:
     payload = watchdog_freshness(
         report_date=REPORT_DATE,
@@ -162,16 +222,35 @@ def test_watchdog_freshness_dispatches_only_stale_side() -> None:
 
     assert payload["stale"] is True
     assert payload["mirror_fresh"] is True
+    assert payload["sync_source_fresh"] is True
     assert payload["app_fresh"] is False
+
+
+def test_watchdog_uses_raw_github_pages_as_sync_source_when_pages_lag() -> None:
+    payload = watchdog_freshness(
+        report_date=REPORT_DATE,
+        mirror_url="https://pkkong.github.io/kpef-newsletter",
+        app_url="https://app.example",
+        fetcher=github_pages_lag_stale_app_fetcher,
+    )
+
+    assert payload["stale"] is True
+    assert payload["mirror_fresh"] is False
+    assert payload["sync_source_fresh"] is True
+    assert payload["app_fresh"] is False
+    assert "raw_github_pages" in payload["reason"]
 
 
 def main() -> int:
     test_mirror_freshness_skips_network_for_manual_runs()
     test_mirror_freshness_detects_already_fresh_schedule()
     test_download_verified_archive_writes_syncable_archive()
+    test_download_verified_archive_uses_raw_github_pages_when_pages_lag()
     test_verify_public_mirror_matches_local_artifacts()
     test_verify_vercel_app_requires_supabase_and_mirror_count_match()
+    test_verify_vercel_app_uses_raw_github_pages_count_when_pages_lag()
     test_watchdog_freshness_dispatches_only_stale_side()
+    test_watchdog_uses_raw_github_pages_as_sync_source_when_pages_lag()
     print("newsletter public status tests passed")
     return 0
 

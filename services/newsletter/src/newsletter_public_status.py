@@ -38,6 +38,33 @@ def _clean_base_url(value: str) -> str:
     return value.rstrip("/")
 
 
+def _github_pages_raw_base_url(mirror_url: str) -> str:
+    parsed = urlparse(_clean_base_url(mirror_url))
+    host = parsed.netloc.lower()
+    if not host.endswith(".github.io"):
+        return ""
+    owner = host[: -len(".github.io")]
+    repo = parsed.path.strip("/").split("/", 1)[0]
+    if not owner or not repo:
+        return ""
+    return f"https://raw.githubusercontent.com/{owner}/{repo}/gh-pages"
+
+
+def _raw_mirror_base_urls(mirror_url: str) -> list[str]:
+    bases: list[str] = []
+    override = os.environ.get("NEWSLETTER_RAW_MIRROR_URL", "").strip()
+    if override:
+        bases.append(_clean_base_url(override))
+    inferred = _github_pages_raw_base_url(mirror_url)
+    if inferred:
+        bases.append(inferred)
+    deduped: list[str] = []
+    for base in bases:
+        if base not in deduped and base != _clean_base_url(mirror_url):
+            deduped.append(base)
+    return deduped
+
+
 def _cache_busted_url(url: str, label: str, key: str) -> str:
     parsed = urlparse(url)
     sep = "&" if parsed.query else ""
@@ -77,6 +104,90 @@ def issue_article_count(archive: Any, report_date: str) -> int:
         None,
     )
     return len(entry.get("articles") or []) if isinstance(entry, dict) else 0
+
+
+def _syncable_archive_snapshot(
+    *,
+    requested_report_date: str,
+    base_url: str,
+    source: str,
+    label: str,
+    fetcher: JsonFetcher,
+) -> dict[str, Any]:
+    cache_key = requested_report_date or str(int(time.time()))
+    health = fetch_json_busted(
+        f"{base_url}/health.json",
+        label=label,
+        key=cache_key,
+        timeout=20,
+        fetcher=fetcher,
+    )
+    archive = fetch_json_busted(
+        f"{base_url}/archive.json",
+        label=label,
+        key=cache_key,
+        timeout=20,
+        fetcher=fetcher,
+    )
+    if not isinstance(health, dict):
+        raise RuntimeError(f"{source} health.json is not an object")
+    if not isinstance(archive, list):
+        raise RuntimeError(f"{source} archive.json is not a list")
+    source_report_date = str(health.get("report_date") or "")
+    report_date = requested_report_date or source_report_date
+    if not report_date:
+        raise RuntimeError(f"{source} health.json does not contain report_date")
+    if source_report_date != report_date:
+        raise RuntimeError(f"{source} report_date={source_report_date} expected={report_date}")
+    article_count = int(health.get("article_count") or 0)
+    archive_count = issue_article_count(archive, report_date)
+    if article_count <= 0 or archive_count != article_count:
+        raise RuntimeError(f"{source} archive is not syncable: health={article_count} archive={archive_count}")
+    return {
+        "source": source,
+        "health": health,
+        "archive": archive,
+        "report_date": report_date,
+        "article_count": article_count,
+        "archive_count": archive_count,
+    }
+
+
+def syncable_public_archive_snapshot(
+    *,
+    requested_report_date: str,
+    mirror_url: str,
+    label: str,
+    fetcher: JsonFetcher = fetch_json_url,
+) -> dict[str, Any]:
+    base_url = _clean_base_url(mirror_url)
+    errors: list[str] = []
+    try:
+        return _syncable_archive_snapshot(
+            requested_report_date=requested_report_date,
+            base_url=base_url,
+            source="pages_mirror",
+            label=label,
+            fetcher=fetcher,
+        )
+    except Exception as exc:  # noqa: BLE001 - fallback reports all checked sources.
+        errors.append(f"pages_mirror: {exc}")
+
+    for raw_base_url in _raw_mirror_base_urls(mirror_url):
+        try:
+            snapshot = _syncable_archive_snapshot(
+                requested_report_date=requested_report_date,
+                base_url=raw_base_url,
+                source="raw_github_pages",
+                label=label,
+                fetcher=fetcher,
+            )
+            snapshot["fallback_reason"] = "; ".join(errors)
+            return snapshot
+        except Exception as exc:  # noqa: BLE001 - continue checking configured fallbacks.
+            errors.append(f"raw_github_pages: {exc}")
+
+    raise RuntimeError("; ".join(errors))
 
 
 def mirror_snapshot(
@@ -196,42 +307,19 @@ def download_verified_archive(
     out_path: Path,
     fetcher: JsonFetcher = fetch_json_url,
 ) -> dict[str, Any]:
-    base_url = _clean_base_url(mirror_url)
-    cache_key = requested_report_date or str(int(time.time()))
-    health = fetch_json_busted(
-        f"{base_url}/health.json",
+    snapshot = syncable_public_archive_snapshot(
+        requested_report_date=requested_report_date,
+        mirror_url=mirror_url,
         label="sync",
-        key=cache_key,
-        timeout=20,
         fetcher=fetcher,
     )
-    archive = fetch_json_busted(
-        f"{base_url}/archive.json",
-        label="sync",
-        key=cache_key,
-        timeout=20,
-        fetcher=fetcher,
-    )
-    if not isinstance(health, dict):
-        raise RuntimeError("mirror health.json is not an object")
-    if not isinstance(archive, list):
-        raise RuntimeError("mirror archive.json is not a list")
-    mirror_report_date = str(health.get("report_date") or "")
-    report_date = requested_report_date or mirror_report_date
-    if not report_date:
-        raise RuntimeError("mirror health.json does not contain report_date")
-    if mirror_report_date != report_date:
-        raise RuntimeError(f"mirror report_date={mirror_report_date} expected={report_date}")
-    article_count = int(health.get("article_count") or 0)
-    archive_count = issue_article_count(archive, report_date)
-    if article_count <= 0 or archive_count != article_count:
-        raise RuntimeError(f"mirror archive is not syncable: health={article_count} archive={archive_count}")
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(archive, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    out_path.write_text(json.dumps(snapshot["archive"], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {
-        "report_date": report_date,
-        "article_count": article_count,
-        "archive_count": archive_count,
+        "source": snapshot["source"],
+        "report_date": snapshot["report_date"],
+        "article_count": snapshot["article_count"],
+        "archive_count": snapshot["archive_count"],
         "archive_path": str(out_path),
     }
 
@@ -315,13 +403,13 @@ def verify_vercel_app(
     poll_seconds: int = 10,
     fetcher: JsonFetcher = fetch_json_url,
 ) -> dict[str, Any]:
-    mirror = mirror_snapshot(
-        report_date=report_date,
+    sync_source = syncable_public_archive_snapshot(
+        requested_report_date=report_date,
         mirror_url=mirror_url,
         label="verify",
         fetcher=fetcher,
     )
-    expected_article_count = int(mirror["article_count"])
+    expected_article_count = int(sync_source["article_count"])
     app_base_url = _clean_base_url(app_url)
     deadline = time.time() + deadline_seconds
     last_error = ""
@@ -357,6 +445,7 @@ def verify_vercel_app(
                 "report_date": report_date,
                 "article_count": article_count,
                 "archive_count": archive_count,
+                "source": sync_source["source"],
             }
         except Exception as exc:  # noqa: BLE001 - status loop reports the last failure.
             last_error = str(exc)
@@ -374,8 +463,10 @@ def watchdog_freshness(
     fetcher: JsonFetcher = fetch_json_url,
 ) -> dict[str, Any]:
     mirror_fresh = False
+    sync_source_fresh = False
     app_fresh = False
     mirror_status = "missing"
+    sync_source_status = "missing"
     app_status = "missing"
 
     try:
@@ -387,8 +478,27 @@ def watchdog_freshness(
         )
         mirror_fresh = bool(mirror["fresh"])
         mirror_status = f"{mirror['report_date'] or 'missing'}/{mirror['article_count']}/{mirror['archive_count']}"
+        if mirror_fresh:
+            sync_source_fresh = True
+            sync_source_status = f"pages_mirror/{mirror_status}"
     except (OSError, json.JSONDecodeError, ValueError, TimeoutError) as exc:
         mirror_status = f"error:{exc}"
+
+    if not sync_source_fresh:
+        try:
+            sync_source = syncable_public_archive_snapshot(
+                requested_report_date=report_date,
+                mirror_url=mirror_url,
+                label="watchdog",
+                fetcher=fetcher,
+            )
+            sync_source_fresh = True
+            sync_source_status = (
+                f"{sync_source['source']}/{sync_source['report_date']}/"
+                f"{sync_source['article_count']}/{sync_source['archive_count']}"
+            )
+        except (OSError, json.JSONDecodeError, ValueError, TimeoutError, RuntimeError) as exc:
+            sync_source_status = f"error:{exc}"
 
     app_base_url = _clean_base_url(app_url)
     try:
@@ -409,11 +519,15 @@ def watchdog_freshness(
     except (OSError, json.JSONDecodeError, ValueError, TimeoutError) as exc:
         app_status = f"error:{exc}"
 
-    stale = not (mirror_fresh and app_fresh)
-    reason = f"expected={report_date} mirror={mirror_status} app={app_status} stale={'true' if stale else 'false'}"
+    stale = not (sync_source_fresh and app_fresh)
+    reason = (
+        f"expected={report_date} mirror={mirror_status} sync_source={sync_source_status} "
+        f"app={app_status} stale={'true' if stale else 'false'}"
+    )
     return {
         "stale": stale,
         "mirror_fresh": mirror_fresh,
+        "sync_source_fresh": sync_source_fresh,
         "app_fresh": app_fresh,
         "reason": reason,
     }
@@ -500,10 +614,12 @@ def main() -> int:
                 {
                     "report_date": payload["report_date"],
                     "article_count": payload["article_count"],
+                    "source": payload["source"],
                 }
             )
             print(
                 "public_archive=ok "
+                f"source={payload['source']} "
                 f"report_date={payload['report_date']} articles={payload['article_count']}"
             )
         elif args.command == "verify-public-mirror":
@@ -529,7 +645,11 @@ def main() -> int:
                 deadline_seconds=args.deadline_seconds,
                 poll_seconds=args.poll_seconds,
             )
-            print(f"supabase_recovery_verify_status=ok report_date={payload['report_date']} articles={payload['article_count']}")
+            print(
+                "supabase_recovery_verify_status=ok "
+                f"source={payload['source']} "
+                f"report_date={payload['report_date']} articles={payload['article_count']}"
+            )
         elif args.command == "watchdog-freshness":
             payload = watchdog_freshness(
                 report_date=args.report_date,

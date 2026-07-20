@@ -176,6 +176,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Publish public newsletter mirror
+        id: publish_public
         if: steps.freshness.outputs.should_run == 'true'
         shell: bash
         env:
@@ -209,7 +210,9 @@ jobs:
           echo "Published ${NEWSLETTER_PUBLIC_URL}"
 
       - name: Verify public newsletter
+        id: verify_public
         if: steps.freshness.outputs.should_run == 'true'
+        continue-on-error: true
         shell: bash
         run: |
           python3 services/newsletter/src/newsletter_public_status.py verify-public-mirror \
@@ -221,14 +224,18 @@ jobs:
             --poll-seconds 15
 
       - name: Report mirror handoff
-        if: steps.freshness.outputs.should_run == 'true'
+        if: ${{ always() && steps.freshness.outputs.should_run == 'true' && steps.publish_public.outcome == 'success' }}
         shell: bash
         run: |
-          echo "GitHub Pages mirror verified for ${{ steps.date.outputs.report_date }}."
+          if [ "${{ steps.verify_public.outcome }}" = "success" ]; then
+            echo "GitHub Pages mirror verified for ${{ steps.date.outputs.report_date }}."
+          else
+            echo "::warning::GitHub Pages mirror did not verify before timeout. Supabase/Vercel sync can use the raw gh-pages archive fallback."
+          fi
           echo "Supabase/Vercel refresh is owned by the separate 'Sync newsletter Supabase read model' workflow."
 
       - name: Dispatch Supabase and Vercel sync
-        if: steps.freshness.outputs.should_run == 'true'
+        if: ${{ always() && steps.freshness.outputs.should_run == 'true' && steps.publish_public.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
