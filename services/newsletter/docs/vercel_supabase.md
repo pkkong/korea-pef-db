@@ -75,7 +75,9 @@ section order는 GitHub Pages `archive.json`과 같아야 한다.
 - GitHub Actions `Deploy newsletter Vercel app`가 성공해야 한다.
 - GitHub Actions `Build newsletter mirror`가 성공해야 한다.
 - GitHub Actions `Sync newsletter Supabase read model`가 성공해야 한다.
-- `https://kpef-newsletter.vercel.app/health.json?refresh=1`이 `data_source=supabase`를 반환해야 한다.
+- 정상 경로에서는 `https://kpef-newsletter.vercel.app/health.json?refresh=1`이 `data_source=supabase`를 반환해야 한다.
+- GitHub Actions나 Pages CDN 장애 중에는 Vercel이 raw `gh-pages` archive fallback으로 오늘자를 보여줄 수 있다. 이때
+  `data_source=archive_fallback`, 최신 `report_date`, 최신 `article_count`이면 사용자 화면은 복구된 상태로 본다.
 - `https://pkkong.github.io/kpef-newsletter/health.json`은 GitHub Pages CDN 반영 지연이 있을 수 있으므로,
   workflow 검증은 이번 빌드의 `built_at`과 `article_count`까지 비교한다.
 
@@ -92,17 +94,21 @@ preflight다. 파일 존재, Python compile, import isolation, Flask smoke test,
 `Apply newsletter Supabase migration` workflow는 Supabase schema 변경만 담당한다.
 Vercel 앱 배포와 DB migration을 섞지 않는다.
 
-`Build newsletter mirror` workflow는 수집, 정적 미러 생성/검증, GitHub Pages static mirror
-publish/verify만 담당한다. Supabase sync와 Vercel app health 검증은 담당하지 않는다.
+`Build newsletter mirror` workflow는 수집, 정적 미러 생성, GitHub Pages static mirror
+publish/verify만 담당한다. GitHub Pages CDN 검증이 지연되어도 `gh-pages` 원본 archive push가 끝났으면
+별도 Supabase sync workflow를 dispatch한다. Supabase sync와 Vercel app health 검증은 별도 workflow가 담당한다.
 
 `Newsletter publish watchdog` workflow는 GitHub-only fallback scheduler다. primary
 publish schedule이 GitHub 내부 지연/누락으로 실행되지 않았을 때 Vercel app과
-GitHub Pages mirror의 health를 확인한다. mirror가 stale이면 mirror build workflow를
-dispatch하고, mirror는 fresh인데 Vercel app만 stale이면 `Sync newsletter Supabase
-read model` workflow만 dispatch한다. 이 watchdog도 수집을 직접 하지 않는다.
+sync 가능한 archive source를 확인한다. Pages mirror 또는 raw `gh-pages` archive 중 하나라도
+오늘자이면 sync source가 fresh인 것으로 본다. sync source가 stale이면 mirror build workflow를
+dispatch하고, sync source는 fresh인데 Vercel app만 stale이면 `Sync newsletter Supabase
+read model` workflow만 dispatch한다. Vercel app이 `archive_fallback`으로 오늘자를 보여주면
+사용자 화면은 fresh로 판단한다. 이 watchdog도 수집을 직접 하지 않는다.
 
 `Sync newsletter Supabase read model` workflow는 GitHub Pages mirror의 verified
 `archive.json`을 읽어 최근 30개 이슈를 Supabase read model로 다시 동기화하고 Vercel health를 확인한다.
+Pages URL이 stale이면 raw `gh-pages` archive를 fallback으로 사용한다.
 Vercel/Supabase만 뒤처졌을 때 전체 뉴스 수집을 다시 돌리지 않기 위한 복구 경로다.
 
 필요한 GitHub Actions secrets:
@@ -121,10 +127,11 @@ Vercel/Supabase만 뒤처졌을 때 전체 뉴스 수집을 다시 돌리지 않
 ## 장애 기준
 
 - Supabase sync가 실패해도 GitHub Pages mirror 발행은 이미 끝난 뒤여야 한다.
-- Vercel app은 Supabase가 비어 있거나 장애일 때 기존 public `archive.json`으로 fallback한다.
+- Vercel app은 Supabase가 비어 있거나 장애일 때, 또는 Supabase보다 raw/public archive가 더 최신일 때
+  `archive_fallback`으로 사용자 화면을 먼저 복구한다.
 - Supabase service role key는 GitHub Actions에만 둔다. Vercel에는 publishable key만 둔다.
-- Daily publish 완료 기준은 Vercel `/health.json?refresh=1`의 `data_source=supabase`,
+- 정상 Daily publish 완료 기준은 Vercel `/health.json?refresh=1`의 `data_source=supabase`,
   최신 `report_date`, 최신 `article_count`와 GitHub Pages `health.json`/`archive.json`
-  일치 여부다.
+  일치 여부다. 장애 중 임시 복구 기준은 Vercel `data_source=archive_fallback`과 최신 날짜/기사 수다.
 - Vercel archive의 최신 issue order와 article row order는 GitHub Pages `archive.json`과 같아야 한다.
 - 같은 날짜를 다시 sync할 때는 `newsletter_issue_articles`, tags, entities를 archive 기준으로 재생성하고 stale links를 남기지 않는다.
