@@ -104,6 +104,14 @@ def github_pages_lag_stale_app_fetcher(url: str, timeout: int = 20) -> object:
     return github_pages_lag_fetcher(url, timeout)
 
 
+def github_pages_lag_archive_fallback_app_fetcher(url: str, timeout: int = 20) -> object:
+    if url.startswith("https://app.example/health.json"):
+        fallback = dict(APP_HEALTH)
+        fallback["data_source"] = "archive_fallback"
+        return fallback
+    return github_pages_lag_fetcher(url, timeout)
+
+
 def test_mirror_freshness_skips_network_for_manual_runs() -> None:
     def fail_fetcher(url: str, timeout: int = 20) -> object:
         raise AssertionError("manual freshness should not fetch public URLs")
@@ -241,6 +249,20 @@ def test_watchdog_uses_raw_github_pages_as_sync_source_when_pages_lag() -> None:
     assert "raw_github_pages" in payload["reason"]
 
 
+def test_watchdog_accepts_archive_fallback_app_when_pages_lag() -> None:
+    payload = watchdog_freshness(
+        report_date=REPORT_DATE,
+        mirror_url="https://pkkong.github.io/kpef-newsletter",
+        app_url="https://app.example",
+        fetcher=github_pages_lag_archive_fallback_app_fetcher,
+    )
+
+    assert payload["stale"] is False
+    assert payload["mirror_fresh"] is False
+    assert payload["sync_source_fresh"] is True
+    assert payload["app_fresh"] is True
+
+
 def main() -> int:
     test_mirror_freshness_skips_network_for_manual_runs()
     test_mirror_freshness_detects_already_fresh_schedule()
@@ -251,6 +273,7 @@ def main() -> int:
     test_verify_vercel_app_uses_raw_github_pages_count_when_pages_lag()
     test_watchdog_freshness_dispatches_only_stale_side()
     test_watchdog_uses_raw_github_pages_as_sync_source_when_pages_lag()
+    test_watchdog_accepts_archive_fallback_app_when_pages_lag()
     print("newsletter public status tests passed")
     return 0
 

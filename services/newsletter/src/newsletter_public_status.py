@@ -32,6 +32,7 @@ NEWSLETTER_REQUIRED_FILES = {
     "apple-touch-icon.png",
 }
 NEWSLETTER_ONLY_ZERO_HEALTH_KEYS = ("lp_monitor_count", "gp_count", "gp_profile_page_count")
+WATCHDOG_APP_FRESH_DATA_SOURCES = {"supabase", "archive_fallback"}
 
 
 def _clean_base_url(value: str) -> str:
@@ -514,7 +515,11 @@ def watchdog_freshness(
         app_date = str(health.get("report_date") or "")
         app_articles = int(health.get("article_count") or 0)
         app_source = str(health.get("data_source") or "")
-        app_fresh = app_date == report_date and app_articles > 0 and app_source == "supabase"
+        app_fresh = (
+            app_date == report_date
+            and app_articles > 0
+            and app_source in WATCHDOG_APP_FRESH_DATA_SOURCES
+        )
         app_status = f"{app_date or 'missing'}/{app_articles}/{app_source or 'missing'}"
     except (OSError, json.JSONDecodeError, ValueError, TimeoutError) as exc:
         app_status = f"error:{exc}"
