@@ -22,6 +22,7 @@ from newsletter_data import (  # noqa: E402
     grouped_sections,
     select_issue,
 )
+import newsletter_data  # noqa: E402
 from newsletter_ui import render_app, service_js  # noqa: E402
 import app as web_app  # noqa: E402
 
@@ -166,6 +167,84 @@ def test_filter_and_group_articles() -> None:
     assert grouped[0][0] == "LP"
 
 
+def test_load_archive_prefers_newer_raw_archive_when_supabase_lags() -> None:
+    supabase_archive = sample_archive()
+    raw_archive = [
+        {
+            "reportDate": "2026-06-17",
+            "visibleDate": "2026.06.17",
+            "articles": [
+                {
+                    "id": "fresh",
+                    "rank": 0,
+                    "title": "최신 기사",
+                    "source": "테스트신문",
+                    "url": "https://example.com/fresh",
+                    "section": "Market",
+                }
+            ],
+        },
+        *supabase_archive,
+    ]
+    old_cache = dict(newsletter_data._CACHE)
+    old_supabase = newsletter_data.fetch_supabase_archive
+    old_urls = newsletter_data.archive_fallback_urls
+    old_archive_fetch = newsletter_data.fetch_archive_url_from
+    newsletter_data._CACHE.update({"expires_at": 0.0, "archive": [], "source": "empty"})
+    newsletter_data.fetch_supabase_archive = lambda: supabase_archive
+    newsletter_data.archive_fallback_urls = lambda: ["pages", "raw"]
+    newsletter_data.fetch_archive_url_from = lambda url: raw_archive if url == "raw" else supabase_archive
+    try:
+        archive, source = newsletter_data.load_archive(force_refresh=True)
+
+        assert source == "archive_fallback"
+        assert archive[0]["reportDate"] == "2026-06-17"
+        assert archive[0]["articles"][0]["title"] == "최신 기사"
+    finally:
+        newsletter_data.fetch_supabase_archive = old_supabase
+        newsletter_data.archive_fallback_urls = old_urls
+        newsletter_data.fetch_archive_url_from = old_archive_fetch
+        newsletter_data._CACHE.update(old_cache)
+
+
+def test_load_archive_keeps_supabase_when_archive_fallback_is_not_newer() -> None:
+    supabase_archive = sample_archive()
+    older_archive = [
+        {
+            "reportDate": "2026-06-15",
+            "visibleDate": "2026.06.15",
+            "articles": [
+                {
+                    "id": "old",
+                    "rank": 0,
+                    "title": "이전 기사",
+                    "source": "테스트신문",
+                    "url": "https://example.com/old",
+                    "section": "Market",
+                }
+            ],
+        }
+    ]
+    old_cache = dict(newsletter_data._CACHE)
+    old_supabase = newsletter_data.fetch_supabase_archive
+    old_urls = newsletter_data.archive_fallback_urls
+    old_archive_fetch = newsletter_data.fetch_archive_url_from
+    newsletter_data._CACHE.update({"expires_at": 0.0, "archive": [], "source": "empty"})
+    newsletter_data.fetch_supabase_archive = lambda: supabase_archive
+    newsletter_data.archive_fallback_urls = lambda: ["raw"]
+    newsletter_data.fetch_archive_url_from = lambda url: older_archive
+    try:
+        archive, source = newsletter_data.load_archive(force_refresh=True)
+
+        assert source == "supabase"
+        assert archive[0]["reportDate"] == "2026-06-16"
+    finally:
+        newsletter_data.fetch_supabase_archive = old_supabase
+        newsletter_data.archive_fallback_urls = old_urls
+        newsletter_data.fetch_archive_url_from = old_archive_fetch
+        newsletter_data._CACHE.update(old_cache)
+
+
 def test_vercel_app_uses_common_newsletter_ui() -> None:
     old_loader = web_app.load_archive
     web_app.load_archive = lambda force_refresh=False: (sample_archive(), "test")
@@ -264,6 +343,8 @@ def main() -> int:
     test_archive_from_supabase_rows_keeps_issue_skeletons_and_zero_section_order()
     test_supabase_archive_filters_articles_to_selected_issue_window()
     test_filter_and_group_articles()
+    test_load_archive_prefers_newer_raw_archive_when_supabase_lags()
+    test_load_archive_keeps_supabase_when_archive_fallback_is_not_newer()
     test_vercel_app_uses_common_newsletter_ui()
     test_common_ui_marks_empty_issue_dates_for_public_users()
     test_vercel_app_imports_from_repo_root_package_path()

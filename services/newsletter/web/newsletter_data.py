@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 
 
 DEFAULT_ARCHIVE_URL = "https://pkkong.github.io/kpef-newsletter/archive.json"
+DEFAULT_RAW_ARCHIVE_URL = "https://raw.githubusercontent.com/pkkong/kpef-newsletter/gh-pages/archive.json"
 DEFAULT_CACHE_SECONDS = 300
 DEFAULT_SUPABASE_ISSUE_LIMIT = 30
 DEFAULT_SUPABASE_ROW_LIMIT = 1200
@@ -193,6 +194,10 @@ def fetch_supabase_archive(limit: int | None = None) -> list[dict[str, Any]]:
 
 def fetch_archive_url() -> list[dict[str, Any]]:
     archive_url = os.environ.get("NEWSLETTER_ARCHIVE_URL", DEFAULT_ARCHIVE_URL)
+    return fetch_archive_url_from(archive_url)
+
+
+def fetch_archive_url_from(archive_url: str) -> list[dict[str, Any]]:
     data = _request_json(
         archive_url,
         headers={"User-Agent": "kpef-newsletter-vercel/1.0"},
@@ -200,6 +205,55 @@ def fetch_archive_url() -> list[dict[str, Any]]:
     if not isinstance(data, list):
         return []
     return [row for row in data if isinstance(row, dict)]
+
+
+def archive_fallback_urls() -> list[str]:
+    urls = [
+        os.environ.get("NEWSLETTER_ARCHIVE_URL", DEFAULT_ARCHIVE_URL),
+        os.environ.get("NEWSLETTER_RAW_ARCHIVE_URL", DEFAULT_RAW_ARCHIVE_URL),
+    ]
+    deduped: list[str] = []
+    for url in urls:
+        clean_url = _clean_text(url)
+        if clean_url and clean_url not in deduped:
+            deduped.append(clean_url)
+    return deduped
+
+
+def archive_latest_status(archive: list[dict[str, Any]]) -> tuple[str, int]:
+    for issue in archive:
+        report_date = _clean_text(issue.get("reportDate"))
+        articles = issue.get("articles") or []
+        article_count = len(articles) if isinstance(articles, list) else _clean_int(issue.get("articleCount"), 0)
+        if report_date:
+            return report_date, article_count
+    return "", 0
+
+
+def archive_is_newer(candidate: list[dict[str, Any]], current: list[dict[str, Any]]) -> bool:
+    candidate_date, candidate_count = archive_latest_status(candidate)
+    current_date, current_count = archive_latest_status(current)
+    if candidate_count <= 0:
+        return False
+    if not current_date:
+        return True
+    if candidate_date > current_date:
+        return True
+    return candidate_date == current_date and candidate_count > current_count
+
+
+def fetch_best_archive_fallback(current_archive: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str]:
+    best_archive: list[dict[str, Any]] = []
+    for url in archive_fallback_urls():
+        try:
+            candidate = fetch_archive_url_from(url)
+        except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
+            continue
+        if archive_is_newer(candidate, current_archive) and (
+            not best_archive or archive_is_newer(candidate, best_archive)
+        ):
+            best_archive = candidate
+    return best_archive, "archive_fallback" if best_archive else ""
 
 
 def load_archive(force_refresh: bool = False) -> tuple[list[dict[str, Any]], str]:
@@ -212,11 +266,20 @@ def load_archive(force_refresh: bool = False) -> tuple[list[dict[str, Any]], str
     try:
         archive = fetch_supabase_archive()
         if not archive:
+            archive, source = fetch_best_archive_fallback([])
+            if not archive:
+                source = "archive"
+                archive = fetch_archive_url()
+        else:
+            fallback_archive, fallback_source = fetch_best_archive_fallback(archive)
+            if fallback_archive:
+                archive = fallback_archive
+                source = fallback_source
+    except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
+        archive, source = fetch_best_archive_fallback([])
+        if not archive:
             source = "archive"
             archive = fetch_archive_url()
-    except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
-        source = "archive"
-        archive = fetch_archive_url()
 
     _CACHE["archive"] = archive
     _CACHE["source"] = source
