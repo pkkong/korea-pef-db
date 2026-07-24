@@ -44,6 +44,7 @@ from daily_news_common import (
     fetch_text,
     google_news_rss_url,
     is_generic_aggregator_text,
+    is_truncated_news_title,
     load_gp_aliases,
     load_env_file,
     load_manual_overrides,
@@ -2563,6 +2564,8 @@ def should_export_row(row: dict[str, object], allow_google_news_redirects: bool 
         return False
     if review_status == "force_include":
         return True
+    if is_truncated_news_title(row.get("title", "")):
+        return False
     if has_advisory_people_signal(str(row.get("title", ""))):
         return False
     if str(row.get("source_url", "")).startswith("https://news.google.com/") and not allow_google_news_redirects:

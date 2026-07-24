@@ -493,6 +493,17 @@ def test_public_news_title_keeps_non_truncated_dotdotdot_title() -> None:
     assert choose_public_news_title(title, "", "인베스트조선") == title
 
 
+def test_truncated_public_title_is_not_auto_exported() -> None:
+    row = {
+        "title": "'공모·사모' 경계 허문다…KKR·캐피털그룹, 개인투자자 겨냥 '하이브리드' 승부...",
+        "source_url": "https://example.com/article",
+        "quality_score": 99,
+    }
+
+    assert not should_export_row(row)
+    assert should_export_row({**row, "review_status": "force_include"})
+
+
 def test_thebell_mobile_url_from_free_and_front_urls() -> None:
     assert thebell_mobile_url("https://www.thebell.co.kr/free/content/ArticleView.asp?key=202606150731053580107281") == (
         "https://m.thebell.co.kr/m/newsview.asp?newskey=202606150731053580107281"
@@ -3421,6 +3432,7 @@ def main() -> int:
         test_truncated_media_suffix_does_not_split_title_duplicates,
         test_public_news_title_uses_full_article_title_when_feed_is_truncated,
         test_public_news_title_keeps_non_truncated_dotdotdot_title,
+        test_truncated_public_title_is_not_auto_exported,
         test_thebell_mobile_url_from_free_and_front_urls,
         test_gp_alias_overrides_cover_common_short_names,
         test_lp_directory_includes_seed_only_profiles_without_empty_profile_pages,

@@ -80,14 +80,14 @@ jobs:
           recent_failed_run="$(gh run list \
             --repo "${GITHUB_REPOSITORY}" \
             --workflow "${NEWSLETTER_PUBLISH_WORKFLOW}" \
-            --json databaseId,status,conclusion,createdAt \
+            --json databaseId,status,conclusion,createdAt,headSha \
             --limit 20 \
-            --jq '.[] | select(.status == "completed" and .conclusion == "failure" and ((now - (.createdAt | fromdateiso8601)) < 21600)) | .databaseId' \
+            | python3 -c 'import datetime, json, os, sys; runs = json.load(sys.stdin); now = datetime.datetime.now(datetime.timezone.utc); current = os.environ.get("GITHUB_SHA", ""); active = next((row for row in runs if row.get("status") == "completed" and row.get("conclusion") == "failure" and row.get("headSha") == current and (now - datetime.datetime.fromisoformat(str(row.get("createdAt", "")).replace("Z", "+00:00"))).total_seconds() < 21600), None); print(active.get("databaseId") if active else "")' \
             | head -n 1
           )"
 
           if [ -n "${recent_failed_run}" ]; then
-            echo "Recent publish workflow already failed: ${recent_failed_run}"
+            echo "Recent publish workflow already failed on current commit ${GITHUB_SHA}: ${recent_failed_run}"
             echo "Skipping automatic redispatch to avoid repeated failure notifications."
             exit 0
           fi

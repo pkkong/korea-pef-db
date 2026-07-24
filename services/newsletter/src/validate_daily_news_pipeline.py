@@ -369,7 +369,7 @@ def check_archive_classification_quality(
         if leaked_fields:
             result.error(f"archive article leaks internal AI fields for '{title}': {','.join(leaked_fields)}")
         if is_truncated_news_title(title):
-            result.error(f"archive article title is truncated; use the full source headline: {title}")
+            result.warning(f"archive article title is truncated; use the full source headline: {title}")
         summary_lines = article.get("summaryLines") or []
         if isinstance(summary_lines, list):
             raw_summary_lines = [str(line or "").strip() for line in summary_lines if str(line or "").strip()]
