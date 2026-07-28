@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+from urllib.error import URLError
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -178,12 +180,71 @@ def test_apply_payload_resets_issue_links_and_article_metadata() -> None:
     ) in calls
 
 
+def test_rest_request_retries_transient_url_errors() -> None:
+    calls: list[int] = []
+    sleeps: list[float] = []
+
+    class FakeResponse:
+        def __enter__(self) -> "FakeResponse":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b'{"ok": true}'
+
+    def fake_urlopen(request: object, timeout: int) -> FakeResponse:
+        calls.append(timeout)
+        if len(calls) == 1:
+            raise URLError(ConnectionResetError("reset by peer"))
+        return FakeResponse()
+
+    original_urlopen = supabase_sync.urlopen
+    original_sleep = supabase_sync.time.sleep
+    original_env = {
+        key: os.environ.get(key)
+        for key in [
+            "SUPABASE_URL",
+            "SUPABASE_SERVICE_ROLE_KEY",
+            "NEWSLETTER_SUPABASE_REST_RETRIES",
+            "NEWSLETTER_SUPABASE_REST_TIMEOUT_SECONDS",
+        ]
+    }
+    supabase_sync.urlopen = fake_urlopen
+    supabase_sync.time.sleep = lambda delay: sleeps.append(delay)
+    os.environ["SUPABASE_URL"] = "https://example.supabase.co"
+    os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "secret"
+    os.environ["NEWSLETTER_SUPABASE_REST_RETRIES"] = "2"
+    os.environ["NEWSLETTER_SUPABASE_REST_TIMEOUT_SECONDS"] = "7"
+    try:
+        result = supabase_sync._rest_request(
+            "newsletter_article_entities",
+            method="DELETE",
+            query={"article_id": "eq.test"},
+            prefer="return=minimal",
+        )
+    finally:
+        supabase_sync.urlopen = original_urlopen
+        supabase_sync.time.sleep = original_sleep
+        for key, value in original_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    assert result == {"ok": True}
+    assert calls == [7, 7]
+    assert sleeps == [0.75]
+
+
 def main() -> int:
     test_prepare_payload_dedupes_issue_urls()
     test_prepare_payload_filters_selected_date()
     test_select_sync_archive_keeps_rolling_range_by_default()
     test_select_sync_archive_allows_single_issue_debug_sync()
     test_apply_payload_resets_issue_links_and_article_metadata()
+    test_rest_request_retries_transient_url_errors()
     print("supabase sync tests passed")
     return 0
 

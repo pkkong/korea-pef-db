@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +33,9 @@ DEFAULT_ARCHIVE = REPO_ROOT / "services" / "newsletter" / "deploy" / "site" / "a
 DEFAULT_PAYLOAD_OUT = REPO_ROOT / "exports" / "daily_news" / "newsletter_supabase_payload.json"
 DEFAULT_ARCHIVE_URL = "https://pkkong.github.io/kpef-newsletter/archive.json"
 DEFAULT_ISSUE_LIMIT = 30
+DEFAULT_REST_RETRIES = 4
+DEFAULT_REST_TIMEOUT_SECONDS = 30
+RETRIABLE_HTTP_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
 
 
 def _clean_text(value: object) -> str:
@@ -220,6 +224,28 @@ def _supabase_url() -> str:
     return url
 
 
+def _env_int(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def _rest_retries() -> int:
+    return max(1, _env_int("NEWSLETTER_SUPABASE_REST_RETRIES", DEFAULT_REST_RETRIES))
+
+
+def _rest_timeout_seconds() -> int:
+    return max(5, _env_int("NEWSLETTER_SUPABASE_REST_TIMEOUT_SECONDS", DEFAULT_REST_TIMEOUT_SECONDS))
+
+
+def _retry_delay_seconds(attempt_index: int) -> float:
+    return min(8.0, 0.75 * (2 ** attempt_index))
+
+
 def _rest_request(
     table: str,
     *,
@@ -241,16 +267,34 @@ def _rest_request(
     if prefer:
         headers["Prefer"] = prefer
     body = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    request = Request(url, data=body, method=method, headers=headers)
-    try:
-        with urlopen(request, timeout=30) as response:
-            text = response.read().decode("utf-8")
-            return json.loads(text) if text else None
-    except HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Supabase {method} {table} failed: HTTP {exc.code} {detail}") from exc
-    except URLError as exc:
-        raise RuntimeError(f"Supabase {method} {table} failed: {exc}") from exc
+    attempts = _rest_retries()
+    timeout_seconds = _rest_timeout_seconds()
+    last_error: BaseException | None = None
+    for attempt_index in range(attempts):
+        request = Request(url, data=body, method=method, headers=headers)
+        try:
+            with urlopen(request, timeout=timeout_seconds) as response:
+                text = response.read().decode("utf-8")
+                return json.loads(text) if text else None
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            if exc.code not in RETRIABLE_HTTP_STATUS_CODES or attempt_index == attempts - 1:
+                raise RuntimeError(f"Supabase {method} {table} failed: HTTP {exc.code} {detail}") from exc
+            last_error = RuntimeError(f"HTTP {exc.code} {detail}")
+        except (URLError, TimeoutError, ConnectionResetError) as exc:
+            if attempt_index == attempts - 1:
+                raise RuntimeError(f"Supabase {method} {table} failed: {exc}") from exc
+            last_error = exc
+
+        delay_seconds = _retry_delay_seconds(attempt_index)
+        print(
+            f"supabase_rest_retry method={method} table={table} "
+            f"attempt={attempt_index + 1}/{attempts} delay_seconds={delay_seconds:.2f} error={last_error}",
+            file=sys.stderr,
+        )
+        time.sleep(delay_seconds)
+
+    raise RuntimeError(f"Supabase {method} {table} failed after {attempts} attempts: {last_error}")
 
 
 def _upsert(table: str, rows: list[dict[str, Any]], on_conflict: str, select: str | None = None) -> Any:
