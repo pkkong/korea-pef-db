@@ -25,7 +25,9 @@ env:
   NEWSLETTER_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter/
   NEWSLETTER_LIMIT_PER_SOURCE: "20"
   NEWSLETTER_CANDIDATE_LIMIT_PER_SOURCE: "8"
-  NEWSLETTER_RUN_TIMEOUT_SECONDS: "720"
+  NEWSLETTER_RUN_TIMEOUT_SECONDS: "1200"
+  NEWSLETTER_COLLECTION_SOFT_DEADLINE_SECONDS: "600"
+  NEWSLETTER_COLLECTION_SOFT_DEADLINE_MIN_FETCHED: "120"
   NEWSLETTER_LP_LIMIT_PER_SOURCE: "50"
   NEWSLETTER_AI_PROVIDER: local
   NEWSLETTER_AI_APPLY_SECTIONS: "0"
@@ -134,6 +136,8 @@ jobs:
             --candidate-limit-per-source "${NEWSLETTER_CANDIDATE_LIMIT_PER_SOURCE}" \
             --brief-limit 30 \
             --review-limit 80 \
+            --collection-soft-deadline-seconds "${NEWSLETTER_COLLECTION_SOFT_DEADLINE_SECONDS}" \
+            --collection-soft-deadline-min-fetched "${NEWSLETTER_COLLECTION_SOFT_DEADLINE_MIN_FETCHED}" \
             --allow-insecure-ssl \
             --google-date-window \
             --require-previous-archive

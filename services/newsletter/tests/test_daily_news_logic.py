@@ -44,6 +44,7 @@ from run_daily_news_pipeline import (
     render_markdown,
     select_brief_rows,
     select_review_rows,
+    should_stop_collection,
     should_skip_previous_export,
     should_export_row,
     thebell_mobile_url,
@@ -502,6 +503,30 @@ def test_truncated_public_title_is_not_auto_exported() -> None:
 
     assert not should_export_row(row)
     assert should_export_row({**row, "review_status": "force_include"})
+
+
+def test_collection_soft_deadline_requires_enough_fetched_documents() -> None:
+    assert not should_stop_collection(
+        started_at=100.0,
+        now=800.0,
+        soft_deadline_seconds=600,
+        fetched_count=119,
+        min_fetched_count=120,
+    )
+    assert should_stop_collection(
+        started_at=100.0,
+        now=800.0,
+        soft_deadline_seconds=600,
+        fetched_count=120,
+        min_fetched_count=120,
+    )
+    assert not should_stop_collection(
+        started_at=100.0,
+        now=800.0,
+        soft_deadline_seconds=0,
+        fetched_count=120,
+        min_fetched_count=120,
+    )
 
 
 def test_thebell_mobile_url_from_free_and_front_urls() -> None:
@@ -3433,6 +3458,7 @@ def main() -> int:
         test_public_news_title_uses_full_article_title_when_feed_is_truncated,
         test_public_news_title_keeps_non_truncated_dotdotdot_title,
         test_truncated_public_title_is_not_auto_exported,
+        test_collection_soft_deadline_requires_enough_fetched_documents,
         test_thebell_mobile_url_from_free_and_front_urls,
         test_gp_alias_overrides_cover_common_short_names,
         test_lp_directory_includes_seed_only_profiles_without_empty_profile_pages,

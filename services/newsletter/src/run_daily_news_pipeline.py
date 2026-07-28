@@ -2937,6 +2937,31 @@ def env_truthy(name: str, default: str = "0") -> bool:
     return str(os.environ.get(name, default)).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def env_int(name: str, default: int = 0) -> int:
+    raw = str(os.environ.get(name, "")).strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def should_stop_collection(
+    *,
+    started_at: float,
+    now: float,
+    soft_deadline_seconds: int,
+    fetched_count: int,
+    min_fetched_count: int,
+) -> bool:
+    if soft_deadline_seconds <= 0:
+        return False
+    if fetched_count < max(0, min_fetched_count):
+        return False
+    return now - started_at >= soft_deadline_seconds
+
+
 def build_optional_service_worklists(args: argparse.Namespace) -> dict[str, str]:
     """Build GP/service follow-up worklists outside the core newsletter publish path."""
     for path in (REPO_ROOT, LEGACY_SCRIPTS_DIR):
@@ -3145,6 +3170,22 @@ def main() -> int:
     parser.add_argument("--brief-limit", type=int, default=12)
     parser.add_argument("--review-limit", type=int, default=80)
     parser.add_argument("--min-score", type=float, default=2.0)
+    parser.add_argument(
+        "--collection-soft-deadline-seconds",
+        type=int,
+        default=env_int("NEWSLETTER_COLLECTION_SOFT_DEADLINE_SECONDS", 0),
+        help=(
+            "Stop scanning lower-priority sources after this many seconds once "
+            "--collection-soft-deadline-min-fetched documents have been fetched. "
+            "This prevents slow sources from blocking the public daily publish."
+        ),
+    )
+    parser.add_argument(
+        "--collection-soft-deadline-min-fetched",
+        type=int,
+        default=env_int("NEWSLETTER_COLLECTION_SOFT_DEADLINE_MIN_FETCHED", 0),
+        help="Minimum fetched article documents required before the collection soft deadline can stop source scanning.",
+    )
     parser.add_argument("--allow-insecure-ssl", action="store_true", help="Disable TLS certificate verification for public source fetching")
     parser.add_argument("--source-code", default="", help="Comma-separated source_code filter for targeted testing")
     parser.add_argument("--google-date-window", action="store_true", help="Use Google News after/before operators based on --date")
@@ -3196,16 +3237,36 @@ def main() -> int:
         run_id = start_run(conn, args.date)
 
         candidate_limit_per_source = args.candidate_limit_per_source or args.limit_per_source
+        collection_started = time.monotonic()
         print(
             "daily_news_pipeline_start "
             f"date={args.date} sources={len(sources)} "
             f"limit_per_source={args.limit_per_source} "
             f"candidate_limit_per_source={candidate_limit_per_source} "
+            f"collection_soft_deadline_seconds={args.collection_soft_deadline_seconds} "
+            f"collection_soft_deadline_min_fetched={args.collection_soft_deadline_min_fetched} "
             f"previous_archive={'on' if args.previous_archive_url else 'off'}",
             flush=True,
         )
 
         for source_index, source in enumerate(sources, start=1):
+            if should_stop_collection(
+                started_at=collection_started,
+                now=time.monotonic(),
+                soft_deadline_seconds=args.collection_soft_deadline_seconds,
+                fetched_count=fetched_count,
+                min_fetched_count=args.collection_soft_deadline_min_fetched,
+            ):
+                warning = (
+                    "stage=collection_soft_deadline "
+                    f"elapsed_seconds={time.monotonic() - collection_started:.1f} "
+                    f"fetched={fetched_count} "
+                    f"min_fetched={args.collection_soft_deadline_min_fetched} "
+                    f"remaining_sources={len(sources) - source_index + 1}"
+                )
+                warnings.append(warning)
+                print(f"WARNING: {warning}", file=sys.stderr, flush=True)
+                break
             source_stats[source.source_code] = {
                 "source_name": source.source_name,
                 "discovered_count": 0,
