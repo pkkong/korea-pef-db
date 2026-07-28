@@ -167,17 +167,49 @@ def test_apply_payload_resets_issue_links_and_article_metadata() -> None:
         supabase_sync._rest_request = original_rest_request
 
     assert result["issue_articles"] == 1
-    assert ("DELETE", "newsletter_issue_articles", {"issue_date": "eq.2026-06-17"}) in calls
+    assert ("DELETE", "newsletter_issue_articles", {"issue_date": "in.(2026-06-17)"}) in calls
     assert (
         "DELETE",
         "newsletter_article_tags",
-        {"article_id": "eq.00000000-0000-0000-0000-000000000001"},
+        {"article_id": "in.(00000000-0000-0000-0000-000000000001)"},
     ) in calls
     assert (
         "DELETE",
         "newsletter_article_entities",
-        {"article_id": "eq.00000000-0000-0000-0000-000000000001"},
+        {"article_id": "in.(00000000-0000-0000-0000-000000000001)"},
     ) in calls
+
+
+def test_delete_many_batches_unique_values() -> None:
+    calls: list[tuple[str, str, dict[str, str] | None]] = []
+
+    def fake_rest_request(
+        table: str,
+        *,
+        method: str = "GET",
+        query: dict[str, str] | None = None,
+        payload: object | None = None,
+        prefer: str | None = None,
+    ) -> object:
+        calls.append((method, table, query))
+        return []
+
+    original_rest_request = supabase_sync._rest_request
+    supabase_sync._rest_request = fake_rest_request
+    try:
+        supabase_sync._delete_many(
+            "newsletter_article_tags",
+            "article_id",
+            ["a1", "a2", "a1", "", "a3"],
+            batch_size=2,
+        )
+    finally:
+        supabase_sync._rest_request = original_rest_request
+
+    assert calls == [
+        ("DELETE", "newsletter_article_tags", {"article_id": "in.(a1,a2)"}),
+        ("DELETE", "newsletter_article_tags", {"article_id": "in.(a3)"}),
+    ]
 
 
 def test_rest_request_retries_transient_url_errors() -> None:
@@ -244,6 +276,7 @@ def main() -> int:
     test_select_sync_archive_keeps_rolling_range_by_default()
     test_select_sync_archive_allows_single_issue_debug_sync()
     test_apply_payload_resets_issue_links_and_article_metadata()
+    test_delete_many_batches_unique_values()
     test_rest_request_retries_transient_url_errors()
     print("supabase sync tests passed")
     return 0

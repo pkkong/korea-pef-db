@@ -35,6 +35,7 @@ DEFAULT_ARCHIVE_URL = "https://pkkong.github.io/kpef-newsletter/archive.json"
 DEFAULT_ISSUE_LIMIT = 30
 DEFAULT_REST_RETRIES = 4
 DEFAULT_REST_TIMEOUT_SECONDS = 30
+DEFAULT_DELETE_BATCH_SIZE = 50
 RETRIABLE_HTTP_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
 
 
@@ -321,6 +322,22 @@ def _delete(table: str, query: dict[str, str]) -> None:
     )
 
 
+def _delete_many(table: str, column: str, values: list[str], batch_size: int = DEFAULT_DELETE_BATCH_SIZE) -> None:
+    clean_values: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        clean_value = _clean_text(value)
+        if clean_value and clean_value not in seen:
+            clean_values.append(clean_value)
+            seen.add(clean_value)
+    if not clean_values:
+        return
+
+    for start in range(0, len(clean_values), max(1, batch_size)):
+        batch = clean_values[start : start + batch_size]
+        _delete(table, {column: f"in.({','.join(batch)})"})
+
+
 def apply_payload(payload: dict[str, list[dict[str, Any]]]) -> dict[str, int]:
     _upsert("newsletter_issues", payload["issues"], "issue_date")
     returned_articles = _upsert(
@@ -335,15 +352,14 @@ def apply_payload(payload: dict[str, list[dict[str, Any]]]) -> dict[str, int]:
         if isinstance(row, dict)
     }
 
-    for issue in payload["issues"]:
-        issue_date = _clean_text(issue.get("issue_date"))
-        if issue_date:
-            _delete("newsletter_issue_articles", {"issue_date": f"eq.{issue_date}"})
-
-    for article_id in article_id_by_url.values():
-        if article_id:
-            _delete("newsletter_article_tags", {"article_id": f"eq.{article_id}"})
-            _delete("newsletter_article_entities", {"article_id": f"eq.{article_id}"})
+    _delete_many(
+        "newsletter_issue_articles",
+        "issue_date",
+        [_clean_text(issue.get("issue_date")) for issue in payload["issues"]],
+    )
+    article_ids = list(article_id_by_url.values())
+    _delete_many("newsletter_article_tags", "article_id", article_ids)
+    _delete_many("newsletter_article_entities", "article_id", article_ids)
 
     issue_article_rows: list[dict[str, Any]] = []
     for row in payload["issue_articles"]:
