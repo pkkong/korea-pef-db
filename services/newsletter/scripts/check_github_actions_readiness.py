@@ -142,6 +142,8 @@ def main() -> int:
                 "mirror workflow dispatches separate Supabase sync",
                 'gh workflow run "Sync newsletter Supabase read model"' in workflow_text,
             ),
+            ("mirror workflow defaults to stable source profile", "NEWSLETTER_SOURCE_PROFILE: stable" in workflow_text),
+            ("mirror workflow exposes manual source profile input", "source_profile:" in workflow_text),
         )
         for message, ok in checks:
             if ok:

@@ -29,6 +29,7 @@ from run_daily_news_pipeline import (
     event_dedupe_key,
     display_url,
     extract_google_news_decode_params,
+    filter_sources_by_profile,
     google_query_for_report_date,
     google_news_encoded_id,
     infer_publisher,
@@ -527,6 +528,22 @@ def test_collection_soft_deadline_requires_enough_fetched_documents() -> None:
         fetched_count=120,
         min_fetched_count=120,
     )
+
+
+def test_stable_source_profile_excludes_late_safety_net_sources() -> None:
+    sources = [
+        SimpleNamespace(source_code="google_pef_market", source_kind="google_news_query", notes="Core coverage"),
+        SimpleNamespace(source_code="naver_pef_core_samo", source_kind="naver_news_api", notes="Core coverage"),
+        SimpleNamespace(source_code="naver_publisher_thebell", source_kind="naver_news_api", notes="Publisher safety net"),
+        SimpleNamespace(source_code="newstop_private_equity", source_kind="html_listing", notes="Direct category safety net"),
+        SimpleNamespace(source_code="manual_company_clipping", source_kind="manual_url_list", notes="Reviewed company clipping"),
+    ]
+
+    stable_codes = [source.source_code for source in filter_sources_by_profile(sources, "stable")]
+    all_codes = [source.source_code for source in filter_sources_by_profile(sources, "all")]
+
+    assert stable_codes == ["google_pef_market", "naver_pef_core_samo", "manual_company_clipping"]
+    assert all_codes == [source.source_code for source in sources]
 
 
 def test_thebell_mobile_url_from_free_and_front_urls() -> None:
@@ -3459,6 +3476,7 @@ def main() -> int:
         test_public_news_title_keeps_non_truncated_dotdotdot_title,
         test_truncated_public_title_is_not_auto_exported,
         test_collection_soft_deadline_requires_enough_fetched_documents,
+        test_stable_source_profile_excludes_late_safety_net_sources,
         test_thebell_mobile_url_from_free_and_front_urls,
         test_gp_alias_overrides_cover_common_short_names,
         test_lp_directory_includes_seed_only_profiles_without_empty_profile_pages,

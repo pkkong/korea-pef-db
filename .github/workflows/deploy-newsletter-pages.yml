@@ -10,6 +10,15 @@ on:
         description: "Report date in YYYY-MM-DD. Leave blank for today's date in Asia/Seoul."
         required: false
         type: string
+      source_profile:
+        description: "Source profile: stable for daily publish, all for full research/safety-net crawl."
+        required: false
+        default: stable
+        type: choice
+        options:
+          - stable
+          - extended
+          - all
 
 permissions:
   actions: write
@@ -25,9 +34,10 @@ env:
   NEWSLETTER_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter/
   NEWSLETTER_LIMIT_PER_SOURCE: "20"
   NEWSLETTER_CANDIDATE_LIMIT_PER_SOURCE: "8"
+  NEWSLETTER_SOURCE_PROFILE: stable
   NEWSLETTER_RUN_TIMEOUT_SECONDS: "1200"
   NEWSLETTER_COLLECTION_SOFT_DEADLINE_SECONDS: "600"
-  NEWSLETTER_COLLECTION_SOFT_DEADLINE_MIN_FETCHED: "120"
+  NEWSLETTER_COLLECTION_SOFT_DEADLINE_MIN_FETCHED: "80"
   NEWSLETTER_LP_LIMIT_PER_SOURCE: "50"
   NEWSLETTER_AI_PROVIDER: local
   NEWSLETTER_AI_APPLY_SECTIONS: "0"
@@ -134,6 +144,7 @@ jobs:
             --date "${{ steps.date.outputs.report_date }}" \
             --limit-per-source "${NEWSLETTER_LIMIT_PER_SOURCE}" \
             --candidate-limit-per-source "${NEWSLETTER_CANDIDATE_LIMIT_PER_SOURCE}" \
+            --source-profile "${{ inputs.source_profile || env.NEWSLETTER_SOURCE_PROFILE }}" \
             --brief-limit 30 \
             --review-limit 80 \
             --collection-soft-deadline-seconds "${NEWSLETTER_COLLECTION_SOFT_DEADLINE_SECONDS}" \

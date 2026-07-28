@@ -140,6 +140,60 @@ def filter_sources(sources: list[object], include_codes: set[str]) -> list[objec
     return [source for source in sources if source.source_code in include_codes]
 
 
+STABLE_SOURCE_CODES = {
+    "google_pef_market",
+    "google_pef_deal",
+    "google_pef_gp",
+    "google_pef_lp",
+    "google_pef_lp_allocator",
+    "google_pef_fundraising",
+    "google_pef_credit",
+    "google_pef_portfolio",
+    "google_pef_regulation",
+    "naver_pef_core_samo",
+    "naver_pef_core_pef",
+    "naver_pef_deal_sale",
+    "naver_pef_deal_acquisition",
+    "naver_pef_gp_mbk",
+    "naver_pef_lp_commitment",
+    "naver_pef_lp_nps",
+    "naver_pef_lp_mutual_aid",
+    "naver_pef_fundraising",
+    "naver_pef_credit",
+    "naver_pef_credit_samo_loan",
+    "naver_pef_portfolio_valueup",
+    "naver_pef_regulation",
+    "manual_company_clipping",
+}
+
+
+def is_extended_safety_net_source(source: object) -> bool:
+    notes = str(getattr(source, "notes", "") or "").lower()
+    source_code = str(getattr(source, "source_code", "") or "")
+    return (
+        "safety net" in notes
+        or source_code.startswith("google_publisher_")
+        or source_code.startswith("google_") and source_code.endswith("_watch")
+        or source_code.startswith("naver_publisher_")
+        or str(getattr(source, "source_kind", "") or "") == "html_listing"
+    )
+
+
+def filter_sources_by_profile(sources: list[object], source_profile: str) -> list[object]:
+    profile = (source_profile or "all").strip().lower()
+    if profile == "all":
+        return sources
+    if profile == "stable":
+        return [source for source in sources if str(getattr(source, "source_code", "")) in STABLE_SOURCE_CODES]
+    if profile == "extended":
+        return [
+            source
+            for source in sources
+            if str(getattr(source, "source_code", "")) in STABLE_SOURCE_CODES or is_extended_safety_net_source(source)
+        ]
+    raise ValueError(f"Unsupported source_profile={source_profile}")
+
+
 def start_run(conn: sqlite3.Connection, report_date: str) -> str:
     run_id = "daily_news_" + report_date.replace("-", "") + "_" + now_utc_iso().replace(":", "").replace("+00:00", "Z")
     conn.execute(
@@ -3188,6 +3242,15 @@ def main() -> int:
     )
     parser.add_argument("--allow-insecure-ssl", action="store_true", help="Disable TLS certificate verification for public source fetching")
     parser.add_argument("--source-code", default="", help="Comma-separated source_code filter for targeted testing")
+    parser.add_argument(
+        "--source-profile",
+        choices=["stable", "extended", "all"],
+        default=os.environ.get("NEWSLETTER_SOURCE_PROFILE", "all"),
+        help=(
+            "Source set to collect. stable is the daily publish set; all keeps the full research/safety-net crawl. "
+            "Ignored when --source-code is set."
+        ),
+    )
     parser.add_argument("--google-date-window", action="store_true", help="Use Google News after/before operators based on --date")
     parser.add_argument("--allow-google-news-redirects", action="store_true", help="Allow unresolved Google News redirect URLs in exported briefs")
     parser.add_argument(
@@ -3229,7 +3292,10 @@ def main() -> int:
         init_db(conn, args.schema)
         sources = sync_sources(conn, args.sources)
         selected_source_codes = {code.strip() for code in args.source_code.split(",") if code.strip()}
-        sources = filter_sources(sources, selected_source_codes)
+        if selected_source_codes:
+            sources = filter_sources(sources, selected_source_codes)
+        else:
+            sources = filter_sources_by_profile(sources, args.source_profile)
         assert_source_family_readiness(sources)
         rules = load_rules(args.rules)
         overrides = load_manual_overrides(args.overrides)
@@ -3241,6 +3307,7 @@ def main() -> int:
         print(
             "daily_news_pipeline_start "
             f"date={args.date} sources={len(sources)} "
+            f"source_profile={args.source_profile if not selected_source_codes else 'source_code'} "
             f"limit_per_source={args.limit_per_source} "
             f"candidate_limit_per_source={candidate_limit_per_source} "
             f"collection_soft_deadline_seconds={args.collection_soft_deadline_seconds} "
