@@ -22,11 +22,14 @@ GitHub Actions 자동 발행에는 원본 저장소 Secrets에 아래 값이 필
 - `NAVER_CLIENT_SECRET`: Naver News API client secret
 - `NEWSLETTER_PUBLIC_REPO_TOKEN`: private 원본 저장소의 Action이 public mirror `pkkong/kpef-newsletter`에 push할 때 쓰는 GitHub token
 - `SUPABASE_DB_URL`: Supabase migration과 external watchdog cron 설치에 쓰는 DB connection URL
+- `NEWSLETTER_WATCHDOG_DISPATCH_TOKEN`: Supabase external watchdog이 GitHub `Newsletter publish watchdog` workflow를 dispatch할 때 쓰는 GitHub token
 - `SUPABASE_URL`: Supabase project URL
 - `SUPABASE_SERVICE_ROLE_KEY`: GitHub Actions가 공개 read model을 upsert할 때 쓰는 backend key
 - `SUPABASE_PUBLISHABLE_KEY`: Vercel 앱이 read model을 읽을 때 쓰는 public key
 
-GitHub Actions 자체가 장애인 날을 자동 복구하려면 Supabase Vault에 아래 secret이 필요하다.
+GitHub Actions 자체가 장애인 날을 자동 복구하려면 GitHub Actions secret
+`NEWSLETTER_WATCHDOG_DISPATCH_TOKEN`이 필요하다. `Apply newsletter Supabase migration`
+workflow가 이 값을 Supabase Vault secret으로 저장한다.
 
 - `newsletter_github_actions_dispatch_token`: `pkkong/korea-pef-db`의 Actions workflow dispatch 권한이 있는 GitHub fine-grained token
 

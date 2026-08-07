@@ -173,6 +173,10 @@ def check_workflow_contracts() -> list[str]:
         violations.append("apply-newsletter-supabase-migration.yml:must_apply_db_url_with_psql")
     if "services/newsletter/supabase/migrations/*.sql" not in migration:
         violations.append("apply-newsletter-supabase-migration.yml:must_apply_all_newsletter_migrations")
+    if "NEWSLETTER_WATCHDOG_DISPATCH_TOKEN" not in migration:
+        violations.append("apply-newsletter-supabase-migration.yml:missing:NEWSLETTER_WATCHDOG_DISPATCH_TOKEN")
+    if "newsletter_github_actions_dispatch_token" not in migration:
+        violations.append("apply-newsletter-supabase-migration.yml:missing:vault_watchdog_token")
     for forbidden in ["vercel deploy", "run_daily_news_pipeline.py", "build_newsletter_bundle.py"]:
         if forbidden in migration:
             violations.append(f"apply-newsletter-supabase-migration.yml:forbidden:{forbidden}")

@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 10
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      NEWSLETTER_WATCHDOG_DISPATCH_TOKEN: ${{ secrets.NEWSLETTER_WATCHDOG_DISPATCH_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -40,6 +41,57 @@ jobs:
               --file "$migration"
             echo "::endgroup::"
           done
+
+      - name: Store newsletter external watchdog token
+        if: env.NEWSLETTER_WATCHDOG_DISPATCH_TOKEN != ''
+        run: |
+          psql "$SUPABASE_DB_URL" \
+            --set ON_ERROR_STOP=1 \
+            --set=watchdog_token="$NEWSLETTER_WATCHDOG_DISPATCH_TOKEN" \
+            --tuples-only \
+            --no-align <<'SQL'
+          WITH incoming AS (
+            SELECT :'watchdog_token'::text AS token
+          ),
+          existing AS (
+            SELECT id
+            FROM vault.decrypted_secrets
+            WHERE name = 'newsletter_github_actions_dispatch_token'
+            LIMIT 1
+          ),
+          updated AS (
+            SELECT vault.update_secret(
+              existing.id,
+              incoming.token,
+              'newsletter_github_actions_dispatch_token',
+              'Dispatches pkkong/korea-pef-db Newsletter publish watchdog from Supabase Cron'
+            ) AS ignored
+            FROM existing
+            CROSS JOIN incoming
+          ),
+          created AS (
+            SELECT vault.create_secret(
+              incoming.token,
+              'newsletter_github_actions_dispatch_token',
+              'Dispatches pkkong/korea-pef-db Newsletter publish watchdog from Supabase Cron'
+            ) AS ignored
+            FROM incoming
+            WHERE NOT EXISTS (SELECT 1 FROM existing)
+          ),
+          touched AS (
+            SELECT 1 FROM updated
+            UNION ALL
+            SELECT 1 FROM created
+          )
+          SELECT 'external_watchdog_token=stored'
+          FROM touched
+          LIMIT 1;
+          SQL
+
+      - name: Warn if newsletter external watchdog token is missing
+        if: env.NEWSLETTER_WATCHDOG_DISPATCH_TOKEN == ''
+        run: |
+          echo "::warning::NEWSLETTER_WATCHDOG_DISPATCH_TOKEN is missing; Supabase Cron is installed but cannot dispatch GitHub watchdog."
 
       - name: Report newsletter external watchdog status
         run: |

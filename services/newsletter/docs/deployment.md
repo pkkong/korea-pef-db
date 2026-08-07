@@ -98,6 +98,7 @@ GitHub Actions 자동 발행에는 private 원본 저장소의 `Settings` → `S
 - `NAVER_CLIENT_SECRET`: Naver News API client secret
 - `NEWSLETTER_PUBLIC_REPO_TOKEN`: private 원본 저장소의 Action이 public mirror `pkkong/kpef-newsletter`에 push할 때 쓰는 GitHub token
 - `SUPABASE_DB_URL`: Supabase migration과 external watchdog cron 설치에 쓰는 DB connection URL
+- `NEWSLETTER_WATCHDOG_DISPATCH_TOKEN`: Supabase external watchdog이 GitHub `Newsletter publish watchdog` workflow를 dispatch할 때 쓰는 token
 - `SUPABASE_URL`: 뉴스레터 read model Supabase project URL
 - `SUPABASE_SERVICE_ROLE_KEY`: GitHub Actions가 read model을 갱신할 때 쓰는 Supabase service role key
 
@@ -105,6 +106,7 @@ GitHub Actions 자동 발행에는 private 원본 저장소의 `Settings` → `S
 `NEWSLETTER_PUBLIC_REPO_TOKEN`이 없거나 public mirror에 push 권한이 없으면 뉴스레터 파일을 만들 수는 있어도
 `pkkong/kpef-newsletter`에 게시할 수 없다.
 `SUPABASE_DB_URL`이 없으면 Supabase migration과 external watchdog cron 설치가 실패한다.
+`NEWSLETTER_WATCHDOG_DISPATCH_TOKEN`이 없으면 Supabase Cron은 설치되지만 GitHub workflow를 외부에서 dispatch하지 못한다.
 `SUPABASE_URL` 또는 `SUPABASE_SERVICE_ROLE_KEY`가 없으면 Supabase/Vercel sync workflow는 실패한다. 단, 이 workflow는 GitHub Pages mirror workflow와 분리되어 있으므로 Supabase 장애가 정적 백업 미러 발행까지 막지는 않는다.
 
 Public mirror 저장소의 Pages 설정은 `Settings` → `Pages`에서 Source를 `Deploy from a branch`,
@@ -118,22 +120,13 @@ Supabase external watchdog은 GitHub Actions 장애로 scheduled workflow가 시
 
 설치 절차:
 
-1. `Apply newsletter Supabase migration` workflow를 실행한다. 이 workflow는 `services/newsletter/supabase/migrations/*.sql`을 순서대로 적용한다.
-2. Supabase Vault에 `newsletter_github_actions_dispatch_token` secret을 저장한다.
+1. GitHub Actions secret `NEWSLETTER_WATCHDOG_DISPATCH_TOKEN`에 workflow dispatch 권한이 있는 GitHub token을 저장한다.
+2. `Apply newsletter Supabase migration` workflow를 실행한다. 이 workflow는 `services/newsletter/supabase/migrations/*.sql`을 순서대로 적용하고, GitHub secret을 Supabase Vault의 `newsletter_github_actions_dispatch_token`으로 저장한다.
 3. 이 token은 `pkkong/korea-pef-db` 저장소의 Actions workflow dispatch 권한이 있어야 한다. Fine-grained token을 쓴다면 최소한 대상 repo의 Actions read/write 권한이 필요하다.
 4. 다음 SQL로 설치 상태를 확인한다.
 
-Vault secret 저장 예시:
-
-```sql
-select vault.create_secret(
-  '<github-actions-dispatch-token>',
-  'newsletter_github_actions_dispatch_token',
-  'Dispatches pkkong/korea-pef-db Newsletter publish watchdog from Supabase Cron'
-);
-```
-
-이미 같은 이름의 secret이 있으면 Supabase Dashboard의 Vault 화면에서 값을 교체하거나 기존 row를 삭제한 뒤 다시 만든다.
+`Apply newsletter Supabase migration` 로그에서 `external_watchdog_token=stored`와
+`external_watchdog_token=configured`가 함께 보여야 한다.
 
 ```sql
 select jobname, schedule, active
