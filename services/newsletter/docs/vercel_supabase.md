@@ -76,6 +76,7 @@ section order는 GitHub Pages `archive.json`과 같아야 한다.
 - GitHub Actions `Build newsletter mirror`가 성공해야 한다.
 - GitHub Actions `Sync newsletter Supabase read model`가 성공해야 한다.
 - 정상 경로에서는 `https://kpef-newsletter.vercel.app/health.json?refresh=1`이 `data_source=supabase`를 반환해야 한다.
+- `services/newsletter/web/vercel.json`에는 전체 요청을 `/index.py`로 보내는 catch-all rewrite를 두지 않는다. 이 설정은 Vercel Flask 라우팅에서 공식 URL을 404로 만들 수 있다.
 - GitHub Actions나 Pages CDN 장애 중에는 Vercel이 raw `gh-pages` archive fallback으로 오늘자를 보여줄 수 있다. 이때
   `data_source=archive_fallback`, 최신 `report_date`, 최신 `article_count`이면 사용자 화면은 복구된 상태로 본다.
 - `https://pkkong.github.io/kpef-newsletter/health.json`은 GitHub Pages CDN 반영 지연이 있을 수 있으므로,
