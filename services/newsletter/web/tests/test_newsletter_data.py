@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import sys
 from pathlib import Path
 
@@ -339,6 +340,17 @@ def test_vercel_runtime_has_no_standalone_ui_or_legacy_service_imports() -> None
             assert token not in source, f"{path.name} must not import or mention {token}"
 
 
+def test_vercel_config_uses_flask_framework_without_catchall_index_rewrite() -> None:
+    config = json.loads((WEB_ROOT / "vercel.json").read_text(encoding="utf-8"))
+    assert config.get("framework") == "flask"
+
+    for rewrite in config.get("rewrites") or []:
+        assert not (
+            rewrite.get("source") in {"/(.*)", "/:path*"}
+            and rewrite.get("destination") in {"/index.py", "index.py"}
+        ), "Vercel must not rewrite every request to /index.py; it makes public routes 404."
+
+
 def main() -> int:
     test_archive_from_supabase_rows_keeps_issue_skeletons_and_zero_section_order()
     test_supabase_archive_filters_articles_to_selected_issue_window()
@@ -349,6 +361,7 @@ def main() -> int:
     test_common_ui_marks_empty_issue_dates_for_public_users()
     test_vercel_app_imports_from_repo_root_package_path()
     test_vercel_runtime_has_no_standalone_ui_or_legacy_service_imports()
+    test_vercel_config_uses_flask_framework_without_catchall_index_rewrite()
     print("newsletter web data tests passed")
     return 0
 

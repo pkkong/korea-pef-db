@@ -56,6 +56,25 @@ def check_import_isolation() -> list[str]:
     ]
 
 
+def check_vercel_config() -> list[str]:
+    config_path = WEB_ROOT / "vercel.json"
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return [f"vercel.json is invalid JSON: {exc}"]
+
+    failures: list[str] = []
+    if config.get("framework") != "flask":
+        failures.append("vercel.json must keep framework=flask")
+
+    for rewrite in config.get("rewrites") or []:
+        source = rewrite.get("source")
+        destination = rewrite.get("destination")
+        if source in {"/(.*)", "/:path*"} and destination in {"/index.py", "index.py"}:
+            failures.append("vercel.json must not rewrite every request to /index.py")
+    return failures
+
+
 def smoke_flask_app() -> None:
     sys.path.insert(0, str(WEB_ROOT))
     from app import app  # noqa: E402
@@ -77,7 +96,7 @@ def print_step_summary(payload_path: Path) -> None:
     print("")
     print("| Check | Status |")
     print("| --- | --- |")
-    for key in ["files", "compile", "import_isolation"]:
+    for key in ["files", "compile", "import_isolation", "vercel_config"]:
         print(f"| `{key}` | {payload.get(key)} |")
     print("")
     print("| Secret | Status |")
@@ -126,6 +145,7 @@ def main() -> int:
         ]
     )
     isolation_failures = check_import_isolation()
+    vercel_config_failures = check_vercel_config()
     payload = {
         "files": "ok" if not missing_files else "missing",
         "missing_files": missing_files,
@@ -133,6 +153,8 @@ def main() -> int:
         "compile_failures": compile_failures,
         "import_isolation": "ok" if not isolation_failures else "failed",
         "forbidden_imports": isolation_failures,
+        "vercel_config": "ok" if not vercel_config_failures else "failed",
+        "vercel_config_failures": vercel_config_failures,
         "env": {
             "VERCEL_TOKEN": env_state("VERCEL_TOKEN"),
             "VERCEL_ORG_ID": env_state("VERCEL_ORG_ID"),
@@ -144,7 +166,7 @@ def main() -> int:
         },
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
-    hard_failures = missing_files or compile_failures or isolation_failures
+    hard_failures = missing_files or compile_failures or isolation_failures or vercel_config_failures
     return 1 if hard_failures else 0
 
 
