@@ -41,6 +41,31 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: Report newsletter external watchdog status
+        run: |
+          psql "$SUPABASE_DB_URL" \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align <<'SQL'
+          SELECT
+            'external_watchdog_jobs=' || count(*)
+          FROM cron.job
+          WHERE jobname LIKE 'newsletter-external-watchdog-%';
+
+          SELECT
+            'external_watchdog_token=' ||
+            CASE
+              WHEN EXISTS (
+                SELECT 1
+                FROM vault.decrypted_secrets
+                WHERE name = 'newsletter_github_actions_dispatch_token'
+                  AND COALESCE(decrypted_secret, '') <> ''
+              )
+              THEN 'configured'
+              ELSE 'missing'
+            END;
+          SQL
+
       - name: Report migration status
         run: |
           echo "newsletter_supabase_migrations=ok"
