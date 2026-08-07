@@ -31,12 +31,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
-      - name: Apply newsletter read model migration
+      - name: Apply newsletter Supabase migrations
         run: |
-          psql "$SUPABASE_DB_URL" \
-            --set ON_ERROR_STOP=1 \
-            --file services/newsletter/supabase/migrations/20260616090000_newsletter_read_model.sql
+          for migration in services/newsletter/supabase/migrations/*.sql; do
+            echo "::group::Apply ${migration}"
+            psql "$SUPABASE_DB_URL" \
+              --set ON_ERROR_STOP=1 \
+              --file "$migration"
+            echo "::endgroup::"
+          done
 
       - name: Report migration status
         run: |
-          echo "newsletter_supabase_migration=ok"
+          echo "newsletter_supabase_migrations=ok"

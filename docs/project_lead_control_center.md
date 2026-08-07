@@ -1,6 +1,6 @@
 # 프로젝트 리드 현재 상태판
 
-최종 수정: 2026-07-28 KST
+최종 수정: 2026-08-07 KST
 
 이 문서는 Project Lead가 현재 프로젝트 상태를 잃지 않기 위한 운영판이다. 새 채팅방, 서브에이전트, 별도 담당자가 작업을 시작할 때는 먼저 이 문서를 읽고, 작업이 끝나면 필요한 변경을 여기에 반영한다.
 
@@ -21,6 +21,7 @@
 - 2026-06-21에 구조 계약 검사를 추가했다. `scripts/check_architecture_contracts.py`는 LP/GP/Wiki import 경계, newsletter-only/Vercel import 격리, workflow 역할 분리, generated output tracking 금지를 검사한다.
 - 2026-06-21에 뉴스레터 workflow 상태 판단을 `services/newsletter/src/newsletter_public_status.py`로 모았다. workflow YAML에는 긴 inline Python을 넣지 않고 이 CLI를 호출한다.
 - 2026-07-28에 뉴스레터 자동 발행을 안정 운영 모드로 전환했다. `Build newsletter mirror`의 routine schedule은 `NEWSLETTER_SOURCE_PROFILE=stable`을 사용해 핵심 Google/Naver 쿼리와 수동 클리핑만 수집한다. 전체 67개 소스는 수동 `source_profile=all` 실행으로만 돌린다. 수집은 collection soft deadline을 지나 충분한 원문을 확보하면 남은 느린 소스를 건너뛰고 발행을 계속해야 한다.
+- 2026-08-07에 GitHub Actions/Pages 장애로 primary schedule과 GitHub 내부 watchdog이 모두 누락되는 리스크를 확인했다. 외부 복구 장치로 Supabase Cron migration `20260807093000_newsletter_external_watchdog_cron.sql`을 추가했다. Supabase Cron은 09:05, 09:35, 10:05, 10:35 KST에 GitHub `Newsletter publish watchdog` workflow를 깨운다. 이 기능은 Supabase Vault secret `newsletter_github_actions_dispatch_token`이 있어야 실제 dispatch가 된다.
 - 2026-06-21부터 LP, GP, Wiki는 공통 유틸을 `services/shared/src/`에서 가져와야 한다. `services.newsletter.src.*` 직접 import는 금지한다.
 - Vercel archive 계약은 유지한다. Vercel은 날짜 이동용 `newsletter_issues`와 기사 row용 `newsletter_public_issue_articles`를 함께 읽어야 하고, 빈 issue와 `section_order=0`을 보존해야 한다.
 - Vercel/Supabase 운영 경로는 다음과 같이 고정한다. `services/newsletter/web/`는 Vercel Flask 앱, `services/newsletter/supabase/`는 public read model schema, `services/newsletter/src/sync_newsletter_supabase.py`는 검증된 archive를 Supabase로 옮기는 동기화 코드다.
@@ -135,6 +136,14 @@ GitHub Actions → Build newsletter mirror → Run workflow
 
 이 workflow는 뉴스레터 데이터를 수집하고 GitHub Pages 백업 미러만 publish/verify한다. 성공한 뒤에는 `Sync newsletter Supabase read model`이 별도로 실행되어 검증된 mirror archive를 Supabase에 복사하고 Vercel 공식 앱을 검증한다. `Deploy newsletter Vercel app`은 앱 코드 배포만 담당한다.
 
+뉴스레터 Supabase migration 적용:
+
+```bash
+GitHub Actions → Apply newsletter Supabase migration → Run workflow
+```
+
+이 workflow는 `services/newsletter/supabase/migrations/*.sql`을 순서대로 적용한다. Supabase external watchdog이 `skipped_missing_token`으로 기록되면 Supabase Vault에 `newsletter_github_actions_dispatch_token`이 없는 상태다.
+
 배포 후 공개 URL 확인:
 
 ```bash
@@ -177,7 +186,7 @@ curl -fsS "https://kpef-newsletter.vercel.app/health.json?refresh=1"
 - 정적 미러 배포 source는 `services/newsletter/deploy/site/`의 생성 번들과 `gh-pages` 미러다. 공식 Brief 앱 상태는 검증된 mirror archive를 Supabase public read model로 동기화한 뒤 Vercel이 읽는 상태다. legacy root `public/` 디렉토리는 ignored generated output이며 커밋하면 안 된다.
 - 뉴스레터 분류와 태그 품질은 계속 active risk다. 분류 로직을 바꾸면 `services/newsletter/tests/test_daily_news_logic.py`에 제목 기반 회귀 테스트를 추가한다.
 - 뉴스레터 수집 완료는 GitHub Actions public mirror push와 공개 `health.json`/`archive.json` 검증 뒤에만 인정한다. 공식 앱 완료는 별도 Supabase sync workflow와 Vercel `health.json?refresh=1` 검증이 필요하다. 언론사 아이콘 누락이나 약한 아이콘은 report와 backlog를 남기되, `NEWSLETTER_STRICT_ICON_CHECK=1`을 명시하지 않는 한 당일 공개 뉴스레터를 막지 않는다.
-- 매일 뉴스레터 schedule은 메일 폭탄을 막기 위해 자동 mirror build 08:37 KST 1회와 watchdog 09:22 KST 1회만 둔다. Scheduled mirror run은 GitHub Pages mirror freshness만 보고, 오늘자 mirror가 이미 기사와 함께 publish되어 있으면 수집/build/publish를 건너뛴다. watchdog은 mirror가 stale이면 mirror build를 dispatch하고, mirror는 fresh인데 Vercel/Supabase만 stale이면 Supabase-only sync를 dispatch한다. 최근 6시간 안에 mirror build가 이미 실패했으면 watchdog은 같은 실패 workflow를 다시 dispatch하지 않는다.
+- 매일 뉴스레터의 GitHub 내부 schedule은 메일 폭탄을 막기 위해 자동 mirror build 08:37 KST 1회와 GitHub 내부 watchdog 09:22 KST 1회만 둔다. Scheduled mirror run은 GitHub Pages mirror freshness만 보고, 오늘자 mirror가 이미 기사와 함께 publish되어 있으면 수집/build/publish를 건너뛴다. watchdog은 mirror가 stale이면 mirror build를 dispatch하고, mirror는 fresh인데 Vercel/Supabase만 stale이면 Supabase-only sync를 dispatch한다. 최근 6시간 안에 mirror build가 이미 실패했으면 watchdog은 같은 실패 workflow를 다시 dispatch하지 않는다. GitHub Actions 자체 장애로 이 두 schedule이 누락되는 경우에는 Supabase external watchdog이 GitHub `Newsletter publish watchdog`을 외부에서 깨운다.
 - 매일 자동 발행은 `stable` source profile을 사용한다. publisher/watch/category safety net과 전체 67개 소스 크롤링은 누락 기사 조사, 백필, source audit 목적의 수동 `source_profile=all` 실행으로 분리한다. 자동 발행이 다시 `all`을 기본값으로 쓰면 운영 안정성 회귀다.
 - 매일 뉴스레터 상태 source는 `exports/daily_news/ops_status/newsletter_ops_status_latest.md`다. 뉴스레터 장애를 진단하기 전에 먼저 이 파일을 확인한다. 이 파일은 collection, local build, public publish, hard failure, soft warning을 분리한다.
 - LP/GP/Wiki import drift와 newsletter workflow role drift는 이제 자동 회귀 risk다. `scripts/check_architecture_contracts.py`가 실패하면 제품 작업을 추가하기 전에 경계 위반부터 고친다.

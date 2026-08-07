@@ -91,20 +91,24 @@ preflight다. 파일 존재, Python compile, import isolation, Flask smoke test,
 뉴스레터 발행 workflow와 분리되어 있으므로, Vercel 쪽 장애가 daily publish를
 막지 않는다.
 
-`Apply newsletter Supabase migration` workflow는 Supabase schema 변경만 담당한다.
-Vercel 앱 배포와 DB migration을 섞지 않는다.
+`Apply newsletter Supabase migration` workflow는 Supabase schema 변경과 Supabase Cron 설치만 담당한다.
+Vercel 앱 배포와 DB migration을 섞지 않는다. 이 workflow는 `services/newsletter/supabase/migrations/*.sql`을 순서대로 적용한다.
 
 `Build newsletter mirror` workflow는 수집, 정적 미러 생성, GitHub Pages static mirror
 publish/verify만 담당한다. GitHub Pages CDN 검증이 지연되어도 `gh-pages` 원본 archive push가 끝났으면
 별도 Supabase sync workflow를 dispatch한다. Supabase sync와 Vercel app health 검증은 별도 workflow가 담당한다.
 
-`Newsletter publish watchdog` workflow는 GitHub-only fallback scheduler다. primary
+`Newsletter publish watchdog` workflow는 GitHub 내부 fallback 판단기다. primary
 publish schedule이 GitHub 내부 지연/누락으로 실행되지 않았을 때 Vercel app과
 sync 가능한 archive source를 확인한다. Pages mirror 또는 raw `gh-pages` archive 중 하나라도
 오늘자이면 sync source가 fresh인 것으로 본다. sync source가 stale이면 mirror build workflow를
 dispatch하고, sync source는 fresh인데 Vercel app만 stale이면 `Sync newsletter Supabase
 read model` workflow만 dispatch한다. Vercel app이 `archive_fallback`으로 오늘자를 보여주면
 사용자 화면은 fresh로 판단한다. 이 watchdog도 수집을 직접 하지 않는다.
+
+Supabase external watchdog은 GitHub Actions 자체 장애로 primary schedule과 GitHub 내부 watchdog이 모두 누락되는 경우를 보완한다.
+Supabase Cron은 09:05, 09:35, 10:05, 10:35 KST에 GitHub `Newsletter publish watchdog` workflow를 외부에서 dispatch한다.
+이 기능은 Supabase Vault secret `newsletter_github_actions_dispatch_token`을 필요로 한다.
 
 `Sync newsletter Supabase read model` workflow는 GitHub Pages mirror의 verified
 `archive.json`을 읽어 최근 30개 이슈를 Supabase read model로 다시 동기화하고 Vercel health를 확인한다.

@@ -53,7 +53,8 @@ Mac은 정식 운영 경로에서 제외한다. 비개발자가 보는 기본 �
 - Mirror workflow name: `Build newsletter mirror`
 - Supabase/Vercel sync workflow: `.github/workflows/sync-newsletter-supabase.yml`
 - Vercel app deploy workflow: `.github/workflows/deploy-newsletter-vercel.yml`
-- Fallback scheduler: `.github/workflows/newsletter-watchdog.yml`
+- GitHub fallback watchdog: `.github/workflows/newsletter-watchdog.yml`
+- External fallback watchdog: Supabase Cron migration `services/newsletter/supabase/migrations/20260807093000_newsletter_external_watchdog_cron.sql`
 
 현재 private 원본 저장소는 GitHub Pages endpoint가 열리지 않을 수 있으므로, 공개 가능한 뉴스레터 산출물만
 `pkkong/kpef-newsletter`에 복사해서 보여준다. Public mirror에는 `services/newsletter/deploy/site/`의
@@ -74,9 +75,12 @@ Sync workflow: Sync newsletter Supabase read model
 7. Vercel 앱의 `/health.json?refresh=1`이 `data_source=supabase`, 오늘 날짜, 같은 기사 수를 보여주는지 확인한다.
 ```
 
-자동 실행은 GitHub Actions schedule이 담당한다. 기본 설정은 매일 한국시간 오전 8:37 실행이고,
-GitHub schedule 지연/누락에 대비해 09:17, 09:47, 10:17, 11:17 KST retry window를 둔다.
-별도 watchdog은 08:52부터 mirror와 Vercel 상태를 확인해 필요한 recovery workflow만 실행한다.
+자동 실행의 기본 경로는 GitHub Actions schedule이다. 기본 설정은 매일 한국시간 오전 8:37 실행이다.
+GitHub 내부 watchdog은 09:22 KST에 한 번 실행되어 mirror와 Vercel 상태를 확인하고 필요한 recovery workflow만 실행한다.
+다만 GitHub Actions 자체 장애가 있으면 primary schedule과 GitHub 내부 watchdog이 함께 누락될 수 있다.
+이 경우를 막기 위해 Supabase Cron이 GitHub 밖에서 09:05, 09:35, 10:05, 10:35 KST에
+`Newsletter publish watchdog` workflow를 `workflow_dispatch`로 깨운다. GitHub watchdog은 이미 fresh이면 아무것도 하지 않고,
+mirror가 stale이면 `Build newsletter mirror`를, mirror는 fresh인데 Vercel/Supabase만 stale이면 `Sync newsletter Supabase read model`만 실행한다.
 
 GitHub Actions 화면에서 수동 실행도 그대로 사용할 수 있다. private 원본 저장소의 GitHub 화면에서
 `Actions` → `Build newsletter mirror` → `Run workflow`를 누르면 백업 미러 생성이 실행된다. `report_date`를 비워 두면
@@ -93,16 +97,62 @@ GitHub Actions 자동 발행에는 private 원본 저장소의 `Settings` → `S
 - `NAVER_CLIENT_ID`: Naver News API client ID
 - `NAVER_CLIENT_SECRET`: Naver News API client secret
 - `NEWSLETTER_PUBLIC_REPO_TOKEN`: private 원본 저장소의 Action이 public mirror `pkkong/kpef-newsletter`에 push할 때 쓰는 GitHub token
+- `SUPABASE_DB_URL`: Supabase migration과 external watchdog cron 설치에 쓰는 DB connection URL
 - `SUPABASE_URL`: 뉴스레터 read model Supabase project URL
 - `SUPABASE_SERVICE_ROLE_KEY`: GitHub Actions가 read model을 갱신할 때 쓰는 Supabase service role key
 
 `NAVER_CLIENT_ID` 또는 `NAVER_CLIENT_SECRET`이 없으면 워크플로는 실패한다. Naver 소스를 빼고 발행하면 커버리지가 크게 낮아져서 자동 발행으로 인정하지 않는다.
 `NEWSLETTER_PUBLIC_REPO_TOKEN`이 없거나 public mirror에 push 권한이 없으면 뉴스레터 파일을 만들 수는 있어도
 `pkkong/kpef-newsletter`에 게시할 수 없다.
+`SUPABASE_DB_URL`이 없으면 Supabase migration과 external watchdog cron 설치가 실패한다.
 `SUPABASE_URL` 또는 `SUPABASE_SERVICE_ROLE_KEY`가 없으면 Supabase/Vercel sync workflow는 실패한다. 단, 이 workflow는 GitHub Pages mirror workflow와 분리되어 있으므로 Supabase 장애가 정적 백업 미러 발행까지 막지는 않는다.
 
 Public mirror 저장소의 Pages 설정은 `Settings` → `Pages`에서 Source를 `Deploy from a branch`,
 Branch를 `gh-pages`, Folder를 `/ (root)`로 둔다.
+
+## Supabase External Watchdog
+
+Supabase external watchdog은 GitHub Actions 장애로 scheduled workflow가 시작되지 않은 날을 복구하기 위한 별도 안전장치다.
+뉴스 수집을 Supabase에서 직접 하지 않는다. Supabase는 GitHub의 `Newsletter publish watchdog` workflow만 깨우고,
+기존 GitHub workflow가 freshness check, 중복 실행 방지, mirror build, Supabase sync, Vercel 검증을 계속 담당한다.
+
+설치 절차:
+
+1. `Apply newsletter Supabase migration` workflow를 실행한다. 이 workflow는 `services/newsletter/supabase/migrations/*.sql`을 순서대로 적용한다.
+2. Supabase Vault에 `newsletter_github_actions_dispatch_token` secret을 저장한다.
+3. 이 token은 `pkkong/korea-pef-db` 저장소의 Actions workflow dispatch 권한이 있어야 한다. Fine-grained token을 쓴다면 최소한 대상 repo의 Actions read/write 권한이 필요하다.
+4. 다음 SQL로 설치 상태를 확인한다.
+
+Vault secret 저장 예시:
+
+```sql
+select vault.create_secret(
+  '<github-actions-dispatch-token>',
+  'newsletter_github_actions_dispatch_token',
+  'Dispatches pkkong/korea-pef-db Newsletter publish watchdog from Supabase Cron'
+);
+```
+
+이미 같은 이름의 secret이 있으면 Supabase Dashboard의 Vault 화면에서 값을 교체하거나 기존 row를 삭제한 뒤 다시 만든다.
+
+```sql
+select jobname, schedule, active
+from cron.job
+where jobname like 'newsletter-external-watchdog-%'
+order by jobname;
+```
+
+실행 기록은 아래 SQL로 본다.
+
+```sql
+select *
+from newsletter_ops.newsletter_external_watchdog_recent_requests
+order by created_at desc
+limit 20;
+```
+
+`status='skipped_missing_token'`이면 cron은 설치됐지만 Supabase Vault secret이 아직 없는 상태다.
+이 상태에서는 메일 폭탄은 발생하지 않지만 GitHub 외부 복구도 동작하지 않는다.
 
 ## GitHub Actions Readiness Check
 
@@ -111,7 +161,7 @@ Branch를 `gh-pages`, Folder를 `/ (root)`로 둔다.
 
 - Workflow `.github/workflows/deploy-newsletter-pages.yml`의 이름은 `Build newsletter mirror`이고 `schedule`과 `workflow_dispatch`가 모두 있다.
 - Workflow `.github/workflows/sync-newsletter-supabase.yml`의 이름은 `Sync newsletter Supabase read model`이고 수동 실행과 mirror workflow의 explicit dispatch를 지원한다.
-- Repository secrets에 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `NEWSLETTER_PUBLIC_REPO_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` 이름이 있다.
+- Repository secrets에 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `NEWSLETTER_PUBLIC_REPO_TOKEN`, `SUPABASE_DB_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` 이름이 있다.
 - `Actions` → `Build newsletter mirror` 화면에 `Run workflow` 버튼이 보인다.
 - 실행 성공 후 `https://pkkong.github.io/kpef-newsletter/health.json`과 `https://kpef-newsletter.vercel.app/health.json`이 같은 날짜와 기사 수를 보여준다.
 
@@ -139,6 +189,7 @@ pkkong/korea-pef-db
 NAVER_CLIENT_ID
 NAVER_CLIENT_SECRET
 NEWSLETTER_PUBLIC_REPO_TOKEN
+SUPABASE_DB_URL
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
 ```
@@ -151,6 +202,7 @@ SUPABASE_SERVICE_ROLE_KEY
 
 - `NEWSLETTER_PUBLIC_REPO_TOKEN`이 없으면 public mirror push가 실패하므로 즉시 보강한다.
 - `NAVER_CLIENT_ID` 또는 `NAVER_CLIENT_SECRET`이 없으면 Naver News 소스가 빠지므로 기사 커버리지가 줄어든다.
+- `SUPABASE_DB_URL`이 없으면 Supabase migration과 external watchdog 설치가 실패한다.
 - `SUPABASE_URL` 또는 `SUPABASE_SERVICE_ROLE_KEY`가 없으면 Vercel 앱 read model 동기화가 실패한다. 이 경우 Pages mirror 상태와 Vercel 상태를 분리해서 본다.
 - 수동 실행은 되지만 schedule 실행 이력이 없으면 workflow 파일의 cron `37 23 * * *` 및 retry cron, Actions enabled 상태를 확인한다.
 

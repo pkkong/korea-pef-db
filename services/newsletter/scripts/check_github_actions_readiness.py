@@ -14,6 +14,10 @@ from pathlib import Path
 
 MIRROR_WORKFLOW_PATH = Path(".github/workflows/deploy-newsletter-pages.yml")
 SYNC_WORKFLOW_PATH = Path(".github/workflows/sync-newsletter-supabase.yml")
+MIGRATION_WORKFLOW_PATH = Path(".github/workflows/apply-newsletter-supabase-migration.yml")
+EXTERNAL_WATCHDOG_MIGRATION_PATH = Path(
+    "services/newsletter/supabase/migrations/20260807093000_newsletter_external_watchdog_cron.sql"
+)
 EXPECTED_CRON = "37 23 * * *"
 MIRROR_EXPECTED_SECRETS = (
     "NAVER_CLIENT_ID",
@@ -24,7 +28,10 @@ SYNC_EXPECTED_SECRETS = (
     "SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
 )
-EXPECTED_SECRETS = MIRROR_EXPECTED_SECRETS + SYNC_EXPECTED_SECRETS
+MIGRATION_EXPECTED_SECRETS = (
+    "SUPABASE_DB_URL",
+)
+EXPECTED_SECRETS = MIRROR_EXPECTED_SECRETS + SYNC_EXPECTED_SECRETS + MIGRATION_EXPECTED_SECRETS
 
 
 def run(args: list[str], cwd: Path, timeout: int = 20) -> subprocess.CompletedProcess[str]:
@@ -115,11 +122,15 @@ def main() -> int:
     repo_name = args.repo or infer_repo_name(repo_root)
     mirror_workflow_file = repo_root / MIRROR_WORKFLOW_PATH
     sync_workflow_file = repo_root / SYNC_WORKFLOW_PATH
+    migration_workflow_file = repo_root / MIGRATION_WORKFLOW_PATH
+    external_watchdog_migration_file = repo_root / EXTERNAL_WATCHDOG_MIGRATION_PATH
 
     print("Newsletter GitHub Actions readiness")
     print(f"Repository: {repo_name}")
     print(f"Mirror workflow: {MIRROR_WORKFLOW_PATH}")
     print(f"Supabase sync workflow: {SYNC_WORKFLOW_PATH}")
+    print(f"Supabase migration workflow: {MIGRATION_WORKFLOW_PATH}")
+    print(f"External watchdog migration: {EXTERNAL_WATCHDOG_MIGRATION_PATH}")
 
     failures: list[str] = []
     unknowns: list[str] = []
@@ -183,6 +194,47 @@ def main() -> int:
                 status("OK", f"sync workflow references secret {name}")
             else:
                 failures.append(f"sync workflow does not reference secret {name}")
+
+    if not migration_workflow_file.exists():
+        failures.append(f"missing workflow file: {MIGRATION_WORKFLOW_PATH}")
+    else:
+        migration_text = migration_workflow_file.read_text(encoding="utf-8")
+        migration_checks = (
+            ("migration workflow named Apply newsletter Supabase migration", "name: Apply newsletter Supabase migration" in migration_text),
+            ("migration workflow has manual dispatch", re.search(r"(?m)^  workflow_dispatch:\s*$", migration_text)),
+            ("migration workflow applies every newsletter migration", "services/newsletter/supabase/migrations/*.sql" in migration_text),
+            ("migration workflow uses psql with SUPABASE_DB_URL", "psql \"$SUPABASE_DB_URL\"" in migration_text),
+        )
+        for message, ok in migration_checks:
+            if ok:
+                status("OK", message)
+            else:
+                failures.append(message)
+        for name in MIGRATION_EXPECTED_SECRETS:
+            if f"secrets.{name}" in migration_text:
+                status("OK", f"migration workflow references secret {name}")
+            else:
+                failures.append(f"migration workflow does not reference secret {name}")
+
+    if not external_watchdog_migration_file.exists():
+        failures.append(f"missing Supabase external watchdog migration: {EXTERNAL_WATCHDOG_MIGRATION_PATH}")
+    else:
+        watchdog_sql = external_watchdog_migration_file.read_text(encoding="utf-8")
+        watchdog_checks = (
+            ("external watchdog creates pg_cron schedule", "cron.schedule" in watchdog_sql),
+            ("external watchdog dispatches GitHub watchdog workflow", "newsletter-watchdog.yml/dispatches" in watchdog_sql),
+            (
+                "external watchdog reads token from Supabase Vault",
+                "newsletter_github_actions_dispatch_token" in watchdog_sql and "vault.decrypted_secrets" in watchdog_sql,
+            ),
+            ("external watchdog logs dispatch attempts", "newsletter_external_watchdog_runs" in watchdog_sql),
+            ("external watchdog has four KST retry windows", all(token in watchdog_sql for token in ("0905", "0935", "1005", "1035"))),
+        )
+        for message, ok in watchdog_checks:
+            if ok:
+                status("OK", message)
+            else:
+                failures.append(message)
 
     if args.skip_secrets:
         unknowns.append("GitHub secret list skipped by --skip-secrets")
