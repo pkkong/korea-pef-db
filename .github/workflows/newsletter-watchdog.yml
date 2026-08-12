@@ -63,13 +63,34 @@ jobs:
           WATCHDOG_DRY_RUN: ${{ inputs.dry_run }}
         shell: bash
         run: |
+          gh_with_retry() {
+            local attempt
+            local output
+            for attempt in 1 2 3 4; do
+              if output="$("$@" 2>&1)"; then
+                printf '%s\n' "$output"
+                return 0
+              fi
+              echo "::warning::GitHub API command failed on attempt ${attempt}/4: $*" >&2
+              echo "${output}" >&2
+              sleep 5
+            done
+            return 1
+          }
+
           echo "Newsletter stale: ${{ steps.freshness.outputs.reason }}"
-          active_run="$(gh run list \
+          if ! active_runs_json="$(gh_with_retry gh run list \
             --repo "${GITHUB_REPOSITORY}" \
             --workflow "${NEWSLETTER_PUBLISH_WORKFLOW}" \
             --json databaseId,status,createdAt,event \
-            --limit 10 \
-            | python3 -c 'import json, sys; runs = json.load(sys.stdin); active = next((row for row in runs if row.get("status") in {"queued", "in_progress", "waiting"}), None); print(active.get("databaseId") if active else "")'
+            --limit 10
+          )"; then
+            echo "::warning::Could not inspect active publish workflows; later watchdog windows will retry."
+            exit 0
+          fi
+          active_run="$(
+            printf '%s' "${active_runs_json}" \
+              | python3 -c 'import json, sys; runs = json.load(sys.stdin); active = next((row for row in runs if row.get("status") in {"queued", "in_progress", "waiting"}), None); print(active.get("databaseId") if active else "")'
           )"
 
           if [ -n "${active_run}" ]; then
@@ -77,13 +98,19 @@ jobs:
             exit 0
           fi
 
-          recent_failed_run="$(gh run list \
+          if ! recent_runs_json="$(gh_with_retry gh run list \
             --repo "${GITHUB_REPOSITORY}" \
             --workflow "${NEWSLETTER_PUBLISH_WORKFLOW}" \
             --json databaseId,status,conclusion,createdAt,headSha \
-            --limit 20 \
-            | python3 -c 'import datetime, json, os, sys; runs = json.load(sys.stdin); now = datetime.datetime.now(datetime.timezone.utc); current = os.environ.get("GITHUB_SHA", ""); active = next((row for row in runs if row.get("status") == "completed" and row.get("conclusion") == "failure" and row.get("headSha") == current and (now - datetime.datetime.fromisoformat(str(row.get("createdAt", "")).replace("Z", "+00:00"))).total_seconds() < 21600), None); print(active.get("databaseId") if active else "")' \
-            | head -n 1
+            --limit 20
+          )"; then
+            echo "::warning::Could not inspect recent publish failures; later watchdog windows will retry."
+            exit 0
+          fi
+          recent_failed_run="$(
+            printf '%s' "${recent_runs_json}" \
+              | python3 -c 'import datetime, json, os, sys; runs = json.load(sys.stdin); now = datetime.datetime.now(datetime.timezone.utc); current = os.environ.get("GITHUB_SHA", ""); active = next((row for row in runs if row.get("status") == "completed" and row.get("conclusion") == "failure" and row.get("headSha") == current and (now - datetime.datetime.fromisoformat(str(row.get("createdAt", "")).replace("Z", "+00:00"))).total_seconds() < 21600), None); print(active.get("databaseId") if active else "")' \
+              | head -n 1
           )"
 
           if [ -n "${recent_failed_run}" ]; then
@@ -97,10 +124,13 @@ jobs:
             exit 0
           fi
 
-          gh workflow run "${NEWSLETTER_PUBLISH_WORKFLOW}" \
+          if ! gh_with_retry gh workflow run "${NEWSLETTER_PUBLISH_WORKFLOW}" \
             --repo "${GITHUB_REPOSITORY}" \
             --ref main \
-            -f report_date="${{ steps.date.outputs.report_date }}"
+            -f report_date="${{ steps.date.outputs.report_date }}"; then
+            echo "::warning::Could not dispatch ${NEWSLETTER_PUBLISH_WORKFLOW}; later watchdog windows will retry."
+            exit 0
+          fi
           echo "Dispatched ${NEWSLETTER_PUBLISH_WORKFLOW} for ${{ steps.date.outputs.report_date }}"
 
       - name: Dispatch Supabase sync if only Vercel app is stale
@@ -110,13 +140,34 @@ jobs:
           WATCHDOG_DRY_RUN: ${{ inputs.dry_run }}
         shell: bash
         run: |
+          gh_with_retry() {
+            local attempt
+            local output
+            for attempt in 1 2 3 4; do
+              if output="$("$@" 2>&1)"; then
+                printf '%s\n' "$output"
+                return 0
+              fi
+              echo "::warning::GitHub API command failed on attempt ${attempt}/4: $*" >&2
+              echo "${output}" >&2
+              sleep 5
+            done
+            return 1
+          }
+
           echo "Newsletter app stale while mirror is fresh: ${{ steps.freshness.outputs.reason }}"
-          active_run="$(gh run list \
+          if ! active_runs_json="$(gh_with_retry gh run list \
             --repo "${GITHUB_REPOSITORY}" \
             --workflow "${NEWSLETTER_SYNC_WORKFLOW}" \
             --json databaseId,status,createdAt,event \
-            --limit 10 \
-            | python3 -c 'import json, sys; runs = json.load(sys.stdin); active = next((row for row in runs if row.get("status") in {"queued", "in_progress", "waiting"}), None); print(active.get("databaseId") if active else "")'
+            --limit 10
+          )"; then
+            echo "::warning::Could not inspect active sync workflows; later watchdog windows will retry."
+            exit 0
+          fi
+          active_run="$(
+            printf '%s' "${active_runs_json}" \
+              | python3 -c 'import json, sys; runs = json.load(sys.stdin); active = next((row for row in runs if row.get("status") in {"queued", "in_progress", "waiting"}), None); print(active.get("databaseId") if active else "")'
           )"
 
           if [ -n "${active_run}" ]; then
@@ -129,10 +180,13 @@ jobs:
             exit 0
           fi
 
-          gh workflow run "${NEWSLETTER_SYNC_WORKFLOW}" \
+          if ! gh_with_retry gh workflow run "${NEWSLETTER_SYNC_WORKFLOW}" \
             --repo "${GITHUB_REPOSITORY}" \
             --ref main \
-            -f report_date="${{ steps.date.outputs.report_date }}"
+            -f report_date="${{ steps.date.outputs.report_date }}"; then
+            echo "::warning::Could not dispatch ${NEWSLETTER_SYNC_WORKFLOW}; later watchdog windows will retry."
+            exit 0
+          fi
           echo "Dispatched ${NEWSLETTER_SYNC_WORKFLOW} for ${{ steps.date.outputs.report_date }}"
 
       - name: Report fresh

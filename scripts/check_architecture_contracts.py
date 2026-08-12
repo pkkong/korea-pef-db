@@ -184,6 +184,10 @@ def check_workflow_contracts() -> list[str]:
     watchdog = workflow_text["newsletter-watchdog.yml"]
     if "newsletter_public_status.py watchdog-freshness" not in watchdog:
         violations.append("newsletter-watchdog.yml:missing:watchdog-freshness")
+    if "gh_with_retry()" not in watchdog:
+        violations.append("newsletter-watchdog.yml:missing:github_api_retry_wrapper")
+    if "later watchdog windows will retry" not in watchdog:
+        violations.append("newsletter-watchdog.yml:missing:soft_fail_for_transient_github_api_errors")
     return violations
 
 
