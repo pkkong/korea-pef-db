@@ -6,8 +6,12 @@ UI source. The Flask app only provides runtime data access and thin HTTP routes.
 
 from __future__ import annotations
 
+import os
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from flask import Flask, Response, jsonify, request
 
@@ -21,6 +25,11 @@ except ImportError:  # Flat import path used by Vercel root and local Flask runs
 
 app = Flask(__name__, static_folder=None)
 
+DEFAULT_GP_PAGE_BASE_URL = "https://pkkong.github.io/kpef-newsletter"
+DEFAULT_GP_PAGE_CACHE_SECONDS = 300
+GP_PAGE_NAMES = {"market.html", "gps.html"}
+_GP_PAGE_CACHE: dict[str, object] = {"expires_at": 0.0, "pages": {}}
+
 
 def today_seoul() -> str:
     return datetime.now(timezone(timedelta(hours=9))).date().isoformat()
@@ -31,6 +40,61 @@ def _cache_headers(content_type: str) -> dict[str, str]:
         "Content-Type": content_type,
         "Cache-Control": "public, max-age=300, stale-while-revalidate=3600",
     }
+
+
+def gp_page_base_url() -> str:
+    return os.environ.get("GP_PAGE_BASE_URL", DEFAULT_GP_PAGE_BASE_URL).rstrip("/")
+
+
+def fetch_gp_page_html(page_name: str) -> str:
+    if page_name not in GP_PAGE_NAMES:
+        raise ValueError(f"Unsupported GP page: {page_name}")
+    request = Request(
+        f"{gp_page_base_url()}/{page_name}",
+        headers={"User-Agent": "kpef-newsletter-vercel/1.0", "Accept": "text/html"},
+    )
+    with urlopen(request, timeout=15) as response:
+        return response.read().decode("utf-8")
+
+
+def _rewrite_gp_navigation(page_html: str) -> str:
+    """Keep GP pages on Vercel while directing the currently static LP page to its public source."""
+    return page_html.replace(
+        'href="lp-notices.html"',
+        f'href="{gp_page_base_url()}/lp-notices.html"',
+    )
+
+
+def load_gp_page(page_name: str, force_refresh: bool = False) -> str:
+    now = time.time()
+    pages = _GP_PAGE_CACHE.get("pages")
+    cached_pages = pages if isinstance(pages, dict) else {}
+    cached = cached_pages.get(page_name)
+    if not force_refresh and isinstance(cached, str) and now < float(_GP_PAGE_CACHE.get("expires_at") or 0):
+        return cached
+
+    try:
+        page_html = _rewrite_gp_navigation(fetch_gp_page_html(page_name))
+    except (HTTPError, URLError, TimeoutError, UnicodeDecodeError, ValueError):
+        if isinstance(cached, str):
+            return cached
+        raise
+
+    cached_pages[page_name] = page_html
+    cache_seconds = int(os.environ.get("GP_PAGE_CACHE_SECONDS", str(DEFAULT_GP_PAGE_CACHE_SECONDS)))
+    _GP_PAGE_CACHE["pages"] = cached_pages
+    _GP_PAGE_CACHE["expires_at"] = now + max(cache_seconds, 30)
+    return page_html
+
+
+def gp_public_page(page_name: str):
+    try:
+        page_html = load_gp_page(page_name, force_refresh=request.args.get("refresh") == "1")
+    except (HTTPError, URLError, TimeoutError, UnicodeDecodeError, ValueError):
+        return Response("GP market data is temporarily unavailable.", status=503, mimetype="text/plain")
+    headers = _cache_headers("text/html; charset=utf-8")
+    headers["X-GP-Data-Source"] = "verified-static-source"
+    return Response(page_html, headers=headers)
 
 
 @app.get("/")
@@ -54,6 +118,18 @@ def daily_news():
     response.headers["X-Newsletter-Data-Source"] = data_source
     response.headers["X-Generated-At"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     return response
+
+
+@app.get("/market")
+@app.get("/market.html")
+def gp_market():
+    return gp_public_page("market.html")
+
+
+@app.get("/gps")
+@app.get("/gps.html")
+def gp_directory():
+    return gp_public_page("gps.html")
 
 
 @app.get("/assets/service.css")

@@ -21,6 +21,7 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
       NEWSLETTER_ARCHIVE_URL: https://pkkong.github.io/kpef-newsletter/archive.json
+      NEWSLETTER_APP_URL: https://kpef-newsletter.vercel.app
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -65,3 +66,22 @@ jobs:
           # Run from repo root because the Vercel project already has Root Directory set.
           vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
           vercel deploy --prod --token "$VERCEL_TOKEN"
+
+      - name: Verify Vercel GP routes
+        shell: bash
+        run: |
+          for path in market.html gps.html; do
+            verified=false
+            for attempt in $(seq 1 12); do
+              page="$(curl --silent --show-error --fail --location --max-time 30 "${NEWSLETTER_APP_URL}/${path}?refresh=1" || true)"
+              if [[ "$page" == *"Korea PEF"* ]]; then
+                verified=true
+                break
+              fi
+              sleep 5
+            done
+            if [ "$verified" != "true" ]; then
+              echo "::error::${path} did not return the GP public page after Vercel alias propagation."
+              exit 1
+            fi
+          done

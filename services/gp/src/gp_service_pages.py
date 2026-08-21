@@ -16,7 +16,9 @@ from services.shared.src.brand_assets import brand_logo_url, brand_style_attr, p
 from services.shared.src.daily_news_common import normalize_url
 
 
-REQUIRED_TABLES = ("gp_profile", "gp_house", "news_entity_link", "news_document")
+MARKET_REQUIRED_TABLES = ("v_period_summary", "source_document")
+PROFILE_REQUIRED_TABLES = ("gp_profile", "gp_house")
+NEWS_REQUIRED_TABLES = ("news_entity_link", "news_document")
 TOP_GP_PAGE_LIMIT = 120
 PROFILE_NEWS_LIMIT = 12
 PROFILE_FUND_LIMIT = 10
@@ -84,23 +86,25 @@ def write_gp_pages(site_dir: Path, db_path: Path, report_date: str) -> dict[str,
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
-        missing_tables = [name for name in REQUIRED_TABLES if not _db_object_exists(conn, name)]
-        if missing_tables:
+        market_ready = _db_objects_exist(conn, MARKET_REQUIRED_TABLES)
+        if market_ready:
+            market_context = _read_market_context(conn)
+            (site_dir / "market.html").write_text(
+                _render_market_page(report_date, market_context),
+                encoding="utf-8",
+            )
+        else:
             (site_dir / "market.html").write_text(
                 _render_empty_market(report_date, "시장 통계가 준비되는 중입니다."),
                 encoding="utf-8",
             )
+
+        if not _db_objects_exist(conn, PROFILE_REQUIRED_TABLES):
             (site_dir / "gps.html").write_text(
                 _render_empty_directory(report_date, "GP 공개 정보가 준비되는 중입니다."),
                 encoding="utf-8",
             )
             return zero_counts
-
-        market_context = _read_market_context(conn)
-        (site_dir / "market.html").write_text(
-            _render_market_page(report_date, market_context),
-            encoding="utf-8",
-        )
 
         gps = _read_gp_profiles(conn)
         if not gps:
@@ -110,7 +114,7 @@ def write_gp_pages(site_dir: Path, db_path: Path, report_date: str) -> dict[str,
             )
             return zero_counts
 
-        news_by_gp = _read_gp_news(conn)
+        news_by_gp = _read_gp_news(conn) if _db_objects_exist(conn, NEWS_REQUIRED_TABLES) else {}
         funds_by_gp = _read_gp_funds(conn)
         lp_signals_by_gp = _read_lp_signals(conn)
         period_metrics_by_gp = _read_gp_period_metrics(conn)
@@ -127,7 +131,9 @@ def write_gp_pages(site_dir: Path, db_path: Path, report_date: str) -> dict[str,
             gp["period_metrics"] = period_metrics_by_gp.get(gp_id, {})
 
         ranked_gps = sorted(gps, key=_gp_sort_key)
-        top_gps = ranked_gps[:TOP_GP_PAGE_LIMIT]
+        # FSS-only names can appear in the directory, but they do not receive a
+        # profile page until source-backed profile facts exist.
+        top_gps = [gp for gp in ranked_gps if _has_public_profile(gp)][:TOP_GP_PAGE_LIMIT]
         top_ids = {str(gp["source_gp_id"]) for gp in top_gps}
         for gp in gps:
             gp["profile_page"] = _gp_page_name(gp["source_gp_id"]) if str(gp["source_gp_id"]) in top_ids else ""
@@ -182,6 +188,21 @@ def _db_object_exists(conn: sqlite3.Connection, name: str) -> bool:
         (name,),
     ).fetchone()
     return row is not None
+
+
+def _db_objects_exist(conn: sqlite3.Connection, names: tuple[str, ...]) -> bool:
+    return all(_db_object_exists(conn, name) for name in names)
+
+
+def _has_public_profile(gp: dict[str, object]) -> bool:
+    verification_level = _clean(gp.get("verification_level")).upper()
+    if verification_level in {"", "FSS_NAME_ONLY"}:
+        return False
+    return bool(
+        _clean(gp.get("primary_source_url"))
+        or _clean(gp.get("homepage_url"))
+        or _clean(gp.get("legal_entity_name_ko"))
+    )
 
 
 def _read_gp_profiles(conn: sqlite3.Connection) -> list[dict[str, object]]:
@@ -1081,6 +1102,7 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
 
     return f"""      <article class="gp-card"
         data-url="{_e(profile_url)}"
+        data-profile="{'detail' if profile_url else 'fss-name-only'}"
         data-search="{_e(search_blob)}"
         data-active="{1 if _as_bool(gp.get("active_in_latest_period")) else 0}"
         data-rank="{rank_sort}"

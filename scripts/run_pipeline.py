@@ -227,6 +227,18 @@ def build_steps(args: argparse.Namespace) -> list[PipelineStep]:
                 ],
             ),
             PipelineStep(
+                name="check_fss_statistics_ready",
+                description="Require reproducible latest FSS source, market summary, and GP ranking",
+                command_factory=lambda: [
+                    sys.executable,
+                    str(SCRIPTS_DIR / "check_fss_statistics_ready.py"),
+                    "--db",
+                    str(args.db),
+                    "--expected-latest-period",
+                    latest_period_label(args.db),
+                ],
+            ),
+            PipelineStep(
                 name="build_gp_profile_master_pre_evidence",
                 description="Build GP profile master shell and research worklist",
                 command_factory=lambda: [

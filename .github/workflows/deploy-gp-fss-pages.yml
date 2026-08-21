@@ -1,0 +1,136 @@
+name: Deploy GP FSS market
+
+on:
+  workflow_dispatch:
+    inputs:
+      report_date:
+        description: "Displayed build date in YYYY-MM-DD. Leave blank for today's date in Asia/Seoul."
+        required: false
+        type: string
+      expected_latest_period:
+        description: "Required latest FSS reporting period."
+        required: true
+        default: "2025Q4"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gp-fss-pages
+  cancel-in-progress: false
+
+env:
+  GP_PUBLIC_REPO: pkkong/kpef-newsletter
+  GP_PUBLIC_BRANCH: gh-pages
+  GP_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter/
+  NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS: "1"
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Resolve report date
+        id: date
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.report_date }}" ]; then
+            echo "report_date=${{ inputs.report_date }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "report_date=$(TZ=Asia/Seoul date +%F)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check publishing readiness
+        shell: bash
+        env:
+          NEWSLETTER_PUBLIC_REPO_TOKEN: ${{ secrets.NEWSLETTER_PUBLIC_REPO_TOKEN }}
+        run: |
+          if [ -z "${NEWSLETTER_PUBLIC_REPO_TOKEN:-}" ]; then
+            echo "::error::NEWSLETTER_PUBLIC_REPO_TOKEN is required to publish ${GP_PUBLIC_REPO}."
+            exit 1
+          fi
+
+      - name: Fetch and validate FSS source files
+        shell: bash
+        run: |
+          mkdir -p db data/raw/fss_pef exports
+          python3 scripts/fetch_fss_pef_sources.py --sleep 0.2
+          python3 scripts/check_fss_raw_sources.py --db db/private_equity.db --no-db-check
+
+      - name: Build verified FSS market data
+        shell: bash
+        run: |
+          python3 scripts/ingest_fss_pef.py --db db/private_equity.db rebuild
+          python3 scripts/build_fund_master.py --db db/private_equity.db --out exports
+          python3 scripts/build_aum_analytics.py \
+            --db db/private_equity.db \
+            --out exports \
+            --ranking-period "${{ inputs.expected_latest_period }}"
+          python3 scripts/check_fss_statistics_ready.py \
+            --db db/private_equity.db \
+            --expected-latest-period "${{ inputs.expected_latest_period }}"
+          python3 scripts/build_gp_profile_master.py --db db/private_equity.db --out exports --limit 120
+
+      - name: Build and validate GP public pages
+        shell: bash
+        run: |
+          rm -rf /tmp/kpef-gp-public-site
+          mkdir -p /tmp/kpef-gp-public-site
+          python3 services/gp/src/build_gp_service_pages.py \
+            --site-dir /tmp/kpef-gp-public-site \
+            --db db/private_equity.db \
+            --date "${{ steps.date.outputs.report_date }}"
+          python3 scripts/check_public_frontend.py \
+            --services gp \
+            --public-dir /tmp/kpef-gp-public-site
+
+      - name: Publish GP pages
+        shell: bash
+        env:
+          NEWSLETTER_PUBLIC_REPO_TOKEN: ${{ secrets.NEWSLETTER_PUBLIC_REPO_TOKEN }}
+        run: |
+          publish_dir="$(mktemp -d)"
+          git clone --depth 1 --branch "${GP_PUBLIC_BRANCH}" "https://x-access-token:${NEWSLETTER_PUBLIC_REPO_TOKEN}@github.com/${GP_PUBLIC_REPO}.git" "$publish_dir/site-repo"
+          python3 services/gp/src/build_gp_service_pages.py \
+            --site-dir "$publish_dir/site-repo" \
+            --db db/private_equity.db \
+            --date "${{ steps.date.outputs.report_date }}"
+          python3 scripts/check_public_frontend.py \
+            --services gp \
+            --public-dir "$publish_dir/site-repo"
+          cd "$publish_dir/site-repo"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- market.html gps.html
+          git add -u -- 'gp-*.html'
+          if git diff --cached --quiet; then
+            echo "No GP public changes to publish."
+            exit 0
+          fi
+          git commit -m "Deploy GP FSS market ${{ inputs.expected_latest_period }}" >/dev/null
+          git push origin "${GP_PUBLIC_BRANCH}"
+
+      - name: Verify deployed GP pages
+        shell: bash
+        run: |
+          for attempt in $(seq 1 40); do
+            if python3 scripts/check_public_frontend.py \
+              --services gp \
+              --base-url "${GP_PUBLIC_URL}" \
+              --public-dir /tmp/kpef-gp-public-site; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 40 ]; then
+              exit 1
+            fi
+            sleep 15
+          done
