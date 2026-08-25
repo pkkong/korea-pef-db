@@ -281,16 +281,22 @@ def test_vercel_app_uses_common_newsletter_ui() -> None:
 
 
 def test_vercel_app_serves_gp_pages_at_canonical_routes() -> None:
-    old_fetch = web_app.fetch_gp_page_html
+    old_fetch = web_app.fetch_active_gp_page
     old_cache = {
         "expires_at": web_app._GP_PAGE_CACHE.get("expires_at", 0.0),
         "pages": dict(web_app._GP_PAGE_CACHE.get("pages") or {}),
     }
 
-    def fake_fetch(page_name: str) -> str:
-        return f'<!doctype html><a href="lp-notices.html">LP</a><main>{page_name} 2025Q4</main>'
+    def fake_fetch(page_name: str) -> dict[str, str]:
+        return {
+            "page_html": f'<!doctype html><a href="lp-notices.html">LP</a><main>{page_name} 2025Q4</main>',
+            "snapshot_id": "fss-2025q4-test",
+            "reporting_period": "2025Q4",
+            "as_of_date": "2025-12-31",
+            "source_sha256": "a" * 64,
+        }
 
-    web_app.fetch_gp_page_html = fake_fetch
+    web_app.fetch_active_gp_page = fake_fetch
     web_app._GP_PAGE_CACHE.update({"expires_at": 0.0, "pages": {}})
     try:
         client = web_app.app.test_client()
@@ -299,12 +305,13 @@ def test_vercel_app_serves_gp_pages_at_canonical_routes() -> None:
 
         assert market.status_code == 200
         assert directory.status_code == 200
-        assert market.headers["X-GP-Data-Source"] == "verified-static-source"
+        assert market.headers["X-GP-Data-Source"] == "supabase-public-snapshot"
+        assert market.headers["X-GP-Snapshot-Id"] == "fss-2025q4-test"
         assert "market.html 2025Q4" in market.get_data(as_text=True)
         assert "gps.html 2025Q4" in directory.get_data(as_text=True)
         assert 'href="https://pkkong.github.io/kpef-newsletter/lp-notices.html"' in market.get_data(as_text=True)
     finally:
-        web_app.fetch_gp_page_html = old_fetch
+        web_app.fetch_active_gp_page = old_fetch
         web_app._GP_PAGE_CACHE.update(old_cache)
 
 
@@ -362,7 +369,7 @@ def test_vercel_runtime_has_no_standalone_ui_or_legacy_service_imports() -> None
         "services.wiki",
         "pef_wiki",
     ]
-    for path in [WEB_ROOT / "app.py", WEB_ROOT / "index.py", WEB_ROOT / "newsletter_data.py"]:
+    for path in [WEB_ROOT / "app.py", WEB_ROOT / "index.py", WEB_ROOT / "newsletter_data.py", WEB_ROOT / "gp_public_data.py"]:
         source = path.read_text(encoding="utf-8")
         for token in forbidden:
             assert token not in source, f"{path.name} must not import or mention {token}"

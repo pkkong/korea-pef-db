@@ -24,6 +24,7 @@ env:
   GP_PUBLIC_REPO: pkkong/kpef-newsletter
   GP_PUBLIC_BRANCH: gh-pages
   GP_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter/
+  GP_VERCEL_URL: https://kpef-newsletter.vercel.app
   NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS: "1"
 
 jobs:
@@ -53,9 +54,15 @@ jobs:
         shell: bash
         env:
           NEWSLETTER_PUBLIC_REPO_TOKEN: ${{ secrets.NEWSLETTER_PUBLIC_REPO_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           if [ -z "${NEWSLETTER_PUBLIC_REPO_TOKEN:-}" ]; then
             echo "::error::NEWSLETTER_PUBLIC_REPO_TOKEN is required to publish ${GP_PUBLIC_REPO}."
+            exit 1
+          fi
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "::error::SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required to publish the GP read model."
             exit 1
           fi
 
@@ -92,6 +99,19 @@ jobs:
           python3 scripts/check_public_frontend.py \
             --services gp \
             --public-dir /tmp/kpef-gp-public-site
+
+      - name: Publish GP public read model
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python3 services/gp/src/sync_gp_public_read_model.py \
+            --site-dir /tmp/kpef-gp-public-site \
+            --db db/private_equity.db \
+            --expected-latest-period "${{ inputs.expected_latest_period }}" \
+            --payload-out exports/gp/gp_public_snapshot.json \
+            --apply
 
       - name: Publish GP pages
         shell: bash
@@ -133,4 +153,29 @@ jobs:
               exit 1
             fi
             sleep 15
+          done
+
+      - name: Verify Vercel GP read model
+        shell: bash
+        run: |
+          for page_name in market.html gps.html; do
+            verified=false
+            for attempt in $(seq 1 24); do
+              header_file="$(mktemp)"
+              body_file="$(mktemp)"
+              curl --silent --show-error --fail --location --max-time 30 \
+                --dump-header "$header_file" \
+                --output "$body_file" \
+                "${GP_VERCEL_URL}/${page_name}?refresh=1" || true
+              if grep -qi '^x-gp-data-source: supabase-public-snapshot' "$header_file" \
+                && grep -q "${{ inputs.expected_latest_period }}" "$body_file"; then
+                verified=true
+                break
+              fi
+              sleep 5
+            done
+            if [ "$verified" != "true" ]; then
+              echo "::error::Vercel did not serve ${page_name} from the GP Supabase public snapshot."
+              exit 1
+            fi
           done

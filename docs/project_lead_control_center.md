@@ -52,7 +52,7 @@
 - LP directory current rule: 직접 GP/위탁운용사를 선정하는 기관만 공개 디렉토리에 표시한다. 산재보험기금·고용보험기금 등 OCIO 위임형 기금은 내부 pool로 분류하고, 별도 OCIO 서비스/탭을 기획하기 전까지 공개 기본 목록에는 섞지 않는다.
 - LP classification basis: `legal_lp_category`는 자본시장법 체계상 법적 LP 유형이고, `core/policy/ocio/candidate`는 실제 공고, 선정 이력, OCIO 위임 여부, 사용자 지정 전략기관 여부를 반영한 서비스 운영 등급이다. 후보성 기관 일반정보만으로는 공개하지 않는다.
 - GP/FSS 통계 기준: 최신 공식 원천은 `2025Q4` (`2025-12-31` 기준, 2026-07-02 금감원 게시)다. 현재 검증 수치는 펀드 1,195개, 대표 운용 GP 397개, 출자약정액 167.5조원, 상위 10개 GP 비중 42.84%다. Market의 GP는 펀드별 대표 운용사 기준이며, FSS에서 관측된 전체/공동 운용사 수와 섞지 않는다.
-- GP/FSS 공개 계약: `scripts/check_fss_statistics_ready.py`는 최신 raw 파일, DB SHA-256, 최신 reporting period, non-zero market summary, complete primary-GP ranking을 확인하고 400일 이상 지난 기준일을 실패 처리한다. GP를 포함한 `build_site_bundle.py`는 이 검사를 통과해야 한다. FSS 명칭만 확인된 GP는 디렉터리 행으로만 공개하며, source-backed profile facts가 없는 상세 페이지를 만들지 않는다.
+- GP/FSS 공개 계약: `scripts/check_fss_statistics_ready.py`는 최신 raw 파일, DB SHA-256, 최신 reporting period, non-zero market summary, complete primary-GP ranking을 확인하고 400일 이상 지난 기준일을 실패 처리한다. GP를 포함한 `build_site_bundle.py`는 이 검사를 통과해야 한다. `sync_gp_public_read_model.py`는 준비성 검사와 page contract를 통과한 `market.html`/`gps.html`을 Supabase versioned snapshot으로 발행하고, Vercel은 published snapshot만 읽는다. FSS 명칭만 확인된 GP는 디렉터리 행으로만 공개하며, source-backed profile facts가 없는 상세 페이지를 만들지 않는다.
 - Wiki 상태: 공개 내비게이션에서 숨긴다. 사용자가 다시 기획하기 전까지 Wiki UI나 본문 작업을 하지 않는다.
 - 운영 체계 목표: LP/GP/Brief 기능을 더 넣기 전에 서비스 경계를 먼저 고정한다. 새 아이디어는 담당 서비스, 데이터 소스, 공개 view 계약, 검증 경로가 정해지기 전까지 `docs/service_quality_backlog.md`에 보관한다.
 
@@ -153,7 +153,7 @@ GP 금감원 통계 발행 workflow 실행:
 GitHub Actions → Deploy GP FSS market → Run workflow
 ```
 
-이 workflow는 FSS raw source 재수집, SQLite 재생성, 최신 분기/집계/순위 readiness 검증 뒤에 정적 GP source를 갱신한다. Vercel 공식 앱은 `/market.html`과 `/gps.html`에서 이 검증된 source를 5분 캐시로 읽어 공개한다. 뉴스레터 archive와 LP 산출물은 건드리지 않는다. FSS-only GP는 디렉터리 행으로만 공개하며 근거 없는 기존 상세 프로필은 같이 제거한다.
+이 workflow는 FSS raw source 재수집, SQLite 재생성, 최신 분기/집계/순위 readiness 검증 뒤에 GP static backup과 Supabase public snapshot을 함께 갱신한다. Vercel 공식 앱은 `/market.html`과 `/gps.html`에서 published Supabase snapshot을 읽어 공개한다. 뉴스레터 archive와 LP 산출물은 건드리지 않는다. FSS-only GP는 디렉터리 행으로만 공개하며 근거 없는 기존 상세 프로필은 같이 제거한다.
 
 뉴스레터 Supabase migration 적용:
 

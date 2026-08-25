@@ -10,24 +10,23 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 from flask import Flask, Response, jsonify, request
 
 WEB_ROOT = Path(__file__).resolve().parent
 try:  # Package import path used by repo-root tests.
+    from .gp_public_data import GPPublicDataError, fetch_active_gp_page  # type: ignore
     from .newsletter_data import load_archive, select_issue  # type: ignore
     from .newsletter_ui import app_icon_png, app_web_manifest, render_app, service_css, service_js  # type: ignore
 except ImportError:  # Flat import path used by Vercel root and local Flask runs.
+    from gp_public_data import GPPublicDataError, fetch_active_gp_page  # type: ignore  # noqa: E402
     from newsletter_data import load_archive, select_issue  # type: ignore  # noqa: E402
     from newsletter_ui import app_icon_png, app_web_manifest, render_app, service_css, service_js  # type: ignore  # noqa: E402
 
 app = Flask(__name__, static_folder=None)
 
-DEFAULT_GP_PAGE_BASE_URL = "https://pkkong.github.io/kpef-newsletter"
+DEFAULT_GP_LP_PUBLIC_URL = "https://pkkong.github.io/kpef-newsletter"
 DEFAULT_GP_PAGE_CACHE_SECONDS = 300
-GP_PAGE_NAMES = {"market.html", "gps.html"}
 _GP_PAGE_CACHE: dict[str, object] = {"expires_at": 0.0, "pages": {}}
 
 
@@ -42,59 +41,48 @@ def _cache_headers(content_type: str) -> dict[str, str]:
     }
 
 
-def gp_page_base_url() -> str:
-    return os.environ.get("GP_PAGE_BASE_URL", DEFAULT_GP_PAGE_BASE_URL).rstrip("/")
-
-
-def fetch_gp_page_html(page_name: str) -> str:
-    if page_name not in GP_PAGE_NAMES:
-        raise ValueError(f"Unsupported GP page: {page_name}")
-    request = Request(
-        f"{gp_page_base_url()}/{page_name}",
-        headers={"User-Agent": "kpef-newsletter-vercel/1.0", "Accept": "text/html"},
-    )
-    with urlopen(request, timeout=15) as response:
-        return response.read().decode("utf-8")
-
-
 def _rewrite_gp_navigation(page_html: str) -> str:
-    """Keep GP pages on Vercel while directing the currently static LP page to its public source."""
+    """Keep GP pages on Vercel while LP remains on its current public endpoint."""
+    lp_public_url = os.environ.get("GP_LP_PUBLIC_URL", DEFAULT_GP_LP_PUBLIC_URL).rstrip("/")
     return page_html.replace(
         'href="lp-notices.html"',
-        f'href="{gp_page_base_url()}/lp-notices.html"',
+        f'href="{lp_public_url}/lp-notices.html"',
     )
 
 
-def load_gp_page(page_name: str, force_refresh: bool = False) -> str:
+def load_gp_page(page_name: str, force_refresh: bool = False) -> dict[str, str]:
     now = time.time()
     pages = _GP_PAGE_CACHE.get("pages")
     cached_pages = pages if isinstance(pages, dict) else {}
     cached = cached_pages.get(page_name)
-    if not force_refresh and isinstance(cached, str) and now < float(_GP_PAGE_CACHE.get("expires_at") or 0):
+    if not force_refresh and isinstance(cached, dict) and now < float(_GP_PAGE_CACHE.get("expires_at") or 0):
         return cached
 
     try:
-        page_html = _rewrite_gp_navigation(fetch_gp_page_html(page_name))
-    except (HTTPError, URLError, TimeoutError, UnicodeDecodeError, ValueError):
-        if isinstance(cached, str):
+        page = dict(fetch_active_gp_page(page_name))
+        page["page_html"] = _rewrite_gp_navigation(page["page_html"])
+    except (GPPublicDataError, OSError, TimeoutError, UnicodeDecodeError, ValueError):
+        if isinstance(cached, dict):
             return cached
         raise
 
-    cached_pages[page_name] = page_html
+    cached_pages[page_name] = page
     cache_seconds = int(os.environ.get("GP_PAGE_CACHE_SECONDS", str(DEFAULT_GP_PAGE_CACHE_SECONDS)))
     _GP_PAGE_CACHE["pages"] = cached_pages
     _GP_PAGE_CACHE["expires_at"] = now + max(cache_seconds, 30)
-    return page_html
+    return page
 
 
 def gp_public_page(page_name: str):
     try:
-        page_html = load_gp_page(page_name, force_refresh=request.args.get("refresh") == "1")
-    except (HTTPError, URLError, TimeoutError, UnicodeDecodeError, ValueError):
+        page = load_gp_page(page_name, force_refresh=request.args.get("refresh") == "1")
+    except (GPPublicDataError, OSError, TimeoutError, UnicodeDecodeError, ValueError):
         return Response("GP market data is temporarily unavailable.", status=503, mimetype="text/plain")
     headers = _cache_headers("text/html; charset=utf-8")
-    headers["X-GP-Data-Source"] = "verified-static-source"
-    return Response(page_html, headers=headers)
+    headers["X-GP-Data-Source"] = "supabase-public-snapshot"
+    headers["X-GP-Snapshot-Id"] = page.get("snapshot_id", "")
+    headers["X-GP-Reporting-Period"] = page.get("reporting_period", "")
+    return Response(page["page_html"], headers=headers)
 
 
 @app.get("/")
