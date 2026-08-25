@@ -26,6 +26,7 @@
 5. `Public surface` 공개 화면
    - LP/GP와 GitHub Pages mirror는 public read model을 HTML로 구운 결과다.
    - 공식 Brief 앱은 검증된 mirror archive를 Supabase public read model로 동기화한 뒤 Vercel에서 읽는 결과다.
+   - 공식 GP Market/Directory는 FSS readiness를 통과한 `gp_public_snapshots`와 두 public page artifact를 Supabase에 atomically publish한 뒤 Vercel에서 읽는 결과다. GitHub Pages는 정적 backup mirror일 뿐 Vercel GP 화면의 runtime source가 아니다.
    - DB나 CSV가 바뀌어도 build, sync, deploy, public verification 전까지 공개 화면은 바뀌지 않는다.
 
 ## 상태값 분리 원칙
@@ -101,6 +102,19 @@ Vercel archive 재구성은 두 층을 함께 읽어야 한다.
 - `archive.json`은 발행일 순서, 섹션 순서, issue 안 기사 row 순서의 canonical source다. Vercel은 이 순서를 Supabase에서 복원해야 하며 독자적으로 재정렬하지 않는다.
 - `section_order=0`은 정상적인 첫 섹션 값이다. `0`을 falsy 값으로 처리해 `999` 같은 fallback으로 바꾸면 Vercel과 GitHub Pages가 같은 기사라도 다른 순서로 보인다.
 
+## GP Supabase public read model
+
+FSS GP는 raw workbook, SQLite 분석 결과, 정적 renderer 산출물을 차례로 검증한 뒤
+Supabase에서 하나의 published snapshot으로 전환한다.
+
+- `gp_public_snapshots`: reporting period, 기준일, FSS source ID/SHA-256, 핵심 수치, publish status를 저장한다.
+- `gp_public_pages`: 하나의 snapshot에 속한 `market.html`, `gps.html` public artifact와 content SHA-256을 저장한다.
+- `publish_gp_public_snapshot(snapshot_id)`: 두 artifact가 모두 존재할 때만 이전 published snapshot을 retire하고 새 snapshot을 publish한다.
+- Vercel은 anon key로 published snapshot만 읽고, HTML content SHA-256을 다시 확인한 뒤 응답한다. Supabase 장애 때에는 같은 serverless instance의 마지막 정상 snapshot만 짧게 유지하고, GitHub Pages HTML을 runtime fallback으로 사용하지 않는다.
+
+이 모델은 HTML을 직접 수정하는 저장소가 아니다. GP renderer가 검증된 FSS public
+view를 HTML로 만든 뒤, 검증된 artifact를 versioned read model로 발행하는 경로다.
+
 ## 빌드 계약
 
 기본 공개 통합 빌드는 active public services만 포함한다.
@@ -128,4 +142,5 @@ python3 scripts/build_site_bundle.py --services wiki --date YYYY-MM-DD
 - `scripts/check_architecture_contracts.py`는 LP/GP/Wiki가 newsletter-private module을 직접 import하지 않는지, newsletter workflow가 자기 책임 밖 작업을 하지 않는지, generated output이 source tracking에 들어오지 않는지 확인한다.
 - `services/newsletter/src/newsletter_public_status.py`는 GitHub Pages mirror, Supabase sync, Vercel health, watchdog freshness 판단을 한 구현으로 묶는다.
 - `scripts/check_public_frontend.py`는 공개 화면의 내부 용어 유출과 LP/GP table-like directory 구조를 확인한다.
+- `services/gp/src/sync_gp_public_read_model.py`는 verified GP artifact를 Supabase snapshot으로 발행한다. 두 GP 페이지와 source hash가 모두 맞지 않으면 Vercel에 새 데이터를 공개하지 않는다.
 - LP Notice는 계속 `사업 1개 = 공개 카드 1개`를 기준으로 삼고, 후보 source와 stale deadline은 public view/export 단계에서 제거한다.

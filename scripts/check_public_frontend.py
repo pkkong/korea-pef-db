@@ -31,6 +31,7 @@ SERVICE_PUBLIC_FILES = [
     "gps.html",
     "market.html",
 ]
+GP_PUBLIC_FILES = ["gps.html", "market.html"]
 REQUIRED_PUBLIC_FILES = NEWSLETTER_PUBLIC_FILES + SERVICE_PUBLIC_FILES
 BOTTOM_NAV_LABELS = ["브리프", "LP", "GP"]
 PUBLIC_CORE_HTML_FILES = ["index.html", "daily-news.html"]
@@ -169,7 +170,9 @@ def check_visible_text(html_files: list[str] | None = None) -> list[str]:
 
 def check_public_source_terms(html_files: list[str] | None = None) -> list[str]:
     html_files = html_files or PUBLIC_HTML_FILES
-    paths = html_files + ["assets/service.js"]
+    paths = list(html_files)
+    if (PUBLIC_DIR / "assets" / "service.js").exists():
+        paths.append("assets/service.js")
     violations: list[str] = []
     for relative_path in paths:
         text = read_public_text(relative_path)
@@ -292,9 +295,21 @@ def latest_fss_registry_period() -> str:
     return latest
 
 
-def check_generated_gp_contract() -> list[str]:
-    gps_path = NEWSLETTER_SITE_DIR / "gps.html"
-    market_path = NEWSLETTER_SITE_DIR / "market.html"
+def gp_data_is_expected() -> bool:
+    health_path = PUBLIC_DIR / "health.json"
+    if not health_path.exists():
+        return False
+    try:
+        payload = json.loads(health_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    services = str(payload.get("services") or "")
+    return "gp" in {part.strip() for part in services.split(",") if part.strip()}
+
+
+def check_generated_gp_contract(require_data: bool = False) -> list[str]:
+    gps_path = PUBLIC_DIR / "gps.html"
+    market_path = PUBLIC_DIR / "market.html"
     if not gps_path.exists():
         return ["generated_gp_contract=skipped"]
     if not market_path.exists():
@@ -369,7 +384,16 @@ def check_generated_gp_contract() -> list[str]:
     if 'font-variant-numeric: tabular-nums' not in gps_html:
         violations.append("gps.html:tabular-nums")
 
-    detail_paths = sorted(NEWSLETTER_SITE_DIR.glob("gp-*.html"))[:3]
+    if require_data or gp_data_is_expected():
+        if re.search(r"<h1 class=\"gp-directory-title\"><strong>0개</strong>", gps_html):
+            raise CheckFailure("Integrated GP build has an empty directory")
+        for label in ["펀드 수", "운용 GP", "출자약정액", "상위 10개 비중"]:
+            if re.search(rf"<span>{re.escape(label)}</span>\s*<strong>-</strong>", market_html):
+                raise CheckFailure(f"Integrated GP build has an empty market metric: {label}")
+        if "표시할 GP 순위가 없습니다." in market_html:
+            raise CheckFailure("Integrated GP build has no GP ranking")
+
+    detail_paths = sorted(PUBLIC_DIR.glob("gp-*.html"))[:3]
     for detail_path in detail_paths:
         html = detail_path.read_text(encoding="utf-8")
         detail_labels = bottom_nav_labels(html)
@@ -387,7 +411,11 @@ def check_generated_gp_contract() -> list[str]:
 
     if violations:
         raise CheckFailure(f"Forbidden generated GP wording/markup: {', '.join(violations)}")
-    if 'data-url="gp-' not in gps_html and "0개 PEF 운용사" not in gps_text:
+    if (
+        'data-url="gp-' not in gps_html
+        and 'data-profile="fss-name-only"' not in gps_html
+        and "0개 PEF 운용사" not in gps_text
+    ):
         raise CheckFailure("GP directory rows are missing clickable data-url links")
 
     return [f"generated_gp_contract=ok detail_pages_checked={len(detail_paths)} market=ok"]
@@ -482,7 +510,12 @@ def check_remote(base_url: str, services: str = "all") -> list[str]:
         return []
     base = base_url.rstrip("/") + "/"
     checked: list[str] = []
-    paths = [""] if services == "newsletter" else ["", "market.html", "gps.html", "lp-official-notices.html"]
+    if services == "newsletter":
+        paths = [""]
+    elif services == "gp":
+        paths = ["market.html", "gps.html"]
+    else:
+        paths = ["", "market.html", "gps.html", "lp-official-notices.html"]
     for relative_path in paths:
         url = base + relative_path
         request = Request(url, headers={"User-Agent": "kpef-public-frontend-check/1.0"})
@@ -498,6 +531,7 @@ def check_remote(base_url: str, services: str = "all") -> list[str]:
 
 
 def main() -> int:
+    global NEWSLETTER_SITE_DIR, PUBLIC_DIR
     parser = argparse.ArgumentParser(description="Check public frontend publishing contract")
     parser.add_argument("--base-url", default="", help="Optional deployed site URL to smoke-check")
     parser.add_argument(
@@ -508,13 +542,13 @@ def main() -> int:
     )
     parser.add_argument(
         "--services",
-        choices=["all", "newsletter"],
+        choices=["all", "newsletter", "gp"],
         default="all",
-        help="Use newsletter for newsletter-only static bundles.",
+        help="Use newsletter or gp for a service-specific static bundle.",
     )
     args = parser.parse_args()
-    global PUBLIC_DIR
-    PUBLIC_DIR = args.public_dir
+    PUBLIC_DIR = args.public_dir.resolve()
+    NEWSLETTER_SITE_DIR = PUBLIC_DIR
 
     if args.services == "newsletter":
         checks = [
@@ -524,6 +558,14 @@ def main() -> int:
             lambda: check_public_source_terms(PUBLIC_CORE_HTML_FILES),
             check_newsletter_frontend_contract,
             check_brief_initial_date_guard,
+        ]
+    elif args.services == "gp":
+        checks = [
+            lambda: check_required_files(GP_PUBLIC_FILES),
+            lambda: check_bottom_nav(GP_PUBLIC_FILES),
+            lambda: check_visible_text(GP_PUBLIC_FILES),
+            lambda: check_public_source_terms(GP_PUBLIC_FILES),
+            lambda: check_generated_gp_contract(require_data=True),
         ]
     else:
         checks = [

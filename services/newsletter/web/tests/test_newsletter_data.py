@@ -280,6 +280,41 @@ def test_vercel_app_uses_common_newsletter_ui() -> None:
         web_app.load_archive = old_loader
 
 
+def test_vercel_app_serves_gp_pages_at_canonical_routes() -> None:
+    old_fetch = web_app.fetch_active_gp_page
+    old_cache = {
+        "expires_at": web_app._GP_PAGE_CACHE.get("expires_at", 0.0),
+        "pages": dict(web_app._GP_PAGE_CACHE.get("pages") or {}),
+    }
+
+    def fake_fetch(page_name: str) -> dict[str, str]:
+        return {
+            "page_html": f'<!doctype html><a href="lp-notices.html">LP</a><main>{page_name} 2025Q4</main>',
+            "snapshot_id": "fss-2025q4-test",
+            "reporting_period": "2025Q4",
+            "as_of_date": "2025-12-31",
+            "source_sha256": "a" * 64,
+        }
+
+    web_app.fetch_active_gp_page = fake_fetch
+    web_app._GP_PAGE_CACHE.update({"expires_at": 0.0, "pages": {}})
+    try:
+        client = web_app.app.test_client()
+        market = client.get("/market.html?refresh=1")
+        directory = client.get("/gps.html?refresh=1")
+
+        assert market.status_code == 200
+        assert directory.status_code == 200
+        assert market.headers["X-GP-Data-Source"] == "supabase-public-snapshot"
+        assert market.headers["X-GP-Snapshot-Id"] == "fss-2025q4-test"
+        assert "market.html 2025Q4" in market.get_data(as_text=True)
+        assert "gps.html 2025Q4" in directory.get_data(as_text=True)
+        assert 'href="https://pkkong.github.io/kpef-newsletter/lp-notices.html"' in market.get_data(as_text=True)
+    finally:
+        web_app.fetch_active_gp_page = old_fetch
+        web_app._GP_PAGE_CACHE.update(old_cache)
+
+
 def test_common_ui_marks_empty_issue_dates_for_public_users() -> None:
     html = render_app(
         "2026-06-17",
@@ -334,7 +369,7 @@ def test_vercel_runtime_has_no_standalone_ui_or_legacy_service_imports() -> None
         "services.wiki",
         "pef_wiki",
     ]
-    for path in [WEB_ROOT / "app.py", WEB_ROOT / "index.py", WEB_ROOT / "newsletter_data.py"]:
+    for path in [WEB_ROOT / "app.py", WEB_ROOT / "index.py", WEB_ROOT / "newsletter_data.py", WEB_ROOT / "gp_public_data.py"]:
         source = path.read_text(encoding="utf-8")
         for token in forbidden:
             assert token not in source, f"{path.name} must not import or mention {token}"
@@ -358,6 +393,7 @@ def main() -> int:
     test_load_archive_prefers_newer_raw_archive_when_supabase_lags()
     test_load_archive_keeps_supabase_when_archive_fallback_is_not_newer()
     test_vercel_app_uses_common_newsletter_ui()
+    test_vercel_app_serves_gp_pages_at_canonical_routes()
     test_common_ui_marks_empty_issue_dates_for_public_users()
     test_vercel_app_imports_from_repo_root_package_path()
     test_vercel_runtime_has_no_standalone_ui_or_legacy_service_imports()

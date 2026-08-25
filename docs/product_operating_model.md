@@ -34,7 +34,7 @@
 각 서비스는 자기 산출물만 만든다.
 
 - Brief builder: `scripts/build_newsletter_bundle.py`가 `index.html`, `daily-news.html`, `archive.json`, `health.json`, 뉴스레터 assets를 만든다. LP, GP, Wiki, legacy deploy monolith를 import하면 안 된다.
-- Brief Vercel app: `services/newsletter/web/`는 Vercel/Supabase 뉴스레터의 독립 runtime이다. Supabase 공개 read model row를 먼저 읽고, 장애나 빈 데이터가 있으면 기존 public `archive.json`으로 fallback한다. 뉴스 수집을 하지 않고 LP/GP/Wiki 코드를 import하지 않는다. Supabase는 기본 최근 30개 issue를 유지해 Vercel 날짜 이동이 GitHub Pages mirror와 같아야 한다. Vercel은 날짜 skeleton용 `newsletter_issues`와 기사 내용·순서용 `newsletter_public_issue_articles`를 함께 읽어야 한다. 화면은 GitHub Pages mirror와 같은 `services/newsletter/web/newsletter_ui.py` HTML/CSS/JS 원본으로 렌더링한다.
+- Brief/GP Vercel app: `services/newsletter/web/`는 Vercel의 독립 runtime이다. Brief는 Supabase 공개 read model row를 먼저 읽고, 장애나 빈 데이터가 있으면 기존 public `archive.json`으로 fallback한다. GP는 published `gp_public_snapshots`/`gp_public_pages`만 읽고 GitHub Pages HTML을 runtime fallback으로 사용하지 않는다. 뉴스 수집을 하지 않고 LP/GP/Wiki crawler나 renderer 코드를 import하지 않는다. Supabase는 기본 최근 30개 issue를 유지해 Vercel 날짜 이동이 GitHub Pages mirror와 같아야 한다. Vercel은 날짜 skeleton용 `newsletter_issues`와 기사 내용·순서용 `newsletter_public_issue_articles`를 함께 읽어야 한다. 화면은 GitHub Pages mirror와 같은 `services/newsletter/web/newsletter_ui.py` HTML/CSS/JS 원본으로 렌더링한다.
 - LP builder: `lp-*.html`, `lp-notices.html`, `lp-official-notices.html`,
   `lp-notice-*.html`, LP public data.
 - GP builder: `market.html`, `gps.html`, `gp-*.html`, GP public data.
@@ -76,7 +76,7 @@
 - 매일 08:37 KST: `Build newsletter mirror`가 Brief 수집, 분류, GitHub Pages 백업 미러 생성/검증만 수행한다.
 - Mirror가 새로 생성/검증된 경우: `Build newsletter mirror`가 `Sync newsletter Supabase read model`을 dispatch하고, sync workflow가 verified mirror archive를 Supabase에 복사한 뒤 Vercel 공식 앱을 검증한다.
 - 매일 09:22 KST: `Newsletter publish watchdog`이 한 번만 freshness를 확인한다. 최근 6시간 안에 mirror build가 실패했으면 같은 실패를 다시 dispatch하지 않고 종료한다.
-- 필요 시: `Deploy newsletter Vercel app`은 Vercel 앱 코드 배포만 수행한다. 뉴스 수집, Pages 미러 생성, Supabase 동기화는 하지 않는다.
+- 필요 시: `Deploy newsletter Vercel app`은 Vercel 앱 코드 배포만 수행한다. 뉴스 수집, Pages 미러 생성, Supabase 동기화는 하지 않는다. GP FSS 발행 workflow는 검증된 GP snapshot만 Supabase에 publish하며, Vercel은 다음 요청에서 그 snapshot을 읽는다.
 - 하루 1-3회: LP 공고 수집, 사업 상태 갱신, public-ready 공고만 공개 빌드.
 - 주기적: GP/LP 프로필, 로고, People, 뉴스 연결 보강.
 - 필요 시: 통합 사이트 빌드와 배포.

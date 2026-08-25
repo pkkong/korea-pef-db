@@ -90,21 +90,29 @@ Default parser unit is `억원`, so `10,000` becomes `1,000,000` KRW million.
 
 ## Current Coverage
 
-As of the latest ingestion pass, the FSS common-board search exposes:
+As of the 2026-08-21 ingestion pass, the FSS common-board search exposes:
 
 - `2015-10-31` through `2021-09-30` legacy `경영참여형` PEF status files
 - `2022Q1` through `2023Q4` institutional PEF status files
 - `2024Q4`
+- `2025Q4` (`2025-12-31` 기준, 2026-07-02 게시)
 
 Older legacy files were found by searching the FSS board with the broader keyword `경영참여` and walking `pageIndex`.
 
 Note that the 2015-2017 legacy files are often as of January, April, July, and October month-end rather than calendar quarter-end. The pipeline stores the exact `as_of_date` and derives a quarter-style `period_label` only for grouping.
 
-The first imported dataset contains:
+The current registry contains 34 immutable raw source files. The 2015Q4 and
+2016Q1 legacy `.xls` files are retained as raw evidence but are not imported by
+the standard-library `.xlsx` parser. The reproducible normalized dataset starts
+at 2016Q2 and contains 32 source documents and 24,624 fund-period snapshots.
 
-- 33 source documents
-- 33 reporting periods
-- 24,055 fund-period snapshots
-- 2,164 normalized unique fund names
-- 674 unique GP names, including co-GPs from `GP1~GP3`
-- 4,346 fund events after event de-duplication
+Before publishing FSS statistics, run:
+
+```bash
+python3 scripts/check_fss_raw_sources.py
+python3 scripts/check_fss_statistics_ready.py --expected-latest-period 2025Q4
+```
+
+The second check requires the latest raw file, matching DB SHA-256, latest
+reporting period, non-zero market totals, and a complete primary-GP ranking.
+It also fails when the latest FSS as-of date is more than 400 days old.

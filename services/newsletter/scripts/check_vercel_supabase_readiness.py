@@ -128,6 +128,7 @@ def main() -> int:
             WEB_ROOT / "index.py",
             WEB_ROOT / "newsletter_data.py",
             WEB_ROOT / "newsletter_ui.py",
+            WEB_ROOT / "gp_public_data.py",
             WEB_ROOT / "requirements.txt",
             WEB_ROOT / "vercel.json",
             MIGRATION_PATH,
@@ -141,6 +142,7 @@ def main() -> int:
             WEB_ROOT / "index.py",
             WEB_ROOT / "newsletter_data.py",
             WEB_ROOT / "newsletter_ui.py",
+            WEB_ROOT / "gp_public_data.py",
             SYNC_SCRIPT,
         ]
     )

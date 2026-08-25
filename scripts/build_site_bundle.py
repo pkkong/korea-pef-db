@@ -141,8 +141,10 @@ def build_site_bundle(
 
             result.update({key: str(value) for key, value in build_lp_service_pages(site_dir, effective_date).items()})
         elif service == "gp":
+            from scripts.check_fss_statistics_ready import check_fss_statistics
             from services.gp.src.build_gp_service_pages import build_gp_service_pages
 
+            check_fss_statistics(db_path=db_path, registry_path=REPO_ROOT / "data" / "source_registry_fss_pef.csv")
             result.update({key: str(value) for key, value in build_gp_service_pages(site_dir, db_path, effective_date).items()})
         elif service == "wiki":
             from services.wiki.src.build_wiki_service_pages import build_wiki_service_pages
