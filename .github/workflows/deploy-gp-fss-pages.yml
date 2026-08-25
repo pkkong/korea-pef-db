@@ -12,6 +12,11 @@ on:
         required: true
         default: "2025Q4"
         type: string
+      verify_vercel:
+        description: "Verify the Vercel GP runtime after publishing. Disable only for initial read-model seeding."
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -156,6 +161,7 @@ jobs:
           done
 
       - name: Verify Vercel GP read model
+        if: inputs.verify_vercel
         shell: bash
         run: |
           for page_name in market.html gps.html; do
