@@ -1,6 +1,6 @@
 # 프로젝트 리드 현재 상태판
 
-최종 수정: 2026-08-21 KST
+최종 수정: 2026-08-25 KST
 
 이 문서는 Project Lead가 현재 프로젝트 상태를 잃지 않기 위한 운영판이다. 새 채팅방, 서브에이전트, 별도 담당자가 작업을 시작할 때는 먼저 이 문서를 읽고, 작업이 끝나면 필요한 변경을 여기에 반영한다.
 
@@ -222,6 +222,7 @@ curl -fsS "https://kpef-newsletter.vercel.app/health.json?refresh=1"
 - 2026-06-21 UX smoke 통과: Chrome 390px와 1280px에서 `index.html`, `lp-notices.html`, `gps.html`, `market.html`을 확인했다. console error 없음, 하단 메뉴 `브리프 / LP / GP`, Wiki/internal wording 숨김, horizontal overflow 0px. 스크린샷은 `/tmp/kpef-*-mobile390.png`, `/tmp/kpef-*-desktop1280.png`에 있다.
 - 2026-06-21 production deploy 완료: commit `82e9737`을 `main`에 push했고, Vercel 앱 배포 run `27906187275`, GitHub Pages 미러 build/publish/verify run `27906187286`, Supabase read model sync와 Vercel 공식 앱 검증 run `27906477785`가 모두 성공했다. 공개 Pages `health.json`과 Vercel `health.json?refresh=1`은 `report_date=2026-06-21`, `article_count=2`, `status=ok`로 확인했다.
 - 2026-08-21 FSS 통계 갱신 검증: 공식 `2025Q4` source를 registry/raw에 추가하고 SQLite를 재생성했다. raw health는 34/34 파일 확인, 32개 `.xlsx` DB SHA 일치(legacy `.xls` 2개는 미적재 경고), FSS readiness는 `2025Q4`, 1,195 펀드, 대표 GP 397개, ranking 397개로 통과했다. 별도 GP bundle에서 `market.html`/`gps.html` 계약 검사와 Chrome 390px/1440px smoke를 통과했다. GitHub Pages `gh-pages` commit `0f7e03d`로 검증된 정적 GP source를 갱신하고 FSS-only GP 120개 상세 페이지를 제거했다. Vercel production deploy run `32486898154`는 `/market.html`과 `/gps.html`의 200 응답, source header, 2025Q4 본문을 확인했다. 이후 발행은 전용 source gate를 통과해야 한다.
+- 2026-08-25 GP Vercel direct read model 전환 완료: Supabase migration run `32845250938`, Vercel 앱 deploy run `32845667639`, GP FSS publish run `32845812052`가 모두 성공했다. 마지막 GP workflow는 FSS 재수집, source/readiness, GP static backup, Supabase versioned snapshot 발행, GitHub Pages backup, Vercel 검증을 모두 통과했다. 공개 `/market.html`과 `/gps.html`은 `X-GP-Data-Source: supabase-public-snapshot`, `X-GP-Reporting-Period: 2025Q4`, snapshot `fss-2025q4-ec864d1a2f16`을 반환한다. GitHub Pages는 GP의 backup mirror일 뿐 Vercel GP 화면의 runtime source가 아니다.
 
 ## 프로젝트 리드 종료 체크리스트
 
