@@ -115,6 +115,18 @@ Supabase에서 하나의 published snapshot으로 전환한다.
 이 모델은 HTML을 직접 수정하는 저장소가 아니다. GP renderer가 검증된 FSS public
 view를 HTML로 만든 뒤, 검증된 artifact를 versioned read model로 발행하는 경로다.
 
+## GP ranking audit data pack
+
+외부 배포 또는 투자자 검토용 GP 순위는 공개 Market HTML만으로 근거를 대신하지 않는다.
+`scripts/build_gp_ranking_datapack.py`가 FSS readiness를 다시 통과한 SQLite와 immutable raw
+source를 읽어 별도의 Excel 데이터팩을 만든다. 생성 파일은 `exports/` 아래의 ignored artifact이며
+source of truth나 공개 Vercel payload가 아니다.
+
+- 순위 명칭은 `YYYY년 말 기준 기관전용 PEF 총약정액 합계 순위 (대표 GP 귀속)`으로 고정한다. FSS 원천은 NAV/AUM이 아니라 펀드별 `총약정액(합계)`을 공시한다.
+- `Calculation Ledger`는 펀드별 FSS source ID, 원본 시트/행, raw GP1~GP3, row hash, 단위 변환식, 포함 여부를 보존한다. 최종 순위는 GP1만 대표 GP로 귀속해 공동 GP 중복 합산을 막는다.
+- `GP Ranking`은 장부의 `SUMIFS`/`COUNTIFS` 수식으로 재계산되고, `QA Reconciliation`은 원천 펀드 행 수, 대표 GP 수, 총약정액, 공동 GP 금액을 대사한다.
+- `Source Manifest`, `GP Name Mapping`, `Raw Index`, 분기별 `Raw YYYYQ#` 시트는 금감원 파일명, URL, SHA-256, 검증된 alias rule, 원본 셀값을 보여준다. 2015Q4·2016Q1 legacy `.xls`는 파일 SHA와 보존 경로를 표시하며 표준 `.xlsx` parser의 행 단위 입력 대상은 아니다.
+
 ## 빌드 계약
 
 기본 공개 통합 빌드는 active public services만 포함한다.
