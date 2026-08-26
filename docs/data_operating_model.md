@@ -107,7 +107,7 @@ Vercel archive 재구성은 두 층을 함께 읽어야 한다.
 FSS GP는 raw workbook, SQLite 분석 결과, 정적 renderer 산출물을 차례로 검증한 뒤
 Supabase에서 하나의 published snapshot으로 전환한다.
 
-- `gp_public_snapshots`: reporting period, 기준일, FSS source ID/SHA-256, 핵심 수치, publish status를 저장한다.
+- `gp_public_snapshots`: reporting period, 기준일, FSS source ID/SHA-256, 핵심 수치, publish status를 저장한다. Snapshot ID는 FSS 원본 SHA와 검증된 두 public page의 content SHA를 함께 반영하므로, 같은 분기라도 집계 또는 화면 결과가 바뀌면 새 snapshot을 발행한다.
 - `gp_public_pages`: 하나의 snapshot에 속한 `market.html`, `gps.html` public artifact와 content SHA-256을 저장한다.
 - `publish_gp_public_snapshot(snapshot_id)`: 두 artifact가 모두 존재할 때만 이전 published snapshot을 retire하고 새 snapshot을 publish한다.
 - Vercel은 anon key로 published snapshot만 읽고, HTML content SHA-256을 다시 확인한 뒤 응답한다. Supabase 장애 때에는 같은 serverless instance의 마지막 정상 snapshot만 짧게 유지하고, GitHub Pages HTML을 runtime fallback으로 사용하지 않는다.

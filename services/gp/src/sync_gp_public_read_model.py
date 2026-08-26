@@ -106,6 +106,12 @@ def _content_sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _snapshot_content_sha256(page_contents: list[tuple[str, str]]) -> str:
+    """Return a stable digest for the complete published GP page set."""
+    value = "\n".join(f"{page_path}\0{content_sha256}" for page_path, content_sha256 in page_contents)
+    return _content_sha256(value)
+
+
 def prepare_payload(
     *,
     site_dir: Path,
@@ -122,9 +128,8 @@ def prepare_payload(
     latest = latest_registry_row(registry_rows, str(readiness["latest_period"]))
     raw_path = REPO_ROOT / latest["local_file"]
     source_sha256 = sha256_file(raw_path)
-    snapshot_id = f"fss-{readiness['latest_period'].lower()}-{source_sha256[:12]}"
 
-    pages: list[dict[str, str]] = []
+    page_bodies: list[tuple[str, str, str]] = []
     for page_path in PAGE_PATHS:
         path = site_dir / page_path
         if not path.is_file():
@@ -134,14 +139,24 @@ def prepare_payload(
             raise GPReadModelError(f"GP public page is not complete HTML: {path}")
         if str(readiness["latest_period"]) not in page_html:
             raise GPReadModelError(f"GP public page does not show latest period {readiness['latest_period']}: {path}")
-        pages.append(
-            {
-                "snapshot_id": snapshot_id,
-                "page_path": page_path,
-                "page_html": page_html,
-                "content_sha256": _content_sha256(page_html),
-            }
-        )
+        page_bodies.append((page_path, page_html, _content_sha256(page_html)))
+
+    snapshot_content_sha256 = _snapshot_content_sha256(
+        [(page_path, content_sha256) for page_path, _, content_sha256 in page_bodies]
+    )
+    snapshot_id = (
+        f"fss-{readiness['latest_period'].lower()}-"
+        f"{source_sha256[:12]}-{snapshot_content_sha256[:12]}"
+    )
+    pages = [
+        {
+            "snapshot_id": snapshot_id,
+            "page_path": page_path,
+            "page_html": page_html,
+            "content_sha256": content_sha256,
+        }
+        for page_path, page_html, content_sha256 in page_bodies
+    ]
 
     snapshot = {
         "snapshot_id": snapshot_id,

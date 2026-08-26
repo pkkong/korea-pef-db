@@ -62,9 +62,26 @@ class SyncGPPublicReadModelTests(unittest.TestCase):
                 MODULE.sha256_file = originals["sha"]
 
         snapshot = payload["snapshot"]
-        self.assertEqual(snapshot["snapshot_id"], "fss-2025q4-aaaaaaaaaaaa")
+        page_hashes = [
+            (page["page_path"], page["content_sha256"])
+            for page in payload["pages"]
+        ]
+        expected_content_hash = MODULE._snapshot_content_sha256(page_hashes)[:12]
+        self.assertEqual(
+            snapshot["snapshot_id"],
+            f"fss-2025q4-{'a' * 12}-{expected_content_hash}",
+        )
         self.assertEqual(snapshot["primary_gp_count"], 397)
         self.assertEqual([page["page_path"] for page in payload["pages"]], ["market.html", "gps.html"])
+
+    def test_snapshot_id_changes_when_public_page_content_changes(self) -> None:
+        first = MODULE._snapshot_content_sha256(
+            [("market.html", "a" * 64), ("gps.html", "b" * 64)]
+        )
+        changed = MODULE._snapshot_content_sha256(
+            [("market.html", "a" * 64), ("gps.html", "c" * 64)]
+        )
+        self.assertNotEqual(first, changed)
 
     def test_apply_payload_upserts_pages_before_atomic_publish(self) -> None:
         calls: list[tuple[str, str]] = []
