@@ -59,3 +59,8 @@ Thumbs.db
 *.xls
 *.xlsx
 ~$*
+
+# Public Vercel delivery copy. This is the verified 2025Q4 GP ranking data pack,
+# deliberately versioned so the mobile download route is deployable.
+!services/newsletter/web/downloads/
+!services/newsletter/web/downloads/gp_ranking_datapack_2025YE.xlsx

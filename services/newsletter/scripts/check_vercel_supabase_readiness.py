@@ -8,6 +8,7 @@ import os
 import py_compile
 import sys
 import argparse
+import zipfile
 from pathlib import Path
 
 
@@ -22,6 +23,7 @@ MIGRATION_PATH = (
     / "20260616090000_newsletter_read_model.sql"
 )
 SYNC_SCRIPT = REPO_ROOT / "services" / "newsletter" / "src" / "sync_newsletter_supabase.py"
+GP_RANKING_DATAPACK = WEB_ROOT / "downloads" / "gp_ranking_datapack_2025YE.xlsx"
 
 
 def env_state(name: str) -> str:
@@ -75,6 +77,14 @@ def check_vercel_config() -> list[str]:
     return failures
 
 
+def check_gp_ranking_datapack() -> list[str]:
+    if not GP_RANKING_DATAPACK.is_file():
+        return [f"missing: {GP_RANKING_DATAPACK}"]
+    if not zipfile.is_zipfile(GP_RANKING_DATAPACK):
+        return [f"not a valid .xlsx ZIP file: {GP_RANKING_DATAPACK}"]
+    return []
+
+
 def smoke_flask_app() -> None:
     sys.path.insert(0, str(WEB_ROOT))
     from app import app  # noqa: E402
@@ -87,6 +97,13 @@ def smoke_flask_app() -> None:
     health = client.get("/health.json").get_json()
     if health.get("service") != "newsletter":
         raise SystemExit(f"unexpected health payload: {health}")
+    data_pack = client.get("/downloads/gp-ranking-datapack-2025ye.xlsx")
+    if data_pack.status_code != 200:
+        raise SystemExit(f"GP ranking data pack returned {data_pack.status_code}")
+    if data_pack.mimetype != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+        raise SystemExit(f"unexpected GP ranking data pack MIME type: {data_pack.mimetype}")
+    if not data_pack.get_data().startswith(b"PK"):
+        raise SystemExit("GP ranking data pack is not a ZIP-based .xlsx payload")
     print(f"newsletter_vercel_smoke=ok report_date={health.get('report_date')} articles={health.get('article_count')}")
 
 
@@ -96,7 +113,7 @@ def print_step_summary(payload_path: Path) -> None:
     print("")
     print("| Check | Status |")
     print("| --- | --- |")
-    for key in ["files", "compile", "import_isolation", "vercel_config"]:
+    for key in ["files", "compile", "import_isolation", "vercel_config", "gp_ranking_datapack"]:
         print(f"| `{key}` | {payload.get(key)} |")
     print("")
     print("| Secret | Status |")
@@ -129,6 +146,7 @@ def main() -> int:
             WEB_ROOT / "newsletter_data.py",
             WEB_ROOT / "newsletter_ui.py",
             WEB_ROOT / "gp_public_data.py",
+            GP_RANKING_DATAPACK,
             WEB_ROOT / "requirements.txt",
             WEB_ROOT / "vercel.json",
             MIGRATION_PATH,
@@ -148,6 +166,7 @@ def main() -> int:
     )
     isolation_failures = check_import_isolation()
     vercel_config_failures = check_vercel_config()
+    gp_ranking_datapack_failures = check_gp_ranking_datapack()
     payload = {
         "files": "ok" if not missing_files else "missing",
         "missing_files": missing_files,
@@ -157,6 +176,8 @@ def main() -> int:
         "forbidden_imports": isolation_failures,
         "vercel_config": "ok" if not vercel_config_failures else "failed",
         "vercel_config_failures": vercel_config_failures,
+        "gp_ranking_datapack": "ok" if not gp_ranking_datapack_failures else "failed",
+        "gp_ranking_datapack_failures": gp_ranking_datapack_failures,
         "env": {
             "VERCEL_TOKEN": env_state("VERCEL_TOKEN"),
             "VERCEL_ORG_ID": env_state("VERCEL_ORG_ID"),
@@ -168,7 +189,13 @@ def main() -> int:
         },
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
-    hard_failures = missing_files or compile_failures or isolation_failures or vercel_config_failures
+    hard_failures = (
+        missing_files
+        or compile_failures
+        or isolation_failures
+        or vercel_config_failures
+        or gp_ranking_datapack_failures
+    )
     return 1 if hard_failures else 0
 
 

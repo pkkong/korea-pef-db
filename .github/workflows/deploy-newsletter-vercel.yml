@@ -85,3 +85,28 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Verify Vercel GP ranking data-pack download
+        shell: bash
+        run: |
+          headers="$(mktemp)"
+          payload="$(mktemp --suffix=.xlsx)"
+          verified=false
+          for attempt in $(seq 1 12); do
+            if curl --silent --show-error --fail --location --max-time 30 \
+              --dump-header "$headers" \
+              --output "$payload" \
+              "${NEWSLETTER_APP_URL}/downloads/gp-ranking-datapack-2025ye.xlsx"; then
+              if grep --ignore-case --quiet '^content-type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' "$headers" \
+                && grep --ignore-case --quiet 'content-disposition: attachment;.*gp_ranking_datapack_2025YE.xlsx' "$headers" \
+                && unzip -t "$payload" >/dev/null; then
+                verified=true
+                break
+              fi
+            fi
+            sleep 5
+          done
+          if [ "$verified" != "true" ]; then
+            echo "::error::GP ranking data-pack download did not return a valid Excel attachment after Vercel alias propagation."
+            exit 1
+          fi
