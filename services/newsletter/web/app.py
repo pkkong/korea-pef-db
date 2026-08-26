@@ -11,9 +11,12 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, jsonify, request, send_file
 
 WEB_ROOT = Path(__file__).resolve().parent
+DOWNLOADS_ROOT = WEB_ROOT / "downloads"
+GP_RANKING_DATAPACK_NAME = "gp_ranking_datapack_2025YE.xlsx"
+GP_RANKING_DATAPACK_PATH = DOWNLOADS_ROOT / GP_RANKING_DATAPACK_NAME
 try:  # Package import path used by repo-root tests.
     from .gp_public_data import GPPublicDataError, fetch_active_gp_page  # type: ignore
     from .newsletter_data import load_archive, select_issue  # type: ignore
@@ -118,6 +121,21 @@ def gp_market():
 @app.get("/gps.html")
 def gp_directory():
     return gp_public_page("gps.html")
+
+
+@app.get("/downloads/gp-ranking-datapack-2025ye.xlsx")
+def gp_ranking_datapack_download():
+    if not GP_RANKING_DATAPACK_PATH.is_file():
+        return Response("The requested data pack is unavailable.", status=404, mimetype="text/plain")
+    response = send_file(
+        GP_RANKING_DATAPACK_PATH,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=GP_RANKING_DATAPACK_NAME,
+        max_age=3600,
+    )
+    response.headers["X-GP-Data-Pack-Period"] = "2025Q4"
+    return response
 
 
 @app.get("/assets/service.css")

@@ -315,6 +315,17 @@ def test_vercel_app_serves_gp_pages_at_canonical_routes() -> None:
         web_app._GP_PAGE_CACHE.update(old_cache)
 
 
+def test_vercel_app_serves_gp_ranking_data_pack_as_a_download() -> None:
+    client = web_app.app.test_client()
+    response = client.get("/downloads/gp-ranking-datapack-2025ye.xlsx")
+
+    assert response.status_code == 200
+    assert response.mimetype == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    assert 'attachment; filename=gp_ranking_datapack_2025YE.xlsx' in response.headers["Content-Disposition"]
+    assert response.headers["X-GP-Data-Pack-Period"] == "2025Q4"
+    assert response.get_data().startswith(b"PK")
+
+
 def test_common_ui_marks_empty_issue_dates_for_public_users() -> None:
     html = render_app(
         "2026-06-17",
@@ -394,6 +405,7 @@ def main() -> int:
     test_load_archive_keeps_supabase_when_archive_fallback_is_not_newer()
     test_vercel_app_uses_common_newsletter_ui()
     test_vercel_app_serves_gp_pages_at_canonical_routes()
+    test_vercel_app_serves_gp_ranking_data_pack_as_a_download()
     test_common_ui_marks_empty_issue_dates_for_public_users()
     test_vercel_app_imports_from_repo_root_package_path()
     test_vercel_runtime_has_no_standalone_ui_or_legacy_service_imports()
