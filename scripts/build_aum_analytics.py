@@ -121,23 +121,33 @@ def build_full_credit_ranking(full_credit_rows: list[dict[str, object]], ranking
     return output
 
 
-def build_cumulative_fund_attribution(conn: sqlite3.Connection) -> list[dict[str, object]]:
-    """Assign each normalized fund once for the cumulative GP ranking.
+def build_cumulative_fund_credit(conn: sqlite3.Connection) -> list[dict[str, object]]:
+    """Credit every FSS-listed GP for a fund in the cumulative ranking.
 
-    The public GP directory needs a stable, non-duplicative cumulative measure.
-    A fund is therefore assigned to the first primary GP observed in the
-    imported FSS history, while its largest disclosed commitment is counted
-    once. Later GP observations are preserved as history, not an additional
-    ranking credit.
+    A single FSS fund row can list more than one 업무집행사원.  The cumulative
+    directory gives the full maximum disclosed commitment to every GP listed
+    for that fund anywhere in the imported FSS history.  This deliberately
+    produces a gross ranking: totals can exceed the economic fund total when
+    a fund has joint GPs.
     """
     return fetch_dicts(
         conn,
         """
-        WITH primary_observation AS (
+        WITH fund_gp AS (
             SELECT
-                fps.fund_id,
-                fps.gp_id,
+                fga.fund_id,
+                fga.gp_id,
                 gh.gp_name,
+                fga.first_seen_period_id,
+                fga.last_seen_period_id
+            FROM fund_gp_affiliation fga
+            JOIN gp_house gh ON gh.gp_id = fga.gp_id
+        ),
+        first_listed_candidates AS (
+            SELECT
+                fund_gp.fund_id,
+                fund_gp.gp_id,
+                fund_gp.gp_name,
                 rp.period_label,
                 rp.as_of_date,
                 fps.source_id,
@@ -145,28 +155,34 @@ def build_cumulative_fund_attribution(conn: sqlite3.Connection) -> list[dict[str
                 fps.row_number,
                 fps.row_hash,
                 ROW_NUMBER() OVER (
-                    PARTITION BY fps.fund_id
-                    ORDER BY rp.as_of_date, rp.period_id, fps.snapshot_id
-                ) AS first_primary_row,
-                ROW_NUMBER() OVER (
-                    PARTITION BY fps.fund_id
-                    ORDER BY rp.as_of_date DESC, rp.period_id DESC, fps.snapshot_id DESC
-                ) AS latest_primary_row
-            FROM fund_period_snapshot fps
-            JOIN reporting_period rp ON rp.period_id = fps.period_id
-            JOIN gp_house gh ON gh.gp_id = fps.gp_id
-            WHERE fps.gp_id IS NOT NULL
+                    PARTITION BY fund_gp.fund_id, fund_gp.gp_id
+                    ORDER BY fps.snapshot_id
+                ) AS first_listed_row
+            FROM fund_gp
+            JOIN reporting_period rp ON rp.period_id = fund_gp.first_seen_period_id
+            JOIN fund_period_snapshot fps
+              ON fps.fund_id = fund_gp.fund_id
+             AND fps.period_id = fund_gp.first_seen_period_id
         ),
-        first_primary AS (
-            SELECT * FROM primary_observation WHERE first_primary_row = 1
+        first_listed AS (
+            SELECT * FROM first_listed_candidates WHERE first_listed_row = 1
         ),
-        latest_primary AS (
-            SELECT * FROM primary_observation WHERE latest_primary_row = 1
+        last_listed AS (
+            SELECT
+                fund_gp.fund_id,
+                fund_gp.gp_id,
+                rp.period_label,
+                rp.as_of_date
+            FROM fund_gp
+            JOIN reporting_period rp ON rp.period_id = fund_gp.last_seen_period_id
         ),
-        primary_history AS (
-            SELECT fund_id, COUNT(DISTINCT gp_id) AS observed_primary_gp_count
-            FROM primary_observation
+        fund_gp_count AS (
+            SELECT fund_id, COUNT(DISTINCT gp_id) AS listed_gp_count
+            FROM fund_gp
             GROUP BY fund_id
+        ),
+        latest_period AS (
+            SELECT period_id FROM reporting_period ORDER BY as_of_date DESC, period_id DESC LIMIT 1
         ),
         max_commitment_observation AS (
             SELECT
@@ -187,34 +203,38 @@ def build_cumulative_fund_attribution(conn: sqlite3.Connection) -> list[dict[str
         SELECT
             fm.fund_id,
             fm.fund_name,
-            first_primary.gp_id AS attributed_gp_id,
-            first_primary.gp_name AS attributed_gp_name,
-            first_primary.period_label AS attribution_period,
-            first_primary.as_of_date AS attribution_as_of_date,
-            first_primary.source_id AS attribution_source_id,
-            first_primary.sheet_name AS attribution_sheet_name,
-            first_primary.row_number AS attribution_row_number,
-            first_primary.row_hash AS attribution_row_hash,
+            first_listed.gp_id AS credited_gp_id,
+            first_listed.gp_name AS credited_gp_name,
+            first_listed.period_label AS first_listed_period,
+            first_listed.as_of_date AS first_listed_as_of_date,
+            first_listed.source_id AS first_listed_source_id,
+            first_listed.sheet_name AS first_listed_sheet_name,
+            first_listed.row_number AS first_listed_row_number,
+            first_listed.row_hash AS first_listed_row_hash,
             max_commitment_observation.source_id AS max_commitment_source_id,
             max_commitment_observation.sheet_name AS max_commitment_sheet_name,
             max_commitment_observation.row_number AS max_commitment_row_number,
             max_commitment_observation.row_hash AS max_commitment_row_hash,
             ROUND(max_commitment_observation.commitment_amount_krw_mn / 1000000.0, 6) AS max_commitment_trn_krw,
-            fm.active_in_latest_period,
-            primary_history.observed_primary_gp_count,
-            CASE WHEN primary_history.observed_primary_gp_count > 1 THEN 1 ELSE 0 END AS primary_gp_changed,
-            latest_primary.gp_id AS latest_observed_gp_id,
-            latest_primary.gp_name AS latest_observed_gp_name,
-            latest_primary.period_label AS latest_observed_period,
-            latest_primary.as_of_date AS latest_observed_as_of_date
+            CASE WHEN fund_gp.last_seen_period_id = latest_period.period_id THEN 1 ELSE 0 END AS active_in_latest_period,
+            fund_gp_count.listed_gp_count,
+            CASE WHEN fund_gp_count.listed_gp_count > 1 THEN 1 ELSE 0 END AS multiple_gp_listed,
+            last_listed.period_label AS last_listed_period,
+            last_listed.as_of_date AS last_listed_as_of_date
         FROM fund_master fm
-        JOIN first_primary ON first_primary.fund_id = fm.fund_id
-        JOIN latest_primary ON latest_primary.fund_id = fm.fund_id
-        JOIN primary_history ON primary_history.fund_id = fm.fund_id
+        JOIN fund_gp ON fund_gp.fund_id = fm.fund_id
+        JOIN first_listed
+          ON first_listed.fund_id = fund_gp.fund_id
+         AND first_listed.gp_id = fund_gp.gp_id
+        JOIN last_listed
+          ON last_listed.fund_id = fund_gp.fund_id
+         AND last_listed.gp_id = fund_gp.gp_id
+        JOIN fund_gp_count ON fund_gp_count.fund_id = fm.fund_id
+        CROSS JOIN latest_period
         JOIN max_commitment_observation
           ON max_commitment_observation.fund_id = fm.fund_id
          AND max_commitment_observation.max_commitment_row = 1
-        ORDER BY attributed_gp_name, fm.fund_name, fm.fund_id
+        ORDER BY credited_gp_name, fm.fund_name, fm.fund_id
         """,
     )
 
@@ -223,7 +243,7 @@ def build_cumulative_gp_ranking(attributions: list[dict[str, object]], period_la
     grouped: dict[tuple[int, str], dict[str, object]] = {}
     total = sum(float(row["max_commitment_trn_krw"] or 0) for row in attributions)
     for row in attributions:
-        key = (int(row["attributed_gp_id"]), str(row["attributed_gp_name"]))
+        key = (int(row["credited_gp_id"]), str(row["credited_gp_name"]))
         item = grouped.setdefault(
             key,
             {
@@ -255,31 +275,29 @@ def build_cumulative_gp_ranking(attributions: list[dict[str, object]], period_la
                 "as_of_period": period_label,
                 "market_share_pct": round(amount / total * 100.0, 4) if total else 0.0,
                 "basis": (
-                    "Each normalized fund is credited once to its first observed FSS primary GP; "
-                    "the fund's maximum disclosed total commitment is summed."
+                    "Each FSS-listed GP receives the fund's full maximum disclosed commitment; "
+                    "joint GP fund amounts are counted for every listed GP."
                 ),
             }
         )
     return ranking
 
 
-def build_cumulative_gp_change_history(attributions: list[dict[str, object]]) -> list[dict[str, object]]:
+def build_cumulative_multi_gp_detail(attributions: list[dict[str, object]]) -> list[dict[str, object]]:
     return [
         {
             "fund_id": row["fund_id"],
             "fund_name": row["fund_name"],
-            "rank_attributed_gp_id": row["attributed_gp_id"],
-            "rank_attributed_gp_name": row["attributed_gp_name"],
-            "attribution_period": row["attribution_period"],
-            "latest_observed_gp_id": row["latest_observed_gp_id"],
-            "latest_observed_gp_name": row["latest_observed_gp_name"],
-            "latest_observed_period": row["latest_observed_period"],
-            "observed_primary_gp_count": row["observed_primary_gp_count"],
+            "credited_gp_id": row["credited_gp_id"],
+            "credited_gp_name": row["credited_gp_name"],
+            "first_listed_period": row["first_listed_period"],
+            "last_listed_period": row["last_listed_period"],
+            "listed_gp_count": row["listed_gp_count"],
             "max_commitment_trn_krw": row["max_commitment_trn_krw"],
-            "ranking_treatment": "Retain the first observed primary GP allocation; do not double count later GP observations.",
+            "ranking_treatment": "공동 GP별 전액 반영",
         }
         for row in attributions
-        if int(row["primary_gp_changed"] or 0) == 1
+        if int(row["multiple_gp_listed"] or 0) == 1
     ]
 
 
@@ -291,21 +309,32 @@ def validate_cumulative_analytics(
     unique_fund_count, unique_fund_total = conn.execute(
         "SELECT COUNT(*), ROUND(SUM(max_commitment_trn_krw), 6) FROM fund_master"
     ).fetchone()
+    fund_gp_count, gross_fund_gp_total = conn.execute(
+        """
+        SELECT COUNT(*), ROUND(SUM(fm.max_commitment_trn_krw), 6)
+        FROM fund_gp_affiliation fga
+        JOIN fund_master fm ON fm.fund_id = fga.fund_id
+        WHERE fm.max_commitment_trn_krw IS NOT NULL
+        """
+    ).fetchone()
     attributed_total = round(sum(float(row["max_commitment_trn_krw"] or 0) for row in attributions), 6)
     ranked_total = round(
         sum(float(row["cumulative_commitment_proxy_trn_krw"] or 0) for row in ranking), 6
     )
     attributed_fund_ids = {int(row["fund_id"]) for row in attributions}
-    if len(attributions) != len(attributed_fund_ids):
-        raise RuntimeError("Cumulative attribution contains duplicate fund rows")
-    if len(attributions) != int(unique_fund_count):
+    if len(attributed_fund_ids) != int(unique_fund_count):
         raise RuntimeError(
-            f"Cumulative attribution does not cover every normalized fund: {len(attributions)} != {unique_fund_count}"
+            f"Cumulative GP credit does not cover every normalized fund: {len(attributed_fund_ids)} != {unique_fund_count}"
         )
-    if attributed_total != float(unique_fund_total) or ranked_total != float(unique_fund_total):
+    if len(attributions) != int(fund_gp_count):
         raise RuntimeError(
-            "Cumulative GP ranking does not reconcile to unique normalized funds: "
-            f"fund_master={unique_fund_total}, attribution={attributed_total}, ranking={ranked_total}"
+            f"Cumulative GP credit row count differs from fund-GP affiliations: {len(attributions)} != {fund_gp_count}"
+        )
+    if attributed_total != float(gross_fund_gp_total) or ranked_total != float(gross_fund_gp_total):
+        raise RuntimeError(
+            "Cumulative GP ranking does not reconcile to gross fund-GP credits: "
+            f"fund_master={unique_fund_total}, fund_gp={gross_fund_gp_total}, "
+            f"credit={attributed_total}, ranking={ranked_total}"
         )
 
 
@@ -455,10 +484,10 @@ def build(db_path: Path, out_dir: Path, ranking_period: str) -> dict[str, int]:
         )
         gp_period_aum_full_credit = build_full_credit_gp_period_aum(conn)
         gp_ranking_full_credit = build_full_credit_ranking(gp_period_aum_full_credit, ranking_period)
-        cumulative_fund_attribution = build_cumulative_fund_attribution(conn)
-        cumulative_gp_ranking = build_cumulative_gp_ranking(cumulative_fund_attribution, ranking_period)
-        cumulative_gp_changes = build_cumulative_gp_change_history(cumulative_fund_attribution)
-        validate_cumulative_analytics(conn, cumulative_fund_attribution, cumulative_gp_ranking)
+        cumulative_fund_credit = build_cumulative_fund_credit(conn)
+        cumulative_gp_ranking = build_cumulative_gp_ranking(cumulative_fund_credit, ranking_period)
+        cumulative_multi_gp_detail = build_cumulative_multi_gp_detail(cumulative_fund_credit)
+        validate_cumulative_analytics(conn, cumulative_fund_credit, cumulative_gp_ranking)
 
         out_dir.mkdir(parents=True, exist_ok=True)
         exports = [
@@ -466,9 +495,9 @@ def build(db_path: Path, out_dir: Path, ranking_period: str) -> dict[str, int]:
             (f"analytics_gp_ranking_{ranking_period}", gp_ranking),
             ("analytics_gp_period_aum_full_credit", gp_period_aum_full_credit),
             (f"analytics_gp_ranking_{ranking_period}_full_credit", gp_ranking_full_credit),
-            ("analytics_gp_cumulative_fund_attribution", cumulative_fund_attribution),
+            ("analytics_gp_cumulative_fund_credit", cumulative_fund_credit),
             ("analytics_gp_cumulative_ranking", cumulative_gp_ranking),
-            ("analytics_gp_cumulative_change_history", cumulative_gp_changes),
+            ("analytics_gp_cumulative_multi_gp_detail", cumulative_multi_gp_detail),
             ("analytics_new_funds_by_year", new_funds_by_year),
             ("analytics_new_funds_by_gp_year", new_funds_by_gp_year),
             ("analytics_new_funds_by_quarter", new_funds_by_quarter),
@@ -477,6 +506,8 @@ def build(db_path: Path, out_dir: Path, ranking_period: str) -> dict[str, int]:
         for filename, rows in exports:
             write_csv(out_dir / f"{filename}.csv", rows)
             replace_table(conn, filename, rows)
+        conn.execute("DROP TABLE IF EXISTS analytics_gp_cumulative_fund_attribution")
+        conn.execute("DROP TABLE IF EXISTS analytics_gp_cumulative_change_history")
 
         write_xlsx(
             out_dir / "aum_analytics.xlsx",
@@ -485,9 +516,9 @@ def build(db_path: Path, out_dir: Path, ranking_period: str) -> dict[str, int]:
                 (f"gp_rank_{ranking_period}", gp_ranking),
                 ("gp_aum_full_credit", gp_period_aum_full_credit),
                 (f"gp_rank_{ranking_period}_fc", gp_ranking_full_credit),
-                ("gp_cumulative_attribution", cumulative_fund_attribution),
+                ("gp_cumulative_fund_credit", cumulative_fund_credit),
                 ("gp_cumulative_rank", cumulative_gp_ranking),
-                ("gp_cumulative_changes", cumulative_gp_changes),
+                ("gp_cumulative_multi_gp_detail", cumulative_multi_gp_detail),
                 ("new_by_year", new_funds_by_year),
                 ("new_by_gp_year", new_funds_by_gp_year),
                 ("new_by_quarter", new_funds_by_quarter),

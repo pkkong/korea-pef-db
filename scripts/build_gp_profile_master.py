@@ -441,7 +441,7 @@ def load_latest_primary_ranking(conn: sqlite3.Connection, period_label: str) -> 
     return {int(row["gp_id"]): row for row in rows if str(row.get("gp_id") or "").isdigit()}
 
 
-def load_cumulative_primary_stats(conn: sqlite3.Connection) -> dict[int, dict[str, object]]:
+def load_cumulative_full_credit_stats(conn: sqlite3.Connection) -> dict[int, dict[str, object]]:
     table_name = "analytics_gp_cumulative_ranking"
     if not table_exists(conn, table_name):
         raise RuntimeError(
@@ -525,7 +525,7 @@ def build_profile_rows(conn: sqlite3.Connection, limit: int, created_at: str) ->
     existing_profiles = load_existing_profiles(conn)
     gp_base = load_gp_base(conn, latest_period_id)
     latest_ranking = load_latest_primary_ranking(conn, latest_label)
-    cumulative_stats = load_cumulative_primary_stats(conn)
+    cumulative_stats = load_cumulative_full_credit_stats(conn)
     alias_names = load_alias_names(conn)
     raw_variants = load_raw_variants(conn)
 
@@ -755,8 +755,8 @@ def field_dictionary_rows() -> list[dict[str, object]]:
         },
         {
             "field_name": "cumulative_primary_commitment_proxy_krw_100mn",
-            "meaning": "Sum of each normalized fund's maximum commitment amount, credited once to its first observed primary GP, KRW 100mn",
-            "fill_rule": "Auto from normalized FSS PEF history. Use as cumulative commitment proxy only; later GP observations are history, not extra credit.",
+            "meaning": "Sum of each normalized fund's maximum commitment amount for every GP listed in FSS history, KRW 100mn",
+            "fill_rule": "Auto from normalized FSS PEF history. A joint-GP fund is credited in full to every listed GP, so the cumulative total can exceed the economic fund total.",
         },
         {
             "field_name": "verification_level",

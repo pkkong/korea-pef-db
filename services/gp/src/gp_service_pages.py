@@ -673,9 +673,9 @@ def _render_empty_directory(report_date: str, message: str) -> str:
         </label>
         <label>
           <span>누적/운용중</span>
-          <select id="gpScope" aria-label="누적 또는 운용중">
+          <select id="gpScope" aria-label="복수 GP 반영 누적 또는 운용중">
             <option value="active" selected>운용중</option>
-            <option value="cumulative">누적</option>
+            <option value="cumulative">누적 (복수 GP 반영)</option>
           </select>
         </label>
         <label>
@@ -1007,9 +1007,9 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
         </label>
         <label>
           <span>누적/운용중</span>
-          <select id="gpScope" aria-label="누적 또는 운용중">
+          <select id="gpScope" aria-label="복수 GP 반영 누적 또는 운용중">
             <option value="active" selected>운용중</option>
-            <option value="cumulative">누적</option>
+            <option value="cumulative">누적 (복수 GP 반영)</option>
           </select>
         </label>
         <label>
@@ -1298,7 +1298,7 @@ def _render_coverage_facts(gp: dict[str, object]) -> str:
     market_share = _format_pct(gp.get("latest_primary_market_share_pct"))
     facts = [
         ("최신 순위", _format_rank(gp.get("latest_primary_rank"))),
-        ("누적 순위", _format_rank(gp.get("cumulative_primary_rank"))),
+        ("누적 순위 (복수 GP 반영)", _format_rank(gp.get("cumulative_primary_rank"))),
         ("약정액 점유율", market_share),
         ("최초 확인 기간", _clean(gp.get("first_seen_period")) or _clean(gp.get("house_first_seen_period"))),
         ("최근 확인 기간", _clean(gp.get("last_seen_period")) or _clean(gp.get("house_last_seen_period"))),

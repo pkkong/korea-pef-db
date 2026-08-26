@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build an audit-ready Excel data pack from the public GP database.
+"""Build the GP ranking workbook from the public GP database.
 
-The workbook is an audit view of the same normalized database that powers the
-GP service. It does not calculate a competing ranking. The cumulative ranking
-credits every normalized fund once to its first observed FSS primary GP and
-sums that fund's maximum disclosed commitment through the requested period.
+The workbook uses the same normalized database and cumulative ranking as the
+GP service. Each GP named for a fund in the imported FSS history receives the
+fund's full maximum disclosed commitment. Joint-GP amounts are therefore
+intentionally duplicated across the relevant GP rows.
 """
 
 from __future__ import annotations
@@ -343,9 +343,9 @@ def read_ranking_inputs(
     conn.row_factory = sqlite3.Row
     try:
         for table_name in (
-            "analytics_gp_cumulative_fund_attribution",
+            "analytics_gp_cumulative_fund_credit",
             "analytics_gp_cumulative_ranking",
-            "analytics_gp_cumulative_change_history",
+            "analytics_gp_cumulative_multi_gp_detail",
             "analytics_gp_period_aum",
             "gp_profile",
         ):
@@ -365,11 +365,11 @@ def read_ranking_inputs(
         if not source_rows:
             raise RuntimeError(f"No imported FSS source exists for {period_label}")
         source = source_rows[0]
-        attribution = fetch_dicts(
+        fund_credit = fetch_dicts(
             conn,
             """
-            SELECT * FROM analytics_gp_cumulative_fund_attribution
-            ORDER BY attributed_gp_name, fund_name, fund_id
+            SELECT * FROM analytics_gp_cumulative_fund_credit
+            ORDER BY credited_gp_name, fund_name, fund_id
             """,
         )
         cumulative_ranking = fetch_dicts(
@@ -428,11 +428,11 @@ def read_ranking_inputs(
             ORDER BY as_of_date, commitment_aum_proxy_trn_krw DESC, gp_name
             """,
         )
-        change_history = fetch_dicts(
+        multi_gp_detail = fetch_dicts(
             conn,
             """
-            SELECT * FROM analytics_gp_cumulative_change_history
-            ORDER BY max_commitment_trn_krw DESC, fund_name, fund_id
+            SELECT * FROM analytics_gp_cumulative_multi_gp_detail
+            ORDER BY max_commitment_trn_krw DESC, fund_name, credited_gp_name
             """,
         )
     finally:
@@ -445,14 +445,14 @@ def read_ranking_inputs(
         "latest_registry": latest_registry,
         "registry": registry_rows,
         "aliases": aliases,
-        "attribution": attribution,
+        "fund_credit": fund_credit,
         "cumulative_ranking": cumulative_ranking,
         "profile_snapshot": profile_snapshot,
         "period_summary": period_summary,
         "period_ranking": period_ranking,
-        "change_history": change_history,
+        "multi_gp_detail": multi_gp_detail,
         "total_cumulative_commitment_trn_krw": sum(
-            float(row["max_commitment_trn_krw"] or 0) for row in attribution
+            float(row["max_commitment_trn_krw"] or 0) for row in fund_credit
         ),
     }
 
@@ -533,51 +533,51 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
     source = inputs["source"]
     registry = inputs["registry"]
     aliases = inputs["aliases"]
-    attribution = inputs["attribution"]
+    fund_credit = inputs["fund_credit"]
     ranking = inputs["cumulative_ranking"]
     profile_snapshot = inputs["profile_snapshot"]
     period_summary = inputs["period_summary"]
     period_ranking = inputs["period_ranking"]
-    change_history = inputs["change_history"]
+    multi_gp_detail = inputs["multi_gp_detail"]
     total_commitment = float(inputs["total_cumulative_commitment_trn_krw"])
-    assert isinstance(source, dict) and isinstance(attribution, list) and isinstance(ranking, list)
+    assert isinstance(source, dict) and isinstance(fund_credit, list) and isinstance(ranking, list)
     raw_sheets, raw_index = build_raw_sheets(registry, raw_history)
-    last_attribution_row = len(attribution) + 3
+    last_fund_credit_row = len(fund_credit) + 3
     last_ranking_row = len(ranking) + 3
+    unique_fund_count = len({int(row["fund_id"]) for row in fund_credit})
+    multi_gp_fund_count = len({int(row["fund_id"]) for row in multi_gp_detail})
 
     readme_rows = [
-        [text("GP Ranking Data Pack", "title")],
+        [text("2025년 말 GP 누적 운용자산 순위", "title")],
         [text(RANKING_TITLE, "subtitle")],
-        [text("목적: 웹 GP 서비스가 읽는 정규화 DB 스냅샷과 동일한 누적 순위를 원본 행까지 추적하게 만든 검증용 데이터팩입니다.", "wrap")],
-        [text(f"기준일: {source['as_of_date']} ({source['period_label']})", "wrap")],
-        [text("순위 지표: 각 정규화 펀드의 최대 공시 총약정액을 한 번씩만 합산합니다. 실제 NAV 또는 운용사 자체 공시 AUM이 아닙니다.", "wrap")],
-        [text("귀속 규칙: 최초 금감원 관측 시점의 대표 GP에 펀드를 한 번만 귀속합니다. 이후 GP 변경은 GP Change History에 보존하고 순위에는 재귀속하거나 중복 반영하지 않습니다.", "wrap")],
-        [text("웹과의 관계: GP DB Snapshot은 공개 GP 서비스가 읽는 gp_profile 누적 지표를 그대로 옮긴 시트입니다. Fund Attribution Ledger의 계산값과 QA에서 대사합니다.", "wrap")],
-        [text("기간별 정보: Period Summary와 Period GP Ranking은 정규화 DB의 기간별 대시보드 데이터를 그대로 표시합니다. 최종 순위는 누적 순위만 사용합니다.", "wrap")],
-        [text("원천 보존: Raw 시트에는 각 금감원 첨부파일의 원본 셀값을 보존합니다. 구형 2015Q4·2016Q1 .xls는 원본 파일 경로와 SHA-256을 보존하며 행 단위 파싱 대상은 아닙니다.", "wrap")],
-        [text("중요 한계: 금감원 원천은 2016Q2부터 행 단위 정규화되어 있습니다. 2015Q4·2016Q1 구형 .xls는 원본 보존과 SHA 검증만 합니다.", "wrap")],
+        [text(f"기준일  {source['as_of_date']}  |  {source['period_label']}", "wrap")],
+        [text("기준 금액  펀드별 최대 공시 총약정액. 실제 NAV나 운용사 자체 공시 AUM이 아닙니다.", "wrap")],
+        [text("공동 GP  금감원 이력에 공동 업무집행사원으로 기재된 경우, 각 GP에 전액 반영합니다. 따라서 순위표 합계는 펀드 전체 총약정액보다 클 수 있습니다.", "wrap")],
+        [text("누적 순위  웹 GP 목록과 같은 DB 기준입니다. 상세 내역은 '펀드별 반영' 시트에서 확인합니다.", "wrap")],
+        [text("기간별 자료  '기간별 요약'과 '기간별 GP 순위'는 분기별 현황입니다.", "wrap")],
+        [text("원본 자료  Raw 시트는 금감원 첨부파일의 원본 셀값입니다. 2015Q4·2016Q1 .xls는 원본 파일만 보존합니다.", "wrap")],
     ]
     assumptions_rows = [
-        [text("Calculation Assumptions", "title")],
-        [text("입력 / 규칙", "header"), text("값", "header"), text("설명", "header")],
-        [text("최종 순위 정의"), text(RANKING_TITLE, "wrap"), text("누적 순위의 유일한 공식 정의")],
+        [text("집계 기준", "title")],
+        [text("항목", "header"), text("기준", "header"), text("비고", "header")],
+        [text("순위"), text(RANKING_TITLE, "wrap"), text("웹 GP 목록과 동일")],
         [text("DB 기준일"), text(source["period_label"]), text(source["as_of_date"])],
-        [text("정규화 기간"), text("2016Q2 ~ 2025Q4"), text("행 단위 정규화가 가능한 FSS 분기")],
-        [text("펀드 귀속"), text("최초 관측 대표 GP"), text("정규화된 펀드당 한 번만 귀속")],
+        [text("정규화 기간"), text("2016Q2 ~ 2025Q4"), text("금감원 분기 자료")],
+        [text("GP 반영"), text("금감원 기재 업무집행사원"), text("공동 GP는 각각 전액 반영")],
         [text("금액"), text("펀드별 최대 공시 총약정액"), text("FSS 공시 총약정액. 실제 NAV/AUM이 아님")],
-        [text("GP 변경"), text("중복 미귀속"), text("후속 GP 변경은 이력 시트에서 검토")],
-        [text("집계 단위"), text("KRW trillion"), text("Workbook 계산 및 대사 단위")],
-        [text("KRW mn per trillion"), number(1_000_000, "number"), text("Fund Attribution Ledger 원천 금액 변환 계수")],
-        [text("감사 산식"), text("SUM(펀드별 MAX(공시 총약정액)) by 최초 관측 대표 GP", "wrap"), text("Fund Attribution Ledger와 GP DB Snapshot의 대사 기준")],
-        [text("고유 펀드 수"), number(len(attribution), "number"), text("최종 누적 순위에 한 번만 포함")],
-        [text("누적 GP 수"), number(len(ranking), "number"), text("최종 순위의 GP 수")],
-        [text("누적 총약정액 (KRW tn)"), number(total_commitment, "amount_tn"), text("모든 펀드의 최대 공시 총약정액 합계")],
-        [text("GP 변경 펀드 수"), number(len(change_history), "number"), text("순위 중복을 막기 위해 변경 이력을 별도 보존")],
+        [text("집계 단위"), text("KRW trillion"), text("금액 단위")],
+        [text("KRW mn per trillion"), number(1_000_000, "number"), text("원금액 환산 계수")],
+        [text("산식"), text("GP별 SUM(펀드별 MAX(공시 총약정액))", "wrap"), text("공동 GP는 각 GP에 전액 반영")],
+        [text("고유 펀드 수"), number(unique_fund_count, "number"), text("정규화된 펀드")],
+        [text("GP 반영 행"), number(len(fund_credit), "number"), text("펀드×GP 행")],
+        [text("누적 GP 수"), number(len(ranking), "number"), text("순위표 GP 수")],
+        [text("누적 반영액 (KRW tn)"), number(total_commitment, "amount_tn"), text("공동 GP 중복 반영 후 합계")],
+        [text("복수 GP 펀드 수"), number(multi_gp_fund_count, "number"), text("2개 이상 GP가 기재된 펀드")],
     ]
 
     manifest_rows: list[list[Cell]] = [
-        [text("FSS Source Manifest", "title")],
-        [text("금감원 원본 파일, URL, 게시일, 로컬 SHA-256 및 데이터팩 원천 시트의 대응표입니다.", "subtitle")],
+        [text("금감원 원본 목록", "title")],
+        [text("데이터팩에 포함한 원본 파일과 수록 시트", "subtitle")],
         [
             text("Source ID", "header"), text("Period", "header"), text("As of", "header"), text("Regime", "header"),
             text("Posted", "header"), text("Original file", "header"), text("FSS post URL", "header"), text("Download URL", "header"),
@@ -597,8 +597,8 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
         )
 
     mapping_rows: list[list[Cell]] = [
-        [text("GP Name Mapping", "title")],
-        [text("별칭 병합은 정규화 DB가 적용한 규칙과 동일합니다. 누적 귀속 GP명은 Fund Attribution Ledger에서 확인합니다.", "subtitle")],
+        [text("GP 명칭 정리", "title")],
+        [text("동일 법인으로 확인된 표기만 통합", "subtitle")],
         [
             text("Scope", "header"), text("Raw GP name", "header"), text("Standard GP name", "header"), text("Mapping status", "header"),
             text("Rule ID", "header"), text("Relationship", "header"), text("Evidence", "header"), text("Primary sources", "header"),
@@ -606,63 +606,63 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
     ]
     alias_by_name = {row["alias_gp_name"]: row for row in aliases if row.get("verification_decision") == "MERGE_ALIAS"}
     seen_mapping: set[tuple[str, str, str]] = set()
-    for item in sorted({(str(row["attributed_gp_name"]), str(row["attributed_gp_name"])) for row in attribution}):
+    for item in sorted({(str(row["credited_gp_name"]), str(row["credited_gp_name"])) for row in fund_credit}):
         raw_name, standard_name = item
         alias = alias_by_name.get(raw_name)
-        row_key = ("Cumulative attribution", raw_name, standard_name)
+        row_key = ("누적 반영", raw_name, standard_name)
         seen_mapping.add(row_key)
         mapping_rows.append(
             [
-                text("Cumulative attribution"), text(raw_name), text(standard_name),
-                text("Verified alias" if alias else "Direct primary GP"), text(alias.get("rule_id", "") if alias else ""),
-                text(alias.get("relationship_type", "") if alias else ""), text(alias.get("evidence_summary", "") if alias else "Normalized FSS primary GP attribution", "wrap"),
+                text("누적 반영"), text(raw_name), text(standard_name),
+                text("통합 확인" if alias else "원본 기재"), text(alias.get("rule_id", "") if alias else ""),
+                text(alias.get("relationship_type", "") if alias else ""), text(alias.get("evidence_summary", "") if alias else "금감원 업무집행사원 기재", "wrap"),
                 text(alias.get("primary_sources", "") if alias else str(source["source_url"]), "link"),
             ]
         )
     for alias in aliases:
         if alias.get("verification_decision") != "MERGE_ALIAS":
             continue
-        row_key = ("Historical alias rule", alias["alias_gp_name"], alias["canonical_gp_name"])
+        row_key = ("과거 명칭 규칙", alias["alias_gp_name"], alias["canonical_gp_name"])
         if row_key in seen_mapping:
             continue
         mapping_rows.append(
             [
-                text("Historical alias rule"), text(alias["alias_gp_name"]), text(alias["canonical_gp_name"]), text("Verified alias"),
+                text("과거 명칭 규칙"), text(alias["alias_gp_name"]), text(alias["canonical_gp_name"]), text("통합 확인"),
                 text(alias["rule_id"]), text(alias["relationship_type"]), text(alias["evidence_summary"], "wrap"), text(alias["primary_sources"], "link"),
             ]
         )
 
-    attribution_rows: list[list[Cell]] = [
-        [text("Fund Attribution Ledger", "title")],
-        [text("각 정규화 펀드를 한 번만 누적 순위에 귀속합니다. 최초 GP 귀속과 최대 공시 총약정액의 원본 행을 모두 보존합니다. 회색 열은 엑셀 수식입니다.", "subtitle")],
+    fund_credit_rows: list[list[Cell]] = [
+        [text("펀드별 반영", "title")],
+        [text("금감원 이력에 기재된 펀드와 업무집행사원 GP의 대응표. 복수 GP는 각 GP에 전액 반영", "subtitle")],
         [
-            text("Fund ID", "header"), text("Fund name", "header"), text("Rank GP ID", "header"), text("Rank GP", "header"),
-            text("First GP period", "header"), text("First GP source", "header"), text("First GP sheet", "header"), text("First GP row", "header"),
-            text("Max commitment source", "header"), text("Max commitment (KRW tn)", "header"), text("Max commitment (KRW mn)", "header"),
-            text("Active in 2025Q4", "header"), text("Observed primary GPs", "header"), text("GP changed", "header"),
-            text("Latest observed GP", "header"), text("Latest period", "header"), text("Included", "header"), text("Ranking rule", "header"),
+            text("펀드 ID", "header"), text("펀드명", "header"), text("GP ID", "header"), text("GP", "header"),
+            text("최초 기재 분기", "header"), text("최초 기재 원본", "header"), text("최초 기재 시트", "header"), text("최초 기재 행", "header"),
+            text("최대 약정액 원본", "header"), text("최대 총약정액 (조원)", "header"), text("최대 총약정액 (백만원)", "header"),
+            text("2025Q4 기재", "header"), text("기재 GP 수", "header"), text("복수 GP", "header"),
+            text("최종 기재 분기", "header"), text("반영", "header"), text("반영 기준", "header"),
         ],
     ]
-    for row_number, item in enumerate(attribution, start=4):
+    for row_number, item in enumerate(fund_credit, start=4):
         amount_tn = float(item["max_commitment_trn_krw"] or 0)
-        attribution_rows.append(
+        fund_credit_rows.append(
             [
-                number(item["fund_id"], "number"), text(item["fund_name"], "wrap"), number(item["attributed_gp_id"], "number"), text(item["attributed_gp_name"], "wrap"),
-                text(item["attribution_period"]), text(item["attribution_source_id"]), text(item["attribution_sheet_name"], "wrap"), number(item["attribution_row_number"], "number"),
-                text(item["max_commitment_source_id"]), number(amount_tn, "amount_tn"), formula(f"J{row_number}*'Assumptions'!$B$10", amount_tn * 1_000_000.0, "formula_amount_mn"),
-                number(item["active_in_latest_period"], "number"), number(item["observed_primary_gp_count"], "number"), text("Y" if item["primary_gp_changed"] else ""),
-                text(item["latest_observed_gp_name"], "wrap"), text(item["latest_observed_period"]), text("Y"),
-                text("One normalized fund, first observed primary GP, maximum disclosed commitment", "wrap"),
+                number(item["fund_id"], "number"), text(item["fund_name"], "wrap"), number(item["credited_gp_id"], "number"), text(item["credited_gp_name"], "wrap"),
+                text(item["first_listed_period"]), text(item["first_listed_source_id"]), text(item["first_listed_sheet_name"], "wrap"), number(item["first_listed_row_number"], "number"),
+                text(item["max_commitment_source_id"]), number(amount_tn, "amount_tn"), formula(f"J{row_number}*'집계 기준'!$B$10", amount_tn * 1_000_000.0, "formula_amount_mn"),
+                number(item["active_in_latest_period"], "number"), number(item["listed_gp_count"], "number"), text("Y" if item["multiple_gp_listed"] else ""),
+                text(item["last_listed_period"]), text("Y"),
+                text("금감원 기재 GP별 최대 총약정액 전액 반영", "wrap"),
             ]
         )
 
     ranking_rows: list[list[Cell]] = [
-        [text("GP DB Snapshot", "title")],
-        [text("공개 GP 웹 서비스가 읽는 gp_profile 누적 순위를 그대로 표시합니다. 회색 열은 Fund Attribution Ledger의 재계산값으로, DB 스냅샷과 일치해야 합니다.", "subtitle")],
+        [text("누적 순위", "title")],
+        [text("웹 GP 목록과 같은 순위. 공동 GP는 각 GP에 전액 반영", "subtitle")],
         [
-            text("Cumulative rank", "header"), text("GP ID", "header"), text("Standard GP", "header"), text("Fund count", "header"),
-            text("DB commitment (KRW tn)", "header"), text("Ledger commitment (KRW tn)", "header"), text("Difference", "header"),
-            text("Active funds in 2025Q4", "header"), text("Market share", "header"), text("DB period", "header"), text("Definition", "header"),
+            text("순위", "header"), text("GP ID", "header"), text("GP", "header"), text("반영 펀드 수", "header"),
+            text("DB 금액 (조원)", "header"), text("펀드별 반영 합계 (조원)", "header"), text("차이", "header"),
+            text("2025Q4 기재 펀드 수", "header"), text("비중", "header"), text("기준 분기", "header"), text("집계 기준", "header"),
         ],
     ]
     for row_number, item in enumerate(profile_snapshot, start=4):
@@ -673,19 +673,19 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
             [
                 number(item["rank"], "number"),
                 number(gp_id, "number"), text(item["gp_name"], "wrap"),
-                formula(f"COUNTIF('Fund Attribution Ledger'!$C$4:$C${last_attribution_row},B{row_number})", int(item["cumulative_fund_count"]), "formula_number"),
+                formula(f"COUNTIF('펀드별 반영'!$C$4:$C${last_fund_credit_row},B{row_number})", int(item["cumulative_fund_count"]), "formula_number"),
                 number(amount_tn, "amount_tn"),
-                formula(f"SUMIF('Fund Attribution Ledger'!$C$4:$C${last_attribution_row},B{row_number},'Fund Attribution Ledger'!$J$4:$J${last_attribution_row})", amount_tn, "formula_amount_tn"),
+                formula(f"SUMIF('펀드별 반영'!$C$4:$C${last_fund_credit_row},B{row_number},'펀드별 반영'!$J$4:$J${last_fund_credit_row})", amount_tn, "formula_amount_tn"),
                 formula(f"E{row_number}-F{row_number}", 0, "formula_amount_tn"),
                 number(item["active_fund_count_latest"], "number"), formula(f"E{row_number}/SUM($E$4:$E${last_ranking_row})", share, "formula_pct"),
-                text(source["period_label"]), text("One fund once; first observed primary GP; maximum disclosed commitment", "wrap"),
+                text(source["period_label"]), text("금감원 기재 GP별 최대 총약정액 전액 반영", "wrap"),
             ]
         )
 
     period_summary_rows: list[list[Cell]] = [
-        [text("Period Summary", "title")],
-        [text("정규화된 FSS 기간별 시장 요약입니다. 웹 Market 대시보드의 기간 데이터와 같은 DB 테이블을 읽습니다.", "subtitle")],
-        [text("Period", "header"), text("As of", "header"), text("Active funds", "header"), text("Primary GPs", "header"), text("Commitment (KRW tn)", "header")],
+        [text("기간별 요약", "title")],
+        [text("웹 Market 대시보드의 분기별 시장 현황", "subtitle")],
+        [text("분기", "header"), text("기준일", "header"), text("펀드 수", "header"), text("대표 GP 수", "header"), text("총약정액 (조원)", "header")],
     ]
     for item in period_summary:
         period_summary_rows.append(
@@ -693,41 +693,41 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
         )
 
     period_ranking_rows: list[list[Cell]] = [
-        [text("Period GP Ranking", "title")],
-        [text("정규화 DB의 GP별 기간 순위입니다. 이 시트의 기간별 수치는 참고용이며, 최종 순위는 GP DB Snapshot의 누적 순위입니다.", "subtitle")],
-        [text("Period", "header"), text("As of", "header"), text("GP ID", "header"), text("GP", "header"), text("Active funds", "header"), text("Commitment (KRW tn)", "header"), text("Paid in (KRW tn)", "header")],
+        [text("기간별 GP 순위", "title")],
+        [text("분기별 대표 GP 기준 현황. 최종 누적 순위와는 별도 지표", "subtitle")],
+        [text("분기", "header"), text("기준일", "header"), text("GP ID", "header"), text("GP", "header"), text("펀드 수", "header"), text("총약정액 (조원)", "header"), text("납입액 (조원)", "header")],
     ]
     for item in period_ranking:
         period_ranking_rows.append(
             [text(item["period_label"]), text(item["as_of_date"]), number(item["gp_id"], "number"), text(item["gp_name"], "wrap"), number(item["active_fund_count"], "number"), number(item["commitment_aum_proxy_trn_krw"], "amount_tn"), number(item["paid_in_trn_krw"], "amount_tn")]
         )
 
-    change_rows: list[list[Cell]] = [
-        [text("GP Change History", "title")],
-        [text("대표 GP가 두 곳 이상 관측된 펀드입니다. 최종 순위에는 최초 관측 대표 GP 한 곳에만 귀속해 중복 집계를 막습니다.", "subtitle")],
-        [text("Fund ID", "header"), text("Fund", "header"), text("Rank GP ID", "header"), text("Rank GP", "header"), text("First period", "header"), text("Latest GP ID", "header"), text("Latest GP", "header"), text("Latest period", "header"), text("Observed GP count", "header"), text("Max commitment (KRW tn)", "header"), text("Ranking treatment", "header")],
+    multi_gp_rows: list[list[Cell]] = [
+        [text("복수 GP 내역", "title")],
+        [text("금감원 이력에 2개 이상 GP가 기재된 펀드. 각 GP 행에 최대 총약정액 전액 반영", "subtitle")],
+        [text("펀드 ID", "header"), text("펀드명", "header"), text("GP ID", "header"), text("GP", "header"), text("최초 기재 분기", "header"), text("최종 기재 분기", "header"), text("기재 GP 수", "header"), text("최대 총약정액 (조원)", "header"), text("반영 기준", "header")],
     ]
-    for item in change_history:
-        change_rows.append(
-            [number(item["fund_id"], "number"), text(item["fund_name"], "wrap"), number(item["rank_attributed_gp_id"], "number"), text(item["rank_attributed_gp_name"], "wrap"), text(item["attribution_period"]), number(item["latest_observed_gp_id"], "number"), text(item["latest_observed_gp_name"], "wrap"), text(item["latest_observed_period"]), number(item["observed_primary_gp_count"], "number"), number(item["max_commitment_trn_krw"], "amount_tn"), text(item["ranking_treatment"], "wrap")]
+    for item in multi_gp_detail:
+        multi_gp_rows.append(
+            [number(item["fund_id"], "number"), text(item["fund_name"], "wrap"), number(item["credited_gp_id"], "number"), text(item["credited_gp_name"], "wrap"), text(item["first_listed_period"]), text(item["last_listed_period"]), number(item["listed_gp_count"], "number"), number(item["max_commitment_trn_krw"], "amount_tn"), text(item["ranking_treatment"], "wrap")]
         )
 
     qa_rows: list[list[Cell]] = [
-        [text("QA Reconciliation", "title")],
-        [text("Expected values are the normalized GP DB snapshot. Calculated values are workbook formulas. Every status must be PASS before distribution.", "subtitle")],
-        [text("Control", "header"), text("Expected", "header"), text("Calculated", "header"), text("Status", "header"), text("Rule", "header")],
-        [text("FSS source ID"), text(source["source_id"]), text(source["source_id"]), formula("IF(B4=C4,\"PASS\",\"FAIL\")", "PASS", "pass"), text("Latest source registered and imported")],
-        [text("Raw file SHA-256"), text(source["sha256"], "wrap"), text(sha256_file(REPO_ROOT / str(source["local_path"])), "wrap"), formula("IF(B5=C5,\"PASS\",\"FAIL\")", "PASS", "pass"), text("Local raw file matches SQLite source_document")],
-        [text("Unique fund attributions"), number(len(attribution), "number"), formula(f"COUNTIF('Fund Attribution Ledger'!$Q$4:$Q${last_attribution_row},\"Y\")", len(attribution), "formula_number"), formula("IF(B6=C6,\"PASS\",\"FAIL\")", "PASS", "pass"), text("Each normalized fund is included once")],
-        [text("Cumulative ranked GPs"), number(len(ranking), "number"), formula(f"COUNTA('GP DB Snapshot'!$B$4:$B${last_ranking_row})", len(ranking), "formula_number"), formula("IF(B7=C7,\"PASS\",\"FAIL\")", "PASS", "pass"), text("The public GP DB and cumulative analytics have the same GP count")],
-        [text("Attribution total (KRW tn)"), number(total_commitment, "amount_tn"), formula(f"SUM('Fund Attribution Ledger'!$J$4:$J${last_attribution_row})", total_commitment, "formula_amount_tn"), formula("IF(ROUND(B8,6)=ROUND(C8,6),\"PASS\",\"FAIL\")", "PASS", "pass"), text("Sum of unique fund maximum commitments")],
-        [text("GP DB total (KRW tn)"), number(total_commitment, "amount_tn"), formula(f"SUM('GP DB Snapshot'!$E$4:$E${last_ranking_row})", total_commitment, "formula_amount_tn"), formula("IF(ROUND(B9,6)=ROUND(C9,6),\"PASS\",\"FAIL\")", "PASS", "pass"), text("Public GP DB cumulative metric")],
-        [text("DB vs ledger difference (KRW tn)"), number(0, "amount_tn"), formula(f"SUM('GP DB Snapshot'!$G$4:$G${last_ranking_row})", 0, "formula_amount_tn"), formula("IF(ROUND(B10,6)=ROUND(C10,6),\"PASS\",\"FAIL\")", "PASS", "pass"), text("No fund amount may be lost or double counted")],
-        [text("GP change funds"), number(len(change_history), "number"), formula(f"COUNTIF('Fund Attribution Ledger'!$N$4:$N${last_attribution_row},\"Y\")", len(change_history), "formula_number"), formula("IF(B11=C11,\"PASS\",\"FAIL\")", "PASS", "pass"), text("Changed GP observations are retained outside final allocation")],
+        [text("검증", "title")],
+        [text("정규화 DB와 엑셀 계산값 비교", "subtitle")],
+        [text("항목", "header"), text("DB 기준", "header"), text("엑셀 계산", "header"), text("결과", "header"), text("확인 내용", "header")],
+        [text("FSS 원본 ID"), text(source["source_id"]), text(source["source_id"]), formula("IF(B4=C4,\"PASS\",\"FAIL\")", "PASS", "pass"), text("최신 원본 등록·적재")],
+        [text("원본 SHA-256"), text(source["sha256"], "wrap"), text(sha256_file(REPO_ROOT / str(source["local_path"])), "wrap"), formula("IF(B5=C5,\"PASS\",\"FAIL\")", "PASS", "pass"), text("원본 파일 일치")],
+        [text("GP 반영 행"), number(len(fund_credit), "number"), formula(f"COUNTIF('펀드별 반영'!$P$4:$P${last_fund_credit_row},\"Y\")", len(fund_credit), "formula_number"), formula("IF(B6=C6,\"PASS\",\"FAIL\")", "PASS", "pass"), text("펀드×GP 반영 행 수")],
+        [text("누적 순위 GP 수"), number(len(ranking), "number"), formula(f"COUNTA('누적 순위'!$B$4:$B${last_ranking_row})", len(ranking), "formula_number"), formula("IF(B7=C7,\"PASS\",\"FAIL\")", "PASS", "pass"), text("웹 GP DB와 일치")],
+        [text("펀드별 반영 합계 (조원)"), number(total_commitment, "amount_tn"), formula(f"SUM('펀드별 반영'!$J$4:$J${last_fund_credit_row})", total_commitment, "formula_amount_tn"), formula("IF(ROUND(B8,6)=ROUND(C8,6),\"PASS\",\"FAIL\")", "PASS", "pass"), text("공동 GP 중복 반영 후 합계")],
+        [text("누적 순위 합계 (조원)"), number(total_commitment, "amount_tn"), formula(f"SUM('누적 순위'!$E$4:$E${last_ranking_row})", total_commitment, "formula_amount_tn"), formula("IF(ROUND(B9,6)=ROUND(C9,6),\"PASS\",\"FAIL\")", "PASS", "pass"), text("웹 GP DB 누적 지표")],
+        [text("DB-펀드별 반영 차이 (조원)"), number(0, "amount_tn"), formula(f"SUM('누적 순위'!$G$4:$G${last_ranking_row})", 0, "formula_amount_tn"), formula("IF(ROUND(B10,6)=ROUND(C10,6),\"PASS\",\"FAIL\")", "PASS", "pass"), text("순위와 상세 내역 대사")],
+        [text("복수 GP 반영 행"), number(len(multi_gp_detail), "number"), formula(f"COUNTIF('펀드별 반영'!$N$4:$N${last_fund_credit_row},\"Y\")", len(multi_gp_detail), "formula_number"), formula("IF(B11=C11,\"PASS\",\"FAIL\")", "PASS", "pass"), text("공동 GP 전액 반영 대상")],
     ]
     raw_index_rows = [
-        [text("Raw Sheet Index", "title")],
-        [text("Source ID", "header"), text("Period", "header"), text("Data pack sheet", "header"), text("Original worksheets", "header"), text("Original rows", "header"), text("Status", "header")],
+        [text("원본 시트 목록", "title")],
+        [text("원본 ID", "header"), text("분기", "header"), text("데이터팩 시트", "header"), text("원본 워크시트", "header"), text("원본 행 수", "header"), text("상태", "header")],
     ]
     for row in raw_index:
         raw_index_rows.append(
@@ -735,17 +735,17 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
         )
 
     return [
-        Sheet("README", readme_rows, [105], freeze_rows=2),
-        Sheet("Assumptions", assumptions_rows, [28, 40, 78], freeze_rows=2, auto_filter=f"A2:C{len(assumptions_rows)}", merges=["A1:C1"]),
-        Sheet("Source Manifest", manifest_rows, [21, 12, 13, 22, 12, 42, 70, 70, 52, 68, 18, 24], freeze_rows=3, auto_filter=f"A3:L{len(manifest_rows)}", merges=["A1:L1", "A2:L2"]),
-        Sheet("GP Name Mapping", mapping_rows, [24, 34, 34, 18, 34, 28, 70, 70], freeze_rows=3, auto_filter=f"A3:H{len(mapping_rows)}", merges=["A1:H1", "A2:H2"]),
-        Sheet("Fund Attribution Ledger", attribution_rows, [12, 42, 12, 34, 15, 22, 18, 12, 22, 25, 25, 18, 18, 14, 34, 15, 12, 65], freeze_rows=3, auto_filter=f"A3:R{len(attribution_rows)}", merges=["A1:R1", "A2:R2"]),
-        Sheet("GP DB Snapshot", ranking_rows, [16, 12, 34, 16, 27, 27, 18, 22, 16, 14, 70], freeze_rows=3, auto_filter=f"A3:K{len(ranking_rows)}", merges=["A1:K1", "A2:K2"]),
-        Sheet("Period Summary", period_summary_rows, [14, 16, 18, 18, 28], freeze_rows=3, auto_filter=f"A3:E{len(period_summary_rows)}", merges=["A1:E1", "A2:E2"]),
-        Sheet("Period GP Ranking", period_ranking_rows, [14, 16, 12, 34, 18, 28, 24], freeze_rows=3, auto_filter=f"A3:G{len(period_ranking_rows)}", merges=["A1:G1", "A2:G2"]),
-        Sheet("GP Change History", change_rows, [12, 42, 12, 34, 15, 14, 34, 15, 20, 28, 70], freeze_rows=3, auto_filter=f"A3:K{len(change_rows)}", merges=["A1:K1", "A2:K2"]),
-        Sheet("QA Reconciliation", qa_rows, [34, 35, 35, 12, 68], freeze_rows=3, auto_filter=f"A3:E{len(qa_rows)}", merges=["A1:E1", "A2:E2"]),
-        Sheet("Raw Index", raw_index_rows, [22, 14, 20, 45, 16, 32], freeze_rows=2, auto_filter=f"A2:F{len(raw_index_rows)}", merges=["A1:F1"]),
+        Sheet("안내", readme_rows, [105], freeze_rows=2),
+        Sheet("집계 기준", assumptions_rows, [28, 40, 78], freeze_rows=2, auto_filter=f"A2:C{len(assumptions_rows)}", merges=["A1:C1"]),
+        Sheet("원천 목록", manifest_rows, [21, 12, 13, 22, 12, 42, 70, 70, 52, 68, 18, 24], freeze_rows=3, auto_filter=f"A3:L{len(manifest_rows)}", merges=["A1:L1", "A2:L2"]),
+        Sheet("GP 명칭 정리", mapping_rows, [24, 34, 34, 18, 34, 28, 70, 70], freeze_rows=3, auto_filter=f"A3:H{len(mapping_rows)}", merges=["A1:H1", "A2:H2"]),
+        Sheet("펀드별 반영", fund_credit_rows, [12, 42, 12, 34, 15, 22, 18, 12, 22, 25, 25, 18, 18, 14, 16, 12, 52], freeze_rows=3, auto_filter=f"A3:Q{len(fund_credit_rows)}", merges=["A1:Q1", "A2:Q2"]),
+        Sheet("누적 순위", ranking_rows, [16, 12, 34, 16, 27, 27, 18, 22, 16, 14, 58], freeze_rows=3, auto_filter=f"A3:K{len(ranking_rows)}", merges=["A1:K1", "A2:K2"]),
+        Sheet("기간별 요약", period_summary_rows, [14, 16, 18, 18, 28], freeze_rows=3, auto_filter=f"A3:E{len(period_summary_rows)}", merges=["A1:E1", "A2:E2"]),
+        Sheet("기간별 GP 순위", period_ranking_rows, [14, 16, 12, 34, 18, 28, 24], freeze_rows=3, auto_filter=f"A3:G{len(period_ranking_rows)}", merges=["A1:G1", "A2:G2"]),
+        Sheet("복수 GP 내역", multi_gp_rows, [12, 42, 12, 34, 15, 15, 16, 28, 36], freeze_rows=3, auto_filter=f"A3:I{len(multi_gp_rows)}", merges=["A1:I1", "A2:I2"]),
+        Sheet("검증", qa_rows, [34, 35, 35, 12, 54], freeze_rows=3, auto_filter=f"A3:E{len(qa_rows)}", merges=["A1:E1", "A2:E2"]),
+        Sheet("원본 시트 목록", raw_index_rows, [22, 14, 20, 45, 16, 32], freeze_rows=2, auto_filter=f"A2:F{len(raw_index_rows)}", merges=["A1:F1"]),
         *raw_sheets,
     ]
 
@@ -827,20 +827,20 @@ def build_datapack(
     sheets = workbook_sheets(inputs, raw_history)
     write_xlsx(output_path, sheets)
     expected_sheets = [
-        "README",
-        "Assumptions",
-        "Source Manifest",
-        "GP Name Mapping",
-        "Fund Attribution Ledger",
-        "GP DB Snapshot",
-        "Period Summary",
-        "Period GP Ranking",
-        "GP Change History",
-        "QA Reconciliation",
-        "Raw Index",
+        "안내",
+        "집계 기준",
+        "원천 목록",
+        "GP 명칭 정리",
+        "펀드별 반영",
+        "누적 순위",
+        "기간별 요약",
+        "기간별 GP 순위",
+        "복수 GP 내역",
+        "검증",
+        "원본 시트 목록",
         f"Raw {period_label}",
     ]
-    expected_formula_count = len(inputs["attribution"]) + len(inputs["profile_snapshot"]) * 4 + 10
+    expected_formula_count = len(inputs["fund_credit"]) + len(inputs["profile_snapshot"]) * 4 + 10
     raw_validation = validate_datapack(
         output_path,
         expected_sheets,
@@ -861,9 +861,9 @@ def build_datapack(
     return {
         "output": str(output_path),
         "period": period_label,
-        "fund_rows": len(inputs["attribution"]),
+        "fund_rows": len(inputs["fund_credit"]),
         "ranked_gps": len(inputs["cumulative_ranking"]),
-        "gp_change_funds": len(inputs["change_history"]),
+        "multi_gp_rows": len(inputs["multi_gp_detail"]),
         "commitment_trn_krw": round(float(inputs["total_cumulative_commitment_trn_krw"]), 6),
         "excel_normalized": excel_compatible,
         "source_formula_count": raw_validation["formula_count"],

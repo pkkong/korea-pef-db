@@ -30,11 +30,11 @@ class GpRankingDataPackTests(unittest.TestCase):
                 raw_history="latest",
             )
 
-            self.assertEqual(result["fund_rows"], 2369)
-            self.assertEqual(result["ranked_gps"], 580)
-            self.assertEqual(result["gp_change_funds"], 195)
-            self.assertEqual(result["commitment_trn_krw"], 279.489082)
-            self.assertGreater(result["formula_count"], 4_700)
+            self.assertEqual(result["fund_rows"], 3133)
+            self.assertEqual(result["ranked_gps"], 725)
+            self.assertEqual(result["multi_gp_rows"], 1407)
+            self.assertEqual(result["commitment_trn_krw"], 364.157751)
+            self.assertGreater(result["formula_count"], 6_000)
             self.assertFalse(result["excel_normalized"])
 
             with zipfile.ZipFile(output) as archive:
@@ -44,36 +44,39 @@ class GpRankingDataPackTests(unittest.TestCase):
                 qa = archive.read("xl/worksheets/sheet10.xml").decode("utf-8")
 
             self.assertIn('name="Raw 2025Q4"', workbook)
-            self.assertIn('name="GP DB Snapshot"', workbook)
-            self.assertIn('name="GP Change History"', workbook)
-            self.assertIn("SUMIF('Fund Attribution Ledger'!$C$4:$C$2372", ranking)
-            self.assertIn("J4*'Assumptions'!$B$10", ledger)
-            self.assertIn("SUM('GP DB Snapshot'!$E$4:$E$583)", qa)
+            self.assertIn('name="누적 순위"', workbook)
+            self.assertIn('name="복수 GP 내역"', workbook)
+            self.assertIn("SUMIF('펀드별 반영'!$C$4:$C$3136", ranking)
+            self.assertIn("J4*'집계 기준'!$B$10", ledger)
+            self.assertIn("SUM('누적 순위'!$E$4:$E$728)", qa)
 
-    def test_cumulative_analytics_counts_each_normalized_fund_once(self) -> None:
+    def test_cumulative_analytics_credits_each_listed_gp(self) -> None:
         conn = sqlite3.connect(DEFAULT_DB)
         try:
-            attribution_count, total_commitment = conn.execute(
+            credit_count, total_commitment = conn.execute(
                 """
                 SELECT COUNT(*), ROUND(SUM(max_commitment_trn_krw), 6)
-                FROM analytics_gp_cumulative_fund_attribution
+                FROM analytics_gp_cumulative_fund_credit
                 """
             ).fetchone()
-            unique_fund_count, unique_fund_total = conn.execute(
+            fund_gp_count, fund_gp_total = conn.execute(
                 """
-                SELECT COUNT(*), ROUND(SUM(max_commitment_trn_krw), 6)
-                FROM fund_master
+                SELECT COUNT(*), ROUND(SUM(fm.max_commitment_trn_krw), 6)
+                FROM fund_gp_affiliation fga
+                JOIN fund_master fm ON fm.fund_id = fga.fund_id
+                WHERE fm.max_commitment_trn_krw IS NOT NULL
                 """
             ).fetchone()
-            change_count = conn.execute(
-                "SELECT COUNT(*) FROM analytics_gp_cumulative_change_history"
+            multi_gp_rows = conn.execute(
+                "SELECT COUNT(*) FROM analytics_gp_cumulative_multi_gp_detail"
             ).fetchone()[0]
         finally:
             conn.close()
 
-        self.assertEqual(attribution_count, unique_fund_count)
-        self.assertEqual(total_commitment, unique_fund_total)
-        self.assertEqual(change_count, 195)
+        self.assertEqual(credit_count, fund_gp_count)
+        self.assertEqual(total_commitment, fund_gp_total)
+        self.assertGreater(credit_count, 2369)
+        self.assertEqual(multi_gp_rows, 1407)
 
 
 if __name__ == "__main__":

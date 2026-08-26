@@ -124,9 +124,9 @@ DB 스냅샷과 원본 가공 이력을 검증하는 데이터팩이다. 생성 
 모바일 전달용 검증 사본만 Vercel asset으로 versioned 한다.
 
 - 최종 순위 명칭은 `YYYY년 말 기준 기관전용 PEF 누적 운용자산 순위 (금감원 공시 총약정액 기준)`이다. FSS 원천은 NAV/AUM이 아니라 펀드별 `총약정액(합계)`을 공시하므로 이 한계를 함께 표시한다.
-- `analytics_gp_cumulative_fund_attribution`은 정규화된 펀드 한 개를 최초 금감원 관측 시점의 대표 GP에 한 번만 귀속하고, 해당 펀드의 최대 공시 총약정액을 사용한다. 이후 GP 변경은 `analytics_gp_cumulative_change_history`에 남기며 순위에 중복 귀속하지 않는다.
-- `GP DB Snapshot`은 웹 GP 서비스가 읽는 `gp_profile` 누적 순위와 동일해야 한다. `Fund Attribution Ledger`, `GP Change History`, `QA Reconciliation`은 이 스냅샷을 고유 펀드 수와 총약정액으로 대사한다. `Period Summary`와 `Period GP Ranking`은 기간별 대시보드 DB view를 보존한다.
-- `Source Manifest`, `GP Name Mapping`, `Raw Index`, 분기별 `Raw YYYYQ#` 시트는 금감원 파일명, URL, SHA-256, 검증된 alias rule, 원본 셀값을 보여준다. 2015Q4·2016Q1 legacy `.xls`는 파일 SHA와 보존 경로를 표시하며 표준 `.xlsx` parser의 행 단위 입력 대상은 아니다.
+- `analytics_gp_cumulative_fund_credit`은 `fund_gp_affiliation`의 펀드×업무집행사원 GP 관계별로 펀드의 최대 공시 총약정액을 전액 반영한다. 금감원 이력에 공동 GP가 기재된 펀드는 각 GP에 중복 반영하므로 누적 순위의 합계는 경제적 펀드 전체 총약정액보다 클 수 있다. `analytics_gp_cumulative_multi_gp_detail`은 복수 GP 펀드의 반영 내역을 보존한다.
+- `누적 순위` 시트는 웹 GP 서비스가 읽는 `gp_profile` 누적 순위와 동일해야 한다. `펀드별 반영`과 `검증` 시트는 이 스냅샷을 펀드×GP 행 및 총약정액으로 대사한다. `기간별 요약`과 `기간별 GP 순위`는 기간별 대시보드 DB view를 보존한다.
+- `원천 목록`, `GP 명칭 정리`, `원본 시트 목록`, 분기별 `Raw YYYYQ#` 시트는 금감원 파일명, URL, SHA-256, 검증된 alias rule, 원본 셀값을 보여준다. 2015Q4·2016Q1 legacy `.xls`는 파일 SHA와 보존 경로를 표시하며 표준 `.xlsx` parser의 행 단위 입력 대상은 아니다.
 
 ## 빌드 계약
 
