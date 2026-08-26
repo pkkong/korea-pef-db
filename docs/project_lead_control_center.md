@@ -1,6 +1,6 @@
 # 프로젝트 리드 현재 상태판
 
-최종 수정: 2026-08-25 KST
+최종 수정: 2026-08-26 KST
 
 이 문서는 Project Lead가 현재 프로젝트 상태를 잃지 않기 위한 운영판이다. 새 채팅방, 서브에이전트, 별도 담당자가 작업을 시작할 때는 먼저 이 문서를 읽고, 작업이 끝나면 필요한 변경을 여기에 반영한다.
 
@@ -101,6 +101,14 @@ python3 scripts/build_site_bundle.py --date YYYY-MM-DD --services newsletter,lp,
 python3 scripts/check_fss_raw_sources.py --db db/private_equity.db
 python3 scripts/check_fss_statistics_ready.py --db db/private_equity.db --expected-latest-period 2025Q4
 ```
+
+GP 순위 검증 데이터팩 생성:
+
+```bash
+python3 scripts/build_gp_ranking_datapack.py --period 2025Q4 --raw-history all
+```
+
+이 명령은 `exports/gp_ranking_datapack_2025YE.xlsx`를 생성한다. 이 파일은 public deploy가 아니라 감사/검토용 ignored artifact다. 순위 명칭은 `총약정액 합계`로만 사용하며 AUM 또는 NAV라고 부르지 않는다.
 
 매일 GitHub Actions용 뉴스레터 단독 빌드:
 
@@ -223,6 +231,7 @@ curl -fsS "https://kpef-newsletter.vercel.app/health.json?refresh=1"
 - 2026-06-21 production deploy 완료: commit `82e9737`을 `main`에 push했고, Vercel 앱 배포 run `27906187275`, GitHub Pages 미러 build/publish/verify run `27906187286`, Supabase read model sync와 Vercel 공식 앱 검증 run `27906477785`가 모두 성공했다. 공개 Pages `health.json`과 Vercel `health.json?refresh=1`은 `report_date=2026-06-21`, `article_count=2`, `status=ok`로 확인했다.
 - 2026-08-21 FSS 통계 갱신 검증: 공식 `2025Q4` source를 registry/raw에 추가하고 SQLite를 재생성했다. raw health는 34/34 파일 확인, 32개 `.xlsx` DB SHA 일치(legacy `.xls` 2개는 미적재 경고), FSS readiness는 `2025Q4`, 1,195 펀드, 대표 GP 397개, ranking 397개로 통과했다. 별도 GP bundle에서 `market.html`/`gps.html` 계약 검사와 Chrome 390px/1440px smoke를 통과했다. GitHub Pages `gh-pages` commit `0f7e03d`로 검증된 정적 GP source를 갱신하고 FSS-only GP 120개 상세 페이지를 제거했다. Vercel production deploy run `32486898154`는 `/market.html`과 `/gps.html`의 200 응답, source header, 2025Q4 본문을 확인했다. 이후 발행은 전용 source gate를 통과해야 한다.
 - 2026-08-25 GP Vercel direct read model 전환 완료: Supabase migration run `32845250938`, Vercel 앱 deploy run `32845667639`, GP FSS publish run `32845812052`가 모두 성공했다. 마지막 GP workflow는 FSS 재수집, source/readiness, GP static backup, Supabase versioned snapshot 발행, GitHub Pages backup, Vercel 검증을 모두 통과했다. 공개 `/market.html`과 `/gps.html`은 `X-GP-Data-Source: supabase-public-snapshot`, `X-GP-Reporting-Period: 2025Q4`, snapshot `fss-2025q4-ec864d1a2f16`을 반환한다. GitHub Pages는 GP의 backup mirror일 뿐 Vercel GP 화면의 runtime source가 아니다.
+- 2026-08-26 GP 순위 검증 데이터팩 생성 경로 추가: `scripts/build_gp_ranking_datapack.py`는 2025Q4 FSS readiness를 선행 확인한 뒤 34개 금감원 원천 파일, alias mapping, 1,195개 펀드 계산 장부, 397개 대표 GP 순위, 수식 기반 QA 대사를 하나의 Excel로 만든다. 2025Q4의 대표 GP 귀속 총약정액은 `167.502409조원`이며, 공개 순위의 조원 표시 반올림과는 최대 0.5백만원 차이가 날 수 있다. 최종 파일은 `exports/` ignored artifact로 보관하고 source commit에는 넣지 않는다.
 
 ## 프로젝트 리드 종료 체크리스트
 
