@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build an audit-ready Excel data pack for the GP commitment ranking.
+"""Build an audit-ready Excel data pack from the public GP database.
 
-The FSS source files disclose fund commitment amounts, not NAV/AUM. This
-workbook therefore ranks primary GPs by the sum of disclosed 2025 year-end
-fund commitments. The workbook keeps the original FSS values, the conversion
-formula, name-resolution evidence, and every final ranking calculation visible.
+The workbook is an audit view of the same normalized database that powers the
+GP service. It does not calculate a competing ranking. The cumulative ranking
+credits every normalized fund once to its first observed FSS primary GP and
+sums that fund's maximum disclosed commitment through the requested period.
 """
 
 from __future__ import annotations
@@ -12,10 +12,13 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
-import json
+import os
 import re
+import shutil
 import sqlite3
+import subprocess
 import sys
+import tempfile
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,7 +37,7 @@ DEFAULT_DB = REPO_ROOT / "db" / "private_equity.db"
 DEFAULT_REGISTRY = REPO_ROOT / "data" / "source_registry_fss_pef.csv"
 DEFAULT_ALIAS_RULES = REPO_ROOT / "data" / "gp_alias_merge_rules.csv"
 DEFAULT_OUTPUT = REPO_ROOT / "exports" / "gp_ranking_datapack_2025YE.xlsx"
-RANKING_TITLE = "2025년 말 기준 기관전용 PEF 총약정액 합계 순위 (대표 GP 귀속)"
+RANKING_TITLE = "2025년 말 기준 기관전용 PEF 누적 운용자산 순위 (금감원 공시 총약정액 기준)"
 
 
 @dataclass(frozen=True)
@@ -313,6 +316,19 @@ def table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
     ).fetchone() is not None
 
 
+def fetch_dicts(conn: sqlite3.Connection, query: str, params: tuple[object, ...] = ()) -> list[dict[str, object]]:
+    cursor = conn.execute(query, params)
+    columns = [column[0] for column in cursor.description]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+def _require_table(conn: sqlite3.Connection, table_name: str) -> None:
+    if not table_exists(conn, table_name):
+        raise RuntimeError(
+            f"Missing {table_name}. Rebuild the normalized GP analytics before creating the data pack."
+        )
+
+
 def read_ranking_inputs(
     db_path: Path, registry_path: Path, alias_rules_path: Path, period_label: str
 ) -> dict[str, object]:
@@ -326,124 +342,117 @@ def read_ranking_inputs(
     conn = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        source = conn.execute(
+        for table_name in (
+            "analytics_gp_cumulative_fund_attribution",
+            "analytics_gp_cumulative_ranking",
+            "analytics_gp_cumulative_change_history",
+            "analytics_gp_period_aum",
+            "gp_profile",
+        ):
+            _require_table(conn, table_name)
+        source_rows = fetch_dicts(
+            conn,
             """
             SELECT rp.period_id, rp.period_label, rp.as_of_date, sd.source_id, sd.sha256, sd.title, sd.source_url, sd.local_path
             FROM reporting_period rp
-            JOIN source_document sd
-              ON sd.period_label = rp.period_label
-             AND sd.as_of_date = rp.as_of_date
+            JOIN source_document sd ON sd.period_label = rp.period_label AND sd.as_of_date = rp.as_of_date
             WHERE rp.period_label = ?
             ORDER BY rp.as_of_date DESC
             LIMIT 1
             """,
             (period_label,),
-        ).fetchone()
-        if source is None:
+        )
+        if not source_rows:
             raise RuntimeError(f"No imported FSS source exists for {period_label}")
-        ledger_sql = """
-            SELECT
-                fps.snapshot_id,
-                fps.source_id,
-                fps.sheet_name,
-                fps.row_number,
-                fps.row_hash,
-                fps.fund_id,
-                fps.fund_name_raw,
-                fps.gp_name_raw,
-                fps.commitment_amount_raw,
-                fps.commitment_amount_krw_mn,
-                fps.raw_row_json,
-                gh.gp_id,
-                gh.gp_name AS standard_gp_name,
-                sr.source_row_id
-            FROM fund_period_snapshot fps
-            JOIN gp_house gh ON gh.gp_id = fps.gp_id
-            LEFT JOIN source_row sr
-              ON sr.source_id = fps.source_id
-             AND sr.sheet_name = fps.sheet_name
-             AND sr.row_number = fps.row_number
-            WHERE fps.period_id = ?
-            ORDER BY fps.sheet_name, fps.row_number, fps.snapshot_id
-        """
-        snapshot_rows = conn.execute(ledger_sql, (source["period_id"],)).fetchall()
-        if not snapshot_rows:
-            raise RuntimeError(f"No fund snapshots found for {period_label}")
-        ledger: list[dict[str, object]] = []
-        for row in snapshot_rows:
-            raw = json.loads(row["raw_row_json"] or "{}")
-            commitment_krw_mn = float(row["commitment_amount_krw_mn"] or 0.0)
-            if commitment_krw_mn < 0:
-                raise RuntimeError(f"Negative commitment amount in snapshot {row['snapshot_id']}")
-            ledger.append(
-                {
-                    "ledger_id": int(row["snapshot_id"]),
-                    "source_row_id": int(row["source_row_id"] or 0),
-                    "source_id": row["source_id"],
-                    "sheet_name": row["sheet_name"],
-                    "row_number": int(row["row_number"]),
-                    "row_hash": row["row_hash"],
-                    "fund_id": int(row["fund_id"]),
-                    "fund_name_raw": row["fund_name_raw"],
-                    "gp1_raw": str(raw.get("GP1") or row["gp_name_raw"] or "").strip(),
-                    "gp2_raw": str(raw.get("GP2") or "").strip(),
-                    "gp3_raw": str(raw.get("GP3") or "").strip(),
-                    "gp_id": int(row["gp_id"]),
-                    "standard_gp_name": row["standard_gp_name"],
-                    "commitment_eok": round(commitment_krw_mn / 100.0, 6),
-                    "commitment_krw_mn": commitment_krw_mn,
-                    "row_hash_short": str(row["row_hash"] or "")[:16],
-                }
-            )
-        totals: dict[tuple[int, str], dict[str, object]] = {}
-        for item in ledger:
-            key = (int(item["gp_id"]), str(item["standard_gp_name"]))
-            aggregate = totals.setdefault(
-                key,
-                {"gp_id": key[0], "gp_name": key[1], "active_fund_count": 0, "commitment_krw_mn": 0.0},
-            )
-            aggregate["active_fund_count"] = int(aggregate["active_fund_count"]) + 1
-            aggregate["commitment_krw_mn"] = float(aggregate["commitment_krw_mn"]) + float(item["commitment_krw_mn"])
-        ranking = sorted(totals.values(), key=lambda item: (-float(item["commitment_krw_mn"]), str(item["gp_name"])))
-        for rank, item in enumerate(ranking, start=1):
-            item["rank"] = rank
-            item["commitment_tn_krw"] = float(item["commitment_krw_mn"]) / 1_000_000.0
-        ranking_table = f"analytics_gp_ranking_{re.sub(r'[^0-9A-Za-z_]+', '', period_label)}"
-        if not table_exists(conn, ranking_table):
-            raise RuntimeError(f"Missing current ranking table: {ranking_table}")
-        stored_ranking = conn.execute(
-            f"SELECT rank, gp_id, gp_name, active_fund_count, commitment_aum_proxy_trn_krw FROM {ranking_table} ORDER BY rank"
-        ).fetchall()
-        if len(stored_ranking) != len(ranking):
-            raise RuntimeError("Stored GP ranking count does not match datapack calculation")
-        for calculated, stored in zip(ranking, stored_ranking):
-            if (
-                int(calculated["rank"]) != int(stored["rank"])
-                or int(calculated["gp_id"]) != int(stored["gp_id"])
-                # The public ranking stores trillion-KRW values rounded to six
-                # decimals, while the ledger keeps the source's KRW-million value.
-                or abs(float(calculated["commitment_tn_krw"]) - float(stored["commitment_aum_proxy_trn_krw"])) > 0.000001
-            ):
-                raise RuntimeError(
-                    "Stored GP ranking does not reconcile to the fund ledger: "
-                    f"calculated={calculated}, stored={dict(stored)}"
-                )
+        source = source_rows[0]
+        attribution = fetch_dicts(
+            conn,
+            """
+            SELECT * FROM analytics_gp_cumulative_fund_attribution
+            ORDER BY attributed_gp_name, fund_name, fund_id
+            """,
+        )
+        cumulative_ranking = fetch_dicts(
+            conn,
+            """
+            SELECT rank, gp_id, gp_name, cumulative_fund_count,
+                   cumulative_commitment_proxy_trn_krw, active_fund_count_latest,
+                   market_share_pct, as_of_period, basis
+            FROM analytics_gp_cumulative_ranking
+            ORDER BY rank
+            """,
+        )
+        profile_snapshot = fetch_dicts(
+            conn,
+            """
+            SELECT CAST(cumulative_primary_rank AS INTEGER) AS rank, source_gp_id AS gp_id,
+                   standard_gp_name AS gp_name,
+                   cumulative_primary_fund_count AS cumulative_fund_count,
+                   ROUND(cumulative_primary_commitment_proxy_krw_100mn / 10000.0, 6)
+                       AS cumulative_commitment_proxy_trn_krw,
+                   cumulative_primary_active_fund_count_latest AS active_fund_count_latest
+            FROM gp_profile
+            WHERE CAST(cumulative_primary_rank AS INTEGER) > 0
+            ORDER BY CAST(cumulative_primary_rank AS INTEGER)
+            """,
+        )
+        if len(profile_snapshot) != len(cumulative_ranking):
+            raise RuntimeError("GP profile snapshot count differs from normalized cumulative ranking")
+        for database_row, analytics_row in zip(profile_snapshot, cumulative_ranking):
+            fields = ("rank", "gp_id", "cumulative_fund_count", "active_fund_count_latest")
+            if any(int(database_row[field]) != int(analytics_row[field]) for field in fields):
+                raise RuntimeError(f"GP profile snapshot differs from cumulative analytics: {database_row} != {analytics_row}")
+            if abs(
+                float(database_row["cumulative_commitment_proxy_trn_krw"])
+                - float(analytics_row["cumulative_commitment_proxy_trn_krw"])
+            ) > 0.000001:
+                raise RuntimeError(f"GP profile amount differs from cumulative analytics: {database_row} != {analytics_row}")
+        period_summary = fetch_dicts(
+            conn,
+            """
+            SELECT rp.period_label, rp.as_of_date, COUNT(DISTINCT fps.fund_id) AS active_fund_count,
+                   COUNT(DISTINCT fps.gp_id) AS primary_gp_count,
+                   ROUND(SUM(fps.commitment_amount_krw_mn) / 1000000.0, 6) AS commitment_trn_krw
+            FROM reporting_period rp
+            JOIN fund_period_snapshot fps ON fps.period_id = rp.period_id
+            GROUP BY rp.period_id
+            ORDER BY rp.as_of_date
+            """,
+        )
+        period_ranking = fetch_dicts(
+            conn,
+            """
+            SELECT period_label, as_of_date, gp_id, gp_name, active_fund_count,
+                   commitment_aum_proxy_trn_krw, paid_in_trn_krw
+            FROM analytics_gp_period_aum
+            ORDER BY as_of_date, commitment_aum_proxy_trn_krw DESC, gp_name
+            """,
+        )
+        change_history = fetch_dicts(
+            conn,
+            """
+            SELECT * FROM analytics_gp_cumulative_change_history
+            ORDER BY max_commitment_trn_krw DESC, fund_name, fund_id
+            """,
+        )
     finally:
         conn.close()
     latest_registry = next((row for row in registry_rows if row["source_id"] == source["source_id"]), None)
     if latest_registry is None:
         raise RuntimeError(f"Source registry has no row for {source['source_id']}")
     return {
-        "source": dict(source),
+        "source": source,
         "latest_registry": latest_registry,
         "registry": registry_rows,
         "aliases": aliases,
-        "ledger": ledger,
-        "ranking": ranking,
-        "total_commitment_krw_mn": sum(float(item["commitment_krw_mn"]) for item in ledger),
-        "co_gp_count": sum(1 for item in ledger if item["gp2_raw"] or item["gp3_raw"]),
-        "co_gp_commitment_krw_mn": sum(
-            float(item["commitment_krw_mn"]) for item in ledger if item["gp2_raw"] or item["gp3_raw"]
+        "attribution": attribution,
+        "cumulative_ranking": cumulative_ranking,
+        "profile_snapshot": profile_snapshot,
+        "period_summary": period_summary,
+        "period_ranking": period_ranking,
+        "change_history": change_history,
+        "total_cumulative_commitment_trn_krw": sum(
+            float(row["max_commitment_trn_krw"] or 0) for row in attribution
         ),
     }
 
@@ -522,46 +531,48 @@ def build_raw_sheets(registry_rows: list[dict[str, str]], raw_history: str) -> t
 
 def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
     source = inputs["source"]
-    ledger = inputs["ledger"]
-    ranking = inputs["ranking"]
     registry = inputs["registry"]
     aliases = inputs["aliases"]
-    total_commitment = float(inputs["total_commitment_krw_mn"])
-    co_gp_count = int(inputs["co_gp_count"])
-    co_gp_commitment = float(inputs["co_gp_commitment_krw_mn"])
-    assert isinstance(source, dict) and isinstance(ledger, list) and isinstance(ranking, list)
+    attribution = inputs["attribution"]
+    ranking = inputs["cumulative_ranking"]
+    profile_snapshot = inputs["profile_snapshot"]
+    period_summary = inputs["period_summary"]
+    period_ranking = inputs["period_ranking"]
+    change_history = inputs["change_history"]
+    total_commitment = float(inputs["total_cumulative_commitment_trn_krw"])
+    assert isinstance(source, dict) and isinstance(attribution, list) and isinstance(ranking, list)
     raw_sheets, raw_index = build_raw_sheets(registry, raw_history)
-    last_ledger_row = len(ledger) + 3
+    last_attribution_row = len(attribution) + 3
     last_ranking_row = len(ranking) + 3
 
     readme_rows = [
         [text("GP Ranking Data Pack", "title")],
         [text(RANKING_TITLE, "subtitle")],
-        [text("목적: 최종 순위의 모든 숫자를 금감원 원본 행까지 추적할 수 있게 만든 검증용 데이터팩입니다.", "wrap")],
+        [text("목적: 웹 GP 서비스가 읽는 정규화 DB 스냅샷과 동일한 누적 순위를 원본 행까지 추적하게 만든 검증용 데이터팩입니다.", "wrap")],
         [text(f"기준일: {source['as_of_date']} ({source['period_label']})", "wrap")],
-        [text("순위 지표: 금감원 공시 펀드별 총약정액의 합계입니다. 실제 NAV 또는 운용사 자체 공시 AUM이 아닙니다.", "wrap")],
-        [text("귀속 규칙: 원본 GP1만 대표 GP로 귀속합니다. GP2·GP3는 원천 장부에 보존하지만 순위 합계에 중복 귀속하지 않습니다.", "wrap")],
-        [text("단위 변환: 금감원 원본 단위인 억원을 백만원으로 변환한 뒤 합산합니다. 변환식은 Calculation Ledger 열 O~Q에 표시됩니다.", "wrap")],
-        [text("순위 대사: Calculation Ledger 합계, GP Ranking 합계, 금감원 원천 합계가 QA Reconciliation에서 일치해야 합니다.", "wrap")],
+        [text("순위 지표: 각 정규화 펀드의 최대 공시 총약정액을 한 번씩만 합산합니다. 실제 NAV 또는 운용사 자체 공시 AUM이 아닙니다.", "wrap")],
+        [text("귀속 규칙: 최초 금감원 관측 시점의 대표 GP에 펀드를 한 번만 귀속합니다. 이후 GP 변경은 GP Change History에 보존하고 순위에는 재귀속하거나 중복 반영하지 않습니다.", "wrap")],
+        [text("웹과의 관계: GP DB Snapshot은 공개 GP 서비스가 읽는 gp_profile 누적 지표를 그대로 옮긴 시트입니다. Fund Attribution Ledger의 계산값과 QA에서 대사합니다.", "wrap")],
+        [text("기간별 정보: Period Summary와 Period GP Ranking은 정규화 DB의 기간별 대시보드 데이터를 그대로 표시합니다. 최종 순위는 누적 순위만 사용합니다.", "wrap")],
         [text("원천 보존: Raw 시트에는 각 금감원 첨부파일의 원본 셀값을 보존합니다. 구형 2015Q4·2016Q1 .xls는 원본 파일 경로와 SHA-256을 보존하며 행 단위 파싱 대상은 아닙니다.", "wrap")],
-        [text("중요 한계: 공동 GP에 펀드 약정액 전액을 각각 귀속하면 시장 총액이 중복 계산됩니다. 이 데이터팩은 대표 GP 귀속만 최종 순위로 사용합니다.", "wrap")],
+        [text("중요 한계: 금감원 원천은 2016Q2부터 행 단위 정규화되어 있습니다. 2015Q4·2016Q1 구형 .xls는 원본 보존과 SHA 검증만 합니다.", "wrap")],
     ]
     assumptions_rows = [
         [text("Calculation Assumptions", "title")],
         [text("입력 / 규칙", "header"), text("값", "header"), text("설명", "header")],
-        [text("순위 정의"), text(RANKING_TITLE, "wrap"), text("대표 GP 귀속 기준의 시장 순위")],
-        [text("기준 기간"), text(source["period_label"]), text(source["as_of_date"])],
-        [text("원천 파일"), text(source["source_id"]), text(source["title"], "wrap")],
-        [text("원천 금액 필드"), text("총약정액(합계)"), text("금감원 원천의 공시 필드")],
-        [text("공시 단위"), text("억원"), text("2025Q4 원천 파일 기준")],
-        [text("집계 단위"), text("KRW million"), text("순위 계산 및 대사 단위")],
-        [text("대표 GP"), text("GP1"), text("GP2와 GP3는 공동 GP 원천 정보로만 보존")],
-        [text("납입액"), text("미공시"), text("2025Q4 원천에 납입액 필드가 없어 0으로 처리하지 않음")],
-        [text("KRW mn per 억원"), number(100, "number"), text("Calculation Ledger의 변환 계수")],
-        [text("KRW mn per 조원"), number(1_000_000, "number"), text("조원 표시 변환 계수")],
-        [text("원천 펀드 행"), number(len(ledger), "number"), text("2025Q4 현황자료의 포함 행")],
-        [text("대표 GP 수"), number(len(ranking), "number"), text("최종 순위의 GP 수")],
-        [text("원천 총약정액 (KRW mn)"), number(total_commitment, "amount_mn"), text("2025Q4 포함 펀드 행 합계")],
+        [text("최종 순위 정의"), text(RANKING_TITLE, "wrap"), text("누적 순위의 유일한 공식 정의")],
+        [text("DB 기준일"), text(source["period_label"]), text(source["as_of_date"])],
+        [text("정규화 기간"), text("2016Q2 ~ 2025Q4"), text("행 단위 정규화가 가능한 FSS 분기")],
+        [text("펀드 귀속"), text("최초 관측 대표 GP"), text("정규화된 펀드당 한 번만 귀속")],
+        [text("금액"), text("펀드별 최대 공시 총약정액"), text("FSS 공시 총약정액. 실제 NAV/AUM이 아님")],
+        [text("GP 변경"), text("중복 미귀속"), text("후속 GP 변경은 이력 시트에서 검토")],
+        [text("집계 단위"), text("KRW trillion"), text("Workbook 계산 및 대사 단위")],
+        [text("KRW mn per trillion"), number(1_000_000, "number"), text("Fund Attribution Ledger 원천 금액 변환 계수")],
+        [text("감사 산식"), text("SUM(펀드별 MAX(공시 총약정액)) by 최초 관측 대표 GP", "wrap"), text("Fund Attribution Ledger와 GP DB Snapshot의 대사 기준")],
+        [text("고유 펀드 수"), number(len(attribution), "number"), text("최종 누적 순위에 한 번만 포함")],
+        [text("누적 GP 수"), number(len(ranking), "number"), text("최종 순위의 GP 수")],
+        [text("누적 총약정액 (KRW tn)"), number(total_commitment, "amount_tn"), text("모든 펀드의 최대 공시 총약정액 합계")],
+        [text("GP 변경 펀드 수"), number(len(change_history), "number"), text("순위 중복을 막기 위해 변경 이력을 별도 보존")],
     ]
 
     manifest_rows: list[list[Cell]] = [
@@ -587,7 +598,7 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
 
     mapping_rows: list[list[Cell]] = [
         [text("GP Name Mapping", "title")],
-        [text("원본 GP명과 최종 순위의 표준 GP명을 함께 보여줍니다. 검증된 별칭 병합은 rule ID와 근거를 공개합니다.", "subtitle")],
+        [text("별칭 병합은 정규화 DB가 적용한 규칙과 동일합니다. 누적 귀속 GP명은 Fund Attribution Ledger에서 확인합니다.", "subtitle")],
         [
             text("Scope", "header"), text("Raw GP name", "header"), text("Standard GP name", "header"), text("Mapping status", "header"),
             text("Rule ID", "header"), text("Relationship", "header"), text("Evidence", "header"), text("Primary sources", "header"),
@@ -595,16 +606,16 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
     ]
     alias_by_name = {row["alias_gp_name"]: row for row in aliases if row.get("verification_decision") == "MERGE_ALIAS"}
     seen_mapping: set[tuple[str, str, str]] = set()
-    for item in sorted({(str(row["gp1_raw"]), str(row["standard_gp_name"])) for row in ledger}):
+    for item in sorted({(str(row["attributed_gp_name"]), str(row["attributed_gp_name"])) for row in attribution}):
         raw_name, standard_name = item
         alias = alias_by_name.get(raw_name)
-        row_key = ("2025Q4 ranking", raw_name, standard_name)
+        row_key = ("Cumulative attribution", raw_name, standard_name)
         seen_mapping.add(row_key)
         mapping_rows.append(
             [
-                text("2025Q4 ranking"), text(raw_name), text(standard_name),
+                text("Cumulative attribution"), text(raw_name), text(standard_name),
                 text("Verified alias" if alias else "Direct primary GP"), text(alias.get("rule_id", "") if alias else ""),
-                text(alias.get("relationship_type", "") if alias else ""), text(alias.get("evidence_summary", "") if alias else "FSS 2025Q4 GP1 normalized snapshot", "wrap"),
+                text(alias.get("relationship_type", "") if alias else ""), text(alias.get("evidence_summary", "") if alias else "Normalized FSS primary GP attribution", "wrap"),
                 text(alias.get("primary_sources", "") if alias else str(source["source_url"]), "link"),
             ]
         )
@@ -621,72 +632,98 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
             ]
         )
 
-    ledger_rows: list[list[Cell]] = [
-        [text("Calculation Ledger 2025Q4", "title")],
-        [text("각 펀드 행은 금감원 원본의 시트·행 번호·row hash로 추적됩니다. 회색 열은 엑셀 수식으로 계산됩니다.", "subtitle")],
+    attribution_rows: list[list[Cell]] = [
+        [text("Fund Attribution Ledger", "title")],
+        [text("각 정규화 펀드를 한 번만 누적 순위에 귀속합니다. 최초 GP 귀속과 최대 공시 총약정액의 원본 행을 모두 보존합니다. 회색 열은 엑셀 수식입니다.", "subtitle")],
         [
-            text("Ledger ID", "header"), text("Source Row ID", "header"), text("Source ID", "header"), text("Source sheet", "header"), text("Source row", "header"), text("Row hash", "header"),
-            text("Fund ID", "header"), text("Fund name (raw)", "header"), text("GP1 raw", "header"), text("GP2 raw", "header"), text("GP3 raw", "header"),
-            text("Standard GP", "header"), text("GP ID", "header"), text("Disclosed unit", "header"), text("Disclosed commitment (억원)", "header"),
-            text("Conversion factor", "header"), text("Commitment (KRW mn)", "header"), text("Commitment (KRW tn)", "header"), text("Included", "header"), text("Co-GP flag", "header"), text("Inclusion rule", "header"),
+            text("Fund ID", "header"), text("Fund name", "header"), text("Rank GP ID", "header"), text("Rank GP", "header"),
+            text("First GP period", "header"), text("First GP source", "header"), text("First GP sheet", "header"), text("First GP row", "header"),
+            text("Max commitment source", "header"), text("Max commitment (KRW tn)", "header"), text("Max commitment (KRW mn)", "header"),
+            text("Active in 2025Q4", "header"), text("Observed primary GPs", "header"), text("GP changed", "header"),
+            text("Latest observed GP", "header"), text("Latest period", "header"), text("Included", "header"), text("Ranking rule", "header"),
         ],
     ]
-    for row_number, item in enumerate(ledger, start=4):
-        disclosed_commitment = float(item["commitment_eok"])
-        commitment_mn = float(item["commitment_krw_mn"])
-        commitment_tn = commitment_mn / 1_000_000.0
-        co_gp = "Y" if item["gp2_raw"] or item["gp3_raw"] else ""
-        ledger_rows.append(
+    for row_number, item in enumerate(attribution, start=4):
+        amount_tn = float(item["max_commitment_trn_krw"] or 0)
+        attribution_rows.append(
             [
-                number(item["ledger_id"], "number"), number(item["source_row_id"], "number"), text(item["source_id"]), text(item["sheet_name"]), number(item["row_number"], "number"), text(item["row_hash_short"]),
-                number(item["fund_id"], "number"), text(item["fund_name_raw"], "wrap"), text(item["gp1_raw"], "wrap"), text(item["gp2_raw"], "wrap"), text(item["gp3_raw"], "wrap"),
-                text(item["standard_gp_name"], "wrap"), number(item["gp_id"], "number"), text("억원"), number(disclosed_commitment, "amount_mn"),
-                formula("'Assumptions'!$B$11", 100, "formula_number"), formula(f"O{row_number}*P{row_number}", commitment_mn, "formula_amount_mn"),
-                formula(f"Q{row_number}/'Assumptions'!$B$12", commitment_tn, "formula_amount_tn"), text("Y"), text(co_gp),
-                text("2025Q4 active fund row; GP1 only receives the commitment in the final ranking", "wrap"),
+                number(item["fund_id"], "number"), text(item["fund_name"], "wrap"), number(item["attributed_gp_id"], "number"), text(item["attributed_gp_name"], "wrap"),
+                text(item["attribution_period"]), text(item["attribution_source_id"]), text(item["attribution_sheet_name"], "wrap"), number(item["attribution_row_number"], "number"),
+                text(item["max_commitment_source_id"]), number(amount_tn, "amount_tn"), formula(f"J{row_number}*'Assumptions'!$B$10", amount_tn * 1_000_000.0, "formula_amount_mn"),
+                number(item["active_in_latest_period"], "number"), number(item["observed_primary_gp_count"], "number"), text("Y" if item["primary_gp_changed"] else ""),
+                text(item["latest_observed_gp_name"], "wrap"), text(item["latest_observed_period"]), text("Y"),
+                text("One normalized fund, first observed primary GP, maximum disclosed commitment", "wrap"),
             ]
         )
 
     ranking_rows: list[list[Cell]] = [
-        [text("GP Ranking 2025YE", "title")],
-        [text("순위와 합계는 Calculation Ledger를 직접 참조하는 수식입니다. 동률은 표준 GP명 알파벳 순으로 안정 정렬했습니다.", "subtitle")],
+        [text("GP DB Snapshot", "title")],
+        [text("공개 GP 웹 서비스가 읽는 gp_profile 누적 순위를 그대로 표시합니다. 회색 열은 Fund Attribution Ledger의 재계산값으로, DB 스냅샷과 일치해야 합니다.", "subtitle")],
         [
-            text("Rank", "header"), text("GP ID", "header"), text("Standard GP", "header"), text("Active fund count", "header"),
-            text("Total commitment (KRW mn)", "header"), text("Total commitment (KRW tn)", "header"), text("Market share", "header"), text("Period", "header"), text("Calculation basis", "header"),
+            text("Cumulative rank", "header"), text("GP ID", "header"), text("Standard GP", "header"), text("Fund count", "header"),
+            text("DB commitment (KRW tn)", "header"), text("Ledger commitment (KRW tn)", "header"), text("Difference", "header"),
+            text("Active funds in 2025Q4", "header"), text("Market share", "header"), text("DB period", "header"), text("Definition", "header"),
         ],
     ]
-    ledger_first_row = 4
-    for row_number, item in enumerate(ranking, start=4):
+    for row_number, item in enumerate(profile_snapshot, start=4):
         gp_id = int(item["gp_id"])
-        amount_mn = float(item["commitment_krw_mn"])
-        amount_tn = amount_mn / 1_000_000.0
-        share = amount_mn / total_commitment if total_commitment else 0.0
+        amount_tn = float(item["cumulative_commitment_proxy_trn_krw"])
+        share = amount_tn / total_commitment if total_commitment else 0.0
         ranking_rows.append(
             [
-                formula(f"RANK.EQ(E{row_number},$E$4:$E${last_ranking_row},0)+COUNTIF($E$4:E{row_number},E{row_number})-1", int(item["rank"]), "formula_number"),
+                number(item["rank"], "number"),
                 number(gp_id, "number"), text(item["gp_name"], "wrap"),
-                formula(f"COUNTIFS('Calculation Ledger'!$M$4:$M${last_ledger_row},B{row_number},'Calculation Ledger'!$S$4:$S${last_ledger_row},\"Y\")", int(item["active_fund_count"]), "formula_number"),
-                formula(f"SUMIFS('Calculation Ledger'!$Q$4:$Q${last_ledger_row},'Calculation Ledger'!$M$4:$M${last_ledger_row},B{row_number},'Calculation Ledger'!$S$4:$S${last_ledger_row},\"Y\")", amount_mn, "formula_amount_mn"),
-                formula(f"E{row_number}/'Assumptions'!$B$12", amount_tn, "formula_amount_tn"), formula(f"E{row_number}/SUM($E$4:$E${last_ranking_row})", share, "formula_pct"),
-                text(source["period_label"]), text("Representative GP (GP1); source commitments summed without co-GP double counting", "wrap"),
+                formula(f"COUNTIF('Fund Attribution Ledger'!$C$4:$C${last_attribution_row},B{row_number})", int(item["cumulative_fund_count"]), "formula_number"),
+                number(amount_tn, "amount_tn"),
+                formula(f"SUMIF('Fund Attribution Ledger'!$C$4:$C${last_attribution_row},B{row_number},'Fund Attribution Ledger'!$J$4:$J${last_attribution_row})", amount_tn, "formula_amount_tn"),
+                formula(f"E{row_number}-F{row_number}", 0, "formula_amount_tn"),
+                number(item["active_fund_count_latest"], "number"), formula(f"E{row_number}/SUM($E$4:$E${last_ranking_row})", share, "formula_pct"),
+                text(source["period_label"]), text("One fund once; first observed primary GP; maximum disclosed commitment", "wrap"),
             ]
+        )
+
+    period_summary_rows: list[list[Cell]] = [
+        [text("Period Summary", "title")],
+        [text("정규화된 FSS 기간별 시장 요약입니다. 웹 Market 대시보드의 기간 데이터와 같은 DB 테이블을 읽습니다.", "subtitle")],
+        [text("Period", "header"), text("As of", "header"), text("Active funds", "header"), text("Primary GPs", "header"), text("Commitment (KRW tn)", "header")],
+    ]
+    for item in period_summary:
+        period_summary_rows.append(
+            [text(item["period_label"]), text(item["as_of_date"]), number(item["active_fund_count"], "number"), number(item["primary_gp_count"], "number"), number(item["commitment_trn_krw"], "amount_tn")]
+        )
+
+    period_ranking_rows: list[list[Cell]] = [
+        [text("Period GP Ranking", "title")],
+        [text("정규화 DB의 GP별 기간 순위입니다. 이 시트의 기간별 수치는 참고용이며, 최종 순위는 GP DB Snapshot의 누적 순위입니다.", "subtitle")],
+        [text("Period", "header"), text("As of", "header"), text("GP ID", "header"), text("GP", "header"), text("Active funds", "header"), text("Commitment (KRW tn)", "header"), text("Paid in (KRW tn)", "header")],
+    ]
+    for item in period_ranking:
+        period_ranking_rows.append(
+            [text(item["period_label"]), text(item["as_of_date"]), number(item["gp_id"], "number"), text(item["gp_name"], "wrap"), number(item["active_fund_count"], "number"), number(item["commitment_aum_proxy_trn_krw"], "amount_tn"), number(item["paid_in_trn_krw"], "amount_tn")]
+        )
+
+    change_rows: list[list[Cell]] = [
+        [text("GP Change History", "title")],
+        [text("대표 GP가 두 곳 이상 관측된 펀드입니다. 최종 순위에는 최초 관측 대표 GP 한 곳에만 귀속해 중복 집계를 막습니다.", "subtitle")],
+        [text("Fund ID", "header"), text("Fund", "header"), text("Rank GP ID", "header"), text("Rank GP", "header"), text("First period", "header"), text("Latest GP ID", "header"), text("Latest GP", "header"), text("Latest period", "header"), text("Observed GP count", "header"), text("Max commitment (KRW tn)", "header"), text("Ranking treatment", "header")],
+    ]
+    for item in change_history:
+        change_rows.append(
+            [number(item["fund_id"], "number"), text(item["fund_name"], "wrap"), number(item["rank_attributed_gp_id"], "number"), text(item["rank_attributed_gp_name"], "wrap"), text(item["attribution_period"]), number(item["latest_observed_gp_id"], "number"), text(item["latest_observed_gp_name"], "wrap"), text(item["latest_observed_period"]), number(item["observed_primary_gp_count"], "number"), number(item["max_commitment_trn_krw"], "amount_tn"), text(item["ranking_treatment"], "wrap")]
         )
 
     qa_rows: list[list[Cell]] = [
         [text("QA Reconciliation", "title")],
-        [text("Expected values are source-backed. Calculated values are workbook formulas. Every status must be PASS before distribution.", "subtitle")],
+        [text("Expected values are the normalized GP DB snapshot. Calculated values are workbook formulas. Every status must be PASS before distribution.", "subtitle")],
         [text("Control", "header"), text("Expected", "header"), text("Calculated", "header"), text("Status", "header"), text("Rule", "header")],
         [text("FSS source ID"), text(source["source_id"]), text(source["source_id"]), formula("IF(B4=C4,\"PASS\",\"FAIL\")", "PASS", "pass"), text("Latest source registered and imported")],
         [text("Raw file SHA-256"), text(source["sha256"], "wrap"), text(sha256_file(REPO_ROOT / str(source["local_path"])), "wrap"), formula("IF(B5=C5,\"PASS\",\"FAIL\")", "PASS", "pass"), text("Local raw file matches SQLite source_document")],
-        [text("2025Q4 fund rows"), number(len(ledger), "number"), formula(f"COUNTA('Calculation Ledger'!$A$4:$A${last_ledger_row})", len(ledger), "formula_number"), formula("IF(B6=C6,\"PASS\",\"FAIL\")", "PASS", "pass"), text("One included ledger record per latest FSS fund snapshot")],
-        [text("Included ledger rows"), number(len(ledger), "number"), formula(f"COUNTIF('Calculation Ledger'!$S$4:$S${last_ledger_row},\"Y\")", len(ledger), "formula_number"), formula("IF(B7=C7,\"PASS\",\"FAIL\")", "PASS", "pass"), text("No 2025Q4 fund row is silently excluded")],
-        [text("Ranked primary GPs"), number(len(ranking), "number"), formula(f"COUNTA('GP Ranking'!$B$4:$B${last_ranking_row})", len(ranking), "formula_number"), formula("IF(B8=C8,\"PASS\",\"FAIL\")", "PASS", "pass"), text("Unique GP1 identities after verified aliases")],
-        [text("Source commitment total (KRW mn)"), number(total_commitment, "amount_mn"), formula(f"SUM('Calculation Ledger'!$Q$4:$Q${last_ledger_row})", total_commitment, "formula_amount_mn"), formula("IF(ROUND(B9,3)=ROUND(C9,3),\"PASS\",\"FAIL\")", "PASS", "pass"), text("Sum of disclosed total commitments after unit conversion")],
-        [text("Ranking commitment total (KRW mn)"), number(total_commitment, "amount_mn"), formula(f"SUM('GP Ranking'!$E$4:$E${last_ranking_row})", total_commitment, "formula_amount_mn"), formula("IF(ROUND(B10,3)=ROUND(C10,3),\"PASS\",\"FAIL\")", "PASS", "pass"), text("Ranked GP totals must equal source total")],
-        [text("Ledger vs ranking difference (KRW mn)"), number(0, "amount_mn"), formula("C9-C10", 0, "formula_amount_mn"), formula("IF(ROUND(B11,3)=ROUND(C11,3),\"PASS\",\"FAIL\")", "PASS", "pass"), text("No commitment amount may be lost or double counted")],
-        [text("Co-GP fund rows"), number(co_gp_count, "number"), formula(f"COUNTIF('Calculation Ledger'!$T$4:$T${last_ledger_row},\"Y\")", co_gp_count, "formula_number"), formula("IF(B12=C12,\"PASS\",\"FAIL\")", "PASS", "pass"), text("GP2 or GP3 exists but is not additionally credited in ranking")],
-        [text("Co-GP commitment total (KRW mn)"), number(co_gp_commitment, "amount_mn"), formula(f"SUMIF('Calculation Ledger'!$T$4:$T${last_ledger_row},\"Y\",'Calculation Ledger'!$Q$4:$Q${last_ledger_row})", co_gp_commitment, "formula_amount_mn"), formula("IF(ROUND(B13,3)=ROUND(C13,3),\"PASS\",\"FAIL\")", "PASS", "pass"), text("Disclosure only; not a separate market-total component")],
-        [text("Missing commitment values"), number(0, "number"), formula(f"COUNTBLANK('Calculation Ledger'!$O$4:$O${last_ledger_row})", 0, "formula_number"), formula("IF(B14=C14,\"PASS\",\"FAIL\")", "PASS", "pass"), text("A missing disclosed amount must fail the distribution review")],
+        [text("Unique fund attributions"), number(len(attribution), "number"), formula(f"COUNTIF('Fund Attribution Ledger'!$Q$4:$Q${last_attribution_row},\"Y\")", len(attribution), "formula_number"), formula("IF(B6=C6,\"PASS\",\"FAIL\")", "PASS", "pass"), text("Each normalized fund is included once")],
+        [text("Cumulative ranked GPs"), number(len(ranking), "number"), formula(f"COUNTA('GP DB Snapshot'!$B$4:$B${last_ranking_row})", len(ranking), "formula_number"), formula("IF(B7=C7,\"PASS\",\"FAIL\")", "PASS", "pass"), text("The public GP DB and cumulative analytics have the same GP count")],
+        [text("Attribution total (KRW tn)"), number(total_commitment, "amount_tn"), formula(f"SUM('Fund Attribution Ledger'!$J$4:$J${last_attribution_row})", total_commitment, "formula_amount_tn"), formula("IF(ROUND(B8,6)=ROUND(C8,6),\"PASS\",\"FAIL\")", "PASS", "pass"), text("Sum of unique fund maximum commitments")],
+        [text("GP DB total (KRW tn)"), number(total_commitment, "amount_tn"), formula(f"SUM('GP DB Snapshot'!$E$4:$E${last_ranking_row})", total_commitment, "formula_amount_tn"), formula("IF(ROUND(B9,6)=ROUND(C9,6),\"PASS\",\"FAIL\")", "PASS", "pass"), text("Public GP DB cumulative metric")],
+        [text("DB vs ledger difference (KRW tn)"), number(0, "amount_tn"), formula(f"SUM('GP DB Snapshot'!$G$4:$G${last_ranking_row})", 0, "formula_amount_tn"), formula("IF(ROUND(B10,6)=ROUND(C10,6),\"PASS\",\"FAIL\")", "PASS", "pass"), text("No fund amount may be lost or double counted")],
+        [text("GP change funds"), number(len(change_history), "number"), formula(f"COUNTIF('Fund Attribution Ledger'!$N$4:$N${last_attribution_row},\"Y\")", len(change_history), "formula_number"), formula("IF(B11=C11,\"PASS\",\"FAIL\")", "PASS", "pass"), text("Changed GP observations are retained outside final allocation")],
     ]
     raw_index_rows = [
         [text("Raw Sheet Index", "title")],
@@ -699,11 +736,14 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
 
     return [
         Sheet("README", readme_rows, [105], freeze_rows=2),
-        Sheet("Assumptions", assumptions_rows, [28, 40, 78], freeze_rows=2, auto_filter="A2:C15", merges=["A1:C1"]),
+        Sheet("Assumptions", assumptions_rows, [28, 40, 78], freeze_rows=2, auto_filter=f"A2:C{len(assumptions_rows)}", merges=["A1:C1"]),
         Sheet("Source Manifest", manifest_rows, [21, 12, 13, 22, 12, 42, 70, 70, 52, 68, 18, 24], freeze_rows=3, auto_filter=f"A3:L{len(manifest_rows)}", merges=["A1:L1", "A2:L2"]),
         Sheet("GP Name Mapping", mapping_rows, [24, 34, 34, 18, 34, 28, 70, 70], freeze_rows=3, auto_filter=f"A3:H{len(mapping_rows)}", merges=["A1:H1", "A2:H2"]),
-        Sheet("Calculation Ledger", ledger_rows, [12, 14, 20, 16, 12, 20, 11, 42, 28, 28, 28, 32, 12, 14, 25, 18, 24, 22, 12, 12, 70], freeze_rows=3, auto_filter=f"A3:U{len(ledger_rows)}", merges=["A1:U1", "A2:U2"]),
-        Sheet("GP Ranking", ranking_rows, [10, 12, 34, 18, 29, 29, 16, 13, 70], freeze_rows=3, auto_filter=f"A3:I{len(ranking_rows)}", merges=["A1:I1", "A2:I2"]),
+        Sheet("Fund Attribution Ledger", attribution_rows, [12, 42, 12, 34, 15, 22, 18, 12, 22, 25, 25, 18, 18, 14, 34, 15, 12, 65], freeze_rows=3, auto_filter=f"A3:R{len(attribution_rows)}", merges=["A1:R1", "A2:R2"]),
+        Sheet("GP DB Snapshot", ranking_rows, [16, 12, 34, 16, 27, 27, 18, 22, 16, 14, 70], freeze_rows=3, auto_filter=f"A3:K{len(ranking_rows)}", merges=["A1:K1", "A2:K2"]),
+        Sheet("Period Summary", period_summary_rows, [14, 16, 18, 18, 28], freeze_rows=3, auto_filter=f"A3:E{len(period_summary_rows)}", merges=["A1:E1", "A2:E2"]),
+        Sheet("Period GP Ranking", period_ranking_rows, [14, 16, 12, 34, 18, 28, 24], freeze_rows=3, auto_filter=f"A3:G{len(period_ranking_rows)}", merges=["A1:G1", "A2:G2"]),
+        Sheet("GP Change History", change_rows, [12, 42, 12, 34, 15, 14, 34, 15, 20, 28, 70], freeze_rows=3, auto_filter=f"A3:K{len(change_rows)}", merges=["A1:K1", "A2:K2"]),
         Sheet("QA Reconciliation", qa_rows, [34, 35, 35, 12, 68], freeze_rows=3, auto_filter=f"A3:E{len(qa_rows)}", merges=["A1:E1", "A2:E2"]),
         Sheet("Raw Index", raw_index_rows, [22, 14, 20, 45, 16, 32], freeze_rows=2, auto_filter=f"A2:F{len(raw_index_rows)}", merges=["A1:F1"]),
         *raw_sheets,
@@ -729,6 +769,50 @@ def validate_datapack(path: Path, expected_sheets: list[str], expected_metrics: 
     return {"file_size_bytes": path.stat().st_size, "sheet_count": len(all_sheets), "formula_count": formulas}
 
 
+def normalize_xlsx_for_excel(path: Path, soffice_binary: Path) -> None:
+    """Rewrite the OOXML package with LibreOffice before external delivery.
+
+    The raw writer is intentionally lightweight so the data pack can run with
+    the standard library. LibreOffice produces a stricter Office-compatible
+    package from that deterministic intermediate file. Delivery builds must
+    use this normalization step and the resulting file is then opened in
+    Microsoft Excel during release verification.
+    """
+    if not soffice_binary.is_file():
+        raise RuntimeError(f"LibreOffice executable was not found: {soffice_binary}")
+    with tempfile.TemporaryDirectory(prefix="gp-datapack-excel-") as temp_dir:
+        temp_root = Path(temp_dir)
+        source_dir = temp_root / "source"
+        output_dir = temp_root / "output"
+        profile_dir = temp_root / "profile"
+        source_dir.mkdir()
+        output_dir.mkdir()
+        source_path = source_dir / path.name
+        shutil.copy2(path, source_path)
+        completed = subprocess.run(
+            [
+                str(soffice_binary),
+                "--headless",
+                f"-env:UserInstallation={profile_dir.as_uri()}",
+                "--convert-to",
+                "xlsx",
+                "--outdir",
+                str(output_dir),
+                str(source_path),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        normalized_path = output_dir / path.name
+        if completed.returncode != 0 or not normalized_path.is_file() or normalized_path.stat().st_size <= 0:
+            raise RuntimeError(
+                "LibreOffice could not normalize the workbook: "
+                f"returncode={completed.returncode}; stdout={completed.stdout.strip()}; stderr={completed.stderr.strip()}"
+            )
+        shutil.copy2(normalized_path, path)
+
+
 def build_datapack(
     db_path: Path,
     registry_path: Path,
@@ -736,22 +820,53 @@ def build_datapack(
     output_path: Path,
     period_label: str = "2025Q4",
     raw_history: str = "all",
+    excel_compatible: bool = False,
+    soffice_binary: Path | None = None,
 ) -> dict[str, object]:
     inputs = read_ranking_inputs(db_path, registry_path, alias_rules_path, period_label)
     sheets = workbook_sheets(inputs, raw_history)
     write_xlsx(output_path, sheets)
+    expected_sheets = [
+        "README",
+        "Assumptions",
+        "Source Manifest",
+        "GP Name Mapping",
+        "Fund Attribution Ledger",
+        "GP DB Snapshot",
+        "Period Summary",
+        "Period GP Ranking",
+        "GP Change History",
+        "QA Reconciliation",
+        "Raw Index",
+        f"Raw {period_label}",
+    ]
+    expected_formula_count = len(inputs["attribution"]) + len(inputs["profile_snapshot"]) * 4 + 10
+    raw_validation = validate_datapack(
+        output_path,
+        expected_sheets,
+        {"formula_count_min": expected_formula_count},
+    )
+    if excel_compatible:
+        if soffice_binary is None:
+            configured = os.environ.get("SOFFICE_BIN") or shutil.which("soffice")
+            if not configured:
+                raise RuntimeError("Excel-compatible delivery requires --soffice or SOFFICE_BIN")
+            soffice_binary = Path(configured)
+        normalize_xlsx_for_excel(output_path, soffice_binary)
     validation = validate_datapack(
         output_path,
-        ["README", "Assumptions", "Source Manifest", "GP Name Mapping", "Calculation Ledger", "GP Ranking", "QA Reconciliation", "Raw Index", f"Raw {period_label}"],
-        {"formula_count_min": len(inputs["ledger"]) * 3 + len(inputs["ranking"]) * 5 + 20},
+        expected_sheets,
+        {"formula_count_min": 0 if excel_compatible else expected_formula_count},
     )
     return {
         "output": str(output_path),
         "period": period_label,
-        "fund_rows": len(inputs["ledger"]),
-        "ranked_gps": len(inputs["ranking"]),
-        "commitment_krw_mn": round(float(inputs["total_commitment_krw_mn"]), 3),
-        "commitment_trn_krw": round(float(inputs["total_commitment_krw_mn"]) / 1_000_000.0, 6),
+        "fund_rows": len(inputs["attribution"]),
+        "ranked_gps": len(inputs["cumulative_ranking"]),
+        "gp_change_funds": len(inputs["change_history"]),
+        "commitment_trn_krw": round(float(inputs["total_cumulative_commitment_trn_krw"]), 6),
+        "excel_normalized": excel_compatible,
+        "source_formula_count": raw_validation["formula_count"],
         **validation,
     }
 
@@ -764,6 +879,8 @@ def main() -> int:
     parser.add_argument("--period", default="2025Q4")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--raw-history", choices=("all", "latest"), default="all")
+    parser.add_argument("--excel-compatible", action="store_true", help="Normalize the delivery file with LibreOffice")
+    parser.add_argument("--soffice", type=Path, help="Path to the LibreOffice soffice executable")
     args = parser.parse_args()
     result = build_datapack(
         db_path=args.db,
@@ -772,6 +889,8 @@ def main() -> int:
         output_path=args.output,
         period_label=args.period,
         raw_history=args.raw_history,
+        excel_compatible=args.excel_compatible,
+        soffice_binary=args.soffice,
     )
     for key, value in result.items():
         print(f"{key}={value}")

@@ -442,36 +442,21 @@ def load_latest_primary_ranking(conn: sqlite3.Connection, period_label: str) -> 
 
 
 def load_cumulative_primary_stats(conn: sqlite3.Connection) -> dict[int, dict[str, object]]:
+    table_name = "analytics_gp_cumulative_ranking"
+    if not table_exists(conn, table_name):
+        raise RuntimeError(
+            f"Missing {table_name}. Run scripts/build_aum_analytics.py after build_fund_master.py before building GP profiles."
+        )
     rows = fetch_dicts(
         conn,
-        """
-        WITH gp_fund AS (
-            SELECT DISTINCT gp_id, fund_id
-            FROM fund_period_snapshot
-            WHERE gp_id IS NOT NULL
-        ),
-        gp_amount AS (
-            SELECT
-                gf.gp_id,
-                gh.gp_name,
-                COUNT(DISTINCT gf.fund_id) AS cumulative_primary_fund_count,
-                SUM(COALESCE(fm.max_commitment_trn_krw, 0)) AS cumulative_primary_commitment_trn_krw,
-                SUM(CASE WHEN fm.active_in_latest_period = 1 THEN 1 ELSE 0 END)
-                    AS cumulative_primary_active_fund_count_latest
-            FROM gp_fund gf
-            JOIN gp_house gh ON gh.gp_id = gf.gp_id
-            JOIN fund_master fm ON fm.fund_id = gf.fund_id
-            GROUP BY gf.gp_id
-        )
+        f"""
         SELECT
-            ROW_NUMBER() OVER (
-                ORDER BY cumulative_primary_commitment_trn_krw DESC, gp_name
-            ) AS cumulative_primary_rank,
+            rank AS cumulative_primary_rank,
             gp_id,
-            cumulative_primary_fund_count,
-            ROUND(cumulative_primary_commitment_trn_krw, 6) AS cumulative_primary_commitment_trn_krw,
-            cumulative_primary_active_fund_count_latest
-        FROM gp_amount
+            cumulative_fund_count AS cumulative_primary_fund_count,
+            cumulative_commitment_proxy_trn_krw AS cumulative_primary_commitment_trn_krw,
+            active_fund_count_latest AS cumulative_primary_active_fund_count_latest
+        FROM {table_name}
         ORDER BY cumulative_primary_rank
         """,
     )
@@ -770,8 +755,8 @@ def field_dictionary_rows() -> list[dict[str, object]]:
         },
         {
             "field_name": "cumulative_primary_commitment_proxy_krw_100mn",
-            "meaning": "Sum of each observed primary GP fund's max commitment amount, KRW 100mn",
-            "fill_rule": "Auto from FSS PEF history. Use as cumulative commitment proxy only.",
+            "meaning": "Sum of each normalized fund's maximum commitment amount, credited once to its first observed primary GP, KRW 100mn",
+            "fill_rule": "Auto from normalized FSS PEF history. Use as cumulative commitment proxy only; later GP observations are history, not extra credit.",
         },
         {
             "field_name": "verification_level",
