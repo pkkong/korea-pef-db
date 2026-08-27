@@ -14,7 +14,13 @@ import sys
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-from scripts.build_gp_ranking_datapack import DEFAULT_ALIAS_RULES, DEFAULT_DB, DEFAULT_REGISTRY, build_datapack
+from scripts.build_gp_ranking_datapack import (
+    DEFAULT_ALIAS_RULES,
+    DEFAULT_DB,
+    DEFAULT_REGISTRY,
+    build_datapack,
+    to_krw_100mn,
+)
 
 
 class GpRankingDataPackTests(unittest.TestCase):
@@ -34,7 +40,7 @@ class GpRankingDataPackTests(unittest.TestCase):
             self.assertEqual(result["ranked_gps"], 725)
             self.assertEqual(result["multi_gp_rows"], 1407)
             self.assertEqual(result["commitment_trn_krw"], 364.157751)
-            self.assertGreater(result["formula_count"], 6_000)
+            self.assertGreater(result["formula_count"], 2_900)
             self.assertFalse(result["excel_normalized"])
 
             with zipfile.ZipFile(output) as archive:
@@ -47,8 +53,15 @@ class GpRankingDataPackTests(unittest.TestCase):
             self.assertIn('name="누적 순위"', workbook)
             self.assertIn('name="복수 GP 내역"', workbook)
             self.assertIn("SUMIF('펀드별 반영'!$C$4:$C$3136", ranking)
-            self.assertIn("J4*'집계 기준'!$B$10", ledger)
+            self.assertIn("최대 총약정액 (억원)", ledger)
+            self.assertNotIn("집계 기준", ledger)
+            self.assertIn("펀드별 반영 합계 (억원)", qa)
+            self.assertIn("$O$4:$O$3136", qa)
+            self.assertIn("$M$4:$M$3136", qa)
             self.assertIn("SUM('누적 순위'!$E$4:$E$728)", qa)
+
+    def test_amounts_are_converted_to_hundred_million_won(self) -> None:
+        self.assertEqual(to_krw_100mn(25.635147), 256351.47)
 
     def test_cumulative_analytics_credits_each_listed_gp(self) -> None:
         conn = sqlite3.connect(DEFAULT_DB)

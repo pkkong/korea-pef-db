@@ -38,6 +38,7 @@ DEFAULT_REGISTRY = REPO_ROOT / "data" / "source_registry_fss_pef.csv"
 DEFAULT_ALIAS_RULES = REPO_ROOT / "data" / "gp_alias_merge_rules.csv"
 DEFAULT_OUTPUT = REPO_ROOT / "exports" / "gp_ranking_datapack_2025YE.xlsx"
 RANKING_TITLE = "2025년 말 기준 기관전용 PEF 누적 운용자산 순위 (금감원 공시 총약정액 기준)"
+KRW_100MN_PER_TRILLION = 10_000.0
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,10 @@ def number(value: object, style: str = "number") -> Cell:
 
 def formula(value: str, cached_value: object, style: str) -> Cell:
     return Cell(style=style, formula=value.lstrip("="), cached_value=cached_value)
+
+
+def to_krw_100mn(value_trn_krw: object) -> float:
+    return float(value_trn_krw or 0) * KRW_100MN_PER_TRILLION
 
 
 def sha256_file(path: Path) -> str:
@@ -103,11 +108,11 @@ STYLE_INDEX = {
     "header": 4,
     "wrap": 5,
     "number": 6,
-    "amount_mn": 7,
+    "amount_100mn": 7,
     "amount_tn": 8,
     "pct": 9,
     "formula_number": 10,
-    "formula_amount_mn": 11,
+    "formula_amount_100mn": 11,
     "formula_amount_tn": 12,
     "formula_pct": 13,
     "pass": 14,
@@ -145,11 +150,12 @@ def style_xml() -> str:
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-        '<numFmts count="4">'
+        '<numFmts count="5">'
         '<numFmt numFmtId="164" formatCode="#,##0"/>'
         '<numFmt numFmtId="165" formatCode="#,##0.0"/>'
         '<numFmt numFmtId="166" formatCode="0.000000"/>'
         '<numFmt numFmtId="167" formatCode="0.00%"/>'
+        '<numFmt numFmtId="168" formatCode="#,##0.00"/>'
         '</numFmts>'
         '<fonts count="5">'
         '<font><sz val="10"/><name val="Apple SD Gothic Neo"/></font>'
@@ -180,11 +186,11 @@ def style_xml() -> str:
         '<xf numFmtId="0" fontId="3" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="center"/></xf>'
         '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>'
         '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
-        '<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
+        '<xf numFmtId="168" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
         '<xf numFmtId="166" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
         '<xf numFmtId="167" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
         '<xf numFmtId="164" fontId="0" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1"/>'
-        '<xf numFmtId="165" fontId="0" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1"/>'
+        '<xf numFmtId="168" fontId="0" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1"/>'
         '<xf numFmtId="166" fontId="0" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1"/>'
         '<xf numFmtId="167" fontId="0" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1"/>'
         '<xf numFmtId="0" fontId="0" fillId="5" borderId="1" xfId="0" applyFill="1" applyBorder="1"/>'
@@ -540,6 +546,7 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
     period_ranking = inputs["period_ranking"]
     multi_gp_detail = inputs["multi_gp_detail"]
     total_commitment = float(inputs["total_cumulative_commitment_trn_krw"])
+    total_commitment_100mn = to_krw_100mn(total_commitment)
     assert isinstance(source, dict) and isinstance(fund_credit, list) and isinstance(ranking, list)
     raw_sheets, raw_index = build_raw_sheets(registry, raw_history)
     last_fund_credit_row = len(fund_credit) + 3
@@ -551,7 +558,7 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
         [text("2025년 말 GP 누적 운용자산 순위", "title")],
         [text(RANKING_TITLE, "subtitle")],
         [text(f"기준일  {source['as_of_date']}  |  {source['period_label']}", "wrap")],
-        [text("기준 금액  펀드별 최대 공시 총약정액. 실제 NAV나 운용사 자체 공시 AUM이 아닙니다.", "wrap")],
+        [text("기준 금액  펀드별 최대 공시 총약정액이며, 표시 단위는 억원입니다. 실제 NAV나 운용사 자체 공시 AUM이 아닙니다.", "wrap")],
         [text("공동 GP  금감원 이력에 공동 업무집행사원으로 기재된 경우, 각 GP에 전액 반영합니다. 따라서 순위표 합계는 펀드 전체 총약정액보다 클 수 있습니다.", "wrap")],
         [text("누적 순위  웹 GP 목록과 같은 DB 기준입니다. 상세 내역은 '펀드별 반영' 시트에서 확인합니다.", "wrap")],
         [text("기간별 자료  '기간별 요약'과 '기간별 GP 순위'는 분기별 현황입니다.", "wrap")],
@@ -565,13 +572,13 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
         [text("정규화 기간"), text("2016Q2 ~ 2025Q4"), text("금감원 분기 자료")],
         [text("GP 반영"), text("금감원 기재 업무집행사원"), text("공동 GP는 각각 전액 반영")],
         [text("금액"), text("펀드별 최대 공시 총약정액"), text("FSS 공시 총약정액. 실제 NAV/AUM이 아님")],
-        [text("집계 단위"), text("KRW trillion"), text("금액 단위")],
-        [text("KRW mn per trillion"), number(1_000_000, "number"), text("원금액 환산 계수")],
+        [text("집계 단위"), text("억원"), text("기본 표시 단위")],
+        [text("1조원당 환산액"), number(KRW_100MN_PER_TRILLION, "number"), text("억원 환산 계수")],
         [text("산식"), text("GP별 SUM(펀드별 MAX(공시 총약정액))", "wrap"), text("공동 GP는 각 GP에 전액 반영")],
         [text("고유 펀드 수"), number(unique_fund_count, "number"), text("정규화된 펀드")],
         [text("GP 반영 행"), number(len(fund_credit), "number"), text("펀드×GP 행")],
         [text("누적 GP 수"), number(len(ranking), "number"), text("순위표 GP 수")],
-        [text("누적 반영액 (KRW tn)"), number(total_commitment, "amount_tn"), text("공동 GP 중복 반영 후 합계")],
+        [text("누적 반영액 (억원)"), number(total_commitment_100mn, "amount_100mn"), text("공동 GP 중복 반영 후 합계")],
         [text("복수 GP 펀드 수"), number(multi_gp_fund_count, "number"), text("2개 이상 GP가 기재된 펀드")],
     ]
 
@@ -638,18 +645,18 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
         [
             text("펀드 ID", "header"), text("펀드명", "header"), text("GP ID", "header"), text("GP", "header"),
             text("최초 기재 분기", "header"), text("최초 기재 원본", "header"), text("최초 기재 시트", "header"), text("최초 기재 행", "header"),
-            text("최대 약정액 원본", "header"), text("최대 총약정액 (조원)", "header"), text("최대 총약정액 (백만원)", "header"),
-            text("2025Q4 기재", "header"), text("기재 GP 수", "header"), text("복수 GP", "header"),
-            text("최종 기재 분기", "header"), text("반영", "header"), text("반영 기준", "header"),
+            text("최대 약정액 원본", "header"), text("최대 총약정액 (억원)", "header"), text("2025Q4 기재", "header"),
+            text("기재 GP 수", "header"), text("복수 GP", "header"), text("최종 기재 분기", "header"),
+            text("반영", "header"), text("반영 기준", "header"),
         ],
     ]
-    for row_number, item in enumerate(fund_credit, start=4):
-        amount_tn = float(item["max_commitment_trn_krw"] or 0)
+    for item in fund_credit:
+        amount_100mn = to_krw_100mn(item["max_commitment_trn_krw"])
         fund_credit_rows.append(
             [
                 number(item["fund_id"], "number"), text(item["fund_name"], "wrap"), number(item["credited_gp_id"], "number"), text(item["credited_gp_name"], "wrap"),
                 text(item["first_listed_period"]), text(item["first_listed_source_id"]), text(item["first_listed_sheet_name"], "wrap"), number(item["first_listed_row_number"], "number"),
-                text(item["max_commitment_source_id"]), number(amount_tn, "amount_tn"), formula(f"J{row_number}*'집계 기준'!$B$10", amount_tn * 1_000_000.0, "formula_amount_mn"),
+                text(item["max_commitment_source_id"]), number(amount_100mn, "amount_100mn"),
                 number(item["active_in_latest_period"], "number"), number(item["listed_gp_count"], "number"), text("Y" if item["multiple_gp_listed"] else ""),
                 text(item["last_listed_period"]), text("Y"),
                 text("금감원 기재 GP별 최대 총약정액 전액 반영", "wrap"),
@@ -661,22 +668,22 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
         [text("웹 GP 목록과 같은 순위. 공동 GP는 각 GP에 전액 반영", "subtitle")],
         [
             text("순위", "header"), text("GP ID", "header"), text("GP", "header"), text("반영 펀드 수", "header"),
-            text("DB 금액 (조원)", "header"), text("펀드별 반영 합계 (조원)", "header"), text("차이", "header"),
+            text("DB 금액 (억원)", "header"), text("펀드별 반영 합계 (억원)", "header"), text("차이 (억원)", "header"),
             text("2025Q4 기재 펀드 수", "header"), text("비중", "header"), text("기준 분기", "header"), text("집계 기준", "header"),
         ],
     ]
     for row_number, item in enumerate(profile_snapshot, start=4):
         gp_id = int(item["gp_id"])
-        amount_tn = float(item["cumulative_commitment_proxy_trn_krw"])
-        share = amount_tn / total_commitment if total_commitment else 0.0
+        amount_100mn = to_krw_100mn(item["cumulative_commitment_proxy_trn_krw"])
+        share = amount_100mn / total_commitment_100mn if total_commitment_100mn else 0.0
         ranking_rows.append(
             [
                 number(item["rank"], "number"),
                 number(gp_id, "number"), text(item["gp_name"], "wrap"),
                 formula(f"COUNTIF('펀드별 반영'!$C$4:$C${last_fund_credit_row},B{row_number})", int(item["cumulative_fund_count"]), "formula_number"),
-                number(amount_tn, "amount_tn"),
-                formula(f"SUMIF('펀드별 반영'!$C$4:$C${last_fund_credit_row},B{row_number},'펀드별 반영'!$J$4:$J${last_fund_credit_row})", amount_tn, "formula_amount_tn"),
-                formula(f"E{row_number}-F{row_number}", 0, "formula_amount_tn"),
+                number(amount_100mn, "amount_100mn"),
+                formula(f"SUMIF('펀드별 반영'!$C$4:$C${last_fund_credit_row},B{row_number},'펀드별 반영'!$J$4:$J${last_fund_credit_row})", amount_100mn, "formula_amount_100mn"),
+                formula(f"E{row_number}-F{row_number}", 0, "formula_amount_100mn"),
                 number(item["active_fund_count_latest"], "number"), formula(f"E{row_number}/SUM($E$4:$E${last_ranking_row})", share, "formula_pct"),
                 text(source["period_label"]), text("금감원 기재 GP별 최대 총약정액 전액 반영", "wrap"),
             ]
@@ -685,31 +692,31 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
     period_summary_rows: list[list[Cell]] = [
         [text("기간별 요약", "title")],
         [text("웹 Market 대시보드의 분기별 시장 현황", "subtitle")],
-        [text("분기", "header"), text("기준일", "header"), text("펀드 수", "header"), text("대표 GP 수", "header"), text("총약정액 (조원)", "header")],
+        [text("분기", "header"), text("기준일", "header"), text("펀드 수", "header"), text("대표 GP 수", "header"), text("총약정액 (억원)", "header")],
     ]
     for item in period_summary:
         period_summary_rows.append(
-            [text(item["period_label"]), text(item["as_of_date"]), number(item["active_fund_count"], "number"), number(item["primary_gp_count"], "number"), number(item["commitment_trn_krw"], "amount_tn")]
+            [text(item["period_label"]), text(item["as_of_date"]), number(item["active_fund_count"], "number"), number(item["primary_gp_count"], "number"), number(to_krw_100mn(item["commitment_trn_krw"]), "amount_100mn")]
         )
 
     period_ranking_rows: list[list[Cell]] = [
         [text("기간별 GP 순위", "title")],
         [text("분기별 대표 GP 기준 현황. 최종 누적 순위와는 별도 지표", "subtitle")],
-        [text("분기", "header"), text("기준일", "header"), text("GP ID", "header"), text("GP", "header"), text("펀드 수", "header"), text("총약정액 (조원)", "header"), text("납입액 (조원)", "header")],
+        [text("분기", "header"), text("기준일", "header"), text("GP ID", "header"), text("GP", "header"), text("펀드 수", "header"), text("총약정액 (억원)", "header"), text("납입액 (억원)", "header")],
     ]
     for item in period_ranking:
         period_ranking_rows.append(
-            [text(item["period_label"]), text(item["as_of_date"]), number(item["gp_id"], "number"), text(item["gp_name"], "wrap"), number(item["active_fund_count"], "number"), number(item["commitment_aum_proxy_trn_krw"], "amount_tn"), number(item["paid_in_trn_krw"], "amount_tn")]
+            [text(item["period_label"]), text(item["as_of_date"]), number(item["gp_id"], "number"), text(item["gp_name"], "wrap"), number(item["active_fund_count"], "number"), number(to_krw_100mn(item["commitment_aum_proxy_trn_krw"]), "amount_100mn"), number(to_krw_100mn(item["paid_in_trn_krw"]), "amount_100mn")]
         )
 
     multi_gp_rows: list[list[Cell]] = [
         [text("복수 GP 내역", "title")],
         [text("금감원 이력에 2개 이상 GP가 기재된 펀드. 각 GP 행에 최대 총약정액 전액 반영", "subtitle")],
-        [text("펀드 ID", "header"), text("펀드명", "header"), text("GP ID", "header"), text("GP", "header"), text("최초 기재 분기", "header"), text("최종 기재 분기", "header"), text("기재 GP 수", "header"), text("최대 총약정액 (조원)", "header"), text("반영 기준", "header")],
+        [text("펀드 ID", "header"), text("펀드명", "header"), text("GP ID", "header"), text("GP", "header"), text("최초 기재 분기", "header"), text("최종 기재 분기", "header"), text("기재 GP 수", "header"), text("최대 총약정액 (억원)", "header"), text("반영 기준", "header")],
     ]
     for item in multi_gp_detail:
         multi_gp_rows.append(
-            [number(item["fund_id"], "number"), text(item["fund_name"], "wrap"), number(item["credited_gp_id"], "number"), text(item["credited_gp_name"], "wrap"), text(item["first_listed_period"]), text(item["last_listed_period"]), number(item["listed_gp_count"], "number"), number(item["max_commitment_trn_krw"], "amount_tn"), text(item["ranking_treatment"], "wrap")]
+            [number(item["fund_id"], "number"), text(item["fund_name"], "wrap"), number(item["credited_gp_id"], "number"), text(item["credited_gp_name"], "wrap"), text(item["first_listed_period"]), text(item["last_listed_period"]), number(item["listed_gp_count"], "number"), number(to_krw_100mn(item["max_commitment_trn_krw"]), "amount_100mn"), text(item["ranking_treatment"], "wrap")]
         )
 
     qa_rows: list[list[Cell]] = [
@@ -718,12 +725,12 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
         [text("항목", "header"), text("DB 기준", "header"), text("엑셀 계산", "header"), text("결과", "header"), text("확인 내용", "header")],
         [text("FSS 원본 ID"), text(source["source_id"]), text(source["source_id"]), formula("IF(B4=C4,\"PASS\",\"FAIL\")", "PASS", "pass"), text("최신 원본 등록·적재")],
         [text("원본 SHA-256"), text(source["sha256"], "wrap"), text(sha256_file(REPO_ROOT / str(source["local_path"])), "wrap"), formula("IF(B5=C5,\"PASS\",\"FAIL\")", "PASS", "pass"), text("원본 파일 일치")],
-        [text("GP 반영 행"), number(len(fund_credit), "number"), formula(f"COUNTIF('펀드별 반영'!$P$4:$P${last_fund_credit_row},\"Y\")", len(fund_credit), "formula_number"), formula("IF(B6=C6,\"PASS\",\"FAIL\")", "PASS", "pass"), text("펀드×GP 반영 행 수")],
+        [text("GP 반영 행"), number(len(fund_credit), "number"), formula(f"COUNTIF('펀드별 반영'!$O$4:$O${last_fund_credit_row},\"Y\")", len(fund_credit), "formula_number"), formula("IF(B6=C6,\"PASS\",\"FAIL\")", "PASS", "pass"), text("펀드×GP 반영 행 수")],
         [text("누적 순위 GP 수"), number(len(ranking), "number"), formula(f"COUNTA('누적 순위'!$B$4:$B${last_ranking_row})", len(ranking), "formula_number"), formula("IF(B7=C7,\"PASS\",\"FAIL\")", "PASS", "pass"), text("웹 GP DB와 일치")],
-        [text("펀드별 반영 합계 (조원)"), number(total_commitment, "amount_tn"), formula(f"SUM('펀드별 반영'!$J$4:$J${last_fund_credit_row})", total_commitment, "formula_amount_tn"), formula("IF(ROUND(B8,6)=ROUND(C8,6),\"PASS\",\"FAIL\")", "PASS", "pass"), text("공동 GP 중복 반영 후 합계")],
-        [text("누적 순위 합계 (조원)"), number(total_commitment, "amount_tn"), formula(f"SUM('누적 순위'!$E$4:$E${last_ranking_row})", total_commitment, "formula_amount_tn"), formula("IF(ROUND(B9,6)=ROUND(C9,6),\"PASS\",\"FAIL\")", "PASS", "pass"), text("웹 GP DB 누적 지표")],
-        [text("DB-펀드별 반영 차이 (조원)"), number(0, "amount_tn"), formula(f"SUM('누적 순위'!$G$4:$G${last_ranking_row})", 0, "formula_amount_tn"), formula("IF(ROUND(B10,6)=ROUND(C10,6),\"PASS\",\"FAIL\")", "PASS", "pass"), text("순위와 상세 내역 대사")],
-        [text("복수 GP 반영 행"), number(len(multi_gp_detail), "number"), formula(f"COUNTIF('펀드별 반영'!$N$4:$N${last_fund_credit_row},\"Y\")", len(multi_gp_detail), "formula_number"), formula("IF(B11=C11,\"PASS\",\"FAIL\")", "PASS", "pass"), text("공동 GP 전액 반영 대상")],
+        [text("펀드별 반영 합계 (억원)"), number(total_commitment_100mn, "amount_100mn"), formula(f"SUM('펀드별 반영'!$J$4:$J${last_fund_credit_row})", total_commitment_100mn, "formula_amount_100mn"), formula("IF(ROUND(B8,2)=ROUND(C8,2),\"PASS\",\"FAIL\")", "PASS", "pass"), text("공동 GP 중복 반영 후 합계")],
+        [text("누적 순위 합계 (억원)"), number(total_commitment_100mn, "amount_100mn"), formula(f"SUM('누적 순위'!$E$4:$E${last_ranking_row})", total_commitment_100mn, "formula_amount_100mn"), formula("IF(ROUND(B9,2)=ROUND(C9,2),\"PASS\",\"FAIL\")", "PASS", "pass"), text("웹 GP DB 누적 지표")],
+        [text("DB-펀드별 반영 차이 (억원)"), number(0, "amount_100mn"), formula(f"SUM('누적 순위'!$G$4:$G${last_ranking_row})", 0, "formula_amount_100mn"), formula("IF(ROUND(B10,2)=ROUND(C10,2),\"PASS\",\"FAIL\")", "PASS", "pass"), text("순위와 상세 내역 대사")],
+        [text("복수 GP 반영 행"), number(len(multi_gp_detail), "number"), formula(f"COUNTIF('펀드별 반영'!$M$4:$M${last_fund_credit_row},\"Y\")", len(multi_gp_detail), "formula_number"), formula("IF(B11=C11,\"PASS\",\"FAIL\")", "PASS", "pass"), text("공동 GP 전액 반영 대상")],
     ]
     raw_index_rows = [
         [text("원본 시트 목록", "title")],
@@ -739,7 +746,7 @@ def workbook_sheets(inputs: dict[str, object], raw_history: str) -> list[Sheet]:
         Sheet("집계 기준", assumptions_rows, [28, 40, 78], freeze_rows=2, auto_filter=f"A2:C{len(assumptions_rows)}", merges=["A1:C1"]),
         Sheet("원천 목록", manifest_rows, [21, 12, 13, 22, 12, 42, 70, 70, 52, 68, 18, 24], freeze_rows=3, auto_filter=f"A3:L{len(manifest_rows)}", merges=["A1:L1", "A2:L2"]),
         Sheet("GP 명칭 정리", mapping_rows, [24, 34, 34, 18, 34, 28, 70, 70], freeze_rows=3, auto_filter=f"A3:H{len(mapping_rows)}", merges=["A1:H1", "A2:H2"]),
-        Sheet("펀드별 반영", fund_credit_rows, [12, 42, 12, 34, 15, 22, 18, 12, 22, 25, 25, 18, 18, 14, 16, 12, 52], freeze_rows=3, auto_filter=f"A3:Q{len(fund_credit_rows)}", merges=["A1:Q1", "A2:Q2"]),
+        Sheet("펀드별 반영", fund_credit_rows, [12, 42, 12, 34, 15, 22, 18, 12, 22, 25, 18, 18, 14, 16, 12, 52], freeze_rows=3, auto_filter=f"A3:P{len(fund_credit_rows)}", merges=["A1:P1", "A2:P2"]),
         Sheet("누적 순위", ranking_rows, [16, 12, 34, 16, 27, 27, 18, 22, 16, 14, 58], freeze_rows=3, auto_filter=f"A3:K{len(ranking_rows)}", merges=["A1:K1", "A2:K2"]),
         Sheet("기간별 요약", period_summary_rows, [14, 16, 18, 18, 28], freeze_rows=3, auto_filter=f"A3:E{len(period_summary_rows)}", merges=["A1:E1", "A2:E2"]),
         Sheet("기간별 GP 순위", period_ranking_rows, [14, 16, 12, 34, 18, 28, 24], freeze_rows=3, auto_filter=f"A3:G{len(period_ranking_rows)}", merges=["A1:G1", "A2:G2"]),
@@ -763,7 +770,8 @@ def validate_datapack(path: Path, expected_sheets: list[str], expected_metrics: 
         if missing_sheets:
             raise RuntimeError(f"Generated workbook is missing sheets: {', '.join(missing_sheets)}")
         all_sheets = [name for name in names if name.startswith("xl/worksheets/sheet") and name.endswith(".xml")]
-        formulas = b"".join(archive.read(name) for name in all_sheets).count(b"<f>")
+        # LibreOffice may add attributes to formula tags while normalizing.
+        formulas = sum(archive.read(name).count(b"<f") for name in all_sheets)
         if formulas < int(expected_metrics["formula_count_min"]):
             raise RuntimeError(f"Generated workbook has too few formulas: {formulas}")
     return {"file_size_bytes": path.stat().st_size, "sheet_count": len(all_sheets), "formula_count": formulas}
@@ -840,7 +848,7 @@ def build_datapack(
         "원본 시트 목록",
         f"Raw {period_label}",
     ]
-    expected_formula_count = len(inputs["fund_credit"]) + len(inputs["profile_snapshot"]) * 4 + 10
+    expected_formula_count = len(inputs["profile_snapshot"]) * 4 + 10
     raw_validation = validate_datapack(
         output_path,
         expected_sheets,
@@ -856,7 +864,7 @@ def build_datapack(
     validation = validate_datapack(
         output_path,
         expected_sheets,
-        {"formula_count_min": 0 if excel_compatible else expected_formula_count},
+        {"formula_count_min": expected_formula_count},
     )
     return {
         "output": str(output_path),
