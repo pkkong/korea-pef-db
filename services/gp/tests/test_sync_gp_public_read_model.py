@@ -20,13 +20,14 @@ SPEC.loader.exec_module(MODULE)
 
 
 class SyncGPPublicReadModelTests(unittest.TestCase):
-    def test_prepare_payload_keeps_source_metadata_and_both_pages(self) -> None:
+    def test_prepare_payload_keeps_source_metadata_and_profile_pages(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             site_dir = root / "site"
             site_dir.mkdir()
-            for page_name in MODULE.PAGE_PATHS:
+            for page_name in MODULE.CORE_PAGE_PATHS:
                 (site_dir / page_name).write_text(f"<!doctype html><main>2025Q4 {page_name}</main>", encoding="utf-8")
+            (site_dir / "gp-2.html").write_text("<!doctype html><main>2025Q4 GP profile</main>", encoding="utf-8")
 
             originals = {
                 "repo_root": MODULE.REPO_ROOT,
@@ -72,7 +73,10 @@ class SyncGPPublicReadModelTests(unittest.TestCase):
             f"fss-2025q4-{'a' * 12}-{expected_content_hash}",
         )
         self.assertEqual(snapshot["primary_gp_count"], 397)
-        self.assertEqual([page["page_path"] for page in payload["pages"]], ["market.html", "gps.html"])
+        self.assertEqual(
+            [page["page_path"] for page in payload["pages"]],
+            ["market.html", "gps.html", "gp-2.html"],
+        )
 
     def test_snapshot_id_changes_when_public_page_content_changes(self) -> None:
         first = MODULE._snapshot_content_sha256(

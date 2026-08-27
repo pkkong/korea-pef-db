@@ -161,7 +161,7 @@ GP 금감원 통계 발행 workflow 실행:
 GitHub Actions → Deploy GP FSS market → Run workflow
 ```
 
-이 workflow는 FSS raw source 재수집, SQLite 재생성, 승인된 GP alias merge, 최신 분기/집계/순위 readiness 검증, canonical GP profile evidence 적용·대사를 거친 뒤 GP static backup과 Supabase public snapshot을 함께 갱신한다. Evidence CSV의 숫자 `source_gp_id`는 재수집마다 달라질 수 있으므로 표준명 정규화 기준으로만 연결한다. Alias·profile evidence 문제는 warning으로 기록하고 후속 정리 대상으로 둔다. 이 품질 경고만으로 통계 snapshot 배포를 막지 않는다. Vercel 공식 앱은 `/market.html`과 `/gps.html`에서 published Supabase snapshot을 읽어 공개한다. 뉴스레터 archive와 LP 산출물은 건드리지 않는다. FSS-only GP는 디렉터리 행으로만 공개하며 근거 없는 기존 상세 프로필은 같이 제거한다.
+이 workflow는 FSS raw source 재수집, SQLite 재생성, 승인된 GP alias merge, 최신 분기/집계/순위 readiness 검증, canonical GP profile evidence 적용·대사를 거친 뒤 GP static backup과 Supabase public snapshot을 함께 갱신한다. Evidence CSV의 숫자 `source_gp_id`는 재수집마다 달라질 수 있으므로 표준명 정규화 기준으로만 연결한다. Alias·profile evidence 문제는 warning으로 기록하고 후속 정리 대상으로 둔다. 이 품질 경고만으로 통계 snapshot 배포를 막지 않는다. Vercel 공식 앱은 `/market.html`, `/gps.html`, source-backed GP의 `/gp-<id>.html`에서 published Supabase snapshot을 읽어 공개한다. GP profile은 금감원 확인 펀드의 전체 이력을 함께 표시한다. 뉴스레터 archive와 LP 산출물은 건드리지 않는다. FSS-only GP는 디렉터리 행으로만 공개하며 근거 없는 기존 상세 프로필은 같이 제거한다.
 
 뉴스레터 Supabase migration 적용:
 

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -33,7 +34,18 @@ from scripts.check_fss_statistics_ready import (  # noqa: E402
 
 DEFAULT_SITE_DIR = REPO_ROOT / "services" / "newsletter" / "deploy" / "site"
 DEFAULT_PAYLOAD_OUT = REPO_ROOT / "exports" / "gp" / "gp_public_snapshot.json"
-PAGE_PATHS = ("market.html", "gps.html")
+CORE_PAGE_PATHS = ("market.html", "gps.html")
+
+
+def public_page_paths(site_dir: Path) -> tuple[str, ...]:
+    detail_pages = tuple(
+        sorted(
+            path.name
+            for path in site_dir.glob("gp-*.html")
+            if re.fullmatch(r"gp-[0-9]+\.html", path.name)
+        )
+    )
+    return CORE_PAGE_PATHS + detail_pages
 RETRIABLE_HTTP_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
 
 
@@ -130,7 +142,7 @@ def prepare_payload(
     source_sha256 = sha256_file(raw_path)
 
     page_bodies: list[tuple[str, str, str]] = []
-    for page_path in PAGE_PATHS:
+    for page_path in public_page_paths(site_dir):
         path = site_dir / page_path
         if not path.is_file():
             raise GPReadModelError(f"Missing GP public page: {path}")

@@ -408,6 +408,11 @@ def check_generated_gp_contract(require_data: bool = False) -> list[str]:
             violations.append(f"{detail_path.name}:kpef-product-header")
         if gp_service_tabs(html) != ["MARKET", "GP"]:
             violations.append(f"{detail_path.name}:gp-service-tabs")
+    if detail_paths and not any(
+        "금감원 확인 펀드" in path.read_text(encoding="utf-8")
+        for path in detail_paths
+    ):
+        violations.append("gp-detail-pages:missing_fss_fund_list")
 
     if violations:
         raise CheckFailure(f"Forbidden generated GP wording/markup: {', '.join(violations)}")

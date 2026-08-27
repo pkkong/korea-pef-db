@@ -302,13 +302,16 @@ def test_vercel_app_serves_gp_pages_at_canonical_routes() -> None:
         client = web_app.app.test_client()
         market = client.get("/market.html?refresh=1")
         directory = client.get("/gps.html?refresh=1")
+        profile = client.get("/gp-2.html?refresh=1")
 
         assert market.status_code == 200
         assert directory.status_code == 200
+        assert profile.status_code == 200
         assert market.headers["X-GP-Data-Source"] == "supabase-public-snapshot"
         assert market.headers["X-GP-Snapshot-Id"] == "fss-2025q4-test"
         assert "market.html 2025Q4" in market.get_data(as_text=True)
         assert "gps.html 2025Q4" in directory.get_data(as_text=True)
+        assert "gp-2.html 2025Q4" in profile.get_data(as_text=True)
         assert 'href="https://pkkong.github.io/kpef-newsletter/lp-notices.html"' in market.get_data(as_text=True)
     finally:
         web_app.fetch_active_gp_page = old_fetch

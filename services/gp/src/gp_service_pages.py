@@ -21,7 +21,6 @@ PROFILE_REQUIRED_TABLES = ("gp_profile", "gp_house")
 NEWS_REQUIRED_TABLES = ("news_entity_link", "news_document")
 TOP_GP_PAGE_LIMIT = 120
 PROFILE_NEWS_LIMIT = 12
-PROFILE_FUND_LIMIT = 10
 PROFILE_LP_SIGNAL_LIMIT = 8
 PROFILE_DEAL_SIGNAL_LIMIT = 8
 DEAL_TAG_HINTS = {
@@ -345,6 +344,9 @@ def _read_gp_funds(conn: sqlite3.Connection) -> dict[str, list[dict[str, object]
             fm.fund_type_master,
             fm.established_date,
             fm.lifecycle_status,
+            fm.active_in_latest_period,
+            fm.first_seen_period,
+            fm.last_seen_period,
             fm.latest_commitment_trn_krw,
             fm.max_commitment_trn_krw,
             fm.latest_source_url,
@@ -362,11 +364,10 @@ def _read_gp_funds(conn: sqlite3.Connection) -> dict[str, list[dict[str, object]
                 ';' || p.standard_gp_name || ';'
             ) > 0
           )
-        WHERE fm.active_in_latest_period = 1
-          AND p.source_gp_id IS NOT NULL
+        WHERE p.source_gp_id IS NOT NULL
         ORDER BY
             p.source_gp_id,
-            COALESCE(fm.latest_commitment_trn_krw, fm.max_commitment_trn_krw, 0) DESC,
+            COALESCE(fm.max_commitment_trn_krw, fm.latest_commitment_trn_krw, 0) DESC,
             fm.fund_name
         """
     ).fetchall()
@@ -1160,7 +1161,8 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
     ][:PROFILE_NEWS_LIMIT]
     news_rows = _render_news_timeline(news_items)
     deal_rows = _render_news_timeline(deal_items, empty_label="딜 관련 뉴스가 없습니다.")
-    fund_rows = _render_fund_rows(gp.get("funds", [])[:PROFILE_FUND_LIMIT])
+    fund_rows = _render_fund_rows(list(gp.get("funds", [])))
+    fund_count = len(gp.get("funds", []))
     lp_signal_rows = _render_lp_signal_rows(gp.get("lp_signals", [])[:PROFILE_LP_SIGNAL_LIMIT])
     peer_rows = _render_peer_links(gp, ranked_gps)
     profile_rows = _render_profile_facts(gp, homepage_link)
@@ -1227,7 +1229,10 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
 
     <section class="gp-detail-grid gp-detail-lower">
       <article class="gp-panel">
-        <h2>펀드 이력</h2>
+        <div class="gp-panel-heading">
+          <h2>금감원 확인 펀드</h2>
+          <span>{fund_count:,}개</span>
+        </div>
         {fund_rows}
       </article>
       <article class="gp-panel">
@@ -1320,24 +1325,26 @@ def _render_signal_bar(gp: dict[str, object]) -> str:
 
 def _render_fund_rows(fund_rows: list[dict[str, object]]) -> str:
     if not fund_rows:
-        return '<p class="gp-empty-note">최신 기준 운용 중 펀드가 공개 자료에서 확인되지 않았습니다.</p>'
+        return '<p class="gp-empty-note">금감원 공개 자료에서 연결된 펀드가 확인되지 않았습니다.</p>'
     rows = []
     for fund in fund_rows:
         name = _clean(fund.get("fund_name")) or "펀드"
         url = _safe_url(fund.get("latest_source_url"))
         title = f'<a href="{_e(url)}" target="_blank" rel="noreferrer">{_e(name)}</a>' if url else _e(name)
-        amount = _format_trn_krw_as_100mn(fund.get("latest_commitment_trn_krw") or fund.get("max_commitment_trn_krw"))
+        amount = _format_trn_krw_as_100mn(fund.get("max_commitment_trn_krw") or fund.get("latest_commitment_trn_krw"))
+        active_label = "운용 중" if _as_bool(fund.get("active_in_latest_period")) else "과거 확인"
+        period_label = _clean(fund.get("last_seen_period"))
         meta = _join_values(
             [
-                _public_code_label(fund.get("fund_type_master")),
-                _fund_status_label(fund.get("lifecycle_status")),
-                _short_date(fund.get("established_date")) if fund.get("established_date") else "",
+                active_label,
+                _short_date(fund.get("established_date")) if fund.get("established_date") else "설정일 미확인",
+                f"최근 확인 {period_label}" if period_label else "",
             ]
         )
         rows.append(
             f"""          <article class="gp-fund-row">
             <h3>{title}</h3>
-            <span>{_e(amount)}</span>
+            <span><small>최대 총약정액</small>{_e(amount)}</span>
             <p>{_e(meta or "공개 운용 현황 기준")}</p>
           </article>"""
         )
@@ -2494,6 +2501,20 @@ def _base_styles() -> str:
       font-size: 17px;
       line-height: 1.35;
     }
+    .gp-panel-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .gp-panel-heading h2 { margin-bottom: 0; }
+    .gp-panel-heading > span {
+      flex: 0 0 auto;
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 760;
+    }
     .gp-disclaimer p {
       margin: 0;
       color: var(--secondary);
@@ -2641,6 +2662,13 @@ def _base_styles() -> str:
       font-size: 11.5px;
       font-weight: 850;
       line-height: 1.4;
+    }
+    .gp-fund-row span small {
+      display: block;
+      margin-bottom: 1px;
+      color: var(--tertiary);
+      font-size: 10.5px;
+      font-weight: 650;
     }
     .gp-fund-row p {
       margin: 0;

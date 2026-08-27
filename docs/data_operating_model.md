@@ -108,12 +108,16 @@ FSS GP는 raw workbook, SQLite 분석 결과, 정적 renderer 산출물을 차�
 Supabase에서 하나의 published snapshot으로 전환한다.
 
 - `gp_public_snapshots`: reporting period, 기준일, FSS source ID/SHA-256, 핵심 수치, publish status를 저장한다. Snapshot ID는 FSS 원본 SHA와 검증된 두 public page의 content SHA를 함께 반영하므로, 같은 분기라도 집계 또는 화면 결과가 바뀌면 새 snapshot을 발행한다.
-- `gp_public_pages`: 하나의 snapshot에 속한 `market.html`, `gps.html` public artifact와 content SHA-256을 저장한다.
-- `publish_gp_public_snapshot(snapshot_id)`: 두 artifact가 모두 존재할 때만 이전 published snapshot을 retire하고 새 snapshot을 publish한다.
+- `gp_public_pages`: 하나의 snapshot에 속한 `market.html`, `gps.html`, source-backed GP의 `gp-<id>.html` public artifact와 content SHA-256을 저장한다.
+- `publish_gp_public_snapshot(snapshot_id)`: `market.html`과 `gps.html`이 모두 존재할 때만 이전 published snapshot을 retire하고 새 snapshot을 publish한다. GP detail page는 함께 versioned 되어 Vercel의 `/gp-<id>.html` 경로에서 읽는다.
 - Vercel은 anon key로 published snapshot만 읽고, HTML content SHA-256을 다시 확인한 뒤 응답한다. Supabase 장애 때에는 같은 serverless instance의 마지막 정상 snapshot만 짧게 유지하고, GitHub Pages HTML을 runtime fallback으로 사용하지 않는다.
 
 이 모델은 HTML을 직접 수정하는 저장소가 아니다. GP renderer가 검증된 FSS public
 view를 HTML로 만든 뒤, 검증된 artifact를 versioned read model로 발행하는 경로다.
+
+GP detail은 근거 있는 회사 정보와 금감원 펀드 이력을 한 화면에 함께 보여준다. 펀드 행은
+`fund_master`의 GP 연결을 기준으로 하며, 최신 운용 중 펀드뿐 아니라 과거에 확인된 펀드도
+`최대 총약정액`, 설정일, 마지막 확인 분기와 함께 보존한다.
 
 ### GP profile evidence binding
 

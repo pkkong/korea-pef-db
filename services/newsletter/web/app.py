@@ -123,6 +123,11 @@ def gp_directory():
     return gp_public_page("gps.html")
 
 
+@app.get("/gp-<int:gp_id>.html")
+def gp_profile(gp_id: int):
+    return gp_public_page(f"gp-{gp_id}.html")
+
+
 @app.get("/downloads/gp-ranking-datapack-2025ye.xlsx")
 def gp_ranking_datapack_download():
     if not GP_RANKING_DATAPACK_PATH.is_file():
