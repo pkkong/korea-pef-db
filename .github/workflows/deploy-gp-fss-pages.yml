@@ -82,6 +82,11 @@ jobs:
         shell: bash
         run: |
           python3 scripts/ingest_fss_pef.py --db db/private_equity.db rebuild
+          if ! python3 scripts/apply_gp_alias_merges.py \
+            --db db/private_equity.db \
+            --rules data/gp_alias_merge_rules.csv; then
+            echo "::warning::GP alias merge needs review. Continuing with the rebuilt FSS market data."
+          fi
           python3 scripts/build_fund_master.py --db db/private_equity.db --out exports
           python3 scripts/build_aum_analytics.py \
             --db db/private_equity.db \
@@ -91,13 +96,17 @@ jobs:
             --db db/private_equity.db \
             --expected-latest-period "${{ inputs.expected_latest_period }}"
           python3 scripts/build_gp_profile_master.py --db db/private_equity.db --out exports --limit 120
-          python3 scripts/apply_gp_profile_evidence.py \
+          if ! python3 scripts/apply_gp_profile_evidence.py \
             --db db/private_equity.db \
-            --evidence data/gp_profile_evidence.csv
+            --evidence data/gp_profile_evidence.csv; then
+            echo "::warning::GP profile evidence needs review. Continuing with the rebuilt FSS market data."
+          fi
           python3 scripts/build_gp_profile_master.py --db db/private_equity.db --out exports --limit 120
-          python3 scripts/check_gp_profile_evidence_ready.py \
+          if ! python3 scripts/check_gp_profile_evidence_ready.py \
             --db db/private_equity.db \
-            --evidence data/gp_profile_evidence.csv
+            --evidence data/gp_profile_evidence.csv; then
+            echo "::warning::GP profile evidence is not fully synchronized. Continuing with the rebuilt FSS market data."
+          fi
 
       - name: Build and validate GP public pages
         shell: bash

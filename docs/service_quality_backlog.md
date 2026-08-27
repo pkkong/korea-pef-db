@@ -73,6 +73,7 @@
 - 상위 120개 GP부터 홈페이지, 대표자, 법인명, 회사 설명, 출처를 보강한다.
 - 공개 화면에 enum, proxy, source/evidence 영문 라벨이 나오지 않게 생성 HTML 회귀 검사를 둔다.
 - FSS 수집 내부 번호를 외부 GP identity로 사용하지 않는다. profile evidence와 공개 URL이 장기적으로 안정된 GP canonical ID를 필요로 하면 `fss_gp_<source_gp_id>`에서 분리하는 migration을 별도 설계한다.
+- GP alias·프로필 evidence 검증은 오류를 발견해 수정할 운영 신호다. 원본 통계가 정상인 경우 이 품질 경고만으로 public snapshot 배포를 막지 않는다.
 
 ## 보류: PEF Wiki
 

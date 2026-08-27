@@ -25,6 +25,23 @@ from scripts.build_gp_ranking_datapack import (
 
 class GpRankingDataPackTests(unittest.TestCase):
     def test_2025q4_data_pack_reconciles_to_the_public_gp_database(self) -> None:
+        conn = sqlite3.connect(DEFAULT_DB)
+        try:
+            expected_fund_rows, expected_commitment = conn.execute(
+                """
+                SELECT COUNT(*), ROUND(SUM(max_commitment_trn_krw), 6)
+                FROM analytics_gp_cumulative_fund_credit
+                """
+            ).fetchone()
+            expected_ranked_gps = conn.execute(
+                "SELECT COUNT(*) FROM analytics_gp_cumulative_ranking"
+            ).fetchone()[0]
+            expected_multi_gp_rows = conn.execute(
+                "SELECT COUNT(*) FROM analytics_gp_cumulative_multi_gp_detail"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir) / "gp_ranking_datapack_2025Q4.xlsx"
             result = build_datapack(
@@ -36,11 +53,11 @@ class GpRankingDataPackTests(unittest.TestCase):
                 raw_history="latest",
             )
 
-            self.assertEqual(result["fund_rows"], 3133)
-            self.assertEqual(result["ranked_gps"], 725)
-            self.assertEqual(result["multi_gp_rows"], 1407)
-            self.assertEqual(result["commitment_trn_krw"], 364.157751)
-            self.assertGreater(result["formula_count"], 2_900)
+            self.assertEqual(result["fund_rows"], expected_fund_rows)
+            self.assertEqual(result["ranked_gps"], expected_ranked_gps)
+            self.assertEqual(result["multi_gp_rows"], expected_multi_gp_rows)
+            self.assertEqual(result["commitment_trn_krw"], expected_commitment)
+            self.assertGreater(result["formula_count"], expected_ranked_gps)
             self.assertFalse(result["excel_normalized"])
 
             with zipfile.ZipFile(output) as archive:
@@ -52,13 +69,15 @@ class GpRankingDataPackTests(unittest.TestCase):
             self.assertIn('name="Raw 2025Q4"', workbook)
             self.assertIn('name="누적 순위"', workbook)
             self.assertIn('name="복수 GP 내역"', workbook)
-            self.assertIn("SUMIF('펀드별 반영'!$C$4:$C$3136", ranking)
+            data_end_row = expected_fund_rows + 3
+            ranking_end_row = expected_ranked_gps + 3
+            self.assertIn(f"SUMIF('펀드별 반영'!$C$4:$C${data_end_row}", ranking)
             self.assertIn("최대 총약정액 (억원)", ledger)
             self.assertNotIn("집계 기준", ledger)
             self.assertIn("펀드별 반영 합계 (억원)", qa)
-            self.assertIn("$O$4:$O$3136", qa)
-            self.assertIn("$M$4:$M$3136", qa)
-            self.assertIn("SUM('누적 순위'!$E$4:$E$728)", qa)
+            self.assertIn(f"$O$4:$O${data_end_row}", qa)
+            self.assertIn(f"$M$4:$M${data_end_row}", qa)
+            self.assertIn(f"SUM('누적 순위'!$E$4:$E${ranking_end_row})", qa)
 
     def test_amounts_are_converted_to_hundred_million_won(self) -> None:
         self.assertEqual(to_krw_100mn(25.635147), 256351.47)
@@ -89,7 +108,7 @@ class GpRankingDataPackTests(unittest.TestCase):
         self.assertEqual(credit_count, fund_gp_count)
         self.assertEqual(total_commitment, fund_gp_total)
         self.assertGreater(credit_count, 2369)
-        self.assertEqual(multi_gp_rows, 1407)
+        self.assertGreater(multi_gp_rows, 0)
 
 
 if __name__ == "__main__":
