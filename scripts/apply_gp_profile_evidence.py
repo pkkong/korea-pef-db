@@ -20,6 +20,7 @@ from build_gp_profile_master import (
     DEFAULT_DB,
     ensure_tables,
 )
+from ingest_fss_pef import normalize_name
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -85,37 +86,44 @@ def read_evidence(path: Path) -> list[dict[str, str]]:
 
 
 def resolve_gp(conn: sqlite3.Connection, row: dict[str, str]) -> tuple[int, str, str]:
-    raw_id = row.get("source_gp_id", "")
-    if raw_id:
-        gp_row = conn.execute(
-            """
-            SELECT source_gp_id, gp_profile_id, standard_gp_name
-            FROM gp_profile
-            WHERE source_gp_id = ?
-            """,
-            (int(raw_id),),
-        ).fetchone()
-    else:
-        gp_row = conn.execute(
-            """
-            SELECT source_gp_id, gp_profile_id, standard_gp_name
-            FROM gp_profile
-            WHERE standard_gp_name = ?
-            """,
-            (row.get("standard_gp_name", ""),),
-        ).fetchone()
-    if gp_row is None:
-        raise ValueError(f"Cannot resolve GP evidence row: {row}")
+    standard_name = row.get("standard_gp_name", "")
+    standard_name_norm = normalize_name(standard_name)
+    gp_rows = conn.execute(
+        """
+        SELECT source_gp_id, gp_profile_id, standard_gp_name
+        FROM gp_profile
+        WHERE gp_name_norm = ?
+        """,
+        (standard_name_norm,),
+    ).fetchall()
+    if not gp_rows:
+        raise ValueError(
+            "Cannot resolve GP evidence by standard_gp_name. "
+            "source_gp_id is an ingestion-local value and must not be used as a stable key: "
+            f"{row}"
+        )
+    if len(gp_rows) != 1:
+        candidates = ", ".join(
+            f"{candidate[0]}:{candidate[2]}" for candidate in gp_rows
+        )
+        raise ValueError(
+            "Ambiguous GP evidence binding by standard_gp_name. "
+            f"standard_gp_name={standard_name!r} candidates={candidates}"
+        )
+    gp_row = gp_rows[0]
     return int(gp_row[0]), str(gp_row[1]), str(gp_row[2])
 
 
 def validate_row(row: dict[str, str]) -> None:
+    standard_gp_name = row.get("standard_gp_name", "")
     field_name = row.get("field_name", "")
     field_value = row.get("field_value", "")
     source_url = row.get("source_url", "")
     source_grade = row.get("source_grade", "")
     if not field_name:
         raise ValueError(f"Missing field_name: {row}")
+    if not standard_gp_name:
+        raise ValueError(f"Missing standard_gp_name: {row}")
     if field_name not in ALLOWED_PROFILE_FIELDS:
         raise ValueError(f"Unsupported field_name={field_name}: {row}")
     if not field_value:
@@ -309,28 +317,16 @@ def status_for_gp(rows: list[dict[str, str]]) -> tuple[str, str]:
 
 def clear_existing_manual_data(
     conn: sqlite3.Connection,
-    gp_ids: list[int],
     applied_at: str,
 ) -> None:
-    if not gp_ids:
-        return
-    placeholders = ",".join("?" for _ in gp_ids)
     reset_fields = ", ".join(f"{field} = NULL" for field in sorted(ALLOWED_PROFILE_FIELDS))
     conn.execute(
-        f"""
+        """
         DELETE FROM gp_profile_source
         WHERE source_evidence_id LIKE 'manual_%'
-          AND source_gp_id IN ({placeholders})
-        """,
-        gp_ids,
+        """
     )
-    conn.execute(
-        f"""
-        DELETE FROM gp_identifier
-        WHERE source_gp_id IN ({placeholders})
-        """,
-        gp_ids,
-    )
+    conn.execute("DELETE FROM gp_identifier")
     conn.execute(
         f"""
         UPDATE gp_profile
@@ -341,9 +337,8 @@ def clear_existing_manual_data(
             primary_source_url = NULL,
             source_note = NULL,
             updated_at = ?
-        WHERE source_gp_id IN ({placeholders})
         """,
-        (applied_at, *gp_ids),
+        (applied_at,),
     )
 
 
@@ -365,9 +360,8 @@ def apply(db_path: Path, evidence_path: Path) -> dict[str, int]:
             gp_id, gp_profile_id, standard_gp_name = resolve_gp(conn, row)
             resolved_rows.append((gp_id, gp_profile_id, standard_gp_name, row))
 
-        touched_gp_ids = sorted({gp_id for gp_id, _, _, _ in resolved_rows})
         validate_no_conflicting_values(resolved_rows)
-        clear_existing_manual_data(conn, touched_gp_ids, applied_at)
+        clear_existing_manual_data(conn, applied_at)
 
         for gp_id, gp_profile_id, standard_gp_name, row in resolved_rows:
             if row.get("skip", "").upper() in {"1", "Y", "YES", "TRUE"}:

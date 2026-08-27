@@ -115,6 +115,21 @@ Supabase에서 하나의 published snapshot으로 전환한다.
 이 모델은 HTML을 직접 수정하는 저장소가 아니다. GP renderer가 검증된 FSS public
 view를 HTML로 만든 뒤, 검증된 artifact를 versioned read model로 발행하는 경로다.
 
+### GP profile evidence binding
+
+`data/gp_profile_evidence.csv`는 홈페이지, 대표자, 법인명처럼 금감원 원천만으로 채울 수 없는
+GP 프로필 필드의 canonical source다. CSV의 `source_gp_id`는 수집 실행마다 달라질 수 있는
+ingestion-local 번호이므로 evidence binding key가 아니다. 적용과 재빌드 모두 `standard_gp_name`을
+정규화한 `gp_name_norm`으로 정확히 한 GP에 연결한다. 이름이 없거나 중복되면 발행을 중단한다.
+
+- `scripts/apply_gp_profile_evidence.py`는 FSS GP profile master를 만든 뒤 canonical evidence를
+  적용하고, 기존 manual evidence를 CSV 기준으로 완전히 동기화한다.
+- `scripts/check_gp_profile_evidence_ready.py`는 활성 CSV 행과 DB의 `manual_*` source가 일치하고,
+  source-backed profile이 `FSS_NAME_ONLY`로 남지 않았는지를 확인한다.
+- `Deploy GP FSS market`은 `FSS ingest → market analytics → GP master → evidence apply → GP master
+  export → evidence readiness → public snapshot` 순서를 지켜야 한다. raw FSS 재수집만으로 source-backed
+  profile 필드가 사라지거나 다른 GP에 옮겨가면 안 된다.
+
 ## GP ranking audit data pack
 
 외부 배포 또는 투자자 검토용 GP 순위는 공개 Market HTML만으로 근거를 대신하지 않는다.
@@ -156,4 +171,5 @@ python3 scripts/build_site_bundle.py --services wiki --date YYYY-MM-DD
 - `services/newsletter/src/newsletter_public_status.py`는 GitHub Pages mirror, Supabase sync, Vercel health, watchdog freshness 판단을 한 구현으로 묶는다.
 - `scripts/check_public_frontend.py`는 공개 화면의 내부 용어 유출과 LP/GP table-like directory 구조를 확인한다.
 - `services/gp/src/sync_gp_public_read_model.py`는 verified GP artifact를 Supabase snapshot으로 발행한다. 두 GP 페이지와 source hash가 모두 맞지 않으면 Vercel에 새 데이터를 공개하지 않는다.
+- `scripts/check_gp_profile_evidence_ready.py`는 GP profile evidence가 현재 FSS rebuilt DB와 표준명 기준으로 일치하는지 검사한다. 이 검사가 통과하기 전에는 GP snapshot을 발행하지 않는다.
 - LP Notice는 계속 `사업 1개 = 공개 카드 1개`를 기준으로 삼고, 후보 source와 stale deadline은 public view/export 단계에서 제거한다.

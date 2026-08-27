@@ -161,7 +161,7 @@ GP 금감원 통계 발행 workflow 실행:
 GitHub Actions → Deploy GP FSS market → Run workflow
 ```
 
-이 workflow는 FSS raw source 재수집, SQLite 재생성, 최신 분기/집계/순위 readiness 검증 뒤에 GP static backup과 Supabase public snapshot을 함께 갱신한다. Vercel 공식 앱은 `/market.html`과 `/gps.html`에서 published Supabase snapshot을 읽어 공개한다. 뉴스레터 archive와 LP 산출물은 건드리지 않는다. FSS-only GP는 디렉터리 행으로만 공개하며 근거 없는 기존 상세 프로필은 같이 제거한다.
+이 workflow는 FSS raw source 재수집, SQLite 재생성, 최신 분기/집계/순위 readiness 검증, canonical GP profile evidence 적용·대사를 거친 뒤 GP static backup과 Supabase public snapshot을 함께 갱신한다. Evidence CSV의 숫자 `source_gp_id`는 재수집마다 달라질 수 있으므로 표준명 정규화 기준으로만 연결한다. Vercel 공식 앱은 `/market.html`과 `/gps.html`에서 published Supabase snapshot을 읽어 공개한다. 뉴스레터 archive와 LP 산출물은 건드리지 않는다. FSS-only GP는 디렉터리 행으로만 공개하며 근거 없는 기존 상세 프로필은 같이 제거한다.
 
 뉴스레터 Supabase migration 적용:
 
@@ -232,6 +232,7 @@ curl -fsS "https://kpef-newsletter.vercel.app/health.json?refresh=1"
 - 2026-08-21 FSS 통계 갱신 검증: 공식 `2025Q4` source를 registry/raw에 추가하고 SQLite를 재생성했다. raw health는 34/34 파일 확인, 32개 `.xlsx` DB SHA 일치(legacy `.xls` 2개는 미적재 경고), FSS readiness는 `2025Q4`, 1,195 펀드, 대표 GP 397개, ranking 397개로 통과했다. 별도 GP bundle에서 `market.html`/`gps.html` 계약 검사와 Chrome 390px/1440px smoke를 통과했다. GitHub Pages `gh-pages` commit `0f7e03d`로 검증된 정적 GP source를 갱신하고 FSS-only GP 120개 상세 페이지를 제거했다. Vercel production deploy run `32486898154`는 `/market.html`과 `/gps.html`의 200 응답, source header, 2025Q4 본문을 확인했다. 이후 발행은 전용 source gate를 통과해야 한다.
 - 2026-08-25 GP Vercel direct read model 전환 완료: Supabase migration run `32845250938`, Vercel 앱 deploy run `32845667639`, GP FSS publish run `32845812052`가 모두 성공했다. 마지막 GP workflow는 FSS 재수집, source/readiness, GP static backup, Supabase versioned snapshot 발행, GitHub Pages backup, Vercel 검증을 모두 통과했다. 공개 `/market.html`과 `/gps.html`은 `X-GP-Data-Source: supabase-public-snapshot`, `X-GP-Reporting-Period: 2025Q4`, snapshot `fss-2025q4-ec864d1a2f16`을 반환한다. GitHub Pages는 GP의 backup mirror일 뿐 Vercel GP 화면의 runtime source가 아니다.
 - 2026-08-26 GP 순위 검증 데이터팩 기준 수정: Excel은 웹 GP DB와 별도 집계를 하지 않는다. `FSS raw → normalized fund/GP analytics → gp_profile → 누적 순위`가 하나의 기준이다. 최종 표는 2025Q4 단일 시점 순위가 아니라, 2016Q2~2025Q4 정규화 FSS의 `fund × 업무집행사원 GP` 관계별로 펀드 최대 공시 총약정액을 전액 반영한 누적 순위다. 공동 GP는 각 GP에 중복 반영하므로 합계는 경제적 펀드 전체 총약정액보다 클 수 있다. 모바일 공개 배포 사본은 `services/newsletter/web/downloads/gp_ranking_datapack_2025YE.xlsx`에 versioned asset으로 두고 Vercel `/downloads/gp-ranking-datapack-2025ye.xlsx`에서 attachment로 제공한다. 갱신 때는 data-pack build, Office normalization, Microsoft Excel 열기, SHA/ZIP 검증, delivery copy 교체, Vercel deploy와 공개 URL download 검증을 모두 통과해야 한다.
+- 2026-08-27 GP profile evidence binding 보강: 금감원 재수집 때 `source_gp_id`가 변하는데도 숫자 ID로 `data/gp_profile_evidence.csv`를 적용하던 결함을 수정했다. 이제 evidence는 `standard_gp_name → gp_name_norm` 기준으로 한 GP에만 연결하며, 이름 중복은 배포 차단이다. GP FSS workflow는 rebuild 뒤 evidence 770행을 재적용하고 source/profile 대사를 통과해야 한다. 최신 2025Q4 사본 검증에서 59개 GP에 근거가 적용됐고, 55개에는 공식 홈페이지가 확인됐다.
 
 ## 프로젝트 리드 종료 체크리스트
 

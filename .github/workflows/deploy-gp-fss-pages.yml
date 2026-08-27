@@ -91,6 +91,13 @@ jobs:
             --db db/private_equity.db \
             --expected-latest-period "${{ inputs.expected_latest_period }}"
           python3 scripts/build_gp_profile_master.py --db db/private_equity.db --out exports --limit 120
+          python3 scripts/apply_gp_profile_evidence.py \
+            --db db/private_equity.db \
+            --evidence data/gp_profile_evidence.csv
+          python3 scripts/build_gp_profile_master.py --db db/private_equity.db --out exports --limit 120
+          python3 scripts/check_gp_profile_evidence_ready.py \
+            --db db/private_equity.db \
+            --evidence data/gp_profile_evidence.csv
 
       - name: Build and validate GP public pages
         shell: bash

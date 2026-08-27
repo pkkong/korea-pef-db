@@ -332,11 +332,11 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE gp_profile ADD COLUMN {column} {column_type}")
 
 
-def load_existing_profiles(conn: sqlite3.Connection) -> dict[int, dict[str, object]]:
+def load_existing_profiles(conn: sqlite3.Connection) -> dict[str, dict[str, object]]:
     if not table_exists(conn, "gp_profile"):
         return {}
     rows = fetch_dicts(conn, "SELECT * FROM gp_profile")
-    return {int(row["source_gp_id"]): row for row in rows}
+    return {str(row["gp_name_norm"]): row for row in rows}
 
 
 def latest_period(conn: sqlite3.Connection) -> dict[str, object]:
@@ -532,7 +532,7 @@ def build_profile_rows(conn: sqlite3.Connection, limit: int, created_at: str) ->
     rows = []
     for base in gp_base:
         gp_id = int(base["source_gp_id"])
-        existing = existing_profiles.get(gp_id, {})
+        existing = existing_profiles.get(str(base["gp_name_norm"]), {})
         latest_rank_row = latest_ranking.get(gp_id, {})
         cumulative_row = cumulative_stats.get(gp_id, {})
 
