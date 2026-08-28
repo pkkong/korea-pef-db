@@ -13,7 +13,13 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from services.gp.src.gp_service_pages import _read_gp_funds, _render_fund_rows
+from services.gp.src.gp_service_pages import (
+    _read_gp_funds,
+    _read_gp_profiles,
+    _render_fund_rows,
+    _render_gp_detail_page,
+    _uses_profile_ui_preview,
+)
 
 
 class GpFundProfilePageTests(unittest.TestCase):
@@ -48,6 +54,25 @@ class GpFundProfilePageTests(unittest.TestCase):
         self.assertIn("엠비케이파트너스2015의1호", html)
         self.assertIn("운용 중", html)
         self.assertIn("과거 확인", html)
+
+    def test_mbk_uses_the_isolated_profile_preview(self) -> None:
+        conn = sqlite3.connect(ROOT / "db" / "private_equity.db")
+        conn.row_factory = sqlite3.Row
+        try:
+            profiles = _read_gp_profiles(conn)
+            profile = next(item for item in profiles if item["standard_gp_name"] == "엠비케이파트너스")
+            profile["funds"] = _read_gp_funds(conn)[str(profile["source_gp_id"])]
+        finally:
+            conn.close()
+
+        html = _render_gp_detail_page("2026-08-28", profile, [])
+
+        self.assertTrue(_uses_profile_ui_preview(profile))
+        self.assertFalse(_uses_profile_ui_preview({"standard_gp_name": "테스트파트너스"}))
+        self.assertIn('class="gp-shell gp-profile-preview"', html)
+        self.assertIn('data-fund-filter="active"', html)
+        self.assertIn("공동 운용 펀드는 각 GP에 함께 표시합니다.", html)
+        self.assertEqual(html.count('class="gp-profile-preview-fund-row"'), len(profile["funds"]))
 
 
 if __name__ == "__main__":

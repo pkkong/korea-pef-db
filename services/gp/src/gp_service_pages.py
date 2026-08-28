@@ -23,6 +23,9 @@ TOP_GP_PAGE_LIMIT = 120
 PROFILE_NEWS_LIMIT = 12
 PROFILE_LP_SIGNAL_LIMIT = 8
 PROFILE_DEAL_SIGNAL_LIMIT = 8
+# Keep the first profile redesign isolated until its information hierarchy is
+# approved. The standard name is stable across FSS ingestion runs.
+PROFILE_UI_PREVIEW_STANDARD_GP_NAME = "엠비케이파트너스"
 DEAL_TAG_HINTS = {
     "section:deal",
     "topic:deal",
@@ -1129,6 +1132,9 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
 
 
 def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: list[dict[str, object]]) -> str:
+    if _uses_profile_ui_preview(gp):
+        return _render_gp_profile_preview_page(report_date, gp)
+
     name = _gp_name(gp)
     homepage = _safe_url(gp.get("homepage_url"))
     logo_url = _brand_logo_url(homepage, name)
@@ -1276,6 +1282,211 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
 </body>
 </html>
 """
+
+
+def _uses_profile_ui_preview(gp: dict[str, object]) -> bool:
+    return _clean(gp.get("standard_gp_name")) == PROFILE_UI_PREVIEW_STANDARD_GP_NAME
+
+
+def _render_gp_profile_preview_page(report_date: str, gp: dict[str, object]) -> str:
+    """Render the approved-candidate profile layout for one GP only."""
+    name = _gp_name(gp)
+    homepage = _safe_url(gp.get("homepage_url"))
+    logo_url = _brand_logo_url(homepage, name)
+    avatar_label = _avatar_label(name)
+    avatar_style = _brand_logo_style_attr(homepage, name) if logo_url else ""
+    avatar_logo = (
+        f'<img src="{logo_url}" alt="" loading="lazy" onerror="this.parentElement.classList.add(\'fallback-only\'); this.remove()">'
+        if logo_url
+        else ""
+    )
+    funds = list(gp.get("funds", []))
+    active_fund_count = sum(1 for fund in funds if _as_bool(fund.get("active_in_latest_period")))
+    historical_fund_count = len(funds) - active_fund_count
+    period_label = _format_period_label(
+        gp.get("latest_period_label") or gp.get("last_seen_period") or report_date
+    )
+    company_rows = _render_profile_preview_company_rows(gp, homepage)
+    fund_rows = _render_profile_preview_fund_rows(funds)
+    source_note = f"금감원 PEF 운용현황 {period_label} 기준"
+
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{_e(name)} - PEF 운용사</title>
+{_app_head_meta()}
+  {_base_styles()}
+</head>
+<body>
+  <main class="gp-shell gp-profile-preview">
+    {_render_service_header("gp")}
+    <nav class="gp-profile-preview-back" aria-label="경로">
+      <a href="gps.html">GP 목록</a>
+    </nav>
+
+    <header class="gp-profile-preview-hero">
+      <span class="gp-detail-logo gp-profile-preview-logo{' has-logo' if logo_url else ''}" aria-hidden="true"{avatar_style}>{avatar_logo}<span>{_e(avatar_label)}</span></span>
+      <div>
+        <span class="gp-profile-preview-kicker">PEF 운용사</span>
+        <h1>{_e(name)}</h1>
+        <p>{_e(period_label)} 운용 현황</p>
+      </div>
+    </header>
+
+    <section class="gp-profile-preview-metrics" aria-label="핵심 통계">
+      <dl>
+        <div>
+          <dt>최신 약정액</dt>
+          <dd>{_e(_format_krw_100mn(gp.get("latest_primary_aum_proxy_krw_100mn")))}</dd>
+          <span>{_e(period_label)}</span>
+        </div>
+        <div>
+          <dt>누적 약정액</dt>
+          <dd>{_e(_format_krw_100mn(gp.get("cumulative_primary_commitment_proxy_krw_100mn")))}</dd>
+          <span>펀드 이력 기준</span>
+        </div>
+        <div>
+          <dt>연결 펀드</dt>
+          <dd>{len(funds):,}개</dd>
+          <span>금감원 확인 이력</span>
+        </div>
+        <div>
+          <dt>최신 순위</dt>
+          <dd>{_e(_format_rank(gp.get("latest_primary_rank")))}</dd>
+          <span>{_e(period_label)} 약정액 기준</span>
+        </div>
+      </dl>
+    </section>
+
+    <section class="gp-profile-preview-section" aria-labelledby="gpCompanyInfo">
+      <div class="gp-profile-preview-section-head">
+        <h2 id="gpCompanyInfo">회사 정보</h2>
+      </div>
+      <dl class="gp-profile-preview-info-list">
+{company_rows}
+      </dl>
+    </section>
+
+    <section class="gp-profile-preview-section gp-profile-preview-funds" aria-labelledby="gpFundHistory">
+      <div class="gp-profile-preview-section-head gp-profile-preview-fund-head">
+        <div>
+          <h2 id="gpFundHistory">금감원 확인 펀드</h2>
+          <p>공동 운용 펀드는 각 GP에 함께 표시합니다.</p>
+        </div>
+        <strong>{len(funds):,}개</strong>
+      </div>
+      <div class="gp-profile-preview-filter" role="group" aria-label="펀드 상태">
+        <button class="active" type="button" data-fund-filter="all" aria-pressed="true">전체 {len(funds):,}</button>
+        <button type="button" data-fund-filter="active" aria-pressed="false">운용 중 {active_fund_count:,}</button>
+        <button type="button" data-fund-filter="historical" aria-pressed="false">과거 확인 {historical_fund_count:,}</button>
+      </div>
+      <div class="gp-profile-preview-fund-list">
+{fund_rows}
+      </div>
+      <p class="gp-profile-preview-empty" id="gpFundEmpty" hidden>해당 상태의 펀드가 없습니다.</p>
+    </section>
+
+    <footer class="gp-profile-preview-source">
+      <p>{source_note}</p>
+    </footer>
+  </main>
+  {_render_bottom_nav()}
+  {_service_header_script(redirect_search=True)}
+  {_profile_preview_script()}
+</body>
+</html>
+"""
+
+
+def _render_profile_preview_company_rows(gp: dict[str, object], homepage: str) -> str:
+    homepage_link = (
+        f'<a href="{_e(homepage)}" target="_blank" rel="noreferrer">{_e(_homepage_label(homepage))}</a>'
+        if homepage
+        else ""
+    )
+    facts = [
+        ("법인명", _clean(gp.get("legal_entity_name_ko")) or _clean(gp.get("legal_entity_name_en"))),
+        ("대표", _clean(gp.get("representative_name"))),
+        ("설립", _clean(gp.get("firm_founded_year")) or _clean(gp.get("firm_founded_date")) or _clean(gp.get("established_date"))),
+        ("홈페이지", homepage_link, True),
+    ]
+    rows = []
+    for label, value, *raw_value in facts:
+        if not _clean(value):
+            continue
+        raw = bool(raw_value and raw_value[0])
+        body = str(value) if raw else _e(str(value))
+        rows.append(
+            f"""        <div class="gp-profile-preview-info-row">
+          <dt>{_e(label)}</dt>
+          <dd>{body}</dd>
+        </div>"""
+        )
+    return "\n".join(rows) or "        <div class=\"gp-profile-preview-info-row\"><dt>회사 정보</dt><dd>-</dd></div>"
+
+
+def _render_profile_preview_fund_rows(fund_rows: list[dict[str, object]]) -> str:
+    if not fund_rows:
+        return '<p class="gp-empty-note">금감원 공개 자료에서 연결된 펀드가 확인되지 않았습니다.</p>'
+    rows = []
+    for fund in fund_rows:
+        name = _clean(fund.get("fund_name")) or "펀드"
+        url = _safe_url(fund.get("latest_source_url"))
+        title = f'<a href="{_e(url)}" target="_blank" rel="noreferrer">{_e(name)}</a>' if url else _e(name)
+        active = _as_bool(fund.get("active_in_latest_period"))
+        state = "active" if active else "historical"
+        state_label = "운용 중" if active else "과거 확인"
+        amount = _format_trn_krw_as_100mn(
+            fund.get("max_commitment_trn_krw") or fund.get("latest_commitment_trn_krw")
+        )
+        established = _short_date(fund.get("established_date"))
+        last_seen = _format_period_label(fund.get("last_seen_period"))
+        meta = _join_values(
+            [
+                f"설정 {established}" if established else "설정일 미확인",
+                f"최근 확인 {last_seen}" if last_seen else "",
+            ]
+        )
+        rows.append(
+            f"""        <article class="gp-profile-preview-fund-row" data-fund-state="{state}">
+          <div class="gp-profile-preview-fund-copy">
+            <h3>{title}</h3>
+            <p>{_e(meta or "금감원 공개 운용 현황 기준")}</p>
+          </div>
+          <div class="gp-profile-preview-fund-amount">
+            <span class="gp-profile-preview-fund-state {state}">{state_label}</span>
+            <strong>{_e(amount)}</strong>
+          </div>
+        </article>"""
+        )
+    return "\n".join(rows)
+
+
+def _profile_preview_script() -> str:
+    return """  <script>
+    (() => {
+      const buttons = Array.from(document.querySelectorAll("[data-fund-filter]"));
+      const rows = Array.from(document.querySelectorAll("[data-fund-state]"));
+      const empty = document.getElementById("gpFundEmpty");
+      const apply = (filter) => {
+        let visible = 0;
+        rows.forEach((row) => {
+          const show = filter === "all" || row.dataset.fundState === filter;
+          row.hidden = !show;
+          if (show) visible += 1;
+        });
+        buttons.forEach((button) => {
+          const active = button.dataset.fundFilter === filter;
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-pressed", String(active));
+        });
+        if (empty) empty.hidden = visible > 0;
+      };
+      buttons.forEach((button) => button.addEventListener("click", () => apply(button.dataset.fundFilter || "all")));
+    })();
+  </script>"""
 
 
 def _render_profile_facts(gp: dict[str, object], homepage_link: str) -> str:
@@ -3976,6 +4187,310 @@ def _base_styles() -> str:
         font-size: 13px;
       }
     }
+
+    /* Isolated profile preview: applies only to the approved MBK profile. */
+    .gp-profile-preview {
+      width: min(calc(100% - 32px), 760px);
+      padding-bottom: calc(100px + env(safe-area-inset-bottom));
+    }
+    .gp-profile-preview .gp-app-header {
+      margin-bottom: 10px;
+    }
+    .gp-profile-preview-back {
+      margin: 12px 0 22px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .gp-profile-preview-back a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      color: #4e5968;
+    }
+    .gp-profile-preview-back a::before {
+      width: 8px;
+      height: 8px;
+      margin-right: 8px;
+      border-bottom: 1.5px solid currentColor;
+      border-left: 1.5px solid currentColor;
+      content: "";
+      transform: rotate(45deg);
+    }
+    .gp-profile-preview-hero {
+      display: grid;
+      grid-template-columns: 64px minmax(0, 1fr);
+      gap: 15px;
+      align-items: center;
+      padding: 0 0 26px;
+    }
+    .gp-profile-preview-logo {
+      width: 64px;
+      height: 64px;
+      border-color: #e5e8eb;
+      background: #fff;
+      border-radius: 18px;
+    }
+    .gp-profile-preview-logo img {
+      width: var(--logo-detail-img-width, var(--logo-img-width, 45px));
+      height: var(--logo-detail-img-height, var(--logo-img-height, 45px));
+    }
+    .gp-profile-preview-kicker {
+      display: block;
+      margin-bottom: 4px;
+      color: #6b7684;
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.3;
+    }
+    .gp-profile-preview-hero h1 {
+      color: #191f28;
+      font-size: 25px;
+      font-weight: 780;
+      line-height: 1.22;
+    }
+    .gp-profile-preview-hero p {
+      margin: 6px 0 0;
+      color: #6b7684;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+    .gp-profile-preview-metrics {
+      border-top: 1px solid #e5e8eb;
+      border-bottom: 1px solid #e5e8eb;
+      padding: 0;
+    }
+    .gp-profile-preview-metrics dl {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0;
+      margin: 0;
+    }
+    .gp-profile-preview-metrics div {
+      min-width: 0;
+      padding: 18px 12px 16px 0;
+    }
+    .gp-profile-preview-metrics div:nth-child(even) {
+      padding-right: 0;
+      padding-left: 12px;
+    }
+    .gp-profile-preview-metrics div:nth-child(n + 3) {
+      border-top: 1px solid #f2f4f6;
+    }
+    .gp-profile-preview-metrics dt {
+      color: #6b7684;
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.35;
+    }
+    .gp-profile-preview-metrics dd {
+      margin: 7px 0 3px;
+      color: #191f28;
+      font-size: 22px;
+      font-weight: 780;
+      line-height: 1.18;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
+    .gp-profile-preview-metrics span {
+      display: block;
+      color: #8b95a1;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+    .gp-profile-preview-section {
+      margin: 0 -16px;
+      border-top: 8px solid #f2f4f6;
+      padding: 24px 16px 0;
+    }
+    .gp-profile-preview-section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+    .gp-profile-preview-section-head h2 {
+      margin: 0;
+      color: #191f28;
+      font-size: 18px;
+      font-weight: 760;
+      line-height: 1.35;
+    }
+    .gp-profile-preview-info-list {
+      margin: 0;
+    }
+    .gp-profile-preview-info-row {
+      display: grid;
+      grid-template-columns: minmax(80px, 0.42fr) minmax(0, 1fr);
+      gap: 16px;
+      min-height: 53px;
+      align-items: center;
+      border-top: 1px solid #f2f4f6;
+    }
+    .gp-profile-preview-info-row dt {
+      color: #6b7684;
+      font-size: 14px;
+      font-weight: 650;
+    }
+    .gp-profile-preview-info-row dd {
+      margin: 0;
+      color: #333d4b;
+      font-size: 14px;
+      font-weight: 650;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .gp-profile-preview-info-row a {
+      color: #3182f6;
+    }
+    .gp-profile-preview-funds {
+      padding-bottom: 4px;
+    }
+    .gp-profile-preview-fund-head {
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    .gp-profile-preview-fund-head p {
+      margin: 5px 0 0;
+      color: #6b7684;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.45;
+    }
+    .gp-profile-preview-fund-head > strong {
+      padding-top: 2px;
+      color: #4e5968;
+      font-size: 14px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .gp-profile-preview-filter {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      margin: 0 -2px 10px;
+      padding: 0 2px 4px;
+      scrollbar-width: none;
+    }
+    .gp-profile-preview-filter::-webkit-scrollbar { display: none; }
+    .gp-profile-preview-filter button {
+      flex: 0 0 auto;
+      min-height: 34px;
+      border: 0;
+      border-radius: 8px;
+      padding: 0 11px;
+      background: #f2f4f6;
+      color: #6b7684;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .gp-profile-preview-filter button.active {
+      background: #191f28;
+      color: #fff;
+    }
+    .gp-profile-preview-fund-list {
+      display: grid;
+    }
+    .gp-profile-preview-fund-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      min-height: 84px;
+      border-top: 1px solid #f2f4f6;
+      padding: 14px 0;
+    }
+    .gp-profile-preview-fund-row[hidden] { display: none; }
+    .gp-profile-preview-fund-copy { min-width: 0; }
+    .gp-profile-preview-fund-copy h3 {
+      margin: 0;
+      color: #333d4b;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .gp-profile-preview-fund-copy a { color: inherit; }
+    .gp-profile-preview-fund-copy p {
+      margin: 5px 0 0;
+      color: #8b95a1;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+    .gp-profile-preview-fund-amount {
+      display: grid;
+      justify-items: end;
+      gap: 6px;
+      min-width: 72px;
+    }
+    .gp-profile-preview-fund-state {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      border-radius: 6px;
+      padding: 0 7px;
+      background: #e8f3ff;
+      color: #3182f6;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .gp-profile-preview-fund-state.historical {
+      background: #f2f4f6;
+      color: #6b7684;
+    }
+    .gp-profile-preview-fund-amount strong {
+      color: #333d4b;
+      font-size: 13px;
+      font-weight: 750;
+      line-height: 1.3;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .gp-profile-preview-empty {
+      margin: 16px 0;
+      color: #6b7684;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .gp-profile-preview-source {
+      margin: 0 -16px;
+      border-top: 8px solid #f2f4f6;
+      padding: 18px 16px 0;
+    }
+    .gp-profile-preview-source p {
+      margin: 0;
+      color: #8b95a1;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.5;
+    }
+    .gp-profile-preview-source a {
+      margin-left: 2px;
+      color: #6b7684;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    @media (min-width: 700px) {
+      .gp-profile-preview { width: min(calc(100% - 48px), 760px); }
+      .gp-profile-preview-hero { grid-template-columns: 72px minmax(0, 1fr); padding-bottom: 30px; }
+      .gp-profile-preview-logo { width: 72px; height: 72px; }
+      .gp-profile-preview-hero h1 { font-size: 28px; }
+      .gp-profile-preview-metrics dl { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .gp-profile-preview-metrics div,
+      .gp-profile-preview-metrics div:nth-child(even) { padding: 21px 14px 19px; }
+      .gp-profile-preview-metrics div:first-child { padding-left: 0; }
+      .gp-profile-preview-metrics div:last-child { padding-right: 0; }
+      .gp-profile-preview-metrics div:nth-child(n + 3) { border-top: 0; }
+      .gp-profile-preview-metrics div + div { border-left: 1px solid #f2f4f6; }
+      .gp-profile-preview-section,
+      .gp-profile-preview-source { margin-right: 0; margin-left: 0; padding-right: 0; padding-left: 0; }
+      .gp-profile-preview-section { padding-top: 28px; }
+      .gp-profile-preview-source { padding-top: 20px; }
+    }
   </style>"""
 
 
@@ -4037,6 +4552,14 @@ def _format_date_dot(value: object) -> str:
     text = _short_date(value)
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
         return text.replace("-", ".")
+    return text
+
+
+def _format_period_label(value: object) -> str:
+    text = _clean(value)
+    matched = re.fullmatch(r"(\d{4})Q([1-4])", text, re.IGNORECASE)
+    if matched:
+        return f"{matched.group(1)}년 {matched.group(2)}분기"
     return text
 
 
