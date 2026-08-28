@@ -19,6 +19,7 @@ from services.shared.src.daily_news_common import normalize_url
 MARKET_REQUIRED_TABLES = ("v_period_summary", "source_document")
 PROFILE_REQUIRED_TABLES = ("gp_profile", "gp_house")
 NEWS_REQUIRED_TABLES = ("news_entity_link", "news_document")
+PEOPLE_REQUIRED_TABLES = ("person", "person_role")
 TOP_GP_PAGE_LIMIT = 120
 PROFILE_NEWS_LIMIT = 12
 PROFILE_LP_SIGNAL_LIMIT = 8
@@ -118,6 +119,7 @@ def write_gp_pages(site_dir: Path, db_path: Path, report_date: str) -> dict[str,
 
         news_by_gp = _read_gp_news(conn) if _db_objects_exist(conn, NEWS_REQUIRED_TABLES) else {}
         funds_by_gp = _read_gp_funds(conn)
+        people_by_gp = _read_gp_people(conn) if _db_objects_exist(conn, PEOPLE_REQUIRED_TABLES) else {}
         lp_signals_by_gp = _read_lp_signals(conn)
         period_metrics_by_gp = _read_gp_period_metrics(conn)
         for gp in gps:
@@ -127,6 +129,7 @@ def write_gp_pages(site_dir: Path, db_path: Path, report_date: str) -> dict[str,
             gp["deal_news"] = [item for item in gp["news"] if _is_deal_news(item)]
             gp["deal_news_count"] = len(gp["deal_news"])
             gp["funds"] = funds_by_gp.get(gp_id, [])
+            gp["people"] = people_by_gp.get(gp_id, [])
             gp["active_fund_signal_count"] = len(gp["funds"])
             gp["lp_signals"] = lp_signals_by_gp.get(gp_id, [])
             gp["lp_signal_count"] = len(gp["lp_signals"])
@@ -384,6 +387,57 @@ def _read_gp_funds(conn: sqlite3.Connection) -> dict[str, list[dict[str, object]
         seen_by_gp[gp_id].add(fund_id)
         funds_by_gp[gp_id].append(dict(row))
     return dict(funds_by_gp)
+
+
+def _read_gp_people(conn: sqlite3.Connection) -> dict[str, list[dict[str, object]]]:
+    """Return current GP people only when their profile has an official source."""
+    rows = conn.execute(
+        """
+        SELECT
+            pr.org_id AS source_gp_id,
+            p.person_id,
+            p.person_name_ko,
+            p.person_name_en,
+            COALESCE(NULLIF(pr.title, ''), NULLIF(p.current_title, '')) AS role_title,
+            pr.team,
+            COALESCE(NULLIF(pr.source_url, ''), NULLIF(p.primary_source_url, '')) AS source_url,
+            pr.source_title,
+            pr.source_grade
+        FROM person_role pr
+        JOIN person p
+          ON p.person_id = pr.person_id
+        WHERE pr.org_type = 'GP'
+          AND pr.is_current = 1
+          AND pr.org_id IS NOT NULL
+          AND COALESCE(p.profile_status, '') = 'active'
+          AND COALESCE(NULLIF(pr.source_url, ''), NULLIF(p.primary_source_url, '')) <> ''
+          AND LOWER(COALESCE(pr.source_grade, '')) IN (
+              'official',
+              'official_exchange_disclosure',
+              'official_filing'
+          )
+        ORDER BY
+            pr.org_id,
+            CASE LOWER(COALESCE(pr.title, p.current_title, ''))
+                WHEN 'partner' THEN 0
+                WHEN 'operating partner' THEN 1
+                WHEN 'managing director' THEN 2
+                ELSE 3
+            END,
+            p.person_name_ko,
+            p.person_id
+        """
+    ).fetchall()
+    people_by_gp: dict[str, list[dict[str, object]]] = defaultdict(list)
+    seen_by_gp: dict[str, set[int]] = defaultdict(set)
+    for row in rows:
+        gp_id = str(row["source_gp_id"] or "")
+        person_id = int(row["person_id"])
+        if not gp_id or person_id in seen_by_gp[gp_id]:
+            continue
+        seen_by_gp[gp_id].add(person_id)
+        people_by_gp[gp_id].append(dict(row))
+    return dict(people_by_gp)
 
 
 def _read_lp_signals(conn: sqlite3.Connection) -> dict[str, list[dict[str, object]]]:
@@ -1301,11 +1355,13 @@ def _render_gp_profile_preview_page(report_date: str, gp: dict[str, object]) -> 
         else ""
     )
     funds = list(gp.get("funds", []))
+    people = list(gp.get("people", []))
     active_fund_count = sum(1 for fund in funds if _as_bool(fund.get("active_in_latest_period")))
     historical_fund_count = len(funds) - active_fund_count
     reporting_period = _clean(gp.get("latest_period_label") or gp.get("last_seen_period") or report_date)
     period_label = _format_period_label(reporting_period)
     company_rows = _render_profile_preview_company_rows(gp, homepage)
+    people_section = _render_profile_preview_people_section(people)
     fund_rows = _render_profile_preview_fund_rows(funds)
     source_note = f"금감원 PEF 운용현황 {period_label} 기준"
 
@@ -1368,6 +1424,8 @@ def _render_gp_profile_preview_page(report_date: str, gp: dict[str, object]) -> 
 {company_rows}
       </dl>
     </section>
+
+{people_section}
 
     <section class="gp-profile-preview-section gp-profile-preview-funds" aria-labelledby="gpFundHistory">
       <div class="gp-profile-preview-section-head gp-profile-preview-fund-head">
@@ -1462,6 +1520,46 @@ def _render_profile_preview_fund_rows(fund_rows: list[dict[str, object]]) -> str
         </article>"""
         )
     return "\n".join(rows)
+
+
+def _render_profile_preview_people_section(people_rows: list[dict[str, object]]) -> str:
+    if not people_rows:
+        return ""
+    source_url = _safe_url(people_rows[0].get("source_url"))
+    source_link = (
+        f'<a class="gp-profile-preview-people-source" href="{_e(source_url)}" target="_blank" rel="noreferrer">공식 팀 페이지</a>'
+        if source_url
+        else ""
+    )
+    rows = []
+    for person in people_rows:
+        name = _clean(person.get("person_name_ko")) or _clean(person.get("person_name_en")) or "-"
+        english_name = _clean(person.get("person_name_en"))
+        english_html = (
+            f'<span>{_e(english_name)}</span>'
+            if english_name and english_name.casefold() != name.casefold()
+            else ""
+        )
+        role = _clean(person.get("role_title"))
+        team = _clean(person.get("team"))
+        meta = _join_values([role, team])
+        rows.append(
+            f"""        <article class="gp-profile-preview-person-row">
+          <div>
+            <h3>{_e(name)}{english_html}</h3>
+            <p>{_e(meta or "MBK Partners")}</p>
+          </div>
+        </article>"""
+        )
+    return f"""    <section class="gp-profile-preview-section gp-profile-preview-people" aria-labelledby="gpPeople">
+      <div class="gp-profile-preview-section-head gp-profile-preview-people-head">
+        <h2 id="gpPeople">주요 인물</h2>
+        {source_link}
+      </div>
+      <div class="gp-profile-preview-people-list">
+{chr(10).join(rows)}
+      </div>
+    </section>"""
 
 
 def _profile_preview_script() -> str:
@@ -4344,6 +4442,63 @@ def _base_styles() -> str:
     }
     .gp-profile-preview-info-row a {
       color: #3182f6;
+    }
+    .gp-profile-preview-people {
+      padding-bottom: 4px;
+    }
+    .gp-profile-preview-people-head {
+      margin-bottom: 4px;
+    }
+    .gp-profile-preview-people-source {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      color: #3182f6;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .gp-profile-preview-people-source::after {
+      width: 6px;
+      height: 6px;
+      margin-left: 7px;
+      border-top: 1.5px solid currentColor;
+      border-right: 1.5px solid currentColor;
+      content: "";
+      transform: rotate(45deg);
+    }
+    .gp-profile-preview-people-list {
+      display: grid;
+    }
+    .gp-profile-preview-person-row {
+      display: flex;
+      align-items: center;
+      min-height: 64px;
+      border-top: 1px solid #f2f4f6;
+      padding: 12px 0;
+    }
+    .gp-profile-preview-person-row h3 {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 7px;
+      margin: 0;
+      color: #333d4b;
+      font-size: 15px;
+      font-weight: 730;
+      line-height: 1.35;
+    }
+    .gp-profile-preview-person-row h3 span {
+      color: #6b7684;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .gp-profile-preview-person-row p {
+      margin: 5px 0 0;
+      color: #8b95a1;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.35;
     }
     .gp-profile-preview-funds {
       padding-bottom: 4px;

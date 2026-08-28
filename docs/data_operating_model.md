@@ -119,6 +119,11 @@ GP detail은 근거 있는 회사 정보와 금감원 펀드 이력을 한 화�
 `fund_master`의 GP 연결을 기준으로 하며, 최신 운용 중 펀드뿐 아니라 과거에 확인된 펀드도
 `최대 총약정액`, 설정일, 마지막 확인 분기와 함께 보존한다.
 
+GP People은 `person_role`의 현재 GP 소속과 공식 출처가 함께 확인된 인물만 profile에 표시한다.
+초기 공개 범위는 MBK profile의 `주요 인물` section이며, 전체 People 탭이나 출처 없는 인물
+목록으로 확장하지 않는다. FSS rebuild는 People table을 포함하지 않으므로 `Deploy GP FSS market`
+workflow가 public page build 전에 maintained People CSV를 SQLite에 다시 적재한다.
+
 ### GP profile evidence binding
 
 `data/gp_profile_evidence.csv`는 홈페이지, 대표자, 법인명처럼 금감원 원천만으로 채울 수 없는
@@ -133,7 +138,7 @@ ingestion-local 번호이므로 evidence binding key가 아니다. 적용과 재
   source-backed profile이 `FSS_NAME_ONLY`로 남지 않았는지를 확인한다. CI에서는 warning으로 기록하고
   다음 evidence 정리 작업에서 수정한다.
 - `Deploy GP FSS market`은 `FSS ingest → approved alias merge → market analytics → GP master → evidence apply → GP master
-  export → evidence readiness → public snapshot` 순서를 지켜야 한다. raw FSS 재수집만으로 source-backed
+  export → evidence readiness → People CSV import → public snapshot` 순서를 지켜야 한다. raw FSS 재수집만으로 source-backed
   profile 필드가 사라지거나 다른 GP에 옮겨가면 안 된다.
 
 ## GP ranking audit data pack

@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 
 from services.gp.src.gp_service_pages import (
     _read_gp_funds,
+    _read_gp_people,
     _read_gp_profiles,
     _render_fund_rows,
     _render_gp_detail_page,
@@ -62,6 +63,7 @@ class GpFundProfilePageTests(unittest.TestCase):
             profiles = _read_gp_profiles(conn)
             profile = next(item for item in profiles if item["standard_gp_name"] == "엠비케이파트너스")
             profile["funds"] = _read_gp_funds(conn)[str(profile["source_gp_id"])]
+            profile["people"] = _read_gp_people(conn)[str(profile["source_gp_id"])]
         finally:
             conn.close()
 
@@ -74,6 +76,9 @@ class GpFundProfilePageTests(unittest.TestCase):
         self.assertIn('name="kpef-fss-reporting-period" content="2025Q4"', html)
         self.assertIn("공동 운용 펀드는 각 GP에 함께 표시합니다.", html)
         self.assertEqual(html.count('class="gp-profile-preview-fund-row"'), len(profile["funds"]))
+        self.assertEqual(html.count('class="gp-profile-preview-person-row"'), 13)
+        self.assertIn("김병주", html)
+        self.assertIn("공식 팀 페이지", html)
 
 
 if __name__ == "__main__":

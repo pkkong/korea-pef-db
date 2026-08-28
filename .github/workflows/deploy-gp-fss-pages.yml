@@ -107,6 +107,7 @@ jobs:
             --evidence data/gp_profile_evidence.csv; then
             echo "::warning::GP profile evidence is not fully synchronized. Continuing with the rebuilt FSS market data."
           fi
+          python3 scripts/import_people_csv.py --db db/private_equity.db
 
       - name: Build and validate GP public pages
         shell: bash
