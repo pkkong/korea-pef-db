@@ -39,7 +39,16 @@ def read_rows(path: Path) -> list[dict[str, str]]:
     if not path.exists():
         return []
     with path.open("r", encoding="utf-8-sig", newline="") as f:
-        return [row for row in csv.DictReader(f) if any(clean(value) for value in row.values())]
+        rows: list[dict[str, str]] = []
+        for line_number, row in enumerate(csv.DictReader(f), start=2):
+            extra_values = row.pop(None, [])
+            if extra_values:
+                raise ValueError(
+                    f"{path}:{line_number}: unexpected CSV columns; quote fields that contain commas"
+                )
+            if any(clean(value) for value in row.values()):
+                rows.append(row)
+        return rows
 
 
 def column_exists(conn: sqlite3.Connection, table_name: str, column_name: str) -> bool:
@@ -64,19 +73,23 @@ def load_school_aliases(path: Path) -> dict[str, tuple[str, str | None]]:
 
 
 def lookup_gp_id(conn: sqlite3.Connection, gp_name: str, gp_id: str = "") -> str:
-    if clean(gp_id):
-        return clean(gp_id)
-    if not clean(gp_name):
-        return ""
-    row = conn.execute(
-        """
-        SELECT gp_id
-        FROM gp_house
-        WHERE gp_name_norm = ?
-        """,
-        (norm(gp_name),),
-    ).fetchone()
-    return str(row[0]) if row else ""
+    """Resolve the current FSS GP id from the maintained canonical GP name.
+
+    FSS GP ids are rebuilt with every source refresh, so a CSV id is only a
+    fallback for records whose GP name is not present in the current FSS data.
+    """
+    if clean(gp_name):
+        row = conn.execute(
+            """
+            SELECT gp_id
+            FROM gp_house
+            WHERE gp_name_norm = ?
+            """,
+            (norm(gp_name),),
+        ).fetchone()
+        if row:
+            return str(row[0])
+    return clean(gp_id)
 
 
 def find_person(
@@ -209,7 +222,7 @@ def add_source_from_person_row(conn: sqlite3.Connection, person_id: int, row: di
         return 0
     exists = conn.execute(
         """
-        SELECT 1
+        SELECT source_evidence_id
         FROM person_source
         WHERE person_id = ?
           AND source_url = ?
@@ -219,6 +232,27 @@ def add_source_from_person_row(conn: sqlite3.Connection, person_id: int, row: di
         (person_id, source_url),
     ).fetchone()
     if exists:
+        conn.execute(
+            """
+            UPDATE person_source
+            SET source_type = ?,
+                source_title = ?,
+                source_grade = ?,
+                evidence_value = ?,
+                verification_status = ?,
+                notes = ?
+            WHERE source_evidence_id = ?
+            """,
+            (
+                "profile",
+                clean(row.get("source_title")) or None,
+                clean(row.get("source_grade")) or "supporting",
+                clean(row.get("current_title")) or clean(row.get("current_gp_name")) or None,
+                clean(row.get("verification_level")) or "source_derived",
+                clean(row.get("notes")) or None,
+                int(exists[0]),
+            ),
+        )
         return 0
     conn.execute(
         """
@@ -260,6 +294,61 @@ def add_role(
     verification_status: str,
     notes: str | None,
 ) -> int:
+    if org_type == "GP" and is_current:
+        current_roles = conn.execute(
+            """
+            SELECT role_id, org_name
+            FROM person_role
+            WHERE person_id = ?
+              AND org_type = 'GP'
+              AND is_current = 1
+            ORDER BY role_id
+            """,
+            (person_id,),
+        ).fetchall()
+        same_gp_roles = [role for role in current_roles if norm(str(role[1])) == norm(org_name)]
+        if same_gp_roles:
+            canonical_role_id = int(same_gp_roles[0][0])
+            conn.execute(
+                """
+                UPDATE person_role
+                SET org_id = ?,
+                    org_name = ?,
+                    title = COALESCE(NULLIF(?, ''), title),
+                    team = COALESCE(NULLIF(?, ''), team),
+                    role_start_date = COALESCE(NULLIF(?, ''), role_start_date),
+                    role_end_date = COALESCE(NULLIF(?, ''), role_end_date),
+                    source_url = COALESCE(NULLIF(?, ''), source_url),
+                    source_title = COALESCE(NULLIF(?, ''), source_title),
+                    source_grade = COALESCE(NULLIF(?, ''), source_grade),
+                    verification_status = COALESCE(NULLIF(?, ''), verification_status),
+                    notes = COALESCE(NULLIF(?, ''), notes),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE role_id = ?
+                """,
+                (
+                    org_id,
+                    org_name,
+                    title,
+                    team,
+                    role_start_date,
+                    role_end_date,
+                    source_url,
+                    source_title,
+                    source_grade,
+                    verification_status,
+                    notes,
+                    canonical_role_id,
+                ),
+            )
+            duplicate_role_ids = [int(role[0]) for role in same_gp_roles[1:]]
+            if duplicate_role_ids:
+                conn.executemany(
+                    "DELETE FROM person_role WHERE role_id = ?",
+                    [(role_id,) for role_id in duplicate_role_ids],
+                )
+            return 0
+
     exists = conn.execute(
         """
         SELECT 1

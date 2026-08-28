@@ -120,6 +120,9 @@ GP detail은 근거 있는 회사 정보와 금감원 펀드 이력을 한 화�
 `최대 총약정액`, 설정일, 마지막 확인 분기와 함께 보존한다.
 
 GP People은 `person_role`의 현재 GP 소속과 공식 출처가 함께 확인된 인물만 profile에 표시한다.
+People 입력 CSV의 GP 숫자 ID는 FSS 재수집 때 달라질 수 있는 hint일 뿐이다. 적재 시에는
+`current_gp_name` 또는 GP role의 `org_name`을 표준명으로 먼저 해석해 최신 `gp_house.gp_id`를
+다시 연결하며, 이름을 찾을 수 없을 때만 입력 ID를 보존한다.
 초기 공개 범위는 MBK profile의 `주요 인물` section이며, 전체 People 탭이나 출처 없는 인물
 목록으로 확장하지 않는다. FSS rebuild는 People table을 포함하지 않으므로 `Deploy GP FSS market`
 workflow가 public page build 전에 maintained People CSV를 SQLite에 다시 적재한다.
