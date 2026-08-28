@@ -71,11 +71,10 @@ jobs:
             exit 1
           fi
 
-      - name: Fetch and validate FSS source files
+      - name: Validate versioned FSS source files
         shell: bash
         run: |
-          mkdir -p db data/raw/fss_pef exports
-          python3 scripts/fetch_fss_pef_sources.py --sleep 0.2
+          mkdir -p db exports
           python3 scripts/check_fss_raw_sources.py --db db/private_equity.db --no-db-check
 
       - name: Build verified FSS market data

@@ -64,3 +64,9 @@ Thumbs.db
 # deliberately versioned so the mobile download route is deployable.
 !services/newsletter/web/downloads/
 !services/newsletter/web/downloads/gp_ranking_datapack_2025YE.xlsx
+
+# Official FSS PEF workbooks are the reproducible input to GP analytics. They
+# are deliberately versioned because the upstream board can become unavailable.
+!data/raw/fss_pef/
+!data/raw/fss_pef/*.xls
+!data/raw/fss_pef/*.xlsx

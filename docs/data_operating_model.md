@@ -170,6 +170,18 @@ profile 필드가 사라지거나 다른 GP에 옮겨가면 안 된다.
 이 분리는 "People 수정 때문에 금감원 재수집"과 "개발자 로컬 SQLite가 서비스 기준"이라는
 두 운영 오류를 막기 위한 계약이다.
 
+### FSS 원본 보관
+
+금감원 Excel은 `data/raw/fss_pef/`와 `data/source_registry_fss_pef.csv`에 Git으로
+버전 관리한다. 현재 2015Q4~2025Q4 공식 원본은 이 저장소에 보관하며, GitHub Actions의
+`Deploy GP FSS market`은 그 versioned 원본만으로 rebuild한다. 이 배포 workflow는 금감원
+사이트에 접속하거나 다운로드하지 않는다.
+
+새 분기 자료가 나왔을 때만 원본 수집 명령을 실행해 새 Excel과 registry 행을 추가하고,
+raw SHA 검증 후 함께 commit한다. 그 commit을 기준으로 `Deploy GP FSS market`을 실행해
+Supabase canonical snapshot과 공개 GP snapshot을 갱신한다. 금감원 게시판 장애는 이미
+확보해 둔 분기 데이터의 재발행이나 People/프로필 갱신을 막지 않는다.
+
 ## GP ranking audit data pack
 
 외부 배포 또는 투자자 검토용 GP 순위는 공개 Market HTML만으로 근거를 대신하지 않는다.
