@@ -38,14 +38,21 @@ CORE_PAGE_PATHS = ("market.html", "gps.html")
 
 
 def public_page_paths(site_dir: Path) -> tuple[str, ...]:
-    detail_pages = tuple(
+    gp_detail_pages = tuple(
         sorted(
             path.name
             for path in site_dir.glob("gp-*.html")
             if re.fullmatch(r"gp-[0-9]+\.html", path.name)
         )
     )
-    return CORE_PAGE_PATHS + detail_pages
+    person_detail_pages = tuple(
+        sorted(
+            path.name
+            for path in site_dir.glob("person-*.html")
+            if re.fullmatch(r"person-[0-9]+\.html", path.name)
+        )
+    )
+    return CORE_PAGE_PATHS + gp_detail_pages + person_detail_pages
 RETRIABLE_HTTP_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
 
 

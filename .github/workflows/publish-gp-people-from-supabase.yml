@@ -163,10 +163,10 @@ jobs:
             "https://x-access-token:${NEWSLETTER_PUBLIC_REPO_TOKEN}@github.com/${GP_PUBLIC_REPO}.git" \
             "$work_dir/site-repo"
           find "$work_dir/site-repo" -maxdepth 1 -type f -regextype posix-extended \
-            -regex '.*/gp-[0-9]+\\.html' -delete
+            -regex '.*/(gp|person)-[0-9]+\\.html' -delete
           cp "$work_dir/site/market.html" "$work_dir/site/gps.html" "$work_dir/site-repo/"
           shopt -s nullglob
-          profiles=("$work_dir/site"/gp-[0-9]*.html)
+          profiles=("$work_dir/site"/gp-[0-9]*.html "$work_dir/site"/person-[0-9]*.html)
           if [ "${#profiles[@]}" -gt 0 ]; then
             cp "${profiles[@]}" "$work_dir/site-repo/"
           fi
@@ -180,8 +180,14 @@ jobs:
           if compgen -G 'gp-*.html' >/dev/null; then
             git add -- gp-*.html
           fi
+          if compgen -G 'person-*.html' >/dev/null; then
+            git add -- person-*.html
+          fi
           if git ls-files --error-unmatch -- 'gp-*.html' >/dev/null 2>&1; then
             git add -u -- 'gp-*.html'
+          fi
+          if git ls-files --error-unmatch -- 'person-*.html' >/dev/null 2>&1; then
+            git add -u -- 'person-*.html'
           fi
           if git diff --cached --quiet; then
             echo "No GP public changes to publish."
@@ -216,6 +222,12 @@ jobs:
           done | sort | head -n 1)"
           if [ -n "$detail_page" ]; then
             page_names+=("$detail_page")
+          fi
+          person_detail_page="$(for page in "$work_dir/site"/person-[0-9]*.html; do
+            [ -e "$page" ] && basename "$page"
+          done | sort | head -n 1)"
+          if [ -n "$person_detail_page" ]; then
+            page_names+=("$person_detail_page")
           fi
           for page_name in "${page_names[@]}"; do
             verified=false

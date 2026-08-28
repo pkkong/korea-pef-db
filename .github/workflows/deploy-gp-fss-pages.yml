@@ -167,8 +167,14 @@ jobs:
           if compgen -G 'gp-*.html' >/dev/null; then
             git add -- gp-*.html
           fi
+          if compgen -G 'person-*.html' >/dev/null; then
+            git add -- person-*.html
+          fi
           if git ls-files --error-unmatch -- 'gp-*.html' >/dev/null 2>&1; then
             git add -u -- 'gp-*.html'
+          fi
+          if git ls-files --error-unmatch -- 'person-*.html' >/dev/null 2>&1; then
+            git add -u -- 'person-*.html'
           fi
           if git diff --cached --quiet; then
             echo "No GP public changes to publish."
@@ -202,6 +208,10 @@ jobs:
           if [ -n "$detail_page" ]; then
             page_names+=("$detail_page")
           fi
+          person_detail_page="$(find /tmp/kpef-gp-public-site -maxdepth 1 -type f -name 'person-*.html' -printf '%f\n' | sort | head -n 1)"
+          if [ -n "$person_detail_page" ]; then
+            page_names+=("$person_detail_page")
+          fi
           for page_name in "${page_names[@]}"; do
             verified=false
             for attempt in $(seq 1 24); do
@@ -213,7 +223,7 @@ jobs:
                 "${GP_VERCEL_URL}/${page_name}?refresh=1" || true
               if grep -qi '^x-gp-data-source: supabase-public-snapshot' "$header_file" \
                 && grep -q "${{ inputs.expected_latest_period }}" "$body_file" \
-                && { [ "$page_name" = "market.html" ] || [ "$page_name" = "gps.html" ] || grep -q "금감원 확인 펀드" "$body_file"; }; then
+                && { [ "$page_name" = "market.html" ] || [ "$page_name" = "gps.html" ] || [[ "$page_name" == person-* ]] || grep -q "금감원 확인 펀드" "$body_file"; }; then
                 verified=true
                 break
               fi

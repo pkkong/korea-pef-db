@@ -34,6 +34,10 @@ class SyncGPPublicReadModelTests(unittest.TestCase):
                 '<!doctype html><meta name="kpef-fss-reporting-period" content="2025Q4"><main>GP profile</main>',
                 encoding="utf-8",
             )
+            (site_dir / "person-47.html").write_text(
+                '<!doctype html><meta name="kpef-fss-reporting-period" content="2025Q4"><main>Person profile</main>',
+                encoding="utf-8",
+            )
 
             originals = {
                 "repo_root": MODULE.REPO_ROOT,
@@ -81,7 +85,7 @@ class SyncGPPublicReadModelTests(unittest.TestCase):
         self.assertEqual(snapshot["primary_gp_count"], 397)
         self.assertEqual(
             [page["page_path"] for page in payload["pages"]],
-            ["market.html", "gps.html", "gp-2.html"],
+            ["market.html", "gps.html", "gp-2.html", "person-47.html"],
         )
 
     def test_period_metadata_allows_localized_profile_copy(self) -> None:

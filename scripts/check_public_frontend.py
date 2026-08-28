@@ -414,6 +414,25 @@ def check_generated_gp_contract(require_data: bool = False) -> list[str]:
     ):
         violations.append("gp-detail-pages:missing_fss_fund_list")
 
+    person_paths = sorted(PUBLIC_DIR.glob("person-*.html"))[:3]
+    for person_path in person_paths:
+        html = person_path.read_text(encoding="utf-8")
+        person_labels = bottom_nav_labels(html)
+        if person_labels != BOTTOM_NAV_LABELS:
+            raise CheckFailure(
+                f"{person_path.name} bottom nav mismatch: expected {BOTTOM_NAV_LABELS}, got {person_labels}"
+            )
+        for needle in forbidden:
+            if needle in html:
+                violations.append(f"{person_path.name}:{needle}")
+        if '<header class="kpef-product-header' in html:
+            violations.append(f"{person_path.name}:kpef-product-header")
+        if gp_service_tabs(html) != ["MARKET", "GP"]:
+            violations.append(f"{person_path.name}:gp-service-tabs")
+        for required in ["현재 역할", "공식 출처"]:
+            if required not in html:
+                violations.append(f"{person_path.name}:missing-{required}")
+
     if violations:
         raise CheckFailure(f"Forbidden generated GP wording/markup: {', '.join(violations)}")
     if (
@@ -423,7 +442,11 @@ def check_generated_gp_contract(require_data: bool = False) -> list[str]:
     ):
         raise CheckFailure("GP directory rows are missing clickable data-url links")
 
-    return [f"generated_gp_contract=ok detail_pages_checked={len(detail_paths)} market=ok"]
+    return [
+        "generated_gp_contract=ok "
+        f"detail_pages_checked={len(detail_paths)} "
+        f"person_pages_checked={len(person_paths)} market=ok"
+    ]
 
 
 def check_generated_lp_wiki_contract() -> list[str]:

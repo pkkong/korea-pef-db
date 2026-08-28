@@ -26,7 +26,7 @@
 5. `Public surface` 공개 화면
    - LP/GP와 GitHub Pages mirror는 public read model을 HTML로 구운 결과다.
    - 공식 Brief 앱은 검증된 mirror archive를 Supabase public read model로 동기화한 뒤 Vercel에서 읽는 결과다.
-   - 공식 GP Market/Directory는 FSS readiness를 통과한 `gp_public_snapshots`와 두 public page artifact를 Supabase에 atomically publish한 뒤 Vercel에서 읽는 결과다. GitHub Pages는 정적 backup mirror일 뿐 Vercel GP 화면의 runtime source가 아니다.
+   - 공식 GP Market/Directory는 FSS readiness를 통과한 `gp_public_snapshots`와 public page artifact를 Supabase에 atomically publish한 뒤 Vercel에서 읽는 결과다. GitHub Pages는 정적 backup mirror일 뿐 Vercel GP 화면의 runtime source가 아니다.
    - DB나 CSV가 바뀌어도 build, sync, deploy, public verification 전까지 공개 화면은 바뀌지 않는다.
 
 ## 상태값 분리 원칙
@@ -107,9 +107,9 @@ Vercel archive 재구성은 두 층을 함께 읽어야 한다.
 FSS GP는 raw workbook, SQLite 분석 결과, 정적 renderer 산출물을 차례로 검증한 뒤
 Supabase에서 하나의 published snapshot으로 전환한다.
 
-- `gp_public_snapshots`: reporting period, 기준일, FSS source ID/SHA-256, 핵심 수치, publish status를 저장한다. Snapshot ID는 FSS 원본 SHA와 검증된 두 public page의 content SHA를 함께 반영하므로, 같은 분기라도 집계 또는 화면 결과가 바뀌면 새 snapshot을 발행한다.
-- `gp_public_pages`: 하나의 snapshot에 속한 `market.html`, `gps.html`, source-backed GP의 `gp-<id>.html` public artifact와 content SHA-256을 저장한다.
-- `publish_gp_public_snapshot(snapshot_id)`: `market.html`과 `gps.html`이 모두 존재할 때만 이전 published snapshot을 retire하고 새 snapshot을 publish한다. GP detail page는 함께 versioned 되어 Vercel의 `/gp-<id>.html` 경로에서 읽는다.
+- `gp_public_snapshots`: reporting period, 기준일, FSS source ID/SHA-256, 핵심 수치, publish status를 저장한다. Snapshot ID는 FSS 원본 SHA와 검증된 모든 public page의 content SHA를 함께 반영하므로, 같은 분기라도 집계 또는 화면 결과가 바뀌면 새 snapshot을 발행한다.
+- `gp_public_pages`: 하나의 snapshot에 속한 `market.html`, `gps.html`, source-backed GP의 `gp-<id>.html`, 공개 가능한 People의 `person-<id>.html` artifact와 content SHA-256을 저장한다.
+- `publish_gp_public_snapshot(snapshot_id)`: `market.html`과 `gps.html`이 모두 존재할 때만 이전 published snapshot을 retire하고 새 snapshot을 publish한다. GP와 People detail page는 함께 versioned 되어 Vercel의 `/gp-<id>.html`, `/person-<id>.html` 경로에서 읽는다.
 - Vercel은 anon key로 published snapshot만 읽고, HTML content SHA-256을 다시 확인한 뒤 응답한다. Supabase 장애 때에는 같은 serverless instance의 마지막 정상 snapshot만 짧게 유지하고, GitHub Pages HTML을 runtime fallback으로 사용하지 않는다.
 
 이 모델은 HTML을 직접 수정하는 저장소가 아니다. GP renderer가 검증된 FSS public
@@ -123,9 +123,11 @@ GP People은 `person_role`의 현재 GP 소속과 공식 출처가 함께 확인
 People 입력 CSV의 GP 숫자 ID는 FSS 재수집 때 달라질 수 있는 hint일 뿐이다. 적재 시에는
 `current_gp_name` 또는 GP role의 `org_name`을 표준명으로 먼저 해석해 최신 `gp_house.gp_id`를
 다시 연결하며, 이름을 찾을 수 없을 때만 입력 ID를 보존한다.
-초기 공개 범위는 MBK profile의 `주요 인물` section이며, 전체 People 탭이나 출처 없는 인물
-목록으로 확장하지 않는다. FSS rebuild는 People table을 포함하지 않으므로 `Deploy GP FSS market`
-workflow가 public page build 전에 maintained People CSV를 SQLite에 다시 적재한다.
+공개 GP profile은 공식 팀 페이지에서 확인된 현재 인물을 `주요 인물`으로 표시한다. 그중 대표,
+파트너, 임원급 직함이 확인된 인물은 이름을 `person-<id>.html` 상세로 연결해 현재 역할, 경력,
+학력, 공식 출처를 공개한다. 전체 People 탭이나 출처 없는 인물 목록으로는 확장하지 않는다.
+FSS rebuild는 People table을 포함하지 않으므로 `Deploy GP FSS market` workflow가 public page build
+전에 maintained People CSV를 SQLite에 다시 적재한다.
 
 ### GP profile evidence binding
 

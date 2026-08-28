@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 
 PUBLIC_PAGE_NAMES = {"market.html", "gps.html"}
 GP_DETAIL_PAGE_RE = re.compile(r"gp-[0-9]+\.html")
+PERSON_DETAIL_PAGE_RE = re.compile(r"person-[0-9]+\.html")
 
 
 class GPPublicDataError(RuntimeError):
@@ -41,7 +42,11 @@ def _request_json(url: str, key: str) -> Any:
 
 
 def fetch_active_gp_page(page_name: str) -> dict[str, str]:
-    if page_name not in PUBLIC_PAGE_NAMES and not GP_DETAIL_PAGE_RE.fullmatch(page_name):
+    if (
+        page_name not in PUBLIC_PAGE_NAMES
+        and not GP_DETAIL_PAGE_RE.fullmatch(page_name)
+        and not PERSON_DETAIL_PAGE_RE.fullmatch(page_name)
+    ):
         raise GPPublicDataError(f"Unsupported GP page: {page_name}")
     base_url, key = _supabase_config()
     snapshot_query = urlencode(

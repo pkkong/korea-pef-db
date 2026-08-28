@@ -20,6 +20,7 @@ MARKET_REQUIRED_TABLES = ("v_period_summary", "source_document")
 PROFILE_REQUIRED_TABLES = ("gp_profile", "gp_house")
 NEWS_REQUIRED_TABLES = ("news_entity_link", "news_document")
 PEOPLE_REQUIRED_TABLES = ("person", "person_role")
+PERSON_PROFILE_REQUIRED_TABLES = ("person", "person_role", "person_education", "person_source")
 TOP_GP_PAGE_LIMIT = 120
 PROFILE_NEWS_LIMIT = 12
 PROFILE_LP_SIGNAL_LIMIT = 8
@@ -56,6 +57,23 @@ DEAL_KEYWORDS = (
 APP_ICON_FILE = "apple-touch-icon.png"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FSS_SOURCE_REGISTRY = REPO_ROOT / "data" / "source_registry_fss_pef.csv"
+OFFICIAL_PEOPLE_SOURCE_GRADES = (
+    "official",
+    "official_exchange_disclosure",
+    "official_filing",
+    "official_public_institution",
+)
+OFFICIAL_PEOPLE_SOURCE_GRADES_SQL = ", ".join(
+    f"'{grade}'" for grade in OFFICIAL_PEOPLE_SOURCE_GRADES
+)
+SENIOR_PERSON_TITLE_RE = re.compile(
+    r"(?:"
+    r"\b(?:ceo|coo|cio|cfo|cro|cto|cso)\b|"
+    r"\b(?:chairman|president|vice president|partner|managing director|director|founder|co-founder|head of)\b|"
+    r"대표|회장|사장|부사장|전무|상무|이사|파트너|본부장|투자총괄|최고|창립|창업|상임고문"
+    r")",
+    re.IGNORECASE,
+)
 
 
 def _app_head_meta() -> str:
@@ -143,6 +161,31 @@ def write_gp_pages(site_dir: Path, db_path: Path, report_date: str) -> dict[str,
         for gp in gps:
             gp["profile_page"] = _gp_page_name(gp["source_gp_id"]) if str(gp["source_gp_id"]) in top_ids else ""
 
+        person_profile_ids = {
+            int(person["person_id"])
+            for gp_id, people in people_by_gp.items()
+            if gp_id in top_ids
+            for person in people
+            if _is_public_person_profile_candidate(person)
+        }
+        person_profiles = (
+            _read_public_person_profiles(conn, person_profile_ids)
+            if person_profile_ids and _db_objects_exist(conn, PERSON_PROFILE_REQUIRED_TABLES)
+            else {}
+        )
+        gp_by_id = {str(gp["source_gp_id"]): gp for gp in gps}
+        for people in people_by_gp.values():
+            for person in people:
+                person_id = int(person["person_id"])
+                person["profile_page"] = _person_page_name(person_id) if person_id in person_profiles else ""
+        for person in person_profiles.values():
+            source_gp_id = str(person["source_gp_id"])
+            gp = gp_by_id.get(source_gp_id, {})
+            person["gp_profile_page"] = _clean(gp.get("profile_page"))
+            person["reporting_period"] = _clean(
+                gp.get("latest_period_label") or gp.get("last_seen_period")
+            )
+
         (site_dir / "gps.html").write_text(
             _render_directory_page(report_date, ranked_gps, top_ids),
             encoding="utf-8",
@@ -152,11 +195,17 @@ def write_gp_pages(site_dir: Path, db_path: Path, report_date: str) -> dict[str,
                 _render_gp_detail_page(report_date, gp, ranked_gps),
                 encoding="utf-8",
             )
+        for person in person_profiles.values():
+            (site_dir / _person_page_name(person["person_id"])).write_text(
+                _render_person_profile_page(report_date, person),
+                encoding="utf-8",
+            )
 
         return {
             "gp_count": len(gps),
             "active_gp_count": sum(1 for gp in gps if _as_bool(gp.get("active_in_latest_period"))),
             "top_gp_page_count": len(top_gps),
+            "person_profile_page_count": len(person_profiles),
             "news_link_count": sum(int(gp.get("news_count") or 0) for gp in gps),
             "deal_signal_count": sum(int(gp.get("deal_news_count") or 0) for gp in gps),
             "lp_signal_count": sum(int(gp.get("lp_signal_count") or 0) for gp in gps),
@@ -170,6 +219,7 @@ def _zero_counts() -> dict[str, int]:
         "gp_count": 0,
         "active_gp_count": 0,
         "top_gp_page_count": 0,
+        "person_profile_page_count": 0,
         "news_link_count": 0,
         "deal_signal_count": 0,
         "lp_signal_count": 0,
@@ -177,8 +227,9 @@ def _zero_counts() -> dict[str, int]:
 
 
 def _remove_stale_gp_pages(site_dir: Path) -> None:
-    for path in site_dir.glob("gp-*.html"):
-        path.unlink()
+    for pattern in ("gp-*.html", "person-*.html"):
+        for path in site_dir.glob(pattern):
+            path.unlink()
 
 
 def _db_object_exists(conn: sqlite3.Connection, name: str) -> bool:
@@ -392,7 +443,7 @@ def _read_gp_funds(conn: sqlite3.Connection) -> dict[str, list[dict[str, object]
 def _read_gp_people(conn: sqlite3.Connection) -> dict[str, list[dict[str, object]]]:
     """Return current GP people only when their profile has an official source."""
     rows = conn.execute(
-        """
+        f"""
         SELECT
             pr.org_id AS source_gp_id,
             p.person_id,
@@ -411,11 +462,7 @@ def _read_gp_people(conn: sqlite3.Connection) -> dict[str, list[dict[str, object
           AND pr.org_id IS NOT NULL
           AND COALESCE(p.profile_status, '') = 'active'
           AND COALESCE(NULLIF(pr.source_url, ''), NULLIF(p.primary_source_url, '')) <> ''
-          AND LOWER(COALESCE(pr.source_grade, '')) IN (
-              'official',
-              'official_exchange_disclosure',
-              'official_filing'
-          )
+          AND LOWER(COALESCE(pr.source_grade, '')) IN ({OFFICIAL_PEOPLE_SOURCE_GRADES_SQL})
         ORDER BY
             pr.org_id,
             CASE LOWER(COALESCE(pr.title, p.current_title, ''))
@@ -438,6 +485,148 @@ def _read_gp_people(conn: sqlite3.Connection) -> dict[str, list[dict[str, object
         seen_by_gp[gp_id].add(person_id)
         people_by_gp[gp_id].append(dict(row))
     return dict(people_by_gp)
+
+
+def _is_public_person_profile_candidate(person: dict[str, object]) -> bool:
+    """Only publish detailed profiles for current senior roles from official sources."""
+    title = _clean(person.get("role_title"))
+    return bool(title and SENIOR_PERSON_TITLE_RE.search(title))
+
+
+def _read_public_person_profiles(
+    conn: sqlite3.Connection,
+    person_ids: set[int],
+) -> dict[int, dict[str, object]]:
+    """Load source-backed detail data for the senior People profile pages."""
+    if not person_ids:
+        return {}
+
+    placeholders = ", ".join("?" for _ in person_ids)
+    ordered_ids = tuple(sorted(person_ids))
+    current_rows = conn.execute(
+        f"""
+        SELECT
+            p.person_id,
+            p.person_name_ko,
+            p.person_name_en,
+            pr.org_id AS source_gp_id,
+            pr.org_name AS gp_name,
+            COALESCE(NULLIF(pr.title, ''), NULLIF(p.current_title, '')) AS role_title,
+            pr.team,
+            COALESCE(NULLIF(pr.source_url, ''), NULLIF(p.primary_source_url, '')) AS source_url,
+            pr.source_title
+        FROM person p
+        JOIN person_role pr
+          ON pr.person_id = p.person_id
+        WHERE p.person_id IN ({placeholders})
+          AND pr.org_type = 'GP'
+          AND pr.is_current = 1
+          AND COALESCE(p.profile_status, '') = 'active'
+          AND COALESCE(NULLIF(pr.source_url, ''), NULLIF(p.primary_source_url, '')) <> ''
+          AND LOWER(COALESCE(pr.source_grade, '')) IN ({OFFICIAL_PEOPLE_SOURCE_GRADES_SQL})
+        ORDER BY p.person_id, pr.role_id
+        """,
+        ordered_ids,
+    ).fetchall()
+    profiles: dict[int, dict[str, object]] = {}
+    for row in current_rows:
+        person_id = int(row["person_id"])
+        if person_id in profiles:
+            continue
+        profiles[person_id] = {
+            **dict(row),
+            "roles": [],
+            "education": [],
+            "sources": [],
+        }
+
+    if not profiles:
+        return {}
+
+    profile_ids = tuple(sorted(profiles))
+    profile_placeholders = ", ".join("?" for _ in profile_ids)
+    role_rows = conn.execute(
+        f"""
+        SELECT
+            role_id,
+            person_id,
+            org_name,
+            title,
+            team,
+            role_start_date,
+            role_end_date,
+            is_current,
+            source_url,
+            source_title
+        FROM person_role
+        WHERE person_id IN ({profile_placeholders})
+          AND COALESCE(source_url, '') <> ''
+          AND LOWER(COALESCE(source_grade, '')) IN ({OFFICIAL_PEOPLE_SOURCE_GRADES_SQL})
+        ORDER BY person_id, is_current DESC, role_end_date DESC, role_id DESC
+        """,
+        profile_ids,
+    ).fetchall()
+    for row in role_rows:
+        profiles[int(row["person_id"])]["roles"].append(dict(row))
+
+    education_rows = conn.execute(
+        f"""
+        SELECT
+            education_id,
+            person_id,
+            school_name,
+            school_name_en,
+            degree,
+            major,
+            start_year,
+            graduation_year,
+            source_url,
+            source_title
+        FROM person_education
+        WHERE person_id IN ({profile_placeholders})
+          AND COALESCE(source_url, '') <> ''
+          AND LOWER(COALESCE(source_grade, '')) IN ({OFFICIAL_PEOPLE_SOURCE_GRADES_SQL})
+        ORDER BY person_id, graduation_year DESC, education_id DESC
+        """,
+        profile_ids,
+    ).fetchall()
+    for row in education_rows:
+        profiles[int(row["person_id"])]["education"].append(dict(row))
+
+    source_rows = conn.execute(
+        f"""
+        SELECT
+            source_evidence_id,
+            person_id,
+            source_title,
+            source_url
+        FROM person_source
+        WHERE person_id IN ({profile_placeholders})
+          AND COALESCE(source_url, '') <> ''
+          AND LOWER(COALESCE(source_grade, '')) IN ({OFFICIAL_PEOPLE_SOURCE_GRADES_SQL})
+        ORDER BY person_id, source_evidence_id
+        """,
+        profile_ids,
+    ).fetchall()
+    source_urls_by_person: dict[int, set[str]] = defaultdict(set)
+    for row in source_rows:
+        person_id = int(row["person_id"])
+        source_url = _safe_url(row["source_url"])
+        if not source_url or source_url in source_urls_by_person[person_id]:
+            continue
+        source_urls_by_person[person_id].add(source_url)
+        profiles[person_id]["sources"].append(dict(row))
+    for person_id, profile in profiles.items():
+        source_url = _safe_url(profile.get("source_url"))
+        if source_url and source_url not in source_urls_by_person[person_id]:
+            profile["sources"].append(
+                {
+                    "source_url": source_url,
+                    "source_title": _clean(profile.get("source_title")) or "공식 팀 소개",
+                }
+            )
+
+    return profiles
 
 
 def _read_lp_signals(conn: sqlite3.Connection) -> dict[str, list[dict[str, object]]]:
@@ -1229,6 +1418,8 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
     coverage_rows = _render_coverage_facts(gp)
     signal_bar = _render_signal_bar(gp)
     alias_list = _render_aliases(gp.get("alias_names") or gp.get("raw_name_variants"))
+    people_rows = _render_gp_people_rows(list(gp.get("people", [])))
+    people_count = len(gp.get("people", []))
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -1303,6 +1494,20 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
 
     <section class="gp-detail-grid gp-detail-lower">
       <article class="gp-panel">
+        <div class="gp-panel-heading">
+          <h2>주요 인물</h2>
+          <span>{people_count:,}명</span>
+        </div>
+        {people_rows}
+      </article>
+      <article class="gp-panel">
+        <h2>비교 GP</h2>
+        {peer_rows}
+      </article>
+    </section>
+
+    <section class="gp-detail-grid gp-detail-lower">
+      <article class="gp-panel">
         <h2>관련 딜</h2>
         {deal_rows}
       </article>
@@ -1313,10 +1518,6 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
     </section>
 
     <section class="gp-detail-grid gp-detail-lower">
-      <article class="gp-panel">
-        <h2>비교 GP</h2>
-        {peer_rows}
-      </article>
       <article class="gp-panel">
         <h2>명칭 정보</h2>
         <div class="gp-alias-box">
@@ -1543,12 +1744,17 @@ def _render_profile_preview_people_section(people_rows: list[dict[str, object]])
         role = _clean(person.get("role_title"))
         team = _clean(person.get("team"))
         meta = _join_values([role, team])
+        profile_page = _clean(person.get("profile_page"))
+        identity = f"""<h3>{_e(name)}{english_html}</h3>
+            <p>{_e(meta or "MBK Partners")}</p>"""
+        row_body = (
+            f'<a class="gp-profile-preview-person-link" href="{_e(profile_page)}">{identity}<span aria-hidden="true"></span></a>'
+            if profile_page
+            else f"<div>{identity}</div>"
+        )
         rows.append(
             f"""        <article class="gp-profile-preview-person-row">
-          <div>
-            <h3>{_e(name)}{english_html}</h3>
-            <p>{_e(meta or "MBK Partners")}</p>
-          </div>
+          {row_body}
         </article>"""
         )
     return f"""    <section class="gp-profile-preview-section gp-profile-preview-people" aria-labelledby="gpPeople">
@@ -1560,6 +1766,236 @@ def _render_profile_preview_people_section(people_rows: list[dict[str, object]])
 {chr(10).join(rows)}
       </div>
     </section>"""
+
+
+def _render_gp_people_rows(people_rows: list[dict[str, object]]) -> str:
+    if not people_rows:
+        return '<p class="gp-empty-note">공식 공개 자료에서 확인된 현재 인물이 없습니다.</p>'
+    rows = []
+    for person in people_rows:
+        name = _clean(person.get("person_name_ko")) or _clean(person.get("person_name_en")) or "-"
+        english_name = _clean(person.get("person_name_en"))
+        english_html = (
+            f'<span>{_e(english_name)}</span>'
+            if english_name and english_name.casefold() != name.casefold()
+            else ""
+        )
+        meta = _join_values([person.get("role_title"), person.get("team")])
+        identity = f"""<div>
+              <h3>{_e(name)}{english_html}</h3>
+              <p>{_e(meta)}</p>
+            </div>"""
+        profile_page = _clean(person.get("profile_page"))
+        row_body = (
+            f'<a class="gp-person-row-link" href="{_e(profile_page)}">{identity}<span aria-hidden="true"></span></a>'
+            if profile_page
+            else identity
+        )
+        rows.append(f"""          <article class="gp-person-row">
+            {row_body}
+          </article>""")
+    return '<div class="gp-person-list">\n' + "\n".join(rows) + "\n        </div>"
+
+
+def _render_person_profile_page(report_date: str, person: dict[str, object]) -> str:
+    name = _clean(person.get("person_name_ko")) or _clean(person.get("person_name_en")) or "인물"
+    english_name = _clean(person.get("person_name_en"))
+    english_html = (
+        f'<p class="person-profile-english">{_e(english_name)}</p>'
+        if english_name and english_name.casefold() != name.casefold()
+        else ""
+    )
+    gp_name = _clean(person.get("gp_name")) or "GP"
+    gp_profile_page = _clean(person.get("gp_profile_page"))
+    gp_link = (
+        f'<a href="{_e(gp_profile_page)}">{_e(gp_name)}</a>'
+        if gp_profile_page
+        else f'<a href="gps.html">{_e(gp_name)}</a>'
+    )
+    role_title = _clean(person.get("role_title"))
+    team = _clean(person.get("team"))
+    reporting_period = _clean(person.get("reporting_period")) or report_date
+    current_rows = _render_person_current_rows(gp_link, role_title, team)
+    career_section = _render_person_career_section(list(person.get("roles", [])))
+    education_section = _render_person_education_section(list(person.get("education", [])))
+    source_section = _render_person_source_section(list(person.get("sources", [])))
+
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{_e(name)} - PEF 운용 인물</title>
+{_app_head_meta()}
+  {_reporting_period_meta(reporting_period)}
+  {_base_styles()}
+</head>
+<body>
+  <main class="gp-shell person-profile">
+    {_render_service_header("gp")}
+    <nav class="person-profile-back" aria-label="경로">
+      {gp_link}
+      <span>{_e(name)}</span>
+    </nav>
+
+    <header class="person-profile-hero">
+      <span class="person-profile-avatar" aria-hidden="true">{_e(_avatar_label(name, fallback="PE"))}</span>
+      <div>
+        <span class="person-profile-kicker">PEF 운용 인물</span>
+        <h1>{_e(name)}</h1>
+        {english_html}
+        <p>{_e(_join_values([role_title, gp_name, team]))}</p>
+      </div>
+    </header>
+
+    <section class="person-profile-section" aria-labelledby="personCurrentRole">
+      <div class="person-profile-section-head">
+        <h2 id="personCurrentRole">현재 역할</h2>
+      </div>
+      <dl class="person-profile-info-list">
+{current_rows}
+      </dl>
+    </section>
+
+{career_section}
+{education_section}
+{source_section}
+
+    <footer class="person-profile-source-note">
+      <p>공식 공개 자료 기준</p>
+    </footer>
+  </main>
+  {_render_bottom_nav()}
+  {_service_header_script(redirect_search=True)}
+</body>
+</html>
+"""
+
+
+def _render_person_current_rows(gp_link: str, role_title: str, team: str) -> str:
+    facts = [("소속", gp_link, True), ("직함", role_title), ("조직", team)]
+    rows = []
+    for label, value, *raw_value in facts:
+        if not _clean(value):
+            continue
+        raw = bool(raw_value and raw_value[0])
+        body = str(value) if raw else _e(value)
+        rows.append(
+            f"""        <div class="person-profile-info-row">
+          <dt>{_e(label)}</dt>
+          <dd>{body}</dd>
+        </div>"""
+        )
+    return "\n".join(rows)
+
+
+def _render_person_career_section(role_rows: list[dict[str, object]]) -> str:
+    seen: set[tuple[str, str, str]] = set()
+    rows = []
+    for role in role_rows:
+        if _as_bool(role.get("is_current")):
+            continue
+        org_name = _clean(role.get("org_name"))
+        role_title = _clean(role.get("title"))
+        team = _clean(role.get("team"))
+        key = (org_name, role_title, team)
+        if not org_name or key in seen:
+            continue
+        seen.add(key)
+        period = _format_person_role_period(role.get("role_start_date"), role.get("role_end_date"))
+        meta = _join_values([role_title, team])
+        rows.append(
+            f"""        <article class="person-profile-row">
+          <div>
+            <h3>{_e(org_name)}</h3>
+            <p>{_e(meta)}</p>
+          </div>
+          <span>{_e(period)}</span>
+        </article>"""
+        )
+    if not rows:
+        return ""
+    return f"""    <section class="person-profile-section" aria-labelledby="personCareer">
+      <div class="person-profile-section-head">
+        <h2 id="personCareer">경력</h2>
+      </div>
+      <div class="person-profile-list">
+{chr(10).join(rows)}
+      </div>
+    </section>"""
+
+
+def _render_person_education_section(education_rows: list[dict[str, object]]) -> str:
+    seen: set[tuple[str, str, str]] = set()
+    rows = []
+    for education in education_rows:
+        school = _clean(education.get("school_name")) or _clean(education.get("school_name_en"))
+        degree = _clean(education.get("degree"))
+        major = _clean(education.get("major"))
+        key = (school, degree, major)
+        if not school or key in seen:
+            continue
+        seen.add(key)
+        years = _format_person_education_years(education.get("start_year"), education.get("graduation_year"))
+        rows.append(
+            f"""        <article class="person-profile-row">
+          <div>
+            <h3>{_e(school)}</h3>
+            <p>{_e(_join_values([degree, major]))}</p>
+          </div>
+          <span>{_e(years)}</span>
+        </article>"""
+        )
+    if not rows:
+        return ""
+    return f"""    <section class="person-profile-section" aria-labelledby="personEducation">
+      <div class="person-profile-section-head">
+        <h2 id="personEducation">학력</h2>
+      </div>
+      <div class="person-profile-list">
+{chr(10).join(rows)}
+      </div>
+    </section>"""
+
+
+def _render_person_source_section(source_rows: list[dict[str, object]]) -> str:
+    rows = []
+    for source in source_rows:
+        source_url = _safe_url(source.get("source_url"))
+        if not source_url:
+            continue
+        title = _clean(source.get("source_title")) or "공식 인물 소개"
+        rows.append(
+            f"""        <a class="person-profile-source-row" href="{_e(source_url)}" target="_blank" rel="noreferrer">
+          <span>{_e(title)}</span><i aria-hidden="true"></i>
+        </a>"""
+        )
+    if not rows:
+        return ""
+    return f"""    <section class="person-profile-section person-profile-sources" aria-labelledby="personSources">
+      <div class="person-profile-section-head">
+        <h2 id="personSources">공식 출처</h2>
+      </div>
+      <div class="person-profile-source-list">
+{chr(10).join(rows)}
+      </div>
+    </section>"""
+
+
+def _format_person_role_period(start_date: object, end_date: object) -> str:
+    start = _short_date(start_date)
+    end = _short_date(end_date)
+    if start and end:
+        return f"{start} - {end}"
+    return start or end
+
+
+def _format_person_education_years(start_year: object, graduation_year: object) -> str:
+    start = _clean(start_year)
+    graduation = _clean(graduation_year)
+    if start and graduation:
+        return f"{start} - {graduation}"
+    return start or graduation
 
 
 def _profile_preview_script() -> str:
@@ -2940,6 +3376,54 @@ def _base_styles() -> str:
     .gp-lp-list {
       display: grid;
       gap: 8px;
+    }
+    .gp-person-list {
+      display: grid;
+    }
+    .gp-person-row {
+      min-width: 0;
+      border-top: 1px solid var(--line);
+      padding: 10px 0;
+    }
+    .gp-person-row:first-child { border-top: 0; padding-top: 0; }
+    .gp-person-row h3 {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 7px;
+      margin: 0;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.4;
+    }
+    .gp-person-row h3 span {
+      color: var(--secondary);
+      font-size: 11.5px;
+      font-weight: 650;
+    }
+    .gp-person-row p {
+      margin: 4px 0 0;
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.4;
+    }
+    .gp-person-row-link {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 16px;
+      gap: 10px;
+      align-items: center;
+      color: inherit;
+      text-decoration: none;
+    }
+    .gp-person-row-link > span,
+    .gp-profile-preview-person-link > span {
+      width: 7px;
+      height: 7px;
+      border-top: 1.5px solid var(--secondary);
+      border-right: 1.5px solid var(--secondary);
+      transform: rotate(45deg);
     }
     .gp-fund-row,
     .gp-lp-row {
@@ -4477,6 +4961,15 @@ def _base_styles() -> str:
       border-top: 1px solid #f2f4f6;
       padding: 12px 0;
     }
+    .gp-profile-preview-person-link {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 16px;
+      gap: 10px;
+      width: 100%;
+      align-items: center;
+      color: inherit;
+      text-decoration: none;
+    }
     .gp-profile-preview-person-row h3 {
       display: flex;
       flex-wrap: wrap;
@@ -4629,6 +5122,178 @@ def _base_styles() -> str:
       text-decoration: underline;
       text-underline-offset: 2px;
     }
+    .person-profile {
+      width: min(calc(100% - 32px), 760px);
+      padding-bottom: calc(100px + env(safe-area-inset-bottom));
+    }
+    .person-profile-back {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin: 14px 0 18px;
+      color: #6b7684;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .person-profile-back a {
+      color: #3182f6;
+      text-decoration: none;
+    }
+    .person-profile-back span::before {
+      margin-right: 7px;
+      color: #b0b8c1;
+      content: "/";
+    }
+    .person-profile-hero {
+      display: grid;
+      grid-template-columns: 58px minmax(0, 1fr);
+      gap: 14px;
+      align-items: center;
+      padding-bottom: 24px;
+    }
+    .person-profile-avatar {
+      display: grid;
+      width: 58px;
+      height: 58px;
+      place-items: center;
+      border-radius: 50%;
+      background: #e8f3ff;
+      color: #3182f6;
+      font-size: 14px;
+      font-weight: 800;
+    }
+    .person-profile-kicker {
+      display: block;
+      margin-bottom: 4px;
+      color: #6b7684;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .person-profile-hero h1 {
+      margin: 0;
+      color: #191f28;
+      font-size: 25px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+    .person-profile-english {
+      margin: 4px 0 0;
+      color: #6b7684;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+    .person-profile-hero > div > p:last-child {
+      margin: 6px 0 0;
+      color: #4e5968;
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.45;
+    }
+    .person-profile-section {
+      margin: 0 -16px;
+      border-top: 8px solid #f2f4f6;
+      padding: 24px 16px 0;
+    }
+    .person-profile-section-head {
+      margin-bottom: 12px;
+    }
+    .person-profile-section-head h2 {
+      margin: 0;
+      color: #191f28;
+      font-size: 18px;
+      font-weight: 760;
+      line-height: 1.35;
+    }
+    .person-profile-info-list { margin: 0; }
+    .person-profile-info-row {
+      display: grid;
+      grid-template-columns: minmax(80px, 0.42fr) minmax(0, 1fr);
+      gap: 16px;
+      min-height: 53px;
+      align-items: center;
+      border-top: 1px solid #f2f4f6;
+    }
+    .person-profile-info-row:first-child { border-top: 0; }
+    .person-profile-info-row dt {
+      color: #6b7684;
+      font-size: 14px;
+      font-weight: 650;
+    }
+    .person-profile-info-row dd {
+      margin: 0;
+      color: #333d4b;
+      font-size: 14px;
+      font-weight: 650;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .person-profile-info-row a { color: #3182f6; text-decoration: none; }
+    .person-profile-list { display: grid; }
+    .person-profile-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      min-height: 62px;
+      border-top: 1px solid #f2f4f6;
+      padding: 11px 0;
+    }
+    .person-profile-row:first-child { border-top: 0; padding-top: 0; }
+    .person-profile-row h3 {
+      margin: 0;
+      color: #333d4b;
+      font-size: 15px;
+      font-weight: 730;
+      line-height: 1.4;
+    }
+    .person-profile-row p {
+      margin: 4px 0 0;
+      color: #6b7684;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+    .person-profile-row > span {
+      color: #8b95a1;
+      font-size: 11.5px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .person-profile-sources { padding-bottom: 4px; }
+    .person-profile-source-list { display: grid; }
+    .person-profile-source-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 16px;
+      gap: 10px;
+      min-height: 54px;
+      align-items: center;
+      border-top: 1px solid #f2f4f6;
+      color: #333d4b;
+      font-size: 14px;
+      font-weight: 650;
+      text-decoration: none;
+    }
+    .person-profile-source-row:first-child { border-top: 0; }
+    .person-profile-source-row i {
+      width: 7px;
+      height: 7px;
+      border-top: 1.5px solid #6b7684;
+      border-right: 1.5px solid #6b7684;
+      transform: rotate(45deg);
+    }
+    .person-profile-source-note {
+      margin: 0 -16px;
+      border-top: 8px solid #f2f4f6;
+      padding: 18px 16px 0;
+    }
+    .person-profile-source-note p {
+      margin: 0;
+      color: #8b95a1;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.5;
+    }
     @media (min-width: 700px) {
       .gp-profile-preview { width: min(calc(100% - 48px), 760px); }
       .gp-profile-preview-hero { grid-template-columns: 72px minmax(0, 1fr); padding-bottom: 30px; }
@@ -4645,6 +5310,11 @@ def _base_styles() -> str:
       .gp-profile-preview-source { margin-right: 0; margin-left: 0; padding-right: 0; padding-left: 0; }
       .gp-profile-preview-section { padding-top: 28px; }
       .gp-profile-preview-source { padding-top: 20px; }
+      .person-profile { width: min(calc(100% - 48px), 760px); }
+      .person-profile-section,
+      .person-profile-source-note { margin-right: 0; margin-left: 0; padding-right: 0; padding-left: 0; }
+      .person-profile-section { padding-top: 28px; }
+      .person-profile-source-note { padding-top: 20px; }
     }
   </style>"""
 
@@ -4672,6 +5342,11 @@ def _gp_name(gp: dict[str, object]) -> str:
 def _gp_page_name(source_gp_id: object) -> str:
     safe_id = re.sub(r"[^0-9A-Za-z_-]+", "-", str(source_gp_id)).strip("-")
     return f"gp-{safe_id or 'unknown'}.html"
+
+
+def _person_page_name(person_id: object) -> str:
+    safe_id = re.sub(r"[^0-9]+", "", str(person_id))
+    return f"person-{safe_id or 'unknown'}.html"
 
 
 def _format_rank(value: object) -> str:
