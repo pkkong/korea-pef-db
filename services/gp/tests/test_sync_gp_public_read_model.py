@@ -27,7 +27,10 @@ class SyncGPPublicReadModelTests(unittest.TestCase):
             site_dir.mkdir()
             for page_name in MODULE.CORE_PAGE_PATHS:
                 (site_dir / page_name).write_text(f"<!doctype html><main>2025Q4 {page_name}</main>", encoding="utf-8")
-            (site_dir / "gp-2.html").write_text("<!doctype html><main>2025Q4 GP profile</main>", encoding="utf-8")
+            (site_dir / "gp-2.html").write_text(
+                '<!doctype html><meta name="kpef-fss-reporting-period" content="2025Q4"><main>GP profile</main>',
+                encoding="utf-8",
+            )
 
             originals = {
                 "repo_root": MODULE.REPO_ROOT,
@@ -77,6 +80,11 @@ class SyncGPPublicReadModelTests(unittest.TestCase):
             [page["page_path"] for page in payload["pages"]],
             ["market.html", "gps.html", "gp-2.html"],
         )
+
+    def test_period_metadata_allows_localized_profile_copy(self) -> None:
+        html = '<meta name="kpef-fss-reporting-period" content="2025Q4"><main>2025년 4분기</main>'
+        self.assertTrue(MODULE._page_declares_reporting_period(html, "2025Q4"))
+        self.assertFalse(MODULE._page_declares_reporting_period(html, "2025Q3"))
 
     def test_snapshot_id_changes_when_public_page_content_changes(self) -> None:
         first = MODULE._snapshot_content_sha256(

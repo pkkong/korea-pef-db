@@ -71,6 +71,7 @@ class GpFundProfilePageTests(unittest.TestCase):
         self.assertFalse(_uses_profile_ui_preview({"standard_gp_name": "테스트파트너스"}))
         self.assertIn('class="gp-shell gp-profile-preview"', html)
         self.assertIn('data-fund-filter="active"', html)
+        self.assertIn('name="kpef-fss-reporting-period" content="2025Q4"', html)
         self.assertIn("공동 운용 펀드는 각 GP에 함께 표시합니다.", html)
         self.assertEqual(html.count('class="gp-profile-preview-fund-row"'), len(profile["funds"]))
 

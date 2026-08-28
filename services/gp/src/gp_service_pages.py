@@ -1303,9 +1303,8 @@ def _render_gp_profile_preview_page(report_date: str, gp: dict[str, object]) -> 
     funds = list(gp.get("funds", []))
     active_fund_count = sum(1 for fund in funds if _as_bool(fund.get("active_in_latest_period")))
     historical_fund_count = len(funds) - active_fund_count
-    period_label = _format_period_label(
-        gp.get("latest_period_label") or gp.get("last_seen_period") or report_date
-    )
+    reporting_period = _clean(gp.get("latest_period_label") or gp.get("last_seen_period") or report_date)
+    period_label = _format_period_label(reporting_period)
     company_rows = _render_profile_preview_company_rows(gp, homepage)
     fund_rows = _render_profile_preview_fund_rows(funds)
     source_note = f"금감원 PEF 운용현황 {period_label} 기준"
@@ -1317,6 +1316,7 @@ def _render_gp_profile_preview_page(report_date: str, gp: dict[str, object]) -> 
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{_e(name)} - PEF 운용사</title>
 {_app_head_meta()}
+  {_reporting_period_meta(reporting_period)}
   {_base_styles()}
 </head>
 <body>
@@ -4561,6 +4561,11 @@ def _format_period_label(value: object) -> str:
     if matched:
         return f"{matched.group(1)}년 {matched.group(2)}분기"
     return text
+
+
+def _reporting_period_meta(value: object) -> str:
+    period = _clean(value)
+    return f'<meta name="kpef-fss-reporting-period" content="{_e(period)}">' if period else ""
 
 
 def _format_delta(current: object, previous: object, suffix: str = "") -> str:

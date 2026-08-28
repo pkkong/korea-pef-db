@@ -124,6 +124,17 @@ def _snapshot_content_sha256(page_contents: list[tuple[str, str]]) -> str:
     return _content_sha256(value)
 
 
+def _page_declares_reporting_period(page_html: str, expected_period: str) -> bool:
+    if expected_period in page_html:
+        return True
+    for tag in re.findall(r"<meta\b[^>]*>", page_html, flags=re.IGNORECASE):
+        name = re.search(r"\bname\s*=\s*['\"]([^'\"]+)['\"]", tag, flags=re.IGNORECASE)
+        content = re.search(r"\bcontent\s*=\s*['\"]([^'\"]*)['\"]", tag, flags=re.IGNORECASE)
+        if name and content and name.group(1).lower() == "kpef-fss-reporting-period":
+            return content.group(1) == expected_period
+    return False
+
+
 def prepare_payload(
     *,
     site_dir: Path,
@@ -149,7 +160,7 @@ def prepare_payload(
         page_html = path.read_text(encoding="utf-8")
         if "<!doctype html>" not in page_html.lower():
             raise GPReadModelError(f"GP public page is not complete HTML: {path}")
-        if str(readiness["latest_period"]) not in page_html:
+        if not _page_declares_reporting_period(page_html, str(readiness["latest_period"])):
             raise GPReadModelError(f"GP public page does not show latest period {readiness['latest_period']}: {path}")
         page_bodies.append((page_path, page_html, _content_sha256(page_html)))
 
