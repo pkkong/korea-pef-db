@@ -135,22 +135,63 @@ def _page_declares_reporting_period(page_html: str, expected_period: str) -> boo
     return False
 
 
+def _metadata_from_canonical_manifest(path: Path) -> dict[str, object]:
+    """Read the FSS identity from Supabase restore output, not local raw files."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    source = data.get("snapshot", data)
+    if not isinstance(source, dict):
+        raise GPReadModelError(f"Canonical snapshot manifest is invalid: {path}")
+    required = (
+        "reporting_period",
+        "as_of_date",
+        "source_id",
+        "source_sha256",
+        "fund_count",
+        "primary_gp_count",
+        "commitment_amount_krw_mn",
+    )
+    missing = [field for field in required if source.get(field) in (None, "")]
+    if missing:
+        raise GPReadModelError(f"Canonical snapshot manifest is missing: {', '.join(missing)}")
+    return {field: source[field] for field in required}
+
+
 def prepare_payload(
     *,
     site_dir: Path,
     db_path: Path,
     registry_path: Path,
     expected_latest_period: str | None = None,
+    canonical_manifest: Path | None = None,
 ) -> dict[str, object]:
-    readiness = check_fss_statistics(
-        db_path=db_path,
-        registry_path=registry_path,
-        expected_latest_period=expected_latest_period,
-    )
-    registry_rows = read_registry(registry_path)
-    latest = latest_registry_row(registry_rows, str(readiness["latest_period"]))
-    raw_path = REPO_ROOT / latest["local_file"]
-    source_sha256 = sha256_file(raw_path)
+    if canonical_manifest:
+        metadata = _metadata_from_canonical_manifest(canonical_manifest)
+        reporting_period = str(metadata["reporting_period"])
+        if expected_latest_period and reporting_period != expected_latest_period:
+            raise GPReadModelError(
+                "Canonical snapshot reporting period does not match --expected-latest-period: "
+                f"{reporting_period} != {expected_latest_period}"
+            )
+    else:
+        readiness = check_fss_statistics(
+            db_path=db_path,
+            registry_path=registry_path,
+            expected_latest_period=expected_latest_period,
+        )
+        registry_rows = read_registry(registry_path)
+        latest = latest_registry_row(registry_rows, str(readiness["latest_period"]))
+        raw_path = REPO_ROOT / latest["local_file"]
+        metadata = {
+            "reporting_period": readiness["latest_period"],
+            "as_of_date": readiness["as_of_date"],
+            "source_id": readiness["source_id"],
+            "source_sha256": sha256_file(raw_path),
+            "fund_count": readiness["fund_count"],
+            "primary_gp_count": readiness["primary_gp_count"],
+            "commitment_amount_krw_mn": readiness["commitment_amount_krw_mn"],
+        }
+        reporting_period = str(metadata["reporting_period"])
+    source_sha256 = str(metadata["source_sha256"])
 
     page_bodies: list[tuple[str, str, str]] = []
     for page_path in public_page_paths(site_dir):
@@ -160,15 +201,15 @@ def prepare_payload(
         page_html = path.read_text(encoding="utf-8")
         if "<!doctype html>" not in page_html.lower():
             raise GPReadModelError(f"GP public page is not complete HTML: {path}")
-        if not _page_declares_reporting_period(page_html, str(readiness["latest_period"])):
-            raise GPReadModelError(f"GP public page does not show latest period {readiness['latest_period']}: {path}")
+        if not _page_declares_reporting_period(page_html, reporting_period):
+            raise GPReadModelError(f"GP public page does not show latest period {reporting_period}: {path}")
         page_bodies.append((page_path, page_html, _content_sha256(page_html)))
 
     snapshot_content_sha256 = _snapshot_content_sha256(
         [(page_path, content_sha256) for page_path, _, content_sha256 in page_bodies]
     )
     snapshot_id = (
-        f"fss-{readiness['latest_period'].lower()}-"
+        f"fss-{reporting_period.lower()}-"
         f"{source_sha256[:12]}-{snapshot_content_sha256[:12]}"
     )
     pages = [
@@ -183,13 +224,13 @@ def prepare_payload(
 
     snapshot = {
         "snapshot_id": snapshot_id,
-        "reporting_period": readiness["latest_period"],
-        "as_of_date": readiness["as_of_date"],
-        "source_id": readiness["source_id"],
+        "reporting_period": metadata["reporting_period"],
+        "as_of_date": metadata["as_of_date"],
+        "source_id": metadata["source_id"],
         "source_sha256": source_sha256,
-        "fund_count": readiness["fund_count"],
-        "primary_gp_count": readiness["primary_gp_count"],
-        "commitment_amount_krw_mn": readiness["commitment_amount_krw_mn"],
+        "fund_count": metadata["fund_count"],
+        "primary_gp_count": metadata["primary_gp_count"],
+        "commitment_amount_krw_mn": metadata["commitment_amount_krw_mn"],
         "status": "staged",
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -233,6 +274,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
     parser.add_argument("--expected-latest-period")
+    parser.add_argument(
+        "--canonical-manifest",
+        type=Path,
+        help="Use metadata restored from the current Supabase FSS snapshot instead of local raw Excel files.",
+    )
     parser.add_argument("--payload-out", type=Path, default=DEFAULT_PAYLOAD_OUT)
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args(argv)
@@ -243,6 +289,7 @@ def main(argv: list[str] | None = None) -> int:
             db_path=args.db,
             registry_path=args.registry,
             expected_latest_period=args.expected_latest_period or None,
+            canonical_manifest=args.canonical_manifest,
         )
         args.payload_out.parent.mkdir(parents=True, exist_ok=True)
         args.payload_out.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

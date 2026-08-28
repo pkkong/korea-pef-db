@@ -1,6 +1,6 @@
 # 데이터 운영 모델
 
-최종 수정: 2026-06-21 KST
+최종 수정: 2026-08-28 KST
 
 이 문서는 DB와 공개 화면 사이의 책임선을 정의한다. 핵심 원칙은
 `raw source -> canonical entity -> review/evidence -> public view -> static HTML`이다.
@@ -142,7 +142,33 @@ ingestion-local 번호이므로 evidence binding key가 아니다. 적용과 재
   다음 evidence 정리 작업에서 수정한다.
 - `Deploy GP FSS market`은 `FSS ingest → approved alias merge → market analytics → GP master → evidence apply → GP master
   export → evidence readiness → People CSV import → public snapshot` 순서를 지켜야 한다. raw FSS 재수집만으로 source-backed
-  profile 필드가 사라지거나 다른 GP에 옮겨가면 안 된다.
+profile 필드가 사라지거나 다른 GP에 옮겨가면 안 된다.
+
+## FSS / People canonical Supabase DB
+
+금감원 원천을 해석한 GP·펀드·People 운영 DB의 기준 위치는 Supabase다. SQLite는 기존
+분석기와 정적 renderer를 유지하는 동안에만 쓰는 임시 계산 파일이며, 공개 서비스의 영속
+원본이 아니다.
+
+- `fss_canonical_snapshots`와 `fss_*` 테이블은 한 FSS 기준일의 원천 문서, 표준 GP/펀드,
+  펀드×분기 행, 이벤트, 검증된 GP 명칭 병합 이력을 함께 보관한다. 이전 분기 snapshot은
+  삭제하지 않으며 새 분기만 새 snapshot으로 추가한다.
+- `people_*` 테이블은 현재 People 입력과 출처를 보관한다. People은 FSS snapshot과 별도
+  수명주기를 가지며 `people_data_state.fss_snapshot_id`로 어느 FSS 기준 GP에 연결됐는지만
+  기록한다.
+- `Deploy GP FSS market`은 **새 금감원 분기 자료가 확인됐을 때만** 실행한다. 이 경로는
+  `원본 수집 → 정규화 → analytics → People 재연결 → canonical Supabase snapshot publish`
+  순서다.
+- `Publish GP and People from Supabase`는 People CSV, 프로필 evidence, 페이지 UI를 고칠 때
+  실행한다. 이 경로에는 `fetch_fss_pef_sources.py`가 없으며, published canonical snapshot을
+  새 임시 SQLite 파일에 복원해 기존 계산기와 renderer를 돌린 뒤 People과 GP public read
+  model만 갱신한다.
+- `gp_public_snapshots`는 위 canonical DB의 공개 HTML read model이다. canonical FSS data와
+  public HTML artifact를 혼동하거나, 로컬 `db/private_equity.db` 파일을 Vercel runtime source로
+  취급하지 않는다.
+
+이 분리는 "People 수정 때문에 금감원 재수집"과 "개발자 로컬 SQLite가 서비스 기준"이라는
+두 운영 오류를 막기 위한 계약이다.
 
 ## GP ranking audit data pack
 

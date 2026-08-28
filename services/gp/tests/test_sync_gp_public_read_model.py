@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +18,7 @@ SPEC = importlib.util.spec_from_file_location(
 )
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
 
@@ -85,6 +88,45 @@ class SyncGPPublicReadModelTests(unittest.TestCase):
         html = '<meta name="kpef-fss-reporting-period" content="2025Q4"><main>2025년 4분기</main>'
         self.assertTrue(MODULE._page_declares_reporting_period(html, "2025Q4"))
         self.assertFalse(MODULE._page_declares_reporting_period(html, "2025Q3"))
+
+    def test_prepare_payload_uses_canonical_manifest_without_raw_excel(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            site_dir = root / "site"
+            site_dir.mkdir()
+            for page_name in MODULE.CORE_PAGE_PATHS:
+                (site_dir / page_name).write_text(
+                    f"<!doctype html><main>2025Q4 {page_name}</main>", encoding="utf-8"
+                )
+            manifest = root / "manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "snapshot": {
+                            "snapshot_id": "fss-core-2025q4-example",
+                            "reporting_period": "2025Q4",
+                            "as_of_date": "2025-12-31",
+                            "source_id": "FSS_PEF_2025_Q4",
+                            "source_sha256": "b" * 64,
+                            "fund_count": 1195,
+                            "primary_gp_count": 397,
+                            "commitment_amount_krw_mn": 167502408.727255,
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            payload = MODULE.prepare_payload(
+                site_dir=site_dir,
+                db_path=root / "temporary.db",
+                registry_path=root / "missing.csv",
+                expected_latest_period="2025Q4",
+                canonical_manifest=manifest,
+            )
+
+        self.assertEqual(payload["snapshot"]["source_sha256"], "b" * 64)
+        self.assertTrue(str(payload["snapshot"]["snapshot_id"]).startswith("fss-2025q4-"))
 
     def test_snapshot_id_changes_when_public_page_content_changes(self) -> None:
         first = MODULE._snapshot_content_sha256(

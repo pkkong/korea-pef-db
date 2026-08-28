@@ -1,0 +1,240 @@
+name: Publish GP and People from Supabase
+
+on:
+  workflow_dispatch:
+    inputs:
+      report_date:
+        description: "Displayed build date in YYYY-MM-DD. Leave blank for today's date in Asia/Seoul."
+        required: false
+        type: string
+      expected_latest_period:
+        description: "Published FSS reporting period to use from Supabase."
+        required: true
+        default: "2025Q4"
+        type: string
+      verify_vercel:
+        description: "Verify the Vercel GP runtime after publishing."
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gp-people-publish
+  cancel-in-progress: false
+
+env:
+  GP_PUBLIC_REPO: pkkong/kpef-newsletter
+  GP_PUBLIC_BRANCH: gh-pages
+  GP_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter/
+  GP_VERCEL_URL: https://kpef-newsletter.vercel.app
+  NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS: "1"
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Resolve report date and temporary workspace
+        id: build
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.report_date }}" ]; then
+            echo "report_date=${{ inputs.report_date }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "report_date=$(TZ=Asia/Seoul date +%F)" >> "$GITHUB_OUTPUT"
+          fi
+          echo "work_dir=$(mktemp -d)" >> "$GITHUB_ENV"
+
+      - name: Check publishing readiness
+        shell: bash
+        env:
+          NEWSLETTER_PUBLIC_REPO_TOKEN: ${{ secrets.NEWSLETTER_PUBLIC_REPO_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "${NEWSLETTER_PUBLIC_REPO_TOKEN:-}" ]; then
+            echo "::error::NEWSLETTER_PUBLIC_REPO_TOKEN is required to publish ${GP_PUBLIC_REPO}."
+            exit 1
+          fi
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "::error::SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required."
+            exit 1
+          fi
+
+      - name: Restore current FSS and People data from Supabase
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python3 services/gp/src/restore_fss_canonical_supabase.py \
+            --db "$work_dir/private_equity.db" \
+            --manifest-out "$work_dir/canonical_snapshot.json"
+          python3 - "$work_dir/canonical_snapshot.json" "${{ inputs.expected_latest_period }}" <<'PY'
+          import json
+          import sys
+
+          snapshot = json.load(open(sys.argv[1], encoding="utf-8"))["snapshot"]
+          if snapshot["reporting_period"] != sys.argv[2]:
+              raise SystemExit(
+                  f"Published FSS period {snapshot['reporting_period']} does not match expected {sys.argv[2]}"
+              )
+          PY
+
+      - name: Rebuild GP profiles and apply People input
+        shell: bash
+        run: |
+          mkdir -p "$work_dir/exports"
+          if ! python3 scripts/apply_gp_alias_merges.py \
+            --db "$work_dir/private_equity.db" \
+            --rules data/gp_alias_merge_rules.csv; then
+            echo "::warning::GP alias merge needs review. Using the restored published FSS data."
+          fi
+          python3 scripts/build_fund_master.py --db "$work_dir/private_equity.db" --out "$work_dir/exports"
+          python3 scripts/build_aum_analytics.py \
+            --db "$work_dir/private_equity.db" \
+            --out "$work_dir/exports" \
+            --ranking-period "${{ inputs.expected_latest_period }}"
+          python3 scripts/build_gp_profile_master.py --db "$work_dir/private_equity.db" --out "$work_dir/exports" --limit 120
+          if ! python3 scripts/apply_gp_profile_evidence.py \
+            --db "$work_dir/private_equity.db" \
+            --evidence data/gp_profile_evidence.csv; then
+            echo "::warning::GP profile evidence needs review. Continuing with source-backed values only."
+          fi
+          python3 scripts/build_gp_profile_master.py --db "$work_dir/private_equity.db" --out "$work_dir/exports" --limit 120
+          python3 scripts/import_people_csv.py --db "$work_dir/private_equity.db"
+
+      - name: Sync People data to canonical Supabase tables
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python3 services/gp/src/sync_fss_canonical_supabase.py \
+            --db "$work_dir/private_equity.db" \
+            --canonical-manifest "$work_dir/canonical_snapshot.json" \
+            --people-only \
+            --payload-out "$work_dir/people_supabase_payload.json" \
+            --apply
+
+      - name: Build and validate GP public pages
+        shell: bash
+        run: |
+          mkdir -p "$work_dir/site"
+          python3 services/gp/src/build_gp_service_pages.py \
+            --site-dir "$work_dir/site" \
+            --db "$work_dir/private_equity.db" \
+            --date "${{ steps.build.outputs.report_date }}"
+          python3 scripts/check_public_frontend.py \
+            --services gp \
+            --public-dir "$work_dir/site"
+
+      - name: Publish GP public read model
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python3 services/gp/src/sync_gp_public_read_model.py \
+            --site-dir "$work_dir/site" \
+            --db "$work_dir/private_equity.db" \
+            --canonical-manifest "$work_dir/canonical_snapshot.json" \
+            --expected-latest-period "${{ inputs.expected_latest_period }}" \
+            --payload-out "$work_dir/gp_public_snapshot.json" \
+            --apply
+
+      - name: Publish GP backup pages
+        shell: bash
+        env:
+          NEWSLETTER_PUBLIC_REPO_TOKEN: ${{ secrets.NEWSLETTER_PUBLIC_REPO_TOKEN }}
+        run: |
+          git clone --depth 1 --branch "${GP_PUBLIC_BRANCH}" \
+            "https://x-access-token:${NEWSLETTER_PUBLIC_REPO_TOKEN}@github.com/${GP_PUBLIC_REPO}.git" \
+            "$work_dir/site-repo"
+          find "$work_dir/site-repo" -maxdepth 1 -type f -regextype posix-extended \
+            -regex '.*/gp-[0-9]+\\.html' -delete
+          cp "$work_dir/site/market.html" "$work_dir/site/gps.html" "$work_dir/site-repo/"
+          shopt -s nullglob
+          profiles=("$work_dir/site"/gp-[0-9]*.html)
+          if [ "${#profiles[@]}" -gt 0 ]; then
+            cp "${profiles[@]}" "$work_dir/site-repo/"
+          fi
+          python3 scripts/check_public_frontend.py \
+            --services gp \
+            --public-dir "$work_dir/site-repo"
+          cd "$work_dir/site-repo"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- market.html gps.html
+          if compgen -G 'gp-*.html' >/dev/null; then
+            git add -- gp-*.html
+          fi
+          if git ls-files --error-unmatch -- 'gp-*.html' >/dev/null 2>&1; then
+            git add -u -- 'gp-*.html'
+          fi
+          if git diff --cached --quiet; then
+            echo "No GP public changes to publish."
+            exit 0
+          fi
+          git commit -m "Publish GP and People ${{ inputs.expected_latest_period }}" >/dev/null
+          git push origin "${GP_PUBLIC_BRANCH}"
+
+      - name: Verify deployed GP backup pages
+        shell: bash
+        run: |
+          for attempt in $(seq 1 40); do
+            if python3 scripts/check_public_frontend.py \
+              --services gp \
+              --base-url "${GP_PUBLIC_URL}" \
+              --public-dir "$work_dir/site"; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 40 ]; then
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Verify Vercel GP read model
+        if: inputs.verify_vercel
+        shell: bash
+        run: |
+          page_names=(market.html gps.html)
+          detail_page="$(for page in "$work_dir/site"/gp-[0-9]*.html; do
+            [ -e "$page" ] && basename "$page"
+          done | sort | head -n 1)"
+          if [ -n "$detail_page" ]; then
+            page_names+=("$detail_page")
+          fi
+          for page_name in "${page_names[@]}"; do
+            verified=false
+            for attempt in $(seq 1 24); do
+              header_file="$(mktemp)"
+              body_file="$(mktemp)"
+              curl --silent --show-error --fail --location --max-time 30 \
+                --dump-header "$header_file" \
+                --output "$body_file" \
+                "${GP_VERCEL_URL}/${page_name}?refresh=1" || true
+              if grep -qi '^x-gp-data-source: supabase-public-snapshot' "$header_file" \
+                && grep -q "${{ inputs.expected_latest_period }}" "$body_file"; then
+                verified=true
+                break
+              fi
+              sleep 5
+            done
+            if [ "$verified" != "true" ]; then
+              echo "::error::Vercel did not serve ${page_name} from the GP Supabase public snapshot."
+              exit 1
+            fi
+          done

@@ -109,6 +109,18 @@ jobs:
           fi
           python3 scripts/import_people_csv.py --db db/private_equity.db
 
+      - name: Sync canonical FSS and People data to Supabase
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python3 services/gp/src/sync_fss_canonical_supabase.py \
+            --db db/private_equity.db \
+            --expected-latest-period "${{ inputs.expected_latest_period }}" \
+            --payload-out exports/gp/fss_canonical_supabase_payload.json \
+            --apply
+
       - name: Build and validate GP public pages
         shell: bash
         run: |
