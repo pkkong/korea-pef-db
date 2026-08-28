@@ -156,8 +156,9 @@ profile 필드가 사라지거나 다른 GP에 옮겨가면 안 된다.
 - `people_*` 테이블은 현재 People 입력과 출처를 보관한다. People은 FSS snapshot과 별도
   수명주기를 가지며 `people_data_state.fss_snapshot_id`로 어느 FSS 기준 GP에 연결됐는지만
   기록한다.
-- `Deploy GP FSS market`은 **새 금감원 분기 자료가 확인됐을 때만** 실행한다. 이 경로는
-  `원본 수집 → 정규화 → analytics → People 재연결 → canonical Supabase snapshot publish`
+- 새 금감원 분기 자료가 확인되면 먼저 Excel과 registry를 GitHub versioned source에 추가한다.
+  그 뒤 `Deploy GP FSS market`을 실행하며, 이 경로는
+  `versioned 원본 검증 → 정규화 → analytics → People 재연결 → canonical Supabase snapshot publish`
   순서다.
 - `Publish GP and People from Supabase`는 People CSV, 프로필 evidence, 페이지 UI를 고칠 때
   실행한다. 이 경로에는 `fetch_fss_pef_sources.py`가 없으며, published canonical snapshot을

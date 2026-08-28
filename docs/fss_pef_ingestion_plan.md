@@ -81,7 +81,7 @@ Default parser unit is `억원`, so `10,000` becomes `1,000,000` KRW million.
 
 ## First Build Order
 
-1. Run `python scripts/fetch_fss_pef_sources.py` to collect discoverable FSS common-board attachments.
+1. 새 분기 확인 시에만 `python scripts/fetch_fss_pef_sources.py`를 실행해 discoverable FSS common-board attachments를 수집한다. 새 Excel과 `data/source_registry_fss_pef.csv`를 SHA 검증 후 GitHub에 commit한다. 정기 GP 배포 workflow는 이 명령을 실행하지 않고 versioned 원본을 사용한다.
 2. Download older legacy FSS files that are no longer exposed by the new board if needed.
 3. Run workbook inspection to verify sheet and header layouts.
 4. Import each workbook into SQLite.
