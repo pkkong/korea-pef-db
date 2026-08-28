@@ -1211,7 +1211,7 @@ def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: 
 
     <section class="gp-detail-kpis" aria-label="운용 현황">
       <div><span>최신 순위</span><strong>{_e(_format_rank(gp.get("latest_primary_rank")))}</strong></div>
-      <div><span>운용 중 펀드</span><strong>{_e(_format_int(gp.get("latest_primary_active_fund_count")))}</strong></div>
+      <div><span>운용중 펀드</span><strong>{_e(_format_int(gp.get("latest_primary_active_fund_count")))}</strong></div>
       <div><span>약정액 기준</span><strong>{_e(_format_krw_100mn(gp.get("latest_primary_aum_proxy_krw_100mn")))}</strong></div>
       <div><span>약정액 점유율</span><strong>{_e(_format_pct(gp.get("latest_primary_market_share_pct")))}</strong></div>
     </section>
@@ -1379,8 +1379,8 @@ def _render_gp_profile_preview_page(report_date: str, gp: dict[str, object]) -> 
       </div>
       <div class="gp-profile-preview-filter" role="group" aria-label="펀드 상태">
         <button class="active" type="button" data-fund-filter="all" aria-pressed="true">전체 {len(funds):,}</button>
-        <button type="button" data-fund-filter="active" aria-pressed="false">운용 중 {active_fund_count:,}</button>
-        <button type="button" data-fund-filter="historical" aria-pressed="false">과거 확인 {historical_fund_count:,}</button>
+        <button type="button" data-fund-filter="active" aria-pressed="false">운용중 {active_fund_count:,}</button>
+        <button type="button" data-fund-filter="historical" aria-pressed="false">청산완료 {historical_fund_count:,}</button>
       </div>
       <div class="gp-profile-preview-fund-list">
 {fund_rows}
@@ -1437,7 +1437,7 @@ def _render_profile_preview_fund_rows(fund_rows: list[dict[str, object]]) -> str
         title = f'<a href="{_e(url)}" target="_blank" rel="noreferrer">{_e(name)}</a>' if url else _e(name)
         active = _as_bool(fund.get("active_in_latest_period"))
         state = "active" if active else "historical"
-        state_label = "운용 중" if active else "과거 확인"
+        state_label = "운용중" if active else "청산완료"
         amount = _format_trn_krw_as_100mn(
             fund.get("max_commitment_trn_krw") or fund.get("latest_commitment_trn_krw")
         )
@@ -1543,7 +1543,7 @@ def _render_fund_rows(fund_rows: list[dict[str, object]]) -> str:
         url = _safe_url(fund.get("latest_source_url"))
         title = f'<a href="{_e(url)}" target="_blank" rel="noreferrer">{_e(name)}</a>' if url else _e(name)
         amount = _format_trn_krw_as_100mn(fund.get("max_commitment_trn_krw") or fund.get("latest_commitment_trn_krw"))
-        active_label = "운용 중" if _as_bool(fund.get("active_in_latest_period")) else "과거 확인"
+        active_label = "운용중" if _as_bool(fund.get("active_in_latest_period")) else "청산완료"
         period_label = _clean(fund.get("last_seen_period"))
         meta = _join_values(
             [
@@ -4642,7 +4642,7 @@ def _profile_summary(gp: dict[str, object]) -> str:
     if latest_rank != "-":
         facts.append(f"최신 순위 {latest_rank}")
     if active_funds != "-":
-        facts.append(f"운용 중 펀드 {active_funds}개")
+        facts.append(f"운용중 펀드 {active_funds}개")
     if aum != "-":
         facts.append(f"약정액 기준 {aum}")
     if facts:
@@ -4742,15 +4742,15 @@ def _lp_event_label(value: object) -> str:
 
 def _fund_status_label(value: object) -> str:
     labels = {
-        "active": "운용 중",
-        "liquidated": "청산",
-        "closed": "청산",
-        "dissolved": "청산",
+        "active": "운용중",
+        "liquidated": "청산완료",
+        "closed": "청산완료",
+        "dissolved": "청산완료",
     }
     key = _clean(value)
     normalized_key = re.sub(r"[\s-]+", "_", key).lower()
     if normalized_key in {"active_in_latest_" + "fss", "active_in_latest_period"}:
-        return "최신 기준 운용 중"
+        return "최신 기준 운용중"
     if normalized_key in labels:
         return labels[normalized_key]
     return _public_code_label(value)

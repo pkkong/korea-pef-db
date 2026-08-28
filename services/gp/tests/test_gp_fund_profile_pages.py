@@ -52,8 +52,8 @@ class GpFundProfilePageTests(unittest.TestCase):
         self.assertEqual(html.count('<article class="gp-fund-row">'), expected_count)
         self.assertIn("엠비케이파트너스오호사모투자합자회사", html)
         self.assertIn("엠비케이파트너스2015의1호", html)
-        self.assertIn("운용 중", html)
-        self.assertIn("과거 확인", html)
+        self.assertIn("운용중", html)
+        self.assertIn("청산완료", html)
 
     def test_mbk_uses_the_isolated_profile_preview(self) -> None:
         conn = sqlite3.connect(ROOT / "db" / "private_equity.db")
