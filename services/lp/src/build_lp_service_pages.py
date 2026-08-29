@@ -30,13 +30,23 @@ def build_lp_service_pages(
         write_lp_notices_page,
         write_lp_profile_pages,
     )
+    from services.lp.src.lp_public_context import write_public_notice_context
 
     site_dir.mkdir(parents=True, exist_ok=True)
     effective_date = report_date or today_seoul()
     notice_count = write_lp_notices_page(site_dir, effective_date)
     profile_fact_count = write_lp_profile_pages(site_dir, effective_date)
+    monitor_available = monitor_path.is_file()
     notices = prepare_lp_notice_display_items(read_lp_monitor(monitor_path, limit=None), effective_date)
     write_lp_notice_detail_pages(site_dir, effective_date, notices)
+    # A clean checkout may not contain the ignored monitor CSV. In that case,
+    # preserve an already-published context file instead of replacing it with
+    # an empty payload.
+    public_notice_context_count = (
+        write_public_notice_context(site_dir, effective_date, notices)
+        if monitor_available
+        else 0
+    )
     lp_service_pages = {"lp-notices.html", "lp-official-notices.html"}
     profile_page_count = len(
         [
@@ -50,6 +60,7 @@ def build_lp_service_pages(
         "lp_profile_fact_count": profile_fact_count,
         "lp_profile_page_count": profile_page_count,
         "lp_notice_detail_page_count": len(list(site_dir.glob("lp-notice-*.html"))),
+        "lp_public_notice_context_count": public_notice_context_count,
     }
 
 
