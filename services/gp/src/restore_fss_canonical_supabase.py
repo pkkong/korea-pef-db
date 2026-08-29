@@ -27,6 +27,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from services.gp.src.sync_fss_canonical_supabase import FSS_TABLES, PEOPLE_TABLES, TableSpec
+from services.gp.src.hydrate_gp_news_context import ensure_news_context_schema
 from scripts.apply_gp_alias_merges import ensure_tables as ensure_gp_alias_tables
 
 
@@ -36,8 +37,8 @@ DEFAULT_MANIFEST_OUT = REPO_ROOT / "exports" / "gp" / "fss_canonical_snapshot_ma
 REST_PAGE_SIZE = 500
 RETRIABLE_HTTP_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
 # ``person_news_link`` references newsletter's ``news_document`` in the legacy
-# SQLite schema. The temporary GP builder needs only its IDs, so it receives a
-# minimal FK table and preserves the links when the People rows are synced back.
+# SQLite schema. The temporary GP builder receives a renderer-compatible public
+# context table before the People schema is restored.
 RESTORABLE_PEOPLE_TABLES = PEOPLE_TABLES
 
 
@@ -139,7 +140,7 @@ def restore_snapshot(*, db_path: Path, manifest_out: Path, include_people: bool 
         conn.executescript(FSS_SCHEMA.read_text(encoding="utf-8"))
         ensure_gp_alias_tables(conn)
         if include_people:
-            conn.execute("CREATE TABLE IF NOT EXISTS news_document (news_id INTEGER PRIMARY KEY)")
+            ensure_news_context_schema(conn)
             conn.executescript(PEOPLE_SCHEMA.read_text(encoding="utf-8"))
         for spec in FSS_TABLES:
             rows = _read_all(spec.supabase_table, {"snapshot_id": f"eq.{snapshot_id}"})

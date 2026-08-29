@@ -226,5 +226,6 @@ python3 scripts/build_site_bundle.py --services wiki --date YYYY-MM-DD
 - `services/newsletter/src/newsletter_public_status.py`는 GitHub Pages mirror, Supabase sync, Vercel health, watchdog freshness 판단을 한 구현으로 묶는다.
 - `scripts/check_public_frontend.py`는 공개 화면의 내부 용어 유출과 LP/GP table-like directory 구조를 확인한다.
 - `services/gp/src/sync_gp_public_read_model.py`는 verified GP artifact를 Supabase snapshot으로 발행한다. 두 GP 페이지와 source hash가 모두 맞지 않으면 Vercel에 새 데이터를 공개하지 않는다.
+- `services/gp/src/hydrate_gp_news_context.py`는 공개 `archive.json`만 읽어 임시 GP build DB의 관련 뉴스 컨텍스트를 채운다. GP 표준명·별칭의 high-confidence match만 연결하고, 더 긴 별칭과 겹치는 짧은 별칭은 제외한다. 뉴스레터 운영 DB나 public read model을 수정하지 않으며, 공개 아카이브 접근 장애는 GP 통계·People 발행을 막지 않는다.
 - `scripts/check_gp_profile_evidence_ready.py`는 GP profile evidence가 현재 FSS rebuilt DB와 표준명 기준으로 일치하는지 검사한다. 프로필/alias 품질 문제는 warning과 정리 backlog로 남기며, 통계 snapshot 발행 자체를 막지 않는다.
 - LP Notice는 계속 `사업 1개 = 공개 카드 1개`를 기준으로 삼고, 후보 source와 stale deadline은 public view/export 단계에서 제거한다.
