@@ -238,6 +238,7 @@ curl -fsS "https://kpef-newsletter.vercel.app/health.json?refresh=1"
 - 2026-08-28 People-only publish 검증: run `33179651922`가 published canonical FSS snapshot을 임시 SQLite로 복원(FSS 행 60,269개), People CSV 141명을 재적재하고, canonical People 877행과 GP public page 61개를 다시 발행했다. `supabase_fss_canonical_sync`는 `fss_rows=0`, `status=people_synced`로 끝났으며 FSS fetch/ingest 명령은 실행하지 않았다. Vercel은 2025Q4 Supabase GP snapshot을 정상 응답했다.
 - 2026-08-29 GP public UI 통일: commit `a8fea82`에서 MBK 한 곳에만 적용됐던 profile layout을 source-backed GP 59개 전체로 확장했다. GP directory는 현재 결과 수와 `기준일/집계 기준/정렬기준` 세 control만 노출하고, Market은 `시장 개요`로 용어를 통일했다. `Publish GP and People from Supabase` run `33256165062`는 현재 canonical `2025Q4`를 복원해 FSS 재수집 없이 public snapshot, backup, Vercel 검증을 모두 통과했다. Vercel 일반 GP profile은 `X-GP-Data-Source: supabase-public-snapshot`, snapshot `fss-2025q4-ec864d1a2f16-eb8c7155f7f1`을 반환한다.
 - 2026-08-28 People 상세 profile 확장: 공식 현재 역할이 확인된 대표·파트너·임원급을 `person-<id>.html`로 공개한다. GP의 `주요 인물`에서 해당 이름을 상세로 연결하고, 상세에는 현재 역할, 공식 프로필에 기재된 경력·학력, 공식 출처만 표시한다. 현재 2025Q4 People 데이터에서는 114개 상세 페이지가 생성된다. 전체 People 탭은 계속 숨긴다.
+- 2026-08-29 People 공식 출처 보강: 아이엠엠크레딧앤솔루션 9명과 글랜우드크레딧 2명을 공식 팀 페이지 근거로 추가했다. `Publish GP and People from Supabase` run `33257090060`은 FSS 재수집 없이 People만 canonical Supabase와 public snapshot에 반영했고, 125개 People 상세 페이지를 생성했다. Top 50에서 People 작업이 시작된 GP는 27개에서 29개가 됐다. 두 GP workflow는 이후 매 실행 때 coverage worklist를 30일 artifact로 남기며, 이 리포트는 배포 차단 조건이 아니다. Vercel 모바일 390px에서 People 목록과 개별 profile을 확인해 가로 overflow 없이 직함·소속·경력·학력·공식 출처가 표시되는 것을 확인했다.
 
 ## 프로젝트 리드 종료 체크리스트
 
