@@ -91,6 +91,10 @@ class GpFundProfilePageTests(unittest.TestCase):
         self.assertEqual(html.count('class="gp-profile-preview-person-row"'), 13)
         self.assertIn("김병주", html)
         self.assertIn('href="person-', html)
+        self.assertRegex(
+            html,
+            r'<a class="gp-profile-preview-person-link" href="person-\d+\.html"><div>',
+        )
         self.assertIn("공식 팀 페이지", html)
 
     def test_non_mbk_profile_uses_the_same_profile_layout(self) -> None:

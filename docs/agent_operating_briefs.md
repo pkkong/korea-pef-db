@@ -173,7 +173,7 @@
 - 수동 포함/제외 보정: `services/newsletter/data/news_manual_overrides.csv`
 - 원문 저장 위치: `data/raw/daily_news/YYYY-MM-DD/`
 - 뉴스 DB 스키마: `services/newsletter/schema/daily_news.sql`
-- 운영 DB: `db/private_equity.db`
+- 운영 DB: Supabase private canonical tables. `db/private_equity.db`는 FSS rebuild 또는 People import 중에만 쓰는 build 사본이다.
 
 ### 출력
 
@@ -265,7 +265,7 @@
 - 현 소속 GP 뷰: `exports/people_current_gp.csv`
 - 역할 이력: `exports/people_roles.csv`
 - 학력 뷰: `exports/people_education.csv`
-- People 리서치 작업 목록: `exports/people_research_worklist_top50.csv`
+- People 리서치 작업 목록: `exports/people_research_worklist_top50.csv`; Actions 발행에서는 `people-research-worklist-<run_id>` artifact로 30일 보관한다. 이 목록은 리서치 우선순위용이며 발행을 막지 않는다.
 - 뉴스/People/GP 통합 작업 큐: `exports/service_integration_worklist_latest.csv`
 - GP 프로필 연동 산출물: `exports/gp_profile_master.csv`, `exports/gp_profile_master.xlsx`
 - dashboard 반영 데이터: `dashboard/data/dashboard_data.json`

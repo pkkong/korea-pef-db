@@ -115,6 +115,16 @@ jobs:
           python3 scripts/build_gp_profile_master.py --db "$work_dir/private_equity.db" --out "$work_dir/exports" --limit 120
           python3 scripts/import_people_csv.py --db "$work_dir/private_equity.db"
 
+      - name: Build People coverage worklist
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p .run-artifacts
+          python3 scripts/build_people_research_worklist.py \
+            --db "$work_dir/private_equity.db" \
+            --out .run-artifacts/people_research_worklist_top50.csv \
+            --limit 50
+
       - name: Sync People data to canonical Supabase tables
         shell: bash
         env:
@@ -250,3 +260,13 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Upload People coverage worklist
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: people-research-worklist-${{ github.run_id }}
+          path: .run-artifacts/people_research_worklist_top50.csv
+          if-no-files-found: warn
+          retention-days: 30

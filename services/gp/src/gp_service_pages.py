@@ -1640,8 +1640,10 @@ def _render_profile_preview_people_section(people_rows: list[dict[str, object]])
         team = _clean(person.get("team"))
         meta = _join_values([role, team])
         profile_page = _clean(person.get("profile_page"))
-        identity = f"""<h3>{_e(name)}{english_html}</h3>
-            <p>{_e(meta or "MBK Partners")}</p>"""
+        identity = f"""<div>
+              <h3>{_e(name)}{english_html}</h3>
+              <p>{_e(meta or "PEF 운용사")}</p>
+            </div>"""
         row_body = (
             f'<a class="gp-profile-preview-person-link" href="{_e(profile_page)}">{identity}<span aria-hidden="true"></span></a>'
             if profile_page
