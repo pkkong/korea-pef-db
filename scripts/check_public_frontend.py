@@ -356,11 +356,9 @@ def check_generated_gp_contract(require_data: bool = False) -> list[str]:
     if gp_service_tabs(market_html) != ["MARKET", "GP"]:
         raise CheckFailure("Market service tabs mismatch")
     gps_text = strip_tags(gps_html)
-    if not re.search(r"\d[\d,]*개 PEF 운용사", gps_text):
-        raise CheckFailure("GP directory count title missing")
-    if re.search(r"\d[\d,]*개 PEF 운용사\s*\([0-9.]+ 기준\)", gps_text):
-        raise CheckFailure("GP directory title should not include 기준일")
-    for required_control in ['id="gpPeriod"', 'id="gpScope"', 'id="gpSort"', 'id="gpPageSize"']:
+    if "PEF GP 디렉토리" not in gps_text:
+        raise CheckFailure("GP directory title missing")
+    for required_control in ['id="gpPeriod"', 'id="gpScope"', 'id="gpSort"']:
         if required_control not in gps_html:
             violations.append(f"gps.html:{required_control}")
     for combined_label in ["대표/홈페이지", "순위/약정액", "뉴스/출자"]:
@@ -369,7 +367,7 @@ def check_generated_gp_contract(require_data: bool = False) -> list[str]:
     for row_badge_markup in ['<div class="gp-chips"', '<div class="gp-signal-strip"']:
         if row_badge_markup in gps_html:
             violations.append(f"gps.html:{row_badge_markup}")
-    for required in ["Overview", "분기별 시장 추이", "상위 GP", "연도별 신규 펀드"]:
+    for required in ["시장 개요", "분기별 시장 추이", "상위 GP", "연도별 신규 펀드"]:
         if required not in market_html:
             raise CheckFailure(f"market.html missing required section: {required}")
     for required in ["market-trend-chart", "market-rank-chart", "대표 운용사 집계", "프로필/제휴 기준"]:
@@ -385,7 +383,7 @@ def check_generated_gp_contract(require_data: bool = False) -> list[str]:
         violations.append("gps.html:tabular-nums")
 
     if require_data or gp_data_is_expected():
-        if re.search(r"<h1 class=\"gp-directory-title\"><strong>0개</strong>", gps_html):
+        if "<h2>표시할 운용사가 없습니다</h2>" in gps_html:
             raise CheckFailure("Integrated GP build has an empty directory")
         for label in ["펀드 수", "운용 GP", "출자약정액", "상위 10개 비중"]:
             if re.search(rf"<span>{re.escape(label)}</span>\s*<strong>-</strong>", market_html):

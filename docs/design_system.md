@@ -146,7 +146,8 @@ shadow보다 border와 whitespace를 먼저 쓴다. 장식용 gradient, 큰 hero
 - LP detail header는 “기본 정보와 뉴스를 정리합니다” 같은 generic 설명문을 쓰지 않는다. 기관명, compact identity fact, tab, 즉시 비교 가능한 data section을 보여준다.
 - LP notice는 LP 서비스의 주요 workflow 화면이다. current/open notices, selected results, historical notices를 마감일, 금액, 기관, source, attachment와 함께 묶는다.
 - GP directory row는 compact해야 한다. 원형 logo, GP명, 대표자 또는 홈페이지, rank/commitment fact, news/LP connection count 정도가 기준이다.
-- GP detail page는 identity, operating fact, fund history, LP connection, deal/news context, peer link 순서로 조용하게 구성한다.
+- GP detail page는 모든 source-backed GP에 하나의 profile layout을 적용한다. identity, 4개 핵심 수치, 회사 정보, 주요 인물, 금감원 확인 펀드, LP/기사 연결 순서로 조용하게 구성한다. 특정 GP만 별도 시안으로 남기지 않는다.
+- GP directory는 `기준일`, `집계 기준`, `정렬기준` 세 가지 control만 유지한다. 제목에 별도 전체 수를 박지 않고, 현재 조건의 결과 수를 control 위에 표시한다.
 
 ## GP 공개 화면 금지 표현
 

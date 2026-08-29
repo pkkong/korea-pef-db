@@ -22,12 +22,7 @@ NEWS_REQUIRED_TABLES = ("news_entity_link", "news_document")
 PEOPLE_REQUIRED_TABLES = ("person", "person_role")
 PERSON_PROFILE_REQUIRED_TABLES = ("person", "person_role", "person_education", "person_source")
 TOP_GP_PAGE_LIMIT = 120
-PROFILE_NEWS_LIMIT = 12
-PROFILE_LP_SIGNAL_LIMIT = 8
-PROFILE_DEAL_SIGNAL_LIMIT = 8
-# Keep the first profile redesign isolated until its information hierarchy is
-# approved. The standard name is stable across FSS ingestion runs.
-PROFILE_UI_PREVIEW_STANDARD_GP_NAME = "엠비케이파트너스"
+PROFILE_ACTIVITY_ROW_LIMIT = 6
 DEAL_TAG_HINTS = {
     "section:deal",
     "topic:deal",
@@ -187,7 +182,7 @@ def write_gp_pages(site_dir: Path, db_path: Path, report_date: str) -> dict[str,
             )
 
         (site_dir / "gps.html").write_text(
-            _render_directory_page(report_date, ranked_gps, top_ids),
+            _render_directory_page(report_date, ranked_gps),
             encoding="utf-8",
         )
         for gp in top_gps:
@@ -906,11 +901,15 @@ def _render_empty_directory(report_date: str, message: str) -> str:
     {_render_service_header("gp")}
     <header class="gp-hero">
       <div class="gp-hero-copy">
-        <h1 class="gp-directory-title"><strong>0개</strong> <span>PEF 운용사</span></h1>
+        <h1 class="gp-directory-title"><span>PEF GP 디렉토리</span></h1>
+        <p>금감원 공개 운용현황 기준</p>
       </div>
     </header>
 
     <section class="gp-control-panel" aria-label="GP 필터">
+      <div class="gp-control-head">
+        <span id="gpVisibleCount">0개 표시</span>
+      </div>
       <div class="gp-controls">
         <label>
           <span>기준일</span>
@@ -919,10 +918,10 @@ def _render_empty_directory(report_date: str, message: str) -> str:
           </select>
         </label>
         <label>
-          <span>누적/운용중</span>
+          <span>집계 기준</span>
           <select id="gpScope" aria-label="복수 GP 반영 누적 또는 운용중">
             <option value="active" selected>운용중</option>
-            <option value="cumulative">누적 (복수 GP 반영)</option>
+            <option value="cumulative">누적 (공동 GP 포함)</option>
           </select>
         </label>
         <label>
@@ -933,18 +932,6 @@ def _render_empty_directory(report_date: str, message: str) -> str:
             <option value="name">운용사명순</option>
           </select>
         </label>
-        <label>
-          <span>보기</span>
-          <select id="gpPageSize" aria-label="페이지당 표시">
-            <option value="30" selected>30개씩 보기</option>
-            <option value="50">50개씩 보기</option>
-            <option value="100">100개씩 보기</option>
-            <option value="all">전체 보기</option>
-          </select>
-        </label>
-      </div>
-      <div class="gp-control-head">
-        <span id="gpVisibleCount">0개 중 0</span>
       </div>
     </section>
 
@@ -1139,12 +1126,12 @@ def _render_market_page(report_date: str, context: dict[str, object]) -> str:
     {_render_service_header("market")}
     <header class="gp-hero market-hero">
       <div class="gp-hero-copy">
-        <h1>Overview</h1>
-        <p>{_e(latest_period)} · {latest_date} 기준</p>
+        <h1>시장 개요</h1>
+        <p>{_e(latest_period)} · {latest_date} 금감원 공개 운용현황 기준</p>
       </div>
     </header>
 
-    <section class="market-section market-overview-section" aria-label="Overview">
+    <section class="market-section market-overview-section" aria-label="시장 개요">
       <div class="market-kpis">
 {kpi_html}
       </div>
@@ -1217,8 +1204,8 @@ def _render_market_page(report_date: str, context: dict[str, object]) -> str:
 """
 
 
-def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_ids: set[str]) -> str:
-    cards = "\n".join(_render_gp_card(gp, str(gp["source_gp_id"]) in top_ids) for gp in gps)
+def _render_directory_page(report_date: str, gps: list[dict[str, object]]) -> str:
+    cards = "\n".join(_render_gp_card(gp, bool(gp.get("profile_page"))) for gp in gps)
     latest_date = _latest_gp_as_of_date(gps) or report_date
     period_options = _gp_period_options(gps)
     period_options_html = "\n".join(
@@ -1240,11 +1227,15 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
     {_render_service_header("gp")}
     <header class="gp-hero">
       <div class="gp-hero-copy">
-        <h1 class="gp-directory-title"><strong>{len(gps):,}개</strong> <span>PEF 운용사</span></h1>
+        <h1 class="gp-directory-title"><span>PEF GP 디렉토리</span></h1>
+        <p>{_e(_format_date_dot(latest_date) or latest_date)} 금감원 공개 운용현황 기준</p>
       </div>
     </header>
 
     <section class="gp-control-panel" aria-label="GP 필터">
+      <div class="gp-control-head">
+        <span id="gpVisibleCount">{len(gps):,}개 표시</span>
+      </div>
       <div class="gp-controls">
         <label>
           <span>기준일</span>
@@ -1253,10 +1244,10 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
           </select>
         </label>
         <label>
-          <span>누적/운용중</span>
+          <span>집계 기준</span>
           <select id="gpScope" aria-label="복수 GP 반영 누적 또는 운용중">
             <option value="active" selected>운용중</option>
-            <option value="cumulative">누적 (복수 GP 반영)</option>
+            <option value="cumulative">누적 (공동 GP 포함)</option>
           </select>
         </label>
         <label>
@@ -1267,18 +1258,6 @@ def _render_directory_page(report_date: str, gps: list[dict[str, object]], top_i
             <option value="name">운용사명순</option>
           </select>
         </label>
-        <label>
-          <span>보기</span>
-          <select id="gpPageSize" aria-label="페이지당 표시">
-            <option value="30" selected>30개씩 보기</option>
-            <option value="50">50개씩 보기</option>
-            <option value="100">100개씩 보기</option>
-            <option value="all">전체 보기</option>
-          </select>
-        </label>
-      </div>
-      <div class="gp-control-head">
-        <span id="gpVisibleCount">{len(gps):,}개 중 1-30</span>
       </div>
     </section>
 
@@ -1375,176 +1354,12 @@ def _render_gp_card(gp: dict[str, object], has_profile_page: bool) -> str:
 
 
 def _render_gp_detail_page(report_date: str, gp: dict[str, object], ranked_gps: list[dict[str, object]]) -> str:
-    if _uses_profile_ui_preview(gp):
-        return _render_gp_profile_preview_page(report_date, gp)
-
-    name = _gp_name(gp)
-    homepage = _safe_url(gp.get("homepage_url"))
-    logo_url = _brand_logo_url(homepage, name)
-    avatar_label = _avatar_label(name)
-    avatar_tone = _identity_tone(name)
-    avatar_class = "gp-detail-logo has-logo" if logo_url else "gp-detail-logo"
-    avatar_style = _brand_logo_style_attr(homepage, name) if logo_url else ""
-    avatar_logo = (
-        f'<img src="{logo_url}" alt="" loading="lazy" onerror="this.parentElement.classList.add(\'fallback-only\'); this.remove()">'
-        if logo_url
-        else ""
-    )
-    homepage_link = (
-        f'<a href="{_e(homepage)}" target="_blank" rel="noreferrer">{_e(_homepage_label(homepage))}</a>'
-        if homepage
-        else ""
-    )
-    representative = _clean(gp.get("representative_name"))
-    representative_html = f"<span>대표 {_e(representative)}</span>" if representative else ""
-    category = _category_label(gp.get("company_category"))
-    category_html = f"<span>{_e(category)}</span>" if category else ""
-    description = _profile_summary(gp)
-    description_html = f"        <p>{_e(description)}</p>" if description else ""
-    deal_items = list(gp.get("deal_news", [])[:PROFILE_DEAL_SIGNAL_LIMIT])
-    deal_urls = {_safe_url(item.get("source_url")) for item in deal_items if _safe_url(item.get("source_url"))}
-    news_items = [
-        item
-        for item in gp.get("news", [])
-        if not _safe_url(item.get("source_url")) or _safe_url(item.get("source_url")) not in deal_urls
-    ][:PROFILE_NEWS_LIMIT]
-    news_rows = _render_news_timeline(news_items)
-    deal_rows = _render_news_timeline(deal_items, empty_label="딜 관련 뉴스가 없습니다.")
-    fund_rows = _render_fund_rows(list(gp.get("funds", [])))
-    fund_count = len(gp.get("funds", []))
-    lp_signal_rows = _render_lp_signal_rows(gp.get("lp_signals", [])[:PROFILE_LP_SIGNAL_LIMIT])
-    peer_rows = _render_peer_links(gp, ranked_gps)
-    profile_rows = _render_profile_facts(gp, homepage_link)
-    coverage_rows = _render_coverage_facts(gp)
-    signal_bar = _render_signal_bar(gp)
-    alias_list = _render_aliases(gp.get("alias_names") or gp.get("raw_name_variants"))
-    people_rows = _render_gp_people_rows(list(gp.get("people", [])))
-    people_count = len(gp.get("people", []))
-
-    return f"""<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>{_e(name)} - PEF 운용사</title>
-{_app_head_meta()}
-  {_base_styles()}
-</head>
-<body>
-  <main class="gp-shell">
-    {_render_service_header("gp")}
-    <nav class="gp-breadcrumb" aria-label="경로">
-      <a href="gps.html">GP</a>
-      <span>{_e(name)}</span>
-    </nav>
-
-    <header class="gp-detail-hero">
-      <div class="gp-detail-title-head">
-        <span class="{avatar_class}" data-tone="{avatar_tone}" aria-hidden="true"{avatar_style}>{avatar_logo}<span>{_e(avatar_label)}</span></span>
-        <div>
-          <span>운용사</span>
-          <h1>{_e(name)}</h1>
-        </div>
-{description_html}
-      </div>
-      <aside class="gp-detail-card" aria-label="핵심 정보">
-        {category_html}
-        {representative_html}
-        {homepage_link}
-      </aside>
-    </header>
-
-    <section class="gp-detail-kpis" aria-label="운용 현황">
-      <div><span>최신 순위</span><strong>{_e(_format_rank(gp.get("latest_primary_rank")))}</strong></div>
-      <div><span>운용중 펀드</span><strong>{_e(_format_int(gp.get("latest_primary_active_fund_count")))}</strong></div>
-      <div><span>약정액 기준</span><strong>{_e(_format_krw_100mn(gp.get("latest_primary_aum_proxy_krw_100mn")))}</strong></div>
-      <div><span>약정액 점유율</span><strong>{_e(_format_pct(gp.get("latest_primary_market_share_pct")))}</strong></div>
-    </section>
-
-    {signal_bar}
-
-    <section class="gp-detail-grid">
-      <article class="gp-panel">
-        <h2>회사 개요</h2>
-        <dl class="gp-fact-list">
-{profile_rows}
-        </dl>
-      </article>
-      <article class="gp-panel">
-        <h2>운용 정보</h2>
-        <dl class="gp-fact-list">
-{coverage_rows}
-        </dl>
-      </article>
-    </section>
-
-    <section class="gp-detail-grid gp-detail-lower">
-      <article class="gp-panel">
-        <div class="gp-panel-heading">
-          <h2>금감원 확인 펀드</h2>
-          <span>{fund_count:,}개</span>
-        </div>
-        {fund_rows}
-      </article>
-      <article class="gp-panel">
-        <h2>출자 연결</h2>
-        {lp_signal_rows}
-      </article>
-    </section>
-
-    <section class="gp-detail-grid gp-detail-lower">
-      <article class="gp-panel">
-        <div class="gp-panel-heading">
-          <h2>주요 인물</h2>
-          <span>{people_count:,}명</span>
-        </div>
-        {people_rows}
-      </article>
-      <article class="gp-panel">
-        <h2>비교 GP</h2>
-        {peer_rows}
-      </article>
-    </section>
-
-    <section class="gp-detail-grid gp-detail-lower">
-      <article class="gp-panel">
-        <h2>관련 딜</h2>
-        {deal_rows}
-      </article>
-      <article class="gp-panel">
-        <h2>관련 뉴스</h2>
-        {news_rows}
-      </article>
-    </section>
-
-    <section class="gp-detail-grid gp-detail-lower">
-      <article class="gp-panel">
-        <h2>명칭 정보</h2>
-        <div class="gp-alias-box">
-          <strong>함께 쓰이는 명칭</strong>
-          {alias_list}
-        </div>
-      </article>
-    </section>
-
-    <section class="gp-disclaimer" aria-label="참고사항">
-      <h2>참고사항</h2>
-      <p>{_e(_detail_limit_note(gp))}</p>
-    </section>
-  </main>
-  {_render_bottom_nav()}
-  {_service_header_script(redirect_search=True)}
-</body>
-</html>
-"""
+    del ranked_gps
+    return _render_gp_profile_page(report_date, gp)
 
 
-def _uses_profile_ui_preview(gp: dict[str, object]) -> bool:
-    return _clean(gp.get("standard_gp_name")) == PROFILE_UI_PREVIEW_STANDARD_GP_NAME
-
-
-def _render_gp_profile_preview_page(report_date: str, gp: dict[str, object]) -> str:
-    """Render the approved-candidate profile layout for one GP only."""
+def _render_gp_profile_page(report_date: str, gp: dict[str, object]) -> str:
+    """Render the shared public profile layout for every source-backed GP."""
     name = _gp_name(gp)
     homepage = _safe_url(gp.get("homepage_url"))
     logo_url = _brand_logo_url(homepage, name)
@@ -1564,6 +1379,9 @@ def _render_gp_profile_preview_page(report_date: str, gp: dict[str, object]) -> 
     company_rows = _render_profile_preview_company_rows(gp, homepage)
     people_section = _render_profile_preview_people_section(people)
     fund_rows = _render_profile_preview_fund_rows(funds)
+    activity_section = _render_profile_preview_activity_section(gp)
+    description = _profile_summary(gp)
+    description_html = f'<p class="gp-profile-preview-description">{_e(description)}</p>' if description else ""
     source_note = f"금감원 PEF 운용현황 {period_label} 기준"
 
     return f"""<!doctype html>
@@ -1589,6 +1407,7 @@ def _render_gp_profile_preview_page(report_date: str, gp: dict[str, object]) -> 
         <span class="gp-profile-preview-kicker">PEF 운용사</span>
         <h1>{_e(name)}</h1>
         <p>{_e(period_label)} 운용 현황</p>
+        {description_html}
       </div>
     </header>
 
@@ -1647,6 +1466,8 @@ def _render_gp_profile_preview_page(report_date: str, gp: dict[str, object]) -> 
       <p class="gp-profile-preview-empty" id="gpFundEmpty" hidden>해당 상태의 펀드가 없습니다.</p>
     </section>
 
+{activity_section}
+
     <footer class="gp-profile-preview-source">
       <p>{source_note}</p>
     </footer>
@@ -1669,6 +1490,7 @@ def _render_profile_preview_company_rows(gp: dict[str, object], homepage: str) -
         ("법인명", _clean(gp.get("legal_entity_name_ko")) or _clean(gp.get("legal_entity_name_en"))),
         ("대표", _clean(gp.get("representative_name"))),
         ("설립", _clean(gp.get("firm_founded_year")) or _clean(gp.get("firm_founded_date")) or _clean(gp.get("established_date"))),
+        ("다른 표기", _clean(gp.get("alias_names")) or _clean(gp.get("raw_name_variants"))),
         ("홈페이지", homepage_link, True),
     ]
     rows = []
@@ -1684,6 +1506,79 @@ def _render_profile_preview_company_rows(gp: dict[str, object], homepage: str) -
         </div>"""
         )
     return "\n".join(rows) or "        <div class=\"gp-profile-preview-info-row\"><dt>회사 정보</dt><dd>-</dd></div>"
+
+
+def _render_profile_preview_activity_section(gp: dict[str, object]) -> str:
+    """Keep LP links and news in the same quiet row pattern as profile facts."""
+    rows: list[str] = []
+    for signal in list(gp.get("lp_signals", []))[:PROFILE_ACTIVITY_ROW_LIMIT]:
+        title = _clean(signal.get("title")) or "LP 출자 이력"
+        url = _safe_url(signal.get("notice_url"))
+        rows.append(
+            _render_profile_preview_activity_row(
+                "출자 연결",
+                title,
+                url,
+                _join_values(
+                    [
+                        _clean(signal.get("lp_name")) or _clean(signal.get("lp_code")),
+                        _lp_event_label(signal.get("event_type")),
+                        _short_date(signal.get("event_date") or signal.get("announced_date")),
+                    ]
+                ),
+            )
+        )
+
+    deal_items = list(gp.get("deal_news", []))[:PROFILE_ACTIVITY_ROW_LIMIT]
+    deal_urls = {_safe_url(item.get("source_url")) for item in deal_items if _safe_url(item.get("source_url"))}
+    for item in deal_items:
+        rows.append(
+            _render_profile_preview_activity_row(
+                "관련 딜",
+                _clean(item.get("title")) or "관련 기사",
+                _safe_url(item.get("source_url")),
+                _join_values([_clean(item.get("publisher")), _short_date(item.get("published_at") or item.get("discovered_at"))]),
+            )
+        )
+    news_row_count = len(deal_items)
+    for item in list(gp.get("news", [])):
+        if news_row_count >= PROFILE_ACTIVITY_ROW_LIMIT:
+            break
+        url = _safe_url(item.get("source_url"))
+        if url and url in deal_urls:
+            continue
+        rows.append(
+            _render_profile_preview_activity_row(
+                "관련 기사",
+                _clean(item.get("title")) or "관련 기사",
+                url,
+                _join_values([_clean(item.get("publisher")), _short_date(item.get("published_at") or item.get("discovered_at"))]),
+            )
+        )
+        news_row_count += 1
+
+    if not rows:
+        return ""
+    return f"""    <section class=\"gp-profile-preview-section gp-profile-preview-activity\" aria-labelledby=\"gpActivity\">
+      <div class=\"gp-profile-preview-section-head\">
+        <h2 id=\"gpActivity\">관련 정보</h2>
+      </div>
+      <div class=\"gp-profile-preview-activity-list\">
+{chr(10).join(rows)}
+      </div>
+    </section>"""
+
+
+def _render_profile_preview_activity_row(kind: str, title: str, url: str, meta: str) -> str:
+    linked_title = f'<a href="{_e(url)}" target="_blank" rel="noreferrer">{_e(title)}</a>' if url else _e(title)
+    activity = "news" if kind in {"관련 딜", "관련 기사"} else "lp"
+    return f"""        <article class=\"gp-profile-preview-activity-row\" data-profile-activity=\"{activity}\">
+          <span>{_e(kind)}</span>
+          <div>
+            <h3>{linked_title}</h3>
+            {f'<p>{_e(meta)}</p>' if meta else ''}
+          </div>
+        </article>"""
 
 
 def _render_profile_preview_fund_rows(fund_rows: list[dict[str, object]]) -> str:
@@ -2345,7 +2240,6 @@ def _directory_script() -> str:
       const periodSelect = document.getElementById("gpPeriod");
       const scopeSelect = document.getElementById("gpScope");
       const sort = document.getElementById("gpSort");
-      const pageSizeSelect = document.getElementById("gpPageSize");
       const list = document.getElementById("gpDirectory");
       const visible = document.getElementById("gpVisibleCount");
       const pagination = document.getElementById("gpPagination");
@@ -2420,10 +2314,7 @@ def _directory_script() -> str:
       };
 
       const getPageSize = (matchCount) => {
-        const value = pageSizeSelect?.value || "30";
-        if (value === "all") return Math.max(matchCount, 1);
-        const parsed = Number(value);
-        return Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
+        return Math.min(Math.max(matchCount, 1), 50);
       };
 
       const apply = (options = {}) => {
@@ -2446,7 +2337,9 @@ def _directory_script() -> str:
         });
         if (visible) {
           const range = matches.length ? `${(start + 1).toLocaleString("ko-KR")}-${end.toLocaleString("ko-KR")}` : "0";
-          visible.textContent = `${matches.length.toLocaleString("ko-KR")}개 중 ${range}`;
+          visible.textContent = matches.length > pageSize
+            ? `${matches.length.toLocaleString("ko-KR")}개 · ${range}`
+            : `${matches.length.toLocaleString("ko-KR")}개 표시`;
         }
         if (pagination) pagination.hidden = matches.length <= pageSize;
         if (pageState) pageState.textContent = `${currentPage.toLocaleString("ko-KR")} / ${totalPages.toLocaleString("ko-KR")}`;
@@ -2469,7 +2362,6 @@ def _directory_script() -> str:
         applySort();
         apply({ resetPage: true });
       });
-      pageSizeSelect?.addEventListener("change", () => apply({ resetPage: true }));
       cards.forEach((card) => {
         const url = card.dataset.url || "";
         if (!url) return;
@@ -4409,7 +4301,7 @@ def _base_styles() -> str:
       width: 100%;
       min-height: 8px;
       border-radius: 4px 4px 0 0;
-      background: #2f6f66;
+      background: #3182f6;
     }
     .market-chart-bar strong {
       overflow: hidden;
@@ -4460,7 +4352,7 @@ def _base_styles() -> str:
       display: block;
       height: 100%;
       border-radius: inherit;
-      background: #2f6f66;
+      background: #3182f6;
     }
     .market-rank-bar strong {
       color: var(--secondary);
@@ -4615,7 +4507,7 @@ def _base_styles() -> str:
       flex-wrap: wrap;
       align-items: baseline;
       gap: 4px 6px;
-      font-size: 16px !important;
+      font-size: 19px !important;
       line-height: 1.35;
     }
     .gp-directory-title strong {
@@ -4625,7 +4517,7 @@ def _base_styles() -> str:
     }
     .gp-directory-title span {
       color: var(--text);
-      font-weight: 760;
+      font-weight: 780;
     }
     .gp-directory-title em {
       color: var(--secondary);
@@ -4749,7 +4641,7 @@ def _base_styles() -> str:
         font-size: 13px;
       }
       .gp-controls {
-        grid-template-columns: minmax(150px, 1fr) minmax(120px, 0.7fr) minmax(150px, 0.9fr) minmax(130px, 0.7fr) !important;
+        grid-template-columns: minmax(180px, 1fr) minmax(150px, 0.8fr) minmax(180px, 1fr) !important;
         justify-content: stretch;
       }
       .gp-directory-head,
@@ -4770,7 +4662,7 @@ def _base_styles() -> str:
       }
     }
 
-    /* Isolated profile preview: applies only to the approved MBK profile. */
+    /* Shared GP profile layout. */
     .gp-profile-preview {
       width: min(calc(100% - 32px), 760px);
       padding-bottom: calc(100px + env(safe-area-inset-bottom));
@@ -4836,6 +4728,11 @@ def _base_styles() -> str:
       font-size: 13px;
       font-weight: 600;
       line-height: 1.4;
+    }
+    .gp-profile-preview-description {
+      max-width: 620px;
+      color: #4e5968 !important;
+      line-height: 1.5 !important;
     }
     .gp-profile-preview-metrics {
       border-top: 1px solid #e5e8eb;
@@ -4953,6 +4850,46 @@ def _base_styles() -> str:
     }
     .gp-profile-preview-people-list {
       display: grid;
+    }
+    .gp-profile-preview-activity {
+      padding-bottom: 4px;
+    }
+    .gp-profile-preview-activity-list {
+      display: grid;
+    }
+    .gp-profile-preview-activity-row {
+      display: grid;
+      grid-template-columns: 68px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      min-height: 62px;
+      border-top: 1px solid #f2f4f6;
+      padding: 12px 0;
+    }
+    .gp-profile-preview-activity-row > span {
+      padding-top: 2px;
+      color: #8b95a1;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+    .gp-profile-preview-activity-row h3 {
+      margin: 0;
+      color: #333d4b;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .gp-profile-preview-activity-row h3 a {
+      color: inherit;
+    }
+    .gp-profile-preview-activity-row p {
+      margin: 4px 0 0;
+      color: #8b95a1;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.4;
     }
     .gp-profile-preview-person-row {
       display: flex;

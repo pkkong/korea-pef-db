@@ -22,7 +22,6 @@ from services.gp.src.gp_service_pages import (
     _render_fund_rows,
     _render_gp_detail_page,
     _render_person_profile_page,
-    _uses_profile_ui_preview,
 )
 
 
@@ -59,7 +58,7 @@ class GpFundProfilePageTests(unittest.TestCase):
         self.assertIn("운용중", html)
         self.assertIn("청산완료", html)
 
-    def test_mbk_uses_the_isolated_profile_preview(self) -> None:
+    def test_gp_profile_uses_the_shared_profile_layout(self) -> None:
         conn = sqlite3.connect(ROOT / "db" / "private_equity.db")
         conn.row_factory = sqlite3.Row
         try:
@@ -84,8 +83,6 @@ class GpFundProfilePageTests(unittest.TestCase):
 
         html = _render_gp_detail_page("2026-08-28", profile, [])
 
-        self.assertTrue(_uses_profile_ui_preview(profile))
-        self.assertFalse(_uses_profile_ui_preview({"standard_gp_name": "테스트파트너스"}))
         self.assertIn('class="gp-shell gp-profile-preview"', html)
         self.assertIn('data-fund-filter="active"', html)
         self.assertIn('name="kpef-fss-reporting-period" content="2025Q4"', html)
@@ -95,6 +92,31 @@ class GpFundProfilePageTests(unittest.TestCase):
         self.assertIn("김병주", html)
         self.assertIn('href="person-', html)
         self.assertIn("공식 팀 페이지", html)
+
+    def test_non_mbk_profile_uses_the_same_profile_layout(self) -> None:
+        html = _render_gp_detail_page(
+            "2026-08-28",
+            {
+                "source_gp_id": "sample-gp",
+                "display_name": "테스트파트너스",
+                "latest_period_label": "2025Q4",
+                "latest_primary_aum_proxy_krw_100mn": 1200,
+                "cumulative_primary_commitment_proxy_krw_100mn": 1800,
+                "latest_primary_active_fund_count": 2,
+                "latest_primary_rank": 12,
+                "funds": [],
+                "people": [],
+                "lp_signals": [],
+                "deal_news": [],
+                "news": [],
+            },
+            [],
+        )
+
+        self.assertIn('class="gp-shell gp-profile-preview"', html)
+        self.assertIn("테스트파트너스", html)
+        self.assertIn("금감원 확인 펀드", html)
+        self.assertNotIn('class="gp-detail-grid"', html)
 
     def test_senior_person_profile_includes_source_backed_career_and_education(self) -> None:
         conn = sqlite3.connect(ROOT / "db" / "private_equity.db")
