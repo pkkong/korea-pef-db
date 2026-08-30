@@ -65,7 +65,7 @@
 - 18개 LP 전체에 일반현황, 투자현황, 담당 조직, 출자공고, 선정 GP 히스토리의 최소 커버리지를 맞춘다.
 - 공고 모니터와 LP 프로필은 연결하되, 공고 수집 상태는 운영 화면으로 분리한다.
 - 다음 LP Notice 과제는 `candidate`를 무조건 많이 보여주는 것이 아니라, 소스별 parser readiness를 올려 공개 가능한 공고 수를 다시 늘리는 것이다. 특히 `vcs_investment_notice`는 좋은 discovery source지만 현재 public parser로는 부적합하다.
-- KOFIA 목록 응답의 `IncompleteRead`를 retry와 payload integrity check로 보강하고, 1건 readiness run에서 경고 없이 통과하는지 확인한다.
+- KOFIA 목록 응답은 bounded retry로 보강했다. 다음 수집 runs에서 retry 빈도와 최종 실패율을 source health로 기록해, 재시도가 반복되는 채널은 parser/transport 개선 대상으로 분리한다.
 
 ## GP
 

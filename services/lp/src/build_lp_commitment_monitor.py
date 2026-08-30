@@ -13,16 +13,18 @@ import ssl
 import sqlite3
 import struct
 import sys
+import time
 import zipfile
 import zlib
 from http.cookiejar import CookieJar
+from http.client import IncompleteRead
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from http.cookies import SimpleCookie
 from urllib.parse import parse_qs, urlencode, unquote_plus, urljoin, urlparse
 from urllib.request import HTTPCookieProcessor, HTTPSHandler, Request, build_opener, urlopen
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SERVICE_ROOT.parents[1]
@@ -75,6 +77,8 @@ DEFAULT_LP_SELECTED_GP_EXCLUSIONS = REPO_ROOT / "data" / "lp_selected_gp_non_gp_
 DEFAULT_OUT_DIR = REPO_ROOT / "exports"
 NEWS_FEED_SOURCE_CODE = "daily_news_lp_feed"
 VCS_BACKFILL_PAGE_SIZE = 500
+SOURCE_FETCH_RETRY_ATTEMPTS = 3
+SOURCE_FETCH_RETRY_DELAY_SECONDS = 0.25
 NOTICE_TERMS = [
     "출자사업",
     "출자 공고",
@@ -1678,6 +1682,24 @@ def fetch_official_detail(notice_url: str, allow_insecure_ssl: bool) -> dict[str
     }
 
 
+def fetch_source_listing_text(source: dict[str, str], allow_insecure_ssl: bool) -> dict[str, object]:
+    """Fetch a simple source listing with bounded retries for truncated responses."""
+    locator = source.get("locator", "")
+    source_code = source.get("source_code", "") or "unknown"
+    for attempt in range(1, SOURCE_FETCH_RETRY_ATTEMPTS + 1):
+        try:
+            return fetch_text(locator, verify_ssl=not allow_insecure_ssl)
+        except (IncompleteRead, OSError, URLError) as exc:
+            if attempt >= SOURCE_FETCH_RETRY_ATTEMPTS:
+                raise
+            print(
+                "warning: source_fetch_retry "
+                f"source_code={source_code} attempt={attempt} error={exc}"
+            )
+            time.sleep(SOURCE_FETCH_RETRY_DELAY_SECONDS * attempt)
+    raise RuntimeError(f"source listing fetch retries exhausted: {source_code}")
+
+
 def fetch_kgrowth_detail(notice_url: str, referer_url: str, allow_insecure_ssl: bool) -> dict[str, object]:
     handlers: list[object] = [HTTPCookieProcessor(CookieJar())]
     if allow_insecure_ssl:
@@ -3065,14 +3087,14 @@ def load_official_candidates(
             elif source.get("source_code") == "nps_manager_selection":
                 links = parse_nps_manager_selection_listing(source, source_limit, allow_insecure_ssl)
             elif source_kind == "html_page":
-                fetched = fetch_text(locator, verify_ssl=not allow_insecure_ssl)
+                fetched = fetch_source_listing_text(source, allow_insecure_ssl)
                 links = make_html_page_link(
                     source,
                     str(fetched.get("text") or ""),
                     str(fetched.get("final_url") or locator),
                 )
             else:
-                fetched = fetch_text(locator, verify_ssl=not allow_insecure_ssl)
+                fetched = fetch_source_listing_text(source, allow_insecure_ssl)
                 links = parse_html_listing(
                     str(fetched.get("final_url") or locator),
                     str(fetched.get("text") or ""),

@@ -219,7 +219,7 @@ curl -fsS "https://kpef-newsletter.vercel.app/health.json?refresh=1"
 - LP/GP/Wiki import drift와 newsletter workflow role drift는 이제 자동 회귀 risk다. `scripts/check_architecture_contracts.py`가 실패하면 제품 작업을 추가하기 전에 경계 위반부터 고친다.
 - FSS raw registry에는 2015Q4와 2016Q1 legacy `.xls` 원천도 보존한다. 현재 표준 라이브러리 parser는 `.xlsx`만 적재하므로 이 두 파일은 raw health check에서는 SHA로 보존 확인하지만 normalized DB에는 넣지 않는다. 2025Q4 공개 통계 준비성은 최신 `.xlsx` 원천과 DB/순위 일치로 별도 보장한다.
 - LP notice lifecycle과 business-card grouping은 계속 active risk다. 진짜 별도 사업이 아닌 한 한 LP 사업을 공고/서류심사/선정결과 카드로 쪼개지 않는다. 현재 public gate는 parser review 전까지 noisy한 `vcs_investment_notice` candidate feed를 의도적으로 제외한다.
-- LP 공식 채널 수집 진단에서 KOFIA 목록 응답이 간헐적으로 `IncompleteRead`로 끊겼다. 이 채널은 자동 후보로 공개하지 않으며, 다음 수집 개선은 retry/response validation을 추가한 뒤 1건 readiness 진단으로 확인한다.
+- KOFIA 목록 응답은 간헐적으로 `IncompleteRead`로 끊길 수 있다. LP collector는 전송 중단·타임아웃 계열을 3회까지 짧게 재시도하며, 2026-08-30 1건 readiness run에서 두 번의 끊김 뒤 세 번째 응답으로 정상 수집했다. 이 채널의 자동 발견 row는 계속 candidate로만 유지한다.
 - 사용자가 Wiki 기획을 다시 열기 전까지 Wiki는 공개 내비게이션에 보여주지 않는다.
 
 ## 현재 검증 기록
@@ -241,7 +241,7 @@ curl -fsS "https://kpef-newsletter.vercel.app/health.json?refresh=1"
 - 2026-08-28 People 상세 profile 확장: 공식 현재 역할이 확인된 대표·파트너·임원급을 `person-<id>.html`로 공개한다. GP의 `주요 인물`에서 해당 이름을 상세로 연결하고, 상세에는 현재 역할, 공식 프로필에 기재된 경력·학력, 공식 출처만 표시한다. 현재 2025Q4 People 데이터에서는 114개 상세 페이지가 생성된다. 전체 People 탭은 계속 숨긴다.
 - 2026-08-29 People 공식 출처 보강: 아이엠엠크레딧앤솔루션 9명과 글랜우드크레딧 2명을 공식 팀 페이지 근거로 추가했다. `Publish GP and People from Supabase` run `33257090060`은 FSS 재수집 없이 People만 canonical Supabase와 public snapshot에 반영했고, 125개 People 상세 페이지를 생성했다. Top 50에서 People 작업이 시작된 GP는 27개에서 29개가 됐다. 두 GP workflow는 이후 매 실행 때 coverage worklist를 30일 artifact로 남기며, 이 리포트는 배포 차단 조건이 아니다. Vercel 모바일 390px에서 People 목록과 개별 profile을 확인해 가로 overflow 없이 직함·소속·경력·학력·공식 출처가 표시되는 것을 확인했다.
 - 2026-08-29 GP 공개 뉴스 연결: `Publish GP and People from Supabase` run `33257755605`가 published newsletter archive 30일치 502건을 read-only로 반영해 65개 GP에 172개 관련 뉴스 링크를 붙였다. GP별로 긴 별칭이 짧은 별칭을 포함할 때 짧은 match를 제외해 글랜우드크레딧 기사가 글랜우드프라이빗에쿼티에 같이 붙지 않게 했다. Vercel 모바일 MBK profile에서 관련 정보 6건, 가로 overflow 0, 콘솔 error 0을 확인했다. LP 선정 연결은 다음 정상 LP monitor build가 public `lp-notices.json`을 만들면 같은 GP publish 경로에서 자동 반영된다. monitor input이 없는 build는 기존 context를 빈 파일로 교체하지 않는다.
-- 2026-08-30 LP collector 독립화 및 공개 계약 정리: LP 단독 SQLite build가 `news_document`·`gp_house` 외래키를 요구해 자동 정리 단계에서 실패하던 결함을 제거했고, 기존 DB도 실행 시 local link table로 변환한다. `--limit-per-source=1` readiness run은 21초에 공식 후보 13건과 검수 이벤트 9건을 수집했다. 후보는 공개하지 않고 lifecycle을 거친 validated 공식 선정 결과 2개만 `lp-notices.json`에 남겼다. 이 context를 임시 GP build에 반영한 결과는 2개 공고, 11개 GP 정확 연결이다. KOFIA channel의 `IncompleteRead`는 별도 retry 개선 대상이며, 이 진단 데이터는 아직 공개 배포하지 않았다.
+- 2026-08-30 LP collector 독립화 및 공개 계약 정리: LP 단독 SQLite build가 `news_document`·`gp_house` 외래키를 요구해 자동 정리 단계에서 실패하던 결함을 제거했고, 기존 DB도 실행 시 local link table로 변환한다. `--limit-per-source=1` readiness run은 24초에 공식 후보 14건과 검수 이벤트 9건을 수집했다. 후보는 공개하지 않고 lifecycle을 거친 validated 공식 선정 결과 2개만 `lp-notices.json`에 남겼다. 이 context를 임시 GP build에 반영한 결과는 2개 공고, 11개 GP 정확 연결이다. KOFIA channel은 두 번의 `IncompleteRead` 뒤 세 번째 bounded retry로 정상 수집했으며, 이 진단 데이터는 아직 공개 배포하지 않았다.
 
 ## 프로젝트 리드 종료 체크리스트
 

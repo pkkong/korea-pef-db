@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sqlite3
 import sys
+from http.client import IncompleteRead
 from pathlib import Path
 from unittest.mock import patch
 
@@ -143,6 +144,40 @@ def test_vcs_source_honors_requested_collection_limit() -> None:
 
     assert rows == []
     parser.assert_called_once_with(source, 1, False)
+
+
+def test_listing_fetch_retries_truncated_response() -> None:
+    source = {
+        "source_code": "kofia_notice_feed",
+        "source_kind": "html_listing",
+        "locator": "https://example.test/kofia",
+        "is_active": "1",
+    }
+    with (
+        patch(
+            "services.lp.src.build_lp_commitment_monitor.fetch_text",
+            side_effect=[
+                IncompleteRead(b"partial", 10),
+                {"text": "<html></html>", "final_url": source["locator"]},
+            ],
+        ) as fetch,
+        patch("services.lp.src.build_lp_commitment_monitor.parse_html_listing", return_value=[]) as parser,
+        patch("services.lp.src.build_lp_commitment_monitor.time.sleep") as sleep,
+    ):
+        rows = load_official_candidates(
+            [source],
+            lp_aliases=[],
+            fallback_year=2026,
+            report_date="2026-08-29",
+            limit_per_source=1,
+            allow_insecure_ssl=False,
+            gp_aliases=[],
+        )
+
+    assert rows == []
+    assert fetch.call_count == 2
+    parser.assert_called_once_with(source["locator"], "<html></html>", "")
+    sleep.assert_called_once()
 
 
 def test_refresh_notice_links_matches_comma_and_normalized_gp_aliases() -> None:
