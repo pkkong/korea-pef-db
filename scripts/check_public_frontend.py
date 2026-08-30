@@ -251,7 +251,7 @@ def check_public_lp_json_contract() -> list[str]:
         leaked = sorted(key for key in LP_PUBLIC_JSON_FORBIDDEN_KEYS if key in row)
         if leaked:
             violations.append(f"lp_commitment_notices[{index}]:internal_keys={','.join(leaked)}")
-        if not is_public_lp_notice_row(row, require_official=True, allow_official_candidates=True):
+        if not is_public_lp_notice_row(row, require_official=True):
             violations.append(f"lp_commitment_notices[{index}]:visibility")
         event_type = str(row.get("event_type") or "")
         event_date = str(row.get("event_date") or row.get("announced_date") or "")[:10]

@@ -75,10 +75,6 @@ DEFAULT_LP_SELECTED_GP_EXCLUSIONS = REPO_ROOT / "data" / "lp_selected_gp_non_gp_
 DEFAULT_OUT_DIR = REPO_ROOT / "exports"
 NEWS_FEED_SOURCE_CODE = "daily_news_lp_feed"
 VCS_BACKFILL_PAGE_SIZE = 500
-SOURCE_BACKFILL_LIMITS = {
-    "vcs_investment_notice": 500,
-}
-
 NOTICE_TERMS = [
     "출자사업",
     "출자 공고",
@@ -385,11 +381,13 @@ def apply_schema(conn: sqlite3.Connection, schema_path: Path) -> None:
         conn.executescript(pre_index_sql)
         ensure_lp_institution_columns(conn)
         ensure_lp_notice_columns(conn)
+        ensure_lp_link_tables_are_local(conn)
         conn.executescript(marker + index_and_view_sql)
     else:
         conn.executescript(schema_sql)
     ensure_lp_institution_columns(conn)
     ensure_lp_notice_columns(conn)
+    ensure_lp_link_tables_are_local(conn)
     conn.commit()
 
 
@@ -434,6 +432,69 @@ def ensure_lp_notice_columns(conn: sqlite3.Connection) -> None:
     for name, definition in columns.items():
         if name not in existing:
             conn.execute(f"ALTER TABLE lp_commitment_notice ADD COLUMN {name} {definition}")
+
+
+def ensure_lp_link_tables_are_local(conn: sqlite3.Connection) -> None:
+    """Remove legacy cross-service foreign keys from an LP-only build database."""
+    migrations = (
+        (
+            "lp_notice_gp_link",
+            "idx_lp_notice_gp_link_lp",
+            """
+            CREATE TABLE lp_notice_gp_link (
+                notice_id INTEGER NOT NULL,
+                lp_code TEXT,
+                source_gp_id INTEGER NOT NULL,
+                gp_name TEXT NOT NULL,
+                matched_alias TEXT,
+                link_source TEXT NOT NULL DEFAULT 'selected_gp_names',
+                confidence TEXT NOT NULL DEFAULT 'medium',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (notice_id, source_gp_id),
+                FOREIGN KEY (notice_id) REFERENCES lp_commitment_notice(notice_id) ON DELETE CASCADE,
+                FOREIGN KEY (lp_code) REFERENCES lp_institution(lp_code)
+            )
+            """,
+        ),
+        (
+            "lp_notice_news_link",
+            "idx_lp_notice_news_link_lp",
+            """
+            CREATE TABLE lp_notice_news_link (
+                notice_id INTEGER NOT NULL,
+                news_id INTEGER NOT NULL,
+                lp_code TEXT,
+                link_source TEXT NOT NULL DEFAULT 'url_match',
+                confidence TEXT NOT NULL DEFAULT 'high',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (notice_id, news_id),
+                FOREIGN KEY (notice_id) REFERENCES lp_commitment_notice(notice_id) ON DELETE CASCADE,
+                FOREIGN KEY (lp_code) REFERENCES lp_institution(lp_code)
+            )
+            """,
+        ),
+    )
+    for table_name, index_name, create_sql in migrations:
+        foreign_tables = {
+            str(row[2])
+            for row in conn.execute(f"PRAGMA foreign_key_list({table_name})").fetchall()
+        }
+        if not ({"gp_house", "news_document"} & foreign_tables):
+            continue
+        legacy_name = f"{table_name}_legacy_external_fk"
+        conn.execute(f"DROP INDEX IF EXISTS {index_name}")
+        conn.execute(f"ALTER TABLE {table_name} RENAME TO {legacy_name}")
+        conn.execute(create_sql)
+        columns = [
+            str(row[1])
+            for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        ]
+        column_list = ", ".join(columns)
+        conn.execute(
+            f"INSERT INTO {table_name} ({column_list}) "
+            f"SELECT {column_list} FROM {legacy_name}"
+        )
+        conn.execute(f"DROP TABLE {legacy_name}")
 
 
 def seed_lp_institutions(conn: sqlite3.Connection, path: Path) -> list[dict[str, str]]:
@@ -2978,7 +3039,9 @@ def load_official_candidates(
         if not locator:
             continue
         try:
-            source_limit = max(limit_per_source, SOURCE_BACKFILL_LIMITS.get(source.get("source_code", ""), 0))
+            # The caller owns collection volume. A source-specific backfill override
+            # made small readiness checks unexpectedly parse hundreds of notices.
+            source_limit = limit_per_source
             if source_kind == "apfs_board":
                 links = parse_apfs_board_listing(source, source_limit, allow_insecure_ssl)
             elif source_kind == "kbiz_listing":

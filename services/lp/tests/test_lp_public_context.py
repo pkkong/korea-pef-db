@@ -5,11 +5,26 @@ from unittest.mock import patch
 from pathlib import Path
 import tempfile
 
+from scripts.lp_public_visibility import is_public_lp_notice_row
 from services.lp.src.build_lp_service_pages import build_lp_service_pages
 from services.lp.src.lp_public_context import build_public_notice_context
 
 
 class LPPublicContextTests(unittest.TestCase):
+    def test_candidate_notice_is_not_public_even_when_source_is_official(self) -> None:
+        candidate = {
+            "source_type": "official",
+            "source_code": "kgrowth_notice",
+            "event_type": "new_notice",
+            "monitor_status": "candidate",
+            "confidence": "medium",
+            "public_visible": "1",
+        }
+        validated = {**candidate, "monitor_status": "validated"}
+
+        self.assertFalse(is_public_lp_notice_row(candidate, require_official=True))
+        self.assertTrue(is_public_lp_notice_row(validated, require_official=True))
+
     def test_exports_only_public_notice_context_fields(self) -> None:
         payload = build_public_notice_context(
             "2026-08-29",

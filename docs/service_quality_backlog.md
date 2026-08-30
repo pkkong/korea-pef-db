@@ -42,6 +42,7 @@
 - 2026-06-09: LP Notice 사업명 추출에서 포털 메뉴, 약관/동의 문구, 투자성향 설명문이 사업명으로 들어오는 경우를 차단했다.
 - 2026-06-09: LP Notice 카드 병합 키에 자산군과 연도를 포함해 서로 다른 연도·자산군 공고가 한 카드에 섞이는 위험을 줄였다.
 - 2026-06-09: Wiki가 숨겨진 상태이므로 public frontend check에서 Wiki 필수 검사를 제거하고 LP Notice 전용 금지 문구 검사를 추가했다.
+- 2026-08-30: LP collector가 뉴스·GP 내부 SQLite 테이블을 외래키로 요구하던 결함을 제거했다. LP build는 독립적으로 동작하며 기존 DB는 link table migration으로 호환한다. 자동 발견한 official candidate도 public HTML/JSON/GP signal에는 넣지 않고 `validated` 이후에만 공개한다. 요청한 source limit을 벤처투자포털 한 곳이 무시해 500건을 강제하던 동작도 제거했다.
 
 ## 뉴스레터
 
@@ -64,6 +65,7 @@
 - 18개 LP 전체에 일반현황, 투자현황, 담당 조직, 출자공고, 선정 GP 히스토리의 최소 커버리지를 맞춘다.
 - 공고 모니터와 LP 프로필은 연결하되, 공고 수집 상태는 운영 화면으로 분리한다.
 - 다음 LP Notice 과제는 `candidate`를 무조건 많이 보여주는 것이 아니라, 소스별 parser readiness를 올려 공개 가능한 공고 수를 다시 늘리는 것이다. 특히 `vcs_investment_notice`는 좋은 discovery source지만 현재 public parser로는 부적합하다.
+- KOFIA 목록 응답의 `IncompleteRead`를 retry와 payload integrity check로 보강하고, 1건 readiness run에서 경고 없이 통과하는지 확인한다.
 
 ## GP
 

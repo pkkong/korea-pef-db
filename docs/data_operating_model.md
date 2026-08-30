@@ -228,5 +228,8 @@ python3 scripts/build_site_bundle.py --services wiki --date YYYY-MM-DD
 - `services/gp/src/sync_gp_public_read_model.py`는 verified GP artifact를 Supabase snapshot으로 발행한다. 두 GP 페이지와 source hash가 모두 맞지 않으면 Vercel에 새 데이터를 공개하지 않는다.
 - `services/gp/src/hydrate_gp_news_context.py`는 공개 `archive.json`만 읽어 임시 GP build DB의 관련 뉴스 컨텍스트를 채운다. GP 표준명·별칭의 high-confidence match만 연결하고, 더 긴 별칭과 겹치는 짧은 별칭은 제외한다. 뉴스레터 운영 DB나 public read model을 수정하지 않으며, 공개 아카이브 접근 장애는 GP 통계·People 발행을 막지 않는다.
 - LP builder는 정상 monitor input이 있을 때만 lifecycle-merged public row에서 `lp-notices.json`을 만든다. 이 export에는 공고·LP·상태·전략·선정 GP·원문 URL만 남기며 candidate, confidence, raw excerpt 같은 내부 필드는 넣지 않는다. monitor input이 없는 build는 기존 public context를 빈 JSON으로 덮어쓰지 않는다. `services/gp/src/hydrate_gp_lp_context.py`는 이 export의 명시적 선정 GP만 정확한 GP 별칭으로 연결하며, export가 아직 없거나 접근할 수 없어도 GP 통계·People 발행은 계속한다.
+- LP 수집 SQLite는 LP 단독 build DB다. `lp_notice_gp_link.source_gp_id`와 `lp_notice_news_link.news_id`는 선택적 참조값일 뿐 GP/뉴스 테이블을 외래키로 요구하지 않는다. 따라서 LP 수집·정리·공개 export가 다른 서비스의 내부 SQLite 테이블 유무에 따라 실패해서는 안 된다.
+- LP collector의 `--limit-per-source`는 모든 활성 공식 소스에 동일하게 적용된다. 한 소스가 진단·정기 수집의 요청 한도를 무시하고 대량 backfill을 강제해서는 안 된다.
+- 공식 사이트에서 자동 발견한 row라도 `monitor_status=candidate`이면 내부 검수 대상이다. candidate는 LP HTML, public JSON, GP profile signal 어디에도 노출하지 않고 `validated` 이후에만 공개한다.
 - `scripts/check_gp_profile_evidence_ready.py`는 GP profile evidence가 현재 FSS rebuilt DB와 표준명 기준으로 일치하는지 검사한다. 프로필/alias 품질 문제는 warning과 정리 backlog로 남기며, 통계 snapshot 발행 자체를 막지 않는다.
 - LP Notice는 계속 `사업 1개 = 공개 카드 1개`를 기준으로 삼고, 후보 source와 stale deadline은 public view/export 단계에서 제거한다.

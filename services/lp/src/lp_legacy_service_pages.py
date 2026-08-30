@@ -533,7 +533,6 @@ def lp_notice_stats(rows: list[dict[str, object]]) -> dict[str, dict[str, object
         if not is_public_lp_notice_row(
             row,
             require_official=True,
-            allow_official_candidates=True,
         ):
             continue
         lp_code = str(row.get("lp_code") or "").strip()
@@ -1198,7 +1197,6 @@ def read_ktcu_payload(db_path: Path = DEFAULT_DB, lp_code: str = KTCU_CODE, prof
             if is_public_lp_notice_row(
                 row,
                 require_official=True,
-                allow_official_candidates=True,
             )
         ]
 

@@ -484,7 +484,7 @@ def build_payload(data: dict[str, object]) -> dict[str, object]:
         row
         for row in data.get("lp_commitment_notices", [])
         if isinstance(row, dict)
-        and is_public_lp_notice_row(row, require_official=True, allow_official_candidates=True)
+        and is_public_lp_notice_row(row, require_official=True)
         and is_clean_public_lp_notice(row)
     ]
     public_lp_notice_ids = {str(row.get("notice_id") or "") for row in public_lp_notice_rows if row.get("notice_id") not in {None, ""}}

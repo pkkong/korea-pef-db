@@ -1795,7 +1795,6 @@ def read_lp_monitor(path: Path, limit: int | None = 8) -> list[dict[str, object]
             public_anchor = is_public_lp_notice_row(
                 row,
                 require_official=True,
-                allow_official_candidates=True,
             )
             if not public_anchor and not is_lp_notice_merge_support_row(row):
                 continue

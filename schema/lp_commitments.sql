@@ -110,8 +110,7 @@ CREATE TABLE IF NOT EXISTS lp_notice_gp_link (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (notice_id, source_gp_id),
     FOREIGN KEY (notice_id) REFERENCES lp_commitment_notice(notice_id) ON DELETE CASCADE,
-    FOREIGN KEY (lp_code) REFERENCES lp_institution(lp_code),
-    FOREIGN KEY (source_gp_id) REFERENCES gp_house(gp_id)
+    FOREIGN KEY (lp_code) REFERENCES lp_institution(lp_code)
 );
 
 CREATE INDEX IF NOT EXISTS idx_lp_notice_gp_link_lp ON lp_notice_gp_link(lp_code, source_gp_id);
@@ -125,7 +124,6 @@ CREATE TABLE IF NOT EXISTS lp_notice_news_link (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (notice_id, news_id),
     FOREIGN KEY (notice_id) REFERENCES lp_commitment_notice(notice_id) ON DELETE CASCADE,
-    FOREIGN KEY (news_id) REFERENCES news_document(news_id),
     FOREIGN KEY (lp_code) REFERENCES lp_institution(lp_code)
 );
 
