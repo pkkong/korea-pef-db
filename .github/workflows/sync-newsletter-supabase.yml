@@ -60,6 +60,10 @@ jobs:
             echo "::error::SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required."
             exit 1
           fi
+          python3 services/newsletter/src/sync_newsletter_canonical_supabase.py \
+            --bootstrap-archive exports/daily_news/public_archive.json \
+            --payload-out exports/daily_news/newsletter_canonical_bootstrap_payload.json \
+            --apply
           python3 services/newsletter/src/sync_newsletter_supabase.py \
             --archive exports/daily_news/public_archive.json \
             --payload-out exports/daily_news/newsletter_supabase_payload.json \

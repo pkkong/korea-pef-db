@@ -100,9 +100,40 @@ Renderer는 public read model을 HTML로 표현하는 역할만 한다.
 - cross-service ID는 참조값이지 cross-service foreign key가 아니다. 각 서비스는 상대 canonical table 없이도 자기 DB를 열고 정리할 수 있어야 한다.
 - service contract의 기본 transport는 Supabase published public read model이다. GitHub Pages JSON은 mirror 검증·장애 복구용 fallback으로만 허용하며, Vercel runtime의 primary data path로 두지 않는다.
 
-## 뉴스레터 Supabase read model
+## 뉴스레터 Supabase 데이터 모델
 
-뉴스레터의 Vercel/Supabase 전환은 운영 DB 전체 이전이 아니라 public read model부터 시작한다.
+뉴스레터의 Supabase 전환은 두 층으로 구분한다. 수집 원본과 운영 이력은
+Supabase canonical collection이 기준이고, Vercel이 읽는 공개 화면 데이터는
+별도 public read model이다. 개발자 컴퓨터의 SQLite는 기준 DB가 아니며,
+기존 수집기 호환을 위해 GitHub Actions 실행 중에만 Supabase에서 복원되는
+임시 작업본이다.
+
+### Canonical collection
+
+- `newsletter_canonical_sources`: 수집 source registry와 활성 상태.
+- `newsletter_canonical_runs`: 매일 수집 실행 이력과 결과 수치.
+- `newsletter_canonical_documents`: 원문 URL, 본문, relevance, 검수 상태,
+  분류 입력값을 포함한 표준 기사 record.
+- `newsletter_canonical_tags`, `newsletter_canonical_entity_links`: taxonomy와
+  GP/LP 등 엔티티 연결 결과.
+- `newsletter-raw` private Storage bucket: 수집 원문 HTML. `raw_html_path`는
+  이 버킷의 `supabase://` 위치만 기록한다.
+
+이 테이블과 버킷은 RLS로 비공개다. service role을 가진 수집 작업만 읽고 쓴다.
+public browser나 Vercel의 publishable key는 raw body, review 상태, source 설정을
+읽을 수 없다.
+
+GitHub Actions의 `Build newsletter mirror`는 다음 순서로 실행한다.
+
+1. Supabase canonical collection을 새 임시 SQLite 파일로 복원한다.
+2. 기존 Python 수집·분류기를 그 임시 파일에 실행한다.
+3. raw HTML을 private Storage에 올리고, source/run/document/tag/link 결과를
+   Supabase canonical collection으로 다시 동기화한다.
+4. 그 뒤에만 정적 backup mirror와 공개 read model을 갱신한다.
+
+따라서 노트북에 있는 `db/*.sqlite` 파일을 수집 이력이나 발행 기준으로 쓰지 않는다.
+
+### Public read model
 
 - `newsletter_issues`: 발행일 단위 issue.
 - `newsletter_articles`: URL 기준 canonical article.
@@ -110,7 +141,16 @@ Renderer는 public read model을 HTML로 표현하는 역할만 한다.
 - `newsletter_article_tags`, `newsletter_article_entities`: 공개 가능한 태그와 GP/LP 링크.
 - `newsletter_public_issue_articles`: Vercel 앱이 읽는 article-level public view.
 
-GitHub Actions의 `Build newsletter mirror`가 기존 archive를 만들고 GitHub Pages mirror를 먼저 검증한 뒤, 별도 `Sync newsletter Supabase read model` workflow가 `sync_newsletter_supabase.py`로 이 read model을 갱신한다. 기본 동기화 범위는 Pages mirror와 맞춘 최근 30개 이슈다. Vercel app은 Supabase를 우선 읽고, Supabase가 비어 있거나 장애일 때는 기존 public `archive.json`으로 fallback한다. Mirror는 최신인데 Vercel/Supabase만 뒤처졌을 때는 mirror build가 아니라 `Sync newsletter Supabase read model` recovery workflow로 read model만 다시 맞춘다. 같은 발행일을 재동기화할 때는 기존 `newsletter_issue_articles` 연결을 먼저 지우고 archive 기준으로 다시 넣어야 한다. 그렇지 않으면 public mirror보다 Supabase/Vercel 기사 수가 많아지는 stale link가 생긴다.
+GitHub Actions의 `Build newsletter mirror`는 canonical collection 동기화까지 끝낸 뒤
+archive를 만들고 GitHub Pages backup mirror를 검증한다. 그 뒤 별도
+`Sync newsletter Supabase read model` workflow가 `sync_newsletter_supabase.py`로
+최근 30개 공개 issue를 갱신한다. Vercel app은 Supabase를 우선 읽고, Supabase가
+비어 있거나 장애일 때만 public `archive.json`을 fallback으로 사용한다. Mirror는
+최신인데 Vercel/public read model만 뒤처졌을 때는 수집을 다시 돌리지 않고 이
+recovery workflow로 공개 read model만 다시 맞춘다. 같은 발행일을 재동기화할 때는
+기존 `newsletter_issue_articles` 연결을 먼저 지우고 archive 기준으로 다시 넣어야
+한다. 그렇지 않으면 public mirror보다 Supabase/Vercel 기사 수가 많아지는 stale
+link가 생긴다.
 
 Vercel archive 재구성은 두 층을 함께 읽어야 한다.
 

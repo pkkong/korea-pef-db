@@ -22,7 +22,16 @@ MIGRATION_PATH = (
     / "migrations"
     / "20260616090000_newsletter_read_model.sql"
 )
+CANONICAL_MIGRATION_PATH = (
+    REPO_ROOT
+    / "services"
+    / "newsletter"
+    / "supabase"
+    / "migrations"
+    / "20260903090000_newsletter_canonical_collection.sql"
+)
 SYNC_SCRIPT = REPO_ROOT / "services" / "newsletter" / "src" / "sync_newsletter_supabase.py"
+CANONICAL_SYNC_SCRIPT = REPO_ROOT / "services" / "newsletter" / "src" / "sync_newsletter_canonical_supabase.py"
 GP_RANKING_DATAPACK = WEB_ROOT / "downloads" / "gp_ranking_datapack_2025YE.xlsx"
 
 
@@ -150,7 +159,9 @@ def main() -> int:
             WEB_ROOT / "requirements.txt",
             WEB_ROOT / "vercel.json",
             MIGRATION_PATH,
+            CANONICAL_MIGRATION_PATH,
             SYNC_SCRIPT,
+            CANONICAL_SYNC_SCRIPT,
         ]
         if not path.exists()
     ]
@@ -162,6 +173,7 @@ def main() -> int:
             WEB_ROOT / "newsletter_ui.py",
             WEB_ROOT / "gp_public_data.py",
             SYNC_SCRIPT,
+            CANONICAL_SYNC_SCRIPT,
         ]
     )
     isolation_failures = check_import_isolation()

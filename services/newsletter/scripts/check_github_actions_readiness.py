@@ -23,6 +23,8 @@ MIRROR_EXPECTED_SECRETS = (
     "NAVER_CLIENT_ID",
     "NAVER_CLIENT_SECRET",
     "NEWSLETTER_PUBLIC_REPO_TOKEN",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
 )
 SYNC_EXPECTED_SECRETS = (
     "SUPABASE_URL",
@@ -150,6 +152,8 @@ def main() -> int:
             (f"daily 08:37 KST cron present ({EXPECTED_CRON})", EXPECTED_CRON in workflow_text),
             ("mirror workflow does not sync Supabase", "sync_newsletter_supabase.py" not in workflow_text),
             ("mirror workflow does not verify Vercel app", "NEWSLETTER_APP_URL" not in workflow_text),
+            ("mirror workflow restores canonical Supabase collection", "sync_newsletter_canonical_supabase.py" in workflow_text),
+            ("mirror workflow uses an ephemeral SQLite adapter", "NEWSLETTER_RUNTIME_DIR" in workflow_text),
             (
                 "mirror workflow dispatches separate Supabase sync",
                 'gh workflow run "Sync newsletter Supabase read model"' in workflow_text,
@@ -169,9 +173,9 @@ def main() -> int:
             else:
                 failures.append(f"mirror workflow does not reference secret {name}")
 
-        for name in SYNC_EXPECTED_SECRETS:
-            if f"secrets.{name}" in workflow_text:
-                failures.append(f"mirror workflow should not reference sync secret {name}")
+        # The mirror collection now restores and writes the private canonical
+        # collection tables. The later public-read-model sync uses the same
+        # service credentials for a different responsibility.
 
     if not sync_workflow_file.exists():
         failures.append(f"missing workflow file: {SYNC_WORKFLOW_PATH}")
@@ -181,6 +185,7 @@ def main() -> int:
             ("sync workflow named Sync newsletter Supabase read model", "name: Sync newsletter Supabase read model" in sync_text),
             ("sync workflow has manual dispatch", re.search(r"(?m)^  workflow_dispatch:\s*$", sync_text)),
             ("sync workflow calls sync_newsletter_supabase.py", "sync_newsletter_supabase.py" in sync_text),
+            ("sync workflow bootstraps an empty canonical collection", "sync_newsletter_canonical_supabase.py" in sync_text),
             ("sync workflow verifies Vercel app", "NEWSLETTER_APP_URL" in sync_text),
             ("sync workflow has no schedule", re.search(r"(?m)^  schedule:\s*$", sync_text) is None),
         )

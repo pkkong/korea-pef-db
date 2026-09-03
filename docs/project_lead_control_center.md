@@ -1,6 +1,6 @@
 # 프로젝트 리드 현재 상태판
 
-최종 수정: 2026-08-28 KST
+최종 수정: 2026-09-03 KST
 
 이 문서는 Project Lead가 현재 프로젝트 상태를 잃지 않기 위한 운영판이다. 새 채팅방, 서브에이전트, 별도 담당자가 작업을 시작할 때는 먼저 이 문서를 읽고, 작업이 끝나면 필요한 변경을 여기에 반영한다.
 
@@ -27,7 +27,7 @@
 - 2026-08-07에 Vercel production 앱이 404를 반환하는 회귀를 수정했다. 원인은 `services/newsletter/web/vercel.json`의 catch-all rewrite가 모든 요청을 `/index.py`로 넘긴 것이었다. Vercel Flask 앱은 `framework=flask` 설정만 유지하고, 전체 요청을 `/index.py`로 rewrite하면 안 된다. `services/newsletter/scripts/check_vercel_supabase_readiness.py`와 `services/newsletter/web/tests/test_newsletter_data.py`가 이 회귀를 검사한다.
 - 2026-06-21부터 LP, GP, Wiki는 공통 유틸을 `services/shared/src/`에서 가져와야 한다. `services.newsletter.src.*` 직접 import는 금지한다.
 - Vercel archive 계약은 유지한다. Vercel은 날짜 이동용 `newsletter_issues`와 기사 row용 `newsletter_public_issue_articles`를 함께 읽어야 하고, 빈 issue와 `section_order=0`을 보존해야 한다.
-- Vercel/Supabase 운영 경로는 다음과 같이 고정한다. `services/newsletter/web/`는 Vercel Flask 앱, `services/newsletter/supabase/`는 public read model schema, `services/newsletter/src/sync_newsletter_supabase.py`는 검증된 archive를 Supabase로 옮기는 동기화 코드다.
+- Vercel/Supabase 운영 경로는 다음과 같이 고정한다. `services/newsletter/web/`는 Vercel Flask 앱이다. Supabase는 뉴스 source/run/document/tag/entity의 비공개 canonical collection과 Vercel용 public read model을 모두 가진다. `services/newsletter/src/sync_newsletter_canonical_supabase.py`는 GitHub Actions에서만 쓸 임시 SQLite adapter를 Supabase로부터 복원하고 다시 반영한다. `sync_newsletter_supabase.py`는 검증된 archive를 public read model로 옮기는 별도 동기화 코드다. 개발자 컴퓨터의 SQLite는 기준 DB가 아니다.
 - 운영 기준 문서:
   - 제품/서비스 책임선: `docs/product_operating_model.md`
   - DB/public-view/build 계약: `docs/data_operating_model.md`
@@ -155,7 +155,7 @@ python3 scripts/check_architecture_contracts.py
 GitHub Actions → Build newsletter mirror → Run workflow
 ```
 
-이 workflow는 뉴스레터 데이터를 수집하고 GitHub Pages 백업 미러만 publish/verify한다. 성공한 뒤에는 `Sync newsletter Supabase read model`이 별도로 실행되어 검증된 mirror archive를 Supabase에 복사하고 Vercel 공식 앱을 검증한다. `Deploy newsletter Vercel app`은 앱 코드 배포만 담당한다.
+이 workflow는 먼저 Supabase canonical collection을 임시 SQLite adapter로 복원하고, 수집·분류·검수 결과와 raw HTML을 다시 Supabase에 기록한다. 이후 GitHub Pages 백업 미러만 publish/verify한다. 성공한 뒤에는 `Sync newsletter Supabase read model`이 별도로 실행되어 검증된 mirror archive를 public read model로 복사하고 Vercel 공식 앱을 검증한다. `Deploy newsletter Vercel app`은 앱 코드 배포만 담당한다.
 
 GP 금감원 통계 발행 workflow 실행:
 

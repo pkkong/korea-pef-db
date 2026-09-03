@@ -153,7 +153,10 @@ DB 설계는 "서비스가 무엇을 기억하고, 무엇끼리 연결하는가"
 | View | 자주 보는 보고서를 미리 만들어 둔 가상 표 |
 | Schema | 어떤 시트와 컬럼이 있어야 하는지 정한 설계도 |
 
-현재 중심 DB는 `db/private_equity.db`다.
+운영 기준 DB는 Supabase다. `db/private_equity.db`는 기존 변환기와 분석기의
+호환용 SQLite 작업본으로 남아 있으며, 장기적으로는 GitHub Actions가 Supabase에서
+복원해 쓰는 임시 adapter로만 취급한다. 뉴스 수집 원본은 이미 Supabase canonical
+collection과 private raw Storage를 기준으로 한다.
 
 주요 엔티티는 다음과 같다.
 

@@ -156,6 +156,8 @@ def check_workflow_contracts() -> list[str]:
         "newsletter_public_status.py check-local-artifacts",
         "newsletter_public_status.py verify-public-mirror",
         'gh workflow run "Sync newsletter Supabase read model"',
+        "sync_newsletter_canonical_supabase.py",
+        "NEWSLETTER_RUNTIME_DIR",
     ]:
         if required not in mirror:
             violations.append(f"deploy-newsletter-pages.yml:missing:{required}")
@@ -168,6 +170,7 @@ def check_workflow_contracts() -> list[str]:
             violations.append(f"sync-newsletter-supabase.yml:forbidden:{forbidden}")
     for required in [
         "sync_newsletter_supabase.py",
+        "sync_newsletter_canonical_supabase.py",
         "newsletter_public_status.py download-verified-archive",
         "newsletter_public_status.py verify-vercel-app",
         "NEWSLETTER_APP_URL",

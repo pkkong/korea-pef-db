@@ -225,7 +225,7 @@
 - 하단 메뉴는 1차 서비스 이동만 담당한다. 뉴스 기사만 저장하는 기능은 전역 `저장` 탭이나 뉴스레터 헤더 유틸리티로 노출하지 않는다. 전역 저장함은 LP/GP/Wiki 저장까지 구현된 뒤에만 하단 메뉴로 승격한다.
 - 매일 발행 후 `services/newsletter/src/build_newsletter_source_audit.py`를 실행해 더벨, 딜사이트, 인베스트조선, 블로터, 뉴스토마토, 뉴스톱 등 핵심 매체가 수집/리뷰/브리프 단계에서 어디까지 도달했는지 확인한다.
 - 검증은 `services/newsletter/tests/test_daily_news_logic.py`, `services/newsletter/src/validate_daily_news_pipeline.py`, `services/newsletter/src/check_newsletter_brand_icons.py`를 실행해야 한다. `validate_daily_news_pipeline.py` 실패는 발행 차단이고, 아이콘 검사의 missing/weak 리포트는 품질 보완 backlog로 남기되 당일 뉴스레터 공개를 막지 않는다. 아이콘 이슈까지 강제 차단하려면 `NEWSLETTER_STRICT_ICON_CHECK=1`을 명시한다. 분류·태그·서브카테고리를 고친 날에는 `test_daily_news_logic.py`에 해당 기사 제목 기반 회귀 테스트를 추가한 뒤 통과시킨다.
-- 매일 뉴스레터 발행은 역할별 GitHub Actions workflow로 나눈다. `Build newsletter mirror`는 뉴스 수집, 분류, static mirror build, GitHub Pages 백업 미러 push/verify만 담당한다. 이 workflow가 `gh-pages` 원본 archive를 새로 push했으면 GitHub Pages CDN 검증이 지연되더라도 `Sync newsletter Supabase read model`을 dispatch한다. Sync workflow는 Pages URL이 stale이면 raw `gh-pages` archive를 fallback으로 써서 Supabase/Vercel 동기화를 진행한다. `Deploy newsletter Vercel app`은 앱 코드 배포만 담당한다. 자동 mirror build는 08:37 KST 1회만 실행한다. GitHub 내부 watchdog은 09:22 KST 1회만 확인하며, Pages 또는 raw `gh-pages` 중 하나라도 오늘자 sync source를 갖고 Vercel app이 `supabase` 또는 `archive_fallback`으로 오늘자를 보여주면 fresh로 본다. sync source가 없으면 mirror build를, sync source는 있는데 Vercel app만 stale이면 Supabase sync만 실행한다. 최근 6시간 안에 mirror build가 이미 실패했으면 watchdog은 같은 실패 workflow를 다시 dispatch하지 않는다. Mirror schedule run은 public mirror `health.json`만 보고 오늘자가 이미 발행됐으면 수집·빌드·배포를 건너뛰며 Supabase sync도 다시 dispatch하지 않는다. LP/GP/Wiki 수집·빌드 실패가 당일 뉴스레터 공개를 막으면 운영 실패로 본다.
+- 매일 뉴스레터 발행은 역할별 GitHub Actions workflow로 나눈다. `Build newsletter mirror`는 먼저 Supabase canonical collection을 임시 SQLite adapter로 복원하고, 뉴스 수집·분류 결과와 raw HTML을 Supabase에 반영한다. 그 뒤 static mirror build와 GitHub Pages 백업 미러 push/verify를 수행한다. 이 workflow가 `gh-pages` 원본 archive를 새로 push했으면 GitHub Pages CDN 검증이 지연되더라도 `Sync newsletter Supabase read model`을 dispatch한다. Sync workflow는 Pages URL이 stale이면 raw `gh-pages` archive를 fallback으로 써서 Vercel용 public read model을 복구한다. `Deploy newsletter Vercel app`은 앱 코드 배포만 담당한다. 자동 mirror build는 08:37 KST 1회만 실행한다. GitHub 내부 watchdog은 09:22 KST 1회만 확인하며, Pages 또는 raw `gh-pages` 중 하나라도 오늘자 sync source를 갖고 Vercel app이 `supabase` 또는 `archive_fallback`으로 오늘자를 보여주면 fresh로 본다. sync source가 없으면 mirror build를, sync source는 있는데 Vercel app만 stale이면 Supabase sync만 실행한다. 최근 6시간 안에 mirror build가 이미 실패했으면 watchdog은 같은 실패 workflow를 다시 dispatch하지 않는다. Mirror schedule run은 public mirror `health.json`만 보고 오늘자가 이미 발행됐으면 수집·빌드·배포를 건너뛰며 Supabase sync도 다시 dispatch하지 않는다. LP/GP/Wiki 수집·빌드 실패가 당일 뉴스레터 공개를 막으면 운영 실패로 본다.
 - GitHub Actions 자체 장애로 08:37 KST schedule과 09:22 KST GitHub 내부 watchdog이 모두 누락될 수 있다. 이 경우를 막기 위해 Supabase external watchdog을 유지한다. Supabase Cron은 09:05, 09:35, 10:05, 10:35 KST에 GitHub `Newsletter publish watchdog` workflow를 외부에서 dispatch한다. 이 기능은 Supabase migration `20260807093000_newsletter_external_watchdog_cron.sql`과 Vault secret `newsletter_github_actions_dispatch_token`에 의존한다. 오늘자 수집 누락을 진단할 때 GitHub run 목록에 실행 기록이 아예 없으면 Supabase `newsletter_ops.newsletter_external_watchdog_recent_requests`도 함께 확인한다.
 - 매일 뉴스레터 정적 빌드는 `scripts/build_newsletter_bundle.py`만 사용한다. 이 빌더가 `services.lp`, `services.gp`, `services.wiki`, 또는 legacy `build_newsletter_deploy.py`를 import하면 회귀로 본다.
 - 뉴스레터 자동 발행은 많이 긁는 것보다 반드시 끝나는 것이 우선이다. GitHub Actions 기본 자동 발행은 `--source-profile stable`만 사용한다. `stable`은 핵심 Google/Naver 쿼리와 수동 클리핑만 포함하고, publisher/watch/category safety net은 routine 발행에서 제외한다. 전체 67개 소스 크롤링은 사용자가 명시적으로 놓친 기사 백필이나 source audit을 요청했을 때 `--source-profile all` 수동 실행으로만 돌린다.
@@ -233,7 +233,7 @@
 - GitHub Actions 정적 빌드에서는 원격 브랜드 로고 다운로드를 하지 않는다. `NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS=1`을 유지하고, 로고 누락·약한 favicon 문제는 `check_newsletter_brand_icons.py` 리포트 기반 별도 sweep에서 보완한다.
 - GitHub Actions 검증 단계도 수집 단계와 같은 Naver credentials를 받아야 한다. `validate_daily_news_pipeline.py`는 active Naver sources와 `NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET` 존재 여부를 함께 검사하므로, collection step만 env를 주고 validation/static build step에는 빼는 구성을 만들면 안 된다.
 - 발행 완료는 로컬 `daily_news_brief_YYYYMMDD.md` 생성이 아니라 공식 Vercel app이 오늘 날짜와 기사 수를 보여주는 상태다. 정상 경로의 완료 판단은 두 단계로 한다: `Build newsletter mirror`가 mirror `health.json`/`archive.json`을 검증하면 백업 미러 완료, `Sync newsletter Supabase read model`이 Vercel `/health.json?refresh=1`의 `data_source=supabase`, `report_date`, `article_count`를 확인하면 공식 앱 완료다. 단, GitHub Pages CDN/Actions 장애 중에는 raw `gh-pages` archive와 Vercel `data_source=archive_fallback`이 오늘자이면 사용자 화면은 복구된 것으로 보고, Supabase sync와 Pages mirror는 후속 정상화 대상으로 남긴다.
-- Vercel/Supabase 전환 경로에서 Vercel은 사용자 화면만 담당한다. 느린 뉴스 수집, 분류, 중복 제거, 발행 검증은 GitHub Actions가 계속 담당하고, `services/newsletter/src/sync_newsletter_supabase.py`가 공개 archive를 Supabase read model로 싱크한다.
+- Vercel/Supabase 전환 경로에서 Vercel은 사용자 화면만 담당한다. 느린 뉴스 수집, 분류, 중복 제거, 발행 검증은 GitHub Actions가 계속 담당한다. `sync_newsletter_canonical_supabase.py`가 Supabase canonical collection을 임시 adapter로 복원하고 수집 결과를 다시 기록하며, `sync_newsletter_supabase.py`가 공개 archive를 Vercel용 public read model로 sync한다. 개발자 컴퓨터의 SQLite는 운영 원본이 아니다.
 - `services/newsletter/web/`은 독립 Vercel Flask app이다. 이 앱은 LP/GP/Wiki, legacy monolith, local SQLite DB를 import하지 않고 Supabase read model 또는 기존 public `archive.json`만 읽는다. Supabase sync는 기본적으로 Pages mirror와 같은 최근 30개 이슈를 유지한다. Vercel은 `newsletter_issues`로 날짜 skeleton을 만들고 `newsletter_public_issue_articles`로 기사 content/order를 붙인다. `newsletter_public_issue_articles`만 읽으면 기사 0건 날짜가 사라지고, `section_order=0`을 빈 값처럼 처리하면 Vercel과 Pages 정렬이 달라진다. 화면은 `services/newsletter/web/newsletter_ui.py`의 공통 HTML/CSS/JS만 사용한다. Vercel 전용 Jinja 템플릿이나 `web/static/service.css`를 다시 만들면 UI 단일화 회귀로 본다. `SUPABASE_SERVICE_ROLE_KEY`는 GitHub Actions 전용이고 Vercel에는 넣지 않는다.
 - 매일 발행 후 `exports/daily_news/ops_status/newsletter_ops_status_latest.md`를 우선 확인한다. 이 파일의 `Status`가 `ok`이고 hard failure가 없어야 “수집/공개 완료”로 보고할 수 있다. 사용자가 “오늘 수집 안 된 것 같다”고 하면 로그부터 파지 말고 이 status report의 Collection, Local, Public, Quality 섹션을 먼저 본다.
 
@@ -290,7 +290,7 @@
 
 ## 매일 운영 흐름
 
-1. 뉴스 수집: 정식 운영은 GitHub Actions가 `services/newsletter/src/run_daily_news_pipeline.py --require-previous-archive`를 실행해 수집, 분류, public archive 기준 중복 제거를 처리한다. `scripts/run_daily_news_today.ps1`은 로컬 진단용이며 운영 스케줄러가 아니다.
+1. 뉴스 수집: 정식 운영은 GitHub Actions가 Supabase canonical collection을 임시 SQLite adapter로 복원한 뒤 `services/newsletter/src/run_daily_news_pipeline.py --require-previous-archive`를 실행해 수집, 분류, public archive 기준 중복 제거를 처리한다. 완료 뒤 raw HTML과 source/run/document/tag/entity 결과를 Supabase로 되돌린다. `scripts/run_daily_news_today.ps1`은 로컬 진단용이며 운영 스케줄러가 아니다.
 2. 발행 후보 검토: 뉴스 담당은 `exports/daily_news/daily_news_review_latest.html`과 `exports/daily_news/daily_news_review_queue_latest.csv`를 검토해 발행 포함/제외와 분류를 확정한다.
 3. GP update queue 생성: 뉴스 담당은 `exports/daily_news/news_gp_update_worklist_latest.csv`에 `source_gp_id`, `standard_gp_name`, `source_url`, 갱신 액션을 남긴다.
 4. 통합 작업 큐 생성: 운영자는 `scripts/build_service_integration_worklist.py`로 `exports/service_integration_worklist_latest.csv`를 갱신한다. 이 파일이 뉴스 담당, GP 프로필 담당, People DB 담당의 공통 작업판이다.
@@ -303,12 +303,12 @@
 
 ## repo 기준 핵심 경로
 
-- 운영 DB: `db/private_equity.db`
+- 운영 DB: Supabase canonical tables. `db/private_equity.db`와 `db/*.sqlite`는 legacy 또는 임시 build adapter이며 운영 기준 DB가 아니다.
 - 뉴스 스키마: `services/newsletter/schema/daily_news.sql`
 - People 스키마: `schema/people.sql`
 - 뉴스 입력 설정: `services/newsletter/data/news_sources.csv`, `services/newsletter/data/news_keyword_rules.csv`, `services/newsletter/data/news_gp_alias_overrides.csv`, `services/newsletter/data/news_manual_overrides.csv`
 - People 입력: `data/people_input.csv`, `data/person_role_input.csv`, `data/person_education_input.csv`
-- 뉴스 원문: `data/raw/daily_news/YYYY-MM-DD/`
+- 뉴스 원문: Supabase private Storage `newsletter-raw`. GitHub Actions의 raw directory는 실행 중 임시 파일이다.
 - 뉴스 발행/검토/큐: `exports/daily_news/`
 - 뉴스/People/GP 통합 작업 큐: `exports/service_integration_worklist_latest.csv`
 - People 검토/뷰: `exports/people_profile_summary.csv`, `exports/people_current_gp.csv`, `exports/people_roles.csv`, `exports/people_education.csv`, `exports/people_research_worklist_top50.csv`

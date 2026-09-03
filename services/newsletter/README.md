@@ -7,8 +7,8 @@ This folder owns the standalone Korea PEF daily newsletter service.
 뉴스레터는 역할을 겹치지 않게 나눈다. Mac은 정식 운영 경로에서 제외하고, 운영은 GitHub Actions, Supabase, Vercel이 각각 자기 일만 맡는다.
 
 1. GitHub Actions workflow가 매일 08:37 KST에 실행되고 retry/watchdog window가 보조한다.
-2. `Build newsletter mirror`가 뉴스 기사를 모으고, 뉴스레터용 정적 HTML/CSS/JS를 만든 뒤 GitHub Pages 백업 미러만 갱신한다.
-3. `Sync newsletter Supabase read model`이 검증된 GitHub Pages archive를 Supabase DB에 복사하고 Vercel 화면이 같은 날짜/기사 수를 읽는지 확인한다.
+2. `Build newsletter mirror`가 Supabase의 비공개 뉴스 원본 DB를 임시 작업본으로 복원해 기사를 수집하고, 수집·분류·검수 이력과 원문 HTML을 다시 Supabase에 기록한 뒤 뉴스레터용 정적 HTML/CSS/JS와 GitHub Pages 백업 미러를 만든다.
+3. `Sync newsletter Supabase read model`이 검증된 GitHub Pages archive를 Vercel용 공개 DB에 복사하고 Vercel 화면이 같은 날짜/기사 수를 읽는지 확인한다.
 4. Supabase Cron은 GitHub Actions 장애로 스케줄이 누락된 날을 외부에서 감시하고, 필요하면 GitHub `Newsletter publish watchdog`을 다시 깨운다.
 5. 사용자는 Vercel 공식 앱 `https://kpef-newsletter.vercel.app/`에서 최신 뉴스레터를 본다.
 6. GitHub Pages `https://pkkong.github.io/kpef-newsletter/`는 장애 시 확인하는 백업 미러와 archive fallback이다.
@@ -24,7 +24,7 @@ GitHub Actions 자동 발행에는 원본 저장소 Secrets에 아래 값이 필
 - `SUPABASE_DB_URL`: Supabase migration과 external watchdog cron 설치에 쓰는 DB connection URL
 - `NEWSLETTER_WATCHDOG_DISPATCH_TOKEN`: Supabase external watchdog이 GitHub `Newsletter publish watchdog` workflow를 dispatch할 때 쓰는 GitHub token
 - `SUPABASE_URL`: Supabase project URL
-- `SUPABASE_SERVICE_ROLE_KEY`: GitHub Actions가 공개 read model을 upsert할 때 쓰는 backend key
+- `SUPABASE_SERVICE_ROLE_KEY`: GitHub Actions가 비공개 canonical collection과 공개 read model을 갱신할 때 쓰는 backend key
 - `SUPABASE_PUBLISHABLE_KEY`: Vercel 앱이 read model을 읽을 때 쓰는 public key
 
 GitHub Actions 자체가 장애인 날을 자동 복구하려면 GitHub Actions secret
@@ -48,7 +48,7 @@ Vercel 앱 배포는 별도 workflow인 `Deploy newsletter Vercel app`에서 처
 - `src/`: Python implementation for collection, review, validation, delivery, source audit, and static deploy bundle generation
 - `data/`: maintained newsletter inputs such as source definitions, keyword rules, manual overrides, and GP alias overrides
 - `schema/`: SQLite schema for newsletter tables
-- `supabase/`: Supabase/Postgres migrations for the public newsletter read model
+- `supabase/`: Supabase/Postgres migrations for the private canonical collection and public newsletter read model
 - `web/`: standalone Flask/Vercel newsletter app that reads Supabase or public `archive.json`
 - `scripts/`: manual diagnostics and verification entrypoints
 - `deploy/`: Docker/Nginx runtime files plus ignored generated site artifacts
@@ -76,6 +76,8 @@ python services/newsletter/src/validate_daily_news_pipeline.py
 python services/newsletter/src/newsletter_public_status.py mirror-freshness --report-date YYYY-MM-DD --mirror-url https://pkkong.github.io/kpef-newsletter/ --event-name workflow_dispatch
 python services/newsletter/tests/test_daily_news_logic.py
 python services/newsletter/tests/test_public_status.py
+python services/newsletter/tests/test_canonical_supabase.py
+python services/newsletter/src/sync_newsletter_canonical_supabase.py --restore --db /tmp/daily_news.sqlite
 python services/newsletter/src/sync_newsletter_supabase.py --archive services/newsletter/deploy/site/archive.json
 python services/newsletter/web/tests/test_newsletter_data.py
 python scripts/check_architecture_contracts.py

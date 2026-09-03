@@ -18,7 +18,9 @@
 
 ```text
 GitHub Actions
+-> sync_newsletter_canonical_supabase.py restore
 -> run_daily_news_pipeline.py
+-> sync_newsletter_canonical_supabase.py sync
 -> build_newsletter_bundle.py
 -> validate_daily_news_pipeline.py
 -> GitHub Pages mirror
@@ -35,10 +37,10 @@ Vercel
 
 역할은 아래처럼 고정한다.
 
-- `Build newsletter mirror`: 기사 수집, 분류, 중복 제거, 정적 미러 생성/검증, GitHub Pages publish/verify
+- `Build newsletter mirror`: Supabase canonical collection을 임시 SQLite adapter로 복원한 뒤 기사 수집, 분류, 중복 제거를 실행하고, 결과와 raw HTML을 다시 Supabase에 저장한 다음 정적 미러 생성/검증과 GitHub Pages backup publish/verify를 수행한다.
 - `Sync newsletter Supabase read model`: verified mirror archive를 Supabase에 동기화하고 Vercel health 검증
 - `Deploy newsletter Vercel app`: Vercel 앱 코드 배포
-- Supabase: 뉴스레터 read model 저장. 기본 동기화 범위는 static mirror와 맞춘 최근 30개 이슈다.
+- Supabase: 비공개 canonical collection과 Vercel용 public read model을 함께 저장한다. public read model의 기본 동기화 범위는 static mirror와 맞춘 최근 30개 이슈다.
 - Vercel: 사용자가 보는 웹 화면. 수집기나 장시간 빌드를 돌리지 않는 읽기 전용 런타임
 - GitHub Pages: 정적 백업 미러와 archive fallback. canonical app은 Vercel
 
@@ -61,7 +63,7 @@ section order는 GitHub Pages `archive.json`과 같아야 한다.
 
 ## Supabase 적용 순서
 
-1. Supabase SQL editor에서 `services/newsletter/supabase/migrations/20260616090000_newsletter_read_model.sql`을 적용한다.
+1. GitHub Actions `Apply newsletter Supabase migration`으로 `services/newsletter/supabase/migrations/`의 migration을 모두 적용한다. canonical collection과 private `newsletter-raw` bucket도 이 단계에서 생성된다.
 2. GitHub Actions secrets에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`를 넣는다.
 3. Vercel project root를 `services/newsletter/web`로 잡는다.
 4. Vercel env에 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`를 넣는다.
@@ -95,8 +97,9 @@ preflight다. 파일 존재, Python compile, import isolation, Flask smoke test,
 `Apply newsletter Supabase migration` workflow는 Supabase schema 변경과 Supabase Cron 설치만 담당한다.
 Vercel 앱 배포와 DB migration을 섞지 않는다. 이 workflow는 `services/newsletter/supabase/migrations/*.sql`을 순서대로 적용한다.
 
-`Build newsletter mirror` workflow는 수집, 정적 미러 생성, GitHub Pages static mirror
-publish/verify만 담당한다. GitHub Pages CDN 검증이 지연되어도 `gh-pages` 원본 archive push가 끝났으면
+`Build newsletter mirror` workflow는 먼저 Supabase canonical collection을 임시 SQLite adapter로
+복원하고, 수집·분류·검수 결과와 raw HTML을 Supabase에 반영한다. 이어서 정적 미러 생성과 GitHub Pages static mirror
+publish/verify를 담당한다. GitHub Pages CDN 검증이 지연되어도 `gh-pages` 원본 archive push가 끝났으면
 별도 Supabase sync workflow를 dispatch한다. Supabase sync와 Vercel app health 검증은 별도 workflow가 담당한다.
 
 `Newsletter publish watchdog` workflow는 GitHub 내부 fallback 판단기다. primary
@@ -131,7 +134,7 @@ Vercel/Supabase만 뒤처졌을 때 전체 뉴스 수집을 다시 돌리지 않
 
 ## 장애 기준
 
-- Supabase sync가 실패해도 GitHub Pages mirror 발행은 이미 끝난 뒤여야 한다.
+- canonical collection sync가 실패하면 수집 결과를 발행하지 않는다. public read model sync가 실패해도 GitHub Pages backup mirror 발행은 이미 끝난 뒤여야 한다.
 - Vercel app은 Supabase가 비어 있거나 장애일 때, 또는 Supabase보다 raw/public archive가 더 최신일 때
   `archive_fallback`으로 사용자 화면을 먼저 복구한다.
 - Supabase service role key는 GitHub Actions에만 둔다. Vercel에는 publishable key만 둔다.

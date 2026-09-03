@@ -89,6 +89,8 @@ jobs:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           NEWSLETTER_PUBLIC_REPO_TOKEN: ${{ secrets.NEWSLETTER_PUBLIC_REPO_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         shell: bash
         run: |
           {
@@ -123,6 +125,8 @@ jobs:
           check_secret "NAVER_CLIENT_ID" "${NAVER_CLIENT_ID:-}" "required" "Active Naver News sources cannot be collected."
           check_secret "NAVER_CLIENT_SECRET" "${NAVER_CLIENT_SECRET:-}" "required" "Active Naver News sources cannot be collected."
           check_secret "NEWSLETTER_PUBLIC_REPO_TOKEN" "${NEWSLETTER_PUBLIC_REPO_TOKEN:-}" "required" "Publishing to ${NEWSLETTER_PUBLIC_REPO} will fail."
+          check_secret "SUPABASE_URL" "${SUPABASE_URL:-}" "required" "The canonical newsletter collection database cannot be restored."
+          check_secret "SUPABASE_SERVICE_ROLE_KEY" "${SUPABASE_SERVICE_ROLE_KEY:-}" "required" "The canonical newsletter collection database cannot be restored or updated."
 
           if [ -z "${NEWSLETTER_PUBLIC_REPO_TOKEN:-}" ]; then
             echo "::error::NEWSLETTER_PUBLIC_REPO_TOKEN is required to publish ${NEWSLETTER_PUBLIC_REPO}."
@@ -133,14 +137,32 @@ jobs:
             exit 1
           fi
 
+      - name: Restore canonical newsletter collection
+        if: steps.freshness.outputs.should_run == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        shell: bash
+        run: |
+          runtime_dir="$(mktemp -d)"
+          echo "NEWSLETTER_RUNTIME_DIR=${runtime_dir}" >> "$GITHUB_ENV"
+          python3 services/newsletter/src/sync_newsletter_canonical_supabase.py \
+            --restore \
+            --db "${runtime_dir}/daily_news.sqlite"
+
       - name: Build daily newsletter data
         if: steps.freshness.outputs.should_run == 'true'
         env:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          mkdir -p db data/raw/daily_news exports/daily_news
+          mkdir -p exports/daily_news
+          set +e
           timeout "${NEWSLETTER_RUN_TIMEOUT_SECONDS}" python3 services/newsletter/src/run_daily_news_pipeline.py \
+            --db "${NEWSLETTER_RUNTIME_DIR}/daily_news.sqlite" \
+            --raw-dir "${NEWSLETTER_RUNTIME_DIR}/raw" \
             --date "${{ steps.date.outputs.report_date }}" \
             --limit-per-source "${NEWSLETTER_LIMIT_PER_SOURCE}" \
             --candidate-limit-per-source "${NEWSLETTER_CANDIDATE_LIMIT_PER_SOURCE}" \
@@ -152,12 +174,21 @@ jobs:
             --allow-insecure-ssl \
             --google-date-window \
             --require-previous-archive
+          pipeline_status=$?
+          set -e
+          python3 services/newsletter/src/sync_newsletter_canonical_supabase.py \
+            --sync \
+            --db "${NEWSLETTER_RUNTIME_DIR}/daily_news.sqlite" \
+            --payload-out "${NEWSLETTER_RUNTIME_DIR}/canonical-newsletter-payload.json" \
+            --apply
+          exit "${pipeline_status}"
 
       - name: Build newsletter quality files
         if: steps.freshness.outputs.should_run == 'true'
         run: |
           python3 services/newsletter/src/build_newsletter_source_audit.py \
-            --date "${{ steps.date.outputs.report_date }}"
+            --date "${{ steps.date.outputs.report_date }}" \
+            --db "${NEWSLETTER_RUNTIME_DIR}/daily_news.sqlite"
           NEWSLETTER_AI_APPLY_SECTIONS="${NEWSLETTER_AI_APPLY_SECTIONS}" \
             python3 services/newsletter/src/enrich_daily_news_ai.py \
               --date "${{ steps.date.outputs.report_date }}" \
@@ -181,6 +212,7 @@ jobs:
           echo "::group::Validate newsletter pipeline"
           timeout 120 python3 services/newsletter/src/validate_daily_news_pipeline.py \
             --date "${{ steps.date.outputs.report_date }}" \
+            --db "${NEWSLETTER_RUNTIME_DIR}/daily_news.sqlite" \
             --public-dir services/newsletter/deploy/site \
             --site-dir services/newsletter/deploy/site
           echo "::endgroup::"

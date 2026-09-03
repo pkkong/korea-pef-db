@@ -3,8 +3,9 @@
 ## 결론
 
 현재 정식 수집/발행 경로는 GitHub Actions다. 매일 수집, 분류,
-정적 HTML 생성, GitHub Pages mirror 배포는 `Build newsletter mirror`가 처리하고,
-Supabase sync와 Vercel 검증은 별도 `Sync newsletter Supabase read model` workflow가 처리한다.
+정적 HTML 생성, GitHub Pages mirror 배포는 `Build newsletter mirror`가 처리한다.
+수집 원본은 Supabase canonical collection에 기록하고, 공개 read model sync와
+Vercel 검증은 별도 `Sync newsletter Supabase read model` workflow가 처리한다.
 개인 Mac, Windows 예약 작업, 로컬 자동 push는 운영 경로에서 제외한다.
 
 이 문서는 GitHub Actions를 넘어 Vercel/Supabase 또는 전용 Cloud Run Job,
@@ -13,9 +14,10 @@ Railway Cron 같은 별도 클라우드 운영으로 확장할 때 참고하는 
 2026-06-16 기준 1차 전환 경로는 Vercel + Supabase다.
 
 - `services/newsletter/web/`: Vercel Flask app. LP/GP/Wiki를 import하지 않는다.
-- `services/newsletter/supabase/migrations/`: Supabase public read model schema.
-- `services/newsletter/src/sync_newsletter_supabase.py`: generated archive를 Supabase read model로 싱크한다.
-- GitHub Pages mirror 발행과 Supabase read model sync는 별도 workflow다. Supabase secret이 없어도 mirror 발행 경로는 유지되어야 한다.
+- `services/newsletter/supabase/migrations/`: Supabase canonical collection과 public read model schema.
+- `services/newsletter/src/sync_newsletter_canonical_supabase.py`: private collection을 임시 SQLite adapter로 복원하고 수집 결과를 다시 Supabase에 sync한다.
+- `services/newsletter/src/sync_newsletter_supabase.py`: generated archive를 public read model로 sync한다.
+- GitHub Pages mirror 발행과 public read model sync는 별도 workflow다. canonical collection 없이 mirror만 발행하는 경로는 허용하지 않는다.
 
 ## 추천 구조
 
@@ -66,10 +68,18 @@ services/newsletter/src
 scripts
   build_newsletter_bundle.py
 
-/db
-  local SQLite for development only
+/tmp in GitHub Actions
+  temporary SQLite compatibility adapter only
 
-Supabase read model
+Supabase canonical collection
+  newsletter_canonical_sources
+  newsletter_canonical_runs
+  newsletter_canonical_documents
+  newsletter_canonical_tags
+  newsletter_canonical_entity_links
+  private newsletter-raw Storage bucket
+
+Supabase public read model
   newsletter_issues
   newsletter_articles
   newsletter_issue_articles

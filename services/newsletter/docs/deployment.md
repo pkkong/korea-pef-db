@@ -4,10 +4,10 @@
 
 운영 역할은 아래처럼 고정한다.
 
-- `Build newsletter mirror`: 뉴스 수집, 분류, 정적 미러 생성/검증, GitHub Pages publish/verify
+- `Build newsletter mirror`: Supabase canonical collection 복원, 뉴스 수집/분류, raw HTML과 검수 이력 반영, 정적 미러 생성/검증, GitHub Pages backup publish/verify
 - `Sync newsletter Supabase read model`: verified mirror archive를 Supabase에 동기화하고 Vercel health 검증
 - `Deploy newsletter Vercel app`: Vercel 앱 코드 배포
-- Supabase: Vercel 앱이 읽는 뉴스레터 read model DB
+- Supabase: 비공개 뉴스 canonical collection과 Vercel 앱이 읽는 공개 read model DB
 - Vercel: 사용자가 보는 primary 뉴스레터 앱
 - GitHub Pages: 장애 시 확인 가능한 정적 백업 미러
 - Mac/local: 개발과 빠른 검증 보조. 정식 발행 경로가 아니다.
@@ -64,15 +64,16 @@ GitHub Actions 자동 발행은 두 단계로 실행된다.
 
 ```text
 Mirror workflow: Build newsletter mirror
-1. run_daily_news_pipeline.py로 그날의 뉴스 데이터를 만든다.
-2. build_newsletter_source_audit.py와 enrich_daily_news_ai.py로 품질 점검과 3줄 요약 보강 파일을 만든다.
-3. scripts/build_newsletter_bundle.py로 뉴스레터 전용 정적 사이트 파일을 만든다.
-4. `NEWSLETTER_PUBLIC_REPO_TOKEN`으로 public mirror `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 push한다.
-5. GitHub Pages mirror의 `health.json`과 `archive.json`이 오늘 날짜와 기사 수를 보여주는지 확인한다.
+1. sync_newsletter_canonical_supabase.py가 Supabase canonical collection을 새 임시 SQLite adapter로 복원한다.
+2. run_daily_news_pipeline.py가 그 adapter에서 그날의 뉴스 데이터를 만들고, raw HTML을 private Storage에 보관한 뒤 source/run/document/tag/entity 결과를 Supabase canonical collection에 반영한다.
+3. build_newsletter_source_audit.py와 enrich_daily_news_ai.py로 품질 점검과 3줄 요약 보강 파일을 만든다.
+4. scripts/build_newsletter_bundle.py로 뉴스레터 전용 정적 사이트 파일을 만든다.
+5. `NEWSLETTER_PUBLIC_REPO_TOKEN`으로 public mirror `pkkong/kpef-newsletter`의 `gh-pages` 브랜치에 push한다.
+6. GitHub Pages mirror의 `health.json`과 `archive.json`이 오늘 날짜와 기사 수를 보여주는지 확인한다.
 
 Sync workflow: Sync newsletter Supabase read model
-6. Verified mirror archive를 Supabase read model에 동기화한다. 같은 날짜 재동기화 때는 기존 issue-article link와 article metadata를 지우고 현재 archive 기준으로 다시 만든다.
-7. Vercel 앱의 `/health.json?refresh=1`이 `data_source=supabase`, 오늘 날짜, 같은 기사 수를 보여주는지 확인한다.
+7. Verified mirror archive를 Supabase public read model에 동기화한다. 같은 날짜 재동기화 때는 기존 issue-article link와 article metadata를 지우고 현재 archive 기준으로 다시 만든다.
+8. Vercel 앱의 `/health.json?refresh=1`이 `data_source=supabase`, 오늘 날짜, 같은 기사 수를 보여주는지 확인한다.
 ```
 
 자동 실행의 기본 경로는 GitHub Actions schedule이다. 기본 설정은 매일 한국시간 오전 8:37 실행이다.
@@ -99,15 +100,15 @@ GitHub Actions 자동 발행에는 private 원본 저장소의 `Settings` → `S
 - `NEWSLETTER_PUBLIC_REPO_TOKEN`: private 원본 저장소의 Action이 public mirror `pkkong/kpef-newsletter`에 push할 때 쓰는 GitHub token
 - `SUPABASE_DB_URL`: Supabase migration과 external watchdog cron 설치에 쓰는 DB connection URL
 - `NEWSLETTER_WATCHDOG_DISPATCH_TOKEN`: Supabase external watchdog이 GitHub `Newsletter publish watchdog` workflow를 dispatch할 때 쓰는 token
-- `SUPABASE_URL`: 뉴스레터 read model Supabase project URL
-- `SUPABASE_SERVICE_ROLE_KEY`: GitHub Actions가 read model을 갱신할 때 쓰는 Supabase service role key
+- `SUPABASE_URL`: 뉴스레터 canonical collection과 public read model의 Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY`: GitHub Actions가 canonical collection과 public read model을 갱신할 때 쓰는 Supabase service role key
 
 `NAVER_CLIENT_ID` 또는 `NAVER_CLIENT_SECRET`이 없으면 워크플로는 실패한다. Naver 소스를 빼고 발행하면 커버리지가 크게 낮아져서 자동 발행으로 인정하지 않는다.
 `NEWSLETTER_PUBLIC_REPO_TOKEN`이 없거나 public mirror에 push 권한이 없으면 뉴스레터 파일을 만들 수는 있어도
 `pkkong/kpef-newsletter`에 게시할 수 없다.
 `SUPABASE_DB_URL`이 없으면 Supabase migration과 external watchdog cron 설치가 실패한다.
 `NEWSLETTER_WATCHDOG_DISPATCH_TOKEN`이 없으면 Supabase Cron은 설치되지만 GitHub workflow를 외부에서 dispatch하지 못한다.
-`SUPABASE_URL` 또는 `SUPABASE_SERVICE_ROLE_KEY`가 없으면 Supabase/Vercel sync workflow는 실패한다. 단, 이 workflow는 GitHub Pages mirror workflow와 분리되어 있으므로 Supabase 장애가 정적 백업 미러 발행까지 막지는 않는다.
+`SUPABASE_URL` 또는 `SUPABASE_SERVICE_ROLE_KEY`가 없으면 canonical collection을 복원하거나 기록할 수 없으므로 mirror workflow는 수집을 시작하지 않는다. public read model sync가 실패해도 이미 만들어진 GitHub Pages backup mirror는 유지된다.
 
 Public mirror 저장소의 Pages 설정은 `Settings` → `Pages`에서 Source를 `Deploy from a branch`,
 Branch를 `gh-pages`, Folder를 `/ (root)`로 둔다.
