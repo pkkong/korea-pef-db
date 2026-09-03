@@ -28,6 +28,7 @@
 - 2026-06-21부터 LP, GP, Wiki는 공통 유틸을 `services/shared/src/`에서 가져와야 한다. `services.newsletter.src.*` 직접 import는 금지한다.
 - Vercel archive 계약은 유지한다. Vercel은 날짜 이동용 `newsletter_issues`와 기사 row용 `newsletter_public_issue_articles`를 함께 읽어야 하고, 빈 issue와 `section_order=0`을 보존해야 한다.
 - Vercel/Supabase 운영 경로는 다음과 같이 고정한다. `services/newsletter/web/`는 Vercel Flask 앱이다. Supabase는 뉴스 source/run/document/tag/entity의 비공개 canonical collection과 Vercel용 public read model을 모두 가진다. `services/newsletter/src/sync_newsletter_canonical_supabase.py`는 GitHub Actions에서만 쓸 임시 SQLite adapter를 Supabase로부터 복원하고 다시 반영한다. `sync_newsletter_supabase.py`는 검증된 archive를 public read model로 옮기는 별도 동기화 코드다. 개발자 컴퓨터의 SQLite는 기준 DB가 아니다.
+- 2026-09-03에 newsletter canonical collection migration을 Supabase에 적용했다. `Sync newsletter Supabase read model` run `33763459735`가 기존 public archive를 최초 이관해 canonical document 506개, run 30개, tag 1,012개를 기록했고, 후속 run `33763668752`가 source registry 71개를 반영했다. 두 run 모두 Vercel `report_date=2026-09-03`, 기사 23개를 확인했다. `Apply newsletter Supabase migration`은 같은 폴더의 GP-owned migration을 다시 적용하지 않는다.
 - 운영 기준 문서:
   - 제품/서비스 책임선: `docs/product_operating_model.md`
   - DB/public-view/build 계약: `docs/data_operating_model.md`
