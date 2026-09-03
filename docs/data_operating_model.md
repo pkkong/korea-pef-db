@@ -1,6 +1,6 @@
 # 데이터 운영 모델
 
-최종 수정: 2026-08-28 KST
+최종 수정: 2026-09-03 KST
 
 이 문서는 DB와 공개 화면 사이의 책임선을 정의한다. 핵심 원칙은
 `raw source -> canonical entity -> review/evidence -> public view -> static HTML`이다.
@@ -82,6 +82,21 @@ Renderer는 public read model을 HTML로 표현하는 역할만 한다.
 - 화면에는 `candidate`, `monitor_status`, `confidence`, `source/evidence`,
   `자동 생성`, `검토 대기` 같은 내부 표현을 노출하지 않는다.
 - 공개 숫자와 목록은 손으로 HTML에 박지 않는다. source data에서 읽어 빌드한다.
+
+## 서비스 간 Public Contract
+
+서비스 간 데이터 연결은 canonical DB 공유가 아니라 읽기 전용 public contract로 한다.
+
+| 발행 서비스 | public contract | 사용하는 서비스 | 허용된 역할 |
+| --- | --- | --- | --- |
+| Brief | `archive.json` / Supabase newsletter public read model의 entity link | LP, GP | 관련 뉴스 링크와 기사 출처 표시 |
+| LP | `lp-notices.json`의 validated lifecycle·선정 GP | GP | GP 프로필의 LP 선정 이력 표시 |
+| GP | Supabase GP public snapshot/page artifact | Brief, LP | GP profile URL과 공개 프로필 정보 연결 |
+
+- contract에는 공개 가능한 값과 stable schema version만 넣는다. raw excerpt, candidate, confidence, 운영 상태는 넣지 않는다.
+- 소비 서비스는 contract를 자기 임시 build/read model에 복사해 사용할 수 있지만, 발행 서비스의 canonical DB를 직접 쓰거나 바꾸지 않는다.
+- contract fetch 장애는 소비 서비스의 enrichment만 생략하게 한다. 소비 서비스의 통계·목록·기본 발행을 실패시키거나, 마지막 정상 context를 빈 값으로 대체해서는 안 된다.
+- cross-service ID는 참조값이지 cross-service foreign key가 아니다. 각 서비스는 상대 canonical table 없이도 자기 DB를 열고 정리할 수 있어야 한다.
 
 ## 뉴스레터 Supabase read model
 

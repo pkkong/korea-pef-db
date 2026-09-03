@@ -11,6 +11,8 @@
 - 뉴스레터 단독 빌드와 Vercel 앱 런타임은 LP, GP, Wiki, 로컬 SQLite 서비스 빌더, legacy public-site renderer를 import하면 안 된다.
 - LP 서비스 entrypoint는 module import 시점에 legacy LP renderer를 불러오면 안 된다.
 - legacy LP renderer도 legacy all-in-one CLI가 GP/Wiki 페이지 생성을 명시적으로 요청하기 전까지 GP/Wiki module을 import하면 안 된다.
+- 서비스 간 연계는 versioned public export/read model을 읽는 enrichment로만 구현한다. 다른 서비스의 canonical SQLite table을 foreign key로 참조하거나 write하면 안 된다.
+- LP schema는 `gp_house`, `news_document` 같은 GP/Brief canonical table을 foreign key로 참조하면 안 된다.
 - 생성 산출물은 source tracking 대상이 아니다. 특히 `services/newsletter/deploy/site/`, `exports/`, `public/`, local DB 파일은 직접 수정하거나 commit하지 않는다.
 
 검사 명령:

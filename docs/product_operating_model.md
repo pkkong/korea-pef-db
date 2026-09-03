@@ -1,6 +1,6 @@
 # 제품 운영 모델
 
-최종 수정: 2026-06-21 KST
+최종 수정: 2026-09-03 KST
 
 이 문서는 제품 운영의 최상위 기준이다. 새 기능, 새 데이터 소스, 새 화면을
 추가하기 전에 먼저 이 문서의 서비스 책임선과 공개 정책을 확인한다.
@@ -46,6 +46,18 @@
 
 서비스 renderer는 다른 서비스의 원천 데이터나 화면 규칙을 직접 고치지 않는다.
 다른 서비스 데이터가 필요하면 public view, export, shared helper를 통해 읽는다.
+
+## 독립 서비스와 공개 연계
+
+Brief, LP, GP는 하나의 제품 안에서 보이지만 각각 독립적으로 수집·정규화·검수·발행할 수 있는 서비스다.
+
+- 각 서비스는 자기 raw source, canonical DB, review 상태, public read model을 소유한다.
+- 다른 서비스의 SQLite table, raw source, crawler, renderer를 직접 import하거나 외래키로 참조하지 않는다. 다른 서비스의 canonical DB를 수정하지도 않는다.
+- 서비스 간 연결은 versioned public contract만 사용한다. Brief는 공개 archive의 GP/LP entity link를 발행하고, LP는 검수된 lifecycle과 선정 GP를 `lp-notices.json`으로 발행하며, GP는 검증된 public snapshot/profile을 발행한다.
+- 연계 정보는 enrichment다. 상대 서비스의 public context가 없거나 일시적으로 읽히지 않아도 자기 서비스의 수집·공개 발행은 계속된다. 기존 public context를 빈 결과로 덮어쓰지 않는다.
+- Shared는 공통 shell, nav, 디자인 언어, 배포 검증만 책임진다. Shared가 서비스별 raw data ownership을 합치거나 하나의 거대한 runtime DB를 뜻하지는 않는다.
+
+따라서 사용자는 한 제품 안에서 뉴스 기사에서 GP/LP로, LP 공고에서 선정 GP로, GP 프로필에서 뉴스·LP 이력으로 이동할 수 있어야 한다. 하지만 Brief, LP, GP 중 하나를 떼어 별도 서비스로 운영해도 나머지 서비스의 수집·DB·발행이 멈추면 안 된다.
 
 ## 화면 유형
 

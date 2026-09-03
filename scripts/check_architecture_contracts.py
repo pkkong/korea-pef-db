@@ -33,6 +33,11 @@ GENERATED_TRACKED_PATTERNS = (
     "exports/",
     "public/",
 )
+LP_SCHEMA_PATH = REPO_ROOT / "schema" / "lp_commitments.sql"
+LP_CROSS_SERVICE_FOREIGN_KEY_REFS = (
+    "REFERENCES gp_house",
+    "REFERENCES news_document",
+)
 
 
 def rel(path: Path) -> str:
@@ -47,6 +52,15 @@ def check_no_cross_service_newsletter_src_imports() -> list[str]:
                 if DIRECT_NEWSLETTER_SRC_IMPORT_RE.search(line):
                     violations.append(f"{rel(path)}:{line_number}:{line.strip()}")
     return violations
+
+
+def check_lp_schema_is_service_local() -> list[str]:
+    schema_text = LP_SCHEMA_PATH.read_text(encoding="utf-8")
+    return [
+        f"{rel(LP_SCHEMA_PATH)}:{reference}"
+        for reference in LP_CROSS_SERVICE_FOREIGN_KEY_REFS
+        if reference in schema_text
+    ]
 
 
 def run_python(code: str) -> tuple[int, str, str]:
@@ -216,6 +230,7 @@ def main() -> int:
 
     sections = {
         "cross_service_newsletter_src_imports": check_no_cross_service_newsletter_src_imports(),
+        "lp_schema_service_local": check_lp_schema_is_service_local(),
         "import_isolation": check_import_isolation(),
         "workflow_contracts": check_workflow_contracts(),
         "generated_outputs_untracked": check_generated_outputs_untracked(),
