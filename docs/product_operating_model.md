@@ -9,6 +9,14 @@
 
 공개 사이트는 하나의 제품이지만, 운영 책임은 서비스별로 분리한다.
 
+### 런타임과 데이터의 우선순위
+
+1. **Vercel**: 사용자가 보는 유일한 공식 서비스 runtime이다. `브리프 / LP / GP`의 공개 URL과 배포 확인은 Vercel 기준으로 한다.
+2. **Supabase**: 서비스의 영속 canonical DB와 versioned public read model의 기준 위치다. Vercel은 published public data만 읽는다.
+3. **GitHub**: 코드, versioned raw input, migration, workflow를 관리하는 개발·운영 저장소다. GitHub Pages는 검증·장애 대비용 정적 backup mirror일 뿐 공식 서비스가 아니다.
+
+SQLite는 parser·정규화·renderer를 위한 임시 계산 파일로만 허용한다. 로컬 SQLite나 GitHub Pages HTML을 공개 서비스의 runtime DB 또는 기본 화면으로 취급하지 않는다.
+
 - `Brief`: 매일 읽는 뉴스 클리핑 서비스다. 기사 수집, 분류, 태그, 중복 제거,
   언론사 로고, 검색, 아카이브, 발행 품질만 책임진다.
 - `LP`: 출자기관, 출자사업, 공식 공고, 서류심사, 선정결과, 선정 GP, LP 관련
@@ -93,6 +101,8 @@ Brief, LP, GP는 하나의 제품 안에서 보이지만 각각 독립적으로 
 - 주기적: GP/LP 프로필, 로고, People, 뉴스 연결 보강.
 - 필요 시: 통합 사이트 빌드와 배포.
 - Wiki: Wiki 기획이나 본문 변경이 있을 때만 명시적으로 빌드.
+
+Brief와 GP는 현재 이 `Supabase → Vercel` 경로로 공개된다. LP는 local collector와 static export에서 Supabase canonical/public read model로 옮기는 작업이 남아 있으며, 이 전환이 끝나기 전까지 GitHub Pages나 로컬 export를 LP 서비스의 기본 운영 경로로 보지 않는다.
 
 ## 완료 기준
 

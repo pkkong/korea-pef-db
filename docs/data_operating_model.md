@@ -24,9 +24,10 @@
    - 내부 상태와 후보 데이터를 제거한 후의 결과다.
 
 5. `Public surface` 공개 화면
-   - LP/GP와 GitHub Pages mirror는 public read model을 HTML로 구운 결과다.
+   - Vercel이 `브리프 / LP / GP`의 유일한 공식 public runtime이다. GitHub Pages는 정적 backup mirror이며 runtime source나 기본 공개 URL이 아니다.
    - 공식 Brief 앱은 검증된 mirror archive를 Supabase public read model로 동기화한 뒤 Vercel에서 읽는 결과다.
-   - 공식 GP Market/Directory는 FSS readiness를 통과한 `gp_public_snapshots`와 public page artifact를 Supabase에 atomically publish한 뒤 Vercel에서 읽는 결과다. GitHub Pages는 정적 backup mirror일 뿐 Vercel GP 화면의 runtime source가 아니다.
+   - 공식 GP Market/Directory는 FSS readiness를 통과한 `gp_public_snapshots`와 public page artifact를 Supabase에 atomically publish한 뒤 Vercel에서 읽는 결과다.
+   - LP의 목표 경로도 `공식 원천 → Supabase canonical LP data → published LP public read model → Vercel`이다. local SQLite와 static export는 이 전환 전의 build helper이며 영속 service DB가 아니다.
    - DB나 CSV가 바뀌어도 build, sync, deploy, public verification 전까지 공개 화면은 바뀌지 않는다.
 
 ## 상태값 분리 원칙
@@ -97,6 +98,7 @@ Renderer는 public read model을 HTML로 표현하는 역할만 한다.
 - 소비 서비스는 contract를 자기 임시 build/read model에 복사해 사용할 수 있지만, 발행 서비스의 canonical DB를 직접 쓰거나 바꾸지 않는다.
 - contract fetch 장애는 소비 서비스의 enrichment만 생략하게 한다. 소비 서비스의 통계·목록·기본 발행을 실패시키거나, 마지막 정상 context를 빈 값으로 대체해서는 안 된다.
 - cross-service ID는 참조값이지 cross-service foreign key가 아니다. 각 서비스는 상대 canonical table 없이도 자기 DB를 열고 정리할 수 있어야 한다.
+- service contract의 기본 transport는 Supabase published public read model이다. GitHub Pages JSON은 mirror 검증·장애 복구용 fallback으로만 허용하며, Vercel runtime의 primary data path로 두지 않는다.
 
 ## 뉴스레터 Supabase read model
 

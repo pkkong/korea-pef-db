@@ -14,6 +14,7 @@
 - 공개 미러 저장소: `pkkong/kpef-newsletter`, branch `gh-pages`
 - 공개 하단 메뉴: `브리프 / LP / GP`
 - Wiki는 사용자가 다시 기획하기 전까지 공개 메뉴에서 숨긴다.
+- 인프라 우선순위: Vercel은 유일한 공식 공개 runtime, Supabase는 canonical/public read model DB, GitHub은 코드·원천·workflow와 backup mirror다. GitHub Pages URL은 검증·장애 복구 목적이며 기본 서비스 URL이 아니다.
 - 2026-06-17 기준 최신 GitHub Pages 미러 검증: GitHub Actions run `27692675935`가 source `40d6e5b`에서 성공했다. 공개 `health.json`은 `report_date=2026-06-17`, `article_count=17`, `services=newsletter`였다.
 - 2026-06-17 기준 최신 Vercel 앱 검증: GitHub Actions run `27694685414`가 source `dbb2a9e`에서 성공했다. Vercel `health.json?refresh=1`은 `report_date=2026-06-17`, `article_count=17`, `issue_count=30`, `data_source=supabase`였다.
 - 2026-06-17에 뉴스레터 UI 원본을 단일화했다. `services/newsletter/web/newsletter_ui.py`가 Vercel 앱과 GitHub Pages 미러가 함께 쓰는 HTML/CSS/JS 원본이다. Vercel 전용 Jinja template이나 `web/static/service.css`를 다시 만들면 회귀다.
@@ -49,6 +50,7 @@
 - 별도 뉴스레터 채팅방의 현재 책임: 뉴스레터 분류, 태그, 검색, 로고, 편집 품질을 관리한다. 사용자가 이 채팅방에 통합·검증을 명시하지 않는 한 같은 뉴스레터 수정을 중복으로 하지 않는다.
 - 뉴스레터 작업을 넘겨받을 때 필요한 확인: source diff, 생성된 공개 페이지, `services/newsletter/tests/test_daily_news_logic.py` 결과, 브랜드 아이콘 검사, 공개 URL smoke check가 있어야 배포 보고에 포함한다.
 - LP Notice 현재 목표: `lp-official-notices.html`, `lp-notices.html`, `lp-notice-*.html`을 긁어온 row 목록이 아니라 사업 단위 공고 서비스로 만든다. 2026-06-09 공개 배포에서는 noisy candidate row를 제외하고 program/lifecycle grouping을 강화해 공개 공고 카드를 246개에서 85개로 줄였다.
+- LP DB/runtime 전환: LP의 최종 경로는 `Supabase canonical LP data → published LP public read model → Vercel`이다. 현재 local SQLite collector와 static export는 이관 대상 build helper다. LP는 GitHub Pages나 local export를 공식 운영 DB·기본 서비스로 취급하지 않는다.
 - LP directory current rule: 직접 GP/위탁운용사를 선정하는 기관만 공개 디렉토리에 표시한다. 산재보험기금·고용보험기금 등 OCIO 위임형 기금은 내부 pool로 분류하고, 별도 OCIO 서비스/탭을 기획하기 전까지 공개 기본 목록에는 섞지 않는다.
 - LP classification basis: `legal_lp_category`는 자본시장법 체계상 법적 LP 유형이고, `core/policy/ocio/candidate`는 실제 공고, 선정 이력, OCIO 위임 여부, 사용자 지정 전략기관 여부를 반영한 서비스 운영 등급이다. 후보성 기관 일반정보만으로는 공개하지 않는다.
 - GP/FSS 통계 기준: 최신 공식 원천은 `2025Q4` (`2025-12-31` 기준, 2026-07-02 금감원 게시)다. 현재 검증 수치는 펀드 1,195개, 대표 운용 GP 397개, 출자약정액 167.5조원, 상위 10개 GP 비중 42.84%다. Market의 GP는 펀드별 대표 운용사 기준이며, FSS에서 관측된 전체/공동 운용사 수와 섞지 않는다.

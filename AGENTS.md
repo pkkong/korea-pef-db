@@ -103,6 +103,7 @@ Every non-trivial subagent task should state:
 
 - The newsletter service lives under `services/newsletter/`.
 - Newsletter official app is Vercel at `https://kpef-newsletter.vercel.app`; GitHub Pages at `pkkong/kpef-newsletter` on `gh-pages` is the static backup mirror and archive fallback.
+- Vercel is the only official user-facing runtime for `브리프 / LP / GP`. Supabase owns durable canonical data and published public read models; GitHub holds code, versioned raw inputs, and automation, while GitHub Pages remains a backup mirror only.
 - Crawlers, CSV imports, or DB updates do not update public surfaces by themselves. Role boundaries are fixed: `Build newsletter mirror` collects/builds/verifies only the GitHub Pages backup mirror, `Sync newsletter Supabase read model` copies the verified mirror archive into Supabase and verifies Vercel, and `Deploy newsletter Vercel app` deploys app code only.
 - Public view taxonomy is a durable product rule: articles use list views, GP/LP directories use table-like directory views, GP/LP entities use profile detail views, LP notices use row-card notice views, and Wiki uses document views.
 - Local secrets are not committed. Newsletter operating secrets live in GitHub Actions repository secrets; `config/daily_news.env` is not an operating path.
