@@ -190,6 +190,8 @@ def check_workflow_contracts() -> list[str]:
         violations.append("apply-newsletter-supabase-migration.yml:must_apply_db_url_with_psql")
     if "services/newsletter/supabase/migrations/*.sql" not in migration:
         violations.append("apply-newsletter-supabase-migration.yml:must_apply_all_newsletter_migrations")
+    if "Skipping GP-owned migration" not in migration:
+        violations.append("apply-newsletter-supabase-migration.yml:must_not_apply_gp_owned_migrations")
     if "NEWSLETTER_WATCHDOG_DISPATCH_TOKEN" not in migration:
         violations.append("apply-newsletter-supabase-migration.yml:missing:NEWSLETTER_WATCHDOG_DISPATCH_TOKEN")
     if "newsletter_github_actions_dispatch_token" not in migration:

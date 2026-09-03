@@ -171,7 +171,7 @@ GitHub Actions → Deploy GP FSS market → Run workflow
 GitHub Actions → Apply newsletter Supabase migration → Run workflow
 ```
 
-이 workflow는 `services/newsletter/supabase/migrations/*.sql`을 순서대로 적용한다. Supabase external watchdog이 `skipped_missing_token`으로 기록되면 Supabase Vault에 `newsletter_github_actions_dispatch_token`이 없는 상태다.
+이 workflow는 `services/newsletter/supabase/migrations/*.sql` 중 newsletter-owned migration만 순서대로 적용한다. GP-owned migration은 별도 GP 발행 경로에서 관리하며 이 workflow가 다시 실행하지 않는다. Supabase external watchdog이 `skipped_missing_token`으로 기록되면 Supabase Vault에 `newsletter_github_actions_dispatch_token`이 없는 상태다.
 
 배포 후 공개 URL 확인:
 

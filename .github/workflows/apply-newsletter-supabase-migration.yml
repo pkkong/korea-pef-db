@@ -35,6 +35,12 @@ jobs:
       - name: Apply newsletter Supabase migrations
         run: |
           for migration in services/newsletter/supabase/migrations/*.sql; do
+            case "$(basename "$migration")" in
+              *_gp_*)
+                echo "Skipping GP-owned migration ${migration}"
+                continue
+                ;;
+            esac
             echo "::group::Apply ${migration}"
             psql "$SUPABASE_DB_URL" \
               --set ON_ERROR_STOP=1 \

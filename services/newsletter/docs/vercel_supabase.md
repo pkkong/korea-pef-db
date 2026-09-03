@@ -95,7 +95,7 @@ preflight다. 파일 존재, Python compile, import isolation, Flask smoke test,
 막지 않는다.
 
 `Apply newsletter Supabase migration` workflow는 Supabase schema 변경과 Supabase Cron 설치만 담당한다.
-Vercel 앱 배포와 DB migration을 섞지 않는다. 이 workflow는 `services/newsletter/supabase/migrations/*.sql`을 순서대로 적용한다.
+Vercel 앱 배포와 DB migration을 섞지 않는다. 이 workflow는 `services/newsletter/supabase/migrations/*.sql` 중 newsletter-owned migration만 순서대로 적용하며, 같은 폴더의 GP-owned migration은 건너뛴다.
 
 `Build newsletter mirror` workflow는 먼저 Supabase canonical collection을 임시 SQLite adapter로
 복원하고, 수집·분류·검수 결과와 raw HTML을 Supabase에 반영한다. 이어서 정적 미러 생성과 GitHub Pages static mirror

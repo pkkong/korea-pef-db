@@ -209,6 +209,7 @@ def main() -> int:
             ("migration workflow named Apply newsletter Supabase migration", "name: Apply newsletter Supabase migration" in migration_text),
             ("migration workflow has manual dispatch", re.search(r"(?m)^  workflow_dispatch:\s*$", migration_text)),
             ("migration workflow applies every newsletter migration", "services/newsletter/supabase/migrations/*.sql" in migration_text),
+            ("migration workflow skips GP-owned migrations", "Skipping GP-owned migration" in migration_text),
             ("migration workflow uses psql with SUPABASE_DB_URL", "psql \"$SUPABASE_DB_URL\"" in migration_text),
         )
         for message, ok in migration_checks:
