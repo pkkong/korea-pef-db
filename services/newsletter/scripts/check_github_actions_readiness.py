@@ -153,6 +153,7 @@ def main() -> int:
             ("mirror workflow does not sync Supabase", "sync_newsletter_supabase.py" not in workflow_text),
             ("mirror workflow does not verify Vercel app", "NEWSLETTER_APP_URL" not in workflow_text),
             ("mirror workflow restores canonical Supabase collection", "sync_newsletter_canonical_supabase.py" in workflow_text),
+            ("mirror workflow syncs canonical source registry", "--sync-source-registry" in workflow_text),
             ("mirror workflow uses an ephemeral SQLite adapter", "NEWSLETTER_RUNTIME_DIR" in workflow_text),
             (
                 "mirror workflow dispatches separate Supabase sync",
@@ -186,6 +187,7 @@ def main() -> int:
             ("sync workflow has manual dispatch", re.search(r"(?m)^  workflow_dispatch:\s*$", sync_text)),
             ("sync workflow calls sync_newsletter_supabase.py", "sync_newsletter_supabase.py" in sync_text),
             ("sync workflow bootstraps an empty canonical collection", "sync_newsletter_canonical_supabase.py" in sync_text),
+            ("sync workflow syncs canonical source registry", "--sync-source-registry" in sync_text),
             ("sync workflow verifies Vercel app", "NEWSLETTER_APP_URL" in sync_text),
             ("sync workflow has no schedule", re.search(r"(?m)^  schedule:\s*$", sync_text) is None),
         )

@@ -158,6 +158,7 @@ def check_workflow_contracts() -> list[str]:
         'gh workflow run "Sync newsletter Supabase read model"',
         "sync_newsletter_canonical_supabase.py",
         "NEWSLETTER_RUNTIME_DIR",
+        "--sync-source-registry",
     ]:
         if required not in mirror:
             violations.append(f"deploy-newsletter-pages.yml:missing:{required}")
@@ -171,6 +172,7 @@ def check_workflow_contracts() -> list[str]:
     for required in [
         "sync_newsletter_supabase.py",
         "sync_newsletter_canonical_supabase.py",
+        "--sync-source-registry",
         "newsletter_public_status.py download-verified-archive",
         "newsletter_public_status.py verify-vercel-app",
         "NEWSLETTER_APP_URL",

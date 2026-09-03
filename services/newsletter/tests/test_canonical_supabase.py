@@ -190,11 +190,20 @@ def test_archive_bootstrap_preserves_published_classification_and_entities() -> 
     ]
 
 
+def test_source_registry_payload_keeps_collection_fields() -> None:
+    rows = canonical.prepare_source_registry_payload(canonical.DEFAULT_SOURCES)
+
+    assert rows
+    assert all(row["source_code"] and row["locator"] for row in rows)
+    assert any(row["source_kind"] == "naver_news_api" and row["is_active"] for row in rows)
+
+
 def main() -> int:
     test_prepare_payload_preserves_private_collection_fields()
     test_restore_rows_recreates_pipeline_compatible_sqlite()
     test_apply_payload_replaces_private_links_after_documents()
     test_archive_bootstrap_preserves_published_classification_and_entities()
+    test_source_registry_payload_keeps_collection_fields()
     print("canonical newsletter Supabase tests passed")
     return 0
 

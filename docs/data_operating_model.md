@@ -125,11 +125,12 @@ public browser나 Vercel의 publishable key는 raw body, review 상태, source �
 
 GitHub Actions의 `Build newsletter mirror`는 다음 순서로 실행한다.
 
-1. Supabase canonical collection을 새 임시 SQLite 파일로 복원한다.
-2. 기존 Python 수집·분류기를 그 임시 파일에 실행한다.
-3. raw HTML을 private Storage에 올리고, source/run/document/tag/link 결과를
+1. 유지하는 source CSV를 Supabase canonical source registry에 반영한다.
+2. Supabase canonical collection을 새 임시 SQLite 파일로 복원한다.
+3. 기존 Python 수집·분류기를 그 임시 파일에 실행한다.
+4. raw HTML을 private Storage에 올리고, source/run/document/tag/link 결과를
    Supabase canonical collection으로 다시 동기화한다.
-4. 그 뒤에만 정적 backup mirror와 공개 read model을 갱신한다.
+5. 그 뒤에만 정적 backup mirror와 공개 read model을 갱신한다.
 
 따라서 노트북에 있는 `db/*.sqlite` 파일을 수집 이력이나 발행 기준으로 쓰지 않는다.
 

@@ -147,6 +147,9 @@ jobs:
           runtime_dir="$(mktemp -d)"
           echo "NEWSLETTER_RUNTIME_DIR=${runtime_dir}" >> "$GITHUB_ENV"
           python3 services/newsletter/src/sync_newsletter_canonical_supabase.py \
+            --sync-source-registry \
+            --apply
+          python3 services/newsletter/src/sync_newsletter_canonical_supabase.py \
             --restore \
             --db "${runtime_dir}/daily_news.sqlite"
 

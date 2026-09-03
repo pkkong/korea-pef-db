@@ -61,6 +61,9 @@ jobs:
             exit 1
           fi
           python3 services/newsletter/src/sync_newsletter_canonical_supabase.py \
+            --sync-source-registry \
+            --apply
+          python3 services/newsletter/src/sync_newsletter_canonical_supabase.py \
             --bootstrap-archive exports/daily_news/public_archive.json \
             --payload-out exports/daily_news/newsletter_canonical_bootstrap_payload.json \
             --apply

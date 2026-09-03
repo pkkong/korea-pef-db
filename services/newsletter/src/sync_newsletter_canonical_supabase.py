@@ -26,7 +26,12 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from services.shared.src.daily_news_common import DEFAULT_SCHEMA  # noqa: E402
+from services.shared.src.daily_news_common import (  # noqa: E402
+    DEFAULT_SCHEMA,
+    DEFAULT_SOURCES,
+    load_sources,
+    now_utc_iso,
+)
 
 
 DEFAULT_PAYLOAD_OUT = REPO_ROOT / "exports" / "daily_news" / "newsletter_canonical_payload.json"
@@ -230,6 +235,28 @@ def prepare_payload(db_path: Path) -> dict[str, list[dict[str, object]]]:
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         return {spec.supabase_table: _sqlite_rows(conn, spec) for spec in TABLES}
+
+
+def prepare_source_registry_payload(sources_path: Path) -> list[dict[str, object]]:
+    applied_at = now_utc_iso()
+    return [
+        {
+            "source_code": source.source_code,
+            "source_name": source.source_name,
+            "source_kind": source.source_kind,
+            "locator": source.locator,
+            "publisher": source.publisher or None,
+            "homepage_url": source.homepage_url or None,
+            "article_url_regex": source.article_url_regex or None,
+            "must_contain": ";".join(source.must_contain) or None,
+            "allowed_publishers": ";".join(source.allowed_publishers) or None,
+            "default_tags": ";".join(f"{tag_type}:{tag_value}" for tag_type, tag_value in source.default_tags) or None,
+            "is_active": bool(source.is_active),
+            "notes": source.notes or None,
+            "updated_at": applied_at,
+        }
+        for source in load_sources(sources_path)
+    ]
 
 
 def _storage_object_key(news_id: object) -> str:
@@ -517,7 +544,13 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="Seed an empty canonical collection from the verified public archive once.",
     )
+    mode.add_argument(
+        "--sync-source-registry",
+        action="store_true",
+        help="Copy maintained source definitions into the canonical collection.",
+    )
     parser.add_argument("--db", type=Path)
+    parser.add_argument("--sources", type=Path, default=DEFAULT_SOURCES)
     parser.add_argument("--payload-out", type=Path, default=DEFAULT_PAYLOAD_OUT)
     parser.add_argument("--apply", action="store_true", help="Apply a sync payload to Supabase")
     parser.add_argument("--skip-raw-html-upload", action="store_true")
@@ -544,6 +577,15 @@ def main(argv: list[str] | None = None) -> int:
                 print("canonical_newsletter_bootstrap=" + json.dumps(result, ensure_ascii=False, sort_keys=True))
             else:
                 print("canonical_newsletter_bootstrap=skipped --apply not set")
+            return 0
+
+        if args.sync_source_registry:
+            sources = prepare_source_registry_payload(args.sources)
+            if args.apply:
+                _upsert(SOURCE_SPEC, sources)
+                print("canonical_newsletter_source_registry=" + json.dumps({"sources": len(sources)}, ensure_ascii=False))
+            else:
+                print("canonical_newsletter_source_registry=skipped --apply not set")
             return 0
 
         if args.db is None:
