@@ -278,7 +278,9 @@ def _upload_raw_html(document: dict[str, object]) -> str:
         f"{_supabase_url()}/storage/v1/object/{RAW_BUCKET}/{encoded_key}",
         method="POST",
         body=source_path.read_bytes(),
-        headers={"Content-Type": "text/html; charset=utf-8", "x-upsert": "true"},
+        # Supabase Storage validates against the bucket's exact MIME allow-list.
+        # Keep the charset out of this transport header; HTML is already UTF-8.
+        headers={"Content-Type": "text/html", "x-upsert": "true"},
     )
     return f"supabase://{RAW_BUCKET}/{object_key}"
 

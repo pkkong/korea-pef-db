@@ -157,6 +157,35 @@ def test_apply_payload_replaces_private_links_after_documents() -> None:
     ]
 
 
+def test_raw_html_upload_uses_bucket_allowed_mime_type() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        raw_path = Path(directory) / "article.html"
+        raw_path.write_text("<html><body>test</body></html>", encoding="utf-8")
+        calls: list[dict[str, object]] = []
+
+        def fake_request(url: str, *, method: str, body: bytes | None = None, headers: dict[str, str] | None = None) -> object:
+            calls.append({"url": url, "method": method, "body": body, "headers": headers or {}})
+            return None
+
+        original_request = canonical._request
+        original_url = canonical._supabase_url
+        canonical._request = fake_request
+        canonical._supabase_url = lambda: "https://example.supabase.co"
+        try:
+            stored_path = canonical._upload_raw_html({"news_id": 41, "raw_html_path": str(raw_path)})
+        finally:
+            canonical._request = original_request
+            canonical._supabase_url = original_url
+
+    assert stored_path == "supabase://newsletter-raw/documents/41.html"
+    assert calls == [{
+        "url": "https://example.supabase.co/storage/v1/object/newsletter-raw/documents/41.html",
+        "method": "POST",
+        "body": b"<html><body>test</body></html>",
+        "headers": {"Content-Type": "text/html", "x-upsert": "true"},
+    }]
+
+
 def test_archive_bootstrap_preserves_published_classification_and_entities() -> None:
     archive = [
         {
@@ -202,6 +231,7 @@ def main() -> int:
     test_prepare_payload_preserves_private_collection_fields()
     test_restore_rows_recreates_pipeline_compatible_sqlite()
     test_apply_payload_replaces_private_links_after_documents()
+    test_raw_html_upload_uses_bucket_allowed_mime_type()
     test_archive_bootstrap_preserves_published_classification_and_entities()
     test_source_registry_payload_keeps_collection_fields()
     print("canonical newsletter Supabase tests passed")
