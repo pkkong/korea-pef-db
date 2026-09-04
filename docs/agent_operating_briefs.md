@@ -308,7 +308,7 @@
 - People 스키마: `schema/people.sql`
 - 뉴스 입력 설정: `services/newsletter/data/news_sources.csv`, `services/newsletter/data/news_keyword_rules.csv`, `services/newsletter/data/news_gp_alias_overrides.csv`, `services/newsletter/data/news_manual_overrides.csv`
 - People 입력: `data/people_input.csv`, `data/person_role_input.csv`, `data/person_education_input.csv`
-- 뉴스 원문: Supabase private Storage `newsletter-raw`. GitHub Actions의 raw directory는 실행 중 임시 파일이다.
+- 뉴스 원문: Supabase private Storage `newsletter-raw`에 오류 분석용으로 30일만 보관한다. 기사 record와 분류 결과는 보관하고, 만료된 원문 파일과 `raw_html_path`는 다음 수집 동기화에서 정리한다. GitHub Actions의 raw directory는 실행 중 임시 파일이다.
 - 뉴스 발행/검토/큐: `exports/daily_news/`
 - 뉴스/People/GP 통합 작업 큐: `exports/service_integration_worklist_latest.csv`
 - People 검토/뷰: `exports/people_profile_summary.csv`, `exports/people_current_gp.csv`, `exports/people_roles.csv`, `exports/people_education.csv`, `exports/people_research_worklist_top50.csv`

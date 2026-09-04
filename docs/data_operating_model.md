@@ -116,8 +116,10 @@ Supabase canonical collection이 기준이고, Vercel이 읽는 공개 화면 �
   분류 입력값을 포함한 표준 기사 record.
 - `newsletter_canonical_tags`, `newsletter_canonical_entity_links`: taxonomy와
   GP/LP 등 엔티티 연결 결과.
-- `newsletter-raw` private Storage bucket: 수집 원문 HTML. `raw_html_path`는
-  이 버킷의 `supabase://` 위치만 기록한다.
+- `newsletter-raw` private Storage bucket: 오류 분석용 수집 원문 HTML을 30일
+  캐시한다. 만료된 파일과 `raw_html_path`는 다음 수집 동기화에서 제거하며,
+  기사·분류·태그 record는 유지한다. `raw_html_path`는 이 버킷의 `supabase://`
+  위치만 기록한다.
 
 이 테이블과 버킷은 RLS로 비공개다. service role을 가진 수집 작업만 읽고 쓴다.
 public browser나 Vercel의 publishable key는 raw body, review 상태, source 설정을

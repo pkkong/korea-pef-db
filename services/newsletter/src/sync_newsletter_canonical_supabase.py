@@ -15,6 +15,7 @@ import sqlite3
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -39,6 +40,7 @@ REST_PAGE_SIZE = 500
 REST_BATCH_SIZE = 250
 MAX_REST_BATCH_BYTES = 750_000
 RAW_BUCKET = "newsletter-raw"
+RAW_HTML_CACHE_DAYS = 30
 RETRIABLE_HTTP_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
 
 
@@ -263,6 +265,17 @@ def _storage_object_key(news_id: object) -> str:
     return f"documents/{int(news_id)}.html"
 
 
+def _storage_object_key_from_path(raw_html_path: object) -> str | None:
+    prefix = f"supabase://{RAW_BUCKET}/"
+    value = str(raw_html_path or "")
+    if not value.startswith(prefix):
+        return None
+    object_key = value.removeprefix(prefix)
+    if not object_key.startswith("documents/") or not object_key.endswith(".html"):
+        return None
+    return object_key
+
+
 def _upload_raw_html(document: dict[str, object]) -> str:
     current = str(document.get("raw_html_path") or "")
     if not current:
@@ -285,6 +298,66 @@ def _upload_raw_html(document: dict[str, object]) -> str:
     return f"supabase://{RAW_BUCKET}/{object_key}"
 
 
+def _parse_utc_timestamp(value: object) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        timestamp = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    return timestamp.astimezone(timezone.utc)
+
+
+def purge_raw_html_cache(
+    *,
+    now_at: datetime | None = None,
+    retention_days: int = RAW_HTML_CACHE_DAYS,
+) -> dict[str, int]:
+    """Expire private raw HTML without affecting article records or publishing.
+
+    A cleanup failure is reported but never raises: raw HTML is a debugging
+    cache, while the normalized article record remains the durable source.
+    """
+    if retention_days < 1:
+        raise CanonicalNewsletterError("Raw HTML cache retention must be at least one day")
+    current_time = (now_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    cutoff = current_time - timedelta(days=retention_days)
+    rows = _read_all(DOCUMENT_SPEC.supabase_table)
+    result = {"raw_html_purged": 0, "raw_html_purge_failures": 0}
+
+    for document in rows:
+        object_key = _storage_object_key_from_path(document.get("raw_html_path"))
+        fetched_at = _parse_utc_timestamp(document.get("fetched_at"))
+        if object_key is None or fetched_at is None or fetched_at >= cutoff:
+            continue
+
+        news_id = document.get("news_id")
+        if not isinstance(news_id, int):
+            result["raw_html_purge_failures"] += 1
+            print(f"WARN raw HTML cache purge skipped: invalid news_id={news_id!r}", file=sys.stderr)
+            continue
+        try:
+            _request(
+                f"{_supabase_url()}/storage/v1/object/{RAW_BUCKET}/{quote(object_key, safe='/')}",
+                method="DELETE",
+            )
+            _rest_request(
+                DOCUMENT_SPEC.supabase_table,
+                method="PATCH",
+                query={"news_id": f"eq.{news_id}"},
+                payload={"raw_html_path": None},
+                prefer="return=minimal",
+            )
+            result["raw_html_purged"] += 1
+        except CanonicalNewsletterError as exc:
+            result["raw_html_purge_failures"] += 1
+            print(f"WARN raw HTML cache purge failed for news_id={news_id}: {exc}", file=sys.stderr)
+    return result
+
+
 def _upsert(spec: TableSpec, rows: list[dict[str, object]]) -> None:
     for batch in _batched(rows):
         _rest_request(
@@ -296,7 +369,12 @@ def _upsert(spec: TableSpec, rows: list[dict[str, object]]) -> None:
         )
 
 
-def apply_payload(payload: dict[str, list[dict[str, object]]], *, upload_raw_html: bool = True) -> dict[str, int]:
+def apply_payload(
+    payload: dict[str, list[dict[str, object]]],
+    *,
+    upload_raw_html: bool = True,
+    purge_raw_html_cache_after_sync: bool = True,
+) -> dict[str, int]:
     for spec in TABLES:
         if not isinstance(payload.get(spec.supabase_table), list):
             raise CanonicalNewsletterError(f"Canonical payload is missing {spec.supabase_table}")
@@ -322,7 +400,7 @@ def apply_payload(payload: dict[str, list[dict[str, object]]], *, upload_raw_htm
     _rest_request(ENTITY_SPEC.supabase_table, method="DELETE", query={"news_id": "gte.0"}, prefer="return=minimal")
     _upsert(TAG_SPEC, payload[TAG_SPEC.supabase_table])
     _upsert(ENTITY_SPEC, payload[ENTITY_SPEC.supabase_table])
-    return {
+    result = {
         "sources": len(payload[SOURCE_SPEC.supabase_table]),
         "runs": len(payload[RUN_SPEC.supabase_table]),
         "documents": len(documents),
@@ -330,6 +408,9 @@ def apply_payload(payload: dict[str, list[dict[str, object]]], *, upload_raw_htm
         "entity_links": len(payload[ENTITY_SPEC.supabase_table]),
         "raw_html_uploaded": raw_upload_count,
     }
+    if purge_raw_html_cache_after_sync:
+        result.update(purge_raw_html_cache())
+    return result
 
 
 def _sqlite_value(spec: TableSpec, column: str, value: object) -> object:
@@ -575,7 +656,11 @@ def main(argv: list[str] | None = None) -> int:
             args.payload_out.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             print(f"payload_out={args.payload_out}")
             if args.apply:
-                result = apply_payload(payload, upload_raw_html=False)
+                result = apply_payload(
+                    payload,
+                    upload_raw_html=False,
+                    purge_raw_html_cache_after_sync=False,
+                )
                 print("canonical_newsletter_bootstrap=" + json.dumps(result, ensure_ascii=False, sort_keys=True))
             else:
                 print("canonical_newsletter_bootstrap=skipped --apply not set")

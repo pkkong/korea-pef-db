@@ -7,6 +7,7 @@ import json
 import sqlite3
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -141,7 +142,11 @@ def test_apply_payload_replaces_private_links_after_documents() -> None:
     original_rest = canonical._rest_request
     canonical._rest_request = fake_rest
     try:
-        result = canonical.apply_payload(payload, upload_raw_html=False)
+        result = canonical.apply_payload(
+            payload,
+            upload_raw_html=False,
+            purge_raw_html_cache_after_sync=False,
+        )
     finally:
         canonical._rest_request = original_rest
 
@@ -184,6 +189,69 @@ def test_raw_html_upload_uses_bucket_allowed_mime_type() -> None:
         "body": b"<html><body>test</body></html>",
         "headers": {"Content-Type": "text/html", "x-upsert": "true"},
     }]
+
+
+def test_raw_html_cache_purges_expired_files_without_touching_article_records() -> None:
+    documents = [
+        {
+            "news_id": 41,
+            "raw_html_path": "supabase://newsletter-raw/documents/41.html",
+            "fetched_at": "2026-07-01T00:00:00+00:00",
+        },
+        {
+            "news_id": 42,
+            "raw_html_path": "supabase://newsletter-raw/documents/42.html",
+            "fetched_at": "2026-07-15T00:00:00+00:00",
+        },
+    ]
+    storage_calls: list[tuple[str, str]] = []
+    record_calls: list[tuple[str, str, dict[str, str] | None, object | None]] = []
+
+    def fake_request(url: str, *, method: str, **_: object) -> object:
+        storage_calls.append((method, url))
+        return None
+
+    def fake_read_all(resource: str) -> list[dict[str, object]]:
+        assert resource == canonical.DOCUMENT_SPEC.supabase_table
+        return documents
+
+    def fake_rest(
+        resource: str,
+        *,
+        method: str = "GET",
+        query: dict[str, str] | None = None,
+        payload: object | None = None,
+        **_: object,
+    ) -> object:
+        record_calls.append((method, resource, query, payload))
+        return None
+
+    original_request = canonical._request
+    original_read_all = canonical._read_all
+    original_rest = canonical._rest_request
+    original_url = canonical._supabase_url
+    canonical._request = fake_request
+    canonical._read_all = fake_read_all
+    canonical._rest_request = fake_rest
+    canonical._supabase_url = lambda: "https://example.supabase.co"
+    try:
+        result = canonical.purge_raw_html_cache(
+            now_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            retention_days=30,
+        )
+    finally:
+        canonical._request = original_request
+        canonical._read_all = original_read_all
+        canonical._rest_request = original_rest
+        canonical._supabase_url = original_url
+
+    assert result == {"raw_html_purged": 1, "raw_html_purge_failures": 0}
+    assert storage_calls == [
+        ("DELETE", "https://example.supabase.co/storage/v1/object/newsletter-raw/documents/41.html")
+    ]
+    assert record_calls == [
+        ("PATCH", canonical.DOCUMENT_SPEC.supabase_table, {"news_id": "eq.41"}, {"raw_html_path": None})
+    ]
 
 
 def test_archive_bootstrap_preserves_published_classification_and_entities() -> None:
@@ -232,6 +300,7 @@ def main() -> int:
     test_restore_rows_recreates_pipeline_compatible_sqlite()
     test_apply_payload_replaces_private_links_after_documents()
     test_raw_html_upload_uses_bucket_allowed_mime_type()
+    test_raw_html_cache_purges_expired_files_without_touching_article_records()
     test_archive_bootstrap_preserves_published_classification_and_entities()
     test_source_registry_payload_keeps_collection_fields()
     print("canonical newsletter Supabase tests passed")
