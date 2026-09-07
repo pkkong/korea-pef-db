@@ -108,6 +108,9 @@ def test_apply_schema_removes_legacy_cross_service_foreign_keys() -> None:
         }
         conn.execute("DROP TABLE gp_house")
         conn.execute("DROP TABLE news_document")
+        assert conn.execute("SELECT gp_name FROM lp_notice_gp_link").fetchone()[0] == "테스트 GP"
+        # Public LP views must remain readable without the other services' DBs.
+        conn.execute("SELECT * FROM v_lp_commitment_selected_gp_compare").fetchall()
         conn.execute("DELETE FROM lp_commitment_notice WHERE notice_id = 1")
         remaining_links = conn.execute(
             "SELECT (SELECT COUNT(*) FROM lp_notice_gp_link) + "

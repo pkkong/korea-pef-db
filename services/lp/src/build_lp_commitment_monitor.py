@@ -379,6 +379,10 @@ def date_window_start(report_date: str, days: int) -> str:
 
 def apply_schema(conn: sqlite3.Connection, schema_path: Path) -> None:
     schema_sql = schema_path.read_text(encoding="utf-8")
+    # Rebuild owned views after table migrations. Modern SQLite validates all
+    # views during ALTER TABLE, including legacy views referencing absent GP DBs.
+    for view_name in re.findall(r"DROP VIEW IF EXISTS ([A-Za-z_][A-Za-z_0-9]*)\s*;", schema_sql):
+        conn.execute(f'DROP VIEW IF EXISTS "{view_name}"')
     marker = "CREATE INDEX IF NOT EXISTS idx_lp_notice_lp"
     if marker in schema_sql:
         pre_index_sql, index_and_view_sql = schema_sql.split(marker, 1)

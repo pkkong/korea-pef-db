@@ -217,7 +217,7 @@ SELECT
     n.amount_type,
     n.amount_confidence,
     lgl.source_gp_id,
-    COALESCE(NULLIF(gh.gp_name, ''), lgl.gp_name) AS gp_name,
+    lgl.gp_name AS gp_name,
     lgl.matched_alias,
     lgl.confidence AS gp_link_confidence,
     n.confidence,
@@ -231,9 +231,7 @@ SELECT
 FROM v_lp_commitment_notice_public n
 JOIN lp_notice_gp_link lgl
     ON lgl.notice_id = n.notice_id
-LEFT JOIN gp_house gh
-    ON gh.gp_id = lgl.source_gp_id
-WHERE COALESCE(NULLIF(lgl.gp_name, ''), NULLIF(gh.gp_name, ''), '') <> ''
+WHERE COALESCE(lgl.gp_name, '') <> ''
   AND COALESCE(n.event_type, '') <> ''
   AND LOWER(COALESCE(n.event_type, '')) <> 'candidate'
   AND LOWER(COALESCE(n.confidence, '')) <> 'low'
