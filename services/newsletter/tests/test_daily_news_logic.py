@@ -2155,6 +2155,45 @@ def test_20260608_category_regressions() -> None:
     )
 
 
+def test_deal_subcategory_conflict_precedence_matches_publication_validator() -> None:
+    cases = [
+        ("구조조정 M&A로 부실기업 살리려면 병든 부위만 정교하게 수술해야", "Issue"),
+        ("포트폴리오 구조조정…수익성 손본다", "Ownership"),
+        ("UCK, 설빙 2차 리캡 완료…밸류업 집중한다", "Financing"),
+        ("컨티뉴에이션 펀드로 포트폴리오 밸류업 추진", "Secondary"),
+        ("부실기업 매각 본입찰 무산", "Issue"),
+        ("매각 본입찰 이후 본계약 체결 완료", "Signing·Closing"),
+        ("애큐온 매각 본입찰에 원매자 참여", "Auction"),
+        ("포트폴리오 매각으로 투자금 회수", "Exit"),
+    ]
+    for title, expected in cases:
+        assert editorial_subtype({"title": title, "section": "Deal"}, "Deal") == expected
+        assert expected_subcategory(title, "Deal") == expected
+
+
+def test_archive_validator_accepts_distressed_restructuring_issue_and_rejects_wrong_subcategory() -> None:
+    title = "구조조정 M&A로 부실기업 살리려면 병든 부위만 정교하게 수술해야"
+    brief = [{"title": title, "section": "Deal", "url": "https://example.com/restructuring", "source": "테스트신문"}]
+    article = article_payload_rows(brief)[0]
+    assert article["subCategory"] == "Issue"
+    with TemporaryDirectory() as tmp:
+        site_dir = Path(tmp)
+        report_date = "2026-09-07"
+        (site_dir / "health.json").write_text(json.dumps({"report_date": report_date}), encoding="utf-8")
+        for subtype, should_pass in [("Issue", True), ("Ownership", False)]:
+            article["subCategory"] = subtype
+            (site_dir / "archive.json").write_text(
+                json.dumps([{"reportDate": report_date, "articles": [article]}], ensure_ascii=False),
+                encoding="utf-8",
+            )
+            result = Validation()
+            check_archive_classification_quality(result, site_dir, site_dir, report_date, brief, [])
+            if should_pass:
+                assert not result.errors, result.errors
+            else:
+                assert any("expected=Issue, actual=Ownership" in error for error in result.errors), result.errors
+
+
 def test_20260609_editorial_quality_regressions() -> None:
     insurance = {
         "publisher": "한국경제",

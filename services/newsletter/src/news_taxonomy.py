@@ -27,6 +27,35 @@ PRIMARY_TOPIC_BY_SECTION = {
 PRIMARY_SECTION_TOPICS = set(PRIMARY_TOPIC_BY_SECTION.values())
 
 
+DEAL_FINANCING_KEYWORDS = [
+    "리캡", "인수금융", "리파이낸싱", "사모대출", "프라이빗크레딧",
+    "private credit", "메자닌", "DIP", "전환사채", "CB", "대출", "파이낸싱",
+]
+DEAL_ISSUE_KEYWORDS = ["무산", "분쟁", "소송", "가격 이견", "리스크", "부실", "시끌", "장고"]
+
+# Rendering and publication validation must use the same conflict precedence.
+# For example, a distressed restructuring story is Issue before Ownership;
+# a recap story remains Financing even when its title also mentions value-up.
+DEAL_SUBCATEGORY_RULES = (
+    ("Financing", DEAL_FINANCING_KEYWORDS),
+    ("Secondary", ["세컨더리", "컨티뉴에이션", "continuation"]),
+    ("Issue", DEAL_ISSUE_KEYWORDS),
+    ("Ownership", ["밸류업", "PMI", "구조조정", "턴어라운드", "운영 개선", "실적", "수익성", "수익성 개선", "손본다", "숨겨진 가치", "가치 재평가", "재평가"]),
+    ("Signing·Closing", ["SPA", "본계약", "계약 체결", "클로징", "자금 납입", "마무리", "완료"]),
+    ("Auction", ["입찰", "우선협상", "숏리스트", "주관사", "매각주관", "원매자", "인수의향", "제안"]),
+    ("Exit", ["엑시트", "회수", "매각", "IPO", "블록딜", "청산"]),
+)
+
+
+def deal_subcategory(text: str) -> str:
+    """Return the first explicit Deal subtype signal, or no signal."""
+    lowered = text.lower()
+    for category, keywords in DEAL_SUBCATEGORY_RULES:
+        if any(keyword.lower() in lowered for keyword in keywords):
+            return category
+    return ""
+
+
 @dataclass(frozen=True)
 class NewsClassification:
     section: str

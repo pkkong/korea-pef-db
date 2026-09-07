@@ -35,6 +35,7 @@ from news_taxonomy import (
     SECTION_LABELS,
     TAG_TAXONOMY_VERSION,
     canonical_section,
+    deal_subcategory,
 )
 
 
@@ -58,7 +59,6 @@ FORBIDDEN_PUBLIC_ARTICLE_FIELDS = {
 MARKDOWN_LINK_RE = re.compile(r"- \[(?P<title>.+?)\]\((?P<url>https?://[^)]+)\)")
 BRIEF_SECTION_RE = re.compile(r"^\[(?P<section>[^\]]+)\]\s*$")
 
-AUCTION_TITLE_RE = re.compile(r"(?:본입찰|예비입찰|입찰|원매자|인수의향|우선협상|숏리스트|주관사|매각주관|제안)")
 FINANCING_TITLE_RE = re.compile(
     r"(?:리캡|리캡탈라이제이션|인수금융|리파이낸싱|파이낸싱|사모대출|프라이빗크레딧|private credit|대출)"
     r"|(?:CB|전환사채|메자닌).*(?:투입|인수|투자|조달)"
@@ -66,7 +66,6 @@ FINANCING_TITLE_RE = re.compile(
     re.IGNORECASE,
 )
 GP_FUNDRAISING_TITLE_RE = re.compile(r"(?:펀딩 목표|펀드레이징|자펀드|블라인드|GP 도전|펀드.{0,5}도전)")
-OWNERSHIP_TITLE_RE = re.compile(r"(?:수익성|수익성 개선|손본다|밸류업|PMI|구조조정|운영 개선|가치 재평가|재평가)", re.IGNORECASE)
 
 
 class Validation:
@@ -192,14 +191,9 @@ def first_match(index: dict[str, dict[str, str]], title: str, *urls: str) -> dic
     return None
 
 
-def expected_subcategory(title: str, section: str) -> str:
+def expected_subcategory(title: str, section: str, raw_section: str = "") -> str:
     if section == "Deal":
-        if FINANCING_TITLE_RE.search(title):
-            return "Financing"
-        if OWNERSHIP_TITLE_RE.search(title):
-            return "Ownership"
-        if AUCTION_TITLE_RE.search(title):
-            return "Auction"
+        return deal_subcategory(f"{title} {raw_section}")
     if section == "GP" and GP_FUNDRAISING_TITLE_RE.search(title):
         return "Fundraising"
     if section == "Market" and "장외파생상품" in title and any(token in title for token in ["라이선스", "인가", "금감원", "금융위"]):
@@ -405,7 +399,7 @@ def check_archive_classification_quality(
                 result.error(f"archive section does not match review queue for '{title}': archive={section}, review={queue_section}")
         if apply_ai_sections and ai_section and section != ai_section:
             result.error(f"archive section does not match AI suggestion for '{title}': archive={section}, ai={ai_section}")
-        expected = expected_subcategory(title, section)
+        expected = expected_subcategory(title, section, str(article.get("rawSection") or ""))
         if expected and subcategory != expected:
             result.error(f"archive subCategory mismatch for '{title}': expected={expected}, actual={subcategory}")
 

@@ -27,7 +27,14 @@ from services.newsletter.src.daily_news_common import (
     normalize_whitespace,
     split_news_title_badges,
 )
-from services.newsletter.src.news_taxonomy import SECTION_LABELS, TAG_TAXONOMY_VERSION, canonical_section
+from services.newsletter.src.news_taxonomy import (
+    DEAL_FINANCING_KEYWORDS,
+    DEAL_ISSUE_KEYWORDS,
+    SECTION_LABELS,
+    TAG_TAXONOMY_VERSION,
+    canonical_section,
+    deal_subcategory,
+)
 from services.newsletter.web.newsletter_ui import (
     app_asset_version,
     app_web_manifest,
@@ -246,24 +253,7 @@ DEAL_SIGNAL_KEYWORDS = [
     "컨티뉴에이션",
 ]
 
-DEAL_FINANCING_KEYWORDS = [
-    "리캡",
-    "인수금융",
-    "리파이낸싱",
-    "사모대출",
-    "프라이빗크레딧",
-    "private credit",
-    "메자닌",
-    "DIP",
-    "전환사채",
-    "CB",
-    "대출",
-    "파이낸싱",
-]
-
 DEAL_OWNERSHIP_KEYWORDS = ["포트폴리오", "밸류업", "PMI", "구조조정", "턴어라운드", "운영 개선", "체질 개선", "실적", "수익성", "수익성 개선", "손본다"]
-
-DEAL_ISSUE_KEYWORDS = ["무산", "분쟁", "소송", "가격 이견", "리스크", "부실", "시끌", "장고"]
 
 LP_FOCUS_KEYWORDS = [
     "LP",
@@ -646,21 +636,7 @@ def editorial_subtype(row: dict[str, str], section: str) -> str:
             return "정책펀드"
         return "프로그램 동향"
     if section == "Deal":
-        if contains_any(text, DEAL_FINANCING_KEYWORDS):
-            return "Financing"
-        if contains_any(text, ["세컨더리", "컨티뉴에이션", "continuation"]):
-            return "Secondary"
-        if contains_any(text, DEAL_ISSUE_KEYWORDS):
-            return "Issue"
-        if contains_any(text, ["밸류업", "PMI", "구조조정", "턴어라운드", "운영 개선", "실적", "수익성", "수익성 개선", "손본다", "숨겨진 가치", "가치 재평가", "재평가"]):
-            return "Ownership"
-        if contains_any(text, ["SPA", "본계약", "계약 체결", "클로징", "자금 납입", "마무리", "완료"]):
-            return "Signing·Closing"
-        if contains_any(text, ["입찰", "우선협상", "숏리스트", "주관사", "매각주관", "원매자", "인수의향", "제안"]):
-            return "Auction"
-        if contains_any(text, ["엑시트", "회수", "매각", "IPO", "블록딜", "청산"]):
-            return "Exit"
-        return "Acquisition"
+        return deal_subcategory(text) or "Acquisition"
     if section == "LP":
         if has_retirement_allocator_signal(text):
             return "Allocation"
