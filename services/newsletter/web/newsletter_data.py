@@ -263,7 +263,9 @@ def archive_is_newer(candidate: list[dict[str, Any]], current: list[dict[str, An
         return True
     if candidate_date > current_date:
         return True
-    return candidate_date == current_date and candidate_count > current_count
+    # A corrected issue can contain fewer articles. A cached mirror with more
+    # rows is not a newer version and must not replace the published DB issue.
+    return False
 
 
 def fetch_best_archive_fallback(current_archive: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str]:

@@ -246,6 +246,21 @@ def test_load_archive_keeps_supabase_when_archive_fallback_is_not_newer() -> Non
         newsletter_data._CACHE.update(old_cache)
 
 
+def test_same_date_cached_mirror_cannot_restore_removed_articles() -> None:
+    from unittest.mock import patch
+
+    old_mirror = sample_archive()
+    for articles in [old_mirror[0]["articles"][:1], []]:
+        corrected = [{**old_mirror[0], "articles": articles}]
+        with patch.dict(newsletter_data._CACHE, {"expires_at": 0.0, "archive": [], "source": "empty"}, clear=True), \
+             patch.object(newsletter_data, "fetch_supabase_archive", return_value=corrected), \
+             patch.object(newsletter_data, "archive_fallback_urls", return_value=["cached-mirror"]), \
+             patch.object(newsletter_data, "fetch_archive_url_from", return_value=old_mirror):
+            archive, source = newsletter_data.load_archive(force_refresh=True)
+            assert source == "supabase"
+            assert archive[0]["articles"] == articles
+
+
 def test_vercel_app_uses_common_newsletter_ui() -> None:
     old_loader = web_app.load_archive
     web_app.load_archive = lambda force_refresh=False: (sample_archive(), "test")
