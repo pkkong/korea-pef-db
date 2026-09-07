@@ -39,10 +39,10 @@ async function check(name,fn){await fn();checks++;console.log(`PASS ${name}`)}
 await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
  CREATE SCHEMA storage; CREATE TABLE storage.buckets(id text PRIMARY KEY,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);`);
 const migrations=['20260616090000_newsletter_read_model.sql','20260903090000_newsletter_canonical_collection.sql',
- '20260906090000_newsletter_atomic_sync.sql','20260828100000_fss_people_canonical_data.sql','20260906100000_gp_canonical_safe_publish.sql'];
+ '20260906090000_newsletter_atomic_sync.sql','20260828100000_fss_people_canonical_data.sql','20260906100000_gp_canonical_safe_publish.sql','20260907110000_gp_people_safeupdate_predicate.sql'];
 for(const name of migrations) await db.exec(fs.readFileSync(path.join(root,'services/newsletter/supabase/migrations',name),'utf8'));
 // Applying new migrations again must preserve already installed objects.
-for(const name of migrations.filter(x=>x.startsWith('20260906')))await db.exec(fs.readFileSync(path.join(root,'services/newsletter/supabase/migrations',name),'utf8'));
+for(const name of migrations.filter(x=>x>='20260906'))await db.exec(fs.readFileSync(path.join(root,'services/newsletter/supabase/migrations',name),'utf8'));
 async function stage(model,payload){
  const id=randomUUID(), counts={};
  for(const [table,rows] of Object.entries(payload)){

@@ -31,3 +31,5 @@ jobs:
         run: |
           psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 \
             --file services/newsletter/supabase/migrations/20260906100000_gp_canonical_safe_publish.sql
+          psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 \
+            --file services/newsletter/supabase/migrations/20260907110000_gp_people_safeupdate_predicate.sql
