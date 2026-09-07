@@ -27,6 +27,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from services.newsletter.src.daily_news_common import normalize_url  # noqa: E402
+from services.newsletter.src.newsletter_atomic_sync import publish_atomic  # noqa: E402
 
 
 DEFAULT_ARCHIVE = REPO_ROOT / "services" / "newsletter" / "deploy" / "site" / "archive.json"
@@ -83,6 +84,7 @@ def prepare_payload(archive: list[dict[str, Any]], issue_date: str | None = None
     issue_rows_by_date: dict[str, dict[str, Any]] = {}
     issue_counts: dict[str, int] = {}
     articles_by_url: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+    article_dates: dict[str, str] = {}
     issue_articles: list[dict[str, Any]] = []
     tag_rows: list[dict[str, Any]] = []
     entity_rows: list[dict[str, Any]] = []
@@ -132,7 +134,9 @@ def prepare_payload(archive: list[dict[str, Any]], issue_date: str | None = None
             }
             if not article_payload["title"]:
                 continue
-            articles_by_url[normalized] = {**articles_by_url.get(normalized, {}), **article_payload}
+            if report_date >= article_dates.get(normalized, ""):
+                articles_by_url[normalized] = article_payload
+                article_dates[normalized] = report_date
             issue_articles.append(
                 {
                     "issue_date": report_date,
@@ -142,41 +146,15 @@ def prepare_payload(archive: list[dict[str, Any]], issue_date: str | None = None
                 }
             )
             issue_counts[report_date] = issue_counts.get(report_date, 0) + 1
-            tag_rows.append(
-                {
-                    "normalized_url": normalized,
-                    "tag_type": "section",
-                    "tag_value": section,
-                    "tag_source": "archive",
-                }
-            )
-            if sub_category:
-                tag_rows.append(
-                    {
-                        "normalized_url": normalized,
-                        "tag_type": "sub_category",
-                        "tag_value": sub_category,
-                        "tag_source": "archive",
-                    }
-                )
-            for gp_name in article_payload["gp_names"]:
-                entity_rows.append(
-                    {
-                        "normalized_url": normalized,
-                        "entity_type": "GP",
-                        "entity_name": gp_name,
-                        "link_source": "archive",
-                    }
-                )
-            for lp_name in article_payload["lp_names"]:
-                entity_rows.append(
-                    {
-                        "normalized_url": normalized,
-                        "entity_type": "LP",
-                        "entity_name": lp_name,
-                        "link_source": "archive",
-                    }
-                )
+    # Article metadata is canonical per URL. Repeated appearances on different
+    # dates share the newest metadata and must not repeat an upsert conflict key.
+    for normalized, article in articles_by_url.items():
+        tag_rows.append({"normalized_url": normalized, "tag_type": "section", "tag_value": article["section"], "tag_source": "archive"})
+        if article["sub_category"]:
+            tag_rows.append({"normalized_url": normalized, "tag_type": "sub_category", "tag_value": article["sub_category"], "tag_source": "archive"})
+        for kind, names in [("GP", article["gp_names"]), ("LP", article["lp_names"])]:
+            for name in names:
+                entity_rows.append({"normalized_url": normalized, "entity_type": kind, "entity_name": name, "link_source": "archive"})
 
     for report_date, count in issue_counts.items():
         if report_date in issue_rows_by_date:
@@ -339,64 +317,8 @@ def _delete_many(table: str, column: str, values: list[str], batch_size: int = D
 
 
 def apply_payload(payload: dict[str, list[dict[str, Any]]]) -> dict[str, int]:
-    _upsert("newsletter_issues", payload["issues"], "issue_date")
-    returned_articles = _upsert(
-        "newsletter_articles",
-        payload["articles"],
-        "normalized_url",
-        "article_id,normalized_url",
-    )
-    article_id_by_url = {
-        _clean_text(row.get("normalized_url")): _clean_text(row.get("article_id"))
-        for row in returned_articles or []
-        if isinstance(row, dict)
-    }
-
-    _delete_many(
-        "newsletter_issue_articles",
-        "issue_date",
-        [_clean_text(issue.get("issue_date")) for issue in payload["issues"]],
-    )
-    article_ids = list(article_id_by_url.values())
-    _delete_many("newsletter_article_tags", "article_id", article_ids)
-    _delete_many("newsletter_article_entities", "article_id", article_ids)
-
-    issue_article_rows: list[dict[str, Any]] = []
-    for row in payload["issue_articles"]:
-        article_id = article_id_by_url.get(_clean_text(row.get("normalized_url")))
-        if not article_id:
-            continue
-        issue_article_rows.append(
-            {
-                "issue_date": row["issue_date"],
-                "article_id": article_id,
-                "rank": row["rank"],
-                "section_order": row["section_order"],
-            }
-        )
-    _upsert("newsletter_issue_articles", issue_article_rows, "issue_date,article_id")
-
-    tag_rows: list[dict[str, Any]] = []
-    for row in payload["tags"]:
-        article_id = article_id_by_url.get(_clean_text(row.get("normalized_url")))
-        if article_id:
-            tag_rows.append({key: value for key, value in row.items() if key != "normalized_url"} | {"article_id": article_id})
-    _upsert("newsletter_article_tags", tag_rows, "article_id,tag_type,tag_value,tag_source")
-
-    entity_rows: list[dict[str, Any]] = []
-    for row in payload["entities"]:
-        article_id = article_id_by_url.get(_clean_text(row.get("normalized_url")))
-        if article_id:
-            entity_rows.append({key: value for key, value in row.items() if key != "normalized_url"} | {"article_id": article_id})
-    _upsert("newsletter_article_entities", entity_rows, "article_id,entity_type,entity_name,link_source")
-
-    return {
-        "issues": len(payload["issues"]),
-        "articles": len(payload["articles"]),
-        "issue_articles": len(issue_article_rows),
-        "tags": len(tag_rows),
-        "entities": len(entity_rows),
-    }
+    """Publish all selected issues and their metadata as one DB transaction."""
+    return publish_atomic(payload, model="public", request=_rest_request)
 
 
 def main() -> int:

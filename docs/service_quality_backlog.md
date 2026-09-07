@@ -16,6 +16,18 @@
 
 ## 현재 우선순위
 
+2026-09-06 검토에서 확인한 오류는 소스 수정과 로컬 검증을 완료했다.
+검토 근거는 `docs/project_review_2026-09-06.md`, 수정 결과와 운영 반영 순서는
+`docs/project_fixes_2026-09-06.md`를 따른다. 운영 적용은 아직 하지 않았다.
+
+- 소스 수정 완료: 뉴스 태그·기사 연결과 People을 한 DB transaction에서 교체하고 실패 시 기존 자료를 보존한다.
+- 소스 수정 완료: FSS 변환 결과가 달라지면 새 버전을 만들며 공개된 과거 행의 변경을 차단한다.
+- 소스 수정 완료: 원문 cache cleanup의 목록 조회 실패도 경고로 처리한다.
+- 소스 수정 완료: 테스트 자동 수집, 0개 실행 방지, PR/push 검사와 LP 사업/회차 병합 오류를 수정했다.
+- 소스 수정 완료: GP 페이지별 cache 만료와 제한된 마지막 정상 자료 제공, 뉴스 장애 상태 응답, 공식 GP 메뉴 연결을 반영했다.
+- 다음 운영 단계: 새 DB migration 적용 → 새 동기화/발행 실행 → Vercel 앱 배포 → 공개 화면 검증. GP migration은 과거 profile 제약 migration 전체를 재실행하지 않는다.
+- 별도 제품 과제: LP의 Vercel route/public read model 이관을 완료한 뒤 LP 메뉴를 전환한다.
+
 1. `scripts/check_architecture_contracts.py`와 `scripts/check_public_frontend.py`가 실패하면 구조 리팩터링이나 UX 작업은 완료로 보지 않는다.
 2. 남은 legacy public-site cleanup은 `scripts/build_service_site.py`와 `services/lp/src/lp_legacy_service_pages.py`의 실행 시점 의존을 서비스별 helper로 더 줄이는 것이다. import-time 결합은 architecture contract로 차단한다.
 3. LP Notice를 사업 단위 서비스로 안정화한다. 같은 사업의 공고, 서류심사, 선정결과, 정정, 취소가 여러 카드로 흩어지면 실패다.
@@ -24,6 +36,8 @@
 6. 뉴스레터 별도 채팅방 결과는 이 프로젝트의 통합 빌드, architecture contract, 공개 frontend 검증을 통과해야만 배포 완료로 본다.
 
 ## 최근 처리
+
+- 2026-09-07 인계: 안정성 수정의 로컬 자동 검사 241개와 PostgreSQL 실패/rollback 검사 14개를 통과했다. 통합 frontend 검사는 기사 원문에 들어간 일반 영어 단어를 내부 필드로 오인하지 않으며, 아이콘 누락은 기존 운영 규칙대로 경고 처리한다. 운영 DB·공개 배포는 미적용이다.
 
 - 2026-06-21: LP/GP/Market empty-state UX를 table-like shell 안에 고정했다. 로컬 DB나 export가 비어도 `lp-directory-card`, `gp-card`, Market chart container가 사라지지 않으며, `scripts/check_public_frontend.py`와 390px/1280px browser smoke가 이를 확인한다.
 - 2026-06-21: 구조 재발 방지 계약을 코드로 추가했다. `scripts/check_architecture_contracts.py`는 LP/GP/Wiki의 newsletter-private import, newsletter-only/Vercel import isolation, newsletter workflow 역할 침범, generated output tracking을 검사한다. Newsletter workflow의 mirror freshness, archive download, public mirror verification, Vercel verification, watchdog freshness 판단은 `services/newsletter/src/newsletter_public_status.py`로 이동했다.

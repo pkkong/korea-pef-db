@@ -17,6 +17,7 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -41,6 +42,11 @@ from scripts.check_fss_statistics_ready import (  # noqa: E402
 DEFAULT_PAYLOAD_OUT = REPO_ROOT / "exports" / "gp" / "fss_canonical_supabase_payload.json"
 REST_BATCH_SIZE = 500
 MAX_REST_BATCH_BYTES = 750_000
+MAX_PEOPLE_RPC_BYTES = 8_000_000
+CANONICAL_FORMAT_VERSION = 2
+# Rebuild/import timestamps do not change the underlying source or its interpretation.
+FSS_VOLATILE_FIELDS = frozenset({"snapshot_id", "created_at", "updated_at", "fetched_at", "parsed_at", "merged_at"})
+DEFAULT_ALIAS_RULES = REPO_ROOT / "data" / "gp_alias_merge_rules.csv"
 RETRIABLE_HTTP_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
 
 
@@ -284,6 +290,64 @@ def _person_source_hash(people_tables: dict[str, list[dict[str, object]]]) -> st
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _fss_row_digest(row: dict[str, object]) -> str:
+    """Match fss_canonical_row_digest in PostgreSQL without JSON numeric/spacing drift."""
+    fields = []
+    for key, value in sorted(row.items()):
+        if key in FSS_VOLATILE_FIELDS:
+            continue
+        if value is None:
+            encoded_value = "-1:"
+        else:
+            if isinstance(value, bool):
+                text_value = "true" if value else "false"
+            elif isinstance(value, (int, float, Decimal)):
+                number = Decimal(str(value))
+                if not number.is_finite():
+                    raise CanonicalSyncError(f"Non-finite numeric value in {key}")
+                text_value = format(number, "f")
+                if "." in text_value:
+                    text_value = text_value.rstrip("0").rstrip(".")
+                if number == 0:
+                    text_value = "0"
+            elif isinstance(value, str):
+                text_value = value
+            else:
+                raise CanonicalSyncError(f"Non-scalar value in FSS column {key}")
+            encoded_value = f"{len(text_value.encode('utf-8'))}:{text_value}"
+        fields.append(f"{key}:{encoded_value}")
+    return hashlib.md5(",".join(fields).encode("utf-8")).hexdigest()
+
+
+def _fss_table_manifest(tables: dict[str, list[dict[str, object]]]) -> dict[str, object]:
+    return {
+        name: {
+            "row_count": len(rows),
+            "content_md5": hashlib.md5("".join(sorted(_fss_row_digest(row) for row in rows)).encode("ascii")).hexdigest(),
+        }
+        for name, rows in tables.items()
+    }
+
+
+def _version_fss_snapshot(snapshot: dict[str, object], tables: dict[str, list[dict[str, object]]], source_manifest: dict[str, object]) -> None:
+    manifest = _fss_table_manifest(tables)
+    identity = {
+        "version": CANONICAL_FORMAT_VERSION,
+        "source_manifest": source_manifest,
+        "table_manifest": manifest,
+        "snapshot": {key: snapshot[key] for key in (
+            "reporting_period", "as_of_date", "source_id", "source_sha256", "fund_count",
+            "primary_gp_count", "commitment_amount_krw_mn",
+        )},
+    }
+    content_hash = hashlib.sha256(json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    snapshot_id = f"fss-core-{str(snapshot['reporting_period']).lower()}-{str(snapshot['source_sha256'])[:12]}-{content_hash[:24]}"
+    snapshot.update(snapshot_id=snapshot_id, content_hash=content_hash, table_manifest=manifest, source_manifest=source_manifest)
+    for rows in tables.values():
+        for row in rows:
+            row["snapshot_id"] = snapshot_id
+
+
 def _snapshot_from_manifest(path: Path) -> dict[str, object]:
     data = json.loads(path.read_text(encoding="utf-8"))
     snapshot = data.get("snapshot", data)
@@ -316,7 +380,10 @@ def prepare_payload(
     expected_latest_period: str | None = None,
     canonical_manifest: Path | None = None,
     include_fss_data: bool = True,
+    alias_rules_path: Path = DEFAULT_ALIAS_RULES,
 ) -> dict[str, object]:
+    if not include_fss_data and canonical_manifest is None:
+        raise CanonicalSyncError("People-only sync requires the manifest restored from the published FSS snapshot")
     if canonical_manifest:
         snapshot = _snapshot_from_manifest(canonical_manifest)
         canonical_snapshot_id = str(snapshot["snapshot_id"])
@@ -358,6 +425,17 @@ def prepare_payload(
             spec.supabase_table: _read_table_rows(conn, spec)
             for spec in PEOPLE_TABLES
         }
+
+    if include_fss_data:
+        # Hash the complete versioned input registry and the approved alias rules,
+        # plus every transformed table. A correction/removal receives a fresh ID.
+        source_manifest = {
+            "format_version": CANONICAL_FORMAT_VERSION,
+            "registry_sha256": sha256_file(registry_path),
+            "alias_rules_sha256": sha256_file(alias_rules_path),
+        }
+        _version_fss_snapshot(snapshot, fss_tables, source_manifest)
+        canonical_snapshot_id = str(snapshot["snapshot_id"])
 
     return {
         "snapshot": snapshot,
@@ -422,43 +500,61 @@ def apply_payload(payload: dict[str, object]) -> dict[str, object]:
 
     if not isinstance(sync_fss_data, bool):
         raise CanonicalSyncError("sync_fss_data must be a boolean")
-    if sync_fss_data:
-        _rest_request(
-            "fss_canonical_snapshots",
-            method="POST",
-            query={"on_conflict": "snapshot_id"},
-            payload=snapshot,
-            prefer="resolution=ignore-duplicates,return=minimal",
-        )
-        for spec in FSS_TABLES:
-            rows = fss_tables.get(spec.supabase_table, [])
-            if not isinstance(rows, list):
-                raise CanonicalSyncError(f"Invalid rows for {spec.supabase_table}")
-            _upsert_table(spec, rows)
+    # Validate the full replacement before any remote write. Missing tables are
+    # errors: accidentally omitted input must never mean "delete this table".
+    for specs, tables in ((FSS_TABLES if sync_fss_data else (), fss_tables), (PEOPLE_TABLES, people_tables)):
+        for spec in specs:
+            rows = tables.get(spec.supabase_table)
+            if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+                raise CanonicalSyncError(f"Invalid or missing rows for {spec.supabase_table}")
+            keys = set()
+            for row in rows:
+                if any(column not in row for column in spec.columns):
+                    raise CanonicalSyncError(f"Missing columns in {spec.supabase_table}")
+                key = tuple(row.get(column) for column in spec.conflict_columns)
+                if any(value is None for value in key) or key in keys:
+                    raise CanonicalSyncError(f"Missing or duplicate row key in {spec.supabase_table}")
+                keys.add(key)
+                if spec.is_fss_data and row.get("snapshot_id") != snapshot_id:
+                    raise CanonicalSyncError(f"Snapshot mismatch in {spec.supabase_table}")
+    if not isinstance(people_state, dict) or people_state.get("fss_snapshot_id") != snapshot_id:
+        raise CanonicalSyncError("People state must reference this FSS snapshot")
+    if people_state.get("source_hash") != _person_source_hash(people_tables):
+        raise CanonicalSyncError("People source hash does not match the replacement")
+    person_ids = {row["person_id"] for row in people_tables["people_persons"]}
+    for spec in PEOPLE_TABLES[1:]:
+        if any(row["person_id"] not in person_ids for row in people_tables[spec.supabase_table]):
+            raise CanonicalSyncError(f"Unknown person reference in {spec.supabase_table}")
+    people_rpc = {
+        "people_tables": people_tables,
+        "people_state": people_state,
+        "publish_snapshot_id": snapshot_id if sync_fss_data else None,
+    }
+    if len(json.dumps(people_rpc, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > MAX_PEOPLE_RPC_BYTES:
+        raise CanonicalSyncError("People replacement exceeds the 8 MB atomic RPC limit; no data was changed")
 
-    # People is current operational data, not an immutable quarterly FSS snapshot.
-    _rest_request("people_persons", method="DELETE", query={"person_id": "gte.0"}, prefer="return=minimal")
-    for spec in PEOPLE_TABLES:
-        rows = people_tables.get(spec.supabase_table, [])
-        if not isinstance(rows, list):
-            raise CanonicalSyncError(f"Invalid rows for {spec.supabase_table}")
-        _upsert_table(spec, rows)
-    if not isinstance(people_state, dict):
-        raise CanonicalSyncError("People state is missing")
-    _rest_request(
-        "people_data_state",
-        method="POST",
-        query={"on_conflict": "state_key"},
-        payload=people_state,
-        prefer="resolution=merge-duplicates,return=minimal",
-    )
     if sync_fss_data:
-        _rest_request(
-            "rpc/publish_fss_canonical_snapshot",
-            method="POST",
-            payload={"target_snapshot_id": snapshot_id},
-            prefer="return=minimal",
-        )
+        if snapshot.get("table_manifest") != _fss_table_manifest(fss_tables) or not snapshot.get("content_hash"):
+            raise CanonicalSyncError("FSS table manifest is missing or does not match the payload")
+        existing_rows = _rest_request("fss_canonical_snapshots", query={"snapshot_id": f"eq.{snapshot_id}", "select": "snapshot_id,status,content_hash,table_manifest,source_manifest"})
+        existing = existing_rows[0] if existing_rows else None
+        if existing and any(existing.get(key) != snapshot.get(key) for key in ("content_hash", "table_manifest", "source_manifest")):
+            raise CanonicalSyncError("Canonical snapshot ID already belongs to a different payload")
+        if existing and existing.get("status") == "retired":
+            raise CanonicalSyncError("Refusing to replace current data using a retired FSS snapshot")
+        if not existing:
+            _rest_request(
+                "fss_canonical_snapshots", method="POST", query={"on_conflict": "snapshot_id"},
+                payload=snapshot, prefer="resolution=ignore-duplicates,return=minimal",
+            )
+        if not existing or existing.get("status") == "staged":
+            for spec in FSS_TABLES:
+                _upsert_table(spec, fss_tables[spec.supabase_table])
+
+    # One transaction owns deletion, all child inserts, state update and (when
+    # requested) FSS publication. A failed child or final validation rolls it all
+    # back; a network retry is safe because the whole replacement is idempotent.
+    _rest_request("rpc/replace_people_canonical", method="POST", payload=people_rpc, prefer="return=minimal")
     return {
         "snapshot_id": snapshot_id,
         "fss_rows": sum(len(rows) for rows in fss_tables.values() if isinstance(rows, list)),

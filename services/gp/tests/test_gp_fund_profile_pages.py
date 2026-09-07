@@ -26,6 +26,7 @@ from services.gp.src.gp_service_pages import (
 
 
 class GpFundProfilePageTests(unittest.TestCase):
+    @unittest.skipUnless((ROOT / "db" / "private_equity.db").is_file(), "Full FSS fixture DB is not available; run the data audit after rebuilding it")
     def test_mbk_profile_includes_all_fss_linked_funds(self) -> None:
         conn = sqlite3.connect(ROOT / "db" / "private_equity.db")
         conn.row_factory = sqlite3.Row
@@ -58,6 +59,7 @@ class GpFundProfilePageTests(unittest.TestCase):
         self.assertIn("운용중", html)
         self.assertIn("청산완료", html)
 
+    @unittest.skipUnless((ROOT / "db" / "private_equity.db").is_file(), "Full FSS fixture DB is not available; run the data audit after rebuilding it")
     def test_gp_profile_uses_the_shared_profile_layout(self) -> None:
         conn = sqlite3.connect(ROOT / "db" / "private_equity.db")
         conn.row_factory = sqlite3.Row
@@ -122,6 +124,7 @@ class GpFundProfilePageTests(unittest.TestCase):
         self.assertIn("금감원 확인 펀드", html)
         self.assertNotIn('class="gp-detail-grid"', html)
 
+    @unittest.skipUnless((ROOT / "db" / "private_equity.db").is_file(), "Full FSS fixture DB is not available; run the data audit after rebuilding it")
     def test_senior_person_profile_includes_source_backed_career_and_education(self) -> None:
         conn = sqlite3.connect(ROOT / "db" / "private_equity.db")
         conn.row_factory = sqlite3.Row

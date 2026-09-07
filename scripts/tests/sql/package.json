@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node test_atomic_sync.mjs"},
+  "dependencies": {"@electric-sql/pglite": "0.4.6"}
+}

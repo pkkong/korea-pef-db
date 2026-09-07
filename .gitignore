@@ -70,3 +70,6 @@ Thumbs.db
 !data/raw/fss_pef/
 !data/raw/fss_pef/*.xls
 !data/raw/fss_pef/*.xlsx
+
+# Local SQL regression runtime
+node_modules/

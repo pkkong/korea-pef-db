@@ -1,6 +1,6 @@
 # 프로젝트 리드 현재 상태판
 
-최종 수정: 2026-09-04 KST
+최종 수정: 2026-09-07 KST
 
 이 문서는 Project Lead가 현재 프로젝트 상태를 잃지 않기 위한 운영판이다. 새 채팅방, 서브에이전트, 별도 담당자가 작업을 시작할 때는 먼저 이 문서를 읽고, 작업이 끝나면 필요한 변경을 여기에 반영한다.
 
@@ -49,6 +49,10 @@
 
 ## 현재 작업판
 
+- 2026-09-06 검토 후 수정, 2026-09-07 인계: `docs/project_fixes_2026-09-06.md`에 수정 결과와 운영 반영 순서를 기록했다. 뉴스·People 갱신 실패 시 기존 자료 보존, 수정된 FSS 자료의 새 버전 발행, 원문 정리 실패의 경고 처리, LP 사업명/회차 병합, GP 페이지별 캐시 만료, 장애 응답, 브리프 GP 메뉴를 소스에서 수정했다. 자동 검사 241개(누락·실패 0개), PostgreSQL 장애 검사 14개, 실제 로컬 FSS 60,269행 및 People 877행의 임시 DB 발행을 통과했다. 통합 빌드와 frontend/architecture/Flask smoke도 통과했다. 로컬 LP 입력은 없어 채워진 LP 전체 화면은 미검증이다.
+- 현재 배포 상태: commit/push, 운영 DB migration, Vercel/Pages 배포는 실행하지 않았다. 새 동기화 코드를 실행하기 전에 뉴스레터 atomic sync migration과 GP canonical safety migration을 먼저 적용해야 한다. `Apply GP Supabase migrations`는 기존 FSS/People 스키마 위에 새 안전성 migration만 적용하며, 과거 GP 페이지 제약 migration을 재실행하지 않는다. GP 발행 두 workflow와 migration은 `gp-publish`로 직렬 실행한다.
+- LP Vercel 이전은 별도 잔여 과제다. 검토 당시 Vercel LP route는 없고 Pages가 실제 연결 경로였으므로, 이번 수정은 GP 메뉴만 `/gps.html`로 전환하고 LP 링크를 유지한다. 기존 검토 근거는 `docs/project_review_2026-09-06.md`에 보존했다.
+
 - 이 채팅방의 현재 책임: LP Notice 출시 품질, LP/GP 통합, 빌드 분리, 공개 배포 준비성, 문서 운영 기준을 관리한다.
 - 별도 뉴스레터 채팅방의 현재 책임: 뉴스레터 분류, 태그, 검색, 로고, 편집 품질을 관리한다. 사용자가 이 채팅방에 통합·검증을 명시하지 않는 한 같은 뉴스레터 수정을 중복으로 하지 않는다.
 - 뉴스레터 작업을 넘겨받을 때 필요한 확인: source diff, 생성된 공개 페이지, `services/newsletter/tests/test_daily_news_logic.py` 결과, 브랜드 아이콘 검사, 공개 URL smoke check가 있어야 배포 보고에 포함한다.
@@ -87,6 +91,17 @@
 - worktree가 dirty이면 현재 작업에 속한 파일만 stage한다.
 
 ## 빌드와 배포 명령
+
+전체 자동 검사와 DB 교체 실패 검사:
+
+```bash
+python3 scripts/run_regression_tests.py
+npm ci --prefix scripts/tests/sql --ignore-scripts
+npm test --prefix scripts/tests/sql
+python3 scripts/check_architecture_contracts.py
+```
+
+전체 FSS fixture가 없는 신규 checkout에서는 기존 실데이터 검사 5개가 명시적으로 skip된다. 로컬 최종 검사는 fixture가 있어 241개 모두 실행했다. 테스트가 0개인 파일이나 실행 실패는 성공으로 처리하지 않는다.
 
 Python 문법 검사:
 

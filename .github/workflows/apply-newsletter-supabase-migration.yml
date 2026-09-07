@@ -36,7 +36,7 @@ jobs:
         run: |
           for migration in services/newsletter/supabase/migrations/*.sql; do
             case "$(basename "$migration")" in
-              *_gp_*)
+              *_gp_*|*_fss_*)
                 echo "Skipping GP-owned migration ${migration}"
                 continue
                 ;;

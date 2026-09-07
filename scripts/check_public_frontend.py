@@ -176,6 +176,24 @@ def check_public_source_terms(html_files: list[str] | None = None) -> list[str]:
     violations: list[str] = []
     for relative_path in paths:
         text = read_public_text(relative_path)
+        # Published article prose may quote words such as "confidence". Scan
+        # the UI and payload field names, not the prose of the source article.
+        assignment = re.search(r"window\.KPEF_DAILY_ARCHIVE\s*=\s*", text)
+        if assignment:
+            try:
+                archive, length = json.JSONDecoder().raw_decode(text[assignment.end():])
+            except json.JSONDecodeError as exc:
+                raise CheckFailure(f"Invalid embedded archive: {relative_path}") from exc
+            def without_article_prose(value):
+                if isinstance(value, list):
+                    return [without_article_prose(item) for item in value]
+                if isinstance(value, dict):
+                    return {
+                        key: "" if key in {"title", "summaryText", "summaryLines"} else without_article_prose(item)
+                        for key, item in value.items()
+                    }
+                return value
+            text = text[:assignment.end()] + json.dumps(without_article_prose(archive)) + text[assignment.end() + length:]
         for needle in FORBIDDEN_PUBLIC_SOURCE_TERMS:
             if needle in text:
                 violations.append(f"{relative_path}:{needle}")
@@ -202,6 +220,7 @@ def check_newsletter_frontend_contract() -> list[str]:
     if not isinstance(archive, list):
         raise CheckFailure("archive.json is not a list")
     article_count = 0
+    missing_icon_count = 0
     violations: list[str] = []
     for entry in archive:
         if not isinstance(entry, dict):
@@ -214,7 +233,9 @@ def check_newsletter_frontend_contract() -> list[str]:
             if GOOGLE_NEWS_HOST_RE.search(str(article.get("url") or "")):
                 violations.append(f"google_news_redirect:{title}")
             if not str(article.get("sourceIconUrl") or "").strip():
-                violations.append(f"missing_source_icon:{title}")
+                # Brand coverage is an operating warning, consistent with the
+                # publisher-icon gate. It must not stop a valid daily issue.
+                missing_icon_count += 1
             if str(article.get("tagVersion") or "") != "news-taxonomy-v1":
                 violations.append(f"taxonomy_version:{title}")
     service_js_path = PUBLIC_DIR / "assets" / "service.js"
@@ -226,7 +247,7 @@ def check_newsletter_frontend_contract() -> list[str]:
             violations.append(f"service.js missing {required}")
     if violations:
         raise CheckFailure(f"Newsletter contract violations: {', '.join(violations[:20])}")
-    return [f"newsletter_contract=ok articles_checked={article_count}"]
+    return [f"newsletter_contract=ok articles_checked={article_count}", f"newsletter_icon_warnings={missing_icon_count}"]
 
 
 def check_public_lp_json_contract() -> list[str]:

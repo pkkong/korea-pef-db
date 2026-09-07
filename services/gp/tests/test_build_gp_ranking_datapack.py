@@ -24,6 +24,7 @@ from scripts.build_gp_ranking_datapack import (
 
 
 class GpRankingDataPackTests(unittest.TestCase):
+    @unittest.skipUnless((DEFAULT_DB).is_file(), "Full FSS fixture DB is not available; run the data audit after rebuilding it")
     def test_2025q4_data_pack_reconciles_to_the_public_gp_database(self) -> None:
         conn = sqlite3.connect(DEFAULT_DB)
         try:
@@ -82,6 +83,7 @@ class GpRankingDataPackTests(unittest.TestCase):
     def test_amounts_are_converted_to_hundred_million_won(self) -> None:
         self.assertEqual(to_krw_100mn(25.635147), 256351.47)
 
+    @unittest.skipUnless((DEFAULT_DB).is_file(), "Full FSS fixture DB is not available; run the data audit after rebuilding it")
     def test_cumulative_analytics_credits_each_listed_gp(self) -> None:
         conn = sqlite3.connect(DEFAULT_DB)
         try:

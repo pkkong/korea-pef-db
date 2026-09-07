@@ -305,6 +305,5 @@ def test_refresh_notice_links_splits_joint_gp_tokens() -> None:
 
 
 if __name__ == "__main__":
-    test_refresh_notice_links_matches_comma_and_normalized_gp_aliases()
-    test_refresh_notice_links_splits_joint_gp_tokens()
-    print("lp_notice_gp_link test passed")
+    from scripts.run_regression_tests import run_module_tests
+    raise SystemExit(run_module_tests(sys.modules[__name__]))

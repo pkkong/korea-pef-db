@@ -78,6 +78,16 @@ def lp_notice_program_label(item: dict[str, object]) -> str:
     round_name = clean_public_lp_text(round_name)
     if not program:
         return "-"
+    # Keep the published annual call label without putting its year or schedule
+    # into the normalized program identity shared by lifecycle events.
+    for key in ("title", "displayTitle"):
+        title = clean_public_lp_text(item.get(key))
+        annual_call = re.match(
+            r"^(.*?)\s+(20\d{2}년\s+(?:\d+차\s+)?(?:정시|수시)\s+출자사업)(?=\s|$)",
+            title,
+        )
+        if annual_call and lp_notice_business_key_text(annual_call.group(1)) == lp_notice_business_key_text(program):
+            return " ".join(annual_call.groups())
     if round_name and re.search(rf"(?:^|[^0-9A-Za-z가-힣]){re.escape(round_name)}(?:$|[^0-9가-힣])", program):
         return program
     return " ".join([program, round_name]).strip() or "-"
@@ -485,7 +495,14 @@ def _resolve_notice_program_for_group(
     lp_key, round_key = _normalize_notice_round_key_for_group(item)
     program = lp_notice_specific_program_name(item)
     if program and program != "-" and not is_generic_lp_program_name(program):
-        return item
+        # Persist the title-derived program before resolving a missing round.
+        # Otherwise infer_notice_round_name rejects that round because the
+        # original stored program is still a generic platform such as 모태펀드.
+        result = dict(item)
+        result["programName"] = program
+        if "program_name" in result:
+            result["program_name"] = program
+        return result
     resolved = program_map.get((lp_key, round_key))
     if not resolved and fallback_map.get(lp_key):
         candidates = fallback_map[lp_key]
@@ -511,6 +528,8 @@ def _resolve_notice_round_for_group(item: dict[str, object], round_map: dict[tup
         return item
     result = dict(item)
     result["roundName"] = resolved
+    if "round_name" in result:
+        result["round_name"] = resolved
     return result
 
 
@@ -677,29 +696,29 @@ def merge_lp_notice_display_item(
 
 def consolidate_lp_notice_display_items(items: list[dict[str, object]], report_date: str | None = None) -> list[dict[str, object]]:
     effective_report_date = report_date or today_seoul()
-    # 1) Build a stable program anchor per LP+round so generic rows (e.g., 국민성장펀드 3차) can be merged
-    # into the same business card when another row contains the true 사업명.
-    preferred_program_by_key: dict[tuple[str, str], str] = {}
-    fallback_program_by_lp: dict[str, set[str]] = {}
-    round_candidates: dict[tuple[str, str], set[str]] = {}
-    preferred_program_by_key, fallback_program_by_lp, round_candidates = _build_notice_program_round_maps(items)
-
-    resolved_round_by_key: dict[tuple[str, str], str] = {
-        key: next(iter(values)) for key, values in round_candidates.items() if len(values) == 1
-    }
-
-    # Normalize fallback LP candidates down to deterministic single options only.
-    fallback_program_by_lp = {
-        lp_code: next(iter(values)) for lp_code, values in fallback_program_by_lp.items() if len(values) == 1
-    }
-
-    normalized_items = [
-        _resolve_notice_round_for_group(
-            _resolve_notice_program_for_group(item, preferred_program_by_key, fallback_program_by_lp),
-            resolved_round_by_key,
+    # A missing program/round may borrow an unambiguous anchor only within the
+    # same LP, year and asset scope used by the final business-card key.
+    identity_scopes: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    for item in items:
+        scope = (
+            str(item.get("lpCode") or item.get("lpName") or "").strip(),
+            lp_notice_group_year_key(item),
+            lp_notice_group_asset_key(item),
         )
-        for item in items
-    ]
+        identity_scopes.setdefault(scope, []).append(item)
+    normalized_items: list[dict[str, object]] = []
+    for scoped_items in identity_scopes.values():
+        program_map, fallback_map, round_candidates = _build_notice_program_round_maps(scoped_items)
+        round_map = {
+            key: next(iter(values)) for key, values in round_candidates.items() if len(values) == 1
+        }
+        normalized_items.extend(
+            _resolve_notice_round_for_group(
+                _resolve_notice_program_for_group(item, program_map, fallback_map),
+                round_map,
+            )
+            for item in scoped_items
+        )
     normalized_items = drop_cross_year_stale_lifecycle_items(normalized_items)
 
     grouped: dict[tuple[str, str], dict[str, object]] = {}

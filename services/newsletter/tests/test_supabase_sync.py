@@ -118,8 +118,8 @@ def test_apply_payload_resets_issue_links_and_article_metadata() -> None:
         prefer: str | None = None,
     ) -> object:
         calls.append((method, table, query))
-        if method == "POST" and table == "newsletter_articles":
-            return [{"article_id": "00000000-0000-0000-0000-000000000001", "normalized_url": "https://example.com/a"}]
+        if table == "rpc/publish_newsletter_sync":
+            return payload["expected_counts"]
         return []
 
     original_rest_request = supabase_sync._rest_request
@@ -167,17 +167,8 @@ def test_apply_payload_resets_issue_links_and_article_metadata() -> None:
         supabase_sync._rest_request = original_rest_request
 
     assert result["issue_articles"] == 1
-    assert ("DELETE", "newsletter_issue_articles", {"issue_date": "in.(2026-06-17)"}) in calls
-    assert (
-        "DELETE",
-        "newsletter_article_tags",
-        {"article_id": "in.(00000000-0000-0000-0000-000000000001)"},
-    ) in calls
-    assert (
-        "DELETE",
-        "newsletter_article_entities",
-        {"article_id": "in.(00000000-0000-0000-0000-000000000001)"},
-    ) in calls
+    assert not any(method == "DELETE" for method, _, _ in calls)
+    assert [table for _, table, _ in calls] == ["newsletter_sync_parts"] * 4 + ["rpc/publish_newsletter_sync"]
 
 
 def test_delete_many_batches_unique_values() -> None:
@@ -270,16 +261,41 @@ def test_rest_request_retries_transient_url_errors() -> None:
     assert sleeps == [0.75]
 
 
+
+def test_same_article_across_dates_uses_latest_metadata_without_duplicate_keys() -> None:
+    old = {"title": "Old", "url": "https://example.com/a", "section": "Market", "gpNames": ["Old GP"]}
+    new = {**old, "title": "Corrected", "section": "GP", "gpNames": ["New GP"]}
+    for archive in [
+        [{"reportDate": "2026-09-05", "articles": [new]}, {"reportDate": "2026-09-04", "articles": [old]}],
+        [{"reportDate": "2026-09-04", "articles": [old]}, {"reportDate": "2026-09-05", "articles": [new]}],
+    ]:
+        payload = prepare_payload(archive)
+        assert len(payload["issue_articles"]) == 2
+        assert len(payload["articles"]) == 1
+        assert payload["articles"][0]["title"] == "Corrected"
+        assert [row["tag_value"] for row in payload["tags"]] == ["GP"]
+        assert [row["entity_name"] for row in payload["entities"]] == ["New GP"]
+
+
+def test_atomic_upload_failure_leaves_public_model_untouched() -> None:
+    from unittest.mock import patch
+    calls = []
+    def request(resource, **kwargs):
+        calls.append(resource)
+        raise RuntimeError("staging unavailable")
+    with patch.object(supabase_sync, "_rest_request", request):
+        try:
+            supabase_sync.apply_payload(prepare_payload([{"reportDate": "2026-09-05", "articles": []}]))
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("Upload must fail")
+    assert calls == ["newsletter_sync_parts"]
+
+
 def main() -> int:
-    test_prepare_payload_dedupes_issue_urls()
-    test_prepare_payload_filters_selected_date()
-    test_select_sync_archive_keeps_rolling_range_by_default()
-    test_select_sync_archive_allows_single_issue_debug_sync()
-    test_apply_payload_resets_issue_links_and_article_metadata()
-    test_delete_many_batches_unique_values()
-    test_rest_request_retries_transient_url_errors()
-    print("supabase sync tests passed")
-    return 0
+    from scripts.run_regression_tests import run_module_tests
+    return run_module_tests(sys.modules[__name__])
 
 
 if __name__ == "__main__":

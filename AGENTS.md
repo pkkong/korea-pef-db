@@ -45,6 +45,7 @@
 - Keep subagent tasks concrete, bounded, and non-overlapping.
 - Review subagent findings before turning them into implementation, user guidance, commits, or deployment decisions.
 - Explain outcomes in non-developer language when the user is making product or operating decisions.
+- In Korean progress and completion reports, lead with the visible problem and what changed in plain language. Avoid leading with severity codes or terms such as canonical, snapshot, and RPC. Always distinguish local code/test completion from changes actually applied to the operating site.
 - Prefer durable operating docs when a repeated workflow, role split, or quality rule is established.
 - Treat repeated user corrections as instruction-management failures, not one-off feedback.
 - When a correction reveals a durable preference, quality bar, or workflow rule, update `AGENTS.md` or `docs/agent_operating_briefs.md` instead of relying on conversation memory.

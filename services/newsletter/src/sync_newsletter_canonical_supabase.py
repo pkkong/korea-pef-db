@@ -33,6 +33,7 @@ from services.shared.src.daily_news_common import (  # noqa: E402
     load_sources,
     now_utc_iso,
 )
+from services.newsletter.src.newsletter_atomic_sync import publish_atomic  # noqa: E402
 
 
 DEFAULT_PAYLOAD_OUT = REPO_ROOT / "exports" / "daily_news" / "newsletter_canonical_payload.json"
@@ -325,8 +326,13 @@ def purge_raw_html_cache(
         raise CanonicalNewsletterError("Raw HTML cache retention must be at least one day")
     current_time = (now_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
     cutoff = current_time - timedelta(days=retention_days)
-    rows = _read_all(DOCUMENT_SPEC.supabase_table)
     result = {"raw_html_purged": 0, "raw_html_purge_failures": 0}
+    try:
+        rows = _read_all(DOCUMENT_SPEC.supabase_table)
+    except (CanonicalNewsletterError, OSError, ValueError) as exc:
+        result["raw_html_purge_failures"] = 1
+        print(f"WARN raw HTML cache listing failed: {exc}", file=sys.stderr)
+        return result
 
     for document in rows:
         object_key = _storage_object_key_from_path(document.get("raw_html_path"))
@@ -352,7 +358,7 @@ def purge_raw_html_cache(
                 prefer="return=minimal",
             )
             result["raw_html_purged"] += 1
-        except CanonicalNewsletterError as exc:
+        except (CanonicalNewsletterError, OSError, ValueError) as exc:
             result["raw_html_purge_failures"] += 1
             print(f"WARN raw HTML cache purge failed for news_id={news_id}: {exc}", file=sys.stderr)
     return result
@@ -390,16 +396,7 @@ def apply_payload(
                 raw_upload_count += 1
     payload = {**payload, DOCUMENT_SPEC.supabase_table: documents}
 
-    _upsert(SOURCE_SPEC, payload[SOURCE_SPEC.supabase_table])
-    _upsert(RUN_SPEC, payload[RUN_SPEC.supabase_table])
-    _upsert(DOCUMENT_SPEC, payload[DOCUMENT_SPEC.supabase_table])
-
-    # The collector replaces classifications per document. Replacing these
-    # private link tables as a set keeps Supabase exactly aligned with it.
-    _rest_request(TAG_SPEC.supabase_table, method="DELETE", query={"news_id": "gte.0"}, prefer="return=minimal")
-    _rest_request(ENTITY_SPEC.supabase_table, method="DELETE", query={"news_id": "gte.0"}, prefer="return=minimal")
-    _upsert(TAG_SPEC, payload[TAG_SPEC.supabase_table])
-    _upsert(ENTITY_SPEC, payload[ENTITY_SPEC.supabase_table])
+    publish_atomic(payload, model="canonical", request=_rest_request)
     result = {
         "sources": len(payload[SOURCE_SPEC.supabase_table]),
         "runs": len(payload[RUN_SPEC.supabase_table]),

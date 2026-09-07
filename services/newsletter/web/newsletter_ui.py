@@ -242,6 +242,8 @@ def render_app(
     lp_monitor: list[dict[str, object]] | None = None,
     newsletter_only: bool = False,
     service_base_url: str = DEFAULT_PUBLIC_MIRROR_URL,
+    gp_url: str | None = None,
+    lp_url: str | None = None,
 ) -> str:
     archive_entries = archive_entries or [
         {
@@ -281,8 +283,8 @@ def render_app(
     def service_href(path: str) -> str:
         return f"{base_url}/{path}" if base_url else path
 
-    lp_notices_href = html_escape(service_href("lp-notices.html"))
-    gp_href = html_escape(service_href("gps.html"))
+    lp_notices_href = html_escape(lp_url if lp_url is not None else service_href("lp-notices.html"))
+    gp_href = html_escape(gp_url if gp_url is not None else service_href("gps.html"))
     lp_db_link = "" if newsletter_only else f'<a href="{lp_notices_href}">LP 목록</a>'
     bottom_db_link = f"""      <a href="{lp_notices_href}">
         <span aria-hidden="true" class="nav-dot nav-icon-lp"></span>

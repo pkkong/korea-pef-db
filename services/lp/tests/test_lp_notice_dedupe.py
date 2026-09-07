@@ -579,22 +579,19 @@ def test_lifecycle_view_rolls_up_by_business_identity() -> None:
     assert rollups == [("은행권 중견기업 밸류업펀드", "3차", 2, 1, 1, "final_selection")]
 
 
+
+def test_missing_round_does_not_borrow_from_another_year_or_asset() -> None:
+    base = {"lpCode": "kgrowth", "sourceType": "official", "eventType": "new_notice", "programName": "은행권 중견기업 밸류업펀드", "title": "은행권 중견기업 밸류업펀드 위탁운용사 선정 공고"}
+    for second in [
+        {"eventDate": "2026-06-01", "assetClass": "PE"},
+        {"eventDate": "2025-06-01", "assetClass": "VC"},
+    ]:
+        rows = [{**base, "noticeId": "old", "eventDate": "2025-06-01", "assetClass": "PE", "roundName": "3차"}, {**base, **second, "noticeId": "new", "roundName": "수시"}]
+        merged = consolidate_lp_notice_display_items(rows, "2026-06-05")
+        target = next(row for row in merged if row["noticeId"] == "new")
+        assert lp_notice_business_round_name(target) == ""
+
+
 if __name__ == "__main__":
-    test_dedupe_stored_notices_merges_lifecycle_events_into_one_business_card()
-    test_past_deadline_notice_does_not_get_new_closed_event_date()
-    test_official_notice_without_announced_date_does_not_sort_as_today_when_deadline_is_past()
-    test_stale_shortlist_is_public_history_not_current_shortlist()
-    test_future_deadline_overrides_stale_business_status()
-    test_deadline_soon_notice_consolidates_as_open_business_card()
-    test_selection_status_beats_future_deadline_on_business_card()
-    test_shortlist_status_beats_future_deadline_on_business_card()
-    test_stale_deadline_does_not_close_recent_notice_card()
-    test_consolidation_drops_cross_year_stale_lifecycle_event()
-    test_dedupe_normalizes_no_space_round_notation_as_same_business()
-    test_identity_module_and_display_grouping_share_business_key()
-    test_notice_identity_prefers_clean_stored_program_over_noisy_body_candidate()
-    test_notice_identity_uses_title_when_stored_program_is_body_sentence()
-    test_notice_identity_rejects_crawler_sentence_and_uses_title_program()
-    test_notice_identity_rejects_rfp_criteria_sentences()
-    test_lifecycle_view_rolls_up_by_business_identity()
-    print("lp notice dedupe test passed")
+    from scripts.run_regression_tests import run_module_tests
+    raise SystemExit(run_module_tests(sys.modules[__name__]))

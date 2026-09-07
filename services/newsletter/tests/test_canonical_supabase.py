@@ -135,9 +135,9 @@ def test_apply_payload_replaces_private_links_after_documents() -> None:
     }
     calls: list[tuple[str, str]] = []
 
-    def fake_rest(resource: str, *, method: str = "GET", **_: object) -> object:
+    def fake_rest(resource: str, *, method: str = "GET", **kwargs: object) -> object:
         calls.append((method, resource))
-        return []
+        return kwargs["payload"]["expected_counts"] if resource.startswith("rpc/") else []
 
     original_rest = canonical._rest_request
     canonical._rest_request = fake_rest
@@ -151,15 +151,8 @@ def test_apply_payload_replaces_private_links_after_documents() -> None:
         canonical._rest_request = original_rest
 
     assert result["documents"] == 1
-    assert calls == [
-        ("POST", "newsletter_canonical_sources"),
-        ("POST", "newsletter_canonical_runs"),
-        ("POST", "newsletter_canonical_documents"),
-        ("DELETE", "newsletter_canonical_tags"),
-        ("DELETE", "newsletter_canonical_entity_links"),
-        ("POST", "newsletter_canonical_tags"),
-        ("POST", "newsletter_canonical_entity_links"),
-    ]
+    assert calls == [("POST", "newsletter_sync_parts")] * 5 + [("POST", "rpc/publish_newsletter_sync")]
+
 
 
 def test_raw_html_upload_uses_bucket_allowed_mime_type() -> None:
@@ -295,16 +288,40 @@ def test_source_registry_payload_keeps_collection_fields() -> None:
     assert any(row["source_kind"] == "naver_news_api" and row["is_active"] for row in rows)
 
 
+
+def test_failed_staging_never_deletes_or_publishes_canonical_data() -> None:
+    from unittest.mock import patch
+    calls = []
+    payload = {spec.supabase_table: [{"sample": True}] for spec in canonical.TABLES}
+    def request(resource, **kwargs):
+        calls.append(resource)
+        if len(calls) == 2:
+            raise canonical.CanonicalNewsletterError("interrupted upload")
+    with patch.object(canonical, "_rest_request", request):
+        try:
+            canonical.apply_payload(payload, upload_raw_html=False, purge_raw_html_cache_after_sync=False)
+        except canonical.CanonicalNewsletterError:
+            pass
+        else:
+            raise AssertionError("Incomplete upload must fail")
+    assert calls == ["newsletter_sync_parts", "newsletter_sync_parts"]
+
+
+def test_cache_listing_failure_does_not_fail_successful_canonical_sync() -> None:
+    from unittest.mock import patch
+    payload = {spec.supabase_table: [] for spec in canonical.TABLES}
+    def request(resource, **kwargs):
+        assert resource == "rpc/publish_newsletter_sync"
+        return kwargs["payload"]["expected_counts"]
+    with patch.object(canonical, "_rest_request", request), patch.object(canonical, "_read_all", side_effect=canonical.CanonicalNewsletterError("listing failed")):
+        result = canonical.apply_payload(payload, upload_raw_html=False)
+    assert result["raw_html_purge_failures"] == 1
+    assert result["documents"] == 0
+
+
 def main() -> int:
-    test_prepare_payload_preserves_private_collection_fields()
-    test_restore_rows_recreates_pipeline_compatible_sqlite()
-    test_apply_payload_replaces_private_links_after_documents()
-    test_raw_html_upload_uses_bucket_allowed_mime_type()
-    test_raw_html_cache_purges_expired_files_without_touching_article_records()
-    test_archive_bootstrap_preserves_published_classification_and_entities()
-    test_source_registry_payload_keeps_collection_fields()
-    print("canonical newsletter Supabase tests passed")
-    return 0
+    from scripts.run_regression_tests import run_module_tests
+    return run_module_tests(sys.modules[__name__])
 
 
 if __name__ == "__main__":

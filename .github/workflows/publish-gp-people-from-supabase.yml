@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: gp-people-publish
+  group: gp-publish
   cancel-in-progress: false
 
 env:

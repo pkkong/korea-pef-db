@@ -194,7 +194,7 @@ def test_load_archive_prefers_newer_raw_archive_when_supabase_lags() -> None:
     newsletter_data._CACHE.update({"expires_at": 0.0, "archive": [], "source": "empty"})
     newsletter_data.fetch_supabase_archive = lambda: supabase_archive
     newsletter_data.archive_fallback_urls = lambda: ["pages", "raw"]
-    newsletter_data.fetch_archive_url_from = lambda url: raw_archive if url == "raw" else supabase_archive
+    newsletter_data.fetch_archive_url_from = lambda url, **kwargs: raw_archive if url == "raw" else supabase_archive
     try:
         archive, source = newsletter_data.load_archive(force_refresh=True)
 
@@ -233,7 +233,7 @@ def test_load_archive_keeps_supabase_when_archive_fallback_is_not_newer() -> Non
     newsletter_data._CACHE.update({"expires_at": 0.0, "archive": [], "source": "empty"})
     newsletter_data.fetch_supabase_archive = lambda: supabase_archive
     newsletter_data.archive_fallback_urls = lambda: ["raw"]
-    newsletter_data.fetch_archive_url_from = lambda url: older_archive
+    newsletter_data.fetch_archive_url_from = lambda url, **kwargs: older_archive
     try:
         archive, source = newsletter_data.load_archive(force_refresh=True)
 
@@ -262,7 +262,7 @@ def test_vercel_app_uses_common_newsletter_ui() -> None:
         assert 'href="assets/service.css' in html
         assert 'src="assets/service.js' in html
         assert 'href="https://pkkong.github.io/kpef-newsletter/lp-notices.html"' in html
-        assert 'href="https://pkkong.github.io/kpef-newsletter/gps.html"' in html
+        assert 'href="/gps.html"' in html
         assert 'href="lp-notices.html"' not in html
         assert 'href="gps.html"' not in html
         assert "/static/service.css" not in html
@@ -403,21 +403,91 @@ def test_vercel_config_uses_flask_framework_without_catchall_index_rewrite() -> 
         ), "Vercel must not rewrite every request to /index.py; it makes public routes 404."
 
 
+
+def test_gp_page_expiry_is_independent_of_other_page_refresh() -> None:
+    from unittest.mock import patch
+    clock = [1000.0]
+    calls = []
+    def fetch(name):
+        calls.append(name)
+        return {"snapshot_id": "one", "page_html": name}
+    with patch.dict(web_app._GP_PAGE_CACHE, {"snapshot_id": "", "pages": {}}, clear=True), patch.object(web_app.time, "time", lambda: clock[0]), patch.object(web_app, "fetch_active_gp_page", fetch):
+        web_app.load_gp_page("gps.html")
+        clock[0] += 100
+        web_app.load_gp_page("gp-1.html")
+        clock[0] += 201
+        web_app.load_gp_page("gps.html")
+    assert calls == ["gps.html", "gp-1.html", "gps.html"]
+
+
+def test_new_gp_snapshot_invalidates_old_directory() -> None:
+    from unittest.mock import patch
+    version = ["old"]
+    def fetch(name):
+        return {"snapshot_id": version[0], "page_html": name}
+    with patch.dict(web_app._GP_PAGE_CACHE, {"snapshot_id": "", "pages": {}}, clear=True), patch.object(web_app, "fetch_active_gp_page", fetch):
+        web_app.load_gp_page("gps.html")
+        version[0] = "new"
+        web_app.load_gp_page("gp-1.html")
+        assert web_app.load_gp_page("gps.html")["snapshot_id"] == "new"
+
+
+def test_gp_outage_cache_has_time_limit() -> None:
+    from unittest.mock import patch
+    clock = [1000.0]
+    with patch.dict(web_app._GP_PAGE_CACHE, {"snapshot_id": "", "pages": {}}, clear=True), patch.object(web_app.time, "time", lambda: clock[0]), patch.object(web_app, "fetch_active_gp_page", return_value={"snapshot_id": "old", "page_html": "ok"}):
+        web_app.load_gp_page("gps.html")
+        with patch.object(web_app, "fetch_active_gp_page", side_effect=OSError("outage")):
+            clock[0] = 1301
+            assert web_app.load_gp_page("gps.html")["cache_status"] == "stale"
+            clock[0] = 5000
+            response = web_app.app.test_client().get("/gps.html")
+            assert response.status_code == 503
+
+
+def test_news_outage_serves_last_good_archive_then_returns_controlled_503() -> None:
+    from unittest.mock import patch
+    clock = [1000.0]
+    cache = {"expires_at": 0, "archive": [], "source": "empty", "last_success_at": None}
+    with patch.dict(newsletter_data._CACHE, cache, clear=True), patch.object(newsletter_data.time, "time", lambda: clock[0]), patch.object(newsletter_data, "fetch_supabase_archive", return_value=sample_archive()), patch.object(newsletter_data, "fetch_best_archive_fallback", return_value=([], "")):
+        archive, source = newsletter_data.load_archive()
+        assert source == "supabase"
+        with patch.object(newsletter_data, "fetch_supabase_archive", side_effect=OSError("outage")):
+            clock[0] = 1301
+            assert newsletter_data.load_archive() == (archive, "stale_cache")
+            health = web_app.app.test_client().get("/health.json")
+            assert health.status_code == 200
+            assert health.get_json()["status"] == "degraded"
+            assert health.get_json()["last_success_at"]
+            clock[0] = 5000
+            for route in ["/", "/health.json", "/archive.json"]:
+                assert web_app.app.test_client().get(route).status_code == 503
+
+
+def test_news_cold_start_outage_does_not_raise_http_500() -> None:
+    from unittest.mock import patch
+    cache = {"expires_at": 0, "archive": [], "source": "empty", "last_success_at": None}
+    with patch.dict(newsletter_data._CACHE, cache, clear=True), patch.object(newsletter_data, "fetch_supabase_archive", side_effect=OSError("outage")), patch.object(newsletter_data, "fetch_archive_url_from", side_effect=OSError("outage")):
+        client = web_app.app.test_client()
+        assert client.get("/").status_code == 503
+        assert client.get("/health.json").get_json()["status"] == "unavailable"
+
+
+def test_archive_fallback_fetches_share_a_bounded_timeout_budget() -> None:
+    from unittest.mock import patch
+    timeouts = []
+    def fetch(url, timeout):
+        timeouts.append(timeout)
+        raise OSError("timeout")
+    with patch.object(newsletter_data, "fetch_archive_url_from", fetch):
+        assert newsletter_data.fetch_best_archive_fallback([]) == ([], "")
+    assert len(timeouts) == 2
+    assert 0 < sum(timeouts) <= newsletter_data.DEFAULT_FALLBACK_BUDGET_SECONDS
+
+
 def main() -> int:
-    test_archive_from_supabase_rows_keeps_issue_skeletons_and_zero_section_order()
-    test_supabase_archive_filters_articles_to_selected_issue_window()
-    test_filter_and_group_articles()
-    test_load_archive_prefers_newer_raw_archive_when_supabase_lags()
-    test_load_archive_keeps_supabase_when_archive_fallback_is_not_newer()
-    test_vercel_app_uses_common_newsletter_ui()
-    test_vercel_app_serves_gp_pages_at_canonical_routes()
-    test_vercel_app_serves_gp_ranking_data_pack_as_a_download()
-    test_common_ui_marks_empty_issue_dates_for_public_users()
-    test_vercel_app_imports_from_repo_root_package_path()
-    test_vercel_runtime_has_no_standalone_ui_or_legacy_service_imports()
-    test_vercel_config_uses_flask_framework_without_catchall_index_rewrite()
-    print("newsletter web data tests passed")
-    return 0
+    from scripts.run_regression_tests import run_module_tests
+    return run_module_tests(sys.modules[__name__])
 
 
 if __name__ == "__main__":

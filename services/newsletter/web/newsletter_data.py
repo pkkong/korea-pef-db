@@ -6,6 +6,7 @@ import json
 import os
 import time
 from collections import OrderedDict
+from datetime import datetime, timezone
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -15,6 +16,8 @@ from urllib.request import Request, urlopen
 DEFAULT_ARCHIVE_URL = "https://pkkong.github.io/kpef-newsletter/archive.json"
 DEFAULT_RAW_ARCHIVE_URL = "https://raw.githubusercontent.com/pkkong/kpef-newsletter/gh-pages/archive.json"
 DEFAULT_CACHE_SECONDS = 300
+DEFAULT_STALE_IF_ERROR_SECONDS = 3600
+DEFAULT_FALLBACK_BUDGET_SECONDS = 4
 DEFAULT_SUPABASE_ISSUE_LIMIT = 30
 DEFAULT_SUPABASE_ROW_LIMIT = 1200
 
@@ -22,7 +25,27 @@ _CACHE: dict[str, Any] = {
     "expires_at": 0.0,
     "archive": [],
     "source": "empty",
+    "last_success_at": None,
 }
+
+
+class NewsletterDataError(RuntimeError):
+    """No upstream or recent last-good archive can serve this request."""
+
+
+UPSTREAM_ERRORS = (OSError, ValueError, UnicodeDecodeError)
+
+
+def archive_cache_status() -> dict[str, Any]:
+    last_success = _CACHE.get("last_success_at")
+    return {
+        "last_success_at": (
+            datetime.fromtimestamp(float(last_success), timezone.utc).isoformat(timespec="seconds")
+            if last_success is not None else None
+        ),
+        "cache_age_seconds": max(0, int(time.time() - float(last_success))) if last_success is not None else None,
+        "last_success_source": _CACHE.get("source", "empty"),
+    }
 
 
 def _clean_text(value: object) -> str:
@@ -197,10 +220,11 @@ def fetch_archive_url() -> list[dict[str, Any]]:
     return fetch_archive_url_from(archive_url)
 
 
-def fetch_archive_url_from(archive_url: str) -> list[dict[str, Any]]:
+def fetch_archive_url_from(archive_url: str, timeout: float = 20) -> list[dict[str, Any]]:
     data = _request_json(
         archive_url,
         headers={"User-Agent": "kpef-newsletter-vercel/1.0"},
+        timeout=timeout,
     )
     if not isinstance(data, list):
         return []
@@ -244,16 +268,24 @@ def archive_is_newer(candidate: list[dict[str, Any]], current: list[dict[str, An
 
 def fetch_best_archive_fallback(current_archive: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str]:
     best_archive: list[dict[str, Any]] = []
+    had_response = False
+    budget = max(0.1, float(os.environ.get("NEWSLETTER_FALLBACK_BUDGET_SECONDS", str(DEFAULT_FALLBACK_BUDGET_SECONDS))))
+    deadline = time.monotonic() + budget
     for url in archive_fallback_urls():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
         try:
-            candidate = fetch_archive_url_from(url)
-        except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
+            candidate = fetch_archive_url_from(url, timeout=min(remaining, budget / 2))
+        except UPSTREAM_ERRORS:
             continue
-        if archive_is_newer(candidate, current_archive) and (
+        had_response = True
+        # A published date with no articles is still a valid issue on cold start.
+        if (candidate and not current_archive or archive_is_newer(candidate, current_archive)) and (
             not best_archive or archive_is_newer(candidate, best_archive)
         ):
             best_archive = candidate
-    return best_archive, "archive_fallback" if best_archive else ""
+    return best_archive, "archive_fallback" if best_archive else ("archive" if had_response and not current_archive else "")
 
 
 def load_archive(force_refresh: bool = False) -> tuple[list[dict[str, Any]], str]:
@@ -265,25 +297,26 @@ def load_archive(force_refresh: bool = False) -> tuple[list[dict[str, Any]], str
     source = "supabase"
     try:
         archive = fetch_supabase_archive()
-        if not archive:
-            archive, source = fetch_best_archive_fallback([])
-            if not archive:
-                source = "archive"
-                archive = fetch_archive_url()
-        else:
-            fallback_archive, fallback_source = fetch_best_archive_fallback(archive)
-            if fallback_archive:
-                archive = fallback_archive
-                source = fallback_source
-    except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
+    except UPSTREAM_ERRORS:
+        archive = []
+
+    if archive:
+        fallback_archive, fallback_source = fetch_best_archive_fallback(archive)
+        if fallback_archive:
+            archive, source = fallback_archive, fallback_source
+    else:
         archive, source = fetch_best_archive_fallback([])
-        if not archive:
-            source = "archive"
-            archive = fetch_archive_url()
+        if not source:
+            stale_seconds = max(0, int(os.environ.get("NEWSLETTER_STALE_IF_ERROR_SECONDS", str(DEFAULT_STALE_IF_ERROR_SECONDS))))
+            stale_until = float(_CACHE.get("expires_at") or 0) + stale_seconds
+            if _CACHE.get("last_success_at") is not None and time.time() < stale_until:
+                return list(_CACHE["archive"]), "stale_cache"
+            raise NewsletterDataError("Newsletter sources are temporarily unavailable")
 
     _CACHE["archive"] = archive
     _CACHE["source"] = source
-    _CACHE["expires_at"] = now + max(cache_seconds, 30)
+    _CACHE["last_success_at"] = time.time()
+    _CACHE["expires_at"] = float(_CACHE["last_success_at"]) + max(cache_seconds, 30)
     return list(archive), source
 
 
