@@ -18,14 +18,14 @@
 
 2026-09-06 검토에서 확인한 오류는 소스 수정과 로컬 검증을 완료했다.
 검토 근거는 `docs/project_review_2026-09-06.md`, 수정 결과와 운영 반영 순서는
-`docs/project_fixes_2026-09-06.md`를 따른다. 운영 적용은 아직 하지 않았다.
+`docs/project_fixes_2026-09-06.md`를 따른다. 2026-09-07 뉴스·GP DB 보호 장치와 Vercel 앱을 운영에 반영했다. 최종 자료 발행 상태는 control center를 따른다.
 
 - 소스 수정 완료: 뉴스 태그·기사 연결과 People을 한 DB transaction에서 교체하고 실패 시 기존 자료를 보존한다.
 - 소스 수정 완료: FSS 변환 결과가 달라지면 새 버전을 만들며 공개된 과거 행의 변경을 차단한다.
 - 소스 수정 완료: 원문 cache cleanup의 목록 조회 실패도 경고로 처리한다.
 - 소스 수정 완료: 테스트 자동 수집, 0개 실행 방지, PR/push 검사와 LP 사업/회차 병합 오류를 수정했다.
 - 소스 수정 완료: GP 페이지별 cache 만료와 제한된 마지막 정상 자료 제공, 뉴스 장애 상태 응답, 공식 GP 메뉴 연결을 반영했다.
-- 다음 운영 단계: 새 DB migration 적용 → 새 동기화/발행 실행 → Vercel 앱 배포 → 공개 화면 검증. GP migration은 과거 profile 제약 migration 전체를 재실행하지 않는다.
+- 운영 반영: 뉴스·GP migration과 Vercel 앱 배포 완료. 새 뉴스·GP 동기화/발행과 공개 검증까지 성공했다. GP migration은 과거 profile 제약 migration 전체를 재실행하지 않는다.
 - 별도 제품 과제: LP의 Vercel route/public read model 이관을 완료한 뒤 LP 메뉴를 전환한다.
 
 1. `scripts/check_architecture_contracts.py`와 `scripts/check_public_frontend.py`가 실패하면 구조 리팩터링이나 UX 작업은 완료로 보지 않는다.
@@ -37,7 +37,11 @@
 
 ## 최근 처리
 
-- 2026-09-07 인계: 안정성 수정의 로컬 자동 검사 241개와 PostgreSQL 실패/rollback 검사 14개를 통과했다. 통합 frontend 검사는 기사 원문에 들어간 일반 영어 단어를 내부 필드로 오인하지 않으며, 아이콘 누락은 기존 운영 규칙대로 경고 처리한다. 운영 DB·공개 배포는 미적용이다.
+- 2026-09-08 완료 확인: 브리프·GP 배포와 새 동기화 검증 완료. 공개 브리프는 Vercel/Pages 모두 9월 8일자 19건으로 일치한다. 최종 CI 244개 발견·실패 0(전체 DB fixture 없는 5개 skip), SQL 실패 검사 14개 통과. LP 공고 화면은 아래 원본 복원 과제가 남아 기존 공개본을 보존한다.
+
+- 2026-09-07 운영 확인: 같은 날짜의 백업 기사 수가 더 많다는 이유로 정정 전 기사가 되살아나는 문제를 수정했다. 같은 날짜는 Supabase 공개본을 우선하며 0건 정정도 보존한다. Deal 세부 분류의 작성/검사 우선순위를 통일하고 LP schema 갱신의 최신 SQLite 호환 문제도 수정했다.
+
+- 2026-09-07 인계: 안정성 수정의 로컬 자동 검사 241개와 PostgreSQL 실패/rollback 검사 14개를 통과했다. 통합 frontend 검사는 기사 원문에 들어간 일반 영어 단어를 내부 필드로 오인하지 않으며, 아이콘 누락은 기존 운영 규칙대로 경고 처리한다. 이후 사용자의 배포 지시로 뉴스·GP DB와 Vercel 앱에 반영했다. LP 화면은 전체 원본 복원 전까지 보존한다.
 
 - 2026-06-21: LP/GP/Market empty-state UX를 table-like shell 안에 고정했다. 로컬 DB나 export가 비어도 `lp-directory-card`, `gp-card`, Market chart container가 사라지지 않으며, `scripts/check_public_frontend.py`와 390px/1280px browser smoke가 이를 확인한다.
 - 2026-06-21: 구조 재발 방지 계약을 코드로 추가했다. `scripts/check_architecture_contracts.py`는 LP/GP/Wiki의 newsletter-private import, newsletter-only/Vercel import isolation, newsletter workflow 역할 침범, generated output tracking을 검사한다. Newsletter workflow의 mirror freshness, archive download, public mirror verification, Vercel verification, watchdog freshness 판단은 `services/newsletter/src/newsletter_public_status.py`로 이동했다.
@@ -69,6 +73,8 @@
 - 검색 placeholder는 `뉴스·기관·운용사 검색`처럼 실제 검색 범위와 맞춘다.
 
 ## LP
+
+- 배포 차단(2026-09-07): 전체 검수 monitor/DB를 복원해야 LP 공고 재배포가 가능하다. 공개 legacy JSON은 현재 공고 대표 원문 5개와 검수 필드가 누락되어 대체 원본으로 부적합하다. `build_lp_service_pages.py --monitor`가 목록에도 동일한 입력을 사용하도록 계약을 정리한 뒤, 기존 83개 공고의 출처·이력과 상세 URL 보존을 확인한다. 이번 오류 수정 배포에서는 기존 LP 공개본을 보존했다.
 
 - 출자기관 디렉토리는 직접 GP/위탁운용사를 선정하는 LP만 보여준다. OCIO 또는 전담운용사가 하위 운용사 선정 실무를 맡는 공적기금·위임형 자금 주체는 `coverage_tier=ocio`, `display_enabled=0`으로 별도 pool에 보관하고 공개 기본 목록에서 제외한다.
 - 출자기관 공개 노출은 공식 기관 성격이 아니라 실제 PE/VC/대체 출자공고·선정 이력 기준으로 판단한다. 이력 0건 기관은 후보로 숨기고, KIC·수협·캠코처럼 사용자가 명시한 전략기관만 예외로 공개 유지한다.

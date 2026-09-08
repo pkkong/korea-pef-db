@@ -104,7 +104,7 @@ Brief, LP, GP는 하나의 제품 안에서 보이지만 각각 독립적으로 
 
 Brief와 GP는 현재 이 `Supabase → Vercel` 경로로 공개된다. LP는 local collector와 static export에서 Supabase canonical/public read model로 옮기는 작업이 남아 있으며, 이 전환이 끝나기 전까지 GitHub Pages나 로컬 export를 LP 서비스의 기본 운영 경로로 보지 않는다.
 
-2026-09-06 점검 당시 LP Vercel 경로는 아직 없고 Pages 공고 페이지가 실제 메뉴 연결 대상이었다. 따라서 이번 오류 수정은 Brief의 GP 메뉴만 공식 `/gps.html`로 연결하고 LP 링크는 이전 완료까지 유지한다. 데이터 갱신 안전성·장애 응답 수정은 로컬 검증을 마쳤으며 운영 적용 여부는 `docs/project_lead_control_center.md`와 `docs/project_fixes_2026-09-06.md`에서 구분한다.
+2026-09-06 점검 당시 LP Vercel 경로는 아직 없고 Pages 공고 페이지가 실제 메뉴 연결 대상이었다. 따라서 이번 오류 수정은 Brief의 GP 메뉴만 공식 `/gps.html`로 연결하고 LP 링크는 이전 완료까지 유지한다. 데이터 갱신 안전성·장애 응답 수정은 2026-09-07 뉴스·GP DB와 Vercel 앱에 반영했다. LP 화면은 전체 검수 원본 복원이 필요해 기존 공개본을 보존한다. 상세 운영 적용 결과는 `docs/project_lead_control_center.md`와 `docs/project_fixes_2026-09-06.md`에서 구분한다.
 
 ## 완료 기준
 

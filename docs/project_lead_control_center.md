@@ -1,6 +1,6 @@
 # 프로젝트 리드 현재 상태판
 
-최종 수정: 2026-09-07 KST
+최종 수정: 2026-09-08 KST
 
 이 문서는 Project Lead가 현재 프로젝트 상태를 잃지 않기 위한 운영판이다. 새 채팅방, 서브에이전트, 별도 담당자가 작업을 시작할 때는 먼저 이 문서를 읽고, 작업이 끝나면 필요한 변경을 여기에 반영한다.
 
@@ -50,7 +50,11 @@
 ## 현재 작업판
 
 - 2026-09-06 검토 후 수정, 2026-09-07 인계: `docs/project_fixes_2026-09-06.md`에 수정 결과와 운영 반영 순서를 기록했다. 뉴스·People 갱신 실패 시 기존 자료 보존, 수정된 FSS 자료의 새 버전 발행, 원문 정리 실패의 경고 처리, LP 사업명/회차 병합, GP 페이지별 캐시 만료, 장애 응답, 브리프 GP 메뉴를 소스에서 수정했다. 자동 검사 241개(누락·실패 0개), PostgreSQL 장애 검사 14개, 실제 로컬 FSS 60,269행 및 People 877행의 임시 DB 발행을 통과했다. 통합 빌드와 frontend/architecture/Flask smoke도 통과했다. 로컬 LP 입력은 없어 채워진 LP 전체 화면은 미검증이다.
-- 현재 배포 상태: commit/push, 운영 DB migration, Vercel/Pages 배포는 실행하지 않았다. 새 동기화 코드를 실행하기 전에 뉴스레터 atomic sync migration과 GP canonical safety migration을 먼저 적용해야 한다. `Apply GP Supabase migrations`는 기존 FSS/People 스키마 위에 새 안전성 migration만 적용하며, 과거 GP 페이지 제약 migration을 재실행하지 않는다. GP 발행 두 workflow와 migration은 `gp-publish`로 직렬 실행한다.
+- 2026-09-07 운영 배포: 사용자가 배포를 명시 지시했다. 소스 `02f218b`(안전성), `4c61278`(LP SQLite 호환), `82c3015`(Deal 분류 검사 일치), `7a1896c`(Supabase People 교체 조건)를 main에 반영했다. 뉴스 migration `34073780498`, GP migration `34073781843` 및 후속 `34111886362`, Vercel 앱 배포 `34111607800` 성공. GP 발행 `34111961285`는 FSS 60,269행·People 관련 956행을 안전하게 반영하고 공개 페이지 186개를 발행해 Vercel까지 검증했다. canonical ID는 `fss-core-2025q4-ec864d1a2f16-267ab6e750b26a69f8988d02`, public ID는 `fss-2025q4-ec864d1a2f16-91fd1930ab37`이다. 최종 CI `34111887301` 성공(243개 발견, 전체 실데이터 fixture 없는 5개 명시 skip); 로컬은 243개 전부 통과, SQL 실패 검사 14개 통과.
+- 배포 중 확인한 추가 결함: Supabase safeupdate가 WHERE 없는 People DELETE를 거부해 첫 GP run `34111610359`는 rollback됐다. 보호 설정을 해제하지 않고 후속 migration `20260907110000_gp_people_safeupdate_predicate.sql`로 명시적 조건을 추가했다. GP migration workflow는 9월 6일 안전성 migration과 이 후속 보정만 적용하며 과거 profile 제약을 재실행하지 않는다. GP 발행과 migration은 `gp-publish`로 직렬 실행한다.
+- 뉴스 새 경로 검증: 자동 mirror `34084940305`와 sync `34085134733` 성공. 최종 코드의 수동 재발행 `34111915257`와 sync `34112268116`도 성공했다. 실제 브라우저에서 9월 7일 브리프, 9월 5일 날짜 이동, 공식 GP 메뉴, 390px 모바일 Brief/GP와 console error 없음을 확인했다.
+- 최종 완료 확인(2026-09-08 21:20 KST): `524fb69`는 정정된 같은 날짜의 Supabase 기사보다 예전 백업의 많은 기사 수를 우선하던 문제를 수정했다. Vercel 최종 배포 `34112456563` 성공, CI `34112456549`는 244개 발견·실패 0·fixture 없는 5개 명시 skip, SQL 실패 검사 14개 통과다. 공개 Vercel과 Pages 모두 9월 8일자 19건, 30일 archive이며 Vercel은 `status=ok`, `data_source=supabase`, `stale=false`다. 브리프와 GP 배포는 완료, LP 화면은 아래 원본 복원 조건 때문에 보류다.
+- LP 화면 배포 보류: 전체 검수 monitor/DB가 없고 공개 legacy JSON은 현재 83개 카드의 대표 원문 중 5개가 누락됐다. 원본 복원 전까지 기존 LP HTML/상세 URL/기관 프로필을 유지한다. `--monitor`가 목록에도 동일하게 전달되도록 LP builder 계약을 정리한 뒤 재발행한다. 상세 근거는 `docs/project_fixes_2026-09-06.md`에 있다.
 - LP Vercel 이전은 별도 잔여 과제다. 검토 당시 Vercel LP route는 없고 Pages가 실제 연결 경로였으므로, 이번 수정은 GP 메뉴만 `/gps.html`로 전환하고 LP 링크를 유지한다. 기존 검토 근거는 `docs/project_review_2026-09-06.md`에 보존했다.
 
 - 이 채팅방의 현재 책임: LP Notice 출시 품질, LP/GP 통합, 빌드 분리, 공개 배포 준비성, 문서 운영 기준을 관리한다.

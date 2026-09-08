@@ -136,7 +136,7 @@ GitHub Actions의 `Build newsletter mirror`는 다음 순서로 실행한다.
 
 따라서 노트북에 있는 `db/*.sqlite` 파일을 수집 이력이나 발행 기준으로 쓰지 않는다.
 
-### 동기화 교체 계약 (소스 반영, 운영 migration 대기)
+### 동기화 교체 계약 (2026-09-07 운영 migration 적용)
 
 - `newsletter_atomic_sync.py`는 전체 payload를 비공개 `newsletter_sync_parts`에 제한된 크기로 적재한 뒤 `publish_newsletter_sync`를 한 번 호출한다. 건수·참조 검사와 운영 테이블 갱신은 하나의 transaction이며, 중간 오류는 모두 rollback한다.
 - canonical 태그/entity 교체 범위는 전달된 document로 한정한다. payload에 없는 기사의 연결을 지우지 않는다.
@@ -163,6 +163,10 @@ recovery workflow로 공개 read model만 다시 맞춘다. 같은 발행일을 
 기존 `newsletter_issue_articles` 연결 삭제와 archive 기준 재삽입을 하나의 DB transaction에서
 완료해야 한다. 별도 REST DELETE와 POST로 나누면 안 된다. 그렇지 않으면 public mirror보다 Supabase/Vercel 기사 수가 많아지는 stale
 link가 생긴다.
+
+같은 발행일의 백업 기사 수가 더 많다고 더 최신인 것으로 판단하지 않는다. 정정으로
+기사가 줄거나 0건이 될 수 있으므로 같은 날짜는 Supabase 공개본을 우선한다. 백업의
+발행일이 더 최신이거나 정식 자료 조회가 실패한 경우에만 fallback으로 대체한다.
 
 Vercel archive 재구성은 두 층을 함께 읽어야 한다.
 
@@ -242,13 +246,13 @@ profile 필드가 사라지거나 다른 GP에 옮겨가면 안 된다.
 이 분리는 "People 수정 때문에 금감원 재수집"과 "개발자 로컬 SQLite가 서비스 기준"이라는
 두 운영 오류를 막기 위한 계약이다.
 
-### FSS / People 교체 계약 (소스 반영, 운영 migration 대기)
+### FSS / People 교체 계약 (2026-09-07 운영 migration 적용)
 
 - FSS 버전에는 source registry, alias rule, 변환된 모든 테이블의 내용을 반영한다. 실행 시각만 달라지면 같은 버전이며, 수정·삭제된 행은 새 버전이 된다.
 - 공개하거나 보관으로 전환한 FSS 행은 변경·삭제하지 않는다. 새 버전의 테이블별 건수와 내용 digest가 모두 맞아야 `publish_fss_canonical_snapshot`이 공개 상태를 바꾼다.
 - `replace_people_canonical`은 People과 모든 자식 테이블, `people_data_state`, 선택적인 FSS 공개 전환을 하나의 transaction으로 처리한다. 이전 FSS 버전에 기반한 뒤늦은 People 실행은 거부한다. People 단일 요청은 클라이언트에서 8 MB로 제한한다.
 - FSS와 People의 DB 발행은 같은 advisory lock을 사용한다. GP의 두 발행 workflow와 migration workflow도 `gp-publish` concurrency를 공유한다.
-- 기존 FSS/People schema가 있는 DB에 `20260906100000_gp_canonical_safe_publish.sql`을 적용한 뒤 새 클라이언트를 실행한다. GP 전용 workflow는 이 새 migration만 적용한다. 과거 GP profile 제약을 전체 재적용하면 이미 있는 People 페이지를 거부할 수 있다.
+- 기존 FSS/People schema가 있는 DB에 `20260906100000_gp_canonical_safe_publish.sql`을 적용한 뒤 새 클라이언트를 실행한다. GP 전용 workflow는 이 migration과 `20260907110000_gp_people_safeupdate_predicate.sql` 후속 보정을 적용한다. Supabase의 safeupdate 보호를 유지하기 위해 People 교체 DELETE도 명시적 조건을 사용한다. 과거 GP profile 제약을 전체 재적용하면 이미 있는 People 페이지를 거부할 수 있다.
 - 뉴스레터 migration workflow는 GP와 FSS 파일을 모두 제외한다. 오래된 FSS 발행 함수를 뉴스레터 작업에서 덮어쓰면 안 된다.
 
 ### FSS 원본 보관
