@@ -3,7 +3,7 @@ body.lp-sample {background:var(--bg);font-family:Pretendard,"Pretendard Variable
 .lp-sample main {max-width:900px;min-height:100vh;background:var(--surface);padding:0 32px 120px}
 .sample-brand{display:flex;align-items:center;gap:12px;height:60px;border-bottom:1px solid var(--separator);margin-bottom:24px;font-weight:750;letter-spacing:-.4px}
 .sample-brand a{text-decoration:none;font-size:19px}.sample-brand span{font-size:12px;color:var(--secondary);border-left:1px solid var(--separator);padding-left:12px}
-.lp-sample a{color:inherit}.back{display:inline-flex;align-items:center;min-height:36px;font-size:13px;color:var(--secondary)!important}
+.lp-sample main a{color:inherit}.back{display:inline-flex;align-items:center;min-height:36px;font-size:13px;color:var(--secondary)!important}
 .detail-header{margin-top:14px;margin-bottom:26px;padding-bottom:24px}.institution{font-size:14px;color:var(--secondary)!important;text-decoration:none}.detail-header h1{font-size:27px;line-height:1.4;letter-spacing:-.8px;margin:10px 0 16px}
 .detail-meta{flex-wrap:wrap;gap:10px}.detail-meta>a{font-size:13px;min-height:32px;display:inline-flex;align-items:center}.badge{background:var(--surface-muted);color:var(--secondary);padding:6px 9px}
 .lp-sample h2{font-size:18px;letter-spacing:-.4px;margin:28px 0 14px}.lp-sample section{margin-bottom:30px}
