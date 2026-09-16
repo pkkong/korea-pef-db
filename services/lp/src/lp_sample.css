@@ -20,3 +20,8 @@ body.lp-sample {background:var(--bg);font-family:Pretendard,"Pretendard Variable
  .controls{display:grid;grid-template-columns:1fr 1fr}.controls input{grid-column:1/-1;min-width:0;width:100%}.controls select{min-width:0;width:100%}
  .lp-sample .bottom-nav{padding:7px 10px calc(7px + env(safe-area-inset-bottom))}.stage-flow{padding:10px 12px}.stage-flow li+li:before{margin-right:12px}
 }
+/* Compact schedule: dates and stages remain side by side on mobile. */
+.lp-sample .stage-flow{background:none;border-radius:0;padding:4px 0 16px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-bottom:1px solid var(--separator);margin-bottom:0;text-align:center;color:var(--text);font-weight:600}
+.stage-flow li{position:relative}.lp-sample .stage-flow li+li:before{position:absolute;left:-5px;margin:0;color:var(--tertiary);font-weight:400}
+.lp-sample #schedule .event-list{border-top:0}.lp-sample #schedule .event{grid-template-columns:140px minmax(0,1fr);gap:16px;padding:13px 0;align-items:baseline}.lp-sample #schedule .event time{grid-column:1;grid-row:1;font-size:13px;line-height:1.5}.lp-sample #schedule .event>div{grid-column:2;grid-row:1}.lp-sample #schedule .event strong{font-size:14px}.lp-sample #schedule .event small{font-size:12px;margin-top:4px}.lp-sample #schedule .event>a{grid-column:2;grid-row:2;min-height:0}.lp-sample #schedule .planned-label{font-size:10px;margin-left:4px;padding:1px 4px}
+@media(max-width:600px){.lp-sample #schedule .event{grid-template-columns:105px minmax(0,1fr);gap:12px;padding:12px 0}.lp-sample #schedule .event time{font-size:12px}.lp-sample #schedule .event small{word-break:keep-all;overflow-wrap:anywhere}.lp-sample .stage-flow{font-size:12px}}
