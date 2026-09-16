@@ -73,3 +73,6 @@ Thumbs.db
 
 # Local SQL regression runtime
 node_modules/
+
+# Generated LP sample pages for Vercel deployment
+services/newsletter/web/lp_samples/

@@ -1,0 +1,787 @@
+{
+  "as_of": "2026-09-13",
+  "programs": [
+    {
+      "id": "moel-iaci-2026-pe",
+      "institution_id": "moel_iaci",
+      "institution_name": "산재보험기금",
+      "title": "2026년 산재보험기금 대체투자상품 PE 선정",
+      "asset_scope": "PE",
+      "status": "선정 완료",
+      "events": [
+        {
+          "date": "2026-07-01",
+          "type": "모집 공고",
+          "title": "PEF·VC 모집 공고",
+          "url": "https://www.samsungfund.com/fund/lounge/notice-view.do?no=242508"
+        },
+        {
+          "date": "2026-08-25",
+          "type": "최종 선정",
+          "title": "PE 최종 선정 결과",
+          "url": "https://www.samsungfund.com/fund/lounge/notice-view.do?no=244408"
+        }
+      ],
+      "selected_gps": [
+        {
+          "name": "비엔더블유인베스트먼트",
+          "source_url": "https://www.samsungfund.com/fund/lounge/notice-view.do?no=244408",
+          "asset_scope": "PE",
+          "master_id": "240",
+          "master_name": "비엔더블유인베스트먼트",
+          "identity_match": "exact_name",
+          "identity_source": "exports/gp_profile_master.csv"
+        },
+        {
+          "name": "에이치앤큐에쿼티파트너스",
+          "source_url": "https://www.samsungfund.com/fund/lounge/notice-view.do?no=244408",
+          "asset_scope": "PE",
+          "master_id": "11866",
+          "master_name": "에이치앤큐에쿼티파트너스",
+          "identity_match": "exact_name",
+          "identity_source": "exports/gp_profile_master.csv"
+        },
+        {
+          "name": "제네시스프라이빗에쿼티",
+          "source_url": "https://www.samsungfund.com/fund/lounge/notice-view.do?no=244408",
+          "asset_scope": "PE",
+          "master_id": "20271",
+          "master_name": "제네시스프라이빗에쿼티",
+          "identity_match": "exact_name",
+          "identity_source": "exports/gp_profile_master.csv"
+        }
+      ],
+      "verifiedfacts": [
+        "PEF 모집 예정액 1,800억원·3건(VC 900억원·3건 별도)",
+        "최종 결과 본문에 PE 선정 3개사 명시",
+        "게시 운영사 삼성자산운용과 기금 출자주체 구분"
+      ],
+      "unknowns": [
+        "GP별 배정액 미확인",
+        "납입·펀드 결성 미확인",
+        "공고 첨부 접수마감일 미검수"
+      ],
+      "commitment_amount_krw": 180000000000,
+      "deadline": null,
+      "status_as_of": "2026-09-13",
+      "checked_at": "2026-09-13",
+      "verification_method": "기관 공식 게시글 HTML 본문 직접 확인",
+      "commitment_label": "PEF 모집 예정액 1,800억원",
+      "summary": "PEF 모집 예정액 1,800억원·3건(VC 900억원·3건 별도)",
+      "planned_events": [],
+      "primary_investment_review": {
+        "program_id": "moel-iaci-2026-pe",
+        "verified": false,
+        "text": null,
+        "source_url": "https://www.samsungfund.com/fund/lounge/notice-view.do?no=242508",
+        "attachment_urls": [
+          "https://www.samsungfund.com/fund/download.do?fileSeq=242508&fileNo=1",
+          "https://www.samsungfund.com/fund/download.do?fileSeq=242508&fileNo=2"
+        ],
+        "page": null,
+        "source_location": "선정 공고 1. 선정 개요 / PEF 제안요청서 Ⅴ. 투자전략·프로세스, Ⅵ. 운용전략 적합성",
+        "source_excerpt": "투자대상 및 비중에 대한 계획 / 주요 투자대상(투자규모, 업종, 분야 등)",
+        "unavailable_reason": "공고와 PEF RFP에서 특정 투자대상·정량 의무투자비율을 확인하지 못함. 운용사 투자대상·비중 계획을 제출하도록 요구. HWP 텍스트 추출로 확인했고 페이지 번호는 확보하지 못함.",
+        "notes": [
+          "공고의 선정 목적은 위탁운용을 통한 수익률 제고이나 이를 주목적 투자대상으로 표시하지 않음",
+          "ESG·근로자 안전·고용창출 등은 평가·가점 관련 조건으로 의무투자비율 아님"
+        ],
+        "checked_at": "2026-09-15",
+        "original_notice_checked": true
+      },
+      "primary_investment": {
+        "text": "별도 투자대상·의무비율 미확인",
+        "source_url": "https://www.samsungfund.com/fund/lounge/notice-view.do?no=242508",
+        "source_page": null,
+        "verified": false
+      }
+    },
+    {
+      "id": "pck-pension-2026-h2-pe",
+      "institution_id": "pck_pension",
+      "institution_name": "대한예수교장로회 총회연금재단",
+      "title": "2026년 하반기 대체투자 위탁운용사 선정 · PE 부문",
+      "asset_scope": "PE",
+      "status": "선정 완료",
+      "events": [
+        {
+          "date": "2026-07-08",
+          "type": "모집 공고",
+          "title": "하반기 PE·VC·Infra·PD 모집",
+          "url": "https://www.pension.or.kr/modu/s_board/read.asp?board_seq=1&board_sub_seq=1&seq=8704"
+        },
+        {
+          "date": "2026-08-11",
+          "type": "최종 선정",
+          "title": "2026년 위탁운용사 최종 선정",
+          "url": "https://www.pension.or.kr/modu/s_board/read.asp?board_seq=1&board_sub_seq=1&seq=8729"
+        }
+      ],
+      "selected_gps": [
+        {
+          "name": "비엔더블유인베스트먼트",
+          "source_url": "https://www.pension.or.kr/modu/s_board/read.asp?board_seq=1&board_sub_seq=1&seq=8729",
+          "asset_scope": "PE",
+          "master_id": "240",
+          "master_name": "비엔더블유인베스트먼트",
+          "identity_match": "exact_name",
+          "identity_source": "exports/gp_profile_master.csv"
+        }
+      ],
+      "verifiedfacts": [
+        "전체 대체투자 최대 1,000억원; PE 전용 예산으로 해석하지 않음",
+        "PEF 선정 1개사. VC 선정 IMM인베스트먼트·LB인베스트먼트는 PE 선정표에서 제외",
+        "원문은 약칭 BNW가 아닌 비엔더블유인베스트먼트로 명시"
+      ],
+      "unknowns": [
+        "PE 배정액·납입·결성 미확인",
+        "결과 제목에 하반기 없음. 동일기관·연도·분야·시간순서로 연결한 것으로 원공고번호 역참조는 없음"
+      ],
+      "commitment_amount_krw": null,
+      "deadline": null,
+      "status_as_of": "2026-09-13",
+      "checked_at": "2026-09-13",
+      "verification_method": "기관 공식 게시글 HTML 본문 직접 확인",
+      "commitment_label": "전체 대체투자 최대 1,000억원 · PE 배정 미확인",
+      "summary": "전체 대체투자 최대 1,000억원 · PE 배정액 미확인",
+      "planned_events": [],
+      "linkage_note": "모집 공고와 최종 결과는 같은 기관·연도·분야를 기준으로 연결했습니다. 결과에 원공고 번호가 없어 동일 사업인지 추가 확인이 필요합니다.",
+      "primary_investment_review": {
+        "program_id": "pck-pension-2026-h2-pe",
+        "verified": false,
+        "text": null,
+        "source_url": "https://www.pension.or.kr/modu/s_board/read.asp?board_seq=1&board_sub_seq=1&seq=8704",
+        "page": "ZIP 내 세부 선정계획 및 가이드라인 PDF 전체 6페이지",
+        "source_excerpt": "운용사의 투자철학 및 투자전략, 투자판단 기준",
+        "unavailable_reason": "공식 세부계획·가이드라인에서 PE 특정 투자대상이나 의무투자비율을 확인하지 못함. 운용사가 Target Sector·포트폴리오 전략을 제안하도록 되어 있음. 자산분야 PE 또는 수익률 제고를 주목적으로 대체하지 않음.",
+        "notes": [
+          "전체 대체투자 모집이고 PE 전용 주목적은 확인되지 않음",
+          "기관출자확약30% 등은 펀드 결성 조건이며 주목적 투자비율이 아님"
+        ],
+        "checked_at": "2026-09-15",
+        "original_notice_checked": true
+      },
+      "primary_investment": {
+        "text": "별도 투자대상·의무비율 미확인",
+        "source_url": "https://www.pension.or.kr/modu/s_board/read.asp?board_seq=1&board_sub_seq=1&seq=8704",
+        "source_page": "ZIP 내 세부 선정계획 및 가이드라인 PDF 전체 6페이지",
+        "verified": false
+      }
+    },
+    {
+      "id": "kgrowth-2026-bank-valueup-3",
+      "institution_id": "kgrowth",
+      "institution_name": "한국성장금융",
+      "title": "은행권 중견기업 밸류업펀드 3차 · 블라인드",
+      "asset_scope": "PEF·신기술조합·벤처조합 등",
+      "status": "선정 완료",
+      "events": [
+        {
+          "date": "2026-06-04",
+          "type": "모집 공고",
+          "title": "위탁운용사 선정계획 공고",
+          "url": "https://www.kgrowth.or.kr/notice_view.asp?idx=1047&str_type=1&tab=1"
+        },
+        {
+          "date": "2026-07-07",
+          "type": "접수 현황",
+          "title": "17개 펀드 접수",
+          "url": "https://www.kgrowth.or.kr/notice_view.asp?idx=1075&str_type=1&tab=1"
+        },
+        {
+          "date": "2026-07-23",
+          "type": "서류심사 결과",
+          "title": "6개 운용팀 서류심사 통과",
+          "url": "https://www.kgrowth.or.kr/notice_view.asp?idx=1090&str_type=1&tab=1"
+        },
+        {
+          "date": "2026-07-31",
+          "type": "최종 선정",
+          "title": "최종 운용사 3개사 선정",
+          "url": "https://www.kgrowth.or.kr/notice_view.asp?idx=1100&str_type=1&tab=1"
+        }
+      ],
+      "selected_gps": [
+        {
+          "name": "에스지프라이빗에쿼티",
+          "source_url": "https://www.kgrowth.or.kr/notice_view.asp?idx=1100&str_type=1&tab=1",
+          "asset_scope": "공식 선정 확인 · 세부 펀드유형 확인 필요",
+          "master_id": "138",
+          "master_name": "에스지프라이빗에쿼티",
+          "identity_match": "exact_name",
+          "identity_source": "exports/gp_profile_master.csv"
+        },
+        {
+          "name": "우리프라이빗에퀴티자산운용",
+          "source_url": "https://www.kgrowth.or.kr/notice_view.asp?idx=1100&str_type=1&tab=1",
+          "asset_scope": "공식 선정 확인 · 세부 펀드유형 확인 필요",
+          "master_id": "719",
+          "master_name": "우리프라이빗에퀴티자산운용",
+          "identity_match": "exact_name",
+          "identity_source": "exports/gp_profile_master.csv"
+        },
+        {
+          "name": "케이엘앤파트너스",
+          "source_url": "https://www.kgrowth.or.kr/notice_view.asp?idx=1100&str_type=1&tab=1",
+          "asset_scope": "공식 선정 확인 · 세부 펀드유형 확인 필요",
+          "master_id": "290",
+          "master_name": "케이엘앤파트너스",
+          "identity_match": "exact_name",
+          "identity_source": "exports/gp_profile_master.csv"
+        }
+      ],
+      "verifiedfacts": [
+        "모집→17개펀드 접수→6팀 서류통과→3개사 선정 동일 사업명으로 확인",
+        "한국성장금융은 사업 운용·선정 주체; 자기자금 직접 출자로 간주하지 않음"
+      ],
+      "unknowns": [
+        "공식 모집 PDF 다운로드가 비정상 접근 안내로 반환되어 펀드유형·예산·마감일 미검수",
+        "공식 HTML 본문에는 PEF 법적 유형 명시 없음",
+        "최종 배정액·납입·결성 미확인"
+      ],
+      "commitment_amount_krw": 150000000000,
+      "deadline": null,
+      "attachments": [
+        {
+          "title": "공식 모집 공고 PDF",
+          "url": "https://www.kgrowth.or.kr/down_file.asp?idx=1047&SelType=Notice1",
+          "verification_status": "다운로드 제한으로 미검수"
+        }
+      ],
+      "shortlisted_gps": [
+        "에스지프라이빗에쿼티",
+        "엔에이치투자증권-시너지아이비투자",
+        "우리프라이빗에퀴티자산운용",
+        "케이비인베스트먼트",
+        "케이엘앤파트너스",
+        "큐리어스파트너스"
+      ],
+      "status_as_of": "2026-09-13",
+      "checked_at": "2026-09-13",
+      "verification_method": "기관 공식 게시글 HTML 본문 직접 확인",
+      "commitment_label": "1,500억원 · 3개사",
+      "summary": "블라인드 1,500억원 · 3개사 선정",
+      "planned_events": [],
+      "primary_investment_review": {
+        "program_id": "kgrowth-2026-bank-valueup-3",
+        "verified": true,
+        "text": "중견·초기 중견·예비 중견기업에 약정총액의 50%와 모펀드 출자액의 2배 중 작은 금액 이상 투자. 의무투자액 중 초기·예비 중견 20% 이상, 중견·초기 중견 70% 이상. 메자닌(CB·BW·EB)에 약정총액의 20% 이상.",
+        "source_url": "https://www.kgrowth.or.kr/notice_view.asp?idx=1047&str_type=1&tab=1",
+        "attachment_url": "https://www.kgrowth.or.kr/down_file.asp?idx=1047&SelType=Notice1",
+        "page": "공고 PDF 2페이지",
+        "source_excerpt": "Min(약정총액의 50% 이상 투자, 모펀드 출자액의 2배 이상 투자)",
+        "conditions": [
+          {
+            "target": "① 중견기업 ② 초기 중견기업 ③ 예비 중견기업",
+            "minimum_formula": "min(약정총액 × 50%, 모펀드 출자액 × 2)",
+            "basis": "주목적 의무투자액",
+            "page": 2
+          },
+          {
+            "target": "② 초기 중견 + ③ 예비 중견",
+            "minimum_percent": 20,
+            "basis": "주목적 의무투자액",
+            "page": 2
+          },
+          {
+            "target": "① 중견 + ② 초기 중견",
+            "minimum_percent": 70,
+            "basis": "주목적 의무투자액",
+            "page": 2
+          },
+          {
+            "target": "메자닌 CB·BW·EB",
+            "minimum_percent": 20,
+            "basis": "약정총액",
+            "page": 2
+          }
+        ],
+        "notes": [
+          "각 의무조건을 모두 충족해야 함",
+          "상호출자제한 기업집단 소속은 제외하되 펀드투자로 분리되는 중소·중견기업은 포함 가능",
+          "중견기업이 SI로 참여한 투자건의 주목적 인정은 사전협의 필요",
+          "공식 공고는 기관전용 PEF 외 신기술조합·벤처조합 등도 허용하므로 전체사업을 기관전용 PEF만으로 단정하지 말 것",
+          "공고에 블라인드 1,500억원과 프로젝트 약502.5억원이 함께 포함됨. 현재 3사 결과는 블라인드 분야 연결로 해석, 프로젝트까지 선정 완료 취급하지 말 것"
+        ],
+        "unavailable_reason": null,
+        "checked_at": "2026-09-15",
+        "original_notice_checked": true
+      },
+      "primary_investment": {
+        "text": "중견·초기 중견·예비 중견기업에 약정총액의 50%와 모펀드 출자액의 2배 중 작은 금액 이상 투자. 의무투자액 중 초기·예비 중견 20% 이상, 중견·초기 중견 70% 이상. 메자닌(CB·BW·EB)에 약정총액의 20% 이상.",
+        "source_url": "https://www.kgrowth.or.kr/notice_view.asp?idx=1047&str_type=1&tab=1",
+        "source_page": "공고 PDF 2페이지",
+        "verified": true,
+        "items": [
+          "중견·초기 중견·예비 중견기업: 약정총액 50%와 모펀드 출자액 2배 중 작은 금액 이상",
+          "위 의무투자액 중 초기·예비 중견 20% 이상, 중견·초기 중견 70% 이상",
+          "메자닌(CB·BW·EB): 약정총액 20% 이상"
+        ]
+      }
+    },
+    {
+      "id": "koreapost-2026-domestic-pe",
+      "institution_id": "koreapost",
+      "institution_name": "우정사업본부",
+      "title": "2026년도 우체국금융 국내 블라인드 PEF 위탁운용사 선정",
+      "asset_scope": "국내 PE",
+      "status": "접수 중",
+      "events": [
+        {
+          "date": "2026-09-10",
+          "type": "모집 공고",
+          "title": "우정사업본부 공고 제2026-124호",
+          "url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400"
+        }
+      ],
+      "selected_gps": [],
+      "verifiedfacts": [
+        "일반리그 2,000억원 이내·3~4개사",
+        "루키리그 450억원 이내·2~3개사",
+        "일반 Growth(Mezzanine 70% 이상), 루키 Buyout 및 Growth",
+        "공식 접수마감 2026-09-28 16시로 9/13 기준 접수 중"
+      ],
+      "unknowns": [
+        "향후 일정 변경 가능",
+        "선정 GP·최종 배정액 미정"
+      ],
+      "commitment_amount_krw": 245000000000,
+      "deadline": "2026-09-28T16:00:00+09:00",
+      "segments": [
+        {
+          "name": "일반",
+          "amount_krw": 200000000000,
+          "manager_count": "3~4개사"
+        },
+        {
+          "name": "루키",
+          "amount_krw": 45000000000,
+          "manager_count": "2~3개사"
+        }
+      ],
+      "status_as_of": "2026-09-13",
+      "checked_at": "2026-09-13",
+      "verification_method": "기관 공식 게시글 HTML 본문 직접 확인",
+      "commitment_label": "총 2,450억원 이내",
+      "summary": "일반 2,000억원·루키 450억원 이내 · 9월 28일 16시 마감 예정",
+      "planned_events": [
+        {
+          "date": "2026-09-28",
+          "type": "접수 마감 예정",
+          "title": "제안서 접수 마감 · 16:00",
+          "url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400",
+          "is_planned": true
+        }
+      ],
+      "primary_investment_review": {
+        "program_id": "koreapost-2026-domestic-pe",
+        "verified": true,
+        "text": "일반: 메자닌 70% 이상, 중소·중견기업 50% 이상, AI 관련 산업에 우체국금융 약정액의 40% 이상. 루키: 중소·중견기업 50% 이상.",
+        "source_url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400",
+        "page": "공고 PDF 1~3페이지",
+        "source_excerpt": "중소·중견기업 50% 이상 투자 / ‘AI 관련 산업 분야’에 우체국금융 약정액의 최소 40% 이상 투자",
+        "conditions": [
+          {
+            "segment": "일반",
+            "target": "메자닌(CB·EB·BW·RCPS·Put Option 등 구조화된 보통주·우선주)",
+            "minimum_percent": 70,
+            "basis": "투자 비중",
+            "page": 2
+          },
+          {
+            "segment": "일반",
+            "target": "중소·중견기업",
+            "minimum_percent": 50,
+            "basis": "공고상 투자 비중",
+            "page": 2
+          },
+          {
+            "segment": "일반",
+            "target": "AI 관련 산업",
+            "minimum_percent": 40,
+            "basis": "우체국금융 약정액",
+            "page": 2,
+            "note": "최종 운용사별 출자금액에 따라 비율 변경 가능"
+          },
+          {
+            "segment": "루키",
+            "target": "중소·중견기업",
+            "minimum_percent": 50,
+            "basis": "공고 1페이지 투자대상",
+            "page": 1
+          }
+        ],
+        "unavailable_reason": null,
+        "checked_at": "2026-09-15",
+        "original_notice_checked": true
+      },
+      "primary_investment": {
+        "text": "일반: 메자닌 70% 이상, 중소·중견기업 50% 이상, AI 관련 산업에 우체국금융 약정액의 40% 이상. 루키: 중소·중견기업 50% 이상.",
+        "source_url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400",
+        "source_page": "공고 PDF 1~3페이지",
+        "verified": true,
+        "items": [
+          "일반: 메자닌 70% 이상 · 중소·중견기업 50% 이상",
+          "일반: AI 산업에 우체국금융 약정액의 40% 이상(최종 배정액에 따라 변경 가능)",
+          "루키: 중소·중견기업 50% 이상"
+        ]
+      }
+    },
+    {
+      "id": "ktcu-2026-blind-pef",
+      "institution_id": "ktcu",
+      "institution_name": "한국교직원공제회",
+      "title": "2026년 블라인드 PEF 위탁운용사 선정",
+      "asset_scope": "PE",
+      "status": "접수 마감 · 후속 결과 미확인",
+      "events": [
+        {
+          "date": "2026-09-04",
+          "type": "모집 공고",
+          "title": "블라인드 PEF 위탁운용사 선정 공고",
+          "url": "https://www.ktcu.or.kr/PPW-CSB-000101/61742"
+        },
+        {
+          "date": "2026-09-11",
+          "type": "공고상 접수 마감",
+          "title": "자료제출 마감 · 15:00",
+          "url": "https://www.ktcu.or.kr/PPW-CSB-000101/61742"
+        }
+      ],
+      "selected_gps": [],
+      "verifiedfacts": [
+        "중형 1,500억원·3개사 이내·펀드별 500억원 이내",
+        "소형 1,500억원·6개사 이내·펀드별 250억원 이내",
+        "중형 결성규모 2,000억 이상 4,000억 미만, 소형 1,000억 이상 2,000억 미만",
+        "공개모집 경쟁방식·공식 본문 마감 2026-09-11 15시"
+      ],
+      "unknowns": [
+        "LP 출자비율 상한은 공고에서 별도 수치 미확인; 펀드별 금액을 비율 상한으로 역산하지 않음",
+        "HWP·Excel 제안서 양식의 세부 필수 제출 항목은 미검수",
+        "정정·마감 연장·후속 심사 결과 실제 발표는 미확인",
+        "최종 선정 GP·배정액·결성 및 납입은 미확인"
+      ],
+      "commitment_amount_krw": 300000000000,
+      "deadline": "2026-09-11T15:00:00+09:00",
+      "segments": [
+        {
+          "name": "중형",
+          "amount_krw": 150000000000,
+          "manager_count": "3개사 이내",
+          "per_fund_max_krw": 50000000000
+        },
+        {
+          "name": "소형",
+          "amount_krw": 150000000000,
+          "manager_count": "6개사 이내",
+          "per_fund_max_krw": 25000000000
+        }
+      ],
+      "status_as_of": "2026-09-13",
+      "checked_at": "2026-09-14",
+      "verification_method": "공식 HTML 및 공식 첨부 PDF 5페이지 전체 텍스트 확인",
+      "commitment_label": "총 3,000억원",
+      "summary": "중형·소형 각 1,500억원 모집 · 접수 마감 후 결과 미확인",
+      "planned_events": [
+        {
+          "date": null,
+          "date_label": "2026년 9월 말까지",
+          "type": "1차 정량평가 및 2차 심사 대상 선정",
+          "title": "대상자 개별 통보",
+          "url": "https://www.ktcu.or.kr/PPW-CSB-000101/61742",
+          "is_planned": true
+        },
+        {
+          "date": null,
+          "date_label": "2026년 10월 중",
+          "type": "현장 실사 및 2차 정성평가",
+          "title": "공고상 예정 일정",
+          "url": "https://www.ktcu.or.kr/PPW-CSB-000101/61742",
+          "is_planned": true
+        },
+        {
+          "date": null,
+          "date_label": "2026년 10월 말",
+          "type": "최종 운용사 선정",
+          "title": "대상자 개별 통보",
+          "url": "https://www.ktcu.or.kr/PPW-CSB-000101/61742",
+          "is_planned": true
+        }
+      ],
+      "source_detail": {
+        "program_id": "ktcu-2026-blind-pef",
+        "checked_at": "2026-09-14",
+        "source_url": "https://www.ktcu.or.kr/PPW-CSB-000101/61742",
+        "pdf_url": "https://www.ktcu.or.kr/comm/getFile?srvcId=BBSTY1&upperNo=x1F0v21ZQqN-_EKkX1hpVkg%3d%3d&fileTy=ATTACH&fileNo=aWp0oGgVfbR9VSoMaIZKcA%3d%3d",
+        "pdf_title": "2026년 한국교직원공제회 블라인드 PEF 위탁운용사 선정 공고문.pdf",
+        "pdf_pages": 5,
+        "verification_method": "공식 HTML 및 공식 첨부 PDF 5페이지 전체 텍스트 확인",
+        "attachment_url_note": "첨부 getFile 매개변수는 페이지 요청 때마다 변경됨. 안정적인 원문 링크는 게시글 URL 사용.",
+        "announcement_date": "2026-09-04",
+        "deadline": "2026-09-11T15:00:00+09:00",
+        "summary": "국내 기관전용 블라인드 PEF에 총 3,000억원 이내, 중형·소형 총 9개 운용사 이내 선정. 접수 마감 후 후속 결과 미확인.",
+        "status": "접수 마감 · 후속 결과 미확인",
+        "total_commitment_krw": 300000000000,
+        "total_managers_max": 9,
+        "fund_type": {
+          "label": "기관전용 사모집합투자기구(PEF)",
+          "excluded": "창업·벤처전문 사모집합투자기구 제외",
+          "structure": "블라인드",
+          "payment": "수시납(Capital Call) 또는 분할납",
+          "source_page": 2
+        },
+        "segments": [
+          {
+            "name": "중형",
+            "commitment_krw": 150000000000,
+            "manager_count_max": 3,
+            "per_fund_commitment_max_krw": 50000000000,
+            "fund_size_min_krw": 200000000000,
+            "fund_size_max_exclusive_krw": 400000000000,
+            "key_personnel_min": 3,
+            "source_page": 3
+          },
+          {
+            "name": "소형",
+            "commitment_krw": 150000000000,
+            "manager_count_max": 6,
+            "per_fund_commitment_max_krw": 25000000000,
+            "fund_size_min_krw": 100000000000,
+            "fund_size_max_exclusive_krw": 200000000000,
+            "key_personnel_min": 2,
+            "source_page": 3
+          }
+        ],
+        "gp_requirements": [
+          {
+            "label": "국내 사무소",
+            "detail": "사무소 소재지가 국내인 운용사",
+            "source_page": 2
+          },
+          {
+            "label": "GP 자격",
+            "detail": "해당 투자기구를 운용할 수 있으며 관련법상 업무집행사원 결격 사유가 없을 것",
+            "source_page": 2
+          },
+          {
+            "label": "제재 이력",
+            "detail": "최근 5년 내 감독기관의 기관경고 이상 제재 사실이 있으면 신청 불가",
+            "source_page": 2
+          },
+          {
+            "label": "선행 펀드 소진",
+            "detail": "접수일 현재 Invested Capital이 선행 펀드 약정액의 60% 이하이면 신청 불가. 기존 펀드 운용조직과 별도 인력으로 운용할 경우 제안 허용",
+            "source_page": 2
+          },
+          {
+            "label": "공동운용 제한",
+            "detail": "Co-GP 지원 불가, 과거 Co-GP 실적 불인정",
+            "source_page": 3
+          },
+          {
+            "label": "리그 중복 제한",
+            "detail": "중형·소형 리그 간 중복 지원 불가",
+            "source_page": 3
+          }
+        ],
+        "terms": [
+          {
+            "label": "GP 출자",
+            "detail": "펀드결성 총액의 1.0% 이상 자율 제안. 특수관계인·소속 운용인력 출자 포함",
+            "source_page": 3
+          },
+          {
+            "label": "국내 투자",
+            "detail": "펀드 규모의 70% 이상을 국내 소재 기업에 투자",
+            "source_page": 3
+          },
+          {
+            "label": "만기",
+            "detail": "최대 10년, 협의하여 1년씩 2회 연장 가능",
+            "source_page": 3
+          },
+          {
+            "label": "투자 기간",
+            "detail": "설립일부터 최대 5년",
+            "source_page": 3
+          },
+          {
+            "label": "결성 시한",
+            "detail": "선정 통보일부터 9개월 내 등록 완료, 협의하여 3개월 이내 연장 가능",
+            "source_page": 2
+          },
+          {
+            "label": "보수",
+            "detail": "관리·성과보수 자율 제안. 공동투자 기회가 있으면 공동투자펀드 보수도 제시",
+            "source_page": 3
+          },
+          {
+            "label": "결성 규모 준수",
+            "detail": "선정 후에도 리그별 결성규모 범위를 준수해야 하며 벗어나면 선정 취소 가능. 해외 LP 전용 병행펀드는 별도 인정",
+            "source_page": 3
+          }
+        ],
+        "lp_commitment_ratio_cap": null,
+        "schedule": [
+          {
+            "date": "2026-09-04",
+            "precision": "day",
+            "title": "선정 공고",
+            "kind": "confirmed",
+            "source_page": 4
+          },
+          {
+            "date": "2026-09-11T15:00:00+09:00",
+            "precision": "datetime",
+            "title": "제안서 접수 마감",
+            "kind": "announced_deadline",
+            "source_page": 4
+          },
+          {
+            "date": null,
+            "date_label": "2026년 9월 말까지",
+            "precision": "month_end",
+            "title": "1차 정량평가 및 2차 심사 대상 선정",
+            "kind": "planned",
+            "note": "대상자 개별 통보",
+            "source_page": 4
+          },
+          {
+            "date": null,
+            "date_label": "2026년 10월 중",
+            "precision": "month",
+            "title": "현장 실사 및 2차 정성평가",
+            "kind": "planned",
+            "source_page": 4
+          },
+          {
+            "date": null,
+            "date_label": "2026년 10월 말",
+            "precision": "month_end",
+            "title": "최종 운용사 선정",
+            "kind": "planned",
+            "note": "대상자 개별 통보",
+            "source_page": 4
+          }
+        ],
+        "schedule_note": "공고상 계획이며 실제 심사 착수·진행·선정 확인이 아님. 업무 진행에 따라 변경 가능.",
+        "submission": {
+          "methods": [
+            "직접 제출",
+            "등기우편",
+            "택배",
+            "퀵"
+          ],
+          "files": "제안서 등을 USB에 저장해 인쇄본과 함께 제출",
+          "packaging": "서류용 A4 상자 권장",
+          "arrival_rule": "우편·택배는 마감일까지 도착분만 접수. 직접 제출·퀵은 9월 11일 당일 15시까지",
+          "in_person": "The-K타워 23층",
+          "mail": "The-K타워 지하 2층 문서수발실",
+          "address": "서울시 영등포구 여의나루로 50, The-K타워 (07328)",
+          "recipient": "한국교직원공제회 기업투자부 기업투자1팀",
+          "source_page": 4
+        },
+        "attachments": [
+          {
+            "title": "2026년 한국교직원공제회 블라인드 PEF 위탁운용사 선정 공고문.pdf",
+            "type": "PDF",
+            "inspection": "전체 5페이지 내용 확인"
+          },
+          {
+            "title": "2026년 한국교직원공제회 블라인드 PEF 제안서 양식_한글파일.hwp",
+            "type": "HWP",
+            "inspection": "게시글 첨부 존재만 확인"
+          },
+          {
+            "title": "2026년 한국교직원공제회 블라인드 PEF 제안서 양식_엑셀파일.xlsx",
+            "type": "XLSX",
+            "inspection": "게시글 첨부 존재만 확인"
+          },
+          {
+            "title": "개인정보 수집 이용 동의서.hwp",
+            "type": "HWP",
+            "inspection": "게시글 첨부 존재만 확인"
+          }
+        ],
+        "followup_review": {
+          "search_url": "https://www.ktcu.or.kr/PPW-CSB-000101?srchKey=sj&srchText=PEF",
+          "search_keyword": "PEF",
+          "observed": "검색결과 4건(2026·2025·2023·2021 모집 공고). 2026년 정정·결과 게시글은 이 검색에서 발견되지 않음",
+          "correction_confirmed": null,
+          "result_confirmed": null,
+          "limitation": "PEF 제목 검색 범위 내 확인. 별도 명칭 공지·개별 통보 존재를 배제하지 않음"
+        },
+        "unknowns": [
+          "LP 출자비율 상한은 공고에서 별도 수치 미확인; 펀드별 금액을 비율 상한으로 역산하지 않음",
+          "HWP·Excel 제안서 양식의 세부 필수 제출 항목은 미검수",
+          "정정·마감 연장·후속 심사 결과 실제 발표는 미확인",
+          "최종 선정 GP·배정액·결성 및 납입은 미확인"
+        ]
+      },
+      "primary_investment": {
+        "text": "국내 소재 기업에 펀드 규모의 70% 이상 투자",
+        "source_url": "https://www.ktcu.or.kr/PPW-CSB-000101/61742",
+        "source_page": 3
+      },
+      "schedule_stages": [
+        {
+          "stage": "announcement",
+          "label": "모집 공고",
+          "original_label": "선정 공고",
+          "date": "2026-09-04",
+          "date_label": null,
+          "precision": "day",
+          "status": "confirmed",
+          "source_url": "https://www.ktcu.or.kr/PPW-CSB-000101/61742",
+          "source_page": 4
+        },
+        {
+          "stage": "application",
+          "label": "접수 마감",
+          "original_label": "제안서 접수 마감",
+          "date": "2026-09-11T15:00:00+09:00",
+          "date_label": null,
+          "precision": "datetime",
+          "status": "announced_deadline",
+          "source_url": "https://www.ktcu.or.kr/PPW-CSB-000101/61742",
+          "source_page": 4
+        },
+        {
+          "stage": "screening",
+          "label": "1차 심사",
+          "original_label": "1차 정량평가 및 2차 심사 대상 선정",
+          "date": null,
+          "date_label": "2026년 9월 말까지",
+          "precision": "month_end",
+          "status": "planned",
+          "source_url": "https://www.ktcu.or.kr/PPW-CSB-000101/61742",
+          "source_page": 4
+        },
+        {
+          "stage": "due_diligence",
+          "label": "2차 심사",
+          "original_label": "현장 실사 및 2차 정성평가",
+          "date": null,
+          "date_label": "2026년 10월 중",
+          "precision": "month",
+          "status": "planned",
+          "source_url": "https://www.ktcu.or.kr/PPW-CSB-000101/61742",
+          "source_page": 4
+        },
+        {
+          "stage": "selection",
+          "label": "최종 선정",
+          "original_label": "최종 운용사 선정",
+          "date": null,
+          "date_label": "2026년 10월 말",
+          "precision": "month_end",
+          "status": "planned",
+          "source_url": "https://www.ktcu.or.kr/PPW-CSB-000101/61742",
+          "source_page": 4
+        }
+      ],
+      "manager_count_label": "9개사 이내",
+      "gp_stage_note": "접수 GP 명단 미확인. 2차 심사 대상자와 최종 선정 GP는 개별 통보 예정입니다."
+    }
+  ]
+}

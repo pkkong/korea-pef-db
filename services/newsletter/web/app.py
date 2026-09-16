@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import RLock
 
-from flask import Flask, Response, jsonify, request, send_file
+from flask import Flask, Response, jsonify, request, send_file, send_from_directory
 
 WEB_ROOT = Path(__file__).resolve().parent
 DOWNLOADS_ROOT = WEB_ROOT / "downloads"
@@ -28,6 +28,14 @@ except ImportError:  # Flat import path used by Vercel root and local Flask runs
     from newsletter_ui import app_icon_png, app_web_manifest, render_app, service_css, service_js  # type: ignore  # noqa: E402
 
 app = Flask(__name__, static_folder=None)
+
+@app.get("/samples/lp/<filename>")
+def lp_sample_page(filename: str):
+    response = send_from_directory(WEB_ROOT / "lp_samples", filename)
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
 
 DEFAULT_GP_LP_PUBLIC_URL = "https://pkkong.github.io/kpef-newsletter"
 DEFAULT_GP_PAGE_CACHE_SECONDS = 300

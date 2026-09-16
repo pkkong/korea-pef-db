@@ -60,12 +60,27 @@ jobs:
           echo "::error::VERCEL_TOKEN, VERCEL_ORG_ID, and VERCEL_PROJECT_ID are required for Vercel deploy."
           exit 1
 
+      - name: Build LP sample pages
+        run: |
+          python3 services/lp/src/build_lp_sample.py
+          python3 -m unittest services.lp.tests.test_lp_program_service
+
       - name: Deploy newsletter app to Vercel
         run: |
           npm install --global vercel@latest
           # Run from repo root because the Vercel project already has Root Directory set.
           vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
           vercel deploy --prod --token "$VERCEL_TOKEN"
+
+      - name: Verify LP sample
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors "${NEWSLETTER_APP_URL}/samples/lp/program-ktcu-2026-blind-pef.html" -o /tmp/lp-sample.html
+          python3 - <<'PYVERIFY'
+          from pathlib import Path
+          html = Path('/tmp/lp-sample.html').read_text()
+          for text in ('한국교직원공제회', '1차 심사', '500억원 이내', '단계별 GP'):
+              assert text in html, text
+          PYVERIFY
 
       - name: Verify Vercel GP routes
         shell: bash
