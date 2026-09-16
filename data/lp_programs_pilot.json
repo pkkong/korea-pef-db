@@ -116,7 +116,8 @@
           "detail": "PE 최종 선정 결과",
           "show_source": true
         }
-      ]
+      ],
+      "display_title": "2026 대체투자 PE"
     },
     {
       "id": "pck-pension-2026-h2-pe",
@@ -210,7 +211,8 @@
           "detail": "2026년 위탁운용사 최종 선정",
           "show_source": true
         }
-      ]
+      ],
+      "display_title": "2026 하반기 대체투자 · PE"
     },
     {
       "id": "kgrowth-2026-bank-valueup-3",
@@ -405,7 +407,8 @@
           "detail": "최종 운용사 3개사 선정",
           "show_source": true
         }
-      ]
+      ],
+      "display_title": "중견기업 밸류업 3차 · 블라인드"
     },
     {
       "id": "koreapost-2026-domestic-pe",
@@ -533,7 +536,8 @@
           "status": "planned",
           "source_url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400"
         }
-      ]
+      ],
+      "display_title": "2026 국내 블라인드 PEF"
     },
     {
       "id": "ktcu-2026-blind-pef",
@@ -889,7 +893,8 @@
         }
       ],
       "manager_count_label": "9개사 이내",
-      "gp_stage_note": "접수 GP 명단 미확인. 2차 심사 대상자와 최종 선정 GP는 개별 통보 예정입니다."
+      "gp_stage_note": "접수 GP 명단 미확인. 2차 심사 대상자와 최종 선정 GP는 개별 통보 예정입니다.",
+      "display_title": "2026 블라인드 PEF"
     }
   ]
 }

@@ -70,12 +70,22 @@ def build(data, out):
             gp_index[str(key)] = gp
             gp_programs[str(key)].append((p, gp))
     def row(p):
-        selection = f"선정 GP {len(p['selected_gps'])}곳" if p['selected_gps'] else "선정 결과 미확인"
-        return f'<article class="program" data-status="{h(p["status"])}" data-institution="{h(p["institution_id"])}"><span class="badge">{h(p["status"])}</span><small>{h(p["institution_name"])} · {h(p["asset_scope"])}</small><h2><a href="program-{h(p["id"])}.html">{h(p["title"])}</a></h2><p class="muted">{h(p.get("summary", ""))}</p><small>{h(max(p["events"], key=lambda e: e["date"])["type"])} {max(e["date"] for e in p["events"])} · {selection}</small></article>'
+        status = '접수 마감' if p['status'].startswith('접수 마감') else p['status']
+        latest = max(p['events'], key=lambda e:e['date'])
+        if p['selected_gps']:
+            timing = f"{latest['date'][5:].replace('-', '.')} 선정 · {len(p['selected_gps'])}개사"
+        elif p.get('deadline'):
+            timing = f"{p['deadline'][5:10].replace('-', '.')} 마감"
+        else:
+            timing = f"{latest['date'][5:].replace('-', '.')} 공고"
+        amount = f"{p['commitment_amount_krw']/100000000:,.0f}억원" if p.get('commitment_amount_krw') else 'PE 출자액 미확인'
+        if p['id'] == 'pck-pension-2026-h2-pe':
+            amount = 'PE 출자액 미확인'
+        return f'<article class="program" data-status="{h(p["status"])}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}</span><span class="program-status">{h(status)}</span></div><h2 class="program-title">{h(p.get("display_title",p["title"]))}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}</span></div></a></article>'
     options = ''.join(f'<option value="{h(k)}">{h(v[0]["institution_name"])}</option>' for k,v in institutions.items())
     statuses = ''.join(f'<option>{h(s)}</option>' for s in sorted({p['status'] for p in programs}))
-    body = f'<header><div class="eyebrow">LP / 출자사업</div><h1>공고부터 선정까지</h1><p class="muted">진행 중인 모집과 선정 결과를 사업별로 확인하세요.</p><small>출자사업 {len(programs)}건</small></header><div class="controls"><input aria-label="사업 검색" placeholder="기관·사업명 검색"><select aria-label="진행 상태"><option value="">모든 상태</option>{statuses}</select><select aria-label="출자기관"><option value="">모든 기관</option>{options}</select></div><p id="count" class="muted">{len(programs)}개 사업</p>'+''.join(row(p) for p in programs)+'<p id="empty" hidden>조건에 맞는 사업이 없습니다.</p>'
-    body += '''<script>const q=document.querySelector('input'),s=document.querySelectorAll('select');function filter(){let n=0;document.querySelectorAll('.program').forEach(r=>{r.hidden=!(r.textContent.toLowerCase().includes(q.value.toLowerCase())&&(!s[0].value||r.dataset.status===s[0].value)&&(!s[1].value||r.dataset.institution===s[1].value));if(!r.hidden)n++});document.querySelector('#count').textContent=n+'개 사업';document.querySelector('#empty').hidden=n!==0}q.addEventListener('input',filter);s.forEach(e=>e.addEventListener('change',filter));</script>'''
+    body = f'<header class="list-header"><h1>출자사업</h1><span id="count">{len(programs)}개 사업</span></header><div class="controls"><input aria-label="사업 검색" placeholder="기관·사업명 검색"><select aria-label="진행 상태"><option value="">모든 상태</option>{statuses}</select><select aria-label="출자기관"><option value="">모든 기관</option>{options}</select></div>'+''.join(row(p) for p in programs)+'<p id="empty" hidden>조건에 맞는 사업이 없습니다.</p>'
+    body += '''<script>const q=document.querySelector('input'),s=document.querySelectorAll('select');function filter(){let n=0;document.querySelectorAll('.program').forEach(r=>{r.hidden=!((r.textContent+" "+r.dataset.search).toLowerCase().includes(q.value.toLowerCase())&&(!s[0].value||r.dataset.status===s[0].value)&&(!s[1].value||r.dataset.institution===s[1].value));if(!r.hidden)n++});document.querySelector('#count').textContent=n+'개 사업';document.querySelector('#empty').hidden=n!==0}q.addEventListener('input',filter);s.forEach(e=>e.addEventListener('change',filter));</script>'''
     (out/'index.html').write_text(shell('출자사업',body,as_of))
     try:
         from .lp_program_detail import render_detail_body
