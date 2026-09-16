@@ -50,7 +50,8 @@ CSS += """.investment-purpose{padding:16px 0;border-bottom:1px solid #e3e8ee}.in
 CSS += """.stage-flow{display:flex;list-style:none;padding:12px 0;gap:20px;color:#53677f;font-size:14px}.stage-flow li+li:before{content:"→";margin-right:20px;color:#aaa}.planned-label:empty{display:none}#offering .facts:has(>div:nth-child(3)){grid-template-columns:1fr 1fr 1fr}"""
 
 def shell(title, body, as_of):
-    return f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{h(title)} · LP</title><style>{CSS}</style></head><body><main>{body}</main><nav><a href="https://kpef-newsletter.vercel.app/">브리프</a><a class="active" href="index.html">LP</a><a href="https://kpef-newsletter.vercel.app/gps.html">GP</a></nav></body></html>'
+    sample_css = (Path(__file__).with_name('lp_sample.css')).read_text()
+    return f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{h(title)} · LP</title><link rel="stylesheet" href="https://kpef-newsletter.vercel.app/assets/service.css"><style>{CSS}\n{sample_css}</style></head><body class="lp-sample"><main><div class="sample-brand"><a href="https://kpef-newsletter.vercel.app/">Korea PEF</a><span>LP</span></div>{body}</main><nav class="bottom-nav" aria-label="하단 메뉴"><a href="https://kpef-newsletter.vercel.app/"><span aria-hidden="true" class="nav-dot nav-icon-brief"></span><strong>브리프</strong></a><a class="active" aria-current="page" href="index.html"><span aria-hidden="true" class="nav-dot nav-icon-lp"></span><strong>LP</strong></a><a href="https://kpef-newsletter.vercel.app/gps.html"><span aria-hidden="true" class="nav-dot nav-icon-gp"></span><strong>GP</strong></a></nav></body></html>'
 
 def build(data, out):
     validate(data)

@@ -1,0 +1,22 @@
+/* LP sample content; shared service CSS owns tokens and navigation icons. */
+body.lp-sample {background:var(--bg);font-family:Pretendard,"Pretendard Variable",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;color:var(--text);line-height:1.55}
+.lp-sample main {max-width:900px;min-height:100vh;background:var(--surface);padding:0 32px 120px}
+.sample-brand{display:flex;align-items:center;gap:12px;height:60px;border-bottom:1px solid var(--separator);margin-bottom:24px;font-weight:750;letter-spacing:-.4px}
+.sample-brand a{text-decoration:none;font-size:19px}.sample-brand span{font-size:12px;color:var(--secondary);border-left:1px solid var(--separator);padding-left:12px}
+.lp-sample a{color:inherit}.back{display:inline-flex;align-items:center;min-height:36px;font-size:13px;color:var(--secondary)!important}
+.detail-header{margin-top:14px;margin-bottom:26px;padding-bottom:24px}.institution{font-size:14px;color:var(--secondary)!important;text-decoration:none}.detail-header h1{font-size:27px;line-height:1.4;letter-spacing:-.8px;margin:10px 0 16px}
+.detail-meta{flex-wrap:wrap;gap:10px}.detail-meta>a{font-size:13px;min-height:32px;display:inline-flex;align-items:center}.badge{background:var(--surface-muted);color:var(--secondary);padding:6px 9px}
+.lp-sample h2{font-size:18px;letter-spacing:-.4px;margin:28px 0 14px}.lp-sample section{margin-bottom:30px}
+.stage-flow{gap:0;justify-content:space-between;background:var(--surface-muted);border-radius:8px;margin:0 0 16px;padding:10px 16px;color:var(--secondary);font-size:13px}.stage-flow li+li:before{margin-right:18px;color:var(--tertiary)}
+.event-list{border-top:1px solid var(--separator)}.event{grid-template-columns:158px minmax(0,1fr) 44px;gap:14px;border-color:var(--separator);padding:14px 0}.event time{color:var(--secondary);font-size:13px}.event strong{font-size:15px}.event small{color:var(--secondary);line-height:1.5}.event>a{color:var(--secondary)}.planned-label{color:var(--secondary);border-color:var(--separator);white-space:nowrap}.planned{background:var(--surface-muted)}
+#offering .facts{border-color:var(--separator);gap:16px;padding:18px 0}.facts small{font-size:12px;margin-bottom:6px}.facts strong{font-size:16px;font-variant-numeric:tabular-nums}.investment-purpose{border-color:var(--separator);padding:18px 0}.investment-purpose>strong{color:var(--secondary);font-size:12px}.investment-purpose p{font-size:15px;line-height:1.65;word-break:keep-all;overflow-wrap:anywhere}
+.lp-sample th{font-size:12px;font-weight:500}.lp-sample th,.lp-sample td{border-color:var(--separator);padding:14px 8px}.lp-sample td{font-size:14px}.league-name{font-weight:650}.scroll{overflow:visible}.lp-sample table{table-layout:fixed}.lp-sample td{overflow-wrap:anywhere;min-width:0}
+.lp-sample .bottom-nav{gap:0}.lp-sample .bottom-nav a{min-height:42px}.lp-sample .bottom-nav .active{font-weight:650}
+@media(max-width:600px){
+ .lp-sample main{padding:0 20px calc(100px + env(safe-area-inset-bottom))}.sample-brand{height:54px;margin-bottom:14px}.detail-header h1{font-size:23px}.detail-header{margin-top:10px;margin-bottom:24px}
+ .event{grid-template-columns:minmax(0,1fr) 44px;gap:5px 10px;padding:13px 0}.event time{grid-column:1;grid-row:1}.event>div{grid-column:1/-1;grid-row:2}.event>a{grid-column:2;grid-row:1;min-height:30px}.event small{margin-top:3px}
+ #offering .facts,#offering .facts:has(>div:nth-child(3)){grid-template-columns:1fr;gap:12px}.facts>div{display:flex;justify-content:space-between;gap:18px;align-items:baseline}.facts small{margin:0;flex-shrink:0}.facts strong{text-align:right;font-size:15px}
+ .league-table,.league-table tbody,.league-table tr,.league-table td{display:block;width:100%}.league-table thead{display:none}.league-table tr{padding:16px 0;border-bottom:1px solid var(--separator)}.lp-sample .league-table td{display:flex;justify-content:space-between;gap:16px;padding:5px 0;border:0;text-align:right}.league-table td:before{content:attr(data-label);font-size:13px;color:var(--secondary);text-align:left;flex-shrink:0}.lp-sample .league-table .league-name{display:block;text-align:left;font-size:16px;padding:0 0 9px}.league-name:before{display:none}
+ .controls{display:grid;grid-template-columns:1fr 1fr}.controls input{grid-column:1/-1;min-width:0;width:100%}.controls select{min-width:0;width:100%}
+ .lp-sample .bottom-nav{padding:7px 10px calc(7px + env(safe-area-inset-bottom))}.stage-flow{padding:10px 12px}.stage-flow li+li:before{margin-right:12px}
+}

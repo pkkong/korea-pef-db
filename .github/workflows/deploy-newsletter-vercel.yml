@@ -75,12 +75,9 @@ jobs:
       - name: Verify LP sample
         run: |
           curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors "${NEWSLETTER_APP_URL}/samples/lp/program-ktcu-2026-blind-pef.html" -o /tmp/lp-sample.html
-          python3 - <<'PYVERIFY'
-          from pathlib import Path
-          html = Path('/tmp/lp-sample.html').read_text()
-          for text in ('한국교직원공제회', '1차 심사', '500억원 이내', '단계별 GP'):
-              assert text in html, text
-          PYVERIFY
+          for expected in '한국교직원공제회' '1차 심사' '500억원 이내' '단계별 GP'; do
+            grep --fixed-strings --quiet "$expected" /tmp/lp-sample.html
+          done
 
       - name: Verify Vercel GP routes
         shell: bash

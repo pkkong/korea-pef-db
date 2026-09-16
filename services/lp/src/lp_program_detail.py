@@ -55,11 +55,11 @@ def render_detail_body(p):
     if segments:
         per_fund = any(s.get('per_fund_max_krw') for s in segments)
         extra = '<th>펀드당 출자 한도</th>' if per_fund else ''
-        body += f'<div class="scroll"><table><thead><tr><th>리그</th><th>출자 예정액</th><th>선정 예정</th>{extra}</tr></thead><tbody>'
+        body += f'<div class="scroll"><table class="league-table"><thead><tr><th>리그</th><th>출자 예정액</th><th>선정 예정</th>{extra}</tr></thead><tbody>'
         for segment in segments:
             amount = f'{segment["amount_krw"]/100000000:,.0f}억원' if segment.get('amount_krw') is not None else '미확인'
-            extra = f'<td>{segment["per_fund_max_krw"]/100000000:,.0f}억원 이내</td>' if per_fund and segment.get('per_fund_max_krw') else ('<td>미확인</td>' if per_fund else '')
-            body += f'<tr><td>{h(segment["name"])}</td><td>{amount}</td><td>{h(segment.get("manager_count") or "미확인")}</td>{extra}</tr>'
+            extra = f'<td data-label="펀드당 한도">{segment["per_fund_max_krw"]/100000000:,.0f}억원 이내</td>' if per_fund and segment.get('per_fund_max_krw') else ('<td data-label="펀드당 한도">미확인</td>' if per_fund else '')
+            body += f'<tr><td class="league-name">{h(segment["name"])}</td><td data-label="출자 예정액">{amount}</td><td data-label="선정 예정">{h(segment.get("manager_count") or "미확인")}</td>{extra}</tr>'
         body += '</tbody></table></div>'
     body += '</section><section id="selection"><h2>' + ('단계별 GP' if p.get('schedule_stages') else '선정 GP') + '</h2>'
     if p['selected_gps']:
