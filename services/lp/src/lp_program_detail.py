@@ -16,8 +16,9 @@ def standardized_schedule(stages):
         if e['precision'] == 'datetime':
             stamp = stamp[:16]
         badge = '예정' if e['status']=='planned' else ('공고상 마감' if e['status']=='announced_deadline' else '')
-        note = e['original_label'] if e['stage'] in ('screening', 'due_diligence') else ''
-        body += f'<li class="event"><time>{h(stamp)}</time><div><strong>{h(e["label"])}</strong> <span class="planned-label">{h(badge)}</span><small>{h(note)}</small></div></li>'
+        note = e.get('detail') or (e['original_label'] if e['stage'] in ('screening', 'due_diligence') else '')
+        evidence = link(e['source_url'], '원문') if e.get('show_source') else ''
+        body += f'<li class="event"><time>{h(stamp)}</time><div><strong>{h(e["label"])}</strong> <span class="planned-label">{h(badge)}</span><small>{h(note)} {evidence}</small></div></li>'
     return body + '</ol></section>'
 
 def render_detail_body(p):

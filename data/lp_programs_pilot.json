@@ -94,7 +94,29 @@
         "source_url": "https://www.samsungfund.com/fund/lounge/notice-view.do?no=242508",
         "source_page": null,
         "verified": false
-      }
+      },
+      "schedule_stages": [
+        {
+          "stage": "announcement",
+          "label": "모집 공고",
+          "original_label": "PEF·VC 모집 공고",
+          "date": "2026-07-01",
+          "precision": "day",
+          "status": "confirmed",
+          "source_url": "https://www.samsungfund.com/fund/lounge/notice-view.do?no=242508"
+        },
+        {
+          "stage": "selection",
+          "label": "최종 선정",
+          "original_label": "PE 최종 선정 결과",
+          "date": "2026-08-25",
+          "precision": "day",
+          "status": "confirmed",
+          "source_url": "https://www.samsungfund.com/fund/lounge/notice-view.do?no=244408",
+          "detail": "PE 최종 선정 결과",
+          "show_source": true
+        }
+      ]
     },
     {
       "id": "pck-pension-2026-h2-pe",
@@ -166,7 +188,29 @@
         "source_url": "https://www.pension.or.kr/modu/s_board/read.asp?board_seq=1&board_sub_seq=1&seq=8704",
         "source_page": "ZIP 내 세부 선정계획 및 가이드라인 PDF 전체 6페이지",
         "verified": false
-      }
+      },
+      "schedule_stages": [
+        {
+          "stage": "announcement",
+          "label": "모집 공고",
+          "original_label": "하반기 PE·VC·Infra·PD 모집",
+          "date": "2026-07-08",
+          "precision": "day",
+          "status": "confirmed",
+          "source_url": "https://www.pension.or.kr/modu/s_board/read.asp?board_seq=1&board_sub_seq=1&seq=8704"
+        },
+        {
+          "stage": "selection",
+          "label": "최종 선정",
+          "original_label": "2026년 위탁운용사 최종 선정",
+          "date": "2026-08-11",
+          "precision": "day",
+          "status": "confirmed",
+          "source_url": "https://www.pension.or.kr/modu/s_board/read.asp?board_seq=1&board_sub_seq=1&seq=8729",
+          "detail": "2026년 위탁운용사 최종 선정",
+          "show_source": true
+        }
+      ]
     },
     {
       "id": "kgrowth-2026-bank-valueup-3",
@@ -317,7 +361,51 @@
           "위 의무투자액 중 초기·예비 중견 20% 이상, 중견·초기 중견 70% 이상",
           "메자닌(CB·BW·EB): 약정총액 20% 이상"
         ]
-      }
+      },
+      "schedule_stages": [
+        {
+          "stage": "announcement",
+          "label": "모집 공고",
+          "original_label": "위탁운용사 선정계획 공고",
+          "date": "2026-06-04",
+          "precision": "day",
+          "status": "confirmed",
+          "source_url": "https://www.kgrowth.or.kr/notice_view.asp?idx=1047&str_type=1&tab=1"
+        },
+        {
+          "stage": "application",
+          "label": "접수 현황",
+          "original_label": "17개 펀드 접수",
+          "date": "2026-07-07",
+          "precision": "day",
+          "status": "confirmed",
+          "source_url": "https://www.kgrowth.or.kr/notice_view.asp?idx=1075&str_type=1&tab=1",
+          "detail": "17개 펀드 접수",
+          "show_source": true
+        },
+        {
+          "stage": "screening",
+          "label": "1차 심사 결과",
+          "original_label": "6개 운용팀 서류심사 통과",
+          "date": "2026-07-23",
+          "precision": "day",
+          "status": "confirmed",
+          "source_url": "https://www.kgrowth.or.kr/notice_view.asp?idx=1090&str_type=1&tab=1",
+          "detail": "6개 운용팀 서류심사 통과",
+          "show_source": true
+        },
+        {
+          "stage": "selection",
+          "label": "최종 선정",
+          "original_label": "최종 운용사 3개사 선정",
+          "date": "2026-07-31",
+          "precision": "day",
+          "status": "confirmed",
+          "source_url": "https://www.kgrowth.or.kr/notice_view.asp?idx=1100&str_type=1&tab=1",
+          "detail": "최종 운용사 3개사 선정",
+          "show_source": true
+        }
+      ]
     },
     {
       "id": "koreapost-2026-domestic-pe",
@@ -425,7 +513,27 @@
           "일반: AI 산업에 우체국금융 약정액의 40% 이상(최종 배정액에 따라 변경 가능)",
           "루키: 중소·중견기업 50% 이상"
         ]
-      }
+      },
+      "schedule_stages": [
+        {
+          "stage": "announcement",
+          "label": "모집 공고",
+          "original_label": "우정사업본부 공고 제2026-124호",
+          "date": "2026-09-10",
+          "precision": "day",
+          "status": "confirmed",
+          "source_url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400"
+        },
+        {
+          "stage": "application",
+          "label": "접수 마감",
+          "original_label": "제안서 접수 마감 · 16:00",
+          "date": "2026-09-28T16:00:00+09:00",
+          "precision": "datetime",
+          "status": "planned",
+          "source_url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400"
+        }
+      ]
     },
     {
       "id": "ktcu-2026-blind-pef",
