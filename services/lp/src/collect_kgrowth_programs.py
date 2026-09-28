@@ -166,6 +166,8 @@ def collect(seed, baseline=None, fetch=None):
     for notice in notices:
         sid = notice["source_id"]
         if int(sid) not in KNOWN_IDS:
+            if PROJECT in compact(notice["title"]):
+                changed = True
             review.append({"source_id": sid, "url": notice["url"], "reason": "새 공고 · 사업 연결 및 원문 검토 필요"})
             continue
         if PROJECT not in compact(notice["title"]) or not notice["event_type"]:
