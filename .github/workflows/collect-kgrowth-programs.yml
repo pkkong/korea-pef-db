@@ -37,7 +37,26 @@ jobs:
       - name: Collect official announcements
         run: python3 services/lp/src/collect_kgrowth_programs.py --baseline /tmp/lp-baseline.json --output /tmp/kgrowth-collection.json
       - name: Store evidence and publish verified pages
-        run: python3 services/lp/src/publish_lp_programs.py --collection /tmp/kgrowth-collection.json
+        run: python3 services/lp/src/publish_lp_programs.py --collection /tmp/kgrowth-collection.json | tee /tmp/kgrowth-publication.json
+      - name: Verify published page
+        run: |
+          python3 - <<'PY'
+          import json, time, urllib.request
+          expected = json.load(open('/tmp/kgrowth-publication.json'))['run_id']
+          url = 'https://kpef-newsletter.vercel.app/samples/lp/program-kgrowth-2026-bank-valueup-3.html'
+          for attempt in range(3):
+              try:
+                  with urllib.request.urlopen(url, timeout=30) as response:
+                      assert response.headers.get('X-LP-Data-Source') == 'supabase'
+                      assert response.headers.get('X-LP-Run') == expected
+                      assert '단계별 GP' in response.read().decode('utf-8')
+                  break
+              except Exception:
+                  if attempt == 2:
+                      raise
+                  time.sleep(5)
+          print('Published LP page matches this collection run')
+          PY
       - name: Keep collection report
         if: always()
         uses: actions/upload-artifact@v4

@@ -124,6 +124,7 @@ def extract_teams(body, expected, bullets=True):
 
 
 def collect(seed, baseline=None, fetch=None):
+    baseline = baseline or {}
     opener = build_opener(HTTPCookieProcessor(CookieJar()))
 
     def get(url, referer=LIST_URL):
@@ -145,8 +146,13 @@ def collect(seed, baseline=None, fetch=None):
                 discovered.add(int(idx))
     if not discovered:
         raise ValueError("Official listing yielded no notice links")
+    # Discovery and approval are separate: keep following unreviewed notices
+    # even when the next batch of announcements pushes them off the listing.
+    tracked = {int(n['source_id']) for n in baseline.get('tracked_notices',
+               baseline.get('accepted_notices', baseline.get('notices', [])))
+               if str(n.get('source_id', '')).isdigit()}
     notices = []
-    for idx in sorted(discovered | set(KNOWN_IDS)):
+    for idx in sorted(discovered | tracked | set(KNOWN_IDS)):
         notice = parse_notice(idx, fetch(notice_url(idx)))
         notice["checked_at"] = checked
         notice["attachment_hashes"] = {}
@@ -157,7 +163,6 @@ def collect(seed, baseline=None, fetch=None):
                     raise ValueError(f"Invalid attachment for {idx}")
                 notice["attachment_hashes"][url] = hashlib.sha256(raw).hexdigest()
         notices.append(notice)
-    baseline = baseline or {}
     candidates = baseline.get("programs") or seed.get("programs", [])
     program = copy.deepcopy(next(p for p in candidates if p["id"] == PROGRAM_ID))
     previous = {str(n["source_id"]): n for n in baseline.get("accepted_notices", baseline.get("notices", []))}
@@ -205,7 +210,8 @@ def collect(seed, baseline=None, fetch=None):
     # Keep the accepted fingerprint until a reviewer explicitly accepts a change.
     # Otherwise a second run could silently accept yesterday's quarantined edit.
     accepted = baseline.get("accepted_notices", baseline.get("notices", [])) or notices
-    return {"checked_at": checked, "notices": notices, "accepted_notices": accepted,
+    return {"checked_at": checked, "notices": notices, "tracked_notices": notices,
+            "accepted_notices": accepted,
             "programs": [program], "review": review, "requires_review": changed}
 
 

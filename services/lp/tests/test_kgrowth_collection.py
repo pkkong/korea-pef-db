@@ -44,6 +44,16 @@ class CollectionTests(unittest.TestCase):
         self.assertTrue(third["requires_review"])
         self.assertEqual(old, third["programs"])
 
+    def test_unreviewed_notice_still_tracked_after_leaving_listing(self):
+        first = c.collect(self.seed, fetch=self.fetch)
+        self.docs[c.LIST_URL] = b'<a href="notice_view.asp?idx=1100">known</a>'
+        self.docs[c.notice_url(9999)] = html("새로운 사업 정정", "변경된 공고")
+        second = c.collect(self.seed, first, self.fetch)
+        notice = next(n for n in second['tracked_notices'] if n['source_id'] == '9999')
+        self.assertEqual(notice['body'], '변경된 공고')
+        self.assertIn('9999', [n['source_id'] for n in second['review']])
+        self.assertEqual(first['accepted_notices'], second['accepted_notices'])
+
     def test_failure_raises_without_empty_program(self):
         self.docs[c.notice_url(1047)] = b'<html>error</html>'
         with self.assertRaises(ValueError):

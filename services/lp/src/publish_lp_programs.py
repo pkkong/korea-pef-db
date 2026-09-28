@@ -12,6 +12,11 @@ from lp_program_service import build, validate
 ROOT = Path(__file__).resolve().parents[3]
 
 
+def document_hash(document):
+    content = {key: value for key, value in document.items() if key != 'checked_at'}
+    return hashlib.sha256(json.dumps(content, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
 def connect():
     import psycopg
     return psycopg.connect(os.environ['SUPABASE_DB_URL'], connect_timeout=20)
@@ -37,6 +42,7 @@ def prepare(current, report):
             existing[p['id']] = p
     data['programs'] = list(existing.values())
     data['accepted_notices'] = copy.deepcopy(report.get('accepted_notices', current.get('accepted_notices', [])))
+    data['tracked_notices'] = copy.deepcopy(report.get('tracked_notices', report['notices']))
     data['as_of'] = str(report['checked_at'])[:10]
     validate(data)
     with tempfile.TemporaryDirectory() as folder:
@@ -64,7 +70,7 @@ def main():
         run_id = hashlib.sha256((stamp+json.dumps(report,sort_keys=True)).encode()).hexdigest()[:24]
         conn.execute('INSERT INTO lp_program_private.collection_runs(run_id,institution,report) VALUES (%s,%s,%s)', (run_id,'kgrowth',Jsonb(report)))
         for doc in report['notices']:
-            digest = hashlib.sha256(json.dumps(doc,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+            digest = document_hash(doc)
             conn.execute('INSERT INTO lp_program_private.documents(source_url,content_hash,document) VALUES(%s,%s,%s) ON CONFLICT DO NOTHING', (doc['url'],digest,Jsonb(doc)))
         conn.execute('INSERT INTO lp_program_private.program_state(id,data,pages,run_id) VALUES(1,%s,%s,%s) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,pages=EXCLUDED.pages,run_id=EXCLUDED.run_id,updated_at=now()', (Jsonb(data),Jsonb(pages),run_id))
     print(json.dumps({'run_id':run_id,'programs':len(data['programs']),'notices':len(report['notices']),'review':len(report.get('review',[]))}))
