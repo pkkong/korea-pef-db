@@ -1,0 +1,48 @@
+name: Collect Korea Growth LP programs
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '20 0,6 * * 1-5'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install collection dependencies
+        run: python3 -m pip install 'psycopg[binary]>=3.2,<4' beautifulsoup4 requests
+      - name: Apply LP schema
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+          psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 --file services/lp/supabase/migrations/20260921090000_lp_program_collection.sql
+      - name: Test collection and publishing contracts
+        run: python3 -m unittest services.lp.tests.test_kgrowth_collection services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish
+      - name: Load last published data
+        run: python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json
+      - name: Collect official announcements
+        run: python3 services/lp/src/collect_kgrowth_programs.py --baseline /tmp/lp-baseline.json --output /tmp/kgrowth-collection.json
+      - name: Store evidence and publish verified pages
+        run: python3 services/lp/src/publish_lp_programs.py --collection /tmp/kgrowth-collection.json
+      - name: Keep collection report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kgrowth-collection
+          path: /tmp/kgrowth-collection.json
+          if-no-files-found: ignore
+          retention-days: 30

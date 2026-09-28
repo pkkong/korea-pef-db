@@ -31,7 +31,21 @@ app = Flask(__name__, static_folder=None)
 
 @app.get("/samples/lp/<filename>")
 def lp_sample_page(filename: str):
-    response = send_from_directory(WEB_ROOT / "lp_samples", filename)
+    try:
+        try:
+            from .lp_program_data import fetch_lp_program_page
+        except ImportError:
+            from lp_program_data import fetch_lp_program_page
+        page = fetch_lp_program_page(filename)
+    except Exception:
+        app.logger.warning("LP public page unavailable")
+        return Response("잠시 후 다시 시도해 주세요.", status=503, headers={"Retry-After":"60"}, content_type="text/plain; charset=utf-8")
+    if page:
+        response = Response(page['page_html'], content_type="text/html; charset=utf-8")
+        response.headers["X-LP-Data-Source"] = "supabase"
+        response.headers["X-LP-Run"] = page['run_id']
+    else:
+        return Response("페이지를 찾을 수 없습니다.", status=404, content_type="text/plain; charset=utf-8")
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
     response.headers["Cache-Control"] = "no-cache"
     return response

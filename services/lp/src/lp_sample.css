@@ -34,3 +34,7 @@ body.lp-sample {background:var(--bg);font-family:Pretendard,"Pretendard Variable
 .lp-sample .program h2.program-title{font-size:16px;line-height:1.4;font-weight:650;letter-spacing:-.35px;margin:6px 0 8px;word-break:keep-all;overflow-wrap:anywhere}
 .program-bottom{display:flex;justify-content:space-between;gap:8px;font-size:12px;line-height:1.5;color:var(--secondary);font-variant-numeric:tabular-nums}.program-bottom span:first-child{color:var(--text)}
 @media(max-width:600px){.lp-sample .program-link{padding:14px 0}.lp-sample .list-header h1{font-size:22px}.lp-sample .controls{margin-bottom:6px}.lp-sample .program h2.program-title{font-size:15px}.program-institution{font-size:12px}}
+
+.lp-sample .gp-stage-table th:first-child{width:54%}.lp-sample .gp-stage-table th:not(:first-child),.lp-sample .gp-stage-table td:not(:first-child){text-align:center}.lp-sample .gp-stage-table td{font-size:12px;padding:12px 4px;word-break:keep-all;overflow-wrap:anywhere}
+
+.applicant-list{border-block:1px solid var(--separator);padding:12px 0;margin-bottom:14px;font-size:13px}.applicant-list summary{cursor:pointer;font-weight:600}.applicant-list ul{padding-left:20px;line-height:1.9}.applicant-list li{word-break:keep-all;overflow-wrap:anywhere}
