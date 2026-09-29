@@ -8,6 +8,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from lp_program_service import build, validate
+from kgrowth_program_review import reviewed_programs
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -40,9 +41,16 @@ def prepare(current, report):
             raise ValueError('Unreviewed program cannot be auto-published')
         if not report.get('requires_review'):
             existing[p['id']] = p
+    # Independently re-project approved sources; never trust a candidate payload
+    # as permission to introduce a new public program.
+    additions, holds = reviewed_programs(report['notices'])
+    for p in additions:
+        existing[p['id']] = p
     data['programs'] = list(existing.values())
     data['accepted_notices'] = copy.deepcopy(report.get('accepted_notices', current.get('accepted_notices', [])))
     data['tracked_notices'] = copy.deepcopy(report.get('tracked_notices', report['notices']))
+    data['candidate_groups'] = copy.deepcopy(report.get('candidate_groups', []))
+    data['program_holds'] = holds
     data['as_of'] = str(report['checked_at'])[:10]
     validate(data)
     with tempfile.TemporaryDirectory() as folder:

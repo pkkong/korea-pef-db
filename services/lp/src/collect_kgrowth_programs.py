@@ -9,12 +9,14 @@ import copy
 import hashlib
 import json
 import re
+import io
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from http.cookiejar import CookieJar
 from pathlib import Path
 from urllib.parse import parse_qs, urljoin, urlparse
 from urllib.request import HTTPCookieProcessor, Request, build_opener
+from kgrowth_program_review import recipes, candidate_queue, reviewed_programs
 
 ROOT = Path(__file__).resolve().parents[3]
 BASE = "https://www.kgrowth.or.kr/"
@@ -151,17 +153,24 @@ def collect(seed, baseline=None, fetch=None):
     tracked = {int(n['source_id']) for n in baseline.get('tracked_notices',
                baseline.get('accepted_notices', baseline.get('notices', [])))
                if str(n.get('source_id', '')).isdigit()}
+    approved_sources = {int(s['source_id']):s for r in recipes() for s in r['sources']}
     notices = []
-    for idx in sorted(discovered | tracked | set(KNOWN_IDS)):
+    for idx in sorted(discovered | tracked | set(KNOWN_IDS) | set(approved_sources)):
         notice = parse_notice(idx, fetch(notice_url(idx)))
         notice["checked_at"] = checked
         notice["attachment_hashes"] = {}
-        if idx in KNOWN_IDS:
+        if idx in KNOWN_IDS or idx in approved_sources:
             for url in notice["attachments"]:
                 raw = fetch(url, notice["url"])
                 if not raw.startswith((b"%PDF", b"PK", bytes.fromhex("d0cf11e0"))):
                     raise ValueError(f"Invalid attachment for {idx}")
                 notice["attachment_hashes"][url] = hashlib.sha256(raw).hexdigest()
+                if url in approved_sources.get(idx, {}).get('text_attachments', []):
+                    if not raw.startswith(b'%PDF'):
+                        raise ValueError('Reviewed text extraction requires PDF')
+                    from pypdf import PdfReader
+                    text = ' '.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(raw)).pages)
+                    notice.setdefault('attachment_texts', {})[url] = re.sub(r'\s+', ' ', text).strip()
         notices.append(notice)
     candidates = baseline.get("programs") or seed.get("programs", [])
     program = copy.deepcopy(next(p for p in candidates if p["id"] == PROGRAM_ID))
@@ -210,8 +219,13 @@ def collect(seed, baseline=None, fetch=None):
     # Keep the accepted fingerprint until a reviewer explicitly accepts a change.
     # Otherwise a second run could silently accept yesterday's quarantined edit.
     accepted = baseline.get("accepted_notices", baseline.get("notices", [])) or notices
+    additions, holds = reviewed_programs(notices)
+    reviewed_ids = {str(s['source_id']) for r in recipes() if r['id'] in {p['id'] for p in additions} for s in r['sources']}
+    review = [item for item in review if item['source_id'] not in reviewed_ids]
     return {"checked_at": checked, "notices": notices, "tracked_notices": notices,
             "accepted_notices": accepted,
+            "candidate_groups": candidate_queue([n for n in notices if n['source_id'] in {i['source_id'] for i in review}]),
+            "reviewed_programs": additions, "program_holds": holds,
             "programs": [program], "review": review, "requires_review": changed}
 
 
@@ -227,7 +241,16 @@ def main():
     temporary = args.output.with_suffix(args.output.suffix + ".tmp")
     temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     temporary.replace(args.output)
-    print(json.dumps({"notices": len(result["notices"]), "programs": len(result["programs"]),
+    lines = ['# 한국성장금융 공고 검토', '', '## 신규 공개 대상', '']
+    lines += [f"- {p['title']}" for p in result['reviewed_programs']]
+    lines += ['', '## 확인이 필요한 사업', '']
+    for hold in result['program_holds']:
+        lines.append(f"- {hold['program_id']}: {hold['reason']}")
+    for group in result['candidate_groups']:
+        lines += ['', f"### {group['title']} — {group['disposition']}", '']
+        lines += [f"- {n['date']} · {n['stage']} · [{n['title']}]({n['url']})" for n in group['notices']]
+    args.output.with_suffix('.md').write_text('\n'.join(lines) + '\n')
+    print(json.dumps({"notices": len(result["notices"]), "programs": len(result["programs"])+len(result['reviewed_programs']),
                       "review": len(result["review"])}))
 
 

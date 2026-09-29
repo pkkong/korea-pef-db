@@ -24,14 +24,14 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install collection dependencies
-        run: python3 -m pip install 'psycopg[binary]>=3.2,<4' beautifulsoup4 requests
+        run: python3 -m pip install 'psycopg[binary]>=3.2,<4' beautifulsoup4 requests 'pypdf==6.10.0'
       - name: Apply LP schema
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y postgresql-client
           psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 --file services/lp/supabase/migrations/20260921090000_lp_program_collection.sql
       - name: Test collection and publishing contracts
-        run: python3 -m unittest services.lp.tests.test_kgrowth_collection services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish
+        run: python3 -m unittest services.lp.tests.test_kgrowth_collection services.lp.tests.test_kgrowth_program_review services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish
       - name: Load last published data
         run: python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json
       - name: Collect official announcements
@@ -43,18 +43,21 @@ jobs:
           python3 - <<'PY'
           import json, time, urllib.request
           expected = json.load(open('/tmp/kgrowth-publication.json'))['run_id']
-          url = 'https://kpef-newsletter.vercel.app/samples/lp/program-kgrowth-2026-bank-valueup-3.html'
-          for attempt in range(3):
-              try:
-                  with urllib.request.urlopen(url, timeout=30) as response:
-                      assert response.headers.get('X-LP-Data-Source') == 'supabase'
-                      assert response.headers.get('X-LP-Run') == expected
-                      assert '단계별 GP' in response.read().decode('utf-8')
-                  break
-              except Exception:
-                  if attempt == 2:
-                      raise
-                  time.sleep(5)
+          report = json.load(open('/tmp/kgrowth-collection.json'))
+          ids = ['kgrowth-2026-bank-valueup-3'] + [p['id'] for p in report.get('reviewed_programs', [])]
+          for program_id in ids:
+              url = f'https://kpef-newsletter.vercel.app/samples/lp/program-{program_id}.html'
+              for attempt in range(3):
+                  try:
+                      with urllib.request.urlopen(url, timeout=30) as response:
+                          assert response.headers.get('X-LP-Data-Source') == 'supabase'
+                          assert response.headers.get('X-LP-Run') == expected
+                          assert '단계별 GP' in response.read().decode('utf-8')
+                      break
+                  except Exception:
+                      if attempt == 2:
+                          raise
+                      time.sleep(5)
           print('Published LP page matches this collection run')
           PY
       - name: Keep collection report
@@ -62,6 +65,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: kgrowth-collection
-          path: /tmp/kgrowth-collection.json
+          path: |
+            /tmp/kgrowth-collection.json
+            /tmp/kgrowth-collection.md
           if-no-files-found: ignore
           retention-days: 30

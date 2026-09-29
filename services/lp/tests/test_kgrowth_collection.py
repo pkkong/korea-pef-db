@@ -1,7 +1,10 @@
 import copy
 import importlib.util
 import unittest
+import sys
+from unittest.mock import patch
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
 spec = importlib.util.spec_from_file_location("collector", Path(__file__).resolve().parents[1] / "src/collect_kgrowth_programs.py")
 c = importlib.util.module_from_spec(spec)
@@ -15,6 +18,9 @@ def html(title, body, date="2026-07-31"):
 
 class CollectionTests(unittest.TestCase):
     def setUp(self):
+        patcher = patch.object(c, 'recipes', return_value=[])
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.seed = {"programs": [{"id": c.PROGRAM_ID, "events": [], "selected_gps": [{"name": f"GP{i}"} for i in range(3)], "amount": "검토된 금액"}]}
         name = "은행권 중견기업 밸류업펀드(3차)"
         self.docs = {

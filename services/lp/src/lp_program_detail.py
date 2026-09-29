@@ -73,6 +73,8 @@ def render_detail_body(p):
         for name in dict.fromkeys(p['shortlisted_gps'] + list(selected)):
             gp = selected.get(name)
             name_html = f'<a href="selected-gp-{h(gp["page_key"])}.html">{h(name)}</a>' if gp else h(name)
+            if p.get('gp_tracks', {}).get(name):
+                name_html += f'<small>{h(p["gp_tracks"][name])}</small>'
             first = link(shortlist_url, '통과') if name in p['shortlisted_gps'] else '—'
             final = link(gp['source_url'], '선정') if gp else '—'
             body += f'<tr><td>{name_html}</td><td>{first}</td><td>{final}</td></tr>'

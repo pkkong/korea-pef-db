@@ -1,0 +1,120 @@
+[
+  {
+    "id": "kgrowth-2026-kculture-valueup",
+    "title": "2026 K-컬처 밸류업 펀드",
+    "source_title": "K-컬처밸류업펀드",
+    "asset_scope": "일반·기관전용 사모펀드·벤처·신기술조합",
+    "tracks": {
+      "AI·IP": "AI·IP",
+      "콘텐츠혁신": "콘텐츠 혁신"
+    },
+    "name_aliases": {
+      "마이다스프라이빗에쿼티": "마이다스PE",
+      "나이스투자파트너스- 케이비인베스트먼트(Co-GP)": "나이스투자파트너스/케이비인베스트먼트",
+      "시너지아이비투자- 티비인베스트먼트(Co-GP)": "시너지아이비투자/티비인베스트먼트"
+    },
+    "sources": [
+      {
+        "source_id": "1089",
+        "sha256": "93cb90366c88fc2dfb5898d5e4afc9d5a9edcb6bb1e1b08f0ab0591290dbd566",
+        "attachment_hashes": {
+          "https://www.kgrowth.or.kr/down_file.asp?idx=1089&SelType=Notice1": "deaff5566151c59cced64885aceddedc035cfdce2cdc62892f9eb4f7df107da7"
+        },
+        "event": "모집 공고",
+        "text_attachments": [
+          "https://www.kgrowth.or.kr/down_file.asp?idx=1089&SelType=Notice1"
+        ]
+      },
+      {
+        "source_id": "1106",
+        "sha256": "e02278dc9143b6e466edfb0bc125a9c50e6655756bc69f3fca518ea027d816d4",
+        "attachment_hashes": {},
+        "event": "접수 현황",
+        "text_attachments": []
+      },
+      {
+        "source_id": "1114",
+        "sha256": "c4dc59648a71160b702049332e48cbb969649fb6f671cc810eabe98b667c9bcb",
+        "attachment_hashes": {},
+        "event": "서류심사 결과",
+        "text_attachments": []
+      },
+      {
+        "source_id": "1120",
+        "sha256": "bc4af623b68fde98159f4af437ffbefdcbf55bc7bf2ca12e7bce79448b807be4",
+        "attachment_hashes": {},
+        "event": "최종 선정",
+        "text_attachments": []
+      }
+    ],
+    "facts": {
+      "commitment_amount_krw": {
+        "value": 80000000000,
+        "source_id": "1089",
+        "attachment_url": "https://www.kgrowth.or.kr/down_file.asp?idx=1089&SelType=Notice1",
+        "page": 1,
+        "quote": "정책출자자 위탁운용 총액 :총 800억원 이내"
+      },
+      "commitment_label": {
+        "value": "정책출자 총 800억원 이내",
+        "source_id": "1089",
+        "attachment_url": "https://www.kgrowth.or.kr/down_file.asp?idx=1089&SelType=Notice1",
+        "page": 1,
+        "quote": "정책출자자 위탁운용 총액 :총 800억원 이내"
+      },
+      "manager_count_label": {
+        "value": "2개사",
+        "source_id": "1089",
+        "attachment_url": "https://www.kgrowth.or.kr/down_file.asp?idx=1089&SelType=Notice1",
+        "page": 1,
+        "quote": "AI·IP성장금융1,0001개50034050110500(50%)콘텐츠 혁신5001개30016012020300(60%)합 계1,5002개800500170130800(53.3%)"
+      },
+      "segments": {
+        "value": [
+          {
+            "name": "AI·IP",
+            "amount_krw": 50000000000,
+            "manager_count": 1
+          },
+          {
+            "name": "콘텐츠 혁신",
+            "amount_krw": 30000000000,
+            "manager_count": 1
+          }
+        ],
+        "source_id": "1089",
+        "attachment_url": "https://www.kgrowth.or.kr/down_file.asp?idx=1089&SelType=Notice1",
+        "page": 1,
+        "quote": "AI·IP성장금융1,0001개50034050110500(50%)콘텐츠 혁신5001개30016012020300(60%)합 계1,5002개800500170130800(53.3%)"
+      },
+      "deadline": {
+        "value": "2026-08-12T16:00:00+09:00",
+        "source_id": "1089",
+        "attachment_url": "https://www.kgrowth.or.kr/down_file.asp?idx=1089&SelType=Notice1",
+        "page": 2,
+        "quote": "접수일시’26. 8. 12(수) 10:00 ~ 16:00"
+      },
+      "primary_investment": {
+        "value": {
+          "text": "K-컬처 산업 영위 국내기업",
+          "items": [
+            "공통: 목표 결성액의 50% 이상을 K-컬처 산업 영위 국내기업에 신주 등 자금이 유입되는 방식으로 투자",
+            "AI·IP: AI 콘텐츠와 IP 활용 기업에 각각 목표 결성액의 25% 이상 투자(중복 산정 불가)",
+            "콘텐츠 혁신: 콘텐츠 제작·유통 기업에 목표 결성액의 15% 이상 투자"
+          ]
+        },
+        "source_id": "1089",
+        "attachment_url": "https://www.kgrowth.or.kr/down_file.asp?idx=1089&SelType=Notice1",
+        "page": "2–3",
+        "quote": "2.주목적 투자 대상□국내 기업 또는 프로젝트를 대상으로 투자기간 내 아래의 주목적 투자분야에 의무투자비율 이상을 신주 투자*해야 함 * 기 업 에 자 금 이 유 입 되 는 방 식(유 상 증 자, 메 자 닌 투 자 등)으 로 출 자 대 상 투 자 기 구 의 근 거 법 령 에 서 허 용 하 는 방 식 이 어 야 함 항 목 세부내용운 용 사신청자격◦제안서 접수일 현재 ‘출자대상 투자기구’의 관련법규에 따른 펀드의 결성과 업무집행이 가능한 국내 설립 법인◦공동 운용(Co-GP)시에는 제안펀드 운용상 법률적 문제가 없는 경우에 한함◦제안운용사에 운용 중인 기존 펀드 정관(규약)에 유사한 목적을 가지거나경합 소지가 있는 펀드 설립을 금지하는 경우 사전 협의 요망운 용 사선정방법◦홈페이지*공개모집 공고 등을 통해 당사가 정한 절차에 따라 선정-운용사,운용인력,펀드운용계획 등을 종합 평가하여 선정 * 한국성장금융: www.kgrowth.or.kr, 한국산업은행: www.kdb.co.kr. 첨단전략산업기금: www.ngf.kdb.co.kr접수일시및결과발표구분내용접수일시’26. 8. 12(수) 10:00 ~ 16:00결과발표’26. 9월 중 ※ 결과 발표 일정은 접수결과 등에 따라 변동될 수 있음 펀 드결성시한◦선정통보일로부터 6개월 이내,단 ’26.12월 중 목표결성금액 이상 LOC를확보한 경우 ’26년말 이내 1차 클로징 필수(단 부득이한 사유 발생 시 당사와의 협의 하에 3개월 추가 연장 가능)◦펀드 결성 이후 국내외 신규 출자자 모집 및 정책목적 달성 등을 위해필요하다고 인정되는 경우(Multi-closing)허용 항 목 세부내용주 목 적 투자분야◦(AI·IP)❶,❶-①,❶-②의 주목적 투자비율 준수구분주목적 투자대상의무 투자비율❶ (공통)K-컬처K-컬처 산업 영위 국내기업목 표 결 성 액 의 50% ❶-① AI 콘텐츠AI 기반 기술을 접목하여 콘텐츠 산업을 영위하는 기업목 표 결 성 액 의 25% ❶-② IP 활용콘텐츠 IP를 활용하는 K-컬처 산업 영위 국내 기업목 표 결 성 액 의 25% ※ ❶-①, ❶-②간 중 복 산 정 불 가 - 3 - 3.주요 출자 조건 항 목 세부내용 주 목 적 투자분야 ※ 용어의 정의 ▪ (K-컬처 산업) 콘텐츠 산업 + 한류 산업 또는 한류 연관 산업 ▪ (콘텐츠 산업) 콘텐츠산업 진흥법에 따른 콘텐츠 산업을 의미하되, 동법 제2조 제1항 제5호에 따른 콘텐츠사업자가 속하는 업종을 포함 (붙임1) ▪ (한류산업 또는 한류 연관산업) 한류산업진흥 기본법에 따른 제3조(정의)에 따른 한류산업 및 한류 연관 산업을 지칭 (붙임2) ▪ (AI 기반 기술) K-컬처 산업과 융합하여 시너지를 낼 수 있는 인공지능 또는 인공지능 기술 ▪ (IP 활용) 콘텐츠 IP를 소유하거나 사업권(이용/사용 등)을 기반으로 부가가치 창출◦(콘텐츠 혁신)아래의 주목적 투자비율 준수구분주목적 투자대상의무 투자비율 (공통)K-컬처K-컬처 산업 영위 국내기업목 표 결 성 액 의 50% 콘텐츠 혁신콘텐츠의 제작·유통 등의 경제활동을 영위하는 콘텐츠 산업 기업목 표 결 성 액 의 15% "
+      },
+      "asset_scope": {
+        "value": "일반·기관전용 사모펀드·벤처·신기술조합",
+        "source_id": "1089",
+        "attachment_url": "https://www.kgrowth.or.kr/down_file.asp?idx=1089&SelType=Notice1",
+        "page": 1,
+        "quote": "출자대상투자기구◦「자본시장과 금융투자업에 관한 법률」에 의한 일반사모집합투자기구◦「자본시장과 금융투자업에 관한 법률」에 의한 기관전용 사모집합투자기구◦「벤처투자 촉진에 관한 법률」에 의한 벤처투자조합◦「여신전문금융업법」에 의한 신기술사업투자조합"
+      }
+    }
+  }
+]
