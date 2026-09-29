@@ -62,6 +62,8 @@ def prepare(current, report):
         out = Path(folder)
         build(data, out)
         pages = {p.name:p.read_text() for p in out.glob('*.html')}
+        from lp_review_preview import render_review
+        pages['review.html'] = render_review(data, report, current)
     return data, pages
 
 

@@ -20,7 +20,7 @@ class PublishContracts(unittest.TestCase):
     def setUp(self):
         self.data=json.loads((SRC.parents[2]/'data/lp_programs_pilot.json').read_text())
         self.p=next(p for p in self.data['programs'] if p['institution_id']=='kgrowth')
-        self.report={'checked_at':'2026-09-21','notices':[{'url':'https://www.kgrowth.or.kr/notice_view.asp?idx=1047'}],'programs':[copy.deepcopy(self.p)]}
+        self.report={'checked_at':'2026-09-21','notices':[{'source_id':'1047','title':'공고','date':'2026-09-21','body':'본문','url':'https://www.kgrowth.or.kr/notice_view.asp?idx=1047'}],'programs':[copy.deepcopy(self.p)]}
     def test_review_preserves_program_and_accepted_fingerprint(self):
         self.data['accepted_notices']=[{'source_id':'1047','sha256':'old'}]
         self.report['accepted_notices']=self.data['accepted_notices']
