@@ -71,6 +71,8 @@ def validate_reviewed_program(p,evidence):
     for g in p.get('selected_gps',[]):
         if not g.get('id') and not g.get('master_id'):
             g['id']='kgrowth-'+hashlib.sha256(g['name'].encode()).hexdigest()[:16]
+        if not re.fullmatch(r'[a-zA-Z0-9_-]+',str(g.get('master_id') or g.get('id'))):
+            raise ValueError('잘못된 GP 식별자')
     p['institution_name']='한국성장금융'
     from lp_program_service import validate
     validate({'as_of':date.today().isoformat(),'programs':[p]})

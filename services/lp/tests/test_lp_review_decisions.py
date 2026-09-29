@@ -35,4 +35,14 @@ class ReviewDecisionTests(unittest.TestCase):
  def test_other_institution_rejected(self):
   self.program['institution_id']='other'
   self.assertFalse(apply_decisions({'programs':[]},self.notices,[self.decision])['programs'])
+ def test_newer_changed_approval_does_not_restore_older_program(self):
+  newer=copy.deepcopy(self.decision);newer.update(id=2,source_id='1114')
+  newer['evidence'][0]['body']='changed after review'
+  existing=copy.deepcopy(self.program);existing['title']='last published'
+  data=apply_decisions({'programs':[existing]},self.notices,[self.decision,newer])
+  self.assertEqual(data['programs'][0]['title'],'last published')
+ def test_excluded_notice_reopens_if_source_changes(self):
+  self.decision['action']='exclude';self.notices[0]['body']='new content'
+  data=apply_decisions({'programs':[]},self.notices,[self.decision])
+  self.assertEqual(data['review_outcomes'][0]['status'],'needs_review')
 if __name__=='__main__':unittest.main()
