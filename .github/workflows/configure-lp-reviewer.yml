@@ -1,0 +1,33 @@
+name: Configure LP reviewer
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: 'Explicitly authorized reviewer email'
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      REVIEWER_EMAIL: ${{ inputs.email }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install 'psycopg[binary]>=3.2,<4'
+      - name: Register reviewer
+        run: |
+          python3 - <<'PY'
+          import os, re, psycopg
+          email=os.environ['REVIEWER_EMAIL'].strip().lower()
+          if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email):
+              raise ValueError('Invalid reviewer email')
+          with psycopg.connect(os.environ['SUPABASE_DB_URL']) as conn:
+              conn.execute('INSERT INTO lp_program_private.reviewers(email) VALUES(%s) ON CONFLICT DO NOTHING',(email,))
+          print('Reviewer registered; confirmed email login required')
+          PY

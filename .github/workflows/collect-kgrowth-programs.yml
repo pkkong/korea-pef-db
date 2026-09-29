@@ -30,8 +30,11 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y postgresql-client
           psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 --file services/lp/supabase/migrations/20260921090000_lp_program_collection.sql
+          psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 --file services/lp/supabase/migrations/20260929090000_lp_review.sql
+      - name: Verify review access boundary
+        run: psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 --file services/lp/tests/check_lp_review_access.sql
       - name: Test collection and publishing contracts
-        run: python3 -m unittest services.lp.tests.test_kgrowth_collection services.lp.tests.test_kgrowth_program_review services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish
+        run: python3 -m unittest services.lp.tests.test_lp_review_decisions services.lp.tests.test_kgrowth_collection services.lp.tests.test_kgrowth_program_review services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish
       - name: Load last published data
         run: python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json
       - name: Collect official announcements

@@ -1,0 +1,46 @@
+'use strict';
+const $=id=>document.getElementById(id), config=JSON.parse($('config').textContent);
+let token=sessionStorage.getItem('lp-review-token')||'', state=null, current=null, busy=false;
+const message=text=>$('message').textContent=text;
+const lines=value=>value.split('\n').map(x=>x.trim()).filter(Boolean);
+async function api(path,data,auth=true){
+ const r=await fetch(config.url+path,{method:'POST',headers:{apikey:config.key,'Content-Type':'application/json',...(auth?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(data)});
+ const result=await r.json();
+ if(!r.ok){if(r.status===401){sessionStorage.removeItem('lp-review-token');token='';$('workspace').hidden=true;$('login').hidden=false;}
+ throw new Error(result.code==='42501'?'이 계정에는 검토 권한이 없습니다. 관리자에게 이메일 등록을 요청해 주세요.':result.code==='40001'?'새 수집 결과가 있습니다. 새로고침 후 다시 확인해 주세요.':result.error_description||result.msg||result.message||'요청을 처리하지 못했습니다.');}
+ return result;
+}
+async function guarded(work){if(busy)return;busy=true;document.querySelectorAll('button').forEach(b=>b.disabled=true);try{await work();}catch(e){message(e.message);}finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false);}}
+$('send').onclick=()=>guarded(async()=>{const email=$('email').value.trim(),password=$('password').value;if(!$('email').checkValidity()||!email||password.length<12)throw Error('이메일과 12자 이상의 비밀번호를 입력해 주세요.');await api('/auth/v1/signup',{email,password},false);$('password').value='';message('확인 메일의 링크를 누른 뒤 이 화면에서 로그인해 주세요. 계정 생성만으로 승인 권한이 생기지는 않습니다.');});
+$('verify').onclick=()=>guarded(async()=>{const r=await api('/auth/v1/token?grant_type=password',{email:$('email').value.trim(),password:$('password').value},false);$('password').value='';token=r.access_token;sessionStorage.setItem('lp-review-token',token);await load();});
+$('logout').onclick=()=>{token='';sessionStorage.removeItem('lp-review-token');$('workspace').hidden=true;$('logout').hidden=true;$('login').hidden=false;message('로그아웃했습니다.');};
+$('refresh').onclick=()=>guarded(load);
+function node(tag,text){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;}
+function sourceLink(url,label){const a=node('a',label+' ↗');a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a;}
+async function load(){state=await api('/rest/v1/rpc/lp_review_queue',{});if(!state)throw Error('수집 결과가 아직 없습니다.');$('login').hidden=true;$('workspace').hidden=false;$('logout').hidden=false;$('editor').hidden=true;renderQueue();message('새 공고와 기존 공개 내용을 비교해 주세요.');}
+function renderQueue(){const q=$('queue');q.replaceChildren();const pending=new Set((state.report.review||[]).map(x=>x.source_id));
+ const outcomes=new Map((state.review_outcomes||[]).map(x=>[x.id,x.status]));
+ for(const n of [...state.report.notices].sort((a,b)=>b.date.localeCompare(a.date))){const decision=state.decisions.find(d=>d.source_id===n.source_id);const status=decision?(outcomes.get(decision.id)==='needs_review'?'원문 변경 · 재검토':({approve:outcomes.get(decision.id)==='published'?'반영 완료':outcomes.get(decision.id)==='needs_review'?'원문 변경 · 재검토':'승인 · 반영 대기',hold:'보류',exclude:'제외'}[decision.action])):pending.has(n.source_id)?'검토 대기':'공개 사업 연결됨';const b=node('button');b.className='item';b.append(node('span',n.title),node('small',n.date+' · '+status));b.onclick=()=>{q.querySelectorAll('.item').forEach(x=>x.classList.remove('active'));b.classList.add('active');select(n);};q.append(b);}}
+function select(n){current=n;$('editor').hidden=false;$('noticeTitle').textContent=n.title;$('body').textContent=n.body;$('links').replaceChildren(sourceLink(n.url,'공고 원문'),...(n.attachments||[]).map((u,i)=>sourceLink(u,'첨부 '+(i+1))));
+ const target=$('target');target.replaceChildren(new Option('새 사업으로 등록',''));for(const p of state.programs.filter(p=>p.institution_id==='kgrowth'))target.add(new Option(p.title,p.id));const existing=state.programs.find(p=>p.events.some(e=>e.url===n.url));target.value=existing?.id||'';fill();}
+$('target').onchange=fill;
+function stage(n){const t=n.title.replace(/\s/g,'');if(/재공고|정정|연장|취소/.test(t))return '';if(t.includes('서류심사'))return '서류심사 결과';if(t.includes('접수'))return '접수 현황';if(t.includes('선정결과'))return '최종 선정';if(t.includes('선정공고'))return '모집 공고';return '';}
+function fill(){const p=state.programs.find(p=>p.id===$('target').value);const fields={title:p?.title||'',asset:p?.asset_scope||'',amount:p?.commitment_amount_krw?p.commitment_amount_krw/1e8:'',applicants:p?.applicants_gps?.join('\n')||'',shortlist:p?.shortlisted_gps?.join('\n')||'',count:p?.manager_count_label||'',purpose:p?.primary_investment?.items?.join('\n')||p?.primary_investment?.text||'',deadline:p?.deadline?.slice(0,16)||'',gps:p?.selected_gps?.map(g=>g.name).join('\n')||''};
+ for(const [key,value]of Object.entries(fields)){$(key).value=value;$('old-'+key).textContent=value||'—';}
+ if(!p)$('title').value=current.title.replace(/^【[^】]+】/,'');$('confirmed').checked=false;
+ const box=$('sources');box.replaceChildren();for(const n of state.report.notices){const row=node('label'),check=document.createElement('input'),name=node('span',n.date+' '+n.title),sel=document.createElement('select');check.type='checkbox';check.dataset.id=n.source_id;check.checked=n.source_id===current.source_id||!!p?.events.some(e=>e.url===n.url);sel.dataset.id=n.source_id;for(const value of ['','모집 공고','접수 현황','서류심사 결과','최종 선정'])sel.add(new Option(value||'단계 선택',value));sel.value=p?.events.find(e=>e.url===n.url)?.type||stage(n);row.append(check,name,sel);box.append(row);}}
+function draft(){const old=state.programs.find(p=>p.id===$('target').value),p=old?structuredClone(old):{id:'kgrowth-review-'+current.source_id,institution_id:'kgrowth',institution_name:'한국성장금융',selected_gps:[]};
+ p.title=$('title').value.trim();p.display_title=p.title;p.asset_scope=$('asset').value.trim();if(!p.title||!p.asset_scope)throw Error('사업명과 투자 분야를 입력해 주세요.');
+ p.commitment_amount_krw=$('amount').value?Number($('amount').value)*1e8:null;if(p.commitment_amount_krw!==null&&!(p.commitment_amount_krw>0))throw Error('출자액을 확인해 주세요.');p.commitment_label=old&&p.commitment_amount_krw===old.commitment_amount_krw?old.commitment_label:(p.commitment_amount_krw?$('amount').value+'억원':'');p.manager_count_label=$('count').value.trim();
+ const purpose=lines($('purpose').value);p.primary_investment=purpose.length?{text:purpose[0],items:purpose}:null;p.deadline=$('deadline').value?$('deadline').value+':00+09:00':null;
+ const ids=[...$('sources').querySelectorAll('input:checked')].map(x=>x.dataset.id);if(!ids.includes(current.source_id))throw Error('현재 공고를 근거에 포함해 주세요.');
+ const map={'모집 공고':['announcement','모집 공고'],'접수 현황':['application','접수 현황'],'서류심사 결과':['screening','1차 심사 결과'],'최종 선정':['selection','최종 선정']};p.events=[];p.schedule_stages=[];
+ for(const id of ids){const n=state.report.notices.find(n=>n.source_id===id),type=[...$('sources').querySelectorAll('select')].find(x=>x.dataset.id===id).value;if(!type)throw Error('선택한 공고의 단계를 지정해 주세요.');p.events.push({date:n.date,title:n.title,type,url:n.url});p.schedule_stages.push({date:n.date,stage:map[type][0],label:map[type][1],original_label:type,precision:'date',status:'confirmed',source_url:n.url,show_source:true});}
+ if(p.deadline){const source=p.events.find(e=>e.type==='모집 공고');if(!source)throw Error('접수 마감의 근거인 모집 공고를 선택해 주세요.');p.schedule_stages.push({date:p.deadline,stage:'application',label:'접수 마감',original_label:'접수 마감',precision:'datetime',status:'announced_deadline',source_url:source.url,show_source:true});}
+ p.applicants_gps=lines($('applicants').value);p.shortlisted_gps=lines($('shortlist').value);const application=p.events.find(e=>e.type==='접수 현황');if(p.applicants_gps.length&&!application)throw Error('접수 명단의 근거 공고가 필요합니다.');if(p.shortlisted_gps.length&&!p.events.some(e=>e.type==='서류심사 결과'))throw Error('서류 통과 명단의 근거 공고가 필요합니다.');p.manager_list_sources={applicants_gps:application?.url||''};p.schedule_stages.sort((a,b)=>a.date.localeCompare(b.date));const names=lines($('gps').value),final=p.events.filter(e=>e.type==='최종 선정').sort((a,b)=>a.date.localeCompare(b.date)).at(-1);if(names.length&&!final)throw Error('선정 GP의 근거인 최종 선정 공고를 선택해 주세요.');if(final&&!names.length)throw Error('최종 선정 GP를 입력해 주세요.');p.selected_gps=names.map(name=>({...old?.selected_gps.find(g=>g.name===name),name,source_url:final.url,asset_scope:old?.selected_gps.find(g=>g.name===name)?.asset_scope||p.asset_scope}));p.status=names.length?'선정 완료':p.events.some(e=>e.type==='서류심사 결과')?'심사 중':'모집 공고';
+ // Do not silently retain detailed amounts after editing the total.
+ if(old&&p.commitment_amount_krw!==old.commitment_amount_krw&&old.segments?.length)throw Error('분야별 출자액이 있는 사업은 총액만 바꿀 수 없습니다. 보류 후 분야별 조건을 먼저 확인해 주세요.');
+ return {program:p,ids};}
+async function decide(action){if(action==='approve'&&!$('confirmed').checked)throw Error('원문 비교 확인란을 체크해 주세요.');const d=action==='approve'?draft():{program:null,ids:[current.source_id]};await api('/rest/v1/rpc/lp_review_decide',{p_run_id:state.run_id,p_source_id:current.source_id,p_action:action,p_program:d.program,p_source_ids:d.ids});await load();message(action==='approve'?'승인했습니다. 다음 수집 때 원문을 재확인한 뒤 공개합니다.':action==='hold'?'보류했습니다.':'검토 대상에서 제외했습니다.');}
+for(const action of ['approve','hold','exclude'])$(action).onclick=()=>guarded(()=>decide(action));
+if(token)guarded(load);

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from lp_program_service import build, validate
 from kgrowth_program_review import reviewed_programs
+from lp_review_decisions import apply_decisions
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -25,7 +26,9 @@ def connect():
 
 def baseline(conn):
     row = conn.execute('SELECT data FROM lp_program_private.program_state WHERE id=1').fetchone()
-    return row[0] if row else json.loads((ROOT/'data/lp_programs_pilot.json').read_text())
+    data = row[0] if row else json.loads((ROOT/'data/lp_programs_pilot.json').read_text())
+    data['review_decisions'] = [r[0] for r in conn.execute("SELECT to_jsonb(d) FROM lp_program_private.review_decisions d ORDER BY id").fetchall()]
+    return data
 
 
 def prepare(current, report):
@@ -39,18 +42,20 @@ def prepare(current, report):
     for p in updates:
         if p.get('institution_id') != 'kgrowth' or p['id'] not in existing:
             raise ValueError('Unreviewed program cannot be auto-published')
-        if not report.get('requires_review'):
+        if not report.get('requires_review') and not existing[p['id']].get('manual_review_id'):
             existing[p['id']] = p
     # Independently re-project approved sources; never trust a candidate payload
     # as permission to introduce a new public program.
     additions, holds = reviewed_programs(report['notices'])
     for p in additions:
-        existing[p['id']] = p
+        if not existing.get(p['id'], {}).get('manual_review_id'):
+            existing[p['id']] = p
     data['programs'] = list(existing.values())
     data['accepted_notices'] = copy.deepcopy(report.get('accepted_notices', current.get('accepted_notices', [])))
     data['tracked_notices'] = copy.deepcopy(report.get('tracked_notices', report['notices']))
     data['candidate_groups'] = copy.deepcopy(report.get('candidate_groups', []))
     data['program_holds'] = holds
+    apply_decisions(data, report['notices'], current.get('review_decisions', []))
     data['as_of'] = str(report['checked_at'])[:10]
     validate(data)
     with tempfile.TemporaryDirectory() as folder:

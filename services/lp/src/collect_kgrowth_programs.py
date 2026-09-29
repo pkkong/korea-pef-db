@@ -159,7 +159,7 @@ def collect(seed, baseline=None, fetch=None):
         notice = parse_notice(idx, fetch(notice_url(idx)))
         notice["checked_at"] = checked
         notice["attachment_hashes"] = {}
-        if idx in KNOWN_IDS or idx in approved_sources:
+        if notice['attachments']:
             for url in notice["attachments"]:
                 raw = fetch(url, notice["url"])
                 if not raw.startswith((b"%PDF", b"PK", bytes.fromhex("d0cf11e0"))):

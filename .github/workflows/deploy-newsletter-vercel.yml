@@ -49,6 +49,7 @@ jobs:
       - name: Run Vercel data and UI contract tests
         run: |
           python3 services/newsletter/web/tests/test_newsletter_data.py
+          python3 -m unittest services.newsletter.web.tests.test_lp_review_ui
 
       - name: Smoke test Flask app
         run: |

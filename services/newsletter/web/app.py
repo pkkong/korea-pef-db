@@ -28,6 +28,11 @@ except ImportError:  # Flat import path used by Vercel root and local Flask runs
     from newsletter_ui import app_icon_png, app_web_manifest, render_app, service_css, service_js  # type: ignore  # noqa: E402
 
 app = Flask(__name__, static_folder=None)
+try:
+    from .lp_review_ui import review
+except ImportError:
+    from lp_review_ui import review
+app.register_blueprint(review)
 
 @app.get("/samples/lp/<filename>")
 def lp_sample_page(filename: str):
