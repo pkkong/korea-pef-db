@@ -164,6 +164,9 @@ def project(recipe, notices):
             key = 'kgrowth-' + hashlib.sha256(name.encode()).hexdigest()[:16]
             p['selected_gps'].append({'id':key, 'name':name, 'source_url':final_url,
                                      'asset_scope':recipe['tracks'][track]})
+            master_id = recipe.get('gp_master_ids', {}).get(name)
+            if master_id:
+                p['selected_gps'][-1].update(master_id=master_id, master_name=name, identity_match='reviewed_exact_name')
             p['gp_tracks'][name] = recipe['tracks'][track]
     if final:
         p['status'] = '선정 완료'

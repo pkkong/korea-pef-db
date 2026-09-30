@@ -93,6 +93,7 @@ class AdditionalReviewTests(unittest.TestCase):
         html=render_detail_body(p)
         self.assertIn('접수 6개 팀',html)
         self.assertIn('노틱인베스트먼트',html)
+        self.assertEqual(p['selected_gps'][0]['master_id'],'719')
         self.assertNotIn('1차 통과',html)
         self.assertEqual(p['commitment_amount_krw'],100000000000)
 
