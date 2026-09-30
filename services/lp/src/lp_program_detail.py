@@ -63,12 +63,12 @@ def render_detail_body(p):
             body += f'<tr><td class="league-name">{h(segment["name"])}</td><td data-label="출자 예정액">{amount}</td><td data-label="선정 예정">{h(segment.get("manager_count") or "미확인")}</td>{extra}</tr>'
         body += '</tbody></table></div>'
     body += '</section><section id="selection"><h2>' + ('단계별 GP' if p.get('schedule_stages') else '선정 GP') + '</h2>'
+    applicants = p.get('applicants_gps', [])
+    if applicants:
+        body += f'<details class="applicant-list"><summary>접수 {len(applicants)}개 팀</summary><ul>' + ''.join(f'<li>{h(name)}</li>' for name in applicants) + '</ul>' + link(p.get('manager_list_sources', {}).get('applicants_gps'), '접수 원문') + '</details>'
     if p.get('shortlisted_gps'):
         selected = {gp['name']: gp for gp in p['selected_gps']}
         shortlist_url = next((e['url'] for e in p['events'] if e['type']=='서류심사 결과'), '')
-        applicants = p.get('applicants_gps', [])
-        if applicants:
-            body += f'<details class="applicant-list"><summary>접수 {len(applicants)}개 팀</summary><ul>' + ''.join(f'<li>{h(name)}</li>' for name in applicants) + '</ul>' + link(p.get('manager_list_sources', {}).get('applicants_gps'), '접수 원문') + '</details>'
         body += '<div class="scroll"><table class="gp-stage-table"><thead><tr><th>운용사</th><th>1차 통과</th><th>최종 선정</th></tr></thead><tbody>'
         for name in dict.fromkeys(p['shortlisted_gps'] + list(selected)):
             gp = selected.get(name)

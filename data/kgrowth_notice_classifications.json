@@ -1,0 +1,53 @@
+[
+  {
+    "source_id": "913",
+    "sha256": "9ca50c76785da0e2a2b7edf26006f8cdb36b4c351bfba893604d49023bbdea03",
+    "attachment_hashes": {},
+    "label": "사업 공고 아님",
+    "reason": "프로젝트펀드 담당자 안내"
+  },
+  {
+    "source_id": "936",
+    "sha256": "f9881cf4dea7054a5ccbcfc8f14296a026fe2bba3c2b1b0c0c9e0c0c3068f5ed",
+    "attachment_hashes": {
+      "https://www.kgrowth.or.kr/down_file.asp?idx=936&SelType=Notice1": "32e3d0c34d8544f07f9feeb8dec17dcd700ae0c09e26edb8449b90cbdaec461e"
+    },
+    "label": "사업 공고 아님",
+    "reason": "혁신기업 지원대상 안내"
+  },
+  {
+    "source_id": "1116",
+    "sha256": "64774af4afb0186569f65be616a38a13e91c9cbc18eee9645591fd6be15feda6",
+    "attachment_hashes": {},
+    "label": "대상 범위 검토",
+    "reason": "국민참여형 사업의 PE 관련성 추가 확인 필요"
+  },
+  {
+    "source_id": "1121",
+    "sha256": "b4dc092c8f0a4cd4475a482f1ca3b8e35e611547535390467c3dcf93d6f21f7c",
+    "attachment_hashes": {
+      "https://www.kgrowth.or.kr/down_file.asp?idx=1121&SelType=Notice1": "9f7ab4a4eb2137f335326247cbbb11e229c56f903c3da8df03750cad0775f689",
+      "https://www.kgrowth.or.kr/down_file.asp?idx=1121&SelType=Notice2": "3bbc8bca4a8fb5fb7ef5d398f7da89f1630596047647a8a2537d146d10fc0a8f",
+      "https://www.kgrowth.or.kr/down_file.asp?idx=1121&SelType=Notice3": "b19bd8e06b5f1dcb185ad3bb581d80740ab15d0590a339e4d2ef6e33c0c6fe17"
+    },
+    "label": "대상 범위 검토",
+    "reason": "IBK 일반매칭 사업의 투자기구·출자 조건 확인 필요"
+  },
+  {
+    "source_id": "1123",
+    "sha256": "ac64289e6bd2564b63fc6eecf331f7be2cd3a5d7c51051c10db325dbe344b72a",
+    "attachment_hashes": {},
+    "label": "대상 범위 검토",
+    "reason": "지역산업 분야 별도 공고로 M.AX 사업과 분리"
+  },
+  {
+    "source_id": "1122",
+    "sha256": "ec78422345dfdadb289156a694c092d16216ac40ee3b5489f52d314c72052f92",
+    "attachment_hashes": {
+      "https://www.kgrowth.or.kr/down_file.asp?idx=1122&SelType=Notice2": "02b64e9b8c1a222769ef673b3b27b4ac2244eb0b4f09c7026c692a971511d9b7",
+      "https://www.kgrowth.or.kr/down_file.asp?idx=1122&SelType=Notice3": "45658f03a1da5e248018588659ab4b5e81cc88746addd7b59297b3d77bf045c5"
+    },
+    "label": "제출서식",
+    "reason": "부산 2호 재공고의 제출서식으로 별도 사업 아님"
+  }
+]

@@ -2,6 +2,7 @@
 from difflib import unified_diff
 from html import escape
 from lp_program_service import shell
+from kgrowth_program_review import notice_classification
 
 
 def render_review(data,report,previous):
@@ -11,7 +12,8 @@ def render_review(data,report,previous):
     notices=sorted(report['notices'],key=lambda n:n['date'],reverse=True)
     for n in notices:
         p=next((p for p in programs if any(e['url']==n['url'] for e in p['events'])),None)
-        label='사업 연결됨' if p else '정리 대기'
+        classification=notice_classification(n)
+        label='사업 연결됨' if p else (classification['label'] if classification else '정리 대기')
         before=old.get(str(n['source_id']))
         changed=before and any(before.get(k)!=n.get(k) for k in ('body','title','date','attachment_hashes'))
         if changed:label='원문 변경'
@@ -24,7 +26,8 @@ def render_review(data,report,previous):
             for name,value in fields:body+=f'<tr><th>{name}</th><td>{escape(value)}</td></tr>'
             body+='</tbody></table>'
         else:
-            body+='<p class="muted">아직 사업 정보로 정리하지 않은 공고입니다.</p>'
+            note=classification['reason'] if classification else '아직 사업 정보로 정리하지 않은 공고입니다.'
+            body+='<p class="muted">'+escape(note)+'</p>'
         if changed:
             diff='\n'.join(unified_diff(before.get('body','').splitlines(),n['body'].splitlines(),fromfile='이전 원문',tofile='현재 원문',lineterm=''))
             if diff:body+='<h2>바뀐 내용</h2><pre>'+escape(diff)+'</pre>'

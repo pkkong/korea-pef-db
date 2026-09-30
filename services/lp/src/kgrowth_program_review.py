@@ -19,6 +19,15 @@ def fingerprint(notice):
     return hashlib.sha256(json.dumps([notice['title'], notice['date'], notice['body']], ensure_ascii=False).encode()).hexdigest()
 
 
+def notice_classification(notice):
+    path = REGISTRY.with_name('kgrowth_notice_classifications.json')
+    rows = json.loads(path.read_text()) if path.exists() else []
+    row = next((r for r in rows if r['source_id'] == str(notice['source_id'])), None)
+    if row and notice.get('body') is not None and fingerprint(notice) == row['sha256'] and notice.get('attachment_hashes', {}) == row.get('attachment_hashes', {}):
+        return row
+    return None
+
+
 def candidate_queue(notices):
     groups = {}
     for n in notices:
@@ -37,6 +46,9 @@ def candidate_queue(notices):
                  '1차 심사' if '서류심사' in title else
                  '최종 선정' if '선정결과' in re.sub(r'\s+', '',title) else
                  '접수 현황' if '접수현황' in re.sub(r'\s+', '',title) else '모집 공고')
+        classification = notice_classification(n)
+        if classification:
+            group['disposition'] = classification['label']
         group['notices'].append({'source_id':n['source_id'], 'title':title, 'date':n['date'],
                                  'url':n['url'], 'stage':stage})
         if stage == '재공고·변경':
@@ -44,8 +56,19 @@ def candidate_queue(notices):
     return list(groups.values())
 
 
-def team_sections(body):
+def team_sections(body, layout=None):
     """Explicit Korean section headings and manager rows; no entity guesses."""
+    if layout:
+        heading = layout['heading']
+        if body.count(heading) != 1:
+            raise ValueError('Manager heading missing or ambiguous')
+        section = body.split(heading, 1)[1].split('문의', 1)[0]
+        if layout.get('row_separator'):
+            section = section.replace(layout['row_separator'], '\n')
+        names = [re.sub(r'^[-•]\s*', '', line.strip()) for line in section.splitlines() if line.strip()]
+        if len(names) != layout['count'] or len(set(names)) != len(names):
+            raise ValueError('Manager list count differs from reviewed evidence')
+        return {layout['track']:names}
     result, current = {}, None
     for raw in body.splitlines():
         line = raw.strip()
@@ -77,7 +100,11 @@ def project(recipe, notices):
             raise ValueError('Approved attachment changed')
         sources.append((approved, n))
     source_ids = {str(s['source_id']) for s in recipe['sources']}
+    exclusions = {str(e['source_id']):e for e in recipe.get('related_exclusions', [])}
     for n in notices:
+        excluded = exclusions.get(str(n['source_id']))
+        if excluded and fingerprint(n) == excluded['sha256'] and n.get('attachment_hashes', {}) == excluded.get('attachment_hashes', {}):
+            continue
         if n['source_id'] not in source_ids and recipe['source_title'].casefold() in re.sub(r'\s+', '', n['title']).casefold() and '【제출서식】' not in n['title']:
             raise ValueError('New related notice requires review')
     # Every reviewed offering field has an exact excerpt from a fetched body
@@ -93,7 +120,7 @@ def project(recipe, notices):
         facts[field] = evidence['value']
     p = {'id':recipe['id'], 'institution_id':'kgrowth', 'institution_name':'한국성장금융',
          'title':recipe['title'], 'display_title':recipe['title'], 'asset_scope':recipe['asset_scope'],
-         'status':'심사 중', 'events':[], 'schedule_stages':[], 'selected_gps':[],
+         'status':'모집 공고', 'events':[], 'schedule_stages':[], 'selected_gps':[],
          'shortlisted_gps':[], 'gp_tracks':{}, **facts}
     stage_map = {'모집 공고':('announcement','모집 공고'), '서류심사 결과':('screening','1차 심사 결과'),
                  '최종 선정':('selection','최종 선정'), '접수 현황':('application','접수 현황')}
@@ -105,15 +132,17 @@ def project(recipe, notices):
         p['schedule_stages'].append({'stage':stage,'label':label,'original_label':event,'date':n['date'],
                                     'precision':'date','status':'confirmed','source_url':n['url'],'show_source':True})
         if event in ('접수 현황','서류심사 결과','최종 선정'):
-            teams = team_sections(n['body'])
+            teams = team_sections(n['body'], approved.get('manager_layout'))
             if set(teams) != set(recipe['tracks']):
                 raise ValueError('Manager tracks differ from reviewed program')
             p['schedule_stages'][-1]['detail'] = f"{sum(len(names) for names in teams.values())}개 팀"
             if event == '접수 현황':
+                p['status'] = '심사 중'
                 applicants = teams
                 p['manager_list_sources'] = {'applicants_gps':n['url']}
                 p['applicants_gps'] = [name for names in teams.values() for name in names]
             elif event == '서류심사 결과':
+                p['status'] = '심사 중'
                 shortlist = teams
             else:
                 final = teams
@@ -126,8 +155,10 @@ def project(recipe, notices):
         for name in names:
             p['gp_tracks'][name] = recipe['tracks'][track]
     for track,names in final.items():
-        if shortlist and not set(names) <= set(shortlist[track]):
-            raise ValueError('Final manager was not shortlisted in this track')
+        prior = shortlist or applicants
+        aliases = recipe.get('name_aliases', {})
+        if prior and not {aliases.get(n,n) for n in names} <= {aliases.get(n,n) for n in prior[track]}:
+            raise ValueError('Final manager not found in preceding stage')
         for name in names:
             # A source-derived identity is not a match to an existing GP master.
             key = 'kgrowth-' + hashlib.sha256(name.encode()).hexdigest()[:16]
@@ -141,7 +172,7 @@ def project(recipe, notices):
         p['schedule_stages'].append({'stage':'application','label':'접수 마감','original_label':'접수 마감',
                                     'date':p['deadline'],'precision':'datetime','status':'announced_deadline',
                                     'source_url':recruitment['url'],'show_source':True})
-        p['schedule_stages'].sort(key=lambda s:s['date'])
+        p['schedule_stages'].sort(key=lambda s:(s['date'][:10], 0 if s['status']=='announced_deadline' else 1, s['date']))
     p['review_evidence'] = recipe['facts']
     return p
 
