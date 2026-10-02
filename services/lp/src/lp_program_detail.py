@@ -69,20 +69,25 @@ def render_detail_body(p):
     if p.get('shortlisted_gps'):
         selected = {gp['name']: gp for gp in p['selected_gps']}
         shortlist_url = next((e['url'] for e in p['events'] if e['type']=='서류심사 결과'), '')
-        body += '<div class="scroll"><table class="gp-stage-table"><thead><tr><th>운용사</th><th>1차 통과</th><th>최종 선정</th></tr></thead><tbody>'
+        result_pending = p['status'] == '선정 결과 발표'
+        result_heading = '선정 결과' if result_pending else '최종 선정'
+        body += f'<div class="scroll"><table class="gp-stage-table"><thead><tr><th>운용사</th><th>1차 통과</th><th>{result_heading}</th></tr></thead><tbody>'
         for name in dict.fromkeys(p['shortlisted_gps'] + list(selected)):
             gp = selected.get(name)
             name_html = f'<a href="selected-gp-{h(gp["page_key"])}.html">{h(name)}</a>' if gp else h(name)
             if p.get('gp_tracks', {}).get(name):
                 name_html += f'<small>{h(p["gp_tracks"][name])}</small>'
+            if gp and gp.get('commitment_amount_krw'):
+                name_html += f'<small>출자 예정 {gp["commitment_amount_krw"]/100000000:,.0f}억원</small>'
             first = link(shortlist_url, '통과') if name in p['shortlisted_gps'] else '—'
-            final = link(gp['source_url'], '선정') if gp else '—'
+            final = link(gp['source_url'], '발표' if result_pending else '선정') if gp else '—'
             body += f'<tr><td>{name_html}</td><td>{first}</td><td>{final}</td></tr>'
         body += '</tbody></table></div>'
     elif p['selected_gps']:
         body += '<div class="scroll"><table><thead><tr><th>운용사</th><th>선정 결과</th></tr></thead><tbody>'
         for gp in p['selected_gps']:
-            body += f'<tr><td><a href="selected-gp-{h(gp["page_key"])}.html">{h(gp["name"])}</a></td><td>{link(gp["source_url"],"선정 결과")}</td></tr>'
+            amount = f'<small>출자 예정 {gp["commitment_amount_krw"]/100000000:,.0f}억원</small>' if gp.get('commitment_amount_krw') else ''
+            body += f'<tr><td><a href="selected-gp-{h(gp["page_key"])}.html">{h(gp["name"])}</a>{amount}</td><td>{link(gp["source_url"],"선정 결과")}</td></tr>'
         body += '</tbody></table></div>'
     else:
         body += f'<p class="muted">{h(p.get("gp_stage_note"))}</p>' if p.get('gp_stage_note') else '<p class="muted">선정 결과 미확인</p>'

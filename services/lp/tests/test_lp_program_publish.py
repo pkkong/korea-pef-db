@@ -4,6 +4,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SRC = Path(__file__).resolve().parents[1]/'src'
 sys.path.insert(0,str(SRC))
@@ -50,5 +51,26 @@ class PublishContracts(unittest.TestCase):
             for gp in p['selected_gps']:gp.pop('page_key',None)
         self.assertEqual(before,after)
         self.assertEqual(5,len([n for n in pages if n.startswith('program-')]))
+
+    def test_priority_program_comes_from_reprojected_evidence_not_collector_payload(self):
+        verified=copy.deepcopy(next(p for p in self.data['programs'] if p['institution_id']=='ktcu'))
+        verified['status']='접수 마감'
+        self.report['priority_sources']={'ktcu':{'notices':[{'source_id':'61742', 'url':'https://www.ktcu.or.kr/PPW-CSB-000101/61742',
+                                                              'date':'2026-09-04','title':'공식 모집','body':'공식 본문'}],
+                                                 'programs':[{'id':'unreviewed-ktcu','institution_id':'ktcu'}],
+                                                 'holds':[]}}
+        with patch('publish_lp_programs.project_ktcu',return_value=([verified],[])):
+            data,pages=prepare(self.data,self.report)
+        self.assertEqual('접수 마감',next(p for p in data['programs'] if p['id']==verified['id'])['status'])
+        self.assertNotIn('unreviewed-ktcu',{p['id'] for p in data['programs']})
+        self.assertIn('program-ktcu-2026-blind-pef.html',pages)
+
+    def test_priority_source_failure_keeps_last_published_program(self):
+        original=copy.deepcopy(next(p for p in self.data['programs'] if p['institution_id']=='koreapost'))
+        self.report['priority_sources']={'koreapost':{'notices':[],'programs':[],
+                                                       'holds':[{'program_id':original['id'],'reason':'공식 자료 수집 실패'}]}}
+        data,_=prepare(self.data,self.report)
+        self.assertEqual(original,next(p for p in data['programs'] if p['id']==original['id']))
+        self.assertIn('공식 자료 수집 실패',[hold['reason'] for hold in data['program_holds']])
 
 if __name__=='__main__':unittest.main()

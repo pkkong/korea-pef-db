@@ -6,11 +6,11 @@ from kgrowth_program_review import link_suggestions, notice_classification
 
 
 def render_review(data,report,previous):
-    old={str(n['source_id']):n for n in previous.get('tracked_notices',[])}
+    old={n['url']:n for n in previous.get('tracked_notices',[])+previous.get('priority_notices',[])}
     programs=data['programs']
     body='<header><h1>공고 검토</h1><p class="muted">공고와 정리된 사업 정보를 확인하는 화면입니다. 수정·반영할 내용은 대화에서 알려주세요.</p></header>'
-    suggestions=link_suggestions(report['notices'])
-    suggested_sources={item['source_id'] for item in suggestions}
+    suggestions=data.get('link_suggestions', link_suggestions(report['notices']))
+    suggested_sources={item['url'] for item in suggestions}
     if suggestions:
         published={p['id'] for p in programs}
         body+='<section class="review-queue"><h2>새 단계 연결 후보</h2><ul>'
@@ -22,13 +22,15 @@ def render_review(data,report,previous):
                 targets+=' · 차수 확인 필요'
             body+=f'<li><small>{escape(item["date"])} · {escape(item["stage"])}</small><strong>{escape(item["title"])}</strong><span>{targets}</span> <a target="_blank" rel="noopener" href="{escape(item["url"],quote=True)}">공고 원문 ↗</a></li>'
         body+='</ul></section>'
-    notices=sorted(report['notices'],key=lambda n:n['date'],reverse=True)
+    related_urls={e['url'] for p in programs for e in p['events']} | suggested_sources
+    priority_notices=[n for n in data.get('priority_notices',[]) if n['url'] in related_urls]
+    notices=sorted(report['notices']+priority_notices,key=lambda n:n['date'],reverse=True)
     for n in notices:
         p=next((p for p in programs if any(e['url']==n['url'] for e in p['events'])),None)
-        classification=notice_classification(n)
-        label=('사업 연결됨' if p else '기존 사업 연결 후보' if str(n['source_id']) in suggested_sources
+        classification=notice_classification(n) if n.get('institution_id','kgrowth')=='kgrowth' else None
+        label=('사업 연결됨' if p else '기존 사업 연결 후보' if n['url'] in suggested_sources
                else classification['label'] if classification else '정리 대기')
-        before=old.get(str(n['source_id']))
+        before=old.get(n['url'])
         changed=before and any(before.get(k)!=n.get(k) for k in ('body','title','date','attachment_hashes'))
         if changed:label='원문 변경'
         body+=f'<details class="review-notice"><summary><small>{escape(n["date"])} · {label}</small><strong>{escape(n["title"])}</strong></summary><div class="review-content">'

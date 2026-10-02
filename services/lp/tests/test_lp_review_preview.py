@@ -28,4 +28,18 @@ class PreviewTests(unittest.TestCase):
   self.assertIn('program-kgrowth-2026-busan-2-reopen.html',html)
   self.assertIn('기존 사업 연결 후보',html)
   self.assertNotIn('선정 GP</th>',html)
+ def test_priority_institution_result_is_shown_as_candidate_only(self):
+  url='https://www.ktcu.or.kr/PPW-CSB-000101/62000'
+  notice={'source_id':'62000','institution_id':'ktcu','title':'2026년 블라인드 PEF 선정 결과',
+          'body':'미검토 운용사', 'date':'2026-10-30','url':url}
+  program={'id':'ktcu-2026-blind-pef','title':'교직원공제회 블라인드 PEF','events':[],'selected_gps':[]}
+  suggestion={'source_id':'62000','title':notice['title'],'date':notice['date'],'url':url,
+              'stage':'최종 선정','programs':[{'id':program['id'],'title':program['title']}]}
+  data={'as_of':'2026-10-30','programs':[program],'priority_notices':[notice],
+        'link_suggestions':[suggestion]}
+  html=render_review(data,{'notices':[]},{'priority_notices':[]})
+  self.assertIn('새 단계 연결 후보',html)
+  self.assertIn('program-ktcu-2026-blind-pef.html',html)
+  self.assertIn('기존 사업 연결 후보',html)
+  self.assertNotIn('선정 GP</th>',html)
 if __name__=='__main__':unittest.main()

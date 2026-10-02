@@ -1,0 +1,181 @@
+{
+  "source_id": "0041:400",
+  "source_url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400",
+  "source_title": "2026년도 우체국금융 국내 블라인드 PEF 위탁운용사 선정 공고[우정사업본부 공고 제2026-124호]",
+  "source_date": "2026-09-10",
+  "sha256": "7afa8d1b3eea042b2af3426230fe47d77865d3bd7fb957d8a934a40053813ef3",
+  "attachment_hashes": {
+    "https://www.kpasset.go.kr/download.es?filename=1789001224497.pdf&filenameOrg=2026%EB%85%84%EB%8F%84%20%EC%9A%B0%EC%B2%B4%EA%B5%AD%EA%B8%88%EC%9C%B5%20%EA%B5%AD%EB%82%B4%20%EB%B8%94%EB%9D%BC%EC%9D%B8%EB%93%9C%20PEF%20%EC%9C%84%ED%83%81%EC%9A%B4%EC%9A%A9%EC%82%AC%20%EC%84%A0%EC%A0%95%20%EA%B3%B5%EA%B3%A0%EB%AC%B8.pdf&f_path=board&bid=0041&type=board&bid=0041&list_no=400&seq=2": "38d9d9bd2bbf6f569e97e9effbaf89b5853eb81b5da9ec886ff7ff8105ce8f54",
+    "https://www.kpasset.go.kr/download.es?filename=1789001224502.hwp&filenameOrg=%28%EB%B3%84%EC%B2%A81%29%202026%EB%85%84%EB%8F%84%20%EC%9A%B0%EC%B2%B4%EA%B5%AD%EA%B8%88%EC%9C%B5%20%EA%B5%AD%EB%82%B4%20%EB%B8%94%EB%9D%BC%EC%9D%B8%EB%93%9C%20PEF%20%EC%A0%9C%EC%95%88%EC%84%9C.hwp&f_path=board&bid=0041&type=board&bid=0041&list_no=400&seq=3": "740045d4179dcecb4e805fba804d6f2a32e69f212d4cf8c372574e8018fb5967",
+    "https://www.kpasset.go.kr/download.es?filename=1789001224505.xlsx&filenameOrg=%28%EB%B3%84%EC%B2%A82%29%202026%EB%85%84%20%EC%9A%B0%EC%B2%B4%EA%B5%AD%EA%B8%88%EC%9C%B5%20%EA%B5%AD%EB%82%B4%20%EB%B8%94%EB%9D%BC%EC%9D%B8%EB%93%9C%20PEF%20%EC%97%91%EC%85%80%20%EC%A0%9C%EC%B6%9C%EC%96%91%EC%8B%9D.xlsx&f_path=board&bid=0041&type=board&bid=0041&list_no=400&seq=4": "df59503ce23ca1b0df49693d08accde2104e6556a53234406fe5b872b5cc62de"
+  },
+  "pdf_url": "https://www.kpasset.go.kr/download.es?filename=1789001224497.pdf&filenameOrg=2026%EB%85%84%EB%8F%84%20%EC%9A%B0%EC%B2%B4%EA%B5%AD%EA%B8%88%EC%9C%B5%20%EA%B5%AD%EB%82%B4%20%EB%B8%94%EB%9D%BC%EC%9D%B8%EB%93%9C%20PEF%20%EC%9C%84%ED%83%81%EC%9A%B4%EC%9A%A9%EC%82%AC%20%EC%84%A0%EC%A0%95%20%EA%B3%B5%EA%B3%A0%EB%AC%B8.pdf&f_path=board&bid=0041&type=board&bid=0041&list_no=400&seq=2",
+  "facts": [
+    {
+      "field": "investment_structure",
+      "source": "pdf",
+      "quote": "기관전용 사모집합투자기구"
+    },
+    {
+      "field": "general_amount",
+      "source": "pdf",
+      "quote": "총 2,000억원 이내"
+    },
+    {
+      "field": "rookie_amount",
+      "source": "pdf",
+      "quote": "총 450억원 이내"
+    },
+    {
+      "field": "general_count",
+      "source": "pdf",
+      "quote": "3~4개 운용사"
+    },
+    {
+      "field": "rookie_count",
+      "source": "pdf",
+      "quote": "2~3개 운용사"
+    },
+    {
+      "field": "deadline",
+      "source": "body",
+      "quote": "2026. 9. 28.(월) 16시"
+    },
+    {
+      "field": "general_strategy",
+      "source": "pdf",
+      "quote": "Mezzanine 투자 비중 70% 이상"
+    },
+    {
+      "field": "small_medium",
+      "source": "pdf",
+      "quote": "중소·중견기업 50% 이상"
+    },
+    {
+      "field": "ai",
+      "source": "pdf",
+      "quote": "우체국금융 약정액의 최소 40%"
+    },
+    {
+      "field": "second_evaluation",
+      "source": "pdf",
+      "quote": "10. 21~22."
+    },
+    {
+      "field": "due_diligence",
+      "source": "pdf",
+      "quote": "10. 28~30."
+    },
+    {
+      "field": "final_month",
+      "source": "pdf",
+      "quote": "11월 최종선정"
+    }
+  ],
+  "program": {
+    "id": "koreapost-2026-domestic-pe",
+    "institution_id": "koreapost",
+    "institution_name": "우정사업본부",
+    "title": "2026년도 우체국금융 국내 블라인드 PEF 위탁운용사 선정",
+    "display_title": "2026 국내 블라인드 PEF",
+    "asset_scope": "국내 PE",
+    "status": "접수 마감",
+    "events": [
+      {
+        "date": "2026-09-10",
+        "type": "모집 공고",
+        "title": "우정사업본부 공고 제2026-124호",
+        "url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400"
+      }
+    ],
+    "selected_gps": [],
+    "applicants_gps": [],
+    "shortlisted_gps": [],
+    "commitment_amount_krw": 245000000000,
+    "commitment_label": "총 2,450억원 이내",
+    "manager_count_label": "5~7개사",
+    "deadline": "2026-09-28T16:00:00+09:00",
+    "segments": [
+      {
+        "name": "일반",
+        "amount_krw": 200000000000,
+        "manager_count": "3~4개사"
+      },
+      {
+        "name": "루키",
+        "amount_krw": 45000000000,
+        "manager_count": "2~3개사"
+      }
+    ],
+    "primary_investment": {
+      "text": "일반: 메자닌·중소·중견기업·AI 관련 산업. 루키: 중소·중견기업.",
+      "items": [
+        "일반: 메자닌 투자 비중 70% 이상 · 중소·중견기업 50% 이상",
+        "일반: AI 관련 산업에 우체국금융 약정액의 40% 이상",
+        "루키: 중소·중견기업 50% 이상"
+      ]
+    },
+    "schedule_stages": [
+      {
+        "stage": "announcement",
+        "label": "모집 공고",
+        "original_label": "모집 공고",
+        "date": "2026-09-10",
+        "precision": "date",
+        "status": "confirmed",
+        "source_url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400"
+      },
+      {
+        "stage": "application",
+        "label": "접수 마감",
+        "original_label": "제안서 접수 마감",
+        "date": "2026-09-28T16:00:00+09:00",
+        "precision": "datetime",
+        "status": "announced_deadline",
+        "source_url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400"
+      },
+      {
+        "stage": "screening",
+        "label": "1차 평가·예비실사",
+        "original_label": "정량평가 및 예비실사",
+        "date": "2026-09-28",
+        "date_label": "9월 28일 이후",
+        "precision": "date",
+        "status": "planned",
+        "source_url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400"
+      },
+      {
+        "stage": "screening",
+        "label": "2차 평가",
+        "original_label": "정성평가",
+        "date": "2026-10-21",
+        "date_label": "10월 21~22일",
+        "precision": "date",
+        "status": "planned",
+        "source_url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400"
+      },
+      {
+        "stage": "due_diligence",
+        "label": "본실사",
+        "original_label": "본실사",
+        "date": "2026-10-28",
+        "date_label": "10월 28~30일",
+        "precision": "date",
+        "status": "planned",
+        "source_url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400"
+      },
+      {
+        "stage": "selection",
+        "label": "최종 선정",
+        "original_label": "투자심의위원회 심의",
+        "date": "2026-11",
+        "date_label": "11월 중",
+        "precision": "month",
+        "status": "planned",
+        "source_url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400"
+      }
+    ],
+    "gp_stage_note": "공식 선정 결과 발표 전"
+  },
+  "source_body": "2026년도 우체국금융 국내 블라인드 PEF 위탁운용사 선정계획을 아래와 같이 공고합니다.\n참여하고자 하는 기관은 아래 내용을 숙지하여 기한 내 제안서를 제출하여 주시기 바랍니다.\n1. 투자전략\n- 일반리그 : Growth 전략(Mezzanine 투자 비중 70% 이상)\n- 루키리그 : Buyout 및 Growth 전략\n2. 투자규모\n- 일반리그 : 총 2,000억원 이내\n- 루키리그 : 총 450억원 이내\n3. 선정 운용사 수\n- 일반리그 : 3~4개 운용사\n- 루키리그 : 2~3개 운용사\n4. 선정방식 : 공개모집 절차를 통해 선정\n5. 제안서 접수 마감일 : 2026. 9. 28.(월) 16시\n6. 상세내용 : 첨부파일 참고\n7. 문의처 : 예금대체투자과 박성찬 주무관(channi79@korea.kr / Tel : 044-200-8537)"
+}

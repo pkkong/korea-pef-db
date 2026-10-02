@@ -1,0 +1,478 @@
+[
+  {
+    "id": "kexim-2026-h1-supply-chain-pe",
+    "title": "2026년 상반기 핵심광물·에너지 공급망안정화 펀드",
+    "match_groups": [
+      [
+        "공급망안정화기금",
+        "2026",
+        "핵심광물",
+        "펀드"
+      ]
+    ],
+    "sources": [
+      {
+        "source_id": "112002",
+        "date": "2025-11-03",
+        "event": "모집 공고",
+        "sha256": "0483999956bc19d63cdc321f403daa6192a98be06dc794279d357f4c0eb0ff3a",
+        "attachment_hashes": {
+          "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112002&fileTy=ATTACH&fileNo=1": "c93d280902319d178a91e578d52dbb7ba32664725040f7c60a8a22df8037c7f0"
+        }
+      },
+      {
+        "source_id": "112123",
+        "date": "2025-11-21",
+        "event": "접수 현황",
+        "sha256": "67d996d4edccacf8a6acfc1726dd86eb912c4721d5925df584f1aa927d44d8c1",
+        "attachment_hashes": {
+          "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112123&fileTy=ATTACH&fileNo=1": "be0988f6cca72d2ce55153ee8b0993f9338b65e6cb503ec2a6ff23f72c576fb8"
+        },
+        "team_count": 5
+      },
+      {
+        "source_id": "112222",
+        "date": "2025-12-08",
+        "event": "서류심사 결과",
+        "sha256": "92748c02d7048ea59e308589180295d632d6f1d4e657c9fa6bb00a793e3804e0",
+        "attachment_hashes": {
+          "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112222&fileTy=ATTACH&fileNo=2": "27c86623647d32c1d96b3c977aed08adff6a13e6da857db6c2cba34b0b872b90"
+        },
+        "team_count": 4
+      },
+      {
+        "source_id": "112512",
+        "date": "2026-01-09",
+        "event": "최종 선정",
+        "sha256": "d7f7ae9fe08a579d8c8c2350b3b7bed23ffcdffc05674bc254f16689a0c6cfbe",
+        "attachment_hashes": {
+          "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112512&fileTy=ATTACH&fileNo=1": "d2f47221a877b8959f0e0bfe4104a6cdde5beddb98d0822a56d3b9f97b65ef09"
+        },
+        "team_count": 2
+      }
+    ],
+    "facts": {
+      "commitment_amount_krw": {
+        "source_id": "112002",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112002&fileTy=ATTACH&fileNo=1",
+        "quote": "출자금액 출자비율 펀드별 목표결성 금액 선정 운용사수 조성목표",
+        "value": 100000000000
+      },
+      "commitment_label": {
+        "source_id": "112002",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112002&fileTy=ATTACH&fileNo=1",
+        "quote": "1,000 40% 이내 1,250 2 2,500",
+        "value": "1,000억원"
+      },
+      "manager_count_label": {
+        "source_id": "112002",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112002&fileTy=ATTACH&fileNo=1",
+        "quote": "선정 운용사수",
+        "value": "2개사"
+      },
+      "deadline": {
+        "source_id": "112002",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112002&fileTy=ATTACH&fileNo=1",
+        "quote": "’25. 11. 21.( 금), 16:00시까지",
+        "value": "2025-11-21T16:00:00+09:00"
+      },
+      "primary_investment": {
+        "source_id": "112002",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112002&fileTy=ATTACH&fileNo=1",
+        "quote": "핵심광물 및 에너지 분야 집중 투자로 공급망안정화 제고",
+        "value": {
+          "text": "핵심광물·에너지 분야 기업과 관련 프로젝트에 투자"
+        }
+      },
+      "segments": {
+        "source_id": "112002",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112002&fileTy=ATTACH&fileNo=1",
+        "quote": "1,000 40% 이내 1,250 2 2,500",
+        "value": [
+          {
+            "name": "핵심광물·에너지",
+            "amount_krw": 100000000000,
+            "manager_count": "2개사"
+          }
+        ]
+      },
+      "linkage_note": {
+        "source_id": "112512",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112512&fileTy=ATTACH&fileNo=1",
+        "quote": "최종선정은 공급망안정화기금운용심의회 의결이 완료된 후 확정 예정",
+        "value": "선정 결과는 기금운용심의회 의결 후 확정 예정입니다."
+      }
+    },
+    "manager_lists": {
+      "applicants": {
+        "핵심광물·에너지": [
+          "비엔더블유인베스트먼트",
+          "우리프라이빗에퀴티자산운용·블루코너캐피탈",
+          "원익투자파트너스",
+          "제네시스프라이빗에쿼티",
+          "한국투자프라이빗에쿼티"
+        ]
+      },
+      "shortlist": {
+        "핵심광물·에너지": [
+          "비엔더블유인베스트먼트",
+          "원익투자파트너스",
+          "제네시스프라이빗에쿼티",
+          "한국투자프라이빗에쿼티"
+        ]
+      },
+      "selected": {
+        "핵심광물·에너지": [
+          "비엔더블유인베스트먼트",
+          "한국투자프라이빗에쿼티"
+        ]
+      }
+    },
+    "manager_evidence": {
+      "applicants": {
+        "source_id": "112123",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112123&fileTy=ATTACH&fileNo=1",
+        "quote": "총 5개사 제출"
+      },
+      "shortlist": {
+        "source_id": "112222",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112222&fileTy=ATTACH&fileNo=2",
+        "quote": "현장실사 및 제안서 발표 대상 운용사 명단"
+      },
+      "selected": {
+        "source_id": "112512",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112512&fileTy=ATTACH&fileNo=1",
+        "quote": "2개사"
+      }
+    },
+    "allocation_evidence": {
+      "source_id": "112512",
+      "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112512&fileTy=ATTACH&fileNo=1",
+      "quote": "500억원 1,250억원",
+      "per_gp_krw": {
+        "핵심광물·에너지": 50000000000
+      }
+    }
+  },
+  {
+    "id": "kexim-2026-h1-regional-growth-pe",
+    "title": "2026년 상반기 수출중소중견 지역주도성장 펀드",
+    "match_groups": [
+      [
+        "2026",
+        "상반기",
+        "수출중소중견",
+        "지역주도성장",
+        "펀드"
+      ]
+    ],
+    "sources": [
+      {
+        "source_id": "112902",
+        "date": "2026-02-12",
+        "event": "모집 공고",
+        "sha256": "afaeabc58450675d9993537402ac6f43df67c2cb6201f6c396e0222f9e942ee2",
+        "attachment_hashes": {
+          "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112902&fileTy=ATTACH&fileNo=1": "0c7c9f56143c22f19b35d6d26c413c1355597e8d480c3666b951ae7095fd97ff"
+        }
+      },
+      {
+        "source_id": "113170",
+        "date": "2026-03-09",
+        "event": "접수 현황",
+        "sha256": "9d053e77604a858ed23e69f5076c0ca688e7de0453ae662236e70c8a286c309d",
+        "attachment_hashes": {
+          "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=113170&fileTy=ATTACH&fileNo=1": "1e34f3ff0235f9370ad6f0684f53367ecfdb84deb95fa82ce5a7d2ed87ebf915"
+        },
+        "team_count": 15
+      },
+      {
+        "source_id": "113343",
+        "date": "2026-03-19",
+        "event": "서류심사 결과",
+        "sha256": "b8944e5cffea5bab1a4d09acf26a3b4686f95e9a86dc77d3f645e132dd06220a",
+        "attachment_hashes": {
+          "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=113343&fileTy=ATTACH&fileNo=1": "19de365b30d2c015928b13ce5549de812d3189baaafc768e37af00901e7809cb"
+        },
+        "team_count": 12
+      },
+      {
+        "source_id": "113689",
+        "date": "2026-04-10",
+        "event": "최종 선정",
+        "sha256": "86470a77e8f4c7b5b2e305af043eca1aecb19836c2e3ba02eecc9aa4009dbdd8",
+        "attachment_hashes": {
+          "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=113689&fileTy=ATTACH&fileNo=1": "135abdcf07ae94e27dce75d9be7f8728737475e6aba2dca38247ad508b8e7c0a"
+        },
+        "team_count": 6
+      }
+    ],
+    "facts": {
+      "commitment_amount_krw": {
+        "source_id": "112902",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112902&fileTy=ATTACH&fileNo=1",
+        "quote": "중형 2,000 20% 2,500 4 10,000",
+        "value": 250000000000
+      },
+      "commitment_label": {
+        "source_id": "112902",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112902&fileTy=ATTACH&fileNo=1",
+        "quote": "합계 2,500 20% - 6 12,500",
+        "value": "2,500억원"
+      },
+      "manager_count_label": {
+        "source_id": "112902",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112902&fileTy=ATTACH&fileNo=1",
+        "quote": "합계 2,500 20% - 6 12,500",
+        "value": "6개사"
+      },
+      "deadline": {
+        "source_id": "112902",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112902&fileTy=ATTACH&fileNo=1",
+        "quote": "’26.3.6.(금), 16:00시 限",
+        "value": "2026-03-06T16:00:00+09:00"
+      },
+      "primary_investment": {
+        "source_id": "112902",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112902&fileTy=ATTACH&fileNo=1",
+        "quote": "비수도권 기업 및 수출 중소 · 중견기업 집중 지원",
+        "value": {
+          "text": "비수도권 기업과 수출 중소·중견기업에 투자하고, 친환경·저탄소 사업전환도 지원"
+        }
+      },
+      "segments": {
+        "source_id": "112902",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=112902&fileTy=ATTACH&fileNo=1",
+        "quote": "중형 2,000 20% 2,500 4 10,000",
+        "value": [
+          {
+            "name": "중형",
+            "amount_krw": 200000000000,
+            "manager_count": "4개사"
+          },
+          {
+            "name": "소형",
+            "amount_krw": 50000000000,
+            "manager_count": "2개사"
+          }
+        ]
+      },
+      "linkage_note": {
+        "source_id": "113689",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=113689&fileTy=ATTACH&fileNo=1",
+        "quote": "최종선정은 수출입은행 및 재정경제부 승인절차가 완료된 후 확정 예정",
+        "value": "선정 결과는 수출입은행·재정경제부 승인 후 확정 예정입니다."
+      }
+    },
+    "manager_lists": {
+      "applicants": {
+        "중형": [
+          "노틱인베스트먼트",
+          "대신프라이빗에쿼티",
+          "스틱인베스트먼트",
+          "에스지프라이빗에쿼티",
+          "에이치앤큐에쿼티파트너스",
+          "에이치프라이빗에쿼티",
+          "우리프라이빗에퀴티",
+          "케이엘앤파트너스"
+        ],
+        "소형": [
+          "더함파트너스",
+          "릴슨프라이빗에쿼티",
+          "제네시스프라이빗에쿼티",
+          "제이케이엘인베스트먼트",
+          "중소기업은행, 티에스인베스트먼트 (공동운용)",
+          "키스톤프라이빗에쿼티",
+          "파라투스인베스트먼트"
+        ]
+      },
+      "shortlist": {
+        "중형": [
+          "노틱인베스트먼트",
+          "대신프라이빗에쿼티",
+          "스틱인베스트먼트",
+          "에스지프라이빗에쿼티",
+          "에이치앤큐에쿼티파트너스",
+          "에이치프라이빗에쿼티",
+          "우리프라이빗에퀴티",
+          "케이엘앤파트너스"
+        ],
+        "소형": [
+          "제네시스프라이빗에쿼티",
+          "중소기업은행, 티에스인베스트먼트 (공동운용)",
+          "키스톤프라이빗에쿼티",
+          "파라투스인베스트먼트"
+        ]
+      },
+      "selected": {
+        "중형": [
+          "대신프라이빗에쿼티",
+          "스틱인베스트먼트",
+          "에스지프라이빗에쿼티",
+          "우리프라이빗에퀴티"
+        ],
+        "소형": [
+          "중소기업은행, 티에스인베스트먼트 (공동운용)",
+          "파라투스인베스트먼트"
+        ]
+      }
+    },
+    "manager_evidence": {
+      "applicants": {
+        "source_id": "113170",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=113170&fileTy=ATTACH&fileNo=1",
+        "quote": "15개사(중형 8, 소형 7)"
+      },
+      "shortlist": {
+        "source_id": "113343",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=113343&fileTy=ATTACH&fileNo=1",
+        "quote": "12개사(중형 8, 소형 4)"
+      },
+      "selected": {
+        "source_id": "113689",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=113689&fileTy=ATTACH&fileNo=1",
+        "quote": "6개사"
+      }
+    },
+    "allocation_evidence": {
+      "source_id": "113689",
+      "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=113689&fileTy=ATTACH&fileNo=1",
+      "quote": "500억원 2,500억원",
+      "per_gp_krw": {
+        "중형": 50000000000,
+        "소형": 25000000000
+      }
+    }
+  },
+  {
+    "id": "kexim-2026-h2-global-growth-pe",
+    "title": "2026년 하반기 중소중견 글로벌 성장펀드 (PE)",
+    "match_groups": [
+      [
+        "2026",
+        "하반기",
+        "중소중견",
+        "글로벌",
+        "성장펀드"
+      ],
+      [
+        "2026",
+        "하반기",
+        "블라인드펀드"
+      ]
+    ],
+    "sources": [
+      {
+        "source_id": "115904",
+        "date": "2026-08-31",
+        "event": "모집 공고",
+        "sha256": "d10690e7f89cff598ccf8f4f2d700dd5e64e89eb809d79afd4ec6fdbdd0569a4",
+        "attachment_hashes": {
+          "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=115904&fileTy=ATTACH&fileNo=24": "13e08489a7c197dda58522c6651a3d80e713b210e9c727648ae07211956e0dc2"
+        }
+      },
+      {
+        "source_id": "116241",
+        "date": "2026-09-17",
+        "event": "접수 현황",
+        "sha256": "ae8e13dd70ff4c6156489c017c4d7d1c8e902cf5e55ed04c4c8702da8744032e",
+        "attachment_hashes": {
+          "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=116241&fileTy=ATTACH&fileNo=1": "a6cebe26705c364262a4e923c8adb3ce7e8a2bee38953bf573bcc5c5b6afb2b2"
+        },
+        "team_count": 14
+      }
+    ],
+    "facts": {
+      "commitment_amount_krw": {
+        "source_id": "115904",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=115904&fileTy=ATTACH&fileNo=24",
+        "quote": "첨단전략 중형 1,000 25% 2,000 2 4,000",
+        "value": 150000000000
+      },
+      "commitment_label": {
+        "source_id": "115904",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=115904&fileTy=ATTACH&fileNo=24",
+        "quote": "합계 1,500 25% - 4 6,000",
+        "value": "1,500억원"
+      },
+      "manager_count_label": {
+        "source_id": "115904",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=115904&fileTy=ATTACH&fileNo=24",
+        "quote": "합계 1,500 25% - 4 6,000",
+        "value": "4개사"
+      },
+      "deadline": {
+        "source_id": "115904",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=115904&fileTy=ATTACH&fileNo=24",
+        "quote": "’26. 9. 16.( 수), 16:00까지",
+        "value": "2026-09-16T16:00:00+09:00"
+      },
+      "primary_investment": {
+        "source_id": "115904",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=115904&fileTy=ATTACH&fileNo=24",
+        "quote": "첨단전략산업 및 전후방 연관산업에 중점 투자하는 펀드 조성",
+        "value": {
+          "text": "첨단전략산업 및 연관산업에 투자하고 수출 중소·중견기업의 해외진출 지원"
+        }
+      },
+      "segments": {
+        "source_id": "115904",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=115904&fileTy=ATTACH&fileNo=24",
+        "quote": "첨단전략 중형 1,000 25% 2,000 2 4,000",
+        "value": [
+          {
+            "name": "첨단전략 중형",
+            "amount_krw": 100000000000,
+            "manager_count": "2개사"
+          },
+          {
+            "name": "첨단전략 소형",
+            "amount_krw": 50000000000,
+            "manager_count": "2개사"
+          }
+        ]
+      }
+    },
+    "manager_lists": {
+      "applicants": {
+        "첨단전략 중형": [
+          "노앤파트너스",
+          "어펄마캐피탈매니져스코리아",
+          "제이앤프라이빗에쿼티",
+          "케이엘앤파트너스"
+        ],
+        "첨단전략 소형": [
+          "노틱인베스트먼트",
+          "더함파트너스",
+          "레버런트파트너스",
+          "릴슨프라이빗에쿼티",
+          "이니어스프라이빗에쿼티",
+          "이스트브릿지파트너스",
+          "이앤인베스트먼트",
+          "키스톤프라이빗에쿼티",
+          "펄인베스트먼트",
+          "화인자산운용"
+        ]
+      },
+      "shortlist": {},
+      "selected": {}
+    },
+    "planned_stages": [
+      {
+        "stage": "selection",
+        "label": "최종 선정",
+        "original_label": "공고상 예정",
+        "date": null,
+        "date_label": "2026년 12월",
+        "precision": "month"
+      }
+    ],
+    "manager_evidence": {
+      "applicants": {
+        "source_id": "116241",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=116241&fileTy=ATTACH&fileNo=1",
+        "quote": "14개사(중형 4, 소형 10)"
+      }
+    }
+  }
+]

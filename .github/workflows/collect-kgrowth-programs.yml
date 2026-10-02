@@ -1,4 +1,4 @@
-name: Collect Korea Growth LP programs
+name: Collect LP programs
 
 on:
   workflow_dispatch:
@@ -34,22 +34,26 @@ jobs:
       - name: Verify review access boundary
         run: psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 --file services/lp/tests/check_lp_review_access.sql
       - name: Test collection and publishing contracts
-        run: python3 -m unittest services.lp.tests.test_lp_review_preview services.lp.tests.test_lp_review_decisions services.lp.tests.test_kgrowth_collection services.lp.tests.test_kgrowth_program_review services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish
+        run: python3 -m unittest services.lp.tests.test_lp_review_preview services.lp.tests.test_lp_review_decisions services.lp.tests.test_kgrowth_collection services.lp.tests.test_kgrowth_program_review services.lp.tests.test_collect_ktcu_program services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_kexim_programs services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish
       - name: Load last published data
         run: python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json
       - name: Collect official announcements
         run: python3 services/lp/src/collect_kgrowth_programs.py --baseline /tmp/lp-baseline.json --output /tmp/kgrowth-collection.json
+      - name: Collect Korea Post, KTCU, and KEXIM announcements
+        run: python3 services/lp/src/collect_priority_lp_programs.py --output /tmp/lp-priority-collection.json
       - name: Store evidence and publish verified pages
         run: |
           set -o pipefail
-          python3 services/lp/src/publish_lp_programs.py --collection /tmp/kgrowth-collection.json | tee /tmp/kgrowth-publication.json
+          python3 services/lp/src/publish_lp_programs.py --collection /tmp/kgrowth-collection.json --priority-collection /tmp/lp-priority-collection.json | tee /tmp/kgrowth-publication.json
       - name: Verify published page
         run: |
           python3 - <<'PY'
           import json, time, urllib.request
           expected = json.load(open('/tmp/kgrowth-publication.json'))['run_id']
           report = json.load(open('/tmp/kgrowth-collection.json'))
+          priority = json.load(open('/tmp/lp-priority-collection.json'))
           ids = ['kgrowth-2026-bank-valueup-3'] + [p['id'] for p in report.get('reviewed_programs', [])]
+          ids += [p['id'] for s in priority['sources'].values() for p in s.get('programs', [])]
           for program_id in ids:
               url = f'https://kpef-newsletter.vercel.app/samples/lp/program-{program_id}.html'
               for attempt in range(3):
@@ -65,6 +69,15 @@ jobs:
                       time.sleep(5)
           print('Published LP page matches this collection run')
           PY
+      - name: Report official source outages
+        run: |
+          python3 - <<'PY'
+          import json
+          sources=json.load(open('/tmp/lp-priority-collection.json'))['sources']
+          errors={key:value['error'] for key,value in sources.items() if value.get('error')}
+          if errors:
+              raise SystemExit(f'LP official source collection failed: {errors}')
+          PY
       - name: Keep collection report
         if: always()
         uses: actions/upload-artifact@v4
@@ -73,5 +86,6 @@ jobs:
           path: |
             /tmp/kgrowth-collection.json
             /tmp/kgrowth-collection.md
+            /tmp/lp-priority-collection.json
           if-no-files-found: ignore
           retention-days: 30

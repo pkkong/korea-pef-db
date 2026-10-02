@@ -1,0 +1,27 @@
+{
+  "program_id": "ktcu-2026-blind-pef",
+  "sources": [
+    {
+      "source_id": "61742",
+      "event": "모집 공고",
+      "url": "https://www.ktcu.or.kr/PPW-CSB-000101/61742",
+      "title": "2026년 한국교직원공제회 블라인드 PEF 위탁운용사 선정 공고",
+      "date": "2026-09-04",
+      "sha256": "3f7c70e49cff4cb7731216fd337593a53657ad42a713d4b96dd407615d997d8f",
+      "body_quotes": [
+        "1,500억원 1,500억원",
+        "3개사 이내 6개사 이내",
+        "2026년 9월 11일(금) 15:00"
+      ],
+      "attachment_hashes": {
+        "2026년 한국교직원공제회 블라인드 PEF 위탁운용사 선정 공고문.pdf": "68cbb27db5af9fc68abb49781823adf6a805ade747a996ce1264e35179fef89c"
+      },
+      "attachment_quotes": [
+        "총 3,000억원 이내",
+        "총 9개 사 이내",
+        "펀드 규모의 70% 이상을 국내 소재 기업",
+        "9월 11일(금) 15시까지 제출"
+      ]
+    }
+  ]
+}
