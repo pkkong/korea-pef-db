@@ -61,6 +61,18 @@ jobs:
                   print('Pinned CA verified board:',response.status)
           except Exception as error:
               print('Pinned CA verified board error:',repr(error))
+          from services.lp.src.collect_kexim_programs import _official_fetch, _decode, BOARD
+          import hashlib, re
+          cookies={}
+          try:
+              page=_decode(_official_fetch(BOARD+'?curPage=1',cookies))
+              title=re.search(r'<title[^>]*>(.*?)</title>',page,re.I|re.S)
+              print('Collector board response:',len(page),hashlib.sha256(page.encode()).hexdigest(),
+                    'title=',title.group(1).strip() if title else None,
+                    '2026=',page.count('2026'), 'cookie_names=',sorted(cookies),
+                    'sample=',re.sub(r'\s+',' ',re.sub(r'<[^>]+>',' ',page))[:300])
+          except Exception as error:
+              print('Collector board response error:',repr(error))
           PY
       - name: Load last published data
         run: python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json
