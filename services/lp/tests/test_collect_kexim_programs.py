@@ -5,8 +5,11 @@ import re
 import ssl
 import tempfile
 import unittest
+from email.message import Message
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from services.lp.src import collect_kexim_programs as kexim
 
@@ -46,6 +49,26 @@ def fixture():
 
 
 class KeximCollectorTests(unittest.TestCase):
+    def test_verified_cookie_redirect_keeps_original_host(self):
+        class Response(BytesIO):
+            def geturl(self):
+                return 'https://www.koreaexim.go.kr/HPHKBI039M01'
+        class Opener:
+            def __init__(self):
+                self.calls=0
+            def open(self, request, timeout):
+                self.calls+=1
+                if self.calls==1:
+                    headers=Message();headers['Location']='/HPHKBI039M01';headers['Set-Cookie']='visit=ok; Path=/'
+                    raise HTTPError(request.full_url,302,'Found',headers,None)
+                if request.get_header('Cookie')!='visit=ok':
+                    raise AssertionError('Official session cookie missing')
+                return Response(b'official page')
+        opener=Opener()
+        with patch.object(kexim,'build_opener',return_value=opener):
+            self.assertEqual(kexim._official_fetch('https://www.koreaexim.go.kr/HPHKBI039M01'),b'official page')
+        self.assertEqual(opener.calls,2)
+
     def test_pinned_official_ca_chain_has_expected_certificates(self):
         pem=kexim.CA_CHAIN.read_text()
         certs=re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',pem,re.S)

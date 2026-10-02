@@ -12,10 +12,11 @@ import re
 import ssl
 import time
 from datetime import datetime
+from http.cookies import SimpleCookie
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
-from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
 
 try:
     from .build_lp_commitment_monitor import extract_kexim_notice_rows
@@ -263,34 +264,72 @@ def project(notices: list[dict], checked_at: str) -> tuple[list[dict], list[dict
     return programs, holds
 
 
-def _official_fetch(url: str) -> bytes:
+class _ManualRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        return None
+
+
+def _official_fetch(url: str, cookies: dict[str, str] | None = None) -> bytes:
     if not url.startswith(BASE + "/"):
         raise ValueError("Unexpected KEXIM URL")
-    req = Request(url, headers={"User-Agent": "Mozilla/5.0",
-                                "Referer": BOARD,
-                                "Accept": "text/html,application/pdf,application/octet-stream,*/*"})
     # The official endpoint's chain verifies against this pinned DigiCert G2
     # root and Thawte intermediate.  Keep hostname and TLS verification on.
     context = ssl.create_default_context()
     context.load_verify_locations(cafile=str(CA_CHAIN))
-    opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context))
-    for attempt in range(3):
-        try:
-            with opener.open(req, timeout=25) as response:
+    opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context), _ManualRedirect())
+    cookies = cookies if cookies is not None else {}
+    current = url
+    referer = BOARD
+    for redirect in range(8):
+        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+                   "Referer": referer,
+                   "Accept": "text/html,application/xhtml+xml,application/pdf,*/*;q=0.8",
+                   "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.7,en;q=0.6"}
+        if cookies:
+            headers["Cookie"] = "; ".join(f"{key}={value}" for key, value in cookies.items())
+        req = Request(current, headers=headers)
+        response = None
+        redirect_error = None
+        for attempt in range(3):
+            try:
+                response = opener.open(req, timeout=25)
+                break
+            except HTTPError as exc:
+                if exc.code not in (301, 302, 303, 307, 308):
+                    raise
+                redirect_error = exc
+                break
+            except (URLError, TimeoutError):
+                if attempt == 2:
+                    raise
+                time.sleep(attempt + 1)
+        if response is not None:
+            with response:
                 if not response.geturl().startswith(BASE + "/"):
                     raise ValueError("KEXIM redirected outside official domain")
                 return response.read()
-        except (URLError, HTTPError, TimeoutError):
-            if attempt == 2:
-                raise
-            time.sleep(attempt + 1)
-    raise AssertionError("unreachable")
+        if redirect_error is None:
+            raise ValueError("Official KEXIM response missing")
+        stored = SimpleCookie()
+        for value in redirect_error.headers.get_all("Set-Cookie", []):
+            stored.load(value)
+        for key, morsel in stored.items():
+            cookies[key] = morsel.value
+        location = redirect_error.headers.get("Location")
+        if not location:
+            raise ValueError("KEXIM cookie redirect has no location")
+        referer, current = current, urljoin(current, location)
+        if not current.startswith(BASE + "/"):
+            raise ValueError("KEXIM redirected outside official domain")
+    raise ValueError(f"Too many KEXIM cookie redirects: {url}")
 
 
 def collect(checked_at: str, fetch=None) -> dict:
     """Discover board pages, fetch first evidence attachment, then re-project."""
     datetime.fromisoformat(checked_at)
-    fetch = fetch or _official_fetch
+    if fetch is None:
+        cookies = {}
+        fetch = lambda url: _official_fetch(url, cookies)
     discovered = set()
     for page_no in range(1, PAGES + 1):
         page_url = f"{BOARD}?curPage={page_no}"
