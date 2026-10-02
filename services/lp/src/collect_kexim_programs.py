@@ -9,12 +9,13 @@ import hashlib
 import html
 import json
 import re
+import ssl
 import time
 from datetime import datetime
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
-from urllib.request import ProxyHandler, Request, build_opener
+from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 
 try:
     from .build_lp_commitment_monitor import extract_kexim_notice_rows
@@ -26,6 +27,7 @@ REGISTRY = ROOT / "data/kexim_program_reviews.json"
 BASE = "https://www.koreaexim.go.kr"
 BOARD = BASE + "/HPHKBI039M01"
 PAGES = 8
+CA_CHAIN = ROOT / "services/lp/certs/kexim_ca_chain.pem"
 
 
 def _clean(markup: str) -> str:
@@ -267,9 +269,11 @@ def _official_fetch(url: str) -> bytes:
     req = Request(url, headers={"User-Agent": "Mozilla/5.0",
                                 "Referer": BOARD,
                                 "Accept": "text/html,application/pdf,application/octet-stream,*/*"})
-    # The Actions runner's ambient HTTP proxy presents an untrusted TLS chain
-    # for this host.  Its direct connection verifies against the system CA.
-    opener = build_opener(ProxyHandler({}))
+    # The official endpoint's chain verifies against this pinned DigiCert G2
+    # root and Thawte intermediate.  Keep hostname and TLS verification on.
+    context = ssl.create_default_context()
+    context.load_verify_locations(cafile=str(CA_CHAIN))
+    opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context))
     for attempt in range(3):
         try:
             with opener.open(req, timeout=25) as response:

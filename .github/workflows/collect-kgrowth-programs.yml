@@ -53,6 +53,14 @@ jobs:
                   print('Direct verified board:',response.status)
           except Exception as error:
               print('Direct verified board error:',repr(error))
+          try:
+              context=ssl.create_default_context()
+              context.load_verify_locations(cafile='services/lp/certs/kexim_ca_chain.pem')
+              opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=context))
+              with opener.open('https://www.koreaexim.go.kr/HPHKBI039M01?curPage=1',timeout=20) as response:
+                  print('Pinned CA verified board:',response.status)
+          except Exception as error:
+              print('Pinned CA verified board error:',repr(error))
           PY
       - name: Load last published data
         run: python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json

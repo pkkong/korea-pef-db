@@ -1,6 +1,8 @@
 """KEXIM board parsing and reviewed-publication safety checks."""
 import hashlib
 import json
+import re
+import ssl
 import tempfile
 import unittest
 from pathlib import Path
@@ -44,6 +46,14 @@ def fixture():
 
 
 class KeximCollectorTests(unittest.TestCase):
+    def test_pinned_official_ca_chain_has_expected_certificates(self):
+        pem=kexim.CA_CHAIN.read_text()
+        certs=re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',pem,re.S)
+        fingerprints={hashlib.sha256(ssl.PEM_cert_to_DER_cert(cert)).hexdigest() for cert in certs}
+        self.assertEqual(fingerprints,{
+            '4bcc5e234fe81ede4eaf883aa19c31335b0b26e85e066b9945e4cb6153eb20c2',
+            'cb3ccbb76031e5e0138f8dd39a23f9de47ffc35e43c1144cea27d46a5ab1cb5f'})
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.registry = Path(self.temp.name) / 'reviews.json'
