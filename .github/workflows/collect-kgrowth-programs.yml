@@ -40,7 +40,9 @@ jobs:
       - name: Collect official announcements
         run: python3 services/lp/src/collect_kgrowth_programs.py --baseline /tmp/lp-baseline.json --output /tmp/kgrowth-collection.json
       - name: Store evidence and publish verified pages
-        run: python3 services/lp/src/publish_lp_programs.py --collection /tmp/kgrowth-collection.json | tee /tmp/kgrowth-publication.json
+        run: |
+          set -o pipefail
+          python3 services/lp/src/publish_lp_programs.py --collection /tmp/kgrowth-collection.json | tee /tmp/kgrowth-publication.json
       - name: Verify published page
         run: |
           python3 - <<'PY'

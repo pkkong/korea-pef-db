@@ -21,7 +21,7 @@ def document_hash(document):
 
 def connect():
     import psycopg
-    return psycopg.connect(os.environ['SUPABASE_DB_URL'], connect_timeout=20)
+    return psycopg.connect(os.environ['SUPABASE_DB_URL'], connect_timeout=20, prepare_threshold=None)
 
 
 def baseline(conn):
