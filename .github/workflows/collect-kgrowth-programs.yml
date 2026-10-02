@@ -13,6 +13,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  probe-kexim-macos:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check official KEXIM board from macOS runner
+        run: |
+          python3 - <<'PY'
+          import hashlib,re
+          from services.lp.src.collect_kexim_programs import _official_fetch,_decode,BOARD
+          page=_decode(_official_fetch(BOARD+'?curPage=1',{}))
+          title=re.search(r'<title[^>]*>(.*?)</title>',page,re.I|re.S)
+          print('Mac board response:',len(page),hashlib.sha256(page.encode()).hexdigest(),
+                'title=',title.group(1).strip() if title else None,'2026=',page.count('2026'))
+          if 'This page can\'t be displayed' in page:
+              raise SystemExit('Official board blocked macOS runner')
+          PY
   collect:
     runs-on: ubuntu-latest
     timeout-minutes: 15
