@@ -34,6 +34,29 @@ class CollectionTests(unittest.TestCase):
     def fetch(self, url, referer=None):
         return self.docs[url]
 
+    def test_transient_official_network_error_retries(self):
+        from urllib.error import URLError
+        from unittest.mock import Mock
+        class Response:
+            def __init__(self, url, body):
+                self.url, self.body = url, body
+            def __enter__(self): return self
+            def __exit__(self, *_): pass
+            def geturl(self): return self.url
+            def read(self): return self.body
+        failures = []
+        def open_request(request, timeout):
+            url = request.full_url
+            failures.append(url)
+            if len(failures) == 1:
+                raise URLError('temporary DNS failure')
+            return Response(url, self.docs[url])
+        with patch.object(c, 'build_opener', return_value=Mock(open=open_request)), patch.object(c.time, 'sleep') as sleep:
+            result = c.collect(self.seed)
+        self.assertEqual(failures[:2], [c.LIST_URL, c.LIST_URL])
+        sleep.assert_called_once_with(1)
+        self.assertEqual(len(result['programs']), 1)
+
     def test_new_notice_is_review_only(self):
         result = c.collect(self.seed, fetch=self.fetch)
         self.assertEqual(len(result["programs"]), 1)

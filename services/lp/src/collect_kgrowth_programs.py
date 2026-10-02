@@ -10,6 +10,8 @@ import hashlib
 import json
 import re
 import io
+import time
+from urllib.error import URLError
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from http.cookiejar import CookieJar
@@ -130,10 +132,17 @@ def collect(seed, baseline=None, fetch=None):
     opener = build_opener(HTTPCookieProcessor(CookieJar()))
 
     def get(url, referer=LIST_URL):
-        with opener.open(Request(url, headers={"User-Agent": "Mozilla/5.0", "Referer": referer}), timeout=25) as response:
-            if urlparse(response.geturl()).hostname != "www.kgrowth.or.kr":
-                raise ValueError("Unexpected official source redirect")
-            return response.read()
+        request = Request(url, headers={"User-Agent": "Mozilla/5.0", "Referer": referer})
+        for attempt in range(3):
+            try:
+                with opener.open(request, timeout=25) as response:
+                    if urlparse(response.geturl()).hostname != "www.kgrowth.or.kr":
+                        raise ValueError("Unexpected official source redirect")
+                    return response.read()
+            except (URLError, TimeoutError):
+                if attempt == 2:
+                    raise
+                time.sleep(attempt + 1)
 
     fetch = fetch or get
     checked = datetime.now(timezone.utc).isoformat()
