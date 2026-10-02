@@ -2,18 +2,32 @@
 from difflib import unified_diff
 from html import escape
 from lp_program_service import shell
-from kgrowth_program_review import notice_classification
+from kgrowth_program_review import link_suggestions, notice_classification
 
 
 def render_review(data,report,previous):
     old={str(n['source_id']):n for n in previous.get('tracked_notices',[])}
     programs=data['programs']
     body='<header><h1>공고 검토</h1><p class="muted">공고와 정리된 사업 정보를 확인하는 화면입니다. 수정·반영할 내용은 대화에서 알려주세요.</p></header>'
+    suggestions=link_suggestions(report['notices'])
+    suggested_sources={item['source_id'] for item in suggestions}
+    if suggestions:
+        published={p['id'] for p in programs}
+        body+='<section class="review-queue"><h2>새 단계 연결 후보</h2><ul>'
+        for item in sorted(suggestions,key=lambda s:s['date'],reverse=True):
+            targets=' · '.join(
+                f'<a href="/samples/lp/program-{escape(p["id"],quote=True)}.html">{escape(p["title"])}</a>'
+                for p in item['programs'] if p['id'] in published)
+            if len(item['programs'])>1:
+                targets+=' · 차수 확인 필요'
+            body+=f'<li><small>{escape(item["date"])} · {escape(item["stage"])}</small><strong>{escape(item["title"])}</strong><span>{targets}</span> <a target="_blank" rel="noopener" href="{escape(item["url"],quote=True)}">공고 원문 ↗</a></li>'
+        body+='</ul></section>'
     notices=sorted(report['notices'],key=lambda n:n['date'],reverse=True)
     for n in notices:
         p=next((p for p in programs if any(e['url']==n['url'] for e in p['events'])),None)
         classification=notice_classification(n)
-        label='사업 연결됨' if p else (classification['label'] if classification else '정리 대기')
+        label=('사업 연결됨' if p else '기존 사업 연결 후보' if str(n['source_id']) in suggested_sources
+               else classification['label'] if classification else '정리 대기')
         before=old.get(str(n['source_id']))
         changed=before and any(before.get(k)!=n.get(k) for k in ('body','title','date','attachment_hashes'))
         if changed:label='원문 변경'
@@ -34,6 +48,6 @@ def render_review(data,report,previous):
             if before.get('attachment_hashes')!=n.get('attachment_hashes'):
                 body+='<p>첨부파일이 변경되었습니다. 원문에서 확인해 주세요.</p>'
         body+='<h2>공고 본문</h2><pre>'+escape(n['body'])+'</pre></div></details>'
-    style='<style>.review-notice{border-bottom:1px solid #e5e5e5}.review-notice summary{cursor:pointer;padding:18px 0;list-style:none}.review-notice summary strong{display:block;font-size:15px;line-height:1.5;margin-top:5px;overflow-wrap:anywhere}.review-content{padding-bottom:20px}.review-content h2{font-size:15px;margin:20px 0 10px}.review-content pre{font:13px/1.7 inherit;white-space:pre-wrap;overflow-wrap:anywhere;background:#fafafa;padding:14px}.review-content th{width:24%;min-width:0}.review-content td{min-width:0;overflow-wrap:anywhere}.review-content table{table-layout:fixed}</style>'
+    style='<style>.review-queue ul{list-style:none;padding:0}.review-queue li{border-bottom:1px solid #e5e5e5;padding:12px 0;overflow-wrap:anywhere}.review-queue li>*{display:block;margin:3px 0}.review-queue small{color:#64748b}.review-notice{border-bottom:1px solid #e5e5e5}.review-notice summary{cursor:pointer;padding:18px 0;list-style:none}.review-notice summary strong{display:block;font-size:15px;line-height:1.5;margin-top:5px;overflow-wrap:anywhere}.review-content{padding-bottom:20px}.review-content h2{font-size:15px;margin:20px 0 10px}.review-content pre{font:13px/1.7 inherit;white-space:pre-wrap;overflow-wrap:anywhere;background:#fafafa;padding:14px}.review-content th{width:24%;min-width:0}.review-content td{min-width:0;overflow-wrap:anywhere}.review-content table{table-layout:fixed}</style>'
     html=shell('공고 검토',style+body,data['as_of'])
     return html.replace('href="index.html"','href="/samples/lp/index.html"')

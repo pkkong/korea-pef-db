@@ -8,7 +8,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from lp_program_service import build, validate
-from kgrowth_program_review import reviewed_programs
+from kgrowth_program_review import link_suggestions, reviewed_programs
 from lp_review_decisions import apply_decisions
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -54,6 +54,7 @@ def prepare(current, report):
     data['accepted_notices'] = copy.deepcopy(report.get('accepted_notices', current.get('accepted_notices', [])))
     data['tracked_notices'] = copy.deepcopy(report.get('tracked_notices', report['notices']))
     data['candidate_groups'] = copy.deepcopy(report.get('candidate_groups', []))
+    data['link_suggestions'] = link_suggestions(report['notices'])
     data['program_holds'] = holds
     apply_decisions(data, report['notices'], current.get('review_decisions', []))
     data['as_of'] = str(report['checked_at'])[:10]

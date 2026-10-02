@@ -18,7 +18,7 @@ from http.cookiejar import CookieJar
 from pathlib import Path
 from urllib.parse import parse_qs, urljoin, urlparse
 from urllib.request import HTTPCookieProcessor, Request, build_opener
-from kgrowth_program_review import recipes, candidate_queue, reviewed_programs
+from kgrowth_program_review import recipes, candidate_queue, link_suggestions, reviewed_programs
 
 ROOT = Path(__file__).resolve().parents[3]
 BASE = "https://www.kgrowth.or.kr/"
@@ -234,6 +234,7 @@ def collect(seed, baseline=None, fetch=None):
     return {"checked_at": checked, "notices": notices, "tracked_notices": notices,
             "accepted_notices": accepted,
             "candidate_groups": candidate_queue([n for n in notices if n['source_id'] in {i['source_id'] for i in review}]),
+            "link_suggestions": link_suggestions(notices),
             "reviewed_programs": additions, "program_holds": holds,
             "programs": [program], "review": review, "requires_review": changed}
 
@@ -255,6 +256,10 @@ def main():
     lines += ['', '## 확인이 필요한 사업', '']
     for hold in result['program_holds']:
         lines.append(f"- {hold['program_id']}: {hold['reason']}")
+    lines += ['', '## 기존 사업의 새 단계 후보', '']
+    for item in result['link_suggestions']:
+        targets = ', '.join(program['title'] for program in item['programs'])
+        lines.append(f"- {item['date']} · {item['stage']} · [{item['title']}]({item['url']}) → {targets}")
     for group in result['candidate_groups']:
         lines += ['', f"### {group['title']} — {group['disposition']}", '']
         lines += [f"- {n['date']} · {n['stage']} · [{n['title']}]({n['url']})" for n in group['notices']]

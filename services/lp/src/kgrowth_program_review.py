@@ -29,6 +29,45 @@ def notice_classification(notice):
     return None
 
 
+def matching_recipe_title(recipe, title):
+    compact = re.sub(r'\s+', '', title).casefold()
+    terms = recipe.get('match_terms') or [recipe['source_title']]
+    return all(re.sub(r'\s+', '', term).casefold() in compact for term in terms)
+
+
+def link_suggestions(notices):
+    """Suggest review targets; a suggestion never approves a stage or GP."""
+    reviewed = recipes()
+    attached = {'1047', '1075', '1090', '1100'}
+    attached.update(str(source['source_id']) for recipe in reviewed for source in recipe['sources'])
+    suggestions = []
+    for notice in notices:
+        if str(notice['source_id']) in attached or notice_classification(notice):
+            continue
+        title = notice['title']
+        if '제출서식' in title or '【기타】' in title:
+            continue
+        compact = re.sub(r'\s+', '', title)
+        stage = ('정정·변경' if any(word in title for word in ('정정', '변경', '취소', '연장')) else
+                 '접수 현황' if '접수현황' in compact else
+                 '서류심사 결과' if '서류심사' in compact else
+                 '최종 선정' if '선정결과' in compact else None)
+        if not stage:
+            continue
+        targets = [{'id':recipe['id'], 'title':recipe['title']} for recipe in reviewed
+                   if matching_recipe_title(recipe, title)]
+        if '은행권중견기업밸류업펀드(3차)' in compact:
+            targets.append({'id':'kgrowth-2026-bank-valueup-3',
+                            'title':'은행권 중견기업 밸류업펀드(3차)'})
+        if targets:
+            suggestions.append({'source_id':str(notice['source_id']), 'date':notice['date'],
+                                'title':title, 'url':notice['url'], 'stage':stage,
+                                'sha256':fingerprint(notice),
+                                'attachment_hashes':notice.get('attachment_hashes', {}),
+                                'programs':targets})
+    return suggestions
+
+
 def candidate_queue(notices):
     groups = {}
     for n in notices:
@@ -106,18 +145,24 @@ def project(recipe, notices, checked_at=None):
         excluded = exclusions.get(str(n['source_id']))
         if excluded and fingerprint(n) == excluded['sha256'] and n.get('attachment_hashes', {}) == excluded.get('attachment_hashes', {}):
             continue
-        if n['source_id'] not in source_ids and recipe['source_title'].casefold() in re.sub(r'\s+', '', n['title']).casefold() and '【제출서식】' not in n['title']:
+        if n['source_id'] not in source_ids and matching_recipe_title(recipe, n['title']) and '【제출서식】' not in n['title']:
             raise ValueError('New related notice requires review')
     # Every reviewed offering field has an exact excerpt from a fetched body
     # or a separately retained, hash-bound attachment text.
     facts = {}
     for field, evidence in recipe.get('facts', {}).items():
         n = by_id[str(evidence['source_id'])]
-        text = n['body']
-        if evidence.get('attachment_url'):
-            text = n.get('attachment_texts', {}).get(evidence['attachment_url'], '')
-        if not evidence['quote'] or evidence['quote'] not in text:
-            raise ValueError(f'Field evidence no longer matches: {field}')
+        attachment_url = evidence.get('attachment_url')
+        if evidence.get('evidence_mode') == 'file_hash_reviewed':
+            approved = next(s for s in recipe['sources'] if str(s['source_id']) == str(evidence['source_id']))
+            if not attachment_url or attachment_url not in approved.get('attachment_hashes', {}) or not evidence.get('quote'):
+                raise ValueError(f'Missing hash-bound file evidence: {field}')
+            # The source attachment hash was already checked above. This mode
+            # is for reviewed HWP text that the workflow cannot re-extract.
+        else:
+            text = n.get('attachment_texts', {}).get(attachment_url, '') if attachment_url else n['body']
+            if not evidence.get('quote') or evidence['quote'] not in text:
+                raise ValueError(f'Field evidence no longer matches: {field}')
         facts[field] = evidence['value']
     p = {'id':recipe['id'], 'institution_id':'kgrowth', 'institution_name':'한국성장금융',
          'title':recipe['title'], 'display_title':recipe['title'], 'asset_scope':recipe['asset_scope'],
