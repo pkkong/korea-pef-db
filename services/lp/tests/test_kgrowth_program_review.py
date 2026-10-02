@@ -71,6 +71,10 @@ class AdditionalReviewTests(unittest.TestCase):
         self.assertEqual(len(original['selected_gps']),2)
         self.assertEqual(reopen['commitment_amount_krw'],15000000000)
         self.assertEqual(reopen['status'],'모집 공고')
+        after=project(self.recipes['kgrowth-2026-busan-2-reopen'],self.notices,'2026-10-01T07:01:00+00:00')
+        self.assertEqual(after['status'],'접수 마감')
+        before=project(self.recipes['kgrowth-2026-busan-2-reopen'],self.notices,'2026-10-01T06:59:00+00:00')
+        self.assertEqual(before['status'],'모집 공고')
         self.assertEqual(reopen['selected_gps'],[])
         self.assertEqual(reopen['deadline'],'2026-10-01T16:00:00+09:00')
 

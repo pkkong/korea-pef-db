@@ -219,7 +219,7 @@ def collect(seed, baseline=None, fetch=None):
     # Keep the accepted fingerprint until a reviewer explicitly accepts a change.
     # Otherwise a second run could silently accept yesterday's quarantined edit.
     accepted = baseline.get("accepted_notices", baseline.get("notices", [])) or notices
-    additions, holds = reviewed_programs(notices)
+    additions, holds = reviewed_programs(notices, checked)
     reviewed_ids = {str(s['source_id']) for r in recipes() if r['id'] in {p['id'] for p in additions} for s in r['sources']}
     review = [item for item in review if item['source_id'] not in reviewed_ids]
     return {"checked_at": checked, "notices": notices, "tracked_notices": notices,

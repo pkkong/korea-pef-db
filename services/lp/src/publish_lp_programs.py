@@ -46,7 +46,7 @@ def prepare(current, report):
             existing[p['id']] = p
     # Independently re-project approved sources; never trust a candidate payload
     # as permission to introduce a new public program.
-    additions, holds = reviewed_programs(report['notices'])
+    additions, holds = reviewed_programs(report['notices'], report['checked_at'])
     for p in additions:
         if not existing.get(p['id'], {}).get('manual_review_id'):
             existing[p['id']] = p

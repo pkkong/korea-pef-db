@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
+from datetime import datetime
 
 REGISTRY = Path(__file__).resolve().parents[3] / 'data/kgrowth_program_reviews.json'
 
@@ -89,7 +90,7 @@ def team_sections(body, layout=None):
     return result
 
 
-def project(recipe, notices):
+def project(recipe, notices, checked_at=None):
     by_id = {str(n['source_id']):n for n in notices}
     sources = []
     for approved in recipe['sources']:
@@ -176,15 +177,18 @@ def project(recipe, notices):
                                     'date':p['deadline'],'precision':'datetime','status':'announced_deadline',
                                     'source_url':recruitment['url'],'show_source':True})
         p['schedule_stages'].sort(key=lambda s:(s['date'][:10], 0 if s['status']=='announced_deadline' else 1, s['date']))
+    if p['status'] == '모집 공고' and p.get('deadline') and checked_at:
+        if datetime.fromisoformat(checked_at) >= datetime.fromisoformat(p['deadline']):
+            p['status'] = '접수 마감'
     p['review_evidence'] = recipe['facts']
     return p
 
 
-def reviewed_programs(notices):
+def reviewed_programs(notices, checked_at=None):
     programs, holds = [], []
     for recipe in recipes():
         try:
-            programs.append(project(recipe, notices))
+            programs.append(project(recipe, notices, checked_at))
         except (ValueError, KeyError) as error:
             holds.append({'program_id':recipe['id'], 'reason':str(error)})
     return programs, holds
