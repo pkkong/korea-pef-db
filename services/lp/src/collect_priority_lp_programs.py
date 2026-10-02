@@ -4,24 +4,46 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from collect_ktcu_program import collect as collect_ktcu
-from collect_koreapost_program import collect as collect_post
-from collect_kexim_programs import collect as collect_kexim
+try:
+    from .collect_ktcu_program import collect as collect_ktcu
+    from .collect_koreapost_program import collect as collect_post
+    from .collect_kexim_programs import collect as collect_kexim, project as project_kexim, link_suggestions as suggest_kexim
+except ImportError:
+    from collect_ktcu_program import collect as collect_ktcu
+    from collect_koreapost_program import collect as collect_post
+    from collect_kexim_programs import collect as collect_kexim, project as project_kexim, link_suggestions as suggest_kexim
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def collect(seed=None, checked_at=None, collectors=None):
+def load_kexim_collection(path: Path, checked_at: str) -> dict:
+    """Read this workflow run's macOS artifact and verify its official evidence."""
+    report = json.loads(path.read_text())
+    collected_at = datetime.fromisoformat(report["checked_at"])
+    now = datetime.fromisoformat(checked_at)
+    if collected_at.tzinfo is None or now.tzinfo is None or not (-timedelta(minutes=5) <= now - collected_at <= timedelta(hours=2)):
+        raise ValueError("KEXIM collection is not from the current run")
+    notices = report["notices"]
+    if not notices:
+        raise ValueError("KEXIM official collection is empty")
+    programs, holds = project_kexim(notices, checked_at)
+    return {"checked_at": report["checked_at"], "notices": notices,
+            "programs": programs, "holds": holds,
+            "link_suggestions": suggest_kexim(notices)}
+
+
+def collect(seed=None, checked_at=None, collectors=None, kexim_input: Path | None = None):
     seed = seed or json.loads((ROOT / "data/lp_programs_pilot.json").read_text())
     by_id = {p["id"]: p for p in seed["programs"]}
     checked_at = checked_at or datetime.now(timezone.utc).isoformat()
     collectors = collectors or {
         "ktcu": lambda: collect_ktcu(by_id["ktcu-2026-blind-pef"], checked_at),
         "koreapost": lambda: collect_post(by_id["koreapost-2026-domestic-pe"], checked_at),
-        "kexim": lambda: collect_kexim(checked_at),
+        "kexim": (lambda: load_kexim_collection(kexim_input, checked_at)) if kexim_input else
+                 (lambda: collect_kexim(checked_at)),
     }
     sources = {}
     for institution, run in collectors.items():
@@ -39,8 +61,10 @@ def collect(seed=None, checked_at=None, collectors=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--kexim-input", type=Path,
+                        help="official collection artifact from this run's macOS runner")
     args = parser.parse_args()
-    report = collect()
+    report = collect(kexim_input=args.kexim_input)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.output.with_suffix(args.output.suffix + ".tmp")
     temporary.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")

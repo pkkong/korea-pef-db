@@ -5,13 +5,14 @@ therefore never turns a new notice into a public GP result by itself.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import html
 import json
 import re
 import ssl
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from http.cookies import SimpleCookie
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -357,3 +358,20 @@ def collect(checked_at: str, fetch=None) -> dict:
     programs, holds = project(notices, checked_at)
     return {"checked_at": checked_at, "notices": notices, "programs": programs,
             "holds": holds, "link_suggestions": link_suggestions(notices)}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", required=True, type=Path)
+    args = parser.parse_args()
+    report = collect(datetime.now(timezone.utc).isoformat())
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = args.output.with_suffix(args.output.suffix + ".tmp")
+    temporary.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    temporary.replace(args.output)
+    print(json.dumps({"notices": len(report["notices"]), "programs": len(report["programs"]),
+                      "holds": len(report["holds"])}))
+
+
+if __name__ == "__main__":
+    main()

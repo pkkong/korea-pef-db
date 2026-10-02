@@ -13,24 +13,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  probe-kexim-macos:
-    if: github.event_name == 'workflow_dispatch'
+  collect-kexim:
     runs-on: macos-latest
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v6
-      - name: Check official KEXIM board from macOS runner
-        run: |
-          python3 - <<'PY'
-          import hashlib,re
-          from services.lp.src.collect_kexim_programs import _official_fetch,_decode,BOARD
-          page=_decode(_official_fetch(BOARD+'?curPage=1',{}))
-          title=re.search(r'<title[^>]*>(.*?)</title>',page,re.I|re.S)
-          print('Mac board response:',len(page),hashlib.sha256(page.encode()).hexdigest(),
-                'title=',title.group(1).strip() if title else None,'2026=',page.count('2026'))
-          if 'This page can\'t be displayed' in page:
-              raise SystemExit('Official board blocked macOS runner')
-          PY
+      - name: Collect official KEXIM notices
+        run: python3 services/lp/src/collect_kexim_programs.py --output /tmp/kexim-collection.json
+      - name: Pass official evidence to publisher
+        uses: actions/upload-artifact@v4
+        with:
+          name: kexim-collection
+          path: /tmp/kexim-collection.json
+          if-no-files-found: error
   collect:
+    needs: collect-kexim
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -51,52 +49,19 @@ jobs:
       - name: Verify review access boundary
         run: psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 --file services/lp/tests/check_lp_review_access.sql
       - name: Test collection and publishing contracts
-        run: python3 -m unittest services.lp.tests.test_lp_review_preview services.lp.tests.test_lp_review_decisions services.lp.tests.test_kgrowth_collection services.lp.tests.test_kgrowth_program_review services.lp.tests.test_collect_ktcu_program services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_kexim_programs services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish
-      - name: Diagnose official KEXIM certificate
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          openssl s_client -connect www.koreaexim.go.kr:443 -servername www.koreaexim.go.kr -showcerts </dev/null 2>&1 | grep -E 'depth=|verify error|Verify return code|subject=|issuer=|BEGIN CERTIFICATE' || true
-          python3 - <<'PY'
-          import ssl,urllib.request
-          print('Python TLS:',ssl.OPENSSL_VERSION,ssl.get_default_verify_paths())
-          try:
-              with urllib.request.urlopen('https://www.koreaexim.go.kr/HPHKBI039M01?curPage=1',timeout=20) as response:
-                  print('Official board:',response.status)
-          except Exception as error:
-              print('Official board TLS error:',repr(error))
-          try:
-              opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
-              with opener.open('https://www.koreaexim.go.kr/HPHKBI039M01?curPage=1',timeout=20) as response:
-                  print('Direct verified board:',response.status)
-          except Exception as error:
-              print('Direct verified board error:',repr(error))
-          try:
-              context=ssl.create_default_context()
-              context.load_verify_locations(cafile='services/lp/certs/kexim_ca_chain.pem')
-              opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=context))
-              with opener.open('https://www.koreaexim.go.kr/HPHKBI039M01?curPage=1',timeout=20) as response:
-                  print('Pinned CA verified board:',response.status)
-          except Exception as error:
-              print('Pinned CA verified board error:',repr(error))
-          from services.lp.src.collect_kexim_programs import _official_fetch, _decode, BOARD
-          import hashlib, re
-          cookies={}
-          try:
-              page=_decode(_official_fetch(BOARD+'?curPage=1',cookies))
-              title=re.search(r'<title[^>]*>(.*?)</title>',page,re.I|re.S)
-              print('Collector board response:',len(page),hashlib.sha256(page.encode()).hexdigest(),
-                    'title=',title.group(1).strip() if title else None,
-                    '2026=',page.count('2026'), 'cookie_names=',sorted(cookies),
-                    'sample=',re.sub(r'\s+',' ',re.sub(r'<[^>]+>',' ',page))[:300])
-          except Exception as error:
-              print('Collector board response error:',repr(error))
-          PY
+        run: python3 -m unittest services.lp.tests.test_lp_review_preview services.lp.tests.test_lp_review_decisions services.lp.tests.test_kgrowth_collection services.lp.tests.test_kgrowth_program_review services.lp.tests.test_collect_ktcu_program services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_kexim_programs services.lp.tests.test_collect_priority_lp_programs services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish
+      - name: Receive official KEXIM evidence
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: kexim-collection
+          path: /tmp
       - name: Load last published data
         run: python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json
       - name: Collect official announcements
         run: python3 services/lp/src/collect_kgrowth_programs.py --baseline /tmp/lp-baseline.json --output /tmp/kgrowth-collection.json
       - name: Collect Korea Post, KTCU, and KEXIM announcements
-        run: python3 services/lp/src/collect_priority_lp_programs.py --output /tmp/lp-priority-collection.json
+        run: python3 services/lp/src/collect_priority_lp_programs.py --kexim-input /tmp/kexim-collection.json --output /tmp/lp-priority-collection.json
       - name: Store evidence and publish verified pages
         run: |
           set -o pipefail
