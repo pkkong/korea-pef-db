@@ -47,6 +47,12 @@ jobs:
                   print('Official board:',response.status)
           except Exception as error:
               print('Official board TLS error:',repr(error))
+          try:
+              opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+              with opener.open('https://www.koreaexim.go.kr/HPHKBI039M01?curPage=1',timeout=20) as response:
+                  print('Direct verified board:',response.status)
+          except Exception as error:
+              print('Direct verified board error:',repr(error))
           PY
       - name: Load last published data
         run: python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json

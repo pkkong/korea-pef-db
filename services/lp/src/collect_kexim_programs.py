@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener
 
 try:
     from .build_lp_commitment_monitor import extract_kexim_notice_rows
@@ -267,9 +267,12 @@ def _official_fetch(url: str) -> bytes:
     req = Request(url, headers={"User-Agent": "Mozilla/5.0",
                                 "Referer": BOARD,
                                 "Accept": "text/html,application/pdf,application/octet-stream,*/*"})
+    # The Actions runner's ambient HTTP proxy presents an untrusted TLS chain
+    # for this host.  Its direct connection verifies against the system CA.
+    opener = build_opener(ProxyHandler({}))
     for attempt in range(3):
         try:
-            with urlopen(req, timeout=25) as response:
+            with opener.open(req, timeout=25) as response:
                 if not response.geturl().startswith(BASE + "/"):
                     raise ValueError("KEXIM redirected outside official domain")
                 return response.read()
