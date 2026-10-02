@@ -35,6 +35,19 @@ jobs:
         run: psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 --file services/lp/tests/check_lp_review_access.sql
       - name: Test collection and publishing contracts
         run: python3 -m unittest services.lp.tests.test_lp_review_preview services.lp.tests.test_lp_review_decisions services.lp.tests.test_kgrowth_collection services.lp.tests.test_kgrowth_program_review services.lp.tests.test_collect_ktcu_program services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_kexim_programs services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish
+      - name: Diagnose official KEXIM certificate
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          openssl s_client -connect www.koreaexim.go.kr:443 -servername www.koreaexim.go.kr -showcerts </dev/null 2>&1 | grep -E 'depth=|verify error|Verify return code|subject=|issuer=|BEGIN CERTIFICATE' || true
+          python3 - <<'PY'
+          import ssl,urllib.request
+          print('Python TLS:',ssl.OPENSSL_VERSION,ssl.get_default_verify_paths())
+          try:
+              with urllib.request.urlopen('https://www.koreaexim.go.kr/HPHKBI039M01?curPage=1',timeout=20) as response:
+                  print('Official board:',response.status)
+          except Exception as error:
+              print('Official board TLS error:',repr(error))
+          PY
       - name: Load last published data
         run: python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json
       - name: Collect official announcements
