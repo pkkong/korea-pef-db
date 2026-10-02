@@ -28,3 +28,10 @@
 - 테스트: `python3 -m unittest services.lp.tests.test_collect_ktcu_program services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_kexim_programs services.lp.tests.test_lp_program_publish services.lp.tests.test_lp_review_preview` 및 `python3 scripts/check_architecture_contracts.py`.
 
 기존 로컬 파일·생성 HTML·개인 DB는 운영 원본이 아니다. workflow의 수집 보고서와 Supabase 공개 실행 식별자, Vercel 상세 페이지가 일치해야 배포 완료로 기록한다.
+
+## 운영 확인 (2026-10-03)
+
+- [GitHub Actions 실행 37067600096, 재시도 2회차](https://github.com/pkkong/korea-pef-db/actions/runs/37067600096): 전체 성공. 첫 시도는 우정사업본부 공식 사이트의 일시적 응답 지연으로 실패했으며, 이미 공개된 자료는 유지됐다.
+- 최종 수집 보고서: 교직원공제회 공고 1건·사업 1개, 우정사업본부 공고 1건·사업 1개, 수출입은행 공고 14건·사업 3개. 세 기관 모두 보류 0건, 소스 오류 0건.
+- 수은 GP 단계: 공급망 펀드 접수 5→서류 4→선정 결과 발표 2팀, 지역주도성장 펀드 15→12→6팀, 하반기 글로벌성장 PE 접수 14팀. 앞의 두 사업은 승인 완료 전인 원문 표현대로 `선정 결과 발표` 상태다.
+- Vercel `/samples/lp/index.html`과 다섯 상세 페이지가 모두 HTTP 200, 동일한 공개 실행 식별자 `a44b1bbb9cb18db8cf3e3d88`을 반환한다. `/admin/lp`도 로그인 없이 HTTP 200이다.
