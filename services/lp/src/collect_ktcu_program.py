@@ -13,12 +13,14 @@ import re
 from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[3]
 BASE = "https://www.ktcu.or.kr"
 LIST = BASE + "/PPW-CSB-000101?srchKey=sj&srchText=PEF"
+SEARCH_TERMS = ("PEF", "블라인드")
+MAX_LIST_PAGES = 10
 REVIEW = ROOT / "data/ktcu_program_review.json"
 PROGRAM_ID = "ktcu-2026-blind-pef"
 
@@ -90,6 +92,25 @@ def parse_notice(source_id, raw):
             "attachments": [{"url": urljoin(BASE, path), "name": name} for path, name in page.attachments]}
 
 
+def _pe_candidate_title(title):
+    year = re.search(r"20\d{2}", title)
+    if not year or int(year.group()) < 2026:
+        return False
+    upper = title.upper()
+    return "PEF" in upper or ("블라인드" in title and "펀드" in title and "VC" not in upper)
+
+
+def _current_program_title(title):
+    return "2026" in title and "블라인드" in title and "PEF" in title.upper()
+
+
+def discovery_candidates(notices):
+    approved = {str(s["source_id"]) for s in json.loads(REVIEW.read_text())["sources"]}
+    return [{"institution_id": "ktcu", "source_id": n["source_id"], "title": n["title"],
+             "date": n["date"], "url": n["url"]}
+            for n in notices if n["source_id"] not in approved and not _current_program_title(n["title"])]
+
+
 def project(notices, checked_at, seed_program=None):
     recipe = json.loads(REVIEW.read_text())
     seed = seed_program or next(p for p in json.loads((ROOT / "data/lp_programs_pilot.json").read_text())["programs"]
@@ -116,7 +137,8 @@ def project(notices, checked_at, seed_program=None):
             if quote not in n.get("attachment_text", ""):
                 holds.append({"program_id": PROGRAM_ID, "reason": "교직원공제회 PDF 조건 확인 실패"})
                 return [], holds
-    if any(n["source_id"] not in {s["source_id"] for s in approved} for n in notices):
+    if any(n["source_id"] not in {s["source_id"] for s in approved}
+           and _current_program_title(n["title"]) for n in notices):
         return [], [{"program_id": PROGRAM_ID, "reason": "교직원공제회 새 단계 공고 연결·GP 명단 검토 필요"}]
     program = copy.deepcopy(seed)
     program["status"] = "접수 마감" if datetime.fromisoformat(checked_at) >= datetime.fromisoformat(program["deadline"]) else "접수 중"
@@ -176,7 +198,7 @@ def link_suggestions(notices, title):
     return [{"source_id": n["source_id"], "title": n["title"], "date": n["date"], "url": n["url"],
              "stage": "후속 공고", "programs": [{"id": PROGRAM_ID, "title": title}],
              "sha256": n["sha256"], "attachment_hashes": n.get("attachment_hashes", {})}
-            for n in notices if n["source_id"] not in approved_ids]
+            for n in notices if n["source_id"] not in approved_ids and _current_program_title(n["title"])]
 
 
 def collect(seed_program, checked_at, fetch=None):
@@ -189,14 +211,30 @@ def collect(seed_program, checked_at, fetch=None):
             return response.read()
 
     fetch = fetch or get
-    listing = fetch(LIST).decode("utf-8")
-    ids = set(re.findall(r"fn_view\('([0-9]+)'\).*?>([^<]+)</a>", listing))
+    ids = {}
+    for term in SEARCH_TERMS:
+        for page_no in range(1, MAX_LIST_PAGES + 1):
+            url = f"{BASE}/PPW-CSB-000101?" + urlencode({"srchKey": "sj", "srchText": term, "curPage": page_no})
+            listing = fetch(url).decode("utf-8")
+            rows = re.findall(r"fn_view\('([0-9]+)'\).*?>([^<]+)</a>", listing)
+            if page_no == 1 and not rows:
+                raise ValueError(f"KTCU official {term} listing yielded no notices")
+            if not rows:
+                break
+            old_count = len(ids)
+            ids.update({source_id: _clean(title) for source_id, title in rows})
+            if len(rows) < 10:
+                break
+            if len(ids) == old_count:
+                raise ValueError(f"KTCU official {term} listing pagination did not advance")
+        else:
+            raise ValueError(f"KTCU official {term} listing exceeded {MAX_LIST_PAGES} pages")
     if not ids:
         raise ValueError("KTCU official listing yielded no notices")
     recipe = json.loads(REVIEW.read_text())
     selected = {source["source_id"] for source in recipe["sources"]}
-    for source_id, title in ids:
-        if "2026" in title and "PEF" in title and ("블라인드" in title or "선정" in title):
+    for source_id, title in ids.items():
+        if _pe_candidate_title(title):
             selected.add(source_id)
     notices = []
     approved_by_id = {s["source_id"]: s for s in recipe["sources"]}
@@ -220,4 +258,5 @@ def collect(seed_program, checked_at, fetch=None):
         notices.append(notice)
     programs, holds = project(notices, checked_at, seed_program)
     suggestions = link_suggestions(notices, seed_program["title"])
-    return {"notices": notices, "programs": programs, "holds": holds, "link_suggestions": suggestions}
+    return {"notices": notices, "programs": programs, "holds": holds,
+            "link_suggestions": suggestions, "discovery_candidates": discovery_candidates(notices)}

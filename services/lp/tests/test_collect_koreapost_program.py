@@ -61,6 +61,17 @@ class KoreaPostReviewTests(unittest.TestCase):
         self.assertEqual(suggestions[0]["programs"][0]["id"], "koreapost-2026-domestic-pe")
         self.assertNotIn("확인되지 않은 운용사", str(suggestions))
 
+    def test_other_pe_strategy_is_discovered_without_rewriting_blind_pef(self):
+        other = {"source_id": "0041:352", "url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=352",
+                 "title": "우체국예금 해외사모펀드 국내재간접 위탁운용사 우선협상대상자 알림",
+                 "date": "2026-04-22", "body": "별도 사업 결과", "sha256": "candidate"}
+        self.assertTrue(post._pe_discovery_title(other["title"]))
+        programs, holds = project([self.notice, other], "2026-10-03T00:00:00+09:00")
+        self.assertEqual([], holds)
+        self.assertEqual(post.PROGRAM_ID, programs[0]["id"])
+        self.assertEqual([], _suggestions([self.notice, other]))
+        self.assertEqual("0041:352", post.discovery_candidates([self.notice, other])[0]["source_id"])
+
     def test_official_html_shapes_are_parsed_without_confusing_other_assets(self):
         listing = '''<a href="/board.es?mid=a10510000000&amp;bid=0041&amp;act=view&amp;list_no=400" title="2026년도 우체국금융 국내 블라인드 PEF 위탁운용사 선정 공고">PE..</a>
         <a href="/board.es?mid=a10510000000&amp;bid=0042&amp;act=view&amp;list_no=430" title="2026 보험 VC">VC</a>'''.encode()

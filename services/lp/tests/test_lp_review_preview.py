@@ -42,4 +42,17 @@ class PreviewTests(unittest.TestCase):
   self.assertIn('program-ktcu-2026-blind-pef.html',html)
   self.assertIn('기존 사업 연결 후보',html)
   self.assertNotIn('선정 GP</th>',html)
+ def test_new_program_discovery_is_visible_without_public_program(self):
+  url='https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=352'
+  notice={'source_id':'0041:352','institution_id':'koreapost',
+          'title':'우체국예금 해외사모펀드 위탁운용사 안내',
+          'body':'공식 공고 본문','date':'2026-04-22','url':url}
+  candidate={k:notice[k] for k in ('source_id','title','date','url','institution_id')}
+  data={'as_of':'2026-10-03','programs':[],'priority_notices':[notice],
+        'discovery_candidates':[candidate]}
+  html=render_review(data,{'notices':[]},{'priority_notices':[]})
+  self.assertIn('새 출자공고 후보',html)
+  self.assertIn('우정사업본부',html)
+  self.assertIn('공식 공고 본문',html)
+  self.assertNotIn('program-koreapost',html)
 if __name__=='__main__':unittest.main()

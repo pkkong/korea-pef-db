@@ -11,6 +11,15 @@ def render_review(data,report,previous):
     body='<header><h1>공고 검토</h1><p class="muted">공고와 정리된 사업 정보를 확인하는 화면입니다. 수정·반영할 내용은 대화에서 알려주세요.</p></header>'
     suggestions=data.get('link_suggestions', link_suggestions(report['notices']))
     suggested_sources={item['url'] for item in suggestions}
+    discovery=data.get('discovery_candidates', [])
+    discovery_sources={item['url'] for item in discovery}
+    institutions={'ktcu':'한국교직원공제회','koreapost':'우정사업본부','kexim':'한국수출입은행'}
+    if discovery:
+        body+='<section class="review-queue"><h2>새 출자공고 후보</h2><p class="muted">사업 범위와 PE 해당 여부를 확인한 뒤 정리합니다.</p><ul>'
+        for item in sorted(discovery,key=lambda s:(s['date'],s['source_id']),reverse=True):
+            name=institutions.get(item['institution_id'],item['institution_id'])
+            body+=f'<li><small>{escape(item["date"])} · {escape(name)}</small><strong>{escape(item["title"])}</strong><a target="_blank" rel="noopener" href="{escape(item["url"],quote=True)}">공고 원문 ↗</a></li>'
+        body+='</ul></section>'
     if suggestions:
         published={p['id'] for p in programs}
         body+='<section class="review-queue"><h2>새 단계 연결 후보</h2><ul>'
@@ -22,13 +31,14 @@ def render_review(data,report,previous):
                 targets+=' · 차수 확인 필요'
             body+=f'<li><small>{escape(item["date"])} · {escape(item["stage"])}</small><strong>{escape(item["title"])}</strong><span>{targets}</span> <a target="_blank" rel="noopener" href="{escape(item["url"],quote=True)}">공고 원문 ↗</a></li>'
         body+='</ul></section>'
-    related_urls={e['url'] for p in programs for e in p['events']} | suggested_sources
+    related_urls={e['url'] for p in programs for e in p['events']} | suggested_sources | discovery_sources
     priority_notices=[n for n in data.get('priority_notices',[]) if n['url'] in related_urls]
     notices=sorted(report['notices']+priority_notices,key=lambda n:n['date'],reverse=True)
     for n in notices:
         p=next((p for p in programs if any(e['url']==n['url'] for e in p['events'])),None)
         classification=notice_classification(n) if n.get('institution_id','kgrowth')=='kgrowth' else None
         label=('사업 연결됨' if p else '기존 사업 연결 후보' if n['url'] in suggested_sources
+               else '새 사업 후보' if n['url'] in discovery_sources
                else classification['label'] if classification else '정리 대기')
         before=old.get(n['url'])
         changed=before and any(before.get(k)!=n.get(k) for k in ('body','title','date','attachment_hashes'))

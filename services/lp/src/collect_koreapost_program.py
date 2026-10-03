@@ -105,6 +105,26 @@ def _related(title):
             and "2025" not in compact)
 
 
+def _pe_discovery_title(title):
+    compact = re.sub(r"\s+", "", title).casefold()
+    return ("우체국" in compact or "우정사업본부" in compact) and any(
+        term in compact for term in ("pef", "사모펀드", "사모투자", "공동투자전략"))
+
+
+def _current_program_title(title):
+    years = re.findall(r"20\d{2}", title)
+    return _related(title) and (not years or "2026" in years)
+
+
+def discovery_candidates(notices):
+    recipe = json.loads(REGISTRY.read_text())
+    approved = {SOURCE_ID} | {s["source_id"] for s in recipe.get("stages", [])}
+    return [{"institution_id": "koreapost", "source_id": n["source_id"],
+             "title": n["title"], "date": n["date"], "url": n["url"]}
+            for n in notices if n["source_id"] not in approved
+            and n["date"] >= "2026-01-01" and not _current_program_title(n["title"])]
+
+
 def _detail(number, raw):
     html = raw.decode("utf-8")
     title_match = re.search(r'<p\s+class="title"[^>]*>(.*?)</p>', html, re.I | re.S)
@@ -166,7 +186,7 @@ def project(notices: list[dict], checked_at: str) -> tuple[list[dict], list[dict
         if fact["quote"] not in text:
             return hold(f"검토된 문구 변경: {fact['field']}")
     approved_ids = {SOURCE_ID} | {s["source_id"] for s in recipe.get("stages", [])}
-    if any(n["source_id"] not in approved_ids and _related(n["title"]) for n in notices):
+    if any(n["source_id"] not in approved_ids and _current_program_title(n["title"]) for n in notices):
         return hold("새 단계 공고 연결·GP 명단 검토 필요")
     program = copy.deepcopy(recipe["program"])
     program["checked_at"] = checked_at
@@ -226,7 +246,7 @@ def _suggestions(notices):
     candidates = []
     approved_ids = {SOURCE_ID} | {s["source_id"] for s in json.loads(REGISTRY.read_text()).get("stages", [])}
     for notice in notices:
-        if notice["source_id"] in approved_ids or not _related(notice["title"]):
+        if notice["source_id"] in approved_ids or not _current_program_title(notice["title"]):
             continue
         title = re.sub(r"\s+", "", notice["title"])
         stage = ("정정·변경" if any(t in title for t in ("정정", "변경", "연장", "취소", "재공고")) else
@@ -256,7 +276,7 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
         if not links:
             break
         for number, title in links:
-            if _related(title):
+            if _pe_discovery_title(title):
                 discovered[number] = title
         if len(links) < 10:
             break
@@ -267,16 +287,21 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
     for stage in recipe.get("stages", []):
         discovered.setdefault(stage["source_id"].split(":")[-1], stage["title"])
     notices = []
+    reviewed_ids = {SOURCE_ID} | {s["source_id"] for s in recipe.get("stages", [])}
     for number in sorted(discovered, key=int):
         url = f"{BASE}/board.es?mid=a10510000000&bid=0041&act=view&list_no={number}"
         notice = _detail(number, fetch(url))
-        if not _related(notice["title"]):
+        if not _pe_discovery_title(notice["title"]):
             if number == "400":
                 raise ValueError("Reviewed Korea Post notice no longer matches program")
             continue
+        if notice["date"] < "2026-01-01" and notice["source_id"] not in reviewed_ids:
+            continue
         notice["attachment_hashes"] = {}
         notice["attachment_texts"] = {}
-        for attachment_url in notice["attachments"]:
+        attachments_to_verify = (notice["attachments"] if notice["source_id"] in reviewed_ids
+                                 or _current_program_title(notice["title"]) else [])
+        for attachment_url in attachments_to_verify:
             raw = fetch(attachment_url)
             if not raw.startswith((b"%PDF", b"PK", bytes.fromhex("d0cf11e0"))):
                 raise ValueError("Official Korea Post attachment is invalid")
@@ -286,4 +311,5 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
         notices.append(notice)
     programs, holds = project(notices, checked_at)
     return {"checked_at": checked_at, "notices": notices, "programs": programs,
-            "holds": holds, "link_suggestions": _suggestions(notices)}
+            "holds": holds, "link_suggestions": _suggestions(notices),
+            "discovery_candidates": discovery_candidates(notices)}

@@ -126,6 +126,16 @@ def link_suggestions(notices: list[dict]) -> list[dict]:
     return result
 
 
+def discovery_candidates(notices: list[dict]) -> list[dict]:
+    """Unmatched fund notices need PE-scope review before becoming programs."""
+    approved = _approved_source_ids()
+    linked = {item["source_id"] for item in link_suggestions(notices)}
+    return [{"institution_id": "kexim", "source_id": str(n["source_id"]),
+             "title": n["title"], "date": n["date"], "url": n["url"]}
+            for n in notices if str(n["source_id"]) not in approved
+            and str(n["source_id"]) not in linked]
+
+
 def _reviewed_source(recipe: dict, notices: dict[str, dict]) -> list[tuple[dict, dict]]:
     sources = []
     for approved in recipe["sources"]:
@@ -357,7 +367,8 @@ def collect(checked_at: str, fetch=None) -> dict:
         notices.append(notice)
     programs, holds = project(notices, checked_at)
     return {"checked_at": checked_at, "notices": notices, "programs": programs,
-            "holds": holds, "link_suggestions": link_suggestions(notices)}
+            "holds": holds, "link_suggestions": link_suggestions(notices),
+            "discovery_candidates": discovery_candidates(notices)}
 
 
 def main() -> None:

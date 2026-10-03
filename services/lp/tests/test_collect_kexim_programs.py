@@ -117,6 +117,16 @@ class KeximCollectorTests(unittest.TestCase):
         self.assertEqual(candidate[0]['programs'],[{'id':'kexim-test-pe','title':'2026 하반기 PE'}])
         self.assertEqual(candidate[0]['stage'],'최종 선정')
 
+    def test_unmatched_fund_notice_is_a_new_business_candidate(self):
+        notices,recipe=fixture();self.set_recipe(recipe)
+        other=detail('9','임상3상 특화펀드 위탁운용사 선정계획 공고',
+                     '2026.05.11','별도 펀드 공고','/comm/getFile?upperNo=9&fileNo=1')
+        programs,holds=kexim.project(notices+[other],'2026-10-03T12:00:00+09:00')
+        self.assertEqual([],holds)
+        self.assertEqual('kexim-test-pe',programs[0]['id'])
+        self.assertEqual([],kexim.link_suggestions(notices+[other]))
+        self.assertEqual('9',kexim.discovery_candidates(notices+[other])[0]['source_id'])
+
     def test_changed_attachment_and_bad_team_count_hold(self):
         notices,recipe=fixture();self.set_recipe(recipe)
         changed=json.loads(json.dumps(notices))

@@ -10,11 +10,11 @@ from pathlib import Path
 try:
     from .collect_ktcu_program import collect as collect_ktcu
     from .collect_koreapost_program import collect as collect_post
-    from .collect_kexim_programs import collect as collect_kexim, project as project_kexim, link_suggestions as suggest_kexim
+    from .collect_kexim_programs import collect as collect_kexim, project as project_kexim, link_suggestions as suggest_kexim, discovery_candidates as discover_kexim
 except ImportError:
     from collect_ktcu_program import collect as collect_ktcu
     from collect_koreapost_program import collect as collect_post
-    from collect_kexim_programs import collect as collect_kexim, project as project_kexim, link_suggestions as suggest_kexim
+    from collect_kexim_programs import collect as collect_kexim, project as project_kexim, link_suggestions as suggest_kexim, discovery_candidates as discover_kexim
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -32,7 +32,8 @@ def load_kexim_collection(path: Path, checked_at: str) -> dict:
     programs, holds = project_kexim(notices, checked_at)
     return {"checked_at": report["checked_at"], "notices": notices,
             "programs": programs, "holds": holds,
-            "link_suggestions": suggest_kexim(notices)}
+            "link_suggestions": suggest_kexim(notices),
+            "discovery_candidates": discover_kexim(notices)}
 
 
 def collect(seed=None, checked_at=None, collectors=None, kexim_input: Path | None = None):

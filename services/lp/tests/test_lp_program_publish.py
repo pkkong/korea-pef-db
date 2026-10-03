@@ -73,4 +73,34 @@ class PublishContracts(unittest.TestCase):
         self.assertEqual(original,next(p for p in data['programs'] if p['id']==original['id']))
         self.assertIn('공식 자료 수집 실패',[hold['reason'] for hold in data['program_holds']])
 
+    def test_new_business_candidates_are_recomputed_from_notices(self):
+        notice={'source_id':'114023','url':'https://www.koreaexim.go.kr/HPHKBI039M01/114023',
+                'date':'2026-05-11','title':'임상3상 특화펀드 위탁운용사 선정계획 공고',
+                'body':'공식 출자 공고'}
+        self.report['priority_sources']={'kexim':{'notices':[notice], 'programs':[],
+                                                  'discovery_candidates':[{'title':'임의 사업'}],
+                                                  'holds':[]}}
+        candidate={k:notice[k] for k in ('source_id','url','date','title')}
+        candidate['institution_id']='kexim'
+        with patch('publish_lp_programs.project_kexim',return_value=([],[])), \
+             patch('publish_lp_programs.suggest_kexim',return_value=[]), \
+             patch('publish_lp_programs.discover_kexim',return_value=[candidate]):
+            data,pages=prepare(self.data,self.report)
+        self.assertEqual([candidate],data['discovery_candidates'])
+        self.assertIn('새 출자공고 후보',pages['review.html'])
+        self.assertNotIn('임의 사업',pages['review.html'])
+
+    def test_discovered_notice_survives_listing_age_out_or_source_outage(self):
+        notice={'source_id':'0041:352','institution_id':'koreapost',
+                'url':'https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=352',
+                'date':'2026-04-22','title':'우체국예금 해외사모펀드 국내재간접 위탁운용사 안내',
+                'body':'공식 후속 공고'}
+        self.data['priority_notices']=[notice]
+        self.report['priority_sources']={'koreapost':{'notices':[],'programs':[],
+                                                       'holds':[{'program_id':'koreapost','reason':'일시적 접속 실패'}]}}
+        data,pages=prepare(self.data,self.report)
+        self.assertEqual([notice],data['priority_notices'])
+        self.assertEqual('0041:352',data['discovery_candidates'][0]['source_id'])
+        self.assertIn('우체국예금 해외사모펀드',pages['review.html'])
+
 if __name__=='__main__':unittest.main()

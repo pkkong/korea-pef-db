@@ -59,6 +59,16 @@ class KtcuProgramCollectionTest(unittest.TestCase):
         self.assertIn("검토 필요", holds[0]["reason"])
         self.assertEqual("62000", ktcu.link_suggestions([self.notice, result], self.seed["title"])[0]["source_id"])
 
+    def test_next_year_pef_is_a_new_program_candidate_without_holding_2026(self):
+        later = {"source_id": "70000", "url": "https://www.ktcu.or.kr/PPW-CSB-000101/70000",
+                 "title": "2027년 블라인드 PEF 위탁운용사 선정 공고", "date": "2026-12-01",
+                 "body": "별도 출자사업 모집 공고", "sha256": "candidate"}
+        programs, holds = ktcu.project([self.notice, later], "2026-12-02T00:00:00+00:00", self.seed)
+        self.assertEqual([], holds)
+        self.assertEqual(ktcu.PROGRAM_ID, programs[0]["id"])
+        self.assertEqual([], ktcu.link_suggestions([self.notice, later], self.seed["title"]))
+        self.assertEqual("70000", ktcu.discovery_candidates([self.notice, later])[0]["source_id"])
+
     def test_result_review_requires_names_in_official_source(self):
         result = {"source_id": "62000", "url": "https://www.ktcu.or.kr/PPW-CSB-000101/62000",
                   "title": "2026년 블라인드 PEF 선정 결과", "date": "2026-10-30",

@@ -23,7 +23,8 @@ class MacOSArtifactTests(unittest.TestCase):
     def test_current_artifact_is_reprojected_from_notices(self):
         self.write(self.now - timedelta(minutes=2))
         with patch.object(priority, "project_kexim", return_value=([{"id": "verified"}], [])), \
-             patch.object(priority, "suggest_kexim", return_value=[]):
+             patch.object(priority, "suggest_kexim", return_value=[]), \
+             patch.object(priority, "discover_kexim", return_value=[]):
             result = priority.load_kexim_collection(self.path, self.now.isoformat())
         self.assertEqual(result["programs"], [{"id": "verified"}])
         self.assertEqual(result["notices"], [{"source_id": "official"}])

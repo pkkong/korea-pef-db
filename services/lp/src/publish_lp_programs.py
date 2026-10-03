@@ -10,9 +10,9 @@ from pathlib import Path
 from lp_program_service import build, validate
 from kgrowth_program_review import link_suggestions, reviewed_programs
 from lp_review_decisions import apply_decisions
-from collect_ktcu_program import project as project_ktcu, link_suggestions as suggest_ktcu
-from collect_koreapost_program import project as project_post, _suggestions as suggest_post
-from collect_kexim_programs import project as project_kexim, link_suggestions as suggest_kexim
+from collect_ktcu_program import project as project_ktcu, link_suggestions as suggest_ktcu, discovery_candidates as discover_ktcu
+from collect_koreapost_program import project as project_post, _suggestions as suggest_post, discovery_candidates as discover_post
+from collect_kexim_programs import project as project_kexim, link_suggestions as suggest_kexim, discovery_candidates as discover_kexim
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -55,11 +55,8 @@ def prepare(current, report):
             existing[p['id']] = p
     priority = report.get('priority_sources', {})
     priority_holds = []
-    priority_notices = []
-    priority_suggestions = []
+    fresh_priority_notices = []
     projectors = {'ktcu': project_ktcu, 'koreapost': project_post, 'kexim': project_kexim}
-    suggesters = {'ktcu': lambda ns: suggest_ktcu(ns, existing['ktcu-2026-blind-pef']['title']),
-                  'koreapost': suggest_post, 'kexim': suggest_kexim}
     for institution, source in priority.items():
         if institution not in projectors:
             raise ValueError(f'Unknown LP source: {institution}')
@@ -69,8 +66,7 @@ def prepare(current, report):
             continue
         projected, source_holds = projectors[institution](notices, report['checked_at'])
         priority_holds.extend(source_holds)
-        priority_suggestions.extend(suggesters[institution](notices))
-        priority_notices.extend({**n, 'institution_id': institution} for n in notices)
+        fresh_priority_notices.extend({**n, 'institution_id': institution} for n in notices)
         for program in projected:
             if program['institution_id'] != institution:
                 raise ValueError('LP program institution differs from official source')
@@ -80,8 +76,18 @@ def prepare(current, report):
     data['accepted_notices'] = copy.deepcopy(report.get('accepted_notices', current.get('accepted_notices', [])))
     data['tracked_notices'] = copy.deepcopy(report.get('tracked_notices', report['notices']))
     data['candidate_groups'] = copy.deepcopy(report.get('candidate_groups', []))
+    # A listing may age out a notice or a source may fail temporarily. Keep
+    # previously observed official documents until their program is reviewed.
+    retained = {n['url']: copy.deepcopy(n) for n in current.get('priority_notices', [])}
+    retained.update({n['url']: n for n in fresh_priority_notices})
+    data['priority_notices'] = list(retained.values())
+    grouped = {institution: [n for n in data['priority_notices'] if n.get('institution_id') == institution]
+               for institution in projectors}
+    priority_suggestions = (suggest_ktcu(grouped['ktcu'], existing['ktcu-2026-blind-pef']['title'])
+                            + suggest_post(grouped['koreapost']) + suggest_kexim(grouped['kexim']))
     data['link_suggestions'] = link_suggestions(report['notices']) + priority_suggestions
-    data['priority_notices'] = priority_notices
+    data['discovery_candidates'] = (discover_ktcu(grouped['ktcu']) + discover_post(grouped['koreapost'])
+                                    + discover_kexim(grouped['kexim']))
     data['program_holds'] = holds + priority_holds
     apply_decisions(data, report['notices'], current.get('review_decisions', []))
     data['as_of'] = str(report['checked_at'])[:10]
