@@ -13,6 +13,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  collect-koreapost:
+    runs-on: macos-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install PDF reader
+        run: python3 -m pip install 'pypdf==6.10.0'
+      - name: Collect official Korea Post notices
+        run: python3 services/lp/src/collect_koreapost_program.py --output /tmp/koreapost-collection.json
+      - name: Pass official evidence to publisher
+        uses: actions/upload-artifact@v4
+        with:
+          name: koreapost-collection
+          path: /tmp/koreapost-collection.json
+          if-no-files-found: error
   collect-kexim:
     runs-on: macos-latest
     timeout-minutes: 8
@@ -27,7 +45,7 @@ jobs:
           path: /tmp/kexim-collection.json
           if-no-files-found: error
   collect:
-    needs: collect-kexim
+    needs: [collect-koreapost, collect-kexim]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -56,12 +74,18 @@ jobs:
         with:
           name: kexim-collection
           path: /tmp
+      - name: Receive official Korea Post evidence
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: koreapost-collection
+          path: /tmp
       - name: Load last published data
         run: python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json
       - name: Collect official announcements
         run: python3 services/lp/src/collect_kgrowth_programs.py --baseline /tmp/lp-baseline.json --output /tmp/kgrowth-collection.json
       - name: Collect Korea Post, KTCU, and KEXIM announcements
-        run: python3 services/lp/src/collect_priority_lp_programs.py --kexim-input /tmp/kexim-collection.json --output /tmp/lp-priority-collection.json
+        run: python3 services/lp/src/collect_priority_lp_programs.py --koreapost-input /tmp/koreapost-collection.json --kexim-input /tmp/kexim-collection.json --output /tmp/lp-priority-collection.json
       - name: Store evidence and publish verified pages
         run: |
           set -o pipefail

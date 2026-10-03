@@ -34,6 +34,16 @@ class MacOSArtifactTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "current run"):
             priority.load_kexim_collection(self.path, self.now.isoformat())
 
+    def test_koreapost_artifact_is_reprojected_and_discovery_retained(self):
+        self.write(self.now - timedelta(minutes=2))
+        discovered=[{"institution_id":"koreapost","source_id":"0041:352"}]
+        with patch.object(priority, "project_post", return_value=([{"id": "reviewed-post"}], [])), \
+             patch.object(priority, "suggest_post", return_value=[]), \
+             patch.object(priority, "discover_post", return_value=discovered):
+            result = priority.load_post_collection(self.path, self.now.isoformat())
+        self.assertEqual([{"id": "reviewed-post"}], result["programs"])
+        self.assertEqual(discovered, result["discovery_candidates"])
+
 
 if __name__ == "__main__":
     unittest.main()

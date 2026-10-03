@@ -6,13 +6,14 @@ are connection candidates until their exact source and GP evidence is reviewed.
 
 from __future__ import annotations
 
+import argparse
 import copy
 import hashlib
 import io
 import json
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
@@ -313,3 +314,23 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
     return {"checked_at": checked_at, "notices": notices, "programs": programs,
             "holds": holds, "link_suggestions": _suggestions(notices),
             "discovery_candidates": discovery_candidates(notices)}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", required=True, type=Path)
+    args = parser.parse_args()
+    seed = next(p for p in json.loads((ROOT / "data/lp_programs_pilot.json").read_text())["programs"]
+                if p["id"] == PROGRAM_ID)
+    report = collect(seed, datetime.now(timezone.utc).isoformat())
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = args.output.with_suffix(args.output.suffix + ".tmp")
+    temporary.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    temporary.replace(args.output)
+    print(json.dumps({"notices": len(report["notices"]), "programs": len(report["programs"]),
+                      "holds": len(report["holds"]),
+                      "discovery_candidates": len(report["discovery_candidates"])}))
+
+
+if __name__ == "__main__":
+    main()
