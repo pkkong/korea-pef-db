@@ -8,9 +8,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import html
+import io
 import json
+import platform
 import re
 import ssl
+import subprocess
+import tempfile
 import time
 from datetime import datetime, timezone
 from http.cookies import SimpleCookie
@@ -74,6 +78,28 @@ def parse_detail(source_id: str, raw: bytes | str) -> dict:
 def fingerprint(notice: dict) -> str:
     value = [notice["title"], notice["date"], notice["body"]]
     return hashlib.sha256(json.dumps(value, ensure_ascii=False).encode()).hexdigest()
+
+
+def _pdf_text(raw: bytes) -> str:
+    from pypdf import PdfReader
+    pages = PdfReader(io.BytesIO(raw)).pages
+    first_page = (pages[0].extract_text() or "") if pages else ""
+    text = " ".join(page.extract_text() or "" for page in pages)
+    if len(first_page.strip()) < 100 and platform.system() == "Darwin":
+        # Some official PDFs show Korean text visually but omit it from the
+        # extractable layer. macOS Vision reads the first page without a cloud
+        # OCR service; a failure leaves the scope unknown rather than guessed.
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".pdf") as source:
+                source.write(raw)
+                source.flush()
+                result = subprocess.run(
+                    ["swift", str(ROOT / "services/lp/scripts/ocr_pdf_first_page.swift"), source.name],
+                    capture_output=True, text=True, timeout=45, check=True)
+                text = result.stdout + " " + text
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return text
 
 
 def _recipes() -> list[dict]:
@@ -358,12 +384,20 @@ def collect(checked_at: str, fetch=None) -> dict:
         notice = parse_detail(source_id, fetch(f"{BOARD}/{source_id}"))
         notice["checked_at"] = checked_at
         notice["attachment_hashes"] = {}
+        notice["attachment_texts"] = {}
         if notice["attachments"]:
             attachment = notice["attachments"][0]
             raw = fetch(attachment["url"])
             if not raw.startswith((b"%PDF", b"PK", bytes.fromhex("d0cf11e0"))):
                 raise ValueError(f"KEXIM attachment {source_id} has unexpected format")
             notice["attachment_hashes"][attachment["url"]] = hashlib.sha256(raw).hexdigest()
+            if raw.startswith(b"%PDF") and source_id not in _approved_source_ids():
+                # Unreviewed notices need the legal fund form from the official
+                # plan, not a guess from the headline or an attachment name.
+                try:
+                    notice["attachment_texts"][attachment["url"]] = _pdf_text(raw)
+                except Exception as error:
+                    notice["attachment_read_error"] = type(error).__name__
         notices.append(notice)
     programs, holds = project(notices, checked_at)
     return {"checked_at": checked_at, "notices": notices, "programs": programs,

@@ -86,7 +86,10 @@ class PublishContracts(unittest.TestCase):
              patch('publish_lp_programs.suggest_kexim',return_value=[]), \
              patch('publish_lp_programs.discover_kexim',return_value=[candidate]):
             data,pages=prepare(self.data,self.report)
-        self.assertEqual([candidate],data['discovery_candidates'])
+        self.assertEqual(1,len(data['discovery_candidates']))
+        self.assertEqual(candidate['source_id'],data['discovery_candidates'][0]['source_id'])
+        self.assertEqual('unknown',data['discovery_candidates'][0]['scope'])
+        self.assertEqual('모집 공고',data['discovery_candidates'][0]['stage'])
         self.assertIn('새 출자공고 후보',pages['review.html'])
         self.assertNotIn('임의 사업',pages['review.html'])
 
@@ -102,5 +105,19 @@ class PublishContracts(unittest.TestCase):
         self.assertEqual([notice],data['priority_notices'])
         self.assertEqual('0041:352',data['discovery_candidates'][0]['source_id'])
         self.assertIn('우체국예금 해외사모펀드',pages['review.html'])
+
+    def test_same_attachment_keeps_extracted_fund_form_when_ocr_temporarily_fails(self):
+        url='https://www.koreaexim.go.kr/HPHKBI039M01/115546'
+        document={'source_id':'115546','institution_id':'kexim','url':url,
+                  'date':'2026-08-13','title':'2026년 LP성장펀드(Track 1) 출자사업 계획 공고',
+                  'body':'공식 공고', 'attachment_hashes':{'official-pdf':'same-bytes'},
+                  'attachment_texts':{'official-pdf':'출자 대상 벤처투자조합'}}
+        self.data['priority_notices']=[document]
+        fresh={key:value for key,value in document.items() if key!='attachment_texts'}
+        self.report['priority_sources']={'kexim':{'notices':[fresh], 'programs':[], 'holds':[]}}
+        with patch('publish_lp_programs.project_kexim',return_value=([],[])):
+            data,_=prepare(self.data,self.report)
+        self.assertEqual(document['attachment_texts'],data['priority_notices'][0]['attachment_texts'])
+        self.assertEqual('vc_only',data['discovery_candidates'][0]['scope'])
 
 if __name__=='__main__':unittest.main()

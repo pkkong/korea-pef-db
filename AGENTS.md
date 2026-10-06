@@ -107,6 +107,7 @@ Every non-trivial subagent task should state:
 - Vercel is the only official user-facing runtime for `브리프 / LP / GP`. Supabase owns durable canonical data and published public read models; GitHub holds code, versioned raw inputs, and automation, while GitHub Pages remains a backup mirror only.
 - Crawlers, CSV imports, or DB updates do not update public surfaces by themselves. Role boundaries are fixed: `Build newsletter mirror` collects/builds/verifies only the GitHub Pages backup mirror, `Sync newsletter Supabase read model` copies the verified mirror archive into Supabase and verifies Vercel, and `Deploy newsletter Vercel app` deploys app code only.
 - Public view taxonomy is a durable product rule: articles use list views, GP/LP directories use table-like directory views, GP/LP entities use profile detail views, LP notices use row-card notice views, and Wiki uses document views.
+- LP 공고 수집은 공식 게시판의 발견·원공고 역탐색·PE/VC 범위 판단·사업별 단계 묶기를 반복 실행 가능한 코드와 검사로 처리한다. 담당자가 공고 ID를 골라 넣는 방식으로 확장하지 않는다. 공식 근거가 부족한 건은 범위 미확인으로 보존하며 공개 사업이나 GP 결과를 추정해 만들지 않는다.
 - Local secrets are not committed. Newsletter operating secrets live in GitHub Actions repository secrets; `config/daily_news.env` is not an operating path.
 - Product and role-specific operating briefs are in `docs/agent_operating_briefs.md`.
 - Product/service responsibility boundaries are in `docs/product_operating_model.md`.

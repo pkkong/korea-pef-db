@@ -85,6 +85,30 @@ class KoreaPostReviewTests(unittest.TestCase):
         self.assertEqual(notice["body"], "모집\n공고")
         self.assertEqual(len(notice["attachments"]), 1)
 
+    def test_bounded_history_finds_recruitment_missing_from_recent_listing(self):
+        titles = {
+            '400': ('2026-09-10', self.recipe['source_title']),
+            '349': ('2026-04-13', '우체국예금 국내 공동투자 전략 펀드 정량평가 결과 안내'),
+            '348': ('2026-03-30', '우체국예금 해외 사모펀드 국내 재간접 위탁운용사 선정 공고'),
+            '347': ('2026-03-23', '2026년도 우체국예금 국내 공동투자 전략 펀드 위탁운용사 선정 공고'),
+            '346': ('2025-12-20', '우체국예금 해외부동산 위탁운용사 선정 공고'),
+        }
+        listing = ('<a href="/board.es?mid=a10510000000&amp;bid=0041&amp;act=view&amp;list_no=349" '
+                   'title="우체국예금 국내 공동투자 전략 펀드 정량평가 결과 안내">공고</a>').encode()
+        def fetch(url):
+            if 'nPage=' in url:
+                return listing
+            number = url.split('list_no=')[-1]
+            date, title = titles[number]
+            return (f'<p class="title">{title}</p><th>작성일시</th><td>{date} 09:00</td>'
+                    '<td colspan="4" class="tb_contents">공식 본문</td>').encode()
+        seed = {'id':post.PROGRAM_ID,'title':self.recipe['program']['title']}
+        with patch.object(post,'project',return_value=([],[])):
+            report = post.collect(seed,'2026-10-03T00:00:00+09:00',fetch=fetch)
+        self.assertEqual({'0041:347','0041:348','0041:349','0041:400'},
+                         {n['source_id'] for n in report['notices']})
+        self.assertEqual(3,len(report['discovery_candidates']))
+
     def test_hash_reviewed_result_can_add_gps_without_changing_code(self):
         result = {"source_id": "0041:402", "url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=402",
                   "title": "2026년도 우체국금융 국내 블라인드 PEF 위탁운용사 선정 결과",

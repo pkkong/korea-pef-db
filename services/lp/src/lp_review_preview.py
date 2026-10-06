@@ -15,11 +15,27 @@ def render_review(data,report,previous):
     discovery_sources={item['url'] for item in discovery}
     institutions={'ktcu':'한국교직원공제회','koreapost':'우정사업본부','kexim':'한국수출입은행'}
     if discovery:
-        body+='<section class="review-queue"><h2>새 출자공고 후보</h2><p class="muted">사업 범위와 PE 해당 여부를 확인한 뒤 정리합니다.</p><ul>'
-        for item in sorted(discovery,key=lambda s:(s['date'],s['source_id']),reverse=True):
-            name=institutions.get(item['institution_id'],item['institution_id'])
-            body+=f'<li><small>{escape(item["date"])} · {escape(name)}</small><strong>{escape(item["title"])}</strong><a target="_blank" rel="noopener" href="{escape(item["url"],quote=True)}">공고 원문 ↗</a></li>'
-        body+='</ul></section>'
+        labels={'pe_eligible':'PE 신청 가능','vc_only':'VC · PE 목록 제외',
+                'pe_related_mandate':'PE·PD 투자관리 위탁','mixed_legal_forms':'PE·VC 모두 가능',
+                'unknown':'펀드 형태 확인 필요'}
+        groups={}
+        for item in discovery:
+            groups.setdefault(item.get('program_key') or item['url'],[]).append(item)
+        body+='<section class="review-queue"><h2>새 출자공고 후보</h2><p class="muted">공식 공고의 펀드 형태와 사업명을 기준으로 자동 분류했습니다.</p>'
+        for members in sorted(groups.values(),key=lambda group:max(item['date'] for item in group),reverse=True):
+            members.sort(key=lambda item:(item['date'],item['source_id']))
+            first=next((item for item in members if item.get('stage')=='모집 공고'),members[0])
+            name=institutions.get(first['institution_id'],first['institution_id'])
+            scope=labels.get(first.get('scope'), '펀드 형태 확인 필요')
+            body+=f'<div class="review-program-group"><small>{escape(name)} · {escape(scope)}</small><h3>{escape(first["title"])}</h3>'
+            if not any(item.get('recruitment_url') for item in members):
+                body+='<p class="muted">모집 원공고 확인 필요</p>'
+            body+='<ul>'
+            for item in members:
+                stage=item.get('stage') or '공고'
+                body+=f'<li><small>{escape(item["date"])} · {escape(stage)}</small><a target="_blank" rel="noopener" href="{escape(item["url"],quote=True)}">{escape(item["title"])} ↗</a></li>'
+            body+='</ul></div>'
+        body+='</section>'
     if suggestions:
         published={p['id'] for p in programs}
         body+='<section class="review-queue"><h2>새 단계 연결 후보</h2><ul>'
@@ -60,6 +76,6 @@ def render_review(data,report,previous):
             if before.get('attachment_hashes')!=n.get('attachment_hashes'):
                 body+='<p>첨부파일이 변경되었습니다. 원문에서 확인해 주세요.</p>'
         body+='<h2>공고 본문</h2><pre>'+escape(n['body'])+'</pre></div></details>'
-    style='<style>.review-queue ul{list-style:none;padding:0}.review-queue li{border-bottom:1px solid #e5e5e5;padding:12px 0;overflow-wrap:anywhere}.review-queue li>*{display:block;margin:3px 0}.review-queue small{color:#64748b}.review-notice{border-bottom:1px solid #e5e5e5}.review-notice summary{cursor:pointer;padding:18px 0;list-style:none}.review-notice summary strong{display:block;font-size:15px;line-height:1.5;margin-top:5px;overflow-wrap:anywhere}.review-content{padding-bottom:20px}.review-content h2{font-size:15px;margin:20px 0 10px}.review-content pre{font:13px/1.7 inherit;white-space:pre-wrap;overflow-wrap:anywhere;background:#fafafa;padding:14px}.review-content th{width:24%;min-width:0}.review-content td{min-width:0;overflow-wrap:anywhere}.review-content table{table-layout:fixed}</style>'
+    style='<style>.review-queue ul{list-style:none;padding:0}.review-program-group{border-bottom:1px solid #e5e5e5;padding:16px 0}.review-program-group h3{font-size:16px;line-height:1.5;margin:6px 0}.review-program-group li{padding:7px 0;overflow-wrap:anywhere}.review-program-group li>*{display:block;margin:2px 0}.review-queue small{color:#64748b}.review-notice{border-bottom:1px solid #e5e5e5}.review-notice summary{cursor:pointer;padding:18px 0;list-style:none}.review-notice summary strong{display:block;font-size:15px;line-height:1.5;margin-top:5px;overflow-wrap:anywhere}.review-content{padding-bottom:20px}.review-content h2{font-size:15px;margin:20px 0 10px}.review-content pre{font:13px/1.7 inherit;white-space:pre-wrap;overflow-wrap:anywhere;background:#fafafa;padding:14px}.review-content th{width:24%;min-width:0}.review-content td{min-width:0;overflow-wrap:anywhere}.review-content table{table-layout:fixed}</style>'
     html=shell('공고 검토',style+body,data['as_of'])
     return html.replace('href="index.html"','href="/samples/lp/index.html"')

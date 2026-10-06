@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, urljoin, urlparse
 from urllib.request import Request, urlopen
 
@@ -74,6 +74,10 @@ def _get(url):
             with urlopen(request, timeout=25) as response:
                 _official_url(response.geturl())
                 return response.read()
+        except HTTPError as error:
+            if error.code in (404, 410) or attempt == 2:
+                raise
+            time.sleep(attempt + 1)
         except (URLError, TimeoutError):
             if attempt == 2:
                 raise
@@ -115,6 +119,12 @@ def _pe_discovery_title(title):
 def _current_program_title(title):
     years = re.findall(r"20\d{2}", title)
     return _related(title) and (not years or "2026" in years)
+
+
+def _recruitment_title(title):
+    compact = re.sub(r"\s+", "", title)
+    return "공고" in compact and not any(
+        term in compact for term in ("결과", "우선협상", "정량평가", "서류심사"))
 
 
 def discovery_candidates(notices):
@@ -269,6 +279,7 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
     fetch = fetch or _get
     recipe = json.loads(REGISTRY.read_text())
     discovered = {}
+    cached_details = {}
     for page in range(1, 11):
         url = LIST_URL + f"&nPage={page}"
         links = _listing(fetch(url))
@@ -283,6 +294,28 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
             break
     else:
         raise ValueError("Korea Post listing pagination exceeded safety limit")
+    # The board can hide older 2026 notices while their official detail URLs
+    # remain accessible. Walk backward from the oldest listed ID until the
+    # prior year; do not encode individual notice IDs as a backfill list.
+    if discovered:
+        oldest = min(map(int, discovered))
+        for number in range(oldest - 1, max(oldest - 81, 0), -1):
+            url = f"{BASE}/board.es?mid=a10510000000&bid=0041&act=view&list_no={number}"
+            try:
+                raw = fetch(url)
+            except HTTPError as error:
+                if error.code in (404, 410):
+                    continue
+                raise
+            try:
+                notice = _detail(str(number), raw)
+            except ValueError:
+                continue
+            if notice["date"] < "2026-01-01":
+                break
+            if _pe_discovery_title(notice["title"]):
+                discovered[str(number)] = notice["title"]
+                cached_details[str(number)] = notice
     # Keep the known source under observation if pagination is changed.
     discovered.setdefault("400", seed_program["title"])
     for stage in recipe.get("stages", []):
@@ -291,7 +324,7 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
     reviewed_ids = {SOURCE_ID} | {s["source_id"] for s in recipe.get("stages", [])}
     for number in sorted(discovered, key=int):
         url = f"{BASE}/board.es?mid=a10510000000&bid=0041&act=view&list_no={number}"
-        notice = _detail(number, fetch(url))
+        notice = cached_details.get(number) or _detail(number, fetch(url))
         if not _pe_discovery_title(notice["title"]):
             if number == "400":
                 raise ValueError("Reviewed Korea Post notice no longer matches program")
@@ -301,14 +334,20 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
         notice["attachment_hashes"] = {}
         notice["attachment_texts"] = {}
         attachments_to_verify = (notice["attachments"] if notice["source_id"] in reviewed_ids
-                                 or _current_program_title(notice["title"]) else [])
+                                 or _current_program_title(notice["title"]) else
+                                 notice["attachments"][:1] if _recruitment_title(notice["title"]) else [])
         for attachment_url in attachments_to_verify:
             raw = fetch(attachment_url)
             if not raw.startswith((b"%PDF", b"PK", bytes.fromhex("d0cf11e0"))):
                 raise ValueError("Official Korea Post attachment is invalid")
             notice["attachment_hashes"][attachment_url] = hashlib.sha256(raw).hexdigest()
             if raw.startswith(b"%PDF"):
-                notice["attachment_texts"][attachment_url] = _pdf_text(raw)
+                try:
+                    notice["attachment_texts"][attachment_url] = _pdf_text(raw)
+                except Exception as error:
+                    if notice["source_id"] in reviewed_ids:
+                        raise
+                    notice["attachment_read_error"] = type(error).__name__
         notices.append(notice)
     programs, holds = project(notices, checked_at)
     return {"checked_at": checked_at, "notices": notices, "programs": programs,
