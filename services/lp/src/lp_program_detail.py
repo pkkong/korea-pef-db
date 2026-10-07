@@ -45,9 +45,13 @@ def render_detail_body(p):
     body += f'<div><small>투자 분야</small><strong>{h(p["asset_scope"])}</strong></div>'
     if p.get('commitment_label'):
         body += f'<div><small>출자 예정액</small><strong>{h(p["commitment_label"])}</strong></div>'
+    if p.get('fund_target_label'):
+        body += f'<div><small>결성 목표</small><strong>{h(p["fund_target_label"])}</strong></div>'
     if p.get('manager_count_label'):
         body += f'<div><small>선정 예정</small><strong>{h(p["manager_count_label"])}</strong></div>'
     body += '</div>'
+    if p.get('commitment_detail'):
+        body += f'<p class="muted contribution-detail">{h(p["commitment_detail"])}<br>{h(p.get("contribution_note"))}</p>'
     objective = p.get('primary_investment')
     if objective:
         paragraphs = "".join(f"<p>{h(item)}</p>" for item in objective.get("items", [objective["text"]]))

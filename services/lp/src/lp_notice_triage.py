@@ -15,16 +15,18 @@ def compact(value: str) -> str:
 
 def notice_stage(title: str) -> str:
     value = compact(title)
+    if any(word in value for word in ("정정", "변경", "연장", "재공고", "취소")):
+        return "변경 공고"
     if "우선협상대상자" in value:
         return "우선협상대상자"
+    if "faq" in value or "질의응답" in value:
+        return "질의응답"
     if any(word in value for word in ("정량평가결과", "서류심사결과", "1차평가결과")):
         return "1차 심사 결과"
     if any(word in value for word in ("접수결과", "접수현황")):
         return "접수 결과"
     if "선정결과" in value or "최종선정" in value:
         return "선정 결과"
-    if any(word in value for word in ("정정", "변경", "연장", "재공고")):
-        return "변경 공고"
     if "공고" in value or "모집" in value:
         return "모집 공고"
     return "단계 확인 필요"
@@ -47,6 +49,9 @@ def program_key(notice: dict) -> str:
             core = "other-" + hashlib.sha256(title.encode()).hexdigest()[:12]
         return f"{institution}:{year}:{core}"
     core = title
+    quoted = re.search(r"[「『]([^」』]+펀드)[」』]", title)
+    if quoted:
+        core = quoted[1]
     for phrase in ("한국수출입은행", "위탁운용사", "운용사", "제안서", "선정계획",
                    "출자사업", "계획공고", "접수결과", "접수현황", "서류심사결과",
                    "선정결과", "공고"):
@@ -65,6 +70,13 @@ def _scope_from_source(notice: dict) -> tuple[str, str]:
     # necessarily an eligible form for this particular solicitation.
     pe_form = vc_form = False
     source_text = attachments + body
+    # A multi-line legal-form table includes law citations between its forms.
+    # Stop at its footnote, before other fund forms in personnel appendices.
+    legal_table = re.search(r"출자대상투자기구(.*?)(?:※|심사결과|운용사신청자격)", source_text)
+    if legal_table:
+        forms = legal_table[1]
+        if "기관전용사모집합투자기구" in forms and any(f in forms for f in ("벤처투자조합", "신기술사업투자조합")):
+            return "mixed_legal_forms", "공식 출자대상 표에 PE와 VC 신청 형태가 함께 표시됨"
     for label in re.finditer(r"출자대상|신청가능조합형태|펀드형태|투자기구및선정대상", source_text):
         window = source_text[label.end():label.end() + 100]
         pe = re.search(r"기관전용사모(?:집합투자기구)?", window)
@@ -112,6 +124,16 @@ def assess_candidates(candidates: list[dict], notices: list[dict]) -> list[dict]
     for members in groups.values():
         recruitment = next((by_url[m["url"]] for m in sorted(members, key=lambda m: m["date"])
                             if m["stage"] == "모집 공고"), None)
+        if recruitment is None:
+            # Supporting originals must come from another official bank, and
+            # match the same derived institution/year/business key themselves.
+            from urllib.parse import urlparse
+            related = [n for n in notices if n.get("related_program_key") == members[0]["program_key"]
+                       and n.get("institution_id") == "kdb" and urlparse(n["url"]).hostname == "www.kdb.co.kr"
+                       and notice_stage(n["title"]) == "모집 공고"
+                       and program_key({**n, "institution_id": members[0]["institution_id"]}) == members[0]["program_key"]]
+            if len(related) == 1:
+                recruitment = related[0]
         anchor = recruitment or by_url[min(members, key=lambda m: m["date"])["url"]]
         scope, reason = _scope_from_source(anchor)
         for member in members:

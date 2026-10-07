@@ -37,6 +37,7 @@ def load_kexim_collection(path: Path, checked_at: str) -> dict:
     programs, holds = project_kexim(notices, checked_at)
     return {"checked_at": report["checked_at"], "notices": notices,
             "programs": programs, "holds": holds,
+            "supporting_notices": report.get("supporting_notices", []), "supporting_holds": report.get("supporting_holds", []),
             "link_suggestions": suggest_kexim(notices),
             "discovery_candidates": discover_kexim(notices)}
 

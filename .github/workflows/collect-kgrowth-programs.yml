@@ -72,7 +72,7 @@ jobs:
       - name: Verify review access boundary
         run: psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 --file services/lp/tests/check_lp_review_access.sql
       - name: Test collection and publishing contracts
-        run: python3 -m unittest services.lp.tests.test_lp_review_preview services.lp.tests.test_lp_review_decisions services.lp.tests.test_kgrowth_collection services.lp.tests.test_kgrowth_program_review services.lp.tests.test_collect_ktcu_program services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_kexim_programs services.lp.tests.test_collect_priority_lp_programs services.lp.tests.test_lp_notice_triage services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish
+        run: python3 -m unittest services.lp.tests.test_lp_review_preview services.lp.tests.test_lp_review_decisions services.lp.tests.test_kgrowth_collection services.lp.tests.test_kgrowth_program_review services.lp.tests.test_collect_ktcu_program services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_kexim_programs services.lp.tests.test_collect_kdb_related services.lp.tests.test_collect_priority_lp_programs services.lp.tests.test_lp_notice_triage services.lp.tests.test_lp_notice_terms services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish
       - name: Receive official KEXIM evidence
         uses: actions/download-artifact@v4
         continue-on-error: true
@@ -99,11 +99,11 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, time, urllib.request
-          expected = json.load(open('/tmp/kgrowth-publication.json'))['run_id']
+          publication = json.load(open('/tmp/kgrowth-publication.json'))
+          expected = publication['run_id']
           report = json.load(open('/tmp/kgrowth-collection.json'))
           priority = json.load(open('/tmp/lp-priority-collection.json'))
-          ids = ['kgrowth-2026-bank-valueup-3'] + [p['id'] for p in report.get('reviewed_programs', [])]
-          ids += [p['id'] for s in priority['sources'].values() for p in s.get('programs', [])]
+          ids = publication['program_ids']
           for program_id in ids:
               url = f'https://kpef-newsletter.vercel.app/samples/lp/program-{program_id}.html'
               for attempt in range(3):
@@ -111,7 +111,7 @@ jobs:
                       with urllib.request.urlopen(url, timeout=30) as response:
                           assert response.headers.get('X-LP-Data-Source') == 'supabase'
                           assert response.headers.get('X-LP-Run') == expected
-                          assert '단계별 GP' in response.read().decode('utf-8')
+                          assert '진행 일정' in response.read().decode('utf-8')
                       break
                   except Exception:
                       if attempt == 2:

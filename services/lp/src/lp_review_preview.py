@@ -30,6 +30,8 @@ def render_review(data,report,previous):
             body+=f'<div class="review-program-group"><small>{escape(name)} · {escape(scope)}</small><h3>{escape(first["title"])}</h3>'
             if not any(item.get('recruitment_url') for item in members):
                 body+='<p class="muted">모집 원공고 확인 필요</p>'
+            elif first.get('recruitment_url') not in {item['url'] for item in members}:
+                body+=f'<p><a target="_blank" rel="noopener" href="{escape(first["recruitment_url"],quote=True)}">공동사업 모집 원공고 ↗</a></p>'
             body+='<ul>'
             for item in members:
                 stage=item.get('stage') or '공고'

@@ -14,6 +14,7 @@ from collect_ktcu_program import project as project_ktcu, link_suggestions as su
 from collect_koreapost_program import project as project_post, _suggestions as suggest_post, discovery_candidates as discover_post
 from collect_kexim_programs import project as project_kexim, link_suggestions as suggest_kexim, discovery_candidates as discover_kexim
 from lp_notice_triage import assess_candidates
+from lp_notice_terms import project_discovered
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -57,12 +58,16 @@ def prepare(current, report):
     priority = report.get('priority_sources', {})
     priority_holds = []
     fresh_priority_notices = []
+    supporting = {n['url']: copy.deepcopy(n) for n in current.get('supporting_notices', [])}
     projectors = {'ktcu': project_ktcu, 'koreapost': project_post, 'kexim': project_kexim}
     for institution, source in priority.items():
         if institution not in projectors:
             raise ValueError(f'Unknown LP source: {institution}')
         notices = source.get('notices', [])
         priority_holds.extend(source.get('holds', []))
+        priority_holds.extend(source.get('supporting_holds', []))
+        for related in source.get('supporting_notices', []):
+            supporting[related['url']] = copy.deepcopy(related)
         if not notices:
             continue
         projected, source_holds = projectors[institution](notices, report['checked_at'])
@@ -86,9 +91,10 @@ def prepare(current, report):
             # A transient text-extraction failure must not forget evidence
             # already read from the very same official attachment bytes.
             old_texts = previous.get('attachment_texts', {})
-            notice['attachment_texts'] = {**old_texts, **notice.get('attachment_texts', {})}
+            notice['attachment_texts'] = {**old_texts, **{url: text for url, text in notice.get('attachment_texts', {}).items() if text.strip()}}
         retained[notice['url']] = notice
     data['priority_notices'] = list(retained.values())
+    data['supporting_notices'] = list(supporting.values())
     grouped = {institution: [n for n in data['priority_notices'] if n.get('institution_id') == institution]
                for institution in projectors}
     priority_suggestions = (suggest_ktcu(grouped['ktcu'], existing['ktcu-2026-blind-pef']['title'])
@@ -96,8 +102,19 @@ def prepare(current, report):
     data['link_suggestions'] = link_suggestions(report['notices']) + priority_suggestions
     discovered = (discover_ktcu(grouped['ktcu']) + discover_post(grouped['koreapost'])
                   + discover_kexim(grouped['kexim']))
-    data['discovery_candidates'] = assess_candidates(discovered, data['priority_notices'])
-    data['program_holds'] = holds + priority_holds
+    official_notices = data['priority_notices'] + data['supporting_notices']
+    data['discovery_candidates'] = assess_candidates(discovered, official_notices)
+    automatic, automatic_holds = project_discovered(discovered, official_notices, report['checked_at'])
+    automatic_ids = {p['id'] for p in automatic}
+    hold_ids = {h['program_id'] for h in automatic_holds}
+    for p in existing.values():
+        if p.get('auto_extracted') and p['id'] not in automatic_ids | hold_ids:
+            automatic_holds.append({'program_id': p['id'], 'reason': '현재 원문에서 PE 범위 또는 필수 항목 재확인 불가; 기존 공개본 유지'})
+    for program in automatic:
+        if not existing.get(program['id'], {}).get('manual_review_id'):
+            existing[program['id']] = program
+    data['programs'] = list(existing.values())
+    data['program_holds'] = holds + priority_holds + automatic_holds
     apply_decisions(data, report['notices'], current.get('review_decisions', []))
     data['as_of'] = str(report['checked_at'])[:10]
     validate(data)
@@ -131,11 +148,12 @@ def main():
         stamp = datetime.now(timezone.utc).isoformat()
         run_id = hashlib.sha256((stamp+json.dumps(report,sort_keys=True)).encode()).hexdigest()[:24]
         conn.execute('INSERT INTO lp_program_private.collection_runs(run_id,institution,report) VALUES (%s,%s,%s)', (run_id,'multi_lp' if args.priority_collection else 'kgrowth',Jsonb(report)))
-        for doc in report['notices'] + data.get('priority_notices', []):
+        for doc in report['notices'] + data.get('priority_notices', []) + data.get('supporting_notices', []):
             digest = document_hash(doc)
             conn.execute('INSERT INTO lp_program_private.documents(source_url,content_hash,document) VALUES(%s,%s,%s) ON CONFLICT DO NOTHING', (doc['url'],digest,Jsonb(doc)))
         conn.execute('INSERT INTO lp_program_private.program_state(id,data,pages,run_id) VALUES(1,%s,%s,%s) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,pages=EXCLUDED.pages,run_id=EXCLUDED.run_id,updated_at=now()', (Jsonb(data),Jsonb(pages),run_id))
-    print(json.dumps({'run_id':run_id,'programs':len(data['programs']),'notices':len(report['notices']),'review':len(report.get('review',[]))}))
+    print(json.dumps({'run_id':run_id,'programs':len(data['programs']),'program_ids':[p['id'] for p in data['programs']],
+                      'notices':len(report['notices']),'review':len(report.get('review',[]))}))
 
 if __name__ == '__main__':
     main()

@@ -275,3 +275,10 @@ curl -fsS "https://kpef-newsletter.vercel.app/health.json?refresh=1"
 - test/build/public check를 실행했고 결과를 보고했는가?
 - 배포 상태를 source 수정·커밋 상태와 분리해서 보고했는가?
 - 남은 risk를 채팅 기억에만 두지 않고 문서에 남겼는가?
+
+## LP 공고 자동 수집 현재 기준 (2026-10-07)
+
+- 현재 사용자 우선순위는 GP 연결보다 출자공고의 누락 없는 코드 수집·조건 추출·사업별 단계 묶기다. 개별 공고 ID를 사람이 골라 등록하는 방식으로 신규 사업을 확장하지 않는다.
+- 최신 운영/검증 기록은 `services/lp/docs/priority_institutions_automation.md`가 관리한다. 10월 6일 수집 실행37470359891은 공개15사업 및 공식 후보10건/6묶음을 검증했다. 10월 7일 변경은 우정 공동투자·수은 임상3상 신규 사업의 공통 조건 추출과 산업은행에 있는 공동사업 원공고의 자동 보완 수집이다. 운영 게시 완료 여부는 해당 문서의 후속 실행 기록을 확인한다.
+- 공식 원문 범위 미확인·VC 전용·PE/PD 투자관리 위탁·혼합형을 PE 전용 신규 게시로 추정하지 않는다. 공동사업은 해당 기관 출자 예정액과 전체 출자액을 분리하고 기관별 승인 완료를 가정하지 않는다.
+- 검증: LP workflow suite(91개), `python3 scripts/check_architecture_contracts.py`, 실제 공고 기반17사업 생성과320/390/1000px 검증. 신규 조건 추출 소스 `services/lp/src/lp_notice_terms.py`, 공식 공동사업 원공고 탐색 `services/lp/src/collect_kdb_related.py`. generated export·DB·배포 번들은 커밋하지 않는다.

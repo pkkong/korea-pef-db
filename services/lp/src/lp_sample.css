@@ -38,3 +38,4 @@ body.lp-sample {background:var(--bg);font-family:Pretendard,"Pretendard Variable
 .lp-sample .gp-stage-table th:first-child{width:54%}.lp-sample .gp-stage-table th:not(:first-child),.lp-sample .gp-stage-table td:not(:first-child){text-align:center}.lp-sample .gp-stage-table td{font-size:12px;padding:12px 4px;word-break:keep-all;overflow-wrap:anywhere}
 
 .applicant-list{border-block:1px solid var(--separator);padding:12px 0;margin-bottom:14px;font-size:13px}.applicant-list summary{cursor:pointer;font-weight:600}.applicant-list ul{padding-left:20px;line-height:1.9}.applicant-list li{word-break:keep-all;overflow-wrap:anywhere}
+.lp-sample .contribution-detail{font-size:12px;line-height:1.7;word-break:keep-all;overflow-wrap:anywhere}

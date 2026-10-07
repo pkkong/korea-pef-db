@@ -84,7 +84,7 @@ def _pdf_text(raw: bytes) -> str:
     from pypdf import PdfReader
     pages = PdfReader(io.BytesIO(raw)).pages
     first_page = (pages[0].extract_text() or "") if pages else ""
-    text = " ".join(page.extract_text() or "" for page in pages)
+    text = "\n".join(page.extract_text(extraction_mode="layout") or page.extract_text() or "" for page in pages)
     if len(first_page.strip()) < 100 and platform.system() == "Darwin":
         # Some official PDFs show Korean text visually but omit it from the
         # extractable layer. macOS Vision reads the first page without a cloud
@@ -400,9 +400,15 @@ def collect(checked_at: str, fetch=None) -> dict:
                     notice["attachment_read_error"] = type(error).__name__
         notices.append(notice)
     programs, holds = project(notices, checked_at)
+    try:
+        from .collect_kdb_related import collect_related
+    except ImportError:
+        from collect_kdb_related import collect_related
+    candidates = discovery_candidates(notices)
+    supporting, supporting_holds = collect_related(candidates, [{**n, "institution_id": "kexim"} for n in notices], checked_at)
     return {"checked_at": checked_at, "notices": notices, "programs": programs,
             "holds": holds, "link_suggestions": link_suggestions(notices),
-            "discovery_candidates": discovery_candidates(notices)}
+            "discovery_candidates": candidates, "supporting_notices": supporting, "supporting_holds": supporting_holds}
 
 
 def main() -> None:

@@ -120,4 +120,25 @@ class PublishContracts(unittest.TestCase):
         self.assertEqual(document['attachment_texts'],data['priority_notices'][0]['attachment_texts'])
         self.assertEqual('vc_only',data['discovery_candidates'][0]['scope'])
 
+    def test_new_official_program_is_published_without_per_notice_recipe(self):
+        from services.lp.tests.test_lp_notice_terms import official, BODY
+        notice=official(BODY)
+        self.report['priority_sources']={'koreapost':{'notices':[notice], 'holds':[]}}
+        data,pages=prepare(self.data,self.report)
+        automatic=next(p for p in data['programs'] if p.get('auto_extracted'))
+        self.assertEqual('koreapost-2026-domestic-coinvestment',automatic['id'])
+        self.assertEqual('2,000억원 이내',automatic['commitment_label'])
+        self.assertIn('program-'+automatic['id']+'.html',pages)
+        self.assertIn('주목적',pages['program-'+automatic['id']+'.html'])
+        # A missing source later preserves the last successful public terms.
+        self.report['priority_sources']={'koreapost':{'notices':[], 'holds':[]}}
+        later,_=prepare(data,self.report)
+        self.assertEqual(automatic,next(p for p in later['programs'] if p['id']==automatic['id']))
+        # A conflicting revision is held, rather than overwriting with a guess.
+        changed={**notice,'body':notice['body']+'\n투자규모 : 총 3,000억원'}
+        self.report['priority_sources']={'koreapost':{'notices':[changed], 'holds':[]}}
+        revised,_=prepare(data,self.report)
+        self.assertEqual(automatic,next(p for p in revised['programs'] if p['id']==automatic['id']))
+        self.assertTrue(any(h['program_id']==automatic['id'] for h in revised['program_holds']))
+
 if __name__=='__main__':unittest.main()
