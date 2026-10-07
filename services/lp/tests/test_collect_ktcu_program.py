@@ -6,12 +6,25 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from io import BytesIO
+from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import collect_ktcu_program as ktcu
 
 
 class KtcuProgramCollectionTest(unittest.TestCase):
+    def test_official_timeout_is_retried_but_missing_notice_is_not(self):
+        class Response(BytesIO):
+            def geturl(self): return ktcu.BASE+'/official'
+        with patch.object(ktcu,'urlopen',side_effect=[URLError('timed out'),TimeoutError(),Response(b'official')]) as opened, \
+             patch.object(ktcu.time,'sleep'):
+            self.assertEqual(ktcu._get(ktcu.BASE+'/official'),b'official')
+            self.assertEqual(opened.call_count,3)
+        with patch.object(ktcu,'urlopen',side_effect=HTTPError(ktcu.BASE+'/missing',404,'missing',{},None)) as opened:
+            with self.assertRaises(HTTPError): ktcu._get(ktcu.BASE+'/missing')
+            self.assertEqual(opened.call_count,1)
+
     def setUp(self):
         self.seed = next(p for p in json.loads((ktcu.ROOT / "data/lp_programs_pilot.json").read_text())["programs"]
                          if p["id"] == ktcu.PROGRAM_ID)

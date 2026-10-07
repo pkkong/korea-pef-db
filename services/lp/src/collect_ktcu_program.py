@@ -10,10 +10,12 @@ import hashlib
 import io
 import json
 import re
+import time
 from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlencode, urljoin, urlparse
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -201,16 +203,27 @@ def link_suggestions(notices, title):
             for n in notices if n["source_id"] not in approved_ids and _current_program_title(n["title"])]
 
 
-def collect(seed_program, checked_at, fetch=None):
-    def get(url):
-        if urlparse(url).hostname != "www.ktcu.or.kr":
-            raise ValueError("Unexpected KTCU source host")
-        with urlopen(Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=25) as response:
-            if urlparse(response.geturl()).hostname != "www.ktcu.or.kr":
-                raise ValueError("Unexpected KTCU redirect")
-            return response.read()
+def _get(url):
+    if urlparse(url).scheme != 'https' or urlparse(url).hostname != 'www.ktcu.or.kr':
+        raise ValueError('Unexpected KTCU source')
+    request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    for attempt in range(3):
+        try:
+            with urlopen(request, timeout=25) as response:
+                if urlparse(response.geturl()).hostname != 'www.ktcu.or.kr':
+                    raise ValueError('KTCU redirected outside official host')
+                return response.read()
+        except HTTPError as error:
+            if error.code not in (408, 429, 500, 502, 503, 504) or attempt == 2:
+                raise
+        except (URLError, TimeoutError, ConnectionError):
+            if attempt == 2:
+                raise
+        time.sleep(attempt + 1)
 
-    fetch = fetch or get
+
+def collect(seed_program, checked_at, fetch=None):
+    fetch = fetch or _get
     ids = {}
     for term in SEARCH_TERMS:
         for page_no in range(1, MAX_LIST_PAGES + 1):
