@@ -151,3 +151,5 @@ Vercel/Supabase만 뒤처졌을 때 전체 뉴스 수집을 다시 돌리지 않
 - 입력 건수와 저장 소요 시간을 Actions 로그에 기록한다. 실패는 게시를 중단하고 오류 메시지에 저장 단계의 테이블 또는 함수 이름을 포함한다. 재시도 횟수나 DB 제한 시간을 늘려 문제를 감추지 않는다.
 - 검사: `python3 services/newsletter/tests/test_canonical_supabase.py`, `python3 scripts/run_regression_tests.py services/newsletter/tests services/newsletter/web/tests`, `npm test --prefix scripts/tests/sql`. SQL 검사는 기사 2,000건·태그 6,000건, ID 집합의 단일 해석, 불완전한 연결 rollback, 변경된 기사만 저장, 이전 연결 보존과 영수증 재시도를 포함한다.
 - 운영 적용 순서: 소스 검사 → main 반영 → Apply newsletter Supabase migration 성공 → Build newsletter mirror 오늘 날짜 재실행 → 자동 Sync newsletter Supabase read model 성공 → Vercel health와 archive의 오늘 날짜·기사 내용 확인. health의 `status=ok`만으로 오늘 발행 여부를 판단하지 않는다.
+
+운영 검증: 2026-10-08 소스 `d92c7f7`, migration `37728153109`, mirror `37728265754`, public sync `37728672671` 모두 성공. 기존 1,521개 기사 중 신규/변경 78개만 반영, DB 저장 3.649초. 공식 Vercel과 미러의 10월 8일자 18개 기사 URL·제목·분류·순서 일치 확인. 정기 수집은 수정 코드를 사용한다.
