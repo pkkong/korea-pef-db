@@ -32,6 +32,23 @@ def render_review(data,report,previous):
                 body+='<p class="muted">모집 원공고 확인 필요</p>'
             elif first.get('recruitment_url') not in {item['url'] for item in members}:
                 body+=f'<p><a target="_blank" rel="noopener" href="{escape(first["recruitment_url"],quote=True)}">공동사업 모집 원공고 ↗</a></p>'
+            terms=data.get('discovery_terms', {}).get(first.get('program_key'))
+            if terms:
+                money=lambda amount:f'{amount/100000000:,.0f}억원'
+                body+=f'<p>출자 계획 {money(terms["total_commitment_amount_krw"])} · {terms["manager_count"]}개사 · {escape(terms["deadline"][:16].replace("T"," "))} 마감</p>'
+                body+='<table><thead><tr><th>분야</th><th>분야 출자액</th><th>선정 수</th><th>펀드별 결성목표</th></tr></thead><tbody>'
+                for segment in terms['segments']:
+                    body+=f'<tr><td>{escape(segment["name"])}</td><td>{money(segment["amount_krw"])}</td><td>{segment["manager_count"]}개</td><td>{money(segment["per_fund_target_krw"])}</td></tr>'
+                body+='</tbody></table><p class="muted">분야 출자액은 해당 분야의 합계입니다. 선정 후 기관별 승인 절차를 거칩니다.</p>'
+                body+='<details><summary>주목적·출자기관·예정 일정</summary><ul>'
+                for item in terms['primary_obligations']:
+                    body+=f'<li>{escape(item["text"])} · 약정총액의 {item["ratio_percent"]}%</li>'
+                body+='</ul><p>'+escape(' · '.join(f'{name} {money(amount)}' for name,amount in terms['contribution_allocations'].items()))+'</p>'
+                body+='<p>'+escape(' · '.join(f'{stage["date"]} {stage["label"]} 예정' for stage in terms['planned_schedule']))+'</p></details>'
+                related=[n for n in data.get('supporting_notices',[]) if n.get('related_program_key')==first.get('program_key')]
+                for n in sorted(related,key=lambda n:n['date']):
+                    if n['url']==first.get('recruitment_url'):continue
+                    body+=f'<p><a target="_blank" rel="noopener" href="{escape(n["url"],quote=True)}">{escape(n["date"])} · {escape(n["title"])} ↗</a></p>'
             body+='<ul>'
             for item in members:
                 stage=item.get('stage') or '공고'

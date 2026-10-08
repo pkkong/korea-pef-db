@@ -282,3 +282,9 @@ curl -fsS "https://kpef-newsletter.vercel.app/health.json?refresh=1"
 - 최신 운영/검증 기록은 `services/lp/docs/priority_institutions_automation.md`가 관리한다. 10월 6일 수집 실행37470359891은 공개15사업 및 공식 후보10건/6묶음을 검증했다. 10월 7일 변경은 우정 공동투자·수은 임상3상 신규 사업의 공통 조건 추출과 산업은행에 있는 공동사업 원공고의 자동 보완 수집이다. 운영 게시 완료 여부는 해당 문서의 후속 실행 기록을 확인한다.
 - 공식 원문 범위 미확인·VC 전용·PE/PD 투자관리 위탁·혼합형을 PE 전용 신규 게시로 추정하지 않는다. 공동사업은 해당 기관 출자 예정액과 전체 출자액을 분리하고 기관별 승인 완료를 가정하지 않는다.
 - 검증: LP workflow suite(91개), `python3 scripts/check_architecture_contracts.py`, 실제 공고 기반17사업 생성과320/390/1000px 검증. 신규 조건 추출 소스 `services/lp/src/lp_notice_terms.py`, 공식 공동사업 원공고 탐색 `services/lp/src/collect_kdb_related.py`. generated export·DB·배포 번들은 커밋하지 않는다.
+
+## LP 공동사업 정리 후속 (2026-10-08)
+
+- 신규2개 사업 자동 게시 완료: 실행37628376137·37629905224 모두 전체 성공, 공개17사업. 교직원 수집 재시도 보완d38ae0a도 운영 경로에 적용됐다.
+- 혼합형 공동사업은 현재 공개 PE 목록과 구분해 검토 화면에 둔다. `lp_joint_terms.py`가 공식 표에서 분야 합계·선정 수·결성목표·주목적·일정을 읽고 총계와 대조한다. 글로벌 스케일업 중형2,574억원을 펀드당 또는 은행당 금액으로 나누지 않고, 주목적50/30/30%를 합산 정규화하지 않는다. FAQ는 별도 자료이며 모집 필수값 대체 소스가 아니다.
+- 검사97개와 구조 계약, 실제 운영 자료 재투영, 검토 화면320/390px 가로 넘침·스크립트 오류 없음 통과. 공개17개 사업과 GP 연결은 유지한다. 운영 반영 확인은 `services/lp/docs/priority_institutions_automation.md`의 후속 실행 기록을 참조한다.

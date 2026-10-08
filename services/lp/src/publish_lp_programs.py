@@ -15,6 +15,7 @@ from collect_koreapost_program import project as project_post, _suggestions as s
 from collect_kexim_programs import project as project_kexim, link_suggestions as suggest_kexim, discovery_candidates as discover_kexim
 from lp_notice_triage import assess_candidates
 from lp_notice_terms import project_discovered
+from lp_joint_terms import discovered_joint_terms
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -104,6 +105,7 @@ def prepare(current, report):
                   + discover_kexim(grouped['kexim']))
     official_notices = data['priority_notices'] + data['supporting_notices']
     data['discovery_candidates'] = assess_candidates(discovered, official_notices)
+    data['discovery_terms'], joint_holds = discovered_joint_terms(data['discovery_candidates'], official_notices)
     automatic, automatic_holds = project_discovered(discovered, official_notices, report['checked_at'])
     automatic_ids = {p['id'] for p in automatic}
     hold_ids = {h['program_id'] for h in automatic_holds}
@@ -114,7 +116,7 @@ def prepare(current, report):
         if not existing.get(program['id'], {}).get('manual_review_id'):
             existing[program['id']] = program
     data['programs'] = list(existing.values())
-    data['program_holds'] = holds + priority_holds + automatic_holds
+    data['program_holds'] = holds + priority_holds + automatic_holds + joint_holds
     apply_decisions(data, report['notices'], current.get('review_decisions', []))
     data['as_of'] = str(report['checked_at'])[:10]
     validate(data)
