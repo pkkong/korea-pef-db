@@ -9,6 +9,7 @@ classification, review, and raw-html records.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sqlite3
@@ -42,6 +43,7 @@ REST_BATCH_SIZE = 250
 MAX_REST_BATCH_BYTES = 750_000
 RAW_BUCKET = "newsletter-raw"
 RAW_HTML_CACHE_DAYS = 30
+BASELINE_TABLE = "newsletter_sync_baseline"
 RETRIABLE_HTTP_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
 
 
@@ -164,7 +166,10 @@ def _rest_request(
     if prefer:
         headers["Prefer"] = prefer
     body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8") if payload is not None else None
-    return _request(url, method=method, body=body, headers=headers)
+    try:
+        return _request(url, method=method, body=body, headers=headers)
+    except CanonicalNewsletterError as exc:
+        raise CanonicalNewsletterError(f"{resource}: {exc}") from exc
 
 
 def _read_all(resource: str) -> list[dict[str, object]]:
@@ -232,12 +237,77 @@ def _sqlite_rows(conn: sqlite3.Connection, spec: TableSpec) -> list[dict[str, ob
     return result
 
 
+def _row_digest(row: dict[str, object]) -> str:
+    encoded = json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _baseline_entries(payload: dict[str, list[dict[str, object]]]) -> dict[tuple[str, str], str]:
+    """Compare restored SQLite values, avoiding PostgreSQL/SQLite type differences."""
+    entries: dict[tuple[str, str], str] = {}
+    for spec in TABLES:
+        rows = payload[spec.supabase_table]
+        if spec in (TAG_SPEC, ENTITY_SPEC):
+            by_document: dict[str, list[str]] = {}
+            for row in rows:
+                by_document.setdefault(str(row["news_id"]), []).append(_row_digest(row))
+            for news_id, digests in by_document.items():
+                entries[(spec.supabase_table, news_id)] = _row_digest({"rows": sorted(digests)})
+        else:
+            key = spec.conflict_columns[0]
+            for row in rows:
+                entries[(spec.supabase_table, str(row[key]))] = _row_digest(row)
+    return entries
+
+
+def _save_baseline(conn: sqlite3.Connection) -> None:
+    payload = {spec.supabase_table: _sqlite_rows(conn, spec) for spec in TABLES}
+    conn.execute(f"CREATE TABLE {BASELINE_TABLE} (table_name TEXT, row_key TEXT, digest TEXT NOT NULL, PRIMARY KEY (table_name, row_key))")
+    conn.executemany(
+        f"INSERT INTO {BASELINE_TABLE} VALUES (?, ?, ?)",
+        [(table, key, digest) for (table, key), digest in _baseline_entries(payload).items()],
+    )
+    # A marker distinguishes an empty restored collection from no baseline.
+    conn.execute(f"INSERT INTO {BASELINE_TABLE} VALUES ('version', '1', '1')")
+
+
 def prepare_payload(db_path: Path) -> dict[str, list[dict[str, object]]]:
     if not db_path.is_file():
         raise CanonicalNewsletterError(f"SQLite collection database does not exist: {db_path}")
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
-        return {spec.supabase_table: _sqlite_rows(conn, spec) for spec in TABLES}
+        payload = {spec.supabase_table: _sqlite_rows(conn, spec) for spec in TABLES}
+        # Standalone imports without a restored baseline retain full-sync support.
+        if not _table_exists(conn, BASELINE_TABLE):
+            return payload
+        baseline = {(row["table_name"], row["row_key"]): row["digest"]
+                    for row in conn.execute(f"SELECT * FROM {BASELINE_TABLE}")}
+        if baseline.pop(("version", "1"), None) != "1":
+            raise CanonicalNewsletterError("Unrecognized newsletter sync baseline")
+
+    current = _baseline_entries(payload)
+    changed_documents = {
+        key for (table, key), digest in current.items()
+        if table == DOCUMENT_SPEC.supabase_table and baseline.get((table, key)) != digest
+    }
+    # Changes/removals in tags or entity links also require their owning document.
+    for (table, key) in current.keys() | baseline.keys():
+        if table in (TAG_SPEC.supabase_table, ENTITY_SPEC.supabase_table):
+            if current.get((table, key)) != baseline.get((table, key)):
+                changed_documents.add(key)
+    document_ids = {str(row["news_id"]) for row in payload[DOCUMENT_SPEC.supabase_table]}
+    if not changed_documents <= document_ids:
+        raise CanonicalNewsletterError("Changed newsletter links reference a missing document")
+    delta: dict[str, list[dict[str, object]]] = {}
+    for spec in TABLES:
+        rows = payload[spec.supabase_table]
+        if spec in (DOCUMENT_SPEC, TAG_SPEC, ENTITY_SPEC):
+            delta[spec.supabase_table] = [row for row in rows if str(row["news_id"]) in changed_documents]
+        else:
+            key_column = spec.conflict_columns[0]
+            delta[spec.supabase_table] = [row for row in rows if baseline.get(
+                (spec.supabase_table, str(row[key_column]))) != _row_digest(row)]
+    return delta
 
 
 def prepare_source_registry_payload(sources_path: Path) -> list[dict[str, object]]:
@@ -396,7 +466,11 @@ def apply_payload(
                 raw_upload_count += 1
     payload = {**payload, DOCUMENT_SPEC.supabase_table: documents}
 
+    print("canonical_newsletter_sync_start=" + json.dumps(
+        {table: len(rows) for table, rows in payload.items()}, sort_keys=True), flush=True)
+    started_at = time.monotonic()
     publish_atomic(payload, model="canonical", request=_rest_request)
+    print(f"canonical_newsletter_sync_committed_seconds={time.monotonic() - started_at:.3f}", flush=True)
     result = {
         "sources": len(payload[SOURCE_SPEC.supabase_table]),
         "runs": len(payload[RUN_SPEC.supabase_table]),
@@ -439,10 +513,12 @@ def restore_canonical_db(db_path: Path) -> dict[str, int]:
     rows_by_table = {spec.supabase_table: _read_all(spec.supabase_table) for spec in TABLES}
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         conn.executescript(DEFAULT_SCHEMA.read_text(encoding="utf-8"))
         for spec in TABLES:
             _restore_rows(conn, spec, rows_by_table[spec.supabase_table])
+        _save_baseline(conn)
         conn.commit()
     return {
         "sources": len(rows_by_table[SOURCE_SPEC.supabase_table]),

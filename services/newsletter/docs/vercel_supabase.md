@@ -143,3 +143,11 @@ Vercel/Supabase만 뒤처졌을 때 전체 뉴스 수집을 다시 돌리지 않
   일치 여부다. 장애 중 임시 복구 기준은 Vercel `data_source=archive_fallback`과 최신 날짜/기사 수다.
 - Vercel archive의 최신 issue order와 article row order는 GitHub Pages `archive.json`과 같아야 한다.
 - 같은 날짜를 다시 sync할 때는 `newsletter_issue_articles`, tags, entities를 archive 기준으로 재생성하고 stale links를 남기지 않는다.
+
+## 수집 저장 시간 초과 방지 (2026-10-08)
+
+- 수집 전에 Supabase에서 임시 SQLite로 복원할 때 각 행과 기사별 태그·기관 연결의 비교값을 저장한다. 수집 후 새 기사와 변경 기사만 전송하며, 태그만 변경되거나 제거된 경우도 해당 기사의 전체 연결을 함께 반영한다. 기존 기사·연결은 보존한다. 비교값은 임시 adapter 내부에만 있으며 별도 운영 DB가 아니다. 복원 없이 실행하는 이관은 전체 입력을 지원한다.
+- `20261008090000_newsletter_sync_linear_validation.sql`은 저장 트랜잭션의 연결 검사를 문서 ID 집합과의 결합으로 바꾼다. 문서 JSON을 각 태그마다 다시 해석하지 않는다. 전체 입력 검증·원자적 저장·응답 분실 재시도 영수증·비공개 권한을 유지한다.
+- 입력 건수와 저장 소요 시간을 Actions 로그에 기록한다. 실패는 게시를 중단하고 오류 메시지에 저장 단계의 테이블 또는 함수 이름을 포함한다. 재시도 횟수나 DB 제한 시간을 늘려 문제를 감추지 않는다.
+- 검사: `python3 services/newsletter/tests/test_canonical_supabase.py`, `python3 scripts/run_regression_tests.py services/newsletter/tests services/newsletter/web/tests`, `npm test --prefix scripts/tests/sql`. SQL 검사는 기사 2,000건·태그 6,000건, ID 집합의 단일 해석, 불완전한 연결 rollback, 변경된 기사만 저장, 이전 연결 보존과 영수증 재시도를 포함한다.
+- 운영 적용 순서: 소스 검사 → main 반영 → Apply newsletter Supabase migration 성공 → Build newsletter mirror 오늘 날짜 재실행 → 자동 Sync newsletter Supabase read model 성공 → Vercel health와 archive의 오늘 날짜·기사 내용 확인. health의 `status=ok`만으로 오늘 발행 여부를 판단하지 않는다.

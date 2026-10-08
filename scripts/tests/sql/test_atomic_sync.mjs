@@ -39,7 +39,7 @@ async function check(name,fn){await fn();checks++;console.log(`PASS ${name}`)}
 await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
  CREATE SCHEMA storage; CREATE TABLE storage.buckets(id text PRIMARY KEY,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);`);
 const migrations=['20260616090000_newsletter_read_model.sql','20260903090000_newsletter_canonical_collection.sql',
- '20260906090000_newsletter_atomic_sync.sql','20260828100000_fss_people_canonical_data.sql','20260906100000_gp_canonical_safe_publish.sql','20260907110000_gp_people_safeupdate_predicate.sql'];
+ '20260906090000_newsletter_atomic_sync.sql','20261008090000_newsletter_sync_linear_validation.sql','20260828100000_fss_people_canonical_data.sql','20260906100000_gp_canonical_safe_publish.sql','20260907110000_gp_people_safeupdate_predicate.sql'];
 for(const name of migrations) await db.exec(fs.readFileSync(path.join(root,'services/newsletter/supabase/migrations',name),'utf8'));
 // Applying new migrations again must preserve already installed objects.
 for(const name of migrations.filter(x=>x>='20260906'))await db.exec(fs.readFileSync(path.join(root,'services/newsletter/supabase/migrations',name),'utf8'));
@@ -47,7 +47,7 @@ async function stage(model,payload){
  const id=randomUUID(), counts={};
  for(const [table,rows] of Object.entries(payload)){
   counts[table]=rows.length;
-  for(let i=0;i<rows.length;i++)await db.query('INSERT INTO newsletter_sync_parts(sync_id,model,table_name,part_no,rows) VALUES ($1,$2,$3,$4,$5)',[id,model,table,i,JSON.stringify([rows[i]])]);
+  for(let i=0;i<rows.length;i+=100)await db.query('INSERT INTO newsletter_sync_parts(sync_id,model,table_name,part_no,rows) VALUES ($1,$2,$3,$4,$5)',[id,model,table,i/100,JSON.stringify(rows.slice(i,i+100))]);
  }
  return {id,model,counts};
 }
@@ -89,6 +89,90 @@ await check('canonical late link error preserves old documents, tags and entitie
 await check('canonical partial payload preserves untouched document links',async()=>{
  const p=Object.fromEntries(Object.keys(fixture.canonical).map(k=>[k,[]]));
  await commit(await stage('canonical',p));assert.equal((await rows('newsletter_canonical_tags')).length,1);
+});
+await check('canonical orphan and null document links roll back all writes',async()=>{
+ const before=await rows('newsletter_canonical_documents'),tags=await rows('newsletter_canonical_tags'),entities=await rows('newsletter_canonical_entity_links');
+ for(const missingId of [999999,null]){
+  const p=structuredClone(fixture.canonical);p.newsletter_canonical_documents[0].title='Must roll back';
+  p.newsletter_canonical_tags.push({...p.newsletter_canonical_tags[0],tag_id:999999,news_id:missingId});
+  const s=await stage('canonical',p);
+  await assert.rejects(commit(s),/outside this sync/);
+  assert.deepEqual(await rows('newsletter_canonical_documents'),before);
+  assert.deepEqual(await rows('newsletter_canonical_tags'),tags);
+  assert.deepEqual(await rows('newsletter_canonical_entity_links'),entities);
+  assert.equal((await db.query('SELECT count(*)::int n FROM newsletter_sync_receipts WHERE sync_id=$1',[s.id])).rows[0].n,0);
+ }
+});
+function historyPayload(count){
+ const p=Object.fromEntries(Object.keys(fixture.canonical).map(k=>[k,[]]));
+ const template=fixture.canonical.newsletter_canonical_documents[0];
+ for(let i=0;i<count;i++){
+  const news_id=10000+i;
+  p.newsletter_canonical_documents.push({...template,news_id,source_url:`https://example.com/history/${i}`,normalized_source_url:`https://example.com/history/${i}`,body_text:'An article body with deal and fund information. '.repeat(100),raw_payload:{feed_item:{description:'Original feed context. '.repeat(100)}}});
+  for(let j=0;j<3;j++)p.newsletter_canonical_tags.push({tag_id:10000+i*3+j,news_id,tag_type:'topic',tag_value:`topic-${j}`,tag_source:'taxonomy'});
+ }
+ return p;
+}
+await check('canonical 2000 documents and 6000 tags commit and replay safely',async()=>{
+ const p=historyPayload(2000),s=await stage('canonical',p),started=performance.now();
+ assert.deepEqual(await commit(s),s.counts);
+ console.log(`INFO canonical 2000 document / 6000 tag commit: ${Math.round(performance.now()-started)} ms`);
+ assert.equal((await db.query('SELECT count(*)::int n FROM newsletter_canonical_documents')).rows[0].n,2001);
+ assert.equal((await db.query('SELECT count(*)::int n FROM newsletter_canonical_tags')).rows[0].n,6001);
+ assert.equal((await db.query('SELECT count(*)::int n FROM newsletter_sync_parts WHERE sync_id=$1',[s.id])).rows[0].n,0);
+ assert.deepEqual(await commit(s),s.counts);
+ await assert.rejects(commit({...s,counts:{...s.counts,newsletter_canonical_tags:6001}}),/receipt does not match/);
+});
+await check('canonical membership decodes document IDs once with a hash join',async()=>{
+ const p=historyPayload(2000);
+ const result=await db.query(`EXPLAIN (ANALYZE, FORMAT JSON)
+ WITH document_ids AS MATERIALIZED (
+  SELECT d.news_id FROM jsonb_to_recordset($1::jsonb) AS d(news_id BIGINT)
+ ), link_ids AS (
+  SELECT t.news_id FROM jsonb_to_recordset($2::jsonb) AS t(news_id BIGINT)
+  UNION ALL SELECT e.news_id FROM jsonb_to_recordset($3::jsonb) AS e(news_id BIGINT)
+ ) SELECT 1 FROM link_ids links LEFT JOIN document_ids documents USING (news_id)
+ WHERE documents.news_id IS NULL`,[JSON.stringify(p.newsletter_canonical_documents),JSON.stringify(p.newsletter_canonical_tags),'[]']);
+ const plan=result.rows[0]['QUERY PLAN'][0],nodes=[];
+ function walk(node){nodes.push(node);for(const child of node.Plans||[])walk(child)}walk(plan.Plan);
+ assert.ok(nodes.some(n=>n['Node Type']==='Hash Join'),JSON.stringify(plan));
+ const documentScan=nodes.find(n=>n['Node Type']==='Function Scan'&&n.Alias==='d');
+ assert.equal(documentScan['Actual Loops'],1);
+ assert.equal(documentScan['Actual Rows'],2000);
+ console.log(`INFO membership plan: document scan once; hash join; ${plan['Execution Time']} ms`);
+});
+await check('canonical changed-document sync retains untouched history and entities',async()=>{
+ const before=(await db.query('SELECT * FROM newsletter_canonical_documents WHERE news_id=10001')).rows;
+ const beforeTags=(await db.query('SELECT * FROM newsletter_canonical_tags WHERE news_id=10001 ORDER BY tag_id')).rows;
+ const beforeEntities=await rows('newsletter_canonical_entity_links');
+ const p=historyPayload(1);p.newsletter_canonical_documents[0].title='Updated existing document';
+ p.newsletter_canonical_tags=p.newsletter_canonical_tags.slice(0,1);
+ await commit(await stage('canonical',p));
+ assert.equal((await db.query('SELECT title FROM newsletter_canonical_documents WHERE news_id=10000')).rows[0].title,'Updated existing document');
+ assert.equal((await db.query('SELECT count(*)::int n FROM newsletter_canonical_tags WHERE news_id=10000')).rows[0].n,1);
+ assert.deepEqual((await db.query('SELECT * FROM newsletter_canonical_documents WHERE news_id=10001')).rows,before);
+ assert.deepEqual((await db.query('SELECT * FROM newsletter_canonical_tags WHERE news_id=10001 ORDER BY tag_id')).rows,beforeTags);
+ assert.deepEqual(await rows('newsletter_canonical_entity_links'),beforeEntities);
+});
+await check('canonical links to existing history outside this sync cannot change data',async()=>{
+ const before=(await db.query('SELECT * FROM newsletter_canonical_documents WHERE news_id=41')).rows;
+ const historyTags=(await db.query('SELECT * FROM newsletter_canonical_tags WHERE news_id=10001 ORDER BY tag_id')).rows;
+ const p=structuredClone(fixture.canonical);p.newsletter_canonical_documents[0].title='Must roll back';
+ p.newsletter_canonical_tags.push({...p.newsletter_canonical_tags[0],tag_id:999998,news_id:10001});
+ await assert.rejects(commit(await stage('canonical',p)),/outside this sync/);
+ assert.deepEqual((await db.query('SELECT * FROM newsletter_canonical_documents WHERE news_id=41')).rows,before);
+ assert.deepEqual((await db.query('SELECT * FROM newsletter_canonical_tags WHERE news_id=10001 ORDER BY tag_id')).rows,historyTags);
+});
+await check('newsletter performance migration reapplies without changing published data',async()=>{
+ const beforeDocuments=(await db.query('SELECT count(*)::int n FROM newsletter_canonical_documents')).rows;
+ const beforeTags=(await db.query('SELECT count(*)::int n FROM newsletter_canonical_tags')).rows;
+ const beforePublic=await rows('newsletter_public_issue_articles');
+ await db.exec(fs.readFileSync(path.join(root,'services/newsletter/supabase/migrations/20261008090000_newsletter_sync_linear_validation.sql'),'utf8'));
+ assert.deepEqual((await db.query('SELECT count(*)::int n FROM newsletter_canonical_documents')).rows,beforeDocuments);
+ assert.deepEqual((await db.query('SELECT count(*)::int n FROM newsletter_canonical_tags')).rows,beforeTags);
+ assert.deepEqual(await rows('newsletter_public_issue_articles'),beforePublic);
+ const p=Object.fromEntries(Object.keys(fixture.canonical).map(k=>[k,[]])),s=await stage('canonical',p);
+ assert.deepEqual(await commit(s),s.counts);assert.deepEqual(await commit(s),s.counts);
 });
 await check('anonymous callers cannot publish or read staging',async()=>{
  await db.exec('SET ROLE anon');

@@ -319,6 +319,98 @@ def test_cache_listing_failure_does_not_fail_successful_canonical_sync() -> None
     assert result["documents"] == 0
 
 
+def _seed_restored_database(path: Path) -> None:
+    seed_database(path)
+    with sqlite3.connect(path) as conn:
+        conn.row_factory = sqlite3.Row
+        canonical._save_baseline(conn)
+
+
+def test_restored_history_without_changes_does_not_get_uploaded() -> None:
+    from unittest.mock import patch
+    with tempfile.TemporaryDirectory() as directory:
+        original = Path(directory) / "original.sqlite"
+        seed_database(original)
+        rows = canonical.prepare_payload(original)
+        restored = Path(directory) / "restored.sqlite"
+        with patch.object(canonical, "_read_all", side_effect=lambda table: rows[table]):
+            canonical.restore_canonical_db(restored)
+        assert all(not value for value in canonical.prepare_payload(restored).values())
+
+
+def test_changed_document_sends_all_its_links_and_preserves_other_history() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "sample.sqlite"
+        _seed_restored_database(path)
+        with sqlite3.connect(path) as conn:
+            conn.execute("UPDATE news_document SET title = '수정된 기사' WHERE news_id = 41")
+            conn.execute("INSERT INTO news_document (news_id,run_id,source_code,source_url,normalized_source_url,title,discovered_at) VALUES (42,'run-1','sample','https://example.com/b','https://example.com/b','신규 기사','2026-10-08')")
+        payload = canonical.prepare_payload(path)
+        assert [row["news_id"] for row in payload[canonical.DOCUMENT_SPEC.supabase_table]] == [41, 42]
+        assert [row["news_id"] for row in payload[canonical.TAG_SPEC.supabase_table]] == [41]
+        assert [row["news_id"] for row in payload[canonical.ENTITY_SPEC.supabase_table]] == [41]
+        assert not payload[canonical.RUN_SPEC.supabase_table]
+        assert not payload[canonical.SOURCE_SPEC.supabase_table]
+
+
+def test_tag_only_change_and_link_removal_include_owning_document() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "sample.sqlite"
+        _seed_restored_database(path)
+        with sqlite3.connect(path) as conn:
+            conn.execute("UPDATE news_tag SET tag_value = 'LP' WHERE news_id = 41")
+            conn.execute("DELETE FROM news_entity_link WHERE news_id = 41")
+        payload = canonical.prepare_payload(path)
+        assert [row["news_id"] for row in payload[canonical.DOCUMENT_SPEC.supabase_table]] == [41]
+        assert payload[canonical.TAG_SPEC.supabase_table][0]["tag_value"] == "LP"
+        assert not payload[canonical.ENTITY_SPEC.supabase_table]
+
+
+def test_removed_all_links_is_still_a_change() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "sample.sqlite"
+        _seed_restored_database(path)
+        with sqlite3.connect(path) as conn:
+            conn.execute("DELETE FROM news_tag WHERE news_id = 41")
+            conn.execute("DELETE FROM news_entity_link WHERE news_id = 41")
+        payload = canonical.prepare_payload(path)
+        assert len(payload[canonical.DOCUMENT_SPEC.supabase_table]) == 1
+        assert not payload[canonical.TAG_SPEC.supabase_table]
+        assert not payload[canonical.ENTITY_SPEC.supabase_table]
+
+
+def test_delta_sync_scales_with_changes_instead_of_history() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "sample.sqlite"
+        seed_database(path)
+        with sqlite3.connect(path) as conn:
+            conn.row_factory = sqlite3.Row
+            conn.executemany("INSERT INTO news_document (news_id,run_id,source_code,source_url,normalized_source_url,title,discovered_at) VALUES (?,'run-1','sample',?,?,?,'2026-09-03')", [
+                (news_id, f'https://example.com/{news_id}', f'https://example.com/{news_id}', f'기사 {news_id}')
+                for news_id in range(100, 5100)
+            ])
+            canonical._save_baseline(conn)
+            conn.execute("UPDATE news_document SET title = '새 제목' WHERE news_id = 5000")
+        payload = canonical.prepare_payload(path)
+        assert [row["news_id"] for row in payload[canonical.DOCUMENT_SPEC.supabase_table]] == [5000]
+        assert not payload[canonical.TAG_SPEC.supabase_table]
+        # Preparing or unsuccessfully uploading a delta never advances its baseline.
+        assert canonical.prepare_payload(path) == payload
+
+
+def test_failed_request_identifies_the_sync_stage() -> None:
+    from unittest.mock import patch
+    with patch.object(canonical, "_supabase_url", return_value="https://example.com"), patch.object(
+        canonical, "_request", side_effect=canonical.CanonicalNewsletterError("HTTP 500 statement timeout")
+    ):
+        try:
+            canonical._rest_request("rpc/publish_newsletter_sync", method="POST")
+        except canonical.CanonicalNewsletterError as exc:
+            assert "rpc/publish_newsletter_sync" in str(exc)
+        else:
+            raise AssertionError("Failed commit must remain an error")
+
+
 def main() -> int:
     from scripts.run_regression_tests import run_module_tests
     return run_module_tests(sys.modules[__name__])
