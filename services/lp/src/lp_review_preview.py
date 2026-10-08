@@ -13,7 +13,17 @@ def render_review(data,report,previous):
     suggested_sources={item['url'] for item in suggestions}
     discovery=data.get('discovery_candidates', [])
     discovery_sources={item['url'] for item in discovery}
-    institutions={'ktcu':'한국교직원공제회','koreapost':'우정사업본부','kexim':'한국수출입은행'}
+    institutions={'ktcu':'한국교직원공제회','koreapost':'우정사업본부','kexim':'한국수출입은행','kgrowth':'한국성장금융'}
+    coverage=data.get('attachment_coverage', {})
+    if coverage:
+        files=coverage.get('attachments', [])
+        body+=f'<p class="muted">공식 목록 {len(coverage.get("listing_urls", []))}페이지 · 공고 {coverage.get("fetched_count", 0)}건 · 누락 {len(coverage.get("missing_source_ids", []))}건 · 첨부 본문 {sum(bool(a.get("readable")) for a in files)}/{len(files)}개</p>'
+        failures=[a for a in files if not a.get('readable') and a.get('reason')]
+        if failures:
+            body+='<details><summary>읽지 못한 첨부</summary><ul>'
+            for a in failures:
+                body+=f'<li><a href="{escape(a["source_url"],quote=True)}" target="_blank" rel="noopener">공고 {escape(a["source_id"])}</a> · {escape(a["reason"])}</li>'
+            body+='</ul></details>'
     if discovery:
         labels={'pe_eligible':'PE 신청 가능','vc_only':'VC · PE 목록 제외',
                 'pe_related_mandate':'PE·PD 투자관리 위탁','mixed_legal_forms':'PE·VC 모두 가능',
@@ -33,6 +43,13 @@ def render_review(data,report,previous):
             elif first.get('recruitment_url') not in {item['url'] for item in members}:
                 body+=f'<p><a target="_blank" rel="noopener" href="{escape(first["recruitment_url"],quote=True)}">공동사업 모집 원공고 ↗</a></p>'
             terms=data.get('discovery_terms', {}).get(first.get('program_key'))
+            growth=data.get('kgrowth_offering_terms', {}).get(first.get('recruitment_url'))
+            if growth:
+                body+=f'<p>{escape(growth["commitment_label"])} · {escape(growth["manager_count_label"])} · {escape(growth["deadline"][:16].replace("T"," "))} 마감</p>'
+                body+='<table><thead><tr><th>분야</th><th>출자액</th><th>선정 수</th><th>펀드당 출자액</th></tr></thead><tbody>'
+                for s in growth['segments']:
+                    body+=f'<tr><td>{escape(s["name"])}</td><td>{s["amount_krw"]/100000000:,.0f}억원</td><td>{s["manager_count"]}개</td><td>{s["per_fund_amount_krw"]/100000000:,.0f}억원'+(' 이내' if s.get('per_fund_max_krw') else '')+'</td></tr>'
+                body+='</tbody></table><p>'+escape(growth['primary_investment']['text'])+'</p>'
             if terms:
                 money=lambda amount:f'{amount/100000000:,.0f}억원'
                 body+=f'<p>출자 계획 {money(terms["total_commitment_amount_krw"])} · {terms["manager_count"]}개사 · {escape(terms["deadline"][:16].replace("T"," "))} 마감</p>'

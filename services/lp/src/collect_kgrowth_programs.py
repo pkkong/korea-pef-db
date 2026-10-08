@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""Collect official notices; publish only the previously reviewed program.
+"""Discover official notices and retain verified attachment body evidence.
 
-Failure never replaces an existing output. New/changed evidence is retained in
-the review queue while the last reviewed program is preserved.
+Failure never replaces an existing output. The publisher independently checks
+source-derived terms before refreshing or introducing any public program.
 """
 import argparse
 import copy
 import hashlib
 import json
 import re
-import io
 import time
 from urllib.error import URLError
 from datetime import datetime, timezone
@@ -19,6 +18,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urljoin, urlparse
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 from kgrowth_program_review import recipes, candidate_queue, link_suggestions, reviewed_programs
+from lp_attachment_text import extract_attachment
+from kgrowth_notice_terms import discovery as discover_terms
 
 ROOT = Path(__file__).resolve().parents[3]
 BASE = "https://www.kgrowth.or.kr/"
@@ -127,7 +128,7 @@ def extract_teams(body, expected, bullets=True):
     return names
 
 
-def collect(seed, baseline=None, fetch=None):
+def collect(seed, baseline=None, fetch=None, listing_pages=3):
     baseline = baseline or {}
     opener = build_opener(HTTPCookieProcessor(CookieJar()))
 
@@ -146,15 +147,31 @@ def collect(seed, baseline=None, fetch=None):
 
     fetch = fetch or get
     checked = datetime.now(timezone.utc).isoformat()
-    listing = Page()
-    listing.feed(fetch(LIST_URL).decode("cp949"))
+    if not 1 <= listing_pages <= 20:
+        raise ValueError("Listing page limit must be between 1 and 20")
     discovered = set()
-    for link in listing.links:
-        url = urlparse(urljoin(BASE, link))
-        if url.hostname == "www.kgrowth.or.kr" and url.path == "/notice_view.asp":
-            idx = parse_qs(url.query).get("idx", [""])[0]
-            if idx.isdigit():
-                discovered.add(int(idx))
+    listing_urls = []
+    pending = [LIST_URL]
+    while pending and len(listing_urls) < listing_pages:
+        listing_url = pending.pop(0)
+        listing = Page()
+        listing.feed(fetch(listing_url).decode("cp949"))
+        listing_urls.append(listing_url)
+        page_ids = set()
+        for link in listing.links:
+            url = urlparse(urljoin(BASE, link))
+            if url.hostname == "www.kgrowth.or.kr" and url.path == "/notice_view.asp":
+                idx = parse_qs(url.query).get("idx", [""])[0]
+                if idx.isdigit():
+                    page_ids.add(int(idx))
+            paging = re.fullmatch(r"javascript:ListView\((\d+),1,0\)", link, re.I)
+            if paging and 1 < int(paging[1]) <= listing_pages:
+                next_url = LIST_URL + "&page=" + paging[1]
+                if next_url not in pending + listing_urls:
+                    pending.append(next_url)
+        if not page_ids:
+            raise ValueError("Official listing page yielded no notice links")
+        discovered.update(page_ids)
     if not discovered:
         raise ValueError("Official listing yielded no notice links")
     # Discovery and approval are separate: keep following unreviewed notices
@@ -174,12 +191,15 @@ def collect(seed, baseline=None, fetch=None):
                 if not raw.startswith((b"%PDF", b"PK", bytes.fromhex("d0cf11e0"))):
                     raise ValueError(f"Invalid attachment for {idx}")
                 notice["attachment_hashes"][url] = hashlib.sha256(raw).hexdigest()
-                if url in approved_sources.get(idx, {}).get('text_attachments', []):
-                    if not raw.startswith(b'%PDF'):
-                        raise ValueError('Reviewed text extraction requires PDF')
-                    from pypdf import PdfReader
-                    text = ' '.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(raw)).pages)
-                    notice.setdefault('attachment_texts', {})[url] = re.sub(r'\s+', ' ', text).strip()
+                try:
+                    document = extract_attachment(raw)
+                    notice.setdefault('attachment_documents', {})[url] = document
+                    if document['text']:
+                        notice.setdefault('attachment_texts', {})[url] = re.sub(r'\s+', ' ', document['text']).strip()
+                except ValueError as error:
+                    notice.setdefault('attachment_errors', {})[url] = str(error)
+                    if url in approved_sources.get(idx, {}).get('text_attachments', []):
+                        raise ValueError(f'Reviewed attachment extraction failed: {error}') from error
         notices.append(notice)
     candidates = baseline.get("programs") or seed.get("programs", [])
     program = copy.deepcopy(next(p for p in candidates if p["id"] == PROGRAM_ID))
@@ -231,11 +251,21 @@ def collect(seed, baseline=None, fetch=None):
     additions, holds = reviewed_programs(notices, checked)
     reviewed_ids = {str(s['source_id']) for r in recipes() if r['id'] in {p['id'] for p in additions} for s in r['sources']}
     review = [item for item in review if item['source_id'] not in reviewed_ids]
+    offering_terms, term_holds, offering_candidates = discover_terms(notices)
+    coverage = {"listing_urls": listing_urls, "discovered_count": len(discovered),
+                "fetched_count": len(notices), "missing_source_ids": sorted(str(i) for i in discovered - {int(n['source_id']) for n in notices}),
+                "attachments": [{"source_id": n['source_id'], "source_url": n['url'], "attachment_url": url,
+                                 "sha256": digest, "format": n.get('attachment_documents', {}).get(url, {}).get('format'),
+                                 "readable": bool(n.get('attachment_texts', {}).get(url)),
+                                 "reason": n.get('attachment_errors', {}).get(url, '')}
+                                for n in notices for url, digest in n.get('attachment_hashes', {}).items()]}
     return {"checked_at": checked, "notices": notices, "tracked_notices": notices,
             "accepted_notices": accepted,
             "candidate_groups": candidate_queue([n for n in notices if n['source_id'] in {i['source_id'] for i in review}]),
             "link_suggestions": link_suggestions(notices),
             "reviewed_programs": additions, "program_holds": holds,
+            "offering_terms": offering_terms, "extraction_holds": term_holds,
+            "offering_candidates": offering_candidates, "collection_coverage": coverage,
             "programs": [program], "review": review, "requires_review": changed}
 
 
@@ -244,15 +274,26 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--baseline", type=Path)
     parser.add_argument("--seed", type=Path, default=ROOT / "data/lp_programs_pilot.json")
+    parser.add_argument("--listing-pages", type=int, default=3)
     args = parser.parse_args()
     baseline = json.loads(args.baseline.read_text()) if args.baseline else None
-    result = collect(json.loads(args.seed.read_text()), baseline)
+    result = collect(json.loads(args.seed.read_text()), baseline, listing_pages=args.listing_pages)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.output.with_suffix(args.output.suffix + ".tmp")
     temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     temporary.replace(args.output)
     lines = ['# 한국성장금융 공고 검토', '', '## 신규 공개 대상', '']
     lines += [f"- {p['title']}" for p in result['reviewed_programs']]
+    coverage = result['collection_coverage']
+    lines += ['', '## 수집 범위', '',
+              f"- 공식 목록 {len(coverage['listing_urls'])}페이지 · 발견 {coverage['discovered_count']}건 · 수집 {coverage['fetched_count']}건",
+              f"- 발견 후 누락: {len(coverage['missing_source_ids'])}건",
+              f"- 첨부 {len(coverage['attachments'])}개 · 본문 읽기 완료 {sum(a['readable'] for a in coverage['attachments'])}개"]
+    lines += ['', '## 첨부 읽기 실패', '']
+    lines += [f"- [{a['source_id']}]({a['source_url']}): {a['reason']}" for a in coverage['attachments']
+              if not a['readable'] and a.get('reason')]
+    lines += ['', '## 항목 추출 보류', '']
+    lines += [f"- [{h['program_id']}]({h['source_url']}): {h['reason']}" for h in result['extraction_holds']]
     lines += ['', '## 확인이 필요한 사업', '']
     for hold in result['program_holds']:
         lines.append(f"- {hold['program_id']}: {hold['reason']}")

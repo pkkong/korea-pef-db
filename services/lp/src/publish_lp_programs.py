@@ -16,6 +16,7 @@ from collect_kexim_programs import project as project_kexim, link_suggestions as
 from lp_notice_triage import assess_candidates
 from lp_notice_terms import project_discovered
 from lp_joint_terms import discovered_joint_terms
+from kgrowth_notice_terms import discovery as discover_growth_terms
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -56,6 +57,25 @@ def prepare(current, report):
     for p in additions:
         if not existing.get(p['id'], {}).get('manual_review_id'):
             existing[p['id']] = p
+    # Discover and re-extract without trusting the collector's prepared facts.
+    # Reviewed source identity/GP history is retained; offering numbers come
+    # directly from the current, independently validated attachment text.
+    growth_terms, growth_term_holds, growth_candidates = discover_growth_terms(report['notices'])
+    verified = {p['id'] for p in additions}
+    growth_unlinked = []
+    for candidate in growth_candidates:
+        program = next((p for p in existing.values() if p['institution_id'] == 'kgrowth'
+                        and candidate['url'] in {e['url'] for e in p['events']}), None)
+        if program and not program.get('auto_extracted'):
+            if program['id'] in verified and not program.get('manual_review_id') and candidate['url'] in growth_terms:
+                terms = copy.deepcopy(growth_terms[candidate['url']])
+                planned = terms.pop('planned_schedule', [])
+                program.update(terms)
+                program['schedule_stages'] = [s for s in program.get('schedule_stages', [])
+                                              if not (s.get('status') == 'planned' and s.get('source_url') == candidate['url'])] + planned
+                program['schedule_stages'].sort(key=lambda s: s['date'])
+        else:
+            growth_unlinked.append(candidate)
     priority = report.get('priority_sources', {})
     priority_holds = []
     fresh_priority_notices = []
@@ -106,7 +126,20 @@ def prepare(current, report):
     official_notices = data['priority_notices'] + data['supporting_notices']
     data['discovery_candidates'] = assess_candidates(discovered, official_notices)
     data['discovery_terms'], joint_holds = discovered_joint_terms(data['discovery_candidates'], official_notices)
+    growth_notices = [{**n, 'institution_id': 'kgrowth'} for n in report['notices']]
+    # Reassess mixed/unknown legal forms from offering text only, excluding forms.
+    from kgrowth_notice_terms import is_offering_text
+    growth_scoped = [{**n, 'attachment_texts': {u: t for u, t in n.get('attachment_texts', {}).items()
+                                              if is_offering_text(t)}} for n in growth_notices]
+    growth_candidates = assess_candidates(growth_unlinked, growth_scoped)
+    data['discovery_candidates'].extend(growth_candidates)
+    data['kgrowth_offering_terms'] = growth_terms
+    data['attachment_coverage'] = copy.deepcopy(report.get('collection_coverage', {}))
+    data['extraction_holds'] = growth_term_holds
     automatic, automatic_holds = project_discovered(discovered, official_notices, report['checked_at'])
+    growth_automatic, growth_automatic_holds = project_discovered(growth_candidates, growth_scoped, report['checked_at'])
+    automatic.extend(growth_automatic)
+    automatic_holds.extend(growth_automatic_holds)
     automatic_ids = {p['id'] for p in automatic}
     hold_ids = {h['program_id'] for h in automatic_holds}
     for p in existing.values():

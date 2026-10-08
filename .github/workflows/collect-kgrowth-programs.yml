@@ -62,7 +62,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install collection dependencies
-        run: python3 -m pip install 'psycopg[binary]>=3.2,<4' beautifulsoup4 requests 'pypdf==6.10.0'
+        run: python3 -m pip install 'psycopg[binary]>=3.2,<4' beautifulsoup4 requests 'pypdf==6.10.0' 'olefile==0.47'
       - name: Apply LP schema
         run: |
           sudo apt-get update -qq
@@ -72,7 +72,7 @@ jobs:
       - name: Verify review access boundary
         run: psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 --file services/lp/tests/check_lp_review_access.sql
       - name: Test collection and publishing contracts
-        run: python3 -m unittest services.lp.tests.test_lp_review_preview services.lp.tests.test_lp_review_decisions services.lp.tests.test_kgrowth_collection services.lp.tests.test_kgrowth_program_review services.lp.tests.test_collect_ktcu_program services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_kexim_programs services.lp.tests.test_collect_kdb_related services.lp.tests.test_collect_priority_lp_programs services.lp.tests.test_lp_notice_triage services.lp.tests.test_lp_notice_terms services.lp.tests.test_lp_joint_terms services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish
+        run: python3 -m unittest services.lp.tests.test_lp_attachment_text services.lp.tests.test_kgrowth_notice_terms services.lp.tests.test_lp_review_preview services.lp.tests.test_lp_review_decisions services.lp.tests.test_kgrowth_collection services.lp.tests.test_kgrowth_program_review services.lp.tests.test_collect_ktcu_program services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_kexim_programs services.lp.tests.test_collect_kdb_related services.lp.tests.test_collect_priority_lp_programs services.lp.tests.test_lp_notice_triage services.lp.tests.test_lp_notice_terms services.lp.tests.test_lp_joint_terms services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish
       - name: Receive official KEXIM evidence
         uses: actions/download-artifact@v4
         continue-on-error: true

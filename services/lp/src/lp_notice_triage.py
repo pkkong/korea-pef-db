@@ -15,7 +15,7 @@ def compact(value: str) -> str:
 
 def notice_stage(title: str) -> str:
     value = compact(title)
-    if any(word in value for word in ("정정", "변경", "연장", "재공고", "취소")):
+    if any(word in value for word in ("정정", "수정", "변경", "연장", "재공고", "취소")):
         return "변경 공고"
     if "우선협상대상자" in value:
         return "우선협상대상자"
@@ -50,8 +50,18 @@ def program_key(notice: dict) -> str:
         return f"{institution}:{year}:{core}"
     core = title
     quoted = re.search(r"[「『]([^」』]+펀드)[」』]", title)
-    if quoted:
+    if quoted and institution != 'kgrowth':
         core = quoted[1]
+    if institution == 'kgrowth':
+        core = re.sub(r'^【(?:선정공고|선정결과|접수현황|접수결과|서류심사결과|정량평가결과|'
+                      r'우선협상대상자|변경공고|재공고|정정공고|수정공고|취소공고|연장공고)】', '', core)
+        core = re.sub(r'\((?:수정|변경|정정|재공고|취소|연장)\)$', '', core)
+        # Track and round qualifiers after a quoted fund name distinguish
+        # separate offerings. Only remove lifecycle wording, never the track.
+        for phrase in ('선정계획변경공고', '선정계획재공고', '선정계획정정공고',
+                       '선정계획연장공고', '선정계획취소공고', '선정계획수정공고',
+                       '변경공고', '재공고', '정정공고', '수정공고', '연장공고', '취소공고'):
+            core = core.replace(phrase, '')
     for phrase in ("한국수출입은행", "위탁운용사", "운용사", "제안서", "선정계획",
                    "출자사업", "계획공고", "접수결과", "접수현황", "서류심사결과",
                    "선정결과", "공고"):

@@ -1,0 +1,35 @@
+# LP 공식 첨부 자동 추출
+
+## 현재 범위
+
+한국성장금융 공식 게시판의 최근 3페이지와 이전 실행에서 추적한 공고를 수집한다. 발견한 공고의 모든 첨부를 내려받아 본문·파일 지문·읽기 실패 사유를 함께 보존한다. 신규 공고 ID나 금액을 담당자가 골라 등록하지 않는다.
+
+`lp_attachment_text.py`는 HWP 5 본문, 단순 표를 포함한 HWPX 본문, 텍스트 PDF를 읽는다. HWP 미리보기는 근거로 쓰지 않는다. 암호·배포용 문서, 깨진 문서, 크기 제한 초과, 복잡한 HWPX 병합·중첩 표는 읽기 실패로 보존한다. ZIP 자료 묶음은 보조 첨부이며 자동 압축 해제·공고문 판독 대상이 아니다. 이미지 PDF의 OCR은 아직 지원하지 않는다.
+
+`kgrowth_notice_terms.py`는 모집 공고문과 제출서식을 구분하고, 지원되는 항목·표 형식에서 총 출자액, 선정 수, 펀드당 출자액, 주목적, 접수 마감, 월 단위 심사 예정일을 추출한다. 분야별 금액·선정 수를 공고 총계와 검산한다. 모든 수치에는 원문 인용과 파일 지문을 남긴다. 분야별 합계가 계산값이면 계산 근거를 보존한다. 운용사 자율 제안과 함께 적힌 비율은 고정 의무비율로 공개하지 않는다.
+
+모든 HWP 공고의 조건 추출을 지원하는 것은 아니다. 항목 누락, 새로운 표 형식, 변경·재공고, PE/VC 혼합형은 후보·보류 사유를 보존하며 추정한 새 사업을 공개하지 않는다. 기존 검증된 공개 사업은 유지한다. 현재 실제 자동 추출을 확인한 모집 문서는 IBK 생산적금융펀드 일반매칭이다.
+
+## 반복 실행과 공개
+
+`Collect LP programs`는 평일 09:20·15:20에 실행한다. 수집 → 독립 재추출·검증 → Supabase 자료·공개 페이지 저장 → Vercel 동일 실행 결과 확인 순서다. 별도 앱 배포 없이 `/samples/lp/`에 반영된다.
+
+신규 사업 자동 공개는 공식 모집 근거와 필수 항목을 갖춘 PE 사업에 한정한다. 동일 사업의 다음 실행도 다시 검증한다. 모집·접수·선정 제목의 단계 표시는 사업 ID에서 제거하되 일반매칭·지역전용·차수는 유지한다. 수정·취소 자료가 나타나면 변경 대조가 끝날 때까지 기존 공개본을 유지한다. 운용사 이름 추출·GP 프로필 연결은 이번 범위에 포함하지 않는다.
+
+수집 보고서의 `collection_coverage`는 방문한 목록 URL, 발견·수집 건수, 발견 후 누락 ID, 첨부별 형식·본문 읽기 여부·실패 사유를 기록한다. 조건 추출 보류는 `extraction_holds`에 따로 기록한다. 읽기 성공과 조건 추출 성공을 구분한다.
+
+## 수정·검증 경로
+
+- 수집: `services/lp/src/collect_kgrowth_programs.py`
+- 첨부 판독: `services/lp/src/lp_attachment_text.py` (`olefile==0.47`, `pypdf==6.10.0`)
+- 항목 추출: `services/lp/src/kgrowth_notice_terms.py`
+- 사업 단계·범위: `services/lp/src/lp_notice_triage.py`, `lp_notice_terms.py`
+- 공개 검증·저장: `services/lp/src/publish_lp_programs.py`
+
+```sh
+python3 scripts/run_regression_tests.py
+python3 scripts/check_architecture_contracts.py
+python3 services/lp/src/collect_kgrowth_programs.py --baseline /tmp/lp-baseline.json --output /tmp/kgrowth-collection.json
+```
+
+운영 기준 자료는 workflow가 Supabase에서 내보낸다. 로컬 SQLite나 과거 미리보기를 운영 기준으로 삼지 않는다. 회귀 검사에는 HWP/HWPX 손상·제어문자·표 검사, 서식의 예시 금액 배제, 총계 불일치 보류, 다른 ID·금액 재사용, 반복 실행, 단계 연결, 혼합형 보류, 수집 결과의 임의 수치 불신 검사가 포함된다.

@@ -20,6 +20,7 @@ INSTITUTIONS = {
     "koreapost": ("우정사업본부", "www.kpasset.go.kr"),
     "kexim": ("한국수출입은행", "www.koreaexim.go.kr"),
     "ktcu": ("한국교직원공제회", "www.ktcu.or.kr"),
+    "kgrowth": ("한국성장금융", "www.kgrowth.or.kr"),
 }
 NUMBER = r"\d+(?:,\d{3})*"
 
@@ -46,6 +47,12 @@ def _readable(value):
 
 def extract_terms(notice):
     institution = notice["institution_id"]
+    if institution == "kgrowth":
+        try:
+            from .kgrowth_notice_terms import extract_offering
+        except ImportError:
+            from kgrowth_notice_terms import extract_offering
+        return extract_offering(notice)
     name, host = INSTITUTIONS[institution]
     if urlparse(notice["url"]).scheme != "https" or urlparse(notice["url"]).hostname != host:
         raise ValueError("공식 기관 주소가 아님")
@@ -187,6 +194,7 @@ def project_discovered(candidates, notices, checked_at):
             p["schedule_stages"].append({"stage": "application", "label": "접수 마감", "original_label": "접수 마감",
                                          "date": p["deadline"], "precision": "datetime", "status": "announced_deadline",
                                          "source_url": original, "show_source": True})
+            p["schedule_stages"].extend(terms.get("planned_schedule", []))
             p["schedule_stages"].sort(key=lambda s: s["date"])
             latest = max(members, key=lambda m: (m["date"], m["source_id"]))["stage"]
             if latest != "모집 공고":

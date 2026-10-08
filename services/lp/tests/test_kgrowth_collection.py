@@ -63,6 +63,34 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(result["review"][0]["source_id"], "9999")
         self.assertEqual(len(result["programs"][0]["events"]), 4)
 
+    def test_listing_pagination_detects_new_notice_without_registered_id(self):
+        self.docs[c.LIST_URL] += b'<a href="Javascript:ListView(2,1,0)">2</a>'
+        self.docs[c.LIST_URL+'&page=2'] = b'<a href="notice_view.asp?idx=987654">new</a>'
+        self.docs[c.notice_url(987654)] = html('새 펀드 선정계획 공고','붙임 공고문 참고')
+        result=c.collect(self.seed,fetch=self.fetch)
+        self.assertIn('987654',[n['source_id'] for n in result['notices']])
+        self.assertEqual(result['collection_coverage']['discovered_count'],2)
+        self.assertEqual(result['collection_coverage']['missing_source_ids'],[])
+        self.assertEqual(len(result['collection_coverage']['listing_urls']),2)
+
+    def test_every_attachment_is_read_without_recipe_text_allowlist(self):
+        self.docs[c.notice_url(9999)] = html('새 펀드 선정계획 공고','붙임 공고문 참고') + b'<a href="down_file.asp?idx=9999&SelType=Notice1">file</a>'
+        attachment=c.BASE+'down_file.asp?idx=9999&SelType=Notice1'
+        self.docs[attachment]=b'%PDF synthetic attachment'
+        with patch.object(c,'extract_attachment',return_value={'format':'pdf','text':'출자 대상 기관전용 사모집합투자기구','tables':[]}):
+            result=c.collect(self.seed,fetch=self.fetch)
+        n=next(n for n in result['notices'] if n['source_id']=='9999')
+        self.assertIn(attachment,n['attachment_texts'])
+        self.assertTrue(result['collection_coverage']['attachments'][0]['readable'])
+
+    def test_unreadable_new_attachment_keeps_notice_and_explicit_failure_reason(self):
+        self.docs[c.notice_url(9999)] += b'<a href="down_file.asp?idx=9999&SelType=Notice1">file</a>'
+        self.docs[c.BASE+'down_file.asp?idx=9999&SelType=Notice1']=b'%PDF synthetic attachment'
+        with patch.object(c,'extract_attachment',side_effect=ValueError('Unreadable body')):
+            result=c.collect(self.seed,fetch=self.fetch)
+        self.assertEqual(result['collection_coverage']['attachments'][0]['reason'],'Unreadable body')
+        self.assertFalse(result['collection_coverage']['attachments'][0]['readable'])
+
     def test_change_stays_quarantined_across_runs(self):
         first = c.collect(self.seed, fetch=self.fetch)
         old = copy.deepcopy(first["programs"])

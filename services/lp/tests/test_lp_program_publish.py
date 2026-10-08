@@ -141,4 +141,63 @@ class PublishContracts(unittest.TestCase):
         self.assertEqual(automatic,next(p for p in revised['programs'] if p['id']==automatic['id']))
         self.assertTrue(any(h['program_id']==automatic['id'] for h in revised['program_holds']))
 
+    def test_growth_repeated_collection_revalidates_and_preserves_last_good(self):
+        from services.lp.tests.test_kgrowth_notice_terms import notice, DOCUMENT
+        n=notice()
+        self.report.update(checked_at='2026-11-13T18:00:00+09:00',notices=[n],
+                           offering_terms={n['url']:{'commitment_amount_krw':999}})
+        first,pages=prepare(self.data,self.report)
+        auto=next(p for p in first['programs'] if p.get('auto_extracted'))
+        self.assertEqual(auto['commitment_amount_krw'],24_000_000_000)
+        self.assertEqual(auto['status'],'접수 마감')
+        self.assertIn('<time>2026-12</time>',pages['program-'+auto['id']+'.html'])
+        second,_=prepare(first,self.report)
+        repeated=next(p for p in second['programs'] if p['id']==auto['id'])
+        self.assertEqual(auto,repeated)
+        self.assertFalse(any(h['program_id']==auto['id'] for h in second['program_holds']))
+        broken=notice(DOCUMENT.replace('▪ 6개','▪ 7개'))
+        self.report['notices']=[broken]
+        third,_=prepare(second,self.report)
+        self.assertEqual(auto,next(p for p in third['programs'] if p['id']==auto['id']))
+        self.assertTrue(any(h['program_id']==auto['id'] for h in third['program_holds']))
+
+    def test_growth_mixed_source_is_reviewed_without_other_bank_parser(self):
+        from services.lp.tests.test_kgrowth_notice_terms import notice, DOCUMENT
+        n=notice(DOCUMENT.replace('▪ 기관전용 사모집합투자기구','▪ 기관전용 사모집합투자기구, 벤처투자조합'))
+        self.report.update(checked_at='2026-11-13',notices=[n])
+        data,pages=prepare(self.data,self.report)
+        self.assertEqual(len(data['programs']),len(self.data['programs']))
+        self.assertEqual(data['discovery_candidates'][0]['scope'],'mixed_legal_forms')
+        self.assertIn(n['url'],data['kgrowth_offering_terms'])
+        self.assertIn('총 240억원',pages['review.html'])
+        self.assertFalse(any('공동사업 조건 추출 보류' in h['reason'] for h in data['program_holds']))
+
+    def test_growth_result_is_connected_by_business_not_notice_id(self):
+        from services.lp.tests.test_kgrowth_notice_terms import notice
+        n=notice();n['title']='【선정공고】'+n['title']
+        result={**n,'source_id':'999999','url':n['url'].replace('76543','999999'),
+                           'title':n['title'].replace('【선정공고】','【선정결과】').replace('선정계획','선정결과'),'date':'2026-12-08',
+                           'attachment_texts':{},'attachment_documents':{},'attachment_hashes':{}}
+        self.report.update(checked_at='2026-12-09',notices=[n,result])
+        data,_=prepare(self.data,self.report)
+        auto=next(p for p in data['programs'] if p.get('auto_extracted'))
+        self.assertEqual(auto['status'],'선정 결과 발표')
+        self.assertEqual(auto['selected_gps'],[])
+        self.assertIn(result['url'],[e['url'] for e in auto['events']])
+
+    def test_growth_amendment_or_cancellation_holds_the_original_business(self):
+        from services.lp.tests.test_kgrowth_notice_terms import notice
+        n=notice();n['title']='【선정공고】'+n['title']
+        self.report.update(checked_at='2026-11-13',notices=[n])
+        first,_=prepare(self.data,self.report)
+        auto=next(p for p in first['programs'] if p.get('auto_extracted'))
+        for title in (n['title']+'(수정)',n['title'].replace('선정계획 공고','선정계획 취소 공고')):
+            amended={**n,'source_id':'888888','url':n['url'].replace('76543','888888'),
+                     'title':title,'date':'2026-11-12'}
+            self.report['notices']=[n,amended]
+            data,_=prepare(first,self.report)
+            self.assertEqual([auto['id']],[p['id'] for p in data['programs'] if p.get('auto_extracted')])
+            self.assertEqual(auto,next(p for p in data['programs'] if p['id']==auto['id']))
+            self.assertTrue(any(h['program_id']==auto['id'] and '변경' in h['reason'] for h in data['program_holds']))
+
 if __name__=='__main__':unittest.main()
