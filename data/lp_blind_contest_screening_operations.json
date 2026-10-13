@@ -1,0 +1,29 @@
+{
+  "checked_at": "2026-10-13",
+  "institutions": [
+    {
+      "institution_id": "koreapost",
+      "name": "우정사업본부",
+      "category": "public_fund",
+      "decision": "core_confirmed",
+      "reason": "공식 모집 공고의 국내 블라인드 PEF 및 공개모집 경쟁방식, 기관전용 사모집합투자기구를 확인했다. 우체국금융 하위계정은 기관 중복으로 만들지 않는다.",
+      "evidence": [
+        {
+          "url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=400",
+          "title": "2026년도 우체국금융 국내 블라인드 PEF 위탁운용사 선정 공고[우정사업본부 공고 제2026-124호]",
+          "date": "2026-09-10",
+          "official": true,
+          "blind_explicit": true,
+          "pe_explicit": true,
+          "quote": "2026년도 우체국금융 국내 블라인드 PEF 위탁운용사 선정계획",
+          "sha256": "7afa8d1b3eea042b2af3426230fe47d77865d3bd7fb957d8a934a40053813ef3",
+          "observed_at": "2026-10-12",
+          "observation_source": "GitHub Actions 38211276411 official collection report"
+        }
+      ],
+      "official_listing_url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041",
+      "issuer_name": "우정사업본부",
+      "collection_hint": "기존 공식 수집기 재사용. 국내 PE 블라인드와 VC·공동투자·해외 재간접은 사업별로 구분."
+    }
+  ]
+}

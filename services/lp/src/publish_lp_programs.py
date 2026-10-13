@@ -17,6 +17,7 @@ from lp_notice_triage import assess_candidates
 from lp_notice_terms import project_discovered
 from lp_joint_terms import discovered_joint_terms
 from kgrowth_notice_terms import discovery as discover_growth_terms
+from lp_shared_notice_catalog import update_shared_catalog
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -150,6 +151,9 @@ def prepare(current, report):
             existing[program['id']] = program
     data['programs'] = list(existing.values())
     data['program_holds'] = holds + priority_holds + automatic_holds + joint_holds
+    data.update(update_shared_catalog(current, report.get('shared_collection'), report['checked_at']))
+    seen_urls = {n['url'] for n in data['discovery_candidates']}
+    data['discovery_candidates'].extend(n for n in data['shared_discovery_candidates'] if n['url'] not in seen_urls)
     apply_decisions(data, report['notices'], current.get('review_decisions', []))
     data['as_of'] = str(report['checked_at'])[:10]
     validate(data)
@@ -167,6 +171,7 @@ def main():
     parser.add_argument('--export-baseline', type=Path)
     parser.add_argument('--collection', type=Path)
     parser.add_argument('--priority-collection', type=Path)
+    parser.add_argument('--shared-collection', type=Path)
     args = parser.parse_args()
     with connect() as conn:
         if args.export_baseline:
@@ -176,6 +181,9 @@ def main():
         if args.priority_collection:
             priority_report = json.loads(args.priority_collection.read_text())
             report['priority_sources'] = priority_report['sources']
+        if args.shared_collection:
+            report['shared_collection'] = (json.loads(args.shared_collection.read_text()) if args.shared_collection.exists() else
+                                          {'notices': [], 'holds': [{'stage': 'listing', 'error': '협회 수집 파일 없음; 이전 자료 유지'}]})
         # One transaction and lock: evidence and public view always agree.
         conn.execute('SELECT pg_advisory_xact_lock(728160921)')
         data, pages = prepare(baseline(conn), report)
@@ -183,12 +191,14 @@ def main():
         stamp = datetime.now(timezone.utc).isoformat()
         run_id = hashlib.sha256((stamp+json.dumps(report,sort_keys=True)).encode()).hexdigest()[:24]
         conn.execute('INSERT INTO lp_program_private.collection_runs(run_id,institution,report) VALUES (%s,%s,%s)', (run_id,'multi_lp' if args.priority_collection else 'kgrowth',Jsonb(report)))
-        for doc in report['notices'] + data.get('priority_notices', []) + data.get('supporting_notices', []):
+        for doc in report['notices'] + data.get('priority_notices', []) + data.get('supporting_notices', []) + data.get('shared_notices', []):
             digest = document_hash(doc)
             conn.execute('INSERT INTO lp_program_private.documents(source_url,content_hash,document) VALUES(%s,%s,%s) ON CONFLICT DO NOTHING', (doc['url'],digest,Jsonb(doc)))
         conn.execute('INSERT INTO lp_program_private.program_state(id,data,pages,run_id) VALUES(1,%s,%s,%s) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,pages=EXCLUDED.pages,run_id=EXCLUDED.run_id,updated_at=now()', (Jsonb(data),Jsonb(pages),run_id))
     print(json.dumps({'run_id':run_id,'programs':len(data['programs']),'program_ids':[p['id'] for p in data['programs']],
-                      'notices':len(report['notices']),'review':len(report.get('review',[]))}))
+                      'notices':len(report['notices']),'review':len(report.get('review',[])),
+                      'shared_notices':len(data.get('shared_notices',[])),
+                      'shared_institutions':sorted({n['institution_id'] for n in data.get('shared_notices',[])})}))
 
 if __name__ == '__main__':
     main()

@@ -14,6 +14,10 @@ def render_review(data,report,previous):
     discovery=data.get('discovery_candidates', [])
     discovery_sources={item['url'] for item in discovery}
     institutions={'ktcu':'한국교직원공제회','koreapost':'우정사업본부','kexim':'한국수출입은행','kgrowth':'한국성장금융'}
+    institutions.update({n['institution_id']: n['institution_name'] for n in data.get('shared_notices', [])})
+    shared=data.get('shared_collection_coverage', {})
+    if shared:
+        body+=f'<p class="muted">협회 공고 {len(data.get("shared_notices", []))}건 · {len({n["institution_id"] for n in data.get("shared_notices", [])})}개 기관</p>'
     coverage=data.get('attachment_coverage', {})
     if coverage:
         files=coverage.get('attachments', [])
@@ -69,7 +73,8 @@ def render_review(data,report,previous):
             body+='<ul>'
             for item in members:
                 stage=item.get('stage') or '공고'
-                body+=f'<li><small>{escape(item["date"])} · {escape(stage)}</small><a target="_blank" rel="noopener" href="{escape(item["url"],quote=True)}">{escape(item["title"])} ↗</a></li>'
+                date_note=(' · '+escape(item['date_note'])) if item.get('date_note') else ''
+                body+=f'<li><small>{escape(item["date"])} · {escape(stage)}{date_note}</small><a target="_blank" rel="noopener" href="{escape(item["url"],quote=True)}">{escape(item["title"])} ↗</a></li>'
             body+='</ul></div>'
         body+='</section>'
     if suggestions:
@@ -85,7 +90,8 @@ def render_review(data,report,previous):
         body+='</ul></section>'
     related_urls={e['url'] for p in programs for e in p['events']} | suggested_sources | discovery_sources
     priority_notices=[n for n in data.get('priority_notices',[]) if n['url'] in related_urls]
-    notices=sorted(report['notices']+priority_notices,key=lambda n:n['date'],reverse=True)
+    shared_notices=[n for n in data.get('shared_notices', []) if n['url'] in related_urls]
+    notices=sorted(report['notices']+priority_notices+shared_notices,key=lambda n:n['date'],reverse=True)
     for n in notices:
         p=next((p for p in programs if any(e['url']==n['url'] for e in p['events'])),None)
         classification=notice_classification(n) if n.get('institution_id','kgrowth')=='kgrowth' else None
@@ -96,6 +102,8 @@ def render_review(data,report,previous):
         changed=before and any(before.get(k)!=n.get(k) for k in ('body','title','date','attachment_hashes'))
         if changed:label='원문 변경'
         body+=f'<details class="review-notice"><summary><small>{escape(n["date"])} · {label}</small><strong>{escape(n["title"])}</strong></summary><div class="review-content">'
+        if n.get('date_note'):
+            body+='<p class="muted">'+escape(n['date_note'])+'</p>'
         body+=f'<p><a target="_blank" rel="noopener" href="{escape(n["url"],quote=True)}">공고 원문 ↗</a></p>'
         if p:
             body+=f'<h2>연결된 사업</h2><p><a href="/samples/lp/program-{escape(p["id"],quote=True)}.html">{escape(p["title"])} ↗</a></p><table><tbody>'

@@ -200,4 +200,17 @@ class PublishContracts(unittest.TestCase):
             self.assertEqual(auto,next(p for p in data['programs'] if p['id']==auto['id']))
             self.assertTrue(any(h['program_id']==auto['id'] and '변경' in h['reason'] for h in data['program_holds']))
 
+    def test_shared_evidence_is_retained_without_approving_fund_terms(self):
+        from services.lp.tests.test_lp_shared_notice_catalog import notice
+        self.report['checked_at']='2026-10-13'
+        self.report['shared_collection']={'notices':[notice()],'coverage':{'notice_count':1}}
+        data,pages=prepare(self.data,self.report)
+        self.assertEqual(len(self.data['programs']),len(data['programs']))
+        self.assertEqual(data['shared_notices'][0]['institution_id'],'cu')
+        self.assertIn('신협중앙회',pages['review.html'])
+        self.assertIn('공고 본문',pages['review.html'])
+        self.report['shared_collection']={'notices':[]}
+        again,_=prepare(data,self.report)
+        self.assertEqual(again['shared_notices'],data['shared_notices'])
+
 if __name__=='__main__':unittest.main()

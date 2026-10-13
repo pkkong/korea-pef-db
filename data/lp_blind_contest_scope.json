@@ -1,0 +1,19 @@
+{
+  "as_of": "2026-10-13",
+  "product_scope": "공식 공개모집으로 선정하는 국내 PE/PEF 블라인드 펀드 출자사업",
+  "confirmed_institution_ids": ["koreapost", "ktcu", "kgrowth", "kexim", "poba", "geps", "mmaa", "pmaa", "sema", "kbiz", "tp", "cu", "kamco", "kfinco", "moel_iaci", "moel_eif"],
+  "priority_verification_ids": ["nps", "kdb", "ibk", "kfcc", "nh_central", "suhyup", "cwma", "pck_pension"],
+  "operating_collector_ids": ["kgrowth", "koreapost", "ktcu", "kexim"],
+  "supporting_collector_ids": ["kdb"],
+  "shared_discovery_channels": [
+    {"name": "한국벤처캐피탈협회 출자공고", "url": "https://www.kvca.or.kr/Program/invest/list.html?a_cd=8&a_gb=board&a_item=0&sm=2_2_2", "role": "기관 명의 모집 원문 및 공식 원공고 역탐색"},
+    {"name": "금융투자협회 안내사항", "url": "https://www.kofia.or.kr/brd/m_212/list.do", "role": "기관 명의 모집 원문 및 공식 원공고 역탐색"},
+    {"name": "금융투자협회 공지사항", "url": "https://www.kofia.or.kr/brd/m_17/list.do", "role": "기관 명의 모집 원문 및 공식 원공고 역탐색"}
+  ],
+  "third_party_discovery_url": "https://pe-vc-lp.com/",
+  "third_party_use": "누락 발행기관과 공고를 발견하는 단서. 금액·마감·선정결과의 공개 근거로 사용하지 않는다.",
+  "notice_policy": "기관 ID와 채널만 관리한다. 공고 ID 허용목록으로 신규 수집을 확장하지 않는다. PE·VC 혼합 공고는 PE 블라인드 트랙을 분리하며 프로젝트·공동투자·해외전용은 본 화면과 구분한다.",
+  "issuer_policy": "산재보험기금–삼성자산운용, 고용보험기금–미래에셋증권은 기금과 공고 수행자 관계로 관리한다. 재게시 협회와 수행자를 자기자금 LP로 중복 등록하지 않는다.",
+  "release_rule": "4기관으로 고정하지 않는다. 확인된 발행기관 전체를 수집 목표로 삼고, 공식 근거 미확인 기관은 우선 확인 대상에서 유지한다. 공고 수집 연결 완료와 모집 조건 자동 추출 완료를 별도로 검증한다.",
+  "deferred_for_first_release": ["GP 프로필 연결", "기관 자격 및 AUM 전수 보강", "모든 연도 과거 공고 복원", "분석 대시보드", "로그인"]
+}

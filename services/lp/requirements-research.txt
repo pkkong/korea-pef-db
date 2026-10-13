@@ -1,0 +1,2 @@
+# Public issuer-index literal parsing; not part of the publishing workflow.
+json5==0.12.1
