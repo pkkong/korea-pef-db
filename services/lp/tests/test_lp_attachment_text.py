@@ -102,6 +102,13 @@ def cell(text, row, col, span=1):
 
 
 class AttachmentTextTests(unittest.TestCase):
+    def test_pdf_null_glyphs_preserve_word_and_amount_boundaries(self):
+        from types import SimpleNamespace
+        page = SimpleNamespace(extract_text=lambda: '100\x00200억원\n주목적\t국내 PE')
+        with patch('pypdf.PdfReader', return_value=SimpleNamespace(is_encrypted=False, pages=[page])):
+            value = extract_attachment(b'%PDF constructed test')
+        self.assertEqual(value['text'], '100 200억원\n주목적\t국내 PE')
+
     def test_hwp_compressed_full_body_multiple_sections_not_preview(self):
         value = extract_attachment(compound([record("First paragraph\r") + record("Second paragraph\r"), record("Final body\r")]))
         self.assertEqual(value, {"format": "hwp", "text": "First paragraph\nSecond paragraph\nFinal body", "tables": []})

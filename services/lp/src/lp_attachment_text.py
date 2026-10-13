@@ -227,6 +227,10 @@ def extract_attachment(raw: bytes) -> dict:
             result = {"format": "pdf", "text": "\n".join(parts), "tables": []}
         else:
             raise ValueError("Unsupported attachment format")
+        # PDF glyph mappings sometimes emit U+0000 between words. PostgreSQL
+        # JSONB cannot store it; a space preserves the boundary (removal could
+        # incorrectly join two amounts). Keep paragraph/tab separators intact.
+        result["text"] = result["text"].replace("\x00", " ")
         if len(result["text"]) > MAX_TEXT_CHARS or (not result["text"].strip() and result["format"] != "zip"):
             raise ValueError("Attachment has no readable body or exceeds text limit")
         return result

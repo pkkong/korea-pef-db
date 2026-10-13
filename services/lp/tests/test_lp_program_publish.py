@@ -8,9 +8,26 @@ from unittest.mock import patch
 
 SRC = Path(__file__).resolve().parents[1]/'src'
 sys.path.insert(0,str(SRC))
-from publish_lp_programs import prepare, document_hash
+from publish_lp_programs import prepare, document_hash, clean_database_text
 
 class PublishContracts(unittest.TestCase):
+    def test_database_text_preserves_amount_boundaries_and_literal_escapes(self):
+        raw = {'text': ['100\x00200억원\nPE\t모집', r'\u0000'], 'hash': 'original', 'count': 0}
+        value = clean_database_text(raw)
+        self.assertEqual(value, {'text': ['100 200억원\nPE\t모집', r'\u0000'], 'hash': 'original', 'count': 0})
+        self.assertIn('\x00', raw['text'][0])
+        with self.assertRaises(ValueError):
+            clean_database_text({'bad\x00field': 'evidence'})
+
+    def test_publication_cleans_incoming_and_retained_evidence(self):
+        self.report['notices'][0]['body'] = '원문\x00본문'
+        self.data['retained_evidence'] = ['100\x00200억원']
+        result, pages = prepare(self.data, self.report)
+        self.assertEqual(result['tracked_notices'][0]['body'], '원문 본문')
+        self.assertEqual(result['retained_evidence'], ['100 200억원'])
+        self.assertNotIn('\\u0000', json.dumps(result))
+        self.assertFalse(any('\x00' in page for page in pages.values()))
+
     def test_identical_document_is_not_versioned_again_for_check_time(self):
         doc = {'body':'same', 'attachment_hashes':{'file':'v1'}, 'checked_at':'first'}
         later = dict(doc, checked_at='later')

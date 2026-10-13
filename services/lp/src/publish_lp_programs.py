@@ -22,6 +22,23 @@ from lp_shared_notice_catalog import update_shared_catalog
 ROOT = Path(__file__).resolve().parents[3]
 
 
+def clean_database_text(value):
+    """Keep evidence boundaries while removing characters JSONB cannot store.
+
+    Apply to both current and incoming evidence so older collector artifacts
+    can be replayed safely. Literal backslash-u sequences remain literal.
+    """
+    if isinstance(value, str):
+        return value.replace('\x00', ' ')
+    if isinstance(value, list):
+        return [clean_database_text(item) for item in value]
+    if isinstance(value, dict):
+        if any('\x00' in key for key in value):
+            raise ValueError('Invalid NUL character in evidence field name')
+        return {key: clean_database_text(item) for key, item in value.items()}
+    return value
+
+
 def document_hash(document):
     content = {key: value for key, value in document.items() if key != 'checked_at'}
     return hashlib.sha256(json.dumps(content, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
@@ -40,6 +57,7 @@ def baseline(conn):
 
 
 def prepare(current, report):
+    current, report = clean_database_text(current), clean_database_text(report)
     if not report.get('notices'):
         raise ValueError('Empty collection cannot replace published data')
     data = copy.deepcopy(current)
@@ -184,6 +202,7 @@ def main():
         if args.shared_collection:
             report['shared_collection'] = (json.loads(args.shared_collection.read_text()) if args.shared_collection.exists() else
                                           {'notices': [], 'holds': [{'stage': 'listing', 'error': '협회 수집 파일 없음; 이전 자료 유지'}]})
+        report = clean_database_text(report)
         # One transaction and lock: evidence and public view always agree.
         conn.execute('SELECT pg_advisory_xact_lock(728160921)')
         data, pages = prepare(baseline(conn), report)
