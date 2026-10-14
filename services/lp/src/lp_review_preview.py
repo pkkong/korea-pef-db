@@ -48,6 +48,36 @@ def render_review(data,report,previous):
                 body+=f'<p><a target="_blank" rel="noopener" href="{escape(first["recruitment_url"],quote=True)}">공동사업 모집 원공고 ↗</a></p>'
             terms=data.get('discovery_terms', {}).get(first.get('program_key'))
             growth=data.get('kgrowth_offering_terms', {}).get(first.get('recruitment_url'))
+            shared_terms=data.get('shared_offering_terms',{}).get(first['url'])
+            if shared_terms:
+                source=next((n for n in data.get('shared_notices',[]) if n['url']==first['url']),None)
+                for original in (source or {}).get('original_notices',[]):
+                    body+=f'<p><a target="_blank" rel="noopener" href="{escape(original["url"],quote=True)}">기관 공고 원문 ↗</a>'
+                    if original.get('date'):body+=f' · {escape(original["date"])}'
+                    body+='</p>'
+                if shared_terms['schedule_stages']:
+                    body+='<h4>진행 일정</h4><table class="shared-facts"><tbody>'
+                    for stage in shared_terms['schedule_stages']:
+                        when=stage.get('date_label') or stage['date'][:16].replace('T',' ')
+                        body+=f'<tr><th>{escape(stage["label"])}</th><td>{escape(when)}'+(' 예정' if stage['status']=='planned' else '')+'</td></tr>'
+                    body+='</tbody></table>'
+                body+='<h4>모집 개요</h4><table class="shared-facts"><tbody>'
+                fields=[('투자 부문',shared_terms['asset_scope']),('출자규모',shared_terms.get('commitment_label')),('선정 수',shared_terms.get('manager_count_label'))]
+                money=lambda amount:f'{amount/100000000:,.0f}'
+                if shared_terms.get('per_fund_range_krw'):
+                    low,high=shared_terms['per_fund_range_krw']
+                    fields.append(('펀드별 출자액',f'{money(low)}~{money(high)}억원'+(' '+shared_terms['per_fund_qualifier'] if shared_terms.get('per_fund_qualifier') else '')))
+                elif shared_terms.get('per_fund_amount_krw'):
+                    fields.append(('펀드별 출자액',money(shared_terms['per_fund_amount_krw'])+'억원'))
+                if shared_terms.get('primary_investment'):fields.append(('주목적',shared_terms['primary_investment']['text']))
+                for label,value in fields:
+                    if value:body+=f'<tr><th>{escape(label)}</th><td>{escape(value)}</td></tr>'
+                body+='</tbody></table>'
+                if shared_terms['segments']:
+                    body+='<table class="shared-segments"><thead><tr><th>분야</th><th>펀드별 출자액</th><th>선정 수</th></tr></thead><tbody>'
+                    for segment in shared_terms['segments']:
+                        body+=f'<tr><td>{escape(segment["name"])}</td><td>{money(segment["per_fund_amount_krw"])}억원</td><td>{segment["manager_count"]}개사'+(' 내외' if segment.get('count_approximate') else '')+'</td></tr>'
+                    body+='</tbody></table>'
             if growth:
                 body+=f'<p>{escape(growth["commitment_label"])} · {escape(growth["manager_count_label"])} · {escape(growth["deadline"][:16].replace("T"," "))} 마감</p>'
                 body+='<table><thead><tr><th>분야</th><th>출자액</th><th>선정 수</th><th>펀드당 출자액</th></tr></thead><tbody>'
@@ -121,5 +151,6 @@ def render_review(data,report,previous):
                 body+='<p>첨부파일이 변경되었습니다. 원문에서 확인해 주세요.</p>'
         body+='<h2>공고 본문</h2><pre>'+escape(n['body'])+'</pre></div></details>'
     style='<style>.review-queue ul{list-style:none;padding:0}.review-program-group{border-bottom:1px solid #e5e5e5;padding:16px 0}.review-program-group h3{font-size:16px;line-height:1.5;margin:6px 0}.review-program-group li{padding:7px 0;overflow-wrap:anywhere}.review-program-group li>*{display:block;margin:2px 0}.review-queue small{color:#64748b}.review-notice{border-bottom:1px solid #e5e5e5}.review-notice summary{cursor:pointer;padding:18px 0;list-style:none}.review-notice summary strong{display:block;font-size:15px;line-height:1.5;margin-top:5px;overflow-wrap:anywhere}.review-content{padding-bottom:20px}.review-content h2{font-size:15px;margin:20px 0 10px}.review-content pre{font:13px/1.7 inherit;white-space:pre-wrap;overflow-wrap:anywhere;background:#fafafa;padding:14px}.review-content th{width:24%;min-width:0}.review-content td{min-width:0;overflow-wrap:anywhere}.review-content table{table-layout:fixed}</style>'
+    style+='<style>.shared-facts,.shared-segments{table-layout:fixed;width:100%;margin:8px 0 16px}.shared-facts th{width:28%;min-width:0}.shared-facts td,.shared-segments td,.shared-segments th{min-width:0;overflow-wrap:anywhere}.review-program-group h4{margin:16px 0 4px;font-size:14px}</style>'
     html=shell('공고 검토',style+body,data['as_of'])
     return html.replace('href="index.html"','href="/samples/lp/index.html"')

@@ -198,7 +198,12 @@ def classify_scope(title,body):
     pe = title_pe or bool(re.search(pe_pattern,offered,re.I))
     blind = title_blind or bool(re.search(r'(?:운용방식|선정유형|선정대상|펀드유형)[\s:：·ㆍ-]{0,15}(?:국내\s*)?블라인드|블라인드\s*(?:PEF?|펀드).{0,35}(?:선정|모집|공고)',offered,re.I))
     domestic = '국내' in title or '국내' in offered
-    vc = bool(re.search(vc_pattern,title+' '+offered,re.I))
+    mixed_fields=[]
+    for m in re.finditer(r'PE\s*부문.{0,100}VC\s*부문',body,re.I):
+        window=body[max(0,m.start()-40):m.end()+40]
+        if not re.search(r'과거|기존|경력|이력|선행',window):
+            mixed_fields.append(m[0])
+    vc = bool(re.search(vc_pattern,title+' '+offered+' '+' '.join(mixed_fields),re.I))
     if pe and blind and domestic:
         return 'mixed_pe_blind' if vc else 'pe_blind'
     if vc and not pe:

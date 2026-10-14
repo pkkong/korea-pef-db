@@ -213,10 +213,15 @@ def main():
         for doc in report['notices'] + data.get('priority_notices', []) + data.get('supporting_notices', []) + data.get('shared_notices', []):
             digest = document_hash(doc)
             conn.execute('INSERT INTO lp_program_private.documents(source_url,content_hash,document) VALUES(%s,%s,%s) ON CONFLICT DO NOTHING', (doc['url'],digest,Jsonb(doc)))
+        for notice in data.get('shared_notices', []):
+            for doc in notice.get('original_notices', []):
+                conn.execute('INSERT INTO lp_program_private.documents(source_url,content_hash,document) VALUES(%s,%s,%s) ON CONFLICT DO NOTHING', (doc['url'],document_hash(doc),Jsonb(doc)))
         conn.execute('INSERT INTO lp_program_private.program_state(id,data,pages,run_id) VALUES(1,%s,%s,%s) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,pages=EXCLUDED.pages,run_id=EXCLUDED.run_id,updated_at=now()', (Jsonb(data),Jsonb(pages),run_id))
     print(json.dumps({'run_id':run_id,'programs':len(data['programs']),'program_ids':[p['id'] for p in data['programs']],
                       'notices':len(report['notices']),'review':len(report.get('review',[])),
                       'shared_notices':len(data.get('shared_notices',[])),
+                      'shared_originals':sum(len(n.get('original_notices',[])) for n in data.get('shared_notices',[])),
+                      'shared_offering_terms':len(data.get('shared_offering_terms',{})),
                       'shared_institutions':sorted({n['institution_id'] for n in data.get('shared_notices',[])})}))
 
 if __name__ == '__main__':

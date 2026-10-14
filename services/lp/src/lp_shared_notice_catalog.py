@@ -14,9 +14,13 @@ from urllib.parse import urlparse
 try:
     from .collect_shared_lp_notices import classify_scope, match_issuer, load_aliases, source_id
     from .lp_notice_triage import program_key, notice_stage
+    from .collect_lp_original_notices import validate_original
+    from .lp_shared_notice_terms import shared_terms
 except ImportError:
     from collect_shared_lp_notices import classify_scope, match_issuer, load_aliases, source_id
     from lp_notice_triage import program_key, notice_stage
+    from collect_lp_original_notices import validate_original
+    from lp_shared_notice_terms import shared_terms
 
 ROOT = Path(__file__).resolve().parents[3]
 CHANNEL_PATHS = {'kvca': '/Program/invest/listbody.html',
@@ -66,17 +70,37 @@ def update_shared_catalog(current, incoming, checked_at):
             for url in n.get('attachment_texts', {}):
                 if urlparse(url).hostname != host or not n.get('attachment_hashes', {}).get(url):
                     raise ValueError('첨부 본문 근거 불일치')
+            originals={}
+            for original in (old or {}).get('original_notices', [])+n.get('original_notices', []):
+                try:
+                    validated=validate_original(original,n,checked_at)
+                    originals[validated['url']]=validated
+                except (ValueError,KeyError,TypeError) as exc:
+                    holds.append({'stage':'original_validation','url':original.get('url'),'error':str(exc)})
+            n['original_notices']=list(originals.values())
+            original_dates={o['date'] for o in n['original_notices'] if o.get('date')}
+            if n.get('date_note') and len(original_dates)==1:
+                n['date_note']='협회 등록일 · 기관 원공고 '+next(iter(original_dates))
             n['institution_name'] = names[identity]
             n['match_confidence'] = confidence
-            n['source_scope'] = classify_scope(n['title'], n['body']+' '+' '.join(n.get('attachment_texts', {}).values()))
+            original_text=' '.join(o['body']+' '+' '.join(o.get('attachment_texts',{}).values()) for o in n['original_notices'])
+            n['source_scope'] = classify_scope(n['title'], n['body']+' '+' '.join(n.get('attachment_texts', {}).values())+' '+original_text)
             retained[n['url']] = n
         except (ValueError, KeyError, TypeError) as exc:
             holds.append({'stage': 'publication_validation', 'url': raw.get('url'), 'error': str(exc)})
     candidates = []
     for n in retained.values():
+        originals=[]
+        for original in n.get('original_notices',[]):
+            try:
+                originals.append(validate_original(original,n,checked_at))
+            except (ValueError,KeyError,TypeError) as exc:
+                holds.append({'stage':'original_validation','url':original.get('url'),'error':str(exc)})
+        n['original_notices']=originals
         # Reclassify the last retained source too; a forged prepared scope is
         # never approval, and unrelated job/share/bond notices stay archived.
-        classified = classify_scope(n['title'], n['body']+' '+' '.join(n.get('attachment_texts', {}).values()))
+        original_text=' '.join(o['body']+' '+' '.join(o.get('attachment_texts',{}).values()) for o in n.get('original_notices',[]))
+        classified = classify_scope(n['title'], n['body']+' '+' '.join(n.get('attachment_texts', {}).values())+' '+original_text)
         n['source_scope'] = classified
         if classified not in LABELS:
             continue
@@ -88,7 +112,9 @@ def update_shared_catalog(current, incoming, checked_at):
                            'scope_reason': reason, 'scope_source_url': n['url'],
                            'recruitment_url': n['url'] if notice_stage(n['title']) == '모집 공고' else None,
                            'source_channel': n['source_channel']})
+    extracted,term_holds=shared_terms([n for n in retained.values() if n['source_scope'] in ('pe_blind','mixed_pe_blind')],checked_at)
     return {'shared_notices': list(retained.values()), 'shared_discovery_candidates': candidates,
+            'shared_offering_terms':extracted, 'shared_term_holds':term_holds,
             'shared_unmatched_notices': copy.deepcopy((incoming or {}).get('unmatched_notices', current.get('shared_unmatched_notices', []))),
             'shared_collection_holds': holds,
             'shared_collection_coverage': copy.deepcopy((incoming or {}).get('coverage', current.get('shared_collection_coverage', {})))}

@@ -13,6 +13,14 @@ def notice():
 
 
 class SharedArchiveTests(unittest.TestCase):
+    def test_shared_facts_are_reextracted_and_never_trust_prepared_amount(self):
+        n=notice();n['body']='국내 PE 블라인드 모집 출자규모: 총 450억원 선정 운용사:1개사 접수 마감:2026.10.12.15:00'
+        n['prepared_terms']={'commitment_amount_krw':999999}
+        result=update_shared_catalog({}, {'notices':[n]}, '2026-10-14')
+        facts=result['shared_offering_terms'][n['url']]
+        self.assertEqual(facts['commitment_amount_krw'],45_000_000_000)
+        self.assertEqual(result['shared_discovery_candidates'][0]['institution_id'],'cu')
+        self.assertNotIn('programs',result)
     def test_inverted_original_dates_are_held_or_marked_as_registration_only(self):
         n=notice();n['source_provenance'].update(claimed_official_date='2026-10-01',application_deadline='2026-09-28',association_registered_at='2026-09-01')
         bad=update_shared_catalog({}, {'notices':[n]}, '2026-10-13')
