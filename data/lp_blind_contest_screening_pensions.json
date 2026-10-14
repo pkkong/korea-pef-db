@@ -19,7 +19,7 @@
       "institution_id": "geps", "name": "공무원연금공단", "category": "public_pension", "decision": "core_confirmed",
       "reason": "2024년 자체 공고가 국내 블라인드 PEF와 기관전용 사모집합투자기구를 명시한다.",
       "evidence": [{"url": "https://www.geps.or.kr/notiCommunication_notice_center/34171", "title": "2024년 공무원연금공단 국내 사모대체 블라인드펀드(PEF) 위탁운용사 선정", "date": "2024-05-21", "official": true, "blind_explicit": true, "pe_explicit": true, "quote": "투자 대상 : 국내 블라인드 사모펀드(PEF)"}],
-      "official_listing_url": "https://www.geps.or.kr/mgtNotice_financialAsset_financialCondition_tradingInstitution_selectionCmc", "issuer_name": "공무원연금공단", "collection_hint": "자체 공지와 금융자산 위탁운용사 선정 게시판을 함께 확인"
+      "official_listing_url": "https://www.geps.or.kr/notiCommunication_notice_center", "issuer_name": "공무원연금공단", "collection_hint": "자체 공지와 금융자산 위탁운용사 선정 게시판을 함께 확인"
     },
     {
       "institution_id": "mmaa", "name": "군인공제회", "category": "mutual_aid", "decision": "mixed_pe_confirmed",
@@ -37,7 +37,7 @@
       "institution_id": "sema", "name": "과학기술인공제회", "category": "mutual_aid", "decision": "mixed_pe_confirmed",
       "reason": "2026년 기관 명의 PE·VC 블라인드 공고를 KVCA가 원문 PDF와 함께 게시했다. PE 2,700억원과 VC 1,900억원을 분리한다.",
       "evidence": [{"url": "https://www.kvca.or.kr/Program/invest/listbody.html?a_cd=8&a_gb=board&a_item=0&key=&keyfield=&page=1&po_no=896&sm=2_2_2", "title": "[과학기술인공제회] 2026년 국내 PE·VC 블라인드 펀드 선정 공고", "date": "2026-08-14", "official": false, "blind_explicit": true, "pe_explicit": true, "quote": "PE 부문 : 2,700억원 / VC 부문 : 1,900억원"}],
-      "official_listing_url": "https://www.sema.or.kr/sema/bbs/B0000024/list.do?menuNo=200018", "issuer_name": "과학기술인공제회", "collection_hint": "발행기관 원문 PDF 첨부를 우선 저장하고 PE/VC 분리"
+      "official_listing_url": "https://www.sema.or.kr/sema/bbs/B0000022/list.do?menuNo=200017&optn1=S", "issuer_name": "과학기술인공제회", "collection_hint": "발행기관 원문 PDF 첨부를 우선 저장하고 PE/VC 분리"
     },
     {
       "institution_id": "cwma", "name": "건설근로자공제회", "category": "mutual_aid", "decision": "needs_confirmation",

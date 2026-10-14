@@ -231,10 +231,19 @@ def extract_shared_terms(notice, checked_at):
         schedules=facts['schedule_'+key]
         # Literal stage captions can vary while their planned period agrees.
         periods=[{k:v for k,v in s.items() if k not in ('original_label','label')} for s in schedules]
+        # '9월' and '9월 중' both mean during September. Keep the
+        # explicit source wording, without interpreting '중' as mid-month.
+        for coarse in list(periods):
+            if coarse.get('precision')=='month':
+                equivalents=[p for p in periods if p.get('precision')=='month_period'
+                    and p.get('date')==coarse['date'] and p.get('stage')==coarse['stage']
+                    and p.get('status')==coarse['status']
+                    and re.fullmatch(r'\d+월\s*중',p.get('date_label',''))]
+                if equivalents:periods.remove(coarse)
         period=_one(periods,'심사 예정 일정')
         if period:
             if period['date']<announcement[:7]:raise ValueError('심사 일정이 원공고보다 빠름')
-            result['schedule_stages'].append(schedules[0])
+            result['schedule_stages'].append(next(s for s in schedules if {k:v for k,v in s.items() if k not in ('original_label','label')}==period))
     result['missing_fields'] = [field for field in ('commitment_amount_krw', 'manager_count', 'deadline', 'primary_investment') if field not in result]
     return result
 

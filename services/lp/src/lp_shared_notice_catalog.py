@@ -14,12 +14,12 @@ from urllib.parse import urlparse
 try:
     from .collect_shared_lp_notices import classify_scope, match_issuer, load_aliases, source_id
     from .lp_notice_triage import program_key, notice_stage
-    from .collect_lp_original_notices import validate_original
+    from .collect_lp_original_notices import validate_original, original_body_hash
     from .lp_shared_notice_terms import shared_terms
 except ImportError:
     from collect_shared_lp_notices import classify_scope, match_issuer, load_aliases, source_id
     from lp_notice_triage import program_key, notice_stage
-    from collect_lp_original_notices import validate_original
+    from collect_lp_original_notices import validate_original, original_body_hash
     from lp_shared_notice_terms import shared_terms
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -36,6 +36,15 @@ def update_shared_catalog(current, incoming, checked_at):
     names = {r['institution_id']: r['name'] for p in (ROOT/'data').glob('lp_blind_contest_screening_*.json')
              for r in json.loads(p.read_text()).get('institutions', [])}
     retained = {n['url']: copy.deepcopy(n) for n in current.get('shared_notices', [])}
+    # Only trusted previously published evidence can migrate the old raw-HTML
+    # digest. Newly collected evidence must pass the semantic hash contract.
+    for retained_notice in retained.values():
+        for original in retained_notice.get('original_notices', []):
+            if (not original.get('hash_kind') and original.get('discovery_provenance', {}).get('kind')!='existing_official_collection'
+                    and re.fullmatch(r'[0-9a-f]{64}',original.get('sha256',''))
+                    and all(isinstance(original.get(field),str) for field in ('title','body'))):
+                original['sha256']=original_body_hash(original)
+                original['hash_kind']='semantic_v1'
     holds = copy.deepcopy((incoming or {}).get('holds', []))
     for raw in (incoming or {}).get('notices', []):
         try:
@@ -113,8 +122,13 @@ def update_shared_catalog(current, incoming, checked_at):
                            'recruitment_url': n['url'] if notice_stage(n['title']) == '모집 공고' else None,
                            'source_channel': n['source_channel']})
     extracted,term_holds=shared_terms([n for n in retained.values() if n['source_scope'] in ('pe_blind','mixed_pe_blind')],checked_at)
+    coverage=copy.deepcopy((incoming or {}).get('coverage',current.get('shared_collection_coverage',{})))
+    eligible=[n for n in retained.values() if n['source_scope'] not in ('outside','vc_only')]
+    coverage['original_linkage']={'eligible_notices':len(eligible),
+        'linked':sum(bool(n.get('original_notices')) for n in eligible),
+        'unlinked':sum(not n.get('original_notices') for n in eligible)}
     return {'shared_notices': list(retained.values()), 'shared_discovery_candidates': candidates,
             'shared_offering_terms':extracted, 'shared_term_holds':term_holds,
             'shared_unmatched_notices': copy.deepcopy((incoming or {}).get('unmatched_notices', current.get('shared_unmatched_notices', []))),
             'shared_collection_holds': holds,
-            'shared_collection_coverage': copy.deepcopy((incoming or {}).get('coverage', current.get('shared_collection_coverage', {})))}
+            'shared_collection_coverage':coverage}

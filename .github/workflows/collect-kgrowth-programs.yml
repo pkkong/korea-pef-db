@@ -15,7 +15,7 @@ concurrency:
 jobs:
   collect-shared:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -24,11 +24,13 @@ jobs:
       - name: Install official attachment readers
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
       - name: Test shared official-board discovery
-        run: python3 -m unittest services.lp.tests.test_collect_shared_lp_notices services.lp.tests.test_collect_lp_original_notices services.lp.tests.test_lp_shared_notice_terms services.lp.tests.test_lp_shared_notice_catalog services.lp.tests.test_lp_contest_screening
+        run: python3 -m unittest services.lp.tests.test_collect_shared_lp_notices services.lp.tests.test_collect_lp_original_notices services.lp.tests.test_discover_lp_original_boards services.lp.tests.test_lp_shared_notice_terms services.lp.tests.test_lp_shared_notice_catalog services.lp.tests.test_lp_contest_screening
       - name: Discover institution notices on association boards
         run: python3 services/lp/src/collect_shared_lp_notices.py --pages 3 --output /tmp/lp-shared-collection.json
       - name: Follow observed institution original notice links
         run: python3 services/lp/src/collect_lp_original_notices.py --input /tmp/lp-shared-collection.json --output /tmp/lp-shared-collection.json
+      - name: Discover matching originals on official institution boards
+        run: python3 services/lp/src/discover_lp_original_boards.py --input /tmp/lp-shared-collection.json --output /tmp/lp-shared-collection.json --pages 2
       - name: Pass association evidence to publisher
         if: always()
         uses: actions/upload-artifact@v4
@@ -163,9 +165,9 @@ jobs:
           if not path.exists():
               raise SystemExit('Association source evidence artifact is missing; previous archive retained')
           shared=json.loads(path.read_text())
-          errors=[h for h in shared.get('holds', []) if h.get('stage') in ('listing','detail')]
+          errors=[h for h in shared.get('holds', []) if h.get('stage') in ('listing','detail','original_board')]
           if errors:
-              raise SystemExit(f'Association listing/detail collection failed: {errors}')
+              raise SystemExit(f'Official board listing/detail collection failed: {errors}')
           PY
       - name: Keep collection report
         if: always()

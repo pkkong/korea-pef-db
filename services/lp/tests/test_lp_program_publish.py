@@ -11,6 +11,14 @@ sys.path.insert(0,str(SRC))
 from publish_lp_programs import prepare, document_hash, clean_database_text
 
 class PublishContracts(unittest.TestCase):
+    def test_nested_original_proof_refresh_is_not_a_content_change(self):
+        old={'body':'same','original_notices':[{'body':'same original','checked_at':'before',
+             'discovery_provenance':{'listing_html':'old counter','listing_sha256':'first'}}]}
+        refreshed=copy.deepcopy(old)
+        refreshed['original_notices'][0].update(checked_at='after',discovery_provenance={'listing_html':'new counter','listing_sha256':'next'})
+        self.assertEqual(document_hash(old),document_hash(refreshed))
+        refreshed['original_notices'][0]['body']='changed amount'
+        self.assertNotEqual(document_hash(old),document_hash(refreshed))
     def test_database_text_preserves_amount_boundaries_and_literal_escapes(self):
         raw = {'text': ['100\x00200억원\nPE\t모집', r'\u0000'], 'hash': 'original', 'count': 0}
         value = clean_database_text(raw)

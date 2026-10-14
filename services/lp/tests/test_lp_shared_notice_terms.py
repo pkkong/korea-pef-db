@@ -1,5 +1,6 @@
 import copy
 import unittest
+from services.lp.src.collect_lp_original_notices import original_body_hash
 
 from services.lp.src.lp_shared_notice_terms import extract_shared_terms
 
@@ -63,6 +64,7 @@ class SharedTermsTests(unittest.TestCase):
                                'body':body,'sha256':'b'*64,'checked_at':'2026-10-14T08:00:00+09:00',
                                'matched_republication_url':n['url'],'attachments':[],
                                'attachment_hashes':{},'attachment_texts':{}}]
+        n['original_notices'][0].update(hash_kind='semantic_v1',sha256=original_body_hash(n['original_notices'][0]))
         result=extract_shared_terms(n,STAMP)
         self.assertEqual(result['commitment_amount_krw'],70_000_000_000)
         self.assertEqual(result['manager_count'],5)
@@ -72,6 +74,17 @@ class SharedTermsTests(unittest.TestCase):
         self.assertEqual(result['schedule_stages'][-1]['end_date'],'2026-10')
         self.assertEqual(result['extraction_evidence']['pe_total'][0]['source_url'],url)
         n['original_notices'][0]['title']=n['title'].replace('26년','25년')
+        with self.assertRaises(ValueError):extract_shared_terms(n,STAMP)
+
+    def test_month_and_during_same_month_agree_but_different_month_does_not(self):
+        n=notice('출자규모: 총 300억원 추진 일정 최종 선정:2026.9월')
+        url='https://www.kofia.or.kr/brd/m_212/down.do?seq=987654'
+        n['attachment_hashes']={url:'c'*64}
+        n['attachment_texts']={url:'추진 일정 최종 선정:2026.9월 중'}
+        result=extract_shared_terms(n,STAMP)
+        self.assertEqual(result['schedule_stages'][-1]['date_label'],'9월 중')
+        self.assertEqual(result['schedule_stages'][-1]['status'],'planned')
+        n['attachment_texts'][url]='추진 일정 최종 선정:2026.10월 중'
         with self.assertRaises(ValueError):extract_shared_terms(n,STAMP)
 
     def test_conflicting_deadlines_or_amounts_are_held(self):

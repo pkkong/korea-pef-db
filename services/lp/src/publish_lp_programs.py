@@ -18,6 +18,7 @@ from lp_notice_terms import project_discovered
 from lp_joint_terms import discovered_joint_terms
 from kgrowth_notice_terms import discovery as discover_growth_terms
 from lp_shared_notice_catalog import update_shared_catalog
+from discover_lp_original_boards import reuse_native_originals
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -40,7 +41,14 @@ def clean_database_text(value):
 
 
 def document_hash(document):
-    content = {key: value for key, value in document.items() if key != 'checked_at'}
+    # Each run keeps the full retrieval proof, but a new observation timestamp
+    # or changed listing snapshot is not a changed notice body/attachment.
+    def durable(value):
+        if isinstance(value,dict):
+            return {key:durable(item) for key,item in value.items() if key not in ('checked_at','discovery_provenance')}
+        if isinstance(value,list):return [durable(item) for item in value]
+        return value
+    content = durable(document)
     return hashlib.sha256(json.dumps(content, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
@@ -169,7 +177,10 @@ def prepare(current, report):
             existing[program['id']] = program
     data['programs'] = list(existing.values())
     data['program_holds'] = holds + priority_holds + automatic_holds + joint_holds
-    data.update(update_shared_catalog(current, report.get('shared_collection'), report['checked_at']))
+    shared=report.get('shared_collection')
+    if shared is not None:
+        shared=reuse_native_originals(shared,growth_notices+official_notices,report['checked_at'])
+    data.update(update_shared_catalog(current, shared, report['checked_at']))
     seen_urls = {n['url'] for n in data['discovery_candidates']}
     data['discovery_candidates'].extend(n for n in data['shared_discovery_candidates'] if n['url'] not in seen_urls)
     apply_decisions(data, report['notices'], current.get('review_decisions', []))

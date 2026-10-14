@@ -1,5 +1,6 @@
 import copy
 import unittest
+from services.lp.src.collect_lp_original_notices import original_body_hash
 
 from services.lp.src.lp_shared_notice_catalog import update_shared_catalog
 
@@ -50,6 +51,29 @@ class SharedArchiveTests(unittest.TestCase):
                 result=update_shared_catalog(first, {'notices':[{**n,**change}]}, '2026-10-13')
                 self.assertEqual(first['shared_notices'],result['shared_notices'])
                 self.assertTrue(result['shared_collection_holds'])
+
+    def test_trusted_old_original_migrates_and_tampered_incoming_keeps_last_good(self):
+        n=notice();n.update(institution_id='mmaa',title='2026년 군인공제회 국내 PE 블라인드 선정 공고',body='군인공제회 국내 PE 블라인드 모집')
+        n['source_provenance']['reported_issuer']='군인공제회'
+        url='https://www.mmaa.or.kr/web/contents/notice.do?schM=view&id=987654'
+        n['source_provenance']['original_links']=[{'url':url}]
+        original={'institution_id':'mmaa','url':url,'title':n['title'],'body':n['body'],'date':n['date'],
+                  'checked_at':'2026-10-14T01:00:00+00:00','sha256':'b'*64,'matched_republication_url':n['url'],
+                  'attachments':[],'attachment_hashes':{},'attachment_texts':{}}
+        n['original_notices']=[original]
+        current={'shared_notices':[n]}
+        first=update_shared_catalog(current,{'notices':[]},'2026-10-14T02:00:00+00:00')
+        kept=first['shared_notices'][0]['original_notices'][0]
+        self.assertEqual(kept['sha256'],original_body_hash(kept))
+        self.assertEqual(kept['hash_kind'],'semantic_v1')
+        incoming=copy.deepcopy(first['shared_notices'][0])
+        incoming['original_notices'][0]['body']+=' 출자규모 999억원'
+        second=update_shared_catalog(first,{'notices':[incoming]},'2026-10-14T02:00:00+00:00')
+        self.assertEqual(second['shared_notices'][0]['original_notices'],[kept])
+        self.assertTrue(second['shared_collection_holds'])
+        # An unmarked incoming old-style digest cannot claim the migration path.
+        untrusted=update_shared_catalog({}, {'notices':[n]},'2026-10-14T02:00:00+00:00')
+        self.assertFalse(untrusted['shared_notices'][0]['original_notices'])
 
     def test_same_attachment_keeps_read_text_but_new_bytes_never_borrow_old(self):
         n=notice();url='https://www.kofia.or.kr/brd/m_212/down.do?seq=999123'

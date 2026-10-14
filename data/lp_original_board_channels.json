@@ -1,0 +1,10 @@
+{
+  "checked_at": "2026-10-14",
+  "policy": "Official board routes and search controls only; no selected notice identifiers.",
+  "channels": [
+    {"institution_id":"sema","listing_url":"https://www.sema.or.kr/sema/bbs/B0000022/list.do?menuNo=200017&optn1=S","adapter":"href","detail_path":"/sema/bbs/B0000022/view.do","search_params":{"searchCnd":"1","searchWrd":"블라인드"},"page_param":"pageIndex"},
+    {"institution_id":"kbiz","listing_url":"https://www.kbiz.or.kr/ko/contents/bbs/list.do?mnSeq=211","adapter":"kbiz","detail_path":"/ko/contents/bbs/view.do","search_params":{"schFld":"ttl","schTxt":"블라인드"},"page_param":"pg"},
+    {"institution_id":"kamco","listing_url":"https://www.kamco.or.kr/portal/bbs/list.do?mId=0701010000&ptIdx=380","adapter":"kamco","detail_path":"/portal/bbs/view.do","search_params":{"searchType":"0","searchTxt":"주력산업"},"page_param":"page"},
+    {"institution_id":"geps","listing_url":"https://www.geps.or.kr/notiCommunication_notice_center","adapter":"href","detail_path":"/notiCommunication_notice_center/","search_params":{"srchKey":"sj","srchText":"위탁운용사"},"page_param":"curPage"}
+  ]
+}

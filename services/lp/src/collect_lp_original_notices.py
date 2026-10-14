@@ -78,11 +78,22 @@ def classes(node):
     return set(node.attrs.get('class','').split())
 
 
+def original_text(node):
+    if node.tag in {'script','style'}:return ''
+    if node.tag=='img':
+        alt=node.attrs.get('alt','')
+        return alt if len(alt)>=30 else ''
+    return ' '.join(original_text(child) if isinstance(child,Node) else child for child in node.children)
+
+
 def parse_original(html,url):
     if '</html>' not in html.lower():raise ValueError('incomplete original HTML')
     root=Document(html).root
     title_nodes=[n for n in root.nodes() if classes(n)&{'board_tit','view_tit','view-title','subject','bbs_tit','title_view'}]
     title=next((n.clean() for n in title_nodes if n.clean()),None)
+    if not title:
+        subject=next((n for n in root.nodes() if 'subject-wrap' in classes(n)),None)
+        if subject:title=next((n.clean() for n in subject.nodes('strong')),None)
     # Labelled metadata is valid only in the notice detail, not page navigation.
     date_value=None
     for row in root.nodes('tr'):
@@ -99,9 +110,12 @@ def parse_original(html,url):
                 if re.match(r'^(등록일|작성일|게시일|공고일)\s*[:：]?',value):
                     date_value=valid_date(value)
                     if date_value:break
-    bodies=[n for n in root.nodes() if n.attrs.get('id') in {'write','bbsCn','boardContent','boardContents'} or classes(n)&{'b_content','view_cont','view_con','board_view_con','bbs_view_cont','board-view-content'}]
+    bodies=[n for n in root.nodes() if n.attrs.get('id') in {'write','bbsCn','boardContent','boardContents'} or classes(n)&{'b_content','view_cont','view_con','board_view_con','bbs_view_cont','board-view-content','td_cont','detail-body'}]
+    if not bodies:
+        board=next((n for n in root.nodes() if 'board-view-table' in classes(n)),None)
+        if board:bodies=list(board.nodes('tbody'))
     if not title or not bodies:raise ValueError('recognized original detail title/body not found')
-    body=max((n.clean() for n in bodies),key=len).replace('\x00',' ')
+    body=re.sub(r'\s+',' ',max((original_text(n) for n in bodies),key=len)).replace('\x00',' ').strip()
     if len(body)<30:raise ValueError('original notice body is empty or too short')
     attachments=[]
     for a in root.nodes('a'):
@@ -109,6 +123,12 @@ def parse_original(html,url):
         if href and re.search(r'\.(pdf|hwp|hwpx)$',name,re.I) and not re.search(r'양식|서식|제출서류|제안서',name):
             if not href.lower().startswith(('javascript:','#')):
                 attachments.append({'name':name,'url':urljoin(url,href)})
+    for li in root.nodes('li'):
+        label=next((n.clean() for n in li.nodes('em')), '')
+        if re.search(r'\.(?:pdf|hwpx?)(?:\(|$)',label,re.I) and not re.search(r'양식|서식|제출서류|제안서',label):
+            for a in li.nodes('a'):
+                href=a.attrs.get('href','')
+                if 'download' in href.lower():attachments.append({'name':re.sub(r'\([^)]*KB\)$','',label).strip(),'url':urljoin(url,href)})
     dynamic=any(n.attrs.get('data-ax5uploader') for n in root.nodes())
     return {'title':title.replace('\x00',' '),'date':date_value,'body':body,'attachments':attachments,'dynamic_attachments':dynamic}
 
@@ -125,25 +145,43 @@ def title_key(title):
     return re.sub(r'[^0-9a-z가-힣]','',title.lower())
 
 
-def validate_identity(notice,original,aliases):
+def validate_identity(notice,original,aliases,*,candidate_only=False):
     left,right=notice['title'],original['title']
     source_years,original_years=years(left),years(right)
-    if not source_years or source_years!=original_years:
+    if not source_years and notice.get('date'):source_years={notice['date'][:4]}
+    if not original_years and original.get('date'):original_years={original['date'][:4]}
+    if (source_years and original_years and source_years!=original_years) or (not candidate_only and (not source_years or not original_years)):
         raise ValueError('original notice year is missing or differs from republication')
     # Distinguish repeated annual leagues and stages rather than only their year.
-    for pattern in (r'\d+\s*(?:차|호)',r'상반기|하반기',r'최종|접수현황|선정결과|서류심사|재공고|변경|정정|수정|취소'):
+    for pattern in (r'\d+\s*(?:차|호)',r'상반기|하반기',r'최종|접수현황|선정결과|서류심사|재공고|변경|정정|수정|취소',r'일반매칭|자율제안|대형|중형|소형|루키|국민참여형|간접투자분야|프로젝트'):
         if set(re.findall(pattern,left))!=set(re.findall(pattern,right)):
             raise ValueError('original notice business round or stage differs')
-    a,b=title_key(left),title_key(right)
+    institution=notice['institution_id']
+    names=list(aliases.get(institution,[]))
+    if institution=='kamco':names.append('캠코')
+    def identity_key(value):
+        for name in names:value=value.replace(name,'')
+        value=re.sub(r'^\s*[【\[](?:사업공고|선정공고|공고|입찰공고)[】\]]','',value)
+        value=re.sub(r"[’'‘]?(?:20)?\d{2}(?:년도|년)",'',value)
+        return title_key(value)
+    a,b=identity_key(left),identity_key(right)
+    if min(len(a),len(b))<10 or not re.search(r'펀드|pe|vc|사모',a):
+        raise ValueError('Original business title is not distinctive enough')
+    source_scope=notice.get('source_scope')
+    if source_scope in ('mixed_pe_blind','pe_blind') and re.search(r'(?<![A-Za-z])VC(?![A-Za-z])',right,re.I) and not re.search(r'(?<![A-Za-z])PEF?(?![A-Za-z])',right,re.I):
+        raise ValueError('VC-only title differs from the PE offering')
     if SequenceMatcher(None,a,b).ratio()<0.82:
         raise ValueError('original title does not identify the same business')
-    institution=notice['institution_id']
-    names=aliases.get(institution,[])
-    if not names or not any(name in (right+' '+original['body'][:500]) for name in names):
+    native=original.get('discovery_provenance',{}).get('kind')=='existing_official_collection'
+    if not candidate_only and not native and (not names or not any(name in (right+' '+original['body'][:500]) for name in names)):
         raise ValueError('original content does not identify the expected institution')
     other={i for i,values in aliases.items() if i!=institution and any(n in right for n in values)}
     if other and not any(n in right for n in names):
         raise ValueError('original title identifies another institution')
+
+
+def original_body_hash(original):
+    return hashlib.sha256(json.dumps([original['title'], original.get('date'), original['body']], ensure_ascii=False).encode()).hexdigest()
 
 
 def validate_original(original, association_notice, checked_at, *, channels=None, aliases=None):
@@ -156,7 +194,16 @@ def validate_original(original, association_notice, checked_at, *, channels=None
     url=original.get('url','')
     validate_url(url,channels.get(institution,set()))
     observed={link.get('url') for link in association_notice.get('source_provenance',{}).get('original_links',[]) if isinstance(link,dict)}
-    if url not in observed or original.get('matched_republication_url')!=association_notice.get('url'):
+    discovery=original.get('discovery_provenance',{})
+    if url not in observed or discovery.get('kind')=='existing_official_collection':
+        try:
+            from .discover_lp_original_boards import validate_listing_provenance, validate_native_provenance
+        except ImportError:
+            from discover_lp_original_boards import validate_listing_provenance, validate_native_provenance
+        if discovery.get('kind')=='official_board':validate_listing_provenance(original,institution)
+        elif discovery.get('kind')=='existing_official_collection':validate_native_provenance(original,institution)
+        else:raise ValueError('original URL is not an observed association link')
+    if original.get('matched_republication_url')!=association_notice.get('url'):
         raise ValueError('original URL is not an observed association link')
     for field in ('title','body','checked_at'):
         if not isinstance(original.get(field),str) or not original[field].strip() or '\x00' in original[field]:
@@ -175,6 +222,9 @@ def validate_original(original, association_notice, checked_at, *, channels=None
         if published>observed_at.date().isoformat():raise ValueError('original publication date is in the future')
     if not isinstance(original.get('sha256'),str) or not re.fullmatch('[0-9a-f]{64}',original['sha256']):
         raise ValueError('invalid original body hash')
+    if discovery.get('kind')!='existing_official_collection':
+        if original.get('hash_kind')!='semantic_v1' or original_body_hash(original)!=original['sha256']:
+            raise ValueError('original body hash does not match title/date/body')
     validate_identity(association_notice,original,aliases)
     attachments=original.get('attachments',[])
     if not isinstance(attachments,list):raise ValueError('invalid original attachments')
@@ -251,7 +301,8 @@ def enrich(collection,fetch=fetch_bytes,*,channels=None,aliases=None,checked_at=
                     except Exception as exc:hold(n,str(exc),attachment['url'],phase='attachment')
                 if original['dynamic_attachments'] and not attachments:
                     hold(n,'original attachment links require unsupported dynamic listing',url,phase='attachment_discovery')
-                record={'institution_id':n['institution_id'],'url':url,'title':original['title'],'date':original['date'],'body':original['body'],'sha256':hashlib.sha256(raw).hexdigest(),'attachment_hashes':hashes,'attachment_texts':texts,'attachments':attachments,'matched_republication_url':n['url'],'checked_at':checked_at,'review_only':True}
+                digest=hashlib.sha256(json.dumps([original['title'],original['date'],original['body']],ensure_ascii=False).encode()).hexdigest()
+                record={'institution_id':n['institution_id'],'url':url,'title':original['title'],'date':original['date'],'body':original['body'],'sha256':digest,'hash_kind':'semantic_v1','attachment_hashes':hashes,'attachment_texts':texts,'attachments':attachments,'matched_republication_url':n['url'],'checked_at':checked_at,'review_only':True}
                 record=validate_original(record,n,checked_at,channels=channels,aliases=aliases)
                 # Upsert only a successful observation; failed refreshes preserve prior evidence.
                 originals[:]=[old for old in originals if old.get('url')!=url]+[record]

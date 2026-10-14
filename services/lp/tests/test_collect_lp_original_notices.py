@@ -79,7 +79,7 @@ class OriginalTracingTests(unittest.TestCase):
 
     def test_validator_rejects_tampered_hash_link_date_attachment(self):
         original=run()['notices'][0]['original_notices'][0]
-        for key,value in [('sha256','123'),('url',URL.replace('987654','111')),('date','2026-02-30'),('attachment_hashes',{'https://evil.example/x':'a'*64}),('institution_id','ktcu')]:
+        for key,value in [('sha256','123'),('sha256','b'*64),('body','군인공제회 국내 PE·VC 블라인드 펀드 모집 금액 999억원'),('hash_kind',None),('url',URL.replace('987654','111')),('date','2026-02-30'),('attachment_hashes',{'https://evil.example/x':'a'*64}),('institution_id','ktcu')]:
             altered=copy.deepcopy(original);altered[key]=value
             with self.subTest(key=key), self.assertRaises(ValueError):
                 validate_original(altered,notice(),STAMP,channels=CHANNELS,aliases=ALIASES)
