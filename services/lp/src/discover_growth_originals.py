@@ -73,7 +73,9 @@ def stage(title):
 
 def parse_detail(raw,url):
     # Match the actual view_info / veiw_contents DOM used by parse_notice.
-    root=Document(decode_html(raw)).root
+    html=decode_html(raw)
+    if '</html>' not in html.lower():raise ValueError('incomplete Growth Finance detail HTML')
+    root=Document(html).root
     info=next((n for n in root.nodes() if 'view_info' in n.attrs.get('class','').split()),None)
     body=next((n for n in root.nodes() if 'veiw_contents' in n.attrs.get('class','').split()),None)
     if info is None or body is None:raise ValueError('recognized Growth Finance detail DOM missing')

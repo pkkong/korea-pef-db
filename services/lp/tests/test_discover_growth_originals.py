@@ -45,7 +45,7 @@ class GrowthSearchTests(unittest.TestCase):
                 self.assertTrue(result['holds'])
 
     def test_detail_year_and_date_are_not_invented(self):
-        for raw in [detail(title=TITLE.replace('2026','2025')),detail(date='게시일 없음')]:
+        for raw in [detail(title=TITLE.replace('2026','2025')),detail(date='게시일 없음'),detail().replace(b'</html>',b'')]:
             result=self.run_fixture(raw=raw)
             self.assertNotIn('original_notices',result['notices'][0])
 
