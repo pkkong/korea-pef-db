@@ -83,6 +83,16 @@ def update_shared_catalog(current, incoming, checked_at):
             for original in (old or {}).get('original_notices', [])+n.get('original_notices', []):
                 try:
                     validated=validate_original(original,n,checked_at)
+                    previous=originals.get(validated['url'])
+                    missing=[url for url in (previous or {}).get('attachment_texts',{}) if not validated.get('attachment_texts',{}).get(url)]
+                    if missing:
+                        # Preserve the complete verified receipt, rather than
+                        # inserting cached text into a different source receipt.
+                        same_files=all(previous['attachment_hashes'][url]==validated.get('attachment_hashes',{}).get(url) for url in missing)
+                        if previous['sha256']==validated['sha256'] and same_files:
+                            validated=copy.deepcopy(previous)
+                        else:
+                            raise ValueError('Original attachment changed or could not be verified; previous evidence retained')
                     originals[validated['url']]=validated
                 except (ValueError,KeyError,TypeError) as exc:
                     holds.append({'stage':'original_validation','url':original.get('url'),'error':str(exc)})

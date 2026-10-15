@@ -96,6 +96,15 @@ def parse_original(html,url):
         if subject:title=next((n.clean() for n in subject.nodes('strong')),None)
     # Labelled metadata is valid only in the notice detail, not page navigation.
     date_value=None
+    # Ministry notices use a definition-list header, not table cells.
+    board=next((n for n in root.nodes() if 'board_view_wrap' in classes(n)),None)
+    if board:
+        for dl in board.nodes('dl'):
+            cells=[n for n in dl.children if isinstance(n,Node) and n.tag in {'dt','dd'}]
+            for i,c in enumerate(cells[:-1]):
+                if c.tag=='dt' and cells[i+1].tag=='dd':
+                    if c.clean() in {'제목','공고명'} and not title:title=cells[i+1].clean()
+                    if c.clean() in {'등록일','작성일','게시일','공고일'}:date_value=valid_date(cells[i+1].clean())
     for row in root.nodes('tr'):
         cells=[c for c in row.children if isinstance(c,Node) and c.tag in {'th','td'}]
         for i,c in enumerate(cells[:-1]):
@@ -172,7 +181,7 @@ def validate_identity(notice,original,aliases,*,candidate_only=False):
         raise ValueError('VC-only title differs from the PE offering')
     if SequenceMatcher(None,a,b).ratio()<0.82:
         raise ValueError('original title does not identify the same business')
-    native=original.get('discovery_provenance',{}).get('kind')=='existing_official_collection'
+    native=original.get('discovery_provenance',{}).get('kind') in {'existing_official_collection','kgrowth_title_search'}
     if not candidate_only and not native and (not names or not any(name in (right+' '+original['body'][:500]) for name in names)):
         raise ValueError('original content does not identify the expected institution')
     other={i for i,values in aliases.items() if i!=institution and any(n in right for n in values)}
@@ -195,13 +204,18 @@ def validate_original(original, association_notice, checked_at, *, channels=None
     validate_url(url,channels.get(institution,set()))
     observed={link.get('url') for link in association_notice.get('source_provenance',{}).get('original_links',[]) if isinstance(link,dict)}
     discovery=original.get('discovery_provenance',{})
-    if url not in observed or discovery.get('kind')=='existing_official_collection':
+    if url not in observed or discovery.get('kind') in {'existing_official_collection','kgrowth_title_search'}:
         try:
             from .discover_lp_original_boards import validate_listing_provenance, validate_native_provenance
         except ImportError:
             from discover_lp_original_boards import validate_listing_provenance, validate_native_provenance
         if discovery.get('kind')=='official_board':validate_listing_provenance(original,institution)
         elif discovery.get('kind')=='existing_official_collection':validate_native_provenance(original,institution)
+        elif discovery.get('kind')=='kgrowth_title_search':
+            try:from .discover_growth_originals import validate_search_provenance
+            except ImportError:from discover_growth_originals import validate_search_provenance
+            if institution!='kgrowth':raise ValueError('Growth search proof belongs to another institution')
+            validate_search_provenance(original)
         else:raise ValueError('original URL is not an observed association link')
     if original.get('matched_republication_url')!=association_notice.get('url'):
         raise ValueError('original URL is not an observed association link')

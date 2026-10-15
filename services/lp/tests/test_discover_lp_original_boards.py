@@ -75,7 +75,42 @@ class OfficialBoardTests(unittest.TestCase):
         def failure(*args):raise TimeoutError('source outage')
         result=discover(old,fetch=failure,pages=1)
         self.assertEqual(old['notices'],result['notices'])
-        self.assertEqual(len([h for h in result['holds'] if h['stage']=='original_board']),4)
+        self.assertEqual(len([h for h in result['holds'] if h['stage']=='original_board']),len(channels()))
+
+    def test_ministry_shared_board_keeps_fund_identities_separate(self):
+        html='<html><a href="/info/astmgmt/employ/imchaeBbsView.do?bbs_seq=999000">2026년 고용보험기금 대체투자상품(PEF, VC) 선정 공고</a><a href="/info/astmgmt/employ/imchaeBbsView.do?bbs_seq=999001">2026년 산재보험기금 대체투자상품(PEF, VC) 선정 공고</a></html>'
+        for institution,fund,identifier in [('moel_eif','고용보험기금','999000'),('moel_iaci','산재보험기금','999001')]:
+            config=channels()[institution];rows=listing_links(html,page_url(config,1),config)
+            self.assertEqual(len(rows),1)
+            self.assertIn(fund,rows[0]['title']);self.assertIn(identifier,rows[0]['url'])
+            detail=f'<html><div class="board_view_wrap"><dl><dt>제목</dt><dd>{rows[0]["title"]}</dd></dl><dl><dt>게시일</dt><dd>2026-08-07</dd><dt>조회수</dt><dd>12345</dd></dl></div><div class="b_content">{fund} 국내 블라인드 펀드의 위탁운용사 모집과 선정 절차에 관하여 공고합니다.</div></html>'
+            original=parse_original(detail,rows[0]['url'])
+            self.assertEqual(original['date'],'2026-08-07')
+            self.assertEqual(original['title'],rows[0]['title'])
+            self.assertNotIn('조회수',original['body'])
+            other='산재보험기금' if institution=='moel_eif' else '고용보험기금'
+            with self.assertRaises(ValueError):validate_identity({'institution_id':institution,'title':rows[0]['title'],'date':'2026-08-07'},dict(original,title=original['title'].replace(fund,other)),load_aliases())
+
+    def test_ministry_listing_is_fetched_once_and_both_funds_are_linked(self):
+        configs={k:v for k,v in channels().items() if k.startswith('moel_')}
+        notices=[];rows=[];details={}
+        for institution,fund,identifier in [('moel_eif','고용보험기금','999000'),('moel_iaci','산재보험기금','999001')]:
+            title=f'2026년 {fund} 국내 PE 블라인드 펀드 선정 공고'
+            path=f'/info/astmgmt/employ/imchaeBbsView.do?bbs_seq={identifier}'
+            rows.append(f'<a href="{path}">{title}</a>')
+            notices.append({'source_id':identifier,'institution_id':institution,'title':title,'date':'2026-08-07','source_scope':'needs_confirmation','url':f'https://www.kofia.or.kr/brd/m_212/view.do?seq={identifier}'})
+            details['https://www.moel.go.kr'+path]=f'<html><div class="board_view_wrap"><dl><dt>제목</dt><dd>{title}</dd><dt>게시일</dt><dd>2026-08-07</dd></dl></div><div class="b_content">{fund} 국내 PE 블라인드 펀드 출자 모집과 선정 절차에 관한 공고입니다.</div></html>'.encode()
+        calls=[]
+        def fetch(url,referer=None):
+            calls.append(url)
+            return details[url] if 'BbsView' in url else ('<html>'+''.join(rows)+'</html>').encode()
+        source={'notices':notices,'holds':[],'coverage':{}}
+        with patch('services.lp.src.discover_lp_original_boards.channels',return_value=configs):
+            result=discover(source,fetch=fetch,pages=2,checked_at='2026-10-15T05:00:00+00:00')
+        self.assertEqual(len(calls),3)
+        self.assertFalse(result['holds'])
+        self.assertEqual([len(n['original_notices']) for n in result['notices']],[1,1])
+        self.assertNotIn('original_notices',source['notices'][0])
 
     def test_accessible_poster_alt_and_kbiz_file_labels_are_official_body_evidence(self):
         html='<html><table><tr><th>제목</th><td>2026년 국내 PE 펀드 공고</td></tr><tr><th>작성일</th><td>2026-08-14 09:00</td></tr></table><td class="td_cont"><img alt="과학기술인공제회 국내 블라인드 펀드 출자 모집 2,700억원을 공고합니다."></td></html>'

@@ -75,6 +75,30 @@ class SharedArchiveTests(unittest.TestCase):
         untrusted=update_shared_catalog({}, {'notices':[n]},'2026-10-14T02:00:00+00:00')
         self.assertFalse(untrusted['shared_notices'][0]['original_notices'])
 
+    def test_failed_original_attachment_never_erases_prior_verified_receipt(self):
+        n=notice();n.update(institution_id='mmaa',title='2026년 군인공제회 국내 PE 블라인드 선정 공고',body='군인공제회 국내 PE 블라인드 모집')
+        n['source_provenance']['reported_issuer']='군인공제회'
+        url='https://www.mmaa.or.kr/web/contents/notice.do?schM=view&id=987654';file='https://www.mmaa.or.kr/files/offer.pdf'
+        n['source_provenance']['original_links']=[{'url':url}]
+        original={'institution_id':'mmaa','url':url,'title':n['title'],'body':n['body'],'date':n['date'],
+                  'checked_at':'2026-10-15T01:00:00+00:00','matched_republication_url':n['url'],
+                  'attachments':[{'url':file,'name':'모집공고.pdf'}],
+                  'attachment_hashes':{file:'c'*64},'attachment_texts':{file:'출자규모: 총 450억원 선정 수:1개사'}}
+        original.update(hash_kind='semantic_v1',sha256=original_body_hash(original))
+        n['original_notices']=[original]
+        first=update_shared_catalog({}, {'notices':[n]}, '2026-10-15T02:00:00+00:00')
+        for hashes in ({file:'c'*64},{file:'d'*64},{}):
+            incoming=copy.deepcopy(n);incoming['original_notices'][0].update(attachment_hashes=hashes,attachment_texts={})
+            result=update_shared_catalog(first,{'notices':[incoming]},'2026-10-15T02:00:00+00:00')
+            self.assertEqual(result['shared_notices'][0]['original_notices'],[original])
+            self.assertEqual(result['shared_offering_terms'][n['url']]['commitment_amount_krw'],45_000_000_000)
+            if hashes!={file:'c'*64}:self.assertTrue(result['shared_collection_holds'])
+        incoming=copy.deepcopy(n);updated=incoming['original_notices'][0]
+        updated['body']+=' New confirmed source wording';updated.update(sha256=original_body_hash(updated),attachment_texts={})
+        result=update_shared_catalog(first,{'notices':[incoming]},'2026-10-15T02:00:00+00:00')
+        self.assertEqual(result['shared_notices'][0]['original_notices'],[original])
+        self.assertTrue(result['shared_collection_holds'])
+
     def test_same_attachment_keeps_read_text_but_new_bytes_never_borrow_old(self):
         n=notice();url='https://www.kofia.or.kr/brd/m_212/down.do?seq=999123'
         n.update(title='[신협중앙회] 국내 기업펀드 모집',body='원문 참조',

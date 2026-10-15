@@ -213,6 +213,10 @@ def main():
         if args.shared_collection:
             report['shared_collection'] = (json.loads(args.shared_collection.read_text()) if args.shared_collection.exists() else
                                           {'notices': [], 'holds': [{'stage': 'listing', 'error': '협회 수집 파일 없음; 이전 자료 유지'}]})
+        # Late original searches happen after the native collection report.
+        # Keep its timestamp and validate every source against publication time.
+        report['collection_checked_at'] = report['checked_at']
+        report['checked_at'] = datetime.now(timezone.utc).isoformat()
         report = clean_database_text(report)
         # One transaction and lock: evidence and public view always agree.
         conn.execute('SELECT pg_advisory_xact_lock(728160921)')

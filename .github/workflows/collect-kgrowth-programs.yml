@@ -24,7 +24,7 @@ jobs:
       - name: Install official attachment readers
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
       - name: Test shared official-board discovery
-        run: python3 -m unittest services.lp.tests.test_collect_shared_lp_notices services.lp.tests.test_collect_lp_original_notices services.lp.tests.test_discover_lp_original_boards services.lp.tests.test_lp_shared_notice_terms services.lp.tests.test_lp_shared_notice_catalog services.lp.tests.test_lp_contest_screening
+        run: python3 -m unittest services.lp.tests.test_collect_shared_lp_notices services.lp.tests.test_collect_lp_original_notices services.lp.tests.test_discover_lp_original_boards services.lp.tests.test_discover_growth_originals services.lp.tests.test_lp_shared_notice_terms services.lp.tests.test_lp_shared_notice_catalog services.lp.tests.test_lp_contest_screening
       - name: Discover institution notices on association boards
         run: python3 services/lp/src/collect_shared_lp_notices.py --pages 3 --output /tmp/lp-shared-collection.json
       - name: Follow observed institution original notice links
@@ -122,6 +122,11 @@ jobs:
         run: python3 services/lp/src/collect_kgrowth_programs.py --baseline /tmp/lp-baseline.json --output /tmp/kgrowth-collection.json
       - name: Collect Korea Post, KTCU, and KEXIM announcements
         run: python3 services/lp/src/collect_priority_lp_programs.py --koreapost-input /tmp/koreapost-collection.json --kexim-input /tmp/kexim-collection.json --output /tmp/lp-priority-collection.json
+      - name: Find earlier Growth recruitment originals through official search
+        run: |
+          if [ -f /tmp/lp-shared-collection.json ]; then
+            python3 services/lp/src/discover_growth_originals.py --input /tmp/lp-shared-collection.json --native-input /tmp/kgrowth-collection.json --output /tmp/lp-shared-collection.json
+          fi
       - name: Store evidence and publish verified pages
         run: |
           set -o pipefail
@@ -165,7 +170,7 @@ jobs:
           if not path.exists():
               raise SystemExit('Association source evidence artifact is missing; previous archive retained')
           shared=json.loads(path.read_text())
-          errors=[h for h in shared.get('holds', []) if h.get('stage') in ('listing','detail','original_board')]
+          errors=[h for h in shared.get('holds', []) if h.get('stage') in ('listing','detail','original_board') or (h.get('stage')=='growth_search' and h.get('phase') in ('listing','detail'))]
           if errors:
               raise SystemExit(f'Official board listing/detail collection failed: {errors}')
           PY

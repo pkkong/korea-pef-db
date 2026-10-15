@@ -46,7 +46,7 @@ def listing_links(html,url,config):
     links={}
     for node in root.nodes():
         title=node.clean()
-        if not title or len(title)>240:
+        if not title or len(title)>240 or (config.get('issuer_title_terms') and not any(name in title for name in config['issuer_title_terms'])):
             continue
         href=node.attrs.get('href','')
         call=node.attrs.get('onclick','')
@@ -118,7 +118,7 @@ def validate_native_provenance(original,institution):
 
 def reuse_native_originals(collection,official_notices,checked_at):
     result=copy.deepcopy(collection or {'notices':[],'holds':[],'coverage':{}})
-    aliases=load_aliases();allowed=load_channels();matched=0
+    aliases=load_aliases();allowed=load_channels()
     for n in result.get('notices',[]):
         if n.get('original_notices') or n.get('source_scope') in ('outside','vc_only') or n.get('institution_id') not in NATIVE:
             continue
@@ -139,17 +139,17 @@ def reuse_native_originals(collection,official_notices,checked_at):
             except (ValueError,KeyError,TypeError):
                 pass
         if len(options)==1:
-            n['original_notices']=options;matched+=1
+            n['original_notices']=options
         elif len(options)>1:
             result.setdefault('holds',[]).append({'stage':'original','url':n['url'],'error':'Multiple official originals match; preserve as unlinked'})
-    result.setdefault('coverage',{})['existing_originals']={'matched':matched}
+    result.setdefault('coverage',{})['existing_originals']={'matched':sum(any(o.get('discovery_provenance',{}).get('kind')=='existing_official_collection' for o in n.get('original_notices',[])) for n in result.get('notices',[]))}
     return result
 
 
 def discover(collection,fetch=fetch_bytes,pages=2,checked_at=None):
     if not 1<=pages<=3:raise ValueError('Official listing pages must be between 1 and 3')
     result=copy.deepcopy(collection);checked_at=checked_at or datetime.now(timezone.utc).isoformat()
-    aliases=load_aliases();allowed=load_channels();stats={};seen=[]
+    aliases=load_aliases();allowed=load_channels();stats={};seen=[];listing_cache={}
     for institution,config in channels().items():
         targets=[n for n in result.get('notices',[]) if n.get('institution_id')==institution and not n.get('original_notices') and n.get('source_scope') not in ('outside','vc_only')]
         stats[institution]={'pages':0,'discovered':0,'matched':0,'errors':0,'target_notices':len(targets)}
@@ -157,7 +157,8 @@ def discover(collection,fetch=fetch_bytes,pages=2,checked_at=None):
             if page>1 and all(n.get('original_notices') for n in targets):break
             url=page_url(config,page)
             try:
-                html=decode_html(fetch(url)).replace('\x00',' ')
+                if url not in listing_cache:listing_cache[url]=decode_html(fetch(url)).replace('\x00',' ')
+                html=listing_cache[url]
                 rows=listing_links(html,url,config)
                 stats[institution]['pages']+=1;stats[institution]['discovered']+=len(rows)
                 seen.extend({**row,'listing_url':url} for row in rows)

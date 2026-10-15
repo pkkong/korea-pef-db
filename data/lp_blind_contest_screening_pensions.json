@@ -61,7 +61,7 @@
       "institution_id": "moel_iaci", "name": "산재보험기금", "category": "public_fund_ocio", "decision": "mixed_pe_confirmed",
       "reason": "고용노동부가 2026년 산재기금 블라인드 PEF 공모를 확인하고 삼성자산운용을 주간운용사로 명시한다. 기금과 실제 공고 수행자를 분리해 표시해야 한다.",
       "evidence": [{"url": "https://www.moel.go.kr/info/astmgmt/employ/sanjaeBbsView.do?bbs_seq=20260700049", "title": "2026년 산재보험기금 대체투자상품(PEF, VC) 선정 공고", "date": "2026-07-01", "official": true, "blind_explicit": true, "pe_explicit": true, "quote": "산재보험기금 주간운용사인 삼성자산운용"}],
-      "official_listing_url": "https://www.moel.go.kr/info/astmgmt/employ/sanjaeBbsList.do", "issuer_name": "삼성자산운용(산재보험기금 주간운용사)", "collection_hint": "고용노동부 공고와 삼성자산운용 원문을 연결; PEF 1,800억원(3건)만 별도 PE 트랙"
+      "official_listing_url": "https://www.moel.go.kr/info/astmgmt/employ/imchaeBbsList.do", "issuer_name": "삼성자산운용(산재보험기금 주간운용사)", "collection_hint": "고용노동부 공고와 삼성자산운용 원문을 연결; PEF 1,800억원(3건)만 별도 PE 트랙"
     },
     {
       "institution_id": "moel_eif", "name": "고용보험기금", "category": "public_fund_ocio", "decision": "mixed_pe_confirmed",
