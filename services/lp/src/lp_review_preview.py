@@ -49,12 +49,16 @@ def render_review(data,report,previous):
             terms=data.get('discovery_terms', {}).get(first.get('program_key'))
             growth=data.get('kgrowth_offering_terms', {}).get(first.get('recruitment_url'))
             shared_terms=data.get('shared_offering_terms',{}).get(first['url'])
+            # Original evidence remains useful before financial terms can be
+            # extracted, including when the first group member is a native notice.
+            member_urls={item['url'] for item in members}
+            originals={o['url']:o for n in data.get('shared_notices',[]) if n['url'] in member_urls
+                       for o in n.get('original_notices',[])}
+            for original in originals.values():
+                body+=f'<p><a target="_blank" rel="noopener" href="{escape(original["url"],quote=True)}">기관 공고 원문 ↗</a>'
+                if original.get('date'):body+=f' · {escape(original["date"])}'
+                body+='</p>'
             if shared_terms:
-                source=next((n for n in data.get('shared_notices',[]) if n['url']==first['url']),None)
-                for original in (source or {}).get('original_notices',[]):
-                    body+=f'<p><a target="_blank" rel="noopener" href="{escape(original["url"],quote=True)}">기관 공고 원문 ↗</a>'
-                    if original.get('date'):body+=f' · {escape(original["date"])}'
-                    body+='</p>'
                 if shared_terms['schedule_stages']:
                     body+='<h4>진행 일정</h4><table class="shared-facts"><tbody>'
                     for stage in shared_terms['schedule_stages']:

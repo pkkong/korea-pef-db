@@ -42,6 +42,20 @@ class PreviewTests(unittest.TestCase):
   self.assertIn('program-ktcu-2026-blind-pef.html',html)
   self.assertIn('기존 사업 연결 후보',html)
   self.assertNotIn('선정 GP</th>',html)
+ def test_original_links_do_not_depend_on_terms_or_first_group_member(self):
+  native={'source_id':'1','institution_id':'kgrowth','title':'2026년 국내 블라인드 펀드 모집 공고',
+          'body':'공식 모집 본문','date':'2026-10-01','url':'https://www.kgrowth.or.kr/notice_view.asp?idx=1'}
+  association=dict(native,source_id='kvca:2',url='https://www.kvca.or.kr/Program/invest/listbody.html?po_no=2',date='2026-10-02')
+  original=dict(native)
+  association['original_notices']=[original]
+  members=[dict(n,program_key='same-business',stage='모집 공고',recruitment_url=n['url'],scope='unknown') for n in (native,association)]
+  data={'as_of':'2026-10-15','programs':[],'shared_notices':[dict(association,institution_name='한국성장금융')],
+        'discovery_candidates':members,'shared_offering_terms':{}}
+  html=render_review(data,{'notices':[native]},{})
+  self.assertEqual(html.count('기관 공고 원문 ↗'),1)
+  self.assertIn('기관 공고 원문 ↗</a> · 2026-10-01',html)
+  self.assertNotIn('모집 개요</h4>',html)
+  self.assertNotIn('program-kgrowth',html)
  def test_new_program_discovery_is_visible_without_public_program(self):
   url='https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=352'
   notice={'source_id':'0041:352','institution_id':'koreapost',
