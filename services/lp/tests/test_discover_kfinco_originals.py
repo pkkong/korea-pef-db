@@ -1,7 +1,10 @@
 import copy
 import json
 import unittest
-from services.lp.src.discover_kfinco_originals import discover, validate_api_provenance, digest, attachments, official, BASE, LIST_URL
+import ssl
+from types import SimpleNamespace
+from unittest.mock import patch
+from services.lp.src.discover_kfinco_originals import discover, validate_api_provenance, digest, attachments, official, native_tls_fetch, BASE, LIST_URL
 
 CODE='NT20991231010203'
 TITLE='2026년 전문건설공제조합 국내 사모투자 위탁운용사 선정 계획 공고'
@@ -23,6 +26,16 @@ class KfincoTests(unittest.TestCase):
             if '/api/pr/notice/detail/' in url:return raw or detail(rows[0])
             raise OSError('attachment outage')
         return discover({'notices':[source()]},fetch,NOW)
+
+    def test_native_tls_requires_certificate_and_hostname_verification(self):
+        context=ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        with patch.dict('sys.modules',{'truststore':SimpleNamespace(SSLContext=lambda protocol:context)}), patch('services.lp.src.discover_kfinco_originals.fetch_bytes',return_value=b'verified') as fetch:
+            self.assertEqual(native_tls_fetch(LIST_URL),b'verified')
+            self.assertEqual(fetch.call_args.kwargs['ssl_context'].verify_mode,ssl.CERT_REQUIRED)
+            self.assertTrue(fetch.call_args.kwargs['ssl_context'].check_hostname)
+            context.check_hostname=False
+            with self.assertRaises(ValueError):native_tls_fetch(LIST_URL)
+            self.assertEqual(fetch.call_count,1)
 
     def test_new_arbitrary_identifier_and_unchanged_title(self):
         out=self.fixture();o=out['notices'][0]['original_notices'][0]

@@ -74,8 +74,34 @@ jobs:
           name: kexim-collection
           path: /tmp/kexim-collection.json
           if-no-files-found: error
+  collect-kfinco:
+    needs: collect-shared
+    if: always()
+    runs-on: macos-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install readers and native certificate verifier
+        run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47' 'truststore==0.10.5'
+      - name: Receive discovered association evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: lp-shared-collection
+          path: /tmp
+      - name: Collect K-FINCO originals with system TLS verification
+        run: python3 services/lp/src/discover_kfinco_originals.py --system-trust --input /tmp/lp-shared-collection.json --output /tmp/lp-kfinco-collection.json
+      - name: Pass original evidence to publisher
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lp-kfinco-collection
+          path: /tmp/lp-kfinco-collection.json
+          if-no-files-found: error
   collect:
-    needs: [collect-koreapost, collect-kexim, collect-shared]
+    needs: [collect-koreapost, collect-kexim, collect-shared, collect-kfinco]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -116,6 +142,12 @@ jobs:
         with:
           name: lp-shared-collection
           path: /tmp
+      - name: Receive K-FINCO original evidence
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: lp-kfinco-collection
+          path: /tmp
       - name: Load last published data
         run: python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json
       - name: Collect official announcements
@@ -124,9 +156,11 @@ jobs:
         run: python3 services/lp/src/collect_priority_lp_programs.py --koreapost-input /tmp/koreapost-collection.json --kexim-input /tmp/kexim-collection.json --output /tmp/lp-priority-collection.json
       - name: Find earlier and remaining institution recruitment originals
         run: |
+          if [ -f /tmp/lp-kfinco-collection.json ]; then
+            cp /tmp/lp-kfinco-collection.json /tmp/lp-shared-collection.json
+          fi
           if [ -f /tmp/lp-shared-collection.json ]; then
             python3 services/lp/src/discover_growth_originals.py --input /tmp/lp-shared-collection.json --native-input /tmp/kgrowth-collection.json --output /tmp/lp-shared-collection.json
-            python3 services/lp/src/discover_kfinco_originals.py --input /tmp/lp-shared-collection.json --output /tmp/lp-shared-collection.json
           fi
       - name: Store evidence and publish verified pages
         run: |
@@ -170,6 +204,8 @@ jobs:
           path=Path('/tmp/lp-shared-collection.json')
           if not path.exists():
               raise SystemExit('Association source evidence artifact is missing; previous archive retained')
+          if not Path('/tmp/lp-kfinco-collection.json').exists():
+              raise SystemExit('K-FINCO original evidence artifact is missing; previous archive retained')
           shared=json.loads(path.read_text())
           errors=[h for h in shared.get('holds', []) if h.get('stage') in ('listing','detail','original_board') or (h.get('stage') in ('growth_search','kfinco_original') and h.get('phase') in ('listing','detail'))]
           if errors:

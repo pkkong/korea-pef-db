@@ -180,11 +180,20 @@ def discover(collection,fetch=fetch_bytes,checked_at=None):
     result.setdefault('coverage',{})['kfinco_original']={'listing_requests':int(attempted),'linked':linked}
     return result
 
+def native_tls_fetch(url):
+    # Use the OS certificate verifier; never weaken certificate/hostname checks.
+    import ssl
+    import truststore
+    context=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    if context.verify_mode!=ssl.CERT_REQUIRED or not context.check_hostname:
+        raise ValueError('native TLS must verify certificate and hostname')
+    return fetch_bytes(url,ssl_context=context)
+
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--input',required=True);p.add_argument('--output',required=True);args=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--input',required=True);p.add_argument('--output',required=True);p.add_argument('--system-trust',action='store_true');args=p.parse_args()
     collection=json.loads(Path(args.input).read_text())
     if not isinstance(collection,dict) or not isinstance(collection.get('notices'),list):raise ValueError('invalid input collection')
-    result=discover(collection);dest=Path(args.output);temp=dest.with_name(dest.name+'.tmp')
+    result=discover(collection,fetch=native_tls_fetch if args.system_trust else fetch_bytes);dest=Path(args.output);temp=dest.with_name(dest.name+'.tmp')
     temp.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n');os.replace(temp,dest)
     print(json.dumps(result['coverage']['kfinco_original']))
 

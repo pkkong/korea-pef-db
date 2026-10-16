@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
-from urllib.request import Request, HTTPRedirectHandler, build_opener
+from urllib.request import Request, HTTPRedirectHandler, HTTPSHandler, build_opener
 
 try:
     from .collect_shared_lp_notices import Document, Node, decode_html, valid_date, load_aliases
@@ -51,11 +51,13 @@ class OfficialRedirect(HTTPRedirectHandler):
         return super().redirect_request(req,fp,code,msg,headers,newurl)
 
 
-def fetch_bytes(url,referer=None):
+def fetch_bytes(url,referer=None,*,ssl_context=None):
     allowed={safe_host(url)}
     headers={'User-Agent':'Mozilla/5.0 (LP original notice collector)','Accept-Encoding':'identity','Connection':'close'}
     if referer:headers['Referer']=referer
-    with build_opener(OfficialRedirect(allowed)).open(Request(url,headers=headers),timeout=20) as r:
+    handlers=[OfficialRedirect(allowed)]
+    if ssl_context is not None:handlers.append(HTTPSHandler(context=ssl_context))
+    with build_opener(*handlers).open(Request(url,headers=headers),timeout=20) as r:
         data=r.read(MAX_BYTES+1)
         if len(data)>MAX_BYTES:raise ValueError('original response exceeds size limit')
         return data
