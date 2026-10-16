@@ -365,3 +365,9 @@ LP 범위 확대 운영 반영: 소스9f0aa6a·저장 보완3e60f17, CI383936273
 d25fbe3/CI38848635676은465개발견·실패0/5skip/SQL20 통과했으나 운영38848738850은 전문건설 Ubuntu 인증서체인 확인 실패로 source outage에서 실패했다. 원문14/모집정보4/공개17사업은보존발행됐으며15건운영성공은아니다.
 
 전문건설만macOS작업으로분리해truststore0.10.5의OS인증서검증을명시사용한다. SSLContext를HTTPSHandler에전달하며CERT_REQUIRED/호스트검증강제·전역SSL주입없음·TLS끄기/HTTP전환/임의인증서추가없음. 실패하던로컬번들Python도동일방식원문1/HWP1판독성공. 전체466개실패0/구조계약통과. 공통→전문건설macOS→산출물병합→성장금융재사용/검색→발행의5job, 미수신/실제접속장애는기존본보존+실패보고. 최종운영검증은docs/lp_contest_collection_scope.md 후속기록참조. 원문15/15를전국전수/새사업자동승격/정식메뉴완료로보고하지않는다.
+
+## LP 재개 지점: GitHub 계정 실행 차단
+
+829fbfc/CI38849847040 성공(466개발견·실패0·5skip, SQL20). 로컬 기존 실패환경에서 native TLS로 전문건설 원문1/HWP1 판독 성공. 운영38849900731은 GitHub 결제/사용한도 문제로 collect-kfinco/collect job이 코드 시작 전 차단돼15건 운영 반영은 미완료다. 계정 결제/예산 변경은 하지 않았다. 현재 실제 공개 e64fb1c05043a7c9410a1dbc·원문14/모집정보4/17사업, 외부320/390/1280px 6화면 넘침/스크립트오류0·8표·원공고일/PEVC/예정표기 확인. 로컬15와 운영14를 혼동하지 않는다.
+
+사용자가 GitHub Billing & plans를 복구한 뒤 최신 main의 Collect LP programs를 전체 새 실행해야 한다. 38849900731 공통 산출물은 kbiz/geps/moel의 응답시간초과7건이 있어 실패job만 재실행해 재사용하지 않는다. 새수집/source outage→macOS --system-trust 실제검증→15원문/4모집정보/기존17사업/최신Vercel run/모바일까지 확인. 기관 응답지연 반복시 bounded retry/호스트별경로 보완, 장애은폐/추정승인 금지. 예산 임의증가/추가실행 반복 없음. 코드·검증·차단근거/남은작업은 docs/lp_contest_collection_scope.md 참조. 이 문서 변경은 코드가 같고 CI가 이미 통과해 중복 CI를 실행하지 않는다.
