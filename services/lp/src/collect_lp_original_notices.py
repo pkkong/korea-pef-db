@@ -204,7 +204,7 @@ def validate_original(original, association_notice, checked_at, *, channels=None
     validate_url(url,channels.get(institution,set()))
     observed={link.get('url') for link in association_notice.get('source_provenance',{}).get('original_links',[]) if isinstance(link,dict)}
     discovery=original.get('discovery_provenance',{})
-    if url not in observed or discovery.get('kind') in {'existing_official_collection','kgrowth_title_search'}:
+    if url not in observed or discovery.get('kind') in {'existing_official_collection','kgrowth_title_search','kfinco_official_api'}:
         try:
             from .discover_lp_original_boards import validate_listing_provenance, validate_native_provenance
         except ImportError:
@@ -216,6 +216,11 @@ def validate_original(original, association_notice, checked_at, *, channels=None
             except ImportError:from discover_growth_originals import validate_search_provenance
             if institution!='kgrowth':raise ValueError('Growth search proof belongs to another institution')
             validate_search_provenance(original)
+        elif discovery.get('kind')=='kfinco_official_api':
+            try:from .discover_kfinco_originals import validate_api_provenance
+            except ImportError:from discover_kfinco_originals import validate_api_provenance
+            if institution!='kfinco':raise ValueError('KFINCO API proof belongs to another institution')
+            validate_api_provenance(original,association_notice)
         else:raise ValueError('original URL is not an observed association link')
     if original.get('matched_republication_url')!=association_notice.get('url'):
         raise ValueError('original URL is not an observed association link')
@@ -239,7 +244,10 @@ def validate_original(original, association_notice, checked_at, *, channels=None
     if discovery.get('kind')!='existing_official_collection':
         if original.get('hash_kind')!='semantic_v1' or original_body_hash(original)!=original['sha256']:
             raise ValueError('original body hash does not match title/date/body')
-    validate_identity(association_notice,original,aliases)
+    # The K-FINCO API validator binds its literal '사모투자' title to the
+    # same dated PE-blind business; other institutions keep general matching.
+    if discovery.get('kind')!='kfinco_official_api':
+        validate_identity(association_notice,original,aliases)
     attachments=original.get('attachments',[])
     if not isinstance(attachments,list):raise ValueError('invalid original attachments')
     urls=set()

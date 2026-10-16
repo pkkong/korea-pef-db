@@ -108,6 +108,15 @@ class SharedTermsTests(unittest.TestCase):
         self.assertEqual(result['amount_scope'],'combined_pe_vc')
         self.assertIn('PE·VC 합계',result['commitment_label'])
 
+    def test_other_fund_investors_are_not_a_joint_lp_program(self):
+        n=notice('선정 운용사:1개사 약정 예정금액:300억원 펀드 규모 5,000억원 이상 '
+                 '공동출자자 기관 및 법인 출자 원칙 접수 마감:2026년10월12일15시 '
+                 '추진 일정 최종 선정:2026년11월 중')
+        result=extract_shared_terms(n,STAMP)
+        self.assertEqual(result['commitment_amount_krw'],30_000_000_000)
+        self.assertEqual(result['manager_count'],1)
+        self.assertEqual(result['schedule_stages'][-1]['date_label'],'11월 중')
+
     def test_joint_amounts_need_institution_allocation_instead_of_total_assumption(self):
         n=notice('공동 출자 총액 300억원 출자규모: 총 300억원 선정운용사:1개사')
         with self.assertRaises(ValueError):extract_shared_terms(n,STAMP)

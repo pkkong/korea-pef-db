@@ -1,0 +1,90 @@
+import copy
+import json
+import unittest
+from services.lp.src.discover_kfinco_originals import discover, validate_api_provenance, digest, attachments, official, BASE, LIST_URL
+
+CODE='NT20991231010203'
+TITLE='2026년 전문건설공제조합 국내 사모투자 위탁운용사 선정 계획 공고'
+BODY='<p>2026년 전문건설공제조합 국내 사모투자 블라인드펀드 위탁운용사 선정 계획 공고</p><p>선정 개요 투자 부문 국내 사모투자(PE) 300억원</p>'
+NOW='2026-10-15T09:00:00+00:00'
+
+def source():return {'institution_id':'kfinco','source_id':'kofia:987','url':'https://www.kofia.or.kr/brd/m_212/view.do?seq=987','title':'[전문건설공제조합] 2026년 국내PE 블라인드펀드 위탁운용사 선정 공고','date':'2026-09-30','source_scope':'pe_blind'}
+def row(code=CODE,date='2026-09-30'):
+    return {'ntCode':code,'ntTitle':TITLE,'ntDate':date,'closed':0,'noticeAttachModelList':[]}
+def encode(x):return json.dumps(x,ensure_ascii=False).encode()
+def listing(rows):return encode({'success':True,'totalCount':len(rows),'list':rows})
+def detail(r):return encode({'success':True,'detail':{**r,'ntContent':BODY}})
+
+class KfincoTests(unittest.TestCase):
+    def fixture(self,rows=None,raw=None):
+        rows=[row()] if rows is None else rows
+        def fetch(url):
+            if url==LIST_URL:return listing(rows)
+            if '/api/pr/notice/detail/' in url:return raw or detail(rows[0])
+            raise OSError('attachment outage')
+        return discover({'notices':[source()]},fetch,NOW)
+
+    def test_new_arbitrary_identifier_and_unchanged_title(self):
+        out=self.fixture();o=out['notices'][0]['original_notices'][0]
+        self.assertTrue(o['url'].endswith(CODE));self.assertEqual(o['title'],TITLE)
+        self.assertTrue(o['review_only']);validate_api_provenance(o,source())
+
+    def test_june_and_september_are_different_businesses(self):
+        june=row('NT20990101010101','2026-06-18');sept=row()
+        out=self.fixture([june,sept],detail(sept))
+        self.assertEqual(out['notices'][0]['original_notices'][0]['date'],'2026-09-30')
+        self.assertNotIn('original_notices',self.fixture([june])['notices'][0])
+
+    def test_ambiguous_same_date_and_closed_do_not_fetch_detail(self):
+        for rows in [[row(),row('NT20990202020202')],[{**row(),'closed':1}]]:
+            calls=[]
+            def fetch(url):calls.append(url);return listing(rows)
+            out=discover({'notices':[source()]},fetch,NOW)
+            self.assertEqual(calls,[LIST_URL]);self.assertEqual(out['holds'][0]['phase'],'matching')
+
+    def test_wrong_year_round_stage_vc_and_foreign_held(self):
+        for title in [TITLE.replace('2026','2025'),TITLE.replace('선정 계획 공고','선정 결과'),TITLE.replace('사모투자','VC'),TITLE.replace('국내','해외'),TITLE.replace('사모투자','프로젝트'),TITLE.replace('2026년','2026년 2차')]:
+            r={**row(),'ntTitle':title}
+            self.assertNotIn('original_notices',self.fixture([r])['notices'][0])
+
+    def test_body_must_explicitly_confirm_pe_blind(self):
+        for wrong in [BODY.replace('블라인드',''),BODY.replace('(PE)','(VC)'),BODY.replace('국내','해외')]:
+            raw=encode({'success':True,'detail':{**row(),'ntContent':wrong}})
+            out=self.fixture(raw=raw)
+            self.assertNotIn('original_notices',out['notices'][0])
+            self.assertEqual(out['holds'][0]['phase'],'validation')
+
+    def test_foreign_route_and_traversal_rejected(self):
+        with self.assertRaises(ValueError):official('https://evil.test/api/pr/notice/list','/api/pr/notice/list')
+        with self.assertRaises(ValueError):official(BASE+'/x/../api/pr/notice/list','/api/pr/notice/list')
+        d={**row(),'noticeAttachModelList':[{'ntCode':CODE,'filepath':'/pds/notice/2026-09/../private','filenameSave':'a.hwp','filenameOriginal':'공고문.hwp'}]}
+        with self.assertRaises(ValueError):attachments(d)
+        d['noticeAttachModelList'][0]['filepath']='/pds/notice/2026-09'
+        d['noticeAttachModelList'][0]['filenameSave']='../secret.hwp'
+        with self.assertRaises(ValueError):attachments(d)
+
+    def test_receipt_or_body_tampering_rejected(self):
+        o=self.fixture()['notices'][0]['original_notices'][0]
+        for field,value in [('body','changed'),('title',TITLE+' changed'),('url','https://evil.test/pr/notice/detail/'+CODE)]:
+            bad=copy.deepcopy(o);bad[field]=value
+            with self.assertRaises(ValueError):validate_api_provenance(bad,source())
+        bad=copy.deepcopy(o);bad['discovery_provenance']['listing_sha256']='0'*64
+        with self.assertRaises(ValueError):validate_api_provenance(bad,source())
+        bad=copy.deepcopy(o);p=bad['discovery_provenance'];d=json.loads(p['detail_json']);d['detail']['ntDate']='2026-06-18';p['detail_json']=json.dumps(d);p['detail_sha256']=digest(p['detail_json'])
+        with self.assertRaises(ValueError):validate_api_provenance(bad,source())
+
+    def test_attachment_failure_preserves_body(self):
+        r={**row(),'noticeAttachModelList':[{'ntCode':CODE,'filepath':'/pds/notice/2026-09','filenameSave':'a.hwp','filenameOriginal':'공고문.hwp'}]}
+        out=self.fixture([r]);self.assertTrue(out['notices'][0]['original_notices'][0]['body']);self.assertEqual(out['holds'][0]['phase'],'attachment')
+
+    def test_outage_preserves_existing_originals_and_input(self):
+        x={'notices':[source(),{**source(),'original_notices':[{'body':'existing'}]}]};before=copy.deepcopy(x)
+        def fail(url):raise OSError('outage')
+        out=discover(x,fail,NOW)
+        self.assertEqual(x,before);self.assertEqual(out['notices'][1],before['notices'][1]);self.assertEqual(out['holds'][0]['phase'],'listing')
+
+    def test_form_zip_skipped(self):
+        r={**row(),'noticeAttachModelList':[{'filenameOriginal':'양식.zip'}]}
+        self.assertEqual(attachments(r),[])
+
+if __name__=='__main__':unittest.main()

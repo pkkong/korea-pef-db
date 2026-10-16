@@ -55,7 +55,7 @@
       "institution_id": "kfinco", "name": "전문건설공제조합", "category": "construction_mutual_cooperative", "decision": "core_confirmed",
       "reason": "기존 명단 밖의 실제 발행기관. 2026년 국내 PE 블라인드 공개공고가 금투협에 공고문·RFP 원문과 함께 게시되었다.",
       "evidence": [{"url": "https://kofia.or.kr/brd/m_212/view.do?company_cd=&company_nm=&itm_seq_1=0&itm_seq_2=0&multi_itm_seq=0&seq=376&srchFr=&srchTo=&srchTp=&srchWord=", "title": "[전문건설공제조합] 2026년 국내PE 블라인드펀드 위탁운용사 선정 공고", "date": "2026-09-30", "official": false, "blind_explicit": true, "pe_explicit": true, "quote": "선정 운용사 : 1개사 · 약정 예정금액 : 300억 원"}],
-      "official_listing_url": "https://kofia.or.kr/brd/m_212/list.do", "issuer_name": "전문건설공제조합", "collection_hint": "K-FINCO 원문 HWPX와 금투협 게시물 연결; 2026-10-12 15시 접수마감"
+      "official_listing_url": "https://www.kfinco.co.kr/pr/notice", "issuer_name": "전문건설공제조합", "collection_hint": "자체 공지 API의 게시일·제목·PE 블라인드 본문과 금투협 공고 대조; 공식 HWP 공고문 판독"
     },
     {
       "institution_id": "moel_iaci", "name": "산재보험기금", "category": "public_fund_ocio", "decision": "mixed_pe_confirmed",

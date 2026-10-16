@@ -92,7 +92,7 @@ def extract_shared_terms(notice, checked_at):
     scope = classify_scope(notice['title'], ' '.join(text for _, text, _ in sources))
     if scope not in ('pe_blind', 'mixed_pe_blind'):
         raise ValueError('국내 PE 블라인드 모집 범위 미확인')
-    if any(re.search(r'공동\s*출자|모태\s*펀드|출자자별',text) for _,text,_ in sources):
+    if any(re.search(r'공동\s*출자(?!\s*자)|모태\s*펀드|출자자별',text) for _,text,_ in sources):
         raise ValueError('공동사업 출자기관별 금액 분리 필요')
     facts, evidence = defaultdict(list), defaultdict(list)
 
