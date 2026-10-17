@@ -14,7 +14,9 @@ concurrency:
 
 jobs:
   collect-shared:
-    runs-on: ubuntu-latest
+    # Several Korean boards intermittently stall from the Ubuntu runner path.
+    # Keep the same discovery/validation on the macOS path used by issuer jobs.
+    runs-on: macos-latest
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v6
