@@ -255,6 +255,8 @@ def _fetch_bytes_once(url, referer=None):
         # KOFIA occasionally sends chunk framing rejected by urllib. Curl fully
         # validates the retry; never accept the truncated partial response.
         command=['curl','--fail','--silent','--show-error',
+                 '--http1.0','--user-agent','Mozilla/5.0 (LP public notice collector)',
+                 '--header','Accept-Encoding: identity','--header','Connection: close',
                  '--max-time','25','--max-filesize',str(MAX_BYTES),
                  '--proto','=https,http','--proto-redir','=https,http']
         if referer:

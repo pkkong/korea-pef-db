@@ -34,6 +34,10 @@ class SharedCollectionTests(unittest.TestCase):
             self.assertEqual(shared.fetch_bytes(KOFIA), b'<html>complete</html>')
             self.assertEqual(curl.call_count, 2)
             command = curl.call_args.args[0]
+            self.assertIn('--http1.0', command)
+            self.assertEqual(command[command.index('--user-agent') + 1],
+                             'Mozilla/5.0 (LP public notice collector)')
+            self.assertIn('Connection: close', command)
             self.assertNotIn('--insecure', command)
             self.assertNotIn('--location', command)
 
