@@ -13,9 +13,14 @@ import re
 from datetime import date, datetime, timezone
 from html.parser import HTMLParser
 from http.client import IncompleteRead
+from functools import partial
 import subprocess
+import ssl
+import sys
+import time
 from pathlib import Path
 from urllib.parse import parse_qs, urljoin, urlsplit
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, HTTPRedirectHandler, build_opener
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -243,7 +248,7 @@ def _fetch_bytes_urllib(url, referer=None):
 
 
 
-def fetch_bytes(url, referer=None):
+def _fetch_bytes_once(url, referer=None):
     try:
         return _fetch_bytes_urllib(url, referer)
     except IncompleteRead:
@@ -260,6 +265,46 @@ def fetch_bytes(url, referer=None):
         return result.stdout
 
 
+def _transient_fetch_error(error):
+    if isinstance(error, HTTPError):
+        return error.code in {408, 429, 500, 502, 503, 504}
+    if isinstance(error, URLError):
+        return _transient_fetch_error(error.reason)
+    if isinstance(error, ssl.SSLError):
+        return False
+    if isinstance(error, subprocess.CalledProcessError):
+        # DNS/connect failures, incomplete transfers and timed-out/closed sockets.
+        # Certificate errors, HTTP refusals and response-size limits stay fatal.
+        return error.returncode in {6, 7, 18, 28, 52, 55, 56}
+    return isinstance(error, (TimeoutError, ConnectionError, IncompleteRead,
+                              subprocess.TimeoutExpired))
+
+
+class _FetchRetryBudget:
+    def __init__(self):
+        self.remaining = 4
+
+    def consume(self):
+        if self.remaining == 0:
+            return False
+        self.remaining -= 1
+        return True
+
+
+def fetch_bytes(url, referer=None, *, retry_budget=None):
+    # Retry the whole read, never merge bytes from an incomplete response.
+    # At most three attempts, with short backoff; exhausted failures still hold.
+    for attempt in range(3):
+        try:
+            return _fetch_bytes_once(url, referer)
+        except Exception as error:
+            if (attempt == 2 or not _transient_fetch_error(error)
+                    or (retry_budget is not None and not retry_budget.consume())):
+                raise
+            print(f'Retrying association request ({attempt + 2}/3): {url}', file=sys.stderr)
+            time.sleep(attempt + 1)
+
+
 def decode_html(raw):
     for codec in ('utf-8','cp949'):
         try:
@@ -269,7 +314,11 @@ def decode_html(raw):
     raise ValueError('HTML encoding not recognized')
 
 
-def collect(pages=3, fetch=fetch_bytes, aliases=None, channels=None, checked_at=None):
+def collect(pages=3, fetch=None, aliases=None, channels=None, checked_at=None):
+    # Share four extra attempts across the whole run, so widespread outages do
+    # not multiply three retries across every sequential listing/detail read.
+    if fetch is None:
+        fetch = partial(fetch_bytes, retry_budget=_FetchRetryBudget())
     aliases = load_aliases() if aliases is None else aliases
     channels = CHANNELS if channels is None else channels
     checked_at = checked_at or datetime.now(timezone.utc).isoformat()

@@ -1,5 +1,11 @@
 import unittest
+import ssl
+import subprocess
+from http.client import IncompleteRead
+from types import SimpleNamespace
+from urllib.error import HTTPError, URLError
 from unittest.mock import patch
+from services.lp.src import collect_shared_lp_notices as shared
 from services.lp.src.collect_shared_lp_notices import (
     collect, parse_listing, parse_detail, match_issuer, classify_scope, valid_date,
 )
@@ -8,6 +14,62 @@ KVCA='https://www.kvca.or.kr/Program/invest/list.html?a_cd=8&page=1'
 KOFIA='https://www.kofia.or.kr/brd/m_212/list.do'
 
 class SharedCollectionTests(unittest.TestCase):
+    def test_transport_retries_temporary_timeout_and_server_error(self):
+        errors = [TimeoutError('slow'), URLError(TimeoutError('slow')),
+                  HTTPError(KOFIA, 503, 'busy', {}, None)]
+        for error in errors:
+            with self.subTest(error=type(error).__name__), \
+                 patch.object(shared, '_fetch_bytes_urllib', side_effect=[error, b'complete']) as fetch, \
+                 patch.object(shared.time, 'sleep') as sleep:
+                self.assertEqual(shared.fetch_bytes(KOFIA), b'complete')
+                self.assertEqual(fetch.call_count, 2)
+                sleep.assert_called_once_with(1)
+
+    def test_truncated_response_then_curl_timeout_retries_complete_read(self):
+        with patch.object(shared, '_fetch_bytes_urllib', side_effect=IncompleteRead(b'partial', 10)), \
+             patch.object(shared.subprocess, 'run', side_effect=[
+                 subprocess.CalledProcessError(28, ['curl'], output=b'partial'),
+                 SimpleNamespace(stdout=b'<html>complete</html>')]) as curl, \
+             patch.object(shared.time, 'sleep'):
+            self.assertEqual(shared.fetch_bytes(KOFIA), b'<html>complete</html>')
+            self.assertEqual(curl.call_count, 2)
+            command = curl.call_args.args[0]
+            self.assertNotIn('--insecure', command)
+            self.assertNotIn('--location', command)
+
+    def test_retries_stop_after_three_attempts_and_keep_failure_visible(self):
+        with patch.object(shared, '_fetch_bytes_urllib', side_effect=TimeoutError('offline')) as fetch, \
+             patch.object(shared.time, 'sleep') as sleep:
+            with self.assertRaises(TimeoutError):
+                shared.fetch_bytes(KOFIA)
+            self.assertEqual(fetch.call_count, 3)
+            self.assertEqual([c.args[0] for c in sleep.call_args_list], [1, 2])
+
+    def test_certificate_refusal_and_validation_errors_are_not_retried(self):
+        errors = [URLError(ssl.SSLCertVerificationError('untrusted')),
+                  HTTPError(KOFIA, 404, 'missing', {}, None),
+                  ValueError('cross-host redirect'), ValueError('oversized response'),
+                  subprocess.CalledProcessError(60, ['curl'])]
+        for error in errors:
+            with self.subTest(error=str(error)), \
+                 patch.object(shared, '_fetch_bytes_urllib', side_effect=error) as fetch, \
+                 patch.object(shared.time, 'sleep') as sleep:
+                with self.assertRaises(type(error)):
+                    shared.fetch_bytes(KOFIA)
+                self.assertEqual(fetch.call_count, 1)
+                sleep.assert_not_called()
+
+    def test_collection_shares_four_extra_attempts_and_still_writes_holds(self):
+        # Three failing boards get seven calls, not nine; each new run resets.
+        for _ in range(2):
+            with patch.object(shared, '_fetch_bytes_urllib', side_effect=TimeoutError('offline')) as fetch, \
+                 patch.object(shared.time, 'sleep'):
+                result = collect(pages=1, aliases={})
+                self.assertEqual(fetch.call_count, 7)
+                self.assertEqual(len(result['holds']), 3)
+                self.assertFalse(result['notices'])
+                self.assertTrue(all(h['stage'] == 'listing' for h in result['holds']))
+
     def test_novel_listing_ids_dates_and_pagination(self):
         html='''<html><table><tr><td>1</td><td><a href="listbody.html?po_no=99981">미래에셋증권</a></td><td><a href="listbody.html?po_no=99981">2026년 고용보험기금 PE 선정</a></td><td>2026-08-07</td><td>2026-08-20</td></tr></table><a href="list.html?a_cd=8&amp;page=2">2</a></html>'''
         rows,pages=parse_listing(html,KVCA,'kvca')

@@ -100,6 +100,14 @@ Every non-trivial subagent task should state:
 - If the user gives several independent tasks, keep at least one subagent working in the background while the Project Lead handles the next user-facing or integration task.
 - If no delegation is used for a non-trivial task, explain briefly why the task was too tightly coupled, urgent, or small to split.
 
+## Automation Cost and Execution Failures
+
+- GitHub Actions billing/usage errors are separate from ChatGPT/Codex limits. The generic failed-payment-or-spending-limit annotation is not evidence that additional payment is required.
+- On an execution-provider block, inspect concrete job annotations, available usage evidence, and free operating alternatives before sending the user to billing settings. Never raise budgets, enroll in paid plans, or repeatedly dispatch blocked workflows without authorization.
+- The user authorized making `pkkong/korea-pef-db` public on 2026-10-16 to restore free standard GitHub-hosted execution. Keep credentials in Actions secrets, retain read-only default workflow permissions, and never add secret-dependent publishing to untrusted pull-request events.
+- Before any future visibility expansion, inspect tracked files/history and retained Actions artifacts/logging for actual disclosure risks. A source scan does not certify all historical logs. Do not assume that public execution resolves an account-wide billing lock; verify an actual started job and completed service publication.
+- Preserve useful schedules and failure signals. Do not hide a broken collection by disabling automation or claiming success because old public data is still served.
+
 ## Project Context
 
 - The newsletter service lives under `services/newsletter/`.
