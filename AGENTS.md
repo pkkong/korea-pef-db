@@ -53,6 +53,7 @@
 
 ## Instruction Maintenance
 
+- Answer routine implementation/coverage questions from maintained status documents, not a fresh codebase investigation. LP institution coverage lives in `docs/lp_collection_status.md`; update the affected rows whenever collection, parsing, publication, or deployment changes. Keep implementation status separate from the latest observed execution result, with dates and evidence. For current health/failure questions, verify live execution as needed; if the status document is stale, state that and refresh only the relevant facts. Do not silently present an old result as current or repeat a full code audit to answer a basic progress question.
 - Maintain operating instructions as part of the work, not as an optional cleanup.
 - If the user repeats the same correction, immediately decide whether a durable rule, checklist item, owner boundary, or verifier check should be added.
 - Do not make the user restate known preferences such as team-based work, service separation, avoiding card-heavy wiki layouts, avoiding unnecessary tables, reducing visual clutter, or keeping generated artifacts out of commits.
