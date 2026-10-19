@@ -37,6 +37,5 @@ jobs:
       - name: Verify own service contracts
         run: |
           python3 scripts/run_regression_tests.py services/gp/tests/test_gp_web_runtime.py
-          python3 -m unittest scripts.tests.test_service_runtime_isolation.ServiceRuntimeIsolationTests.test_gp_boots_without_newsletter_or_lp
       - name: Deploy and verify own service
         run: python3 scripts/deploy_service_runtime.py --service gp

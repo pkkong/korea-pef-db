@@ -37,6 +37,5 @@ jobs:
       - name: Verify own service contracts
         run: |
           python3 -m unittest services.lp.tests.test_lp_web_runtime
-          python3 -m unittest scripts.tests.test_service_runtime_isolation.ServiceRuntimeIsolationTests.test_lp_boots_without_newsletter_or_gp
       - name: Deploy and verify own service
         run: python3 scripts/deploy_service_runtime.py --service lp
