@@ -1,0 +1,22 @@
+name: Inspect service deployment projects
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Read project settings without changing them
+        run: |
+          python3 scripts/deploy_service_runtime.py --service newsletter --inspect-only
+          python3 scripts/deploy_service_runtime.py --service lp --inspect-only
+          python3 scripts/deploy_service_runtime.py --service gp --inspect-only
