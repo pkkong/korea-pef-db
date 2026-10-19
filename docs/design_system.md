@@ -33,17 +33,17 @@
 
 ## 데이터 반영 방식
 
-공개 서비스는 현재 정적 생성 사이트다. DB, CSV, exports, crawler output이 원천 데이터이고, 공개 HTML은 build 때 만들어진다.
+뉴스레터·LP·GP는 각각 독립 Vercel 앱이며 공통 디자인과 메뉴로 연결한다. 뉴스레터는 공개 읽기 자료를 렌더링하고, LP·GP는 검증해 발행한 HTML을 자기 공개 읽기 경로로 제공한다. GitHub Pages는 정적 백업이다. DB, CSV, exports, crawler output이 원천 데이터다.
 
 - crawler, DB import, CSV 수정은 source data만 바꾼다.
-- 공개 웹사이트는 site builder가 정적 HTML을 다시 만들고 GitHub Pages 또는 Vercel/Supabase 경로가 검증된 뒤에만 바뀐다.
+- 자료 갱신은 해당 서비스의 수집·검증·DB 발행으로 반영하고 공개 응답을 확인한다. 앱 코드 갱신은 해당 서비스만 배포한다.
 - article count, LP notice count, GP count, AUM/commitment metric, profile count 같은 숫자는 renderer에 손으로 박지 않는다. build 때 source data에서 읽어 생성 HTML에 반영한다.
 - generated public HTML을 직접 고쳐 숫자를 맞추지 않는다. source data 또는 renderer를 고치고, rebuild, verify, publish한다.
-- 비개발자에게 freshness를 설명할 때는 “DB 업데이트는 재료이고, build/deploy가 웹사이트에 올리는 단계”라고 설명한다.
+- 비개발자에게 자료 반영과 앱 배포를 구분해서 설명한다. 수집만 끝난 상태를 공개 반영 완료라고 말하지 않는다.
 
 ## 내비게이션
 
-- 전역 하단 메뉴는 모든 공개 화면에서 `브리프 / LP / GP` 순서로 고정한다.
+- 전역 하단 메뉴는 모든 공개 화면에서 `브리프 / LP / GP` 순서로 고정한다. 각 항목은 독립 서비스의 공식 주소로 연결하며 자산은 각 앱이 직접 제공한다.
 - Wiki는 사용자가 다시 기획하기 전까지 공개 내비게이션에 보여주지 않는다.
 - 공개 content 위에 top-level service tab을 따로 만들지 않는다.
 - 페이지 안의 local control은 있어도 현재 화면 안에서만 작동해야 한다.

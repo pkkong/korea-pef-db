@@ -14,7 +14,7 @@
 - `documents`: URL과 문서지문별 원문 근거.
 - `program_state`: 기존 5사업 데이터와 승인된 원문지문, 렌더링된 페이지. 한 트랜잭션으로 교체.
 - 공개는 `public.lp_program_page` RPC를 통한 HTML만. 원문/검토대기 데이터 접근권한은 공개하지 않는다.
-- Vercel `/samples/lp/`는 Supabase를 읽는다. DB 읽기실패는503, 없는페이지404. 옛배포사본으로 조용히되돌리지 않는다.
+- 독립 LP 앱 `https://kpef-lp.vercel.app/`는 Supabase를 읽는다. 뉴스레터의 옛 `/samples/lp/` 주소는 이 앱으로 이동한다. 자기 캐시가 없고 DB 읽기가 실패하면503, 없는페이지404다.
 - 수집실패·빈결과·명단불일치는 발행중단. 본문/첨부변경은 requires_review로 기존사업보존. 승인된 fingerprint를 DBbaseline으로 재사용해 다음실행에서 변경이 자동승인되지 않게 한다.
 
 ## 검수와 한계
@@ -22,7 +22,7 @@
 수집보고서는 GitHub Actions artifact `kgrowth-collection` 및 DB collection_runs에서 확인. 변경원문 검수 후 명시적으로 승인된지문/사업자료를 갱신하는 관리UI는 아직 없다. 정정공고의 기존사업 영향은 수동검토 대상이다. 다른4기관 일정상태는 샘플시점이므로 자동최신으로 설명하지 않는다.
 
 검사:
-`python3 -m unittest services.lp.tests.test_kgrowth_collection services.lp.tests.test_lp_program_publish services.lp.tests.test_lp_program_service services.newsletter.web.tests.test_lp_program_data`
+`python3 -m unittest services.lp.tests.test_kgrowth_collection services.lp.tests.test_lp_program_publish services.lp.tests.test_lp_program_service services.lp.tests.test_lp_web_runtime`
 
 
 ## 2026-09-28 운영 반영 확인

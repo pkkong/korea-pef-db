@@ -125,3 +125,6 @@ Brief와 GP는 현재 이 `Supabase → Vercel` 경로로 공개된다. LP는 lo
 공통 CSS/JS/아이콘은 services/shared/web/service_assets.py의 단일 순수 함수 원본을 각 배포 패키지에 포함한다. 다른 서비스의 실행 서버에서 공통 assets를 가져오지 않는다. newsletter_ui.py는 뉴스레터 HTML의 단일 원본을 유지하고 기존 정적 미러를 위해 자산 함수를 재노출한다. 옛 주소는 다른 서버를 조회하지 않고 각 서비스로 redirect한다.
 
 현재 Supabase 서버/계정은 공유하지만 논리 데이터 공간과 앱별 설정을 분리한다. LP/GP 전용 Supabase 공개 읽기 secret이 있으면 각 배포가 그것을 사용하며 기존 공용 설정은 전환용 기본값이다. 물리 DB 서버 장애까지 완전히 분리됐다고 표현하지 않는다. 실행 앱에는 DB URL/관리자 service-role key를 전달하지 않는다. 배포 전환 완료 여부와 실제 주소는 상태판의 후속 검증 기록을 따른다.
+
+
+운영 전환 완료: 브리프 `https://kpef-newsletter.vercel.app/`, LP `https://kpef-lp.vercel.app/`, GP `https://kpef-gp.vercel.app/`가 각각 별도 Vercel 프로젝트에서 실행된다. 메뉴와 옛 주소 이동만 연결하며 한 서비스 코드 배포에 다른 서비스가 포함되지 않는다. LP 앱 주소 분리는 수집범위 확대·발행게이트 변경·정식출시 완료를 뜻하지 않는다.

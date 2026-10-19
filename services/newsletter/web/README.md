@@ -25,10 +25,11 @@ The app reads `newsletter_issues` for the 30-issue date skeleton and
 this into the article view only, because dates with zero articles would
 disappear. Preserve numeric order values exactly, including `section_order=0`.
 
-`newsletter_ui.py` is the single newsletter UI source for both Vercel and the
-GitHub Pages mirror. Do not add a separate Jinja template or standalone
-`static/service.css`; Vercel serves `/assets/service.css` and
-`/assets/service.js` from the same module the static builder imports.
+`newsletter_ui.py` owns newsletter HTML for Vercel and the GitHub Pages mirror.
+Pure CSS/JS/icon functions live once in `services/shared/web/service_assets.py`
+and are re-exported by the newsletter renderer. Each deployment includes its
+own copy and serves `/assets/service.css` and `/assets/service.js` locally.
+Do not add a separate template or duplicate stylesheet source.
 
 ## Required Vercel Environment
 
@@ -49,3 +50,21 @@ python3 -m venv .venv-newsletter-web
 pip install -r services/newsletter/web/requirements.txt
 FLASK_APP=services/newsletter/web/app.py flask run --port 5050
 ```
+
+## Independent deployment
+
+`Deploy newsletter Vercel app` runs only newsletter checks and packages only
+this app plus shared pure assets. LP and GP have their own apps, Vercel projects
+and deployment workflows. Menu links use `LP_PUBLIC_URL` and `GP_PUBLIC_URL`,
+which default to `https://kpef-lp.vercel.app` and `https://kpef-gp.vercel.app`.
+Old LP/GP routes return redirects without importing or querying either service.
+
+To inspect the deployable package without the rest of the repository:
+
+```bash
+python3 scripts/build_service_runtime.py --service newsletter --output /tmp/newsletter-package
+```
+
+The generated app is under `/tmp/newsletter-package/services/newsletter/web/`.
+Production deployment uses `scripts/deploy_service_runtime.py --service newsletter`
+inside the workflow. No database writer credentials enter the app package.

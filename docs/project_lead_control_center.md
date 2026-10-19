@@ -414,3 +414,12 @@ KOFIA의기본curl요청은동일URL에서20초/0byte timeout이났으나HTTP/1.
 각 서비스 소스 services/{newsletter,lp,gp}/web 및 별도 배포 workflow를 준비했다. 공통 CSS/JS/icon은 services/shared/web/service_assets.py 단일원본에서 각 앱에 포함한다. 뉴스레터의 LP/GP adapter·eager import·빌드/검증 의존은 제거하고 옛 주소는 외부 redirect만 한다. 기존 버전관리 GP XLSX를 GP web/downloads로 같은 바이트 이동했다. LP17사업·원문15/GP snapshot·뉴스 아카이브 DB는 이번 전환에서 수정하지 않는다.
 
 배포 목표: 기존 kpef-newsletter + 별도 kpef-lp/kpef-gp Vercel 프로젝트. 각 배포는 자기 앱 파일과 공통 자산만 업로드하고 다른 서비스의 코드/검사를 요구하지 않는다. 기존 프로젝트의 Git 자동배포 여부와 root/framework를 read-only workflow로 먼저 확인한다. 실제 전환은 후속 배포 기록 전까지 미완료다. Supabase 물리서버는 공유 상태이며 서비스별 독립 public read 설정을 지원한다. DB서버/플랫폼 공통장애까지 없어졌다고 보고하지 않는다.
+
+
+## 독립 서비스 운영 전환 완료
+
+별도 Vercel 프로젝트 LP `https://kpef-lp.vercel.app`와 GP `https://kpef-gp.vercel.app`를 생성·배포했다. 소스 ea2a2b4, 배포39180815345/39180817060 성공. 뉴스레터는 ccc1ea9/배포39181128037 성공으로 LP·GP import/실행/빌드 의존을 제거했다. 옛 LP/GP 상세·시장·인물·엑셀9경로는 query를 보존하는307로 독립 앱에 연결한다. 메뉴도 각 공식 서비스 주소를 사용한다. Git 자동배포를 끄고 서비스별 workflow로 자기 앱만 배포하며 각 health의 release SHA까지 대조한다.
+
+검증: 로컬490개 실패0, CI39181111322는490개 발견·실패0·로컬fixture없는5skip 및 PostgreSQL20개 통과. 다른 두 서비스 코드/네트워크가 없는 패키지의 자기 루트·health·assets 실행을3서비스 모두 검사했다. LP/GP 외부18화면(목록/상세/검토 또는 시장×320/390/1280px)의 넘침·스크립트오류·뉴스레터 CSS/JS 요청0. LP17사업/17상세·기관원문15·공개실행662f4b794117b2e787adf5ed, GP snapshot fss-2025q4-ec864d1a2f16-91fd1930ab37 유지. GP397개 목록 및 기존 XLSX2587467bytes SHA 동일. 뉴스레터30호/최신15기사 아카이브 JSON과 순서가 전환 전후 완전히 같다. 뉴스레터3화면320/390/1280px 넘침/스크립트오류/타서비스 요청0, 과거기사·검색도 후속 점검했다. 검증 산출물은/tmp에만 보관했다.
+
+초기 LP/GP bootstrap 배포39180729017/39180731367은 아직 커밋되지 않은 공통 검사 파일을 실행하려다 배포 전 실패했다. 자기 앱의 분리 실행 검사만 쓰도록 고쳐 위 최종2실행 성공을 확인했다. 실패신호를 숨기거나 자료발행을 다시 실행하지 않았다. 이번 작업은 앱 코드와 배포 분리이며 Supabase DB 내용·수집 예약·발행 게이트를 바꾸지 않았다. LP noindex 유지, 새사업 자동승격·16기관 수집완성·정식출시 완료와 구분한다. 다음 LP 제품 작업은 기존 출시범위의 확인된 신규공고 노출/정정·마감 처리다. 공유 Supabase 서버/Vercel 계정 장애는 여전히 공통위험이다.

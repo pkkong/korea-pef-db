@@ -323,3 +323,6 @@ python3 scripts/build_site_bundle.py --services wiki --date YYYY-MM-DD
 뉴스레터 앱은 newsletter_issues/newsletter_public_issue_articles와 자기 아카이브 fallback만 읽는다. LP 앱은 lp_program_page RPC와 자기 캐시만 읽는다. GP 앱은 gp_public_snapshots/gp_public_pages의 지문 검증된 공개본과 자기 캐시만 읽는다. 한 서비스의 조회·캐시·앱 상태 검사가 다른 서비스의 필수 데이터 의존성이 되면 안 된다. LP 공고 및 GP snapshot 원자료/식별자는 이번 앱 분리에서 변경하거나 재발행하지 않는다.
 
 앱 배포별 SUPABASE_URL/public read key는 각각 설정할 수 있다. 현재 물리 Supabase 프로젝트/서버 공유는 잔존 공통 인프라 위험이며 앱 코드·배포 독립과 구분한다. 공통 자산은 각 앱 내부에 버전별로 패키징하고 원격 서비스에서 가져오지 않는다. GP의 기존 버전 관리된 XLSX는 services/gp/web/downloads/ 소유로 이동하며 뉴스레터 빌드/실행을 요구하지 않는다.
+
+
+독립 앱 운영 주소: Newsletter kpef-newsletter.vercel.app, LP kpef-lp.vercel.app, GP kpef-gp.vercel.app. LP 수집 workflow는 새 LP 주소의 공개 실행을 검사하고 GP 발행 workflow도 새 GP 주소의 snapshot을 검사한다. 뉴스레터 옛 /samples/lp/ 및 GP 경로는 자료를 읽지 않고307 이동한다. DB 발행이 앱 배포를 요구하지 않는 계약은 유지한다. 이전 문서의 뉴스레터 /samples/lp/ 운영주소 설명은 이 전환 기록을 우선한다.
