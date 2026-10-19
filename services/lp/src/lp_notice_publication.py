@@ -165,6 +165,13 @@ def _terms(n, shared_notice, checked_at):
         pass
     # Only fields validated by the existing term parser may be copied.
     result = {k: copy.deepcopy(v) for k, v in terms.items() if k in OFFERING_FIELDS}
+    if shared_notice and result.get('primary_investment'):
+        # The source's generic fund-management purpose (e.g. income or deal
+        # opportunities) is not an investment mandate. Retain it in evidence,
+        # but do not relabel it as 주목적 on the public program.
+        quotes = terms.get('extraction_evidence', {}).get('purpose', [])
+        if not any(re.search(r'주목적(?:투자대상)?\s*[:：]', compact(e['quote'])) for e in quotes):
+            result.pop('primary_investment')
     if result.get('primary_investment'):
         result['primary_investment'].setdefault('source_url', n['url'])
     try:

@@ -253,6 +253,16 @@ class BasicNoticePublicationTests(unittest.TestCase):
         self.assertEqual(len(stages), 1)
         self.assertEqual(stages[0]['status'], 'confirmed')
 
+    def test_generic_management_purpose_is_not_relabelled_investment_mandate(self):
+        from services.lp.tests.test_lp_shared_notice_terms import notice as shared_notice
+        n = shared_notice('국내 PE 블라인드 모집\n출자규모: 총 450억원\n운용목적: 기금 수익 제고 및 공동투자 기회 확보')
+        programs, _ = publish_basic_notices({'programs': [], 'shared_notices': [n]}, [], NOW)
+        self.assertEqual(len(programs), 1)
+        self.assertNotIn('primary_investment', programs[0])
+        n['body'] = n['body'].replace('운용목적: 기금 수익 제고 및 공동투자 기회 확보', '주목적: 국내 중소기업의 사업확장 및 인수금융 투자')
+        programs, _ = publish_basic_notices({'programs': [], 'shared_notices': [n]}, [], NOW)
+        self.assertIn('국내 중소기업', programs[0]['primary_investment']['text'])
+
 
 if __name__ == '__main__':
     unittest.main()
