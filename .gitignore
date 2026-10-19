@@ -62,8 +62,8 @@ Thumbs.db
 
 # Public Vercel delivery copy. This is the verified 2025Q4 GP ranking data pack,
 # deliberately versioned so the mobile download route is deployable.
-!services/newsletter/web/downloads/
-!services/newsletter/web/downloads/gp_ranking_datapack_2025YE.xlsx
+!services/gp/web/downloads/
+!services/gp/web/downloads/gp_ranking_datapack_2025YE.xlsx
 
 # Official FSS PEF workbooks are the reproducible input to GP analytics. They
 # are deliberately versioned because the upstream board can become unavailable.
@@ -75,4 +75,5 @@ Thumbs.db
 node_modules/
 
 # Generated LP sample pages for Vercel deployment
+services/lp/web/lp_samples/
 services/newsletter/web/lp_samples/

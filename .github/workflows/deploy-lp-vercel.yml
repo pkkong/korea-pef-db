@@ -1,0 +1,42 @@
+name: Deploy LP Vercel app
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lp-vercel
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      SUPABASE_URL: ${{ secrets.LP_SUPABASE_URL || secrets.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.LP_SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_PUBLISHABLE_KEY }}
+      NEWSLETTER_PUBLIC_URL: https://kpef-newsletter.vercel.app
+      LP_PUBLIC_URL: https://kpef-lp.vercel.app
+      GP_PUBLIC_URL: https://kpef-gp.vercel.app
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Install own runtime dependencies
+        run: |
+          python3 -m pip install -r services/lp/web/requirements.txt
+          npm install --global vercel@64.5.0
+      - name: Verify own service contracts
+        run: |
+          python3 -m unittest services.lp.tests.test_lp_web_runtime
+          python3 -m unittest scripts.tests.test_service_runtime_isolation.ServiceRuntimeIsolationTests.test_lp_boots_without_newsletter_or_gp
+      - name: Deploy and verify own service
+        run: python3 scripts/deploy_service_runtime.py --service lp

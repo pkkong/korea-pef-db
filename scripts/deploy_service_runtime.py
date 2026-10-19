@@ -58,6 +58,7 @@ def ensure_project(service):
 
 def configure_public_env(project_id):
     values = {'SUPABASE_URL': os.environ['SUPABASE_URL'], 'SUPABASE_PUBLISHABLE_KEY': os.environ['SUPABASE_PUBLISHABLE_KEY']}
+    values['SERVICE_RELEASE'] = os.environ.get('GITHUB_SHA') or os.environ.get('SERVICE_RELEASE', 'manual')
     for service, default in DEFAULTS.items():
         values[service.upper() + '_PUBLIC_URL'] = os.environ.get(service.upper() + '_PUBLIC_URL', default)
     payload = [{'key': key, 'value': value, 'type': 'encrypted', 'target': ['production']} for key, value in values.items()]
@@ -66,13 +67,15 @@ def configure_public_env(project_id):
         raise RuntimeError('Unable to configure all public service settings')
 
 
-def verify(service, base, *, attempts=12):
+def verify(service, base, *, attempts=12, expected_release=None):
     for attempt in range(attempts):
         try:
             with urlopen(base.rstrip('/') + '/health.json?refresh=1', timeout=25) as response:
                 health = json.load(response)
             if health.get('service') != service or health.get('status') not in {'ok', 'degraded'}:
                 raise ValueError('Unexpected own-service health response')
+            if expected_release and health.get('release') != expected_release:
+                raise ValueError('Production alias still serves a different deployment')
             with urlopen(base.rstrip('/') + '/assets/service.css', timeout=15) as response:
                 if response.status != 200 or b'.bottom-nav' not in response.read():
                     raise ValueError('Local presentation assets unavailable')
@@ -81,6 +84,14 @@ def verify(service, base, *, attempts=12):
             if attempt == attempts - 1:
                 raise RuntimeError(f'{service} public verification failed') from None
             time.sleep(5)
+
+
+def run_vercel(command, environment):
+    try:
+        subprocess.run(command + ['--token', os.environ['VERCEL_TOKEN']], env=environment, check=True)
+    except subprocess.CalledProcessError as error:
+        # The original exception contains argv, including the token.
+        raise RuntimeError(f'Vercel {command[1]} failed with exit code {error.returncode}') from None
 
 
 def main():
@@ -118,8 +129,9 @@ def main():
             ['vercel', 'deploy', '--prod', '--yes', '--cwd', str(staging)],
         ]
         for command in commands:
-            subprocess.run(command + ['--token', os.environ['VERCEL_TOKEN']], env=environment, check=True)
-        health = verify(args.service, base)
+            run_vercel(command, environment)
+        release = os.environ.get('GITHUB_SHA') or os.environ.get('SERVICE_RELEASE', 'manual')
+        health = verify(args.service, base, expected_release=release)
         print(json.dumps({'service': args.service, 'url': base, 'health': health, 'project': project['name']}))
 
 
