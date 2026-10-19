@@ -74,6 +74,67 @@ class SharedCollectionTests(unittest.TestCase):
                 self.assertFalse(result['notices'])
                 self.assertTrue(all(h['stage'] == 'listing' for h in result['holds']))
 
+    def test_http_200_truncation_uses_complete_http10_response(self):
+        partial = b'<html><table><tr><td><a href="view.do?seq=777">partial row</a></td></tr>'
+        complete = b'<html><table><tr><td><a href="view.do?seq=888">verified row</a></td></tr></table></html>'
+        with patch.object(shared, '_fetch_bytes_urllib', return_value=partial) as urllib, \
+             patch.object(shared.subprocess, 'run', return_value=SimpleNamespace(stdout=complete)) as curl:
+            result = collect(pages=1, aliases={}, channels={'kofia_212': KOFIA})
+        self.assertEqual(urllib.call_count, 1)
+        self.assertEqual(curl.call_count, 1)
+        self.assertFalse(result['holds'])
+        self.assertEqual([r['source_id'] for r in result['unmatched_notices']], ['kofia_212:888'])
+        self.assertEqual(result['coverage']['channel_pages']['kofia_212']['pages'][0]['count'], 1)
+
+    def test_incomplete_http10_response_retries_with_existing_budget(self):
+        partial = b'<html>incomplete'
+        complete = b'<html><table><tr><td><a href="view.do?seq=919">new row</a></td></tr></table></html>'
+        with patch.object(shared, '_fetch_bytes_urllib', side_effect=[partial, complete]) as urllib, \
+             patch.object(shared.subprocess, 'run', return_value=SimpleNamespace(stdout=partial)) as curl, \
+             patch.object(shared.time, 'sleep') as sleep:
+            result = collect(pages=1, aliases={}, channels={'kofia_212': KOFIA})
+        self.assertFalse(result['holds'])
+        self.assertEqual(urllib.call_count, 2)
+        self.assertEqual(curl.call_count, 1)
+        sleep.assert_called_once_with(1)
+        self.assertEqual(result['unmatched_notices'][0]['source_id'], 'kofia_212:919')
+
+    def test_permanent_200_truncation_holds_without_importing_partial_rows(self):
+        partial = b'<html><table><tr><td><a href="view.do?seq=777">partial</a></td></tr>'
+        with patch.object(shared, '_fetch_bytes_urllib', return_value=partial) as urllib, \
+             patch.object(shared.subprocess, 'run', return_value=SimpleNamespace(stdout=partial)) as curl, \
+             patch.object(shared.time, 'sleep'):
+            result = collect(pages=1, aliases={}, channels={'kofia_212': KOFIA, 'kofia_17': shared.CHANNELS['kofia_17'], 'kvca': KVCA})
+        # Same run-wide four-extra-attempt budget as transport failures, with at
+        # most one urllib plus one HTTP/1.0 recovery request per attempt.
+        self.assertEqual(urllib.call_count, 7)
+        self.assertEqual(curl.call_count, 7)
+        self.assertEqual(len(result['holds']), 3)
+        self.assertTrue(all(h['error'] == 'incomplete listing HTML' for h in result['holds']))
+        self.assertFalse(result['notices'])
+        self.assertFalse(result['unmatched_notices'])
+        self.assertEqual(result['update_policy'], 'upsert_successes_preserve_existing_on_holds')
+        self.assertTrue(all(c['pages'][0]['status'] == 'error' for c in result['coverage']['channel_pages'].values()))
+
+    def test_complete_empty_board_is_valid_and_does_not_follow_pagination(self):
+        empty = '<html><table><thead><tr><th>번호</th><th>제목</th><th>작성일</th></tr></thead><tbody><tr><td colspan="5">등록된 게시물이 없습니다.</td></tr></tbody></table><a href="?page=2">2</a></html>'
+        calls = []
+        def fetch(url, referer=None):
+            calls.append(url)
+            return empty.encode()
+        result = collect(fetch=fetch, pages=3, aliases={}, channels={'kofia_212': KOFIA})
+        self.assertEqual(calls, [KOFIA])
+        self.assertFalse(result['holds'])
+        self.assertEqual(result['coverage']['channel_pages']['kofia_212']['pages'][0], {'page': 1, 'url': KOFIA, 'status': 'ok', 'count': 0})
+
+    def test_complete_error_page_or_unlabelled_empty_message_is_not_success(self):
+        for html in ('<html>Access denied</html>', '<html>등록된 게시물이 없습니다.</html>',
+                     '<html><table><tr><td colspan="5">등록된 게시물이 없습니다.</td></tr></table></html>'):
+            with self.subTest(html=html):
+                result = collect(fetch=lambda url: html.encode(), pages=1, aliases={}, channels={'kofia_212': KOFIA})
+                self.assertEqual(len(result['holds']), 1)
+                self.assertEqual(result['holds'][0]['error'], 'listing parser found no notice rows')
+
     def test_novel_listing_ids_dates_and_pagination(self):
         html='''<html><table><tr><td>1</td><td><a href="listbody.html?po_no=99981">미래에셋증권</a></td><td><a href="listbody.html?po_no=99981">2026년 고용보험기금 PE 선정</a></td><td>2026-08-07</td><td>2026-08-20</td></tr></table><a href="list.html?a_cd=8&amp;page=2">2</a></html>'''
         rows,pages=parse_listing(html,KVCA,'kvca')

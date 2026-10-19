@@ -81,10 +81,10 @@ def build(data, out):
             timing = f"{p['deadline'][5:10].replace('-', '.')} 마감"
         else:
             timing = f"{latest['date'][5:].replace('-', '.')} 공고"
-        amount = f"{p['commitment_amount_krw']/100000000:,.0f}억원" if p.get('commitment_amount_krw') else 'PE 출자액 미확인'
+        amount = f"{p['commitment_amount_krw']/100000000:,.0f}억원" if p.get('commitment_amount_krw') else ''
         amount = p.get('list_commitment_label', amount)
         if p['id'] == 'pck-pension-2026-h2-pe':
-            amount = 'PE 출자액 미확인'
+            amount = ''
         return f'<article class="program" data-status="{h(p["status"])}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}</span><span class="program-status">{h(status)}</span></div><h2 class="program-title">{h(p.get("display_title",p["title"]))}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}</span></div></a></article>'
     options = ''.join(f'<option value="{h(k)}">{h(v[0]["institution_name"])}</option>' for k,v in institutions.items())
     statuses = ''.join(f'<option>{h(s)}</option>' for s in sorted({p['status'] for p in programs}))

@@ -15,7 +15,14 @@ def compact(value: str) -> str:
 
 def notice_stage(title: str) -> str:
     value = compact(title)
-    if any(word in value for word in ("정정", "수정", "변경", "연장", "재공고", "취소")):
+    # Classify an actual amendment, not a syllable crossing a word boundary:
+    # "선정 정량평가" becomes "선정정량평가" when whitespace is removed.
+    amendment = (
+        re.search(r"(?:정정|수정|변경|연장|취소)(?:공고|안내|사항|내용|본|알림|된)", value)
+        or re.search(r"(?:공고|계획|결과|일정|기한|기간|모집|선정)(?:을|를)?(?:정정|수정|변경|연장|취소)", value)
+        or re.search(r"(?:^|[\s【\[（(「『])(?:정정|수정|변경|연장|취소)(?=$|[\s】\]）)」』:：])", title)
+    )
+    if amendment:
         return "변경 공고"
     if "우선협상대상자" in value:
         return "우선협상대상자"
@@ -27,6 +34,10 @@ def notice_stage(title: str) -> str:
         return "접수 결과"
     if "선정결과" in value or "최종선정" in value:
         return "선정 결과"
+    # Reopening identifies the offering round. It must not turn its subsequent
+    # receipt/screening/final-result notices into fresh amendment events.
+    if "재공고" in value:
+        return "변경 공고"
     if "공고" in value or "모집" in value:
         return "모집 공고"
     return "단계 확인 필요"

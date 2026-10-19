@@ -19,6 +19,7 @@ from lp_joint_terms import discovered_joint_terms
 from kgrowth_notice_terms import discovery as discover_growth_terms
 from lp_shared_notice_catalog import update_shared_catalog
 from discover_lp_original_boards import reuse_native_originals
+from lp_notice_publication import publish_basic_notices
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -173,6 +174,18 @@ def prepare(current, report):
         if p.get('auto_extracted') and p['id'] not in automatic_ids | hold_ids:
             automatic_holds.append({'program_id': p['id'], 'reason': '현재 원문에서 PE 범위 또는 필수 항목 재확인 불가; 기존 공개본 유지'})
     for program in automatic:
+        # A basic notice can later gain fully parsed terms without changing its
+        # public URL or creating a second card for the same recruitment source.
+        original_urls = {e['url'] for e in program['events'] if e['type'] == '모집 공고'}
+        matching = [p for p in existing.values() if p['institution_id'] == program['institution_id']
+                    and original_urls & {e['url'] for e in p['events'] if e['type'] == '모집 공고'}]
+        if len(matching) > 1:
+            automatic_holds.append({'program_id': program['id'], 'reason': '복수 기존 모집 사업 연결; 기존 공개본 유지'})
+            continue
+        if matching and matching[0]['id'] != program['id']:
+            if not (matching[0].get('basic_publication') or matching[0].get('auto_extracted')):
+                continue
+            program['id'] = matching[0]['id']
         if not existing.get(program['id'], {}).get('manual_review_id'):
             existing[program['id']] = program
     data['programs'] = list(existing.values())
@@ -184,6 +197,8 @@ def prepare(current, report):
     seen_urls = {n['url'] for n in data['discovery_candidates']}
     data['discovery_candidates'].extend(n for n in data['shared_discovery_candidates'] if n['url'] not in seen_urls)
     apply_decisions(data, report['notices'], current.get('review_decisions', []))
+    data['programs'], basic_holds = publish_basic_notices(data, growth_notices, report['checked_at'])
+    data['basic_publication_holds'] = basic_holds
     data['as_of'] = str(report['checked_at'])[:10]
     validate(data)
     with tempfile.TemporaryDirectory() as folder:

@@ -248,12 +248,27 @@ def _fetch_bytes_urllib(url, referer=None):
 
 
 
-def _fetch_bytes_once(url, referer=None):
+class IncompleteHTML(ValueError):
+    """A successful HTTP transfer did not contain a complete HTML document."""
+
+
+def _complete_html(raw, kind):
+    html = decode_html(raw)
+    if '</html>' not in html.lower():
+        raise IncompleteHTML(f'incomplete {kind} HTML')
+    return html
+
+
+def _fetch_bytes_once(url, referer=None, *, html_kind=None):
     try:
-        return _fetch_bytes_urllib(url, referer)
-    except IncompleteRead:
-        # KOFIA occasionally sends chunk framing rejected by urllib. Curl fully
-        # validates the retry; never accept the truncated partial response.
+        raw = _fetch_bytes_urllib(url, referer)
+        if html_kind:
+            _complete_html(raw, html_kind)
+        return raw
+    except (IncompleteRead, IncompleteHTML):
+        # KOFIA can truncate a 200 response without a transport exception, as
+        # well as send invalid chunk framing. Retry the whole document over
+        # HTTP/1.0; validate its HTML too, never accept partial rows as complete.
         command=['curl','--fail','--silent','--show-error',
                  '--http1.0','--user-agent','Mozilla/5.0 (LP public notice collector)',
                  '--header','Accept-Encoding: identity','--header','Connection: close',
@@ -264,6 +279,8 @@ def _fetch_bytes_once(url, referer=None):
         result=subprocess.run(command+[url],capture_output=True,timeout=30,check=True)
         if len(result.stdout)>MAX_BYTES:
             raise ValueError('response exceeds 12 MiB limit')
+        if html_kind:
+            _complete_html(result.stdout, html_kind)
         return result.stdout
 
 
@@ -278,7 +295,7 @@ def _transient_fetch_error(error):
         # DNS/connect failures, incomplete transfers and timed-out/closed sockets.
         # Certificate errors, HTTP refusals and response-size limits stay fatal.
         return error.returncode in {6, 7, 18, 28, 52, 55, 56}
-    return isinstance(error, (TimeoutError, ConnectionError, IncompleteRead,
+    return isinstance(error, (TimeoutError, ConnectionError, IncompleteRead, IncompleteHTML,
                               subprocess.TimeoutExpired))
 
 
@@ -293,12 +310,12 @@ class _FetchRetryBudget:
         return True
 
 
-def fetch_bytes(url, referer=None, *, retry_budget=None):
+def fetch_bytes(url, referer=None, *, retry_budget=None, html_kind=None):
     # Retry the whole read, never merge bytes from an incomplete response.
     # At most three attempts, with short backoff; exhausted failures still hold.
     for attempt in range(3):
         try:
-            return _fetch_bytes_once(url, referer)
+            return _fetch_bytes_once(url, referer, html_kind=html_kind)
         except Exception as error:
             if (attempt == 2 or not _transient_fetch_error(error)
                     or (retry_budget is not None and not retry_budget.consume())):
@@ -316,11 +333,32 @@ def decode_html(raw):
     raise ValueError('HTML encoding not recognized')
 
 
+def _explicit_empty_listing(html, channel):
+    # An empty result is healthy only with the board's actual empty-row marker
+    # inside a labelled listing table. Error/bot pages and parser misses hold.
+    if not channel.startswith('kofia_'):
+        return False
+    for table in Document(html).root.nodes('table'):
+        headings = {n.clean() for n in table.nodes('th')}
+        if not {'번호', '제목', '작성일'}.issubset(headings):
+            continue
+        for cell in table.nodes('td'):
+            if cell.attrs.get('colspan', '').isdigit() and int(cell.attrs['colspan']) > 1:
+                if cell.clean() == '등록된 게시물이 없습니다.':
+                    return True
+    return False
+
+
 def collect(pages=3, fetch=None, aliases=None, channels=None, checked_at=None):
     # Share four extra attempts across the whole run, so widespread outages do
     # not multiply three retries across every sequential listing/detail read.
-    if fetch is None:
+    builtin_fetch = fetch is None
+    if builtin_fetch:
         fetch = partial(fetch_bytes, retry_budget=_FetchRetryBudget())
+
+    def read_html(url, kind):
+        raw = fetch(url, html_kind=kind) if builtin_fetch else fetch(url)
+        return _complete_html(raw, kind)
     aliases = load_aliases() if aliases is None else aliases
     channels = CHANNELS if channels is None else channels
     checked_at = checked_at or datetime.now(timezone.utc).isoformat()
@@ -334,12 +372,13 @@ def collect(pages=3, fetch=None, aliases=None, channels=None, checked_at=None):
                 continue
             done.add(number)
             try:
-                raw=fetch(url);html=decode_html(raw)
-                if '</html>' not in html.lower():
-                    raise ValueError('incomplete listing HTML')
+                html=read_html(url, 'listing')
                 found, pagination=parse_listing(html,url,channel)
-                if not found:
+                if not found and not _explicit_empty_listing(html, channel):
                     raise ValueError('listing parser found no notice rows')
+                if not found:
+                    # Do not follow navigation from an explicitly empty page.
+                    pagination = {}
                 stats['pages'].append({'page':number,'url':url,'status':'ok','count':len(found)})
                 pending.update({p:u for p,u in pagination.items() if p not in done and p<=pages})
             except Exception as exc:
@@ -356,9 +395,7 @@ def collect(pages=3, fetch=None, aliases=None, channels=None, checked_at=None):
                     unmatched.append({**candidate, 'source_channel':channel})
                     continue
                 try:
-                    raw=fetch(candidate['url']);html=decode_html(raw)
-                    if '</html>' not in html.lower():
-                        raise ValueError('incomplete detail HTML')
+                    html=read_html(candidate['url'], 'detail')
                     detail=parse_detail(html,candidate['url'],channel)
                     title=detail['title'] or candidate['title']
                     issuer=detail['issuer_name'] or candidate['issuer_name']

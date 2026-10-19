@@ -230,12 +230,33 @@ class PublishContracts(unittest.TestCase):
         self.report['checked_at']='2026-10-13'
         self.report['shared_collection']={'notices':[notice()],'coverage':{'notice_count':1}}
         data,pages=prepare(self.data,self.report)
-        self.assertEqual(len(self.data['programs']),len(data['programs']))
+        self.assertEqual(len(self.data['programs']) + 1,len(data['programs']))
+        basic = next(p for p in data['programs'] if p.get('basic_publication'))
+        self.assertEqual(basic['institution_id'], 'cu')
+        self.assertNotIn('commitment_amount_krw', basic)
+        self.assertEqual(basic['selected_gps'], [])
         self.assertEqual(data['shared_notices'][0]['institution_id'],'cu')
         self.assertIn('신협중앙회',pages['review.html'])
         self.assertIn('공고 본문',pages['review.html'])
         self.report['shared_collection']={'notices':[]}
         again,_=prepare(data,self.report)
         self.assertEqual(again['shared_notices'],data['shared_notices'])
+
+    def test_basic_notice_gains_terms_without_changing_url_or_duplicating(self):
+        from services.lp.tests.test_lp_notice_terms import official, BODY
+        n = official('운용방식: 국내 블라인드 PEF 공개모집', title='2026년 국내 신규전략 PEF 선정 공고')
+        n['sha256'] = 'a' * 64
+        self.report['priority_sources'] = {'koreapost': {'notices': [n], 'holds': []}}
+        first, _ = prepare(self.data, self.report)
+        basic = next(p for p in first['programs'] if p.get('basic_publication'))
+        self.assertNotIn('commitment_amount_krw', basic)
+        n['body'] += '\n' + BODY.replace('공동투자건', '혁신기업')
+        self.report['priority_sources']['koreapost']['notices'] = [n]
+        second, pages = prepare(first, self.report)
+        matches = [p for p in second['programs'] if n['url'] in {e['url'] for e in p['events']}]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]['id'], basic['id'])
+        self.assertEqual(matches[0]['commitment_amount_krw'], 200_000_000_000)
+        self.assertIn('program-' + basic['id'] + '.html', pages)
 
 if __name__=='__main__':unittest.main()
