@@ -316,3 +316,10 @@ python3 scripts/build_site_bundle.py --services wiki --date YYYY-MM-DD
 - 공식 사이트에서 자동 발견한 row라도 `monitor_status=candidate`이면 내부 검수 대상이다. candidate는 LP HTML, public JSON, GP profile signal 어디에도 노출하지 않고 `validated` 이후에만 공개한다.
 - `scripts/check_gp_profile_evidence_ready.py`는 GP profile evidence가 현재 FSS rebuilt DB와 표준명 기준으로 일치하는지 검사한다. 프로필/alias 품질 문제는 warning과 정리 backlog로 남기며, 통계 snapshot 발행 자체를 막지 않는다.
 - LP Notice는 계속 `사업 1개 = 공개 카드 1개`를 기준으로 삼고, 후보 source와 stale deadline은 public view/export 단계에서 제거한다.
+
+
+## 독립 웹서비스 읽기 계약
+
+뉴스레터 앱은 newsletter_issues/newsletter_public_issue_articles와 자기 아카이브 fallback만 읽는다. LP 앱은 lp_program_page RPC와 자기 캐시만 읽는다. GP 앱은 gp_public_snapshots/gp_public_pages의 지문 검증된 공개본과 자기 캐시만 읽는다. 한 서비스의 조회·캐시·앱 상태 검사가 다른 서비스의 필수 데이터 의존성이 되면 안 된다. LP 공고 및 GP snapshot 원자료/식별자는 이번 앱 분리에서 변경하거나 재발행하지 않는다.
+
+앱 배포별 SUPABASE_URL/public read key는 각각 설정할 수 있다. 현재 물리 Supabase 프로젝트/서버 공유는 잔존 공통 인프라 위험이며 앱 코드·배포 독립과 구분한다. 공통 자산은 각 앱 내부에 버전별로 패키징하고 원격 서비스에서 가져오지 않는다. GP의 기존 버전 관리된 XLSX는 services/gp/web/downloads/ 소유로 이동하며 뉴스레터 빌드/실행을 요구하지 않는다.

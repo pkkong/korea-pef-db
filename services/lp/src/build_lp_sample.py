@@ -11,7 +11,7 @@ def main():
     data['programs'] = [p for p in data['programs'] if p['id'] in approved]
     if {p['id'] for p in data['programs']} != approved:
         raise ValueError('All five approved samples must exist')
-    print(build(data, ROOT / 'services/newsletter/web/lp_samples'))
+    print(build(data, ROOT / 'services/lp/web/lp_samples'))
 
 if __name__ == '__main__':
     main()

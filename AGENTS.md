@@ -108,6 +108,15 @@ Every non-trivial subagent task should state:
 - Before any future visibility expansion, inspect tracked files/history and retained Actions artifacts/logging for actual disclosure risks. A source scan does not certify all historical logs. Do not assume that public execution resolves an account-wide billing lock; verify an actual started job and completed service publication.
 - Preserve useful schedules and failure signals. Do not hide a broken collection by disabling automation or claiming success because old public data is still served.
 
+## Independent Service Runtime Rule
+
+- Newsletter, LP and GP are independent products connected by user-facing links. Each must boot, package, deploy, read its own published data and serve its own assets without importing, building or health-checking either sibling.
+- Each runtime has its own `services/<service>/web/` source, Vercel project, environment and deployment workflow. Never add LP/GP build, download or checks to the newsletter deployment, or require newsletter code/assets for LP/GP deployment.
+- Shared visual assets have one pure source in `services/shared/web/service_assets.py`. Each deployment includes an immutable local copy; runtime assets must not be fetched from a sibling service. Newsletter HTML remains singular in `services/newsletter/web/newsletter_ui.py`, which re-exports shared asset functions for static mirror compatibility.
+- Cross-service old URLs may issue direct redirects without contacting the destination. A sibling timeout, broken import or missing dataset must not prevent the current service from booting or publishing.
+- Separate application/process/deployment isolation from shared infrastructure availability. The current Supabase server/account may remain shared with service-owned schemas and independently configurable public read credentials; do not claim separate database-server outage isolation until that infrastructure is actually separated.
+- Runtime deployment uses public read settings only. Database/service-role credentials belong to service-specific collection and publication workflows, never app packages.
+
 ## Project Context
 
 - The newsletter service lives under `services/newsletter/`.
@@ -122,7 +131,7 @@ Every non-trivial subagent task should state:
 - DB/public-view/build data contracts are in `docs/data_operating_model.md`.
 - The Project Lead control document is `docs/project_lead_control_center.md`. Use it as the current source of truth for active service ownership, product decisions, verification commands, deployment state, and handoff notes before starting or delegating substantial work.
 - Public UX/UI rules are durable instructions in `docs/design_system.md`: benchmark the public service against InnoForest-style data directories, keep the unified `브리프 / LP / GP` bottom nav while Wiki is hidden, use table-like rows for LP/GP directories, avoid card-heavy layouts, and remove operator/internal wording from public pages.
-- Newsletter UI source is singular: `services/newsletter/web/newsletter_ui.py` owns the public newsletter HTML/CSS/JS used by both Vercel and the GitHub Pages mirror. Do not create or restore Vercel-only Jinja templates or standalone `web/static/service.css`; those are product regressions unless explicitly replanned.
+- Newsletter HTML source is singular in `services/newsletter/web/newsletter_ui.py` for Vercel and the Pages mirror. Shared CSS/JS/icon functions live once in `services/shared/web/service_assets.py` and are re-exported there. Do not create Vercel-only templates, duplicate style sources, or runtime asset dependencies on sibling services.
 - Newsletter Vercel archive data must preserve both `newsletter_issues` and `newsletter_public_issue_articles`: issue rows own date navigation, article rows own article content/order. Do not treat numeric `0` values such as `section_order=0` as missing values; doing so changes Vercel ordering while Pages remains correct.
 - Wiki is not an active routine public-build target until the user re-plans it. Preserve explicit Wiki builder support, but do not include Wiki in default active public builds or navigation.
 

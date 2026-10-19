@@ -180,7 +180,7 @@ jobs:
           baseline_ids = {p['id'] for p in json.load(open('/tmp/lp-baseline.json'))['programs']}
           assert baseline_ids <= set(ids), 'Previously published LP programs must be retained'
           for program_id in ids:
-              url = f'https://kpef-newsletter.vercel.app/samples/lp/program-{program_id}.html'
+              url = f'https://kpef-lp.vercel.app/program-{program_id}.html'
               for attempt in range(3):
                   try:
                       with urllib.request.urlopen(url, timeout=30) as response:

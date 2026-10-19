@@ -29,7 +29,7 @@ env:
   GP_PUBLIC_REPO: pkkong/kpef-newsletter
   GP_PUBLIC_BRANCH: gh-pages
   GP_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter/
-  GP_VERCEL_URL: https://kpef-newsletter.vercel.app
+  GP_VERCEL_URL: https://kpef-gp.vercel.app
   NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS: "1"
 
 jobs:

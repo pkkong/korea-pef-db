@@ -11,115 +11,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy-vercel:
+  deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-      NEWSLETTER_ARCHIVE_URL: https://pkkong.github.io/kpef-newsletter/archive.json
-      NEWSLETTER_APP_URL: https://kpef-newsletter.vercel.app
+      SUPABASE_URL: ${{ secrets.NEWSLETTER_SUPABASE_URL || secrets.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEWSLETTER_SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_PUBLISHABLE_KEY }}
+      NEWSLETTER_PUBLIC_URL: https://kpef-newsletter.vercel.app
+      LP_PUBLIC_URL: https://kpef-lp.vercel.app
+      GP_PUBLIC_URL: https://kpef-gp.vercel.app
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
-          python-version: "3.x"
-
-      - name: Set up Node for Vercel CLI
-        uses: actions/setup-node@v6
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
         with:
-          node-version: "24"
-
-      - name: Install newsletter web dependencies
-        working-directory: services/newsletter/web
+          node-version: '24'
+      - name: Install own runtime dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install -r requirements.txt
-
-      - name: Check Vercel/Supabase readiness
-        run: |
-          python3 services/newsletter/scripts/check_vercel_supabase_readiness.py
-
-      - name: Run Vercel data and UI contract tests
+          python3 -m pip install -r services/newsletter/web/requirements.txt
+          npm install --global vercel@64.5.0
+      - name: Verify own service contracts
         run: |
           python3 services/newsletter/web/tests/test_newsletter_data.py
-          python3 -m unittest services.newsletter.web.tests.test_lp_review_ui
-
-      - name: Smoke test Flask app
-        run: |
-          python3 services/newsletter/scripts/check_vercel_supabase_readiness.py --smoke-app
-
-      - name: Stop if Vercel credentials are missing
-        if: env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID == ''
-        run: |
-          echo "::error::VERCEL_TOKEN, VERCEL_ORG_ID, and VERCEL_PROJECT_ID are required for Vercel deploy."
-          exit 1
-
-      - name: Build LP sample pages
-        run: |
-          python3 services/lp/src/build_lp_sample.py
-          python3 -m unittest services.lp.tests.test_lp_program_service
-
-      - name: Deploy newsletter app to Vercel
-        run: |
-          npm install --global vercel@latest
-          # Run from repo root because the Vercel project already has Root Directory set.
-          vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
-          vercel deploy --prod --token "$VERCEL_TOKEN"
-
-      - name: Verify LP sample
-        run: |
-          curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors "${NEWSLETTER_APP_URL}/samples/lp/program-ktcu-2026-blind-pef.html" -o /tmp/lp-sample.html
-          for expected in '한국교직원공제회' '1차 심사' '500억원 이내' '단계별 GP'; do
-            grep --fixed-strings --quiet "$expected" /tmp/lp-sample.html
-          done
-
-      - name: Verify Vercel GP routes
-        shell: bash
-        run: |
-          for path in market.html gps.html; do
-            verified=false
-            for attempt in $(seq 1 12); do
-              page="$(curl --silent --show-error --fail --location --max-time 30 "${NEWSLETTER_APP_URL}/${path}?refresh=1" || true)"
-              if [[ "$page" == *"Korea PEF"* ]]; then
-                verified=true
-                break
-              fi
-              sleep 5
-            done
-            if [ "$verified" != "true" ]; then
-              echo "::error::${path} did not return the GP public page after Vercel alias propagation."
-              exit 1
-            fi
-          done
-
-      - name: Verify Vercel GP ranking data-pack download
-        shell: bash
-        run: |
-          headers="$(mktemp)"
-          payload="$(mktemp --suffix=.xlsx)"
-          verified=false
-          for attempt in $(seq 1 12); do
-            if curl --silent --show-error --fail --location --max-time 30 \
-              --dump-header "$headers" \
-              --output "$payload" \
-              "${NEWSLETTER_APP_URL}/downloads/gp-ranking-datapack-2025ye.xlsx"; then
-              if grep --ignore-case --quiet '^content-type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' "$headers" \
-                && grep --ignore-case --quiet 'content-disposition: attachment;.*gp_ranking_datapack_2025YE.xlsx' "$headers" \
-                && unzip -t "$payload" >/dev/null; then
-                verified=true
-                break
-              fi
-            fi
-            sleep 5
-          done
-          if [ "$verified" != "true" ]; then
-            echo "::error::GP ranking data-pack download did not return a valid Excel attachment after Vercel alias propagation."
-            exit 1
-          fi
+          python3 -m unittest services.newsletter.web.tests.test_service_links
+          python3 -m unittest scripts.tests.test_service_runtime_isolation.ServiceRuntimeIsolationTests.test_newsletter_boots_without_lp_or_gp
+      - name: Deploy and verify own service
+        run: python3 scripts/deploy_service_runtime.py --service newsletter

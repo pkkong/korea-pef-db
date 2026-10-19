@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import subprocess
@@ -61,6 +62,53 @@ def check_lp_schema_is_service_local() -> list[str]:
         for reference in LP_CROSS_SERVICE_FOREIGN_KEY_REFS
         if reference in schema_text
     ]
+
+
+def check_web_service_boundaries() -> list[str]:
+    """Runtime packages may share static assets, never another service adapter."""
+    violations: list[str] = []
+    services = {"newsletter", "lp", "gp"}
+    adapters = {
+        "newsletter": {"newsletter_data", "newsletter_ui"},
+        "lp": {"lp_program_data", "lp_review_ui"},
+        "gp": {"gp_public_data"},
+    }
+    for service in sorted(services):
+        root = REPO_ROOT / "services" / service / "web"
+        if not (root / "app.py").is_file():
+            violations.append(f"services/{service}/web/app.py:missing_standalone_app")
+            continue
+        foreign = services - {service}
+        foreign_adapters = set().union(*(adapters[item] for item in foreign))
+        for path in sorted(root.rglob("*.py")):
+            if "tests" in path.relative_to(root).parts:
+                continue
+            if path.stem in foreign_adapters:
+                violations.append(f"{rel(path)}:foreign_service_adapter")
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=rel(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    names = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom):
+                    names = [node.module or ""]
+                    names.extend(alias.name for alias in node.names)
+                else:
+                    continue
+                for name in names:
+                    if any(name == f"services.{other}" or name.startswith(f"services.{other}.") for other in foreign):
+                        violations.append(f"{rel(path)}:{node.lineno}:foreign_service_import:{name}")
+                    if name.split(".")[0] in foreign_adapters:
+                        violations.append(f"{rel(path)}:{node.lineno}:foreign_adapter_import:{name}")
+    shared = REPO_ROOT / "services" / "shared" / "web" / "service_assets.py"
+    if not shared.is_file():
+        violations.append("services/shared/web/service_assets.py:missing_shared_assets")
+    else:
+        for node in ast.walk(ast.parse(shared.read_text(encoding="utf-8"))):
+            names = [alias.name for alias in node.names] if isinstance(node, ast.Import) else [node.module or ""] if isinstance(node, ast.ImportFrom) else []
+            for name in names:
+                if any(name == f"services.{service}" or name.startswith(f"services.{service}.") for service in services):
+                    violations.append(f"{rel(shared)}:{node.lineno}:shared_assets_depend_on_service:{name}")
+    return violations
 
 
 def run_python(code: str) -> tuple[int, str, str]:
@@ -181,11 +229,26 @@ def check_workflow_contracts() -> list[str]:
             violations.append(f"sync-newsletter-supabase.yml:missing:{required}")
 
     vercel = workflow_text["deploy-newsletter-vercel.yml"]
-    for forbidden in ["run_daily_news_pipeline.py", "build_newsletter_bundle.py", "sync_newsletter_supabase.py", "SUPABASE_SERVICE_ROLE_KEY"]:
+    for forbidden in ["run_daily_news_pipeline.py", "build_newsletter_bundle.py", "sync_newsletter_supabase.py", "SUPABASE_SERVICE_ROLE_KEY", "services/lp/", "services/gp/", "services.lp.", "services.gp.", "test_lp_", "Verify LP", "Verify Vercel GP"]:
         if forbidden in vercel:
             violations.append(f"deploy-newsletter-vercel.yml:forbidden:{forbidden}")
-    if "vercel deploy --prod" not in vercel:
-        violations.append("deploy-newsletter-vercel.yml:missing:vercel deploy --prod")
+    if "vercel deploy --prod" not in vercel and not (
+        "deploy_service_runtime.py" in vercel and "--service newsletter" in vercel
+    ):
+        violations.append("deploy-newsletter-vercel.yml:missing:newsletter_runtime_deploy")
+    for service in ("lp", "gp"):
+        path = REPO_ROOT / ".github" / "workflows" / f"deploy-{service}-vercel.yml"
+        if not path.is_file():
+            violations.append(f"{path.name}:missing_independent_deploy_workflow")
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "deploy_service_runtime.py" not in text or f"--service {service}" not in text:
+            violations.append(f"{path.name}:missing:own_runtime_deploy")
+        for other in {"newsletter", "lp", "gp"} - {service}:
+            if f"--service {other}" in text or f"services/{other}/" in text:
+                violations.append(f"{path.name}:foreign_service_build:{other}")
+        if "SUPABASE_SERVICE_ROLE_KEY" in text:
+            violations.append(f"{path.name}:runtime_deploy_must_not_have_database_write_key")
 
     migration = workflow_text["apply-newsletter-supabase-migration.yml"]
     if "SUPABASE_DB_URL" not in migration or "psql" not in migration:
@@ -238,6 +301,7 @@ def main() -> int:
     sections = {
         "cross_service_newsletter_src_imports": check_no_cross_service_newsletter_src_imports(),
         "lp_schema_service_local": check_lp_schema_is_service_local(),
+        "web_service_boundaries": check_web_service_boundaries(),
         "import_isolation": check_import_isolation(),
         "workflow_contracts": check_workflow_contracts(),
         "generated_outputs_untracked": check_generated_outputs_untracked(),

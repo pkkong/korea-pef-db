@@ -276,8 +276,8 @@ def test_vercel_app_uses_common_newsletter_ui() -> None:
         assert "bottom-nav newsletter-only" in html
         assert 'href="assets/service.css' in html
         assert 'src="assets/service.js' in html
-        assert 'href="https://pkkong.github.io/kpef-newsletter/lp-notices.html"' in html
-        assert 'href="/gps.html"' in html
+        assert 'href="https://kpef-lp.vercel.app/"' in html
+        assert 'href="https://kpef-gp.vercel.app/gps.html"' in html
         assert 'href="lp-notices.html"' not in html
         assert 'href="gps.html"' not in html
         assert "/static/service.css" not in html
@@ -295,56 +295,8 @@ def test_vercel_app_uses_common_newsletter_ui() -> None:
         web_app.load_archive = old_loader
 
 
-def test_vercel_app_serves_gp_pages_at_canonical_routes() -> None:
-    old_fetch = web_app.fetch_active_gp_page
-    old_cache = {
-        "expires_at": web_app._GP_PAGE_CACHE.get("expires_at", 0.0),
-        "pages": dict(web_app._GP_PAGE_CACHE.get("pages") or {}),
-    }
-
-    def fake_fetch(page_name: str) -> dict[str, str]:
-        return {
-            "page_html": f'<!doctype html><a href="lp-notices.html">LP</a><main>{page_name} 2025Q4</main>',
-            "snapshot_id": "fss-2025q4-test",
-            "reporting_period": "2025Q4",
-            "as_of_date": "2025-12-31",
-            "source_sha256": "a" * 64,
-        }
-
-    web_app.fetch_active_gp_page = fake_fetch
-    web_app._GP_PAGE_CACHE.update({"expires_at": 0.0, "pages": {}})
-    try:
-        client = web_app.app.test_client()
-        market = client.get("/market.html?refresh=1")
-        directory = client.get("/gps.html?refresh=1")
-        profile = client.get("/gp-2.html?refresh=1")
-        person = client.get("/person-47.html?refresh=1")
-
-        assert market.status_code == 200
-        assert directory.status_code == 200
-        assert profile.status_code == 200
-        assert person.status_code == 200
-        assert market.headers["X-GP-Data-Source"] == "supabase-public-snapshot"
-        assert market.headers["X-GP-Snapshot-Id"] == "fss-2025q4-test"
-        assert "market.html 2025Q4" in market.get_data(as_text=True)
-        assert "gps.html 2025Q4" in directory.get_data(as_text=True)
-        assert "gp-2.html 2025Q4" in profile.get_data(as_text=True)
-        assert "person-47.html 2025Q4" in person.get_data(as_text=True)
-        assert 'href="https://pkkong.github.io/kpef-newsletter/lp-notices.html"' in market.get_data(as_text=True)
-    finally:
-        web_app.fetch_active_gp_page = old_fetch
-        web_app._GP_PAGE_CACHE.update(old_cache)
 
 
-def test_vercel_app_serves_gp_ranking_data_pack_as_a_download() -> None:
-    client = web_app.app.test_client()
-    response = client.get("/downloads/gp-ranking-datapack-2025ye.xlsx")
-
-    assert response.status_code == 200
-    assert response.mimetype == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    assert 'attachment; filename=gp_ranking_datapack_2025YE.xlsx' in response.headers["Content-Disposition"]
-    assert response.headers["X-GP-Data-Pack-Period"] == "2025Q4"
-    assert response.get_data().startswith(b"PK")
 
 
 def test_common_ui_marks_empty_issue_dates_for_public_users() -> None:
@@ -401,7 +353,7 @@ def test_vercel_runtime_has_no_standalone_ui_or_legacy_service_imports() -> None
         "services.wiki",
         "pef_wiki",
     ]
-    for path in [WEB_ROOT / "app.py", WEB_ROOT / "index.py", WEB_ROOT / "newsletter_data.py", WEB_ROOT / "gp_public_data.py"]:
+    for path in [WEB_ROOT / "app.py", WEB_ROOT / "index.py", WEB_ROOT / "newsletter_data.py"]:
         source = path.read_text(encoding="utf-8")
         for token in forbidden:
             assert token not in source, f"{path.name} must not import or mention {token}"
@@ -419,45 +371,10 @@ def test_vercel_config_uses_flask_framework_without_catchall_index_rewrite() -> 
 
 
 
-def test_gp_page_expiry_is_independent_of_other_page_refresh() -> None:
-    from unittest.mock import patch
-    clock = [1000.0]
-    calls = []
-    def fetch(name):
-        calls.append(name)
-        return {"snapshot_id": "one", "page_html": name}
-    with patch.dict(web_app._GP_PAGE_CACHE, {"snapshot_id": "", "pages": {}}, clear=True), patch.object(web_app.time, "time", lambda: clock[0]), patch.object(web_app, "fetch_active_gp_page", fetch):
-        web_app.load_gp_page("gps.html")
-        clock[0] += 100
-        web_app.load_gp_page("gp-1.html")
-        clock[0] += 201
-        web_app.load_gp_page("gps.html")
-    assert calls == ["gps.html", "gp-1.html", "gps.html"]
 
 
-def test_new_gp_snapshot_invalidates_old_directory() -> None:
-    from unittest.mock import patch
-    version = ["old"]
-    def fetch(name):
-        return {"snapshot_id": version[0], "page_html": name}
-    with patch.dict(web_app._GP_PAGE_CACHE, {"snapshot_id": "", "pages": {}}, clear=True), patch.object(web_app, "fetch_active_gp_page", fetch):
-        web_app.load_gp_page("gps.html")
-        version[0] = "new"
-        web_app.load_gp_page("gp-1.html")
-        assert web_app.load_gp_page("gps.html")["snapshot_id"] == "new"
 
 
-def test_gp_outage_cache_has_time_limit() -> None:
-    from unittest.mock import patch
-    clock = [1000.0]
-    with patch.dict(web_app._GP_PAGE_CACHE, {"snapshot_id": "", "pages": {}}, clear=True), patch.object(web_app.time, "time", lambda: clock[0]), patch.object(web_app, "fetch_active_gp_page", return_value={"snapshot_id": "old", "page_html": "ok"}):
-        web_app.load_gp_page("gps.html")
-        with patch.object(web_app, "fetch_active_gp_page", side_effect=OSError("outage")):
-            clock[0] = 1301
-            assert web_app.load_gp_page("gps.html")["cache_status"] == "stale"
-            clock[0] = 5000
-            response = web_app.app.test_client().get("/gps.html")
-            assert response.status_code == 503
 
 
 def test_news_outage_serves_last_good_archive_then_returns_controlled_503() -> None:
