@@ -82,7 +82,7 @@ def build(data, out):
         else:
             timing = f"{latest['date'][5:].replace('-', '.')} 공고"
         amount = f"{p['commitment_amount_krw']/100000000:,.0f}억원" if p.get('commitment_amount_krw') else ''
-        amount = p.get('list_commitment_label', amount)
+        amount = p.get('list_commitment_label') or p.get('commitment_label') or amount
         if p['id'] == 'pck-pension-2026-h2-pe':
             amount = ''
         return f'<article class="program" data-status="{h(p["status"])}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}</span><span class="program-status">{h(status)}</span></div><h2 class="program-title">{h(p.get("display_title",p["title"]))}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}</span></div></a></article>'

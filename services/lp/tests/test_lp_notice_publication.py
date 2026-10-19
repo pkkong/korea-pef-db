@@ -230,6 +230,29 @@ class BasicNoticePublicationTests(unittest.TestCase):
         self.assertNotIn('deadline', programs[0])
         self.assertTrue(any(h['stage'] == 'basic_deadline' for h in holds))
 
+    def test_month_period_screening_is_after_same_month_submission_deadline(self):
+        original = notice(body='국내 블라인드 PEF 공개모집. 접수마감일:2026.10.20.')
+        p = publish([original])[0][0]
+        p.pop('basic_publication');p['publication_version'] = 1
+        p['schedule_stages'].append({'stage':'screening','label':'1차 심사','original_label':'정량평가',
+            'date':'2026-10','date_label':'10월 말','precision':'month_period','status':'planned','source_url':original['url']})
+        programs, _ = publish([original], existing=[p])
+        labels = [s['label'] for s in programs[0]['schedule_stages']]
+        self.assertLess(labels.index('접수 마감'), labels.index('1차 심사'))
+        self.assertEqual(next(s for s in programs[0]['schedule_stages'] if s['label']=='1차 심사')['date'], '2026-10')
+
+    def test_confirmed_result_replaces_old_planned_stage(self):
+        original = notice()
+        p = publish([original])[0][0]
+        p.pop('basic_publication');p['publication_version'] = 1
+        p['schedule_stages'].append({'stage':'screening','label':'1차 심사','original_label':'정량평가',
+            'date':'2026-10','precision':'month','status':'planned','source_url':original['url']})
+        result = notice(910002, title=PREFIX+' 선정 정량평가 결과 안내', day='2026-10-15')
+        programs, _ = publish([original, result], existing=[p])
+        stages = [s for s in programs[0]['schedule_stages'] if s['stage']=='screening']
+        self.assertEqual(len(stages), 1)
+        self.assertEqual(stages[0]['status'], 'confirmed')
+
 
 if __name__ == '__main__':
     unittest.main()

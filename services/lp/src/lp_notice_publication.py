@@ -196,14 +196,31 @@ def _event(n):
     return {'date': n['date'], 'type': stage, 'title': n['title'], 'url': n['url']}
 
 
+def _schedule_order(stages):
+    """Sort coarse periods after known prior stages, without inventing dates."""
+    phase = {'announcement': 0, 'application': 1, 'screening': 2,
+             'interview': 3, 'due_diligence': 4, 'selection': 5}
+    def key(item):
+        stamp = item['date']
+        if len(stamp) >= 10:
+            return stamp[:7], float(stamp[8:10]), stamp
+        rank = phase.get(item['stage'], 6)
+        earlier_days = [int(s['date'][8:10]) for s in stages if len(s['date']) >= 10
+                        and s['date'][:7] == stamp[:7] and phase.get(s['stage'], 6) < rank]
+        return stamp[:7], max(earlier_days, default=0) + (rank + 1) / 10, stamp
+    return sorted(stages, key=key)
+
+
 def _refresh(p, members, checked_at):
     existing_events = {e['url']: copy.deepcopy(e) for e in p['events']}
     for n in members:
         existing_events.setdefault(n['url'], _event(n))
     p['events'] = sorted(existing_events.values(), key=lambda e: (e['date'], e['url']))
     changed = any(_event(n)['type'] == '변경 공고' for n in members)
+    confirmed = {STAGES[e['type']] for e in p['events'] if e['type'] in STAGES}
     stages = [s for s in p.get('schedule_stages', []) if not changed
-              and s.get('status') == 'planned' and s.get('source_url') in {e['url'] for e in p['events']}]
+              and s.get('status') == 'planned' and s['stage'] not in confirmed
+              and s.get('source_url') in {e['url'] for e in p['events']}]
     for event in p['events']:
         kind = STAGES.get(event['type'])
         if kind:
@@ -215,7 +232,7 @@ def _refresh(p, members, checked_at):
         stages.append({'stage': 'application', 'label': '접수 마감', 'original_label': '접수 마감',
                        'date': p['deadline'], 'precision': p.get('deadline_precision', 'datetime'),
                        'status': 'announced_deadline', 'source_url': p.get('deadline_source_url', original), 'show_source': True})
-    p['schedule_stages'] = sorted(stages, key=lambda s: s['date'])
+    p['schedule_stages'] = _schedule_order(stages)
     rank = {'모집 공고': 0, '접수 결과': 1, '1차 심사 결과': 2, '우선협상대상자': 3, '선정 결과': 4, '최종 선정': 4, '변경 공고': 5}
     latest = max(p['events'], key=lambda e: (e['date'], rank.get(e['type'], -1), e['url']))
     stage = latest['type']
@@ -272,7 +289,7 @@ def publish_basic_notices(data, growth_notices, checked_at):
                 continue
             if matches:
                 p = matches[0]
-                if not p.get('basic_publication') and not (urls - {e['url'] for e in p['events']}):
+                if not p.get('basic_publication') and not p.get('publication_version') and not (urls - {e['url'] for e in p['events']}):
                     continue
                 # Complete reviewed programs retain their validated offering
                 # facts. Lifecycle links can advance without guessing GP names.

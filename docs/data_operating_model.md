@@ -326,3 +326,10 @@ python3 scripts/build_site_bundle.py --services wiki --date YYYY-MM-DD
 
 
 독립 앱 운영 주소: Newsletter kpef-newsletter.vercel.app, LP kpef-lp.vercel.app, GP kpef-gp.vercel.app. LP 수집 workflow는 새 LP 주소의 공개 실행을 검사하고 GP 발행 workflow도 새 GP 주소의 snapshot을 검사한다. 뉴스레터 옛 /samples/lp/ 및 GP 경로는 자료를 읽지 않고307 이동한다. DB 발행이 앱 배포를 요구하지 않는 계약은 유지한다. 이전 문서의 뉴스레터 /samples/lp/ 운영주소 설명은 이 전환 기록을 우선한다.
+
+
+## LP 기본 공고와 모집조건의 분리
+
+`lp_notice_publication.py`는 검증·보존된 기관 및 협회 공고에서 기본 공개 사업과 후속 일정을 만든다. `basic_publication`은 금액·주목적·GP가 비어 있어도 공식 PE 모집을 검증해 공개한 자료다. 빈 항목을 추정하거나 공개 화면에 검토 문구로 채우지 않는다. 기존 조건 추출기는 계속 항목별 근거를 검증하며, 기본 공고가 나중에 조건을 얻어도 기존 ID/URL을 유지한다.
+
+기관 원문으로 재게시 중복을 줄이고, 게시물 공고번호·평가 단계 숫자를 펀드 차수로 사용하지 않는다. 혼합 PE/VC 총액을 PE 금액으로 사용하지 않는다. 변경·취소는 원문 이력을 보존하고 오래된 금액·마감·예정 일정을 비운다. 전후 비교표 등 새 마감을 확정할 수 없는 경우 공고와 변경 사실만 공개한다. `basic_publication_holds`는 내부 보류 근거이며 공개 사실이 아니다. DB 저장·페이지 발행은 기존 단일 트랜잭션과 이전 사업 보존 계약을 유지한다.
