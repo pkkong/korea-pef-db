@@ -2,6 +2,8 @@ import copy
 import json
 import unittest
 import ssl
+import socket
+from urllib.error import HTTPError, URLError
 from types import SimpleNamespace
 from unittest.mock import patch
 from services.lp.src.discover_kfinco_originals import discover, validate_api_provenance, digest, attachments, official, native_tls_fetch, BASE, LIST_URL
@@ -36,6 +38,105 @@ class KfincoTests(unittest.TestCase):
             context.check_hostname=False
             with self.assertRaises(ValueError):native_tls_fetch(LIST_URL)
             self.assertEqual(fetch.call_count,1)
+
+    def test_temporary_macos_dns_listing_error_recovers_without_hold(self):
+        responses = [URLError(socket.gaierror(8, 'nodename nor servname provided, or not known')), listing([row()]), detail(row())]
+        with patch('services.lp.src.discover_kfinco_originals.time.sleep') as sleep:
+            fetch = unittest.mock.Mock(side_effect=responses)
+            out = discover({'notices': [source()]}, fetch, NOW)
+        self.assertNotIn('holds', out)
+        self.assertEqual(out['notices'][0]['original_notices'][0]['title'], TITLE)
+        self.assertEqual([c.args[0] for c in fetch.call_args_list], [LIST_URL, LIST_URL, BASE + '/api/pr/notice/detail/' + CODE])
+        self.assertEqual(out['coverage']['kfinco_original']['retry_requests'], 1)
+        sleep.assert_called_once_with(1)
+
+    def test_timeout_connection_rate_limit_and_server_error_retry_only_transport(self):
+        errors = [TimeoutError('slow'), URLError(TimeoutError('slow')),
+                  URLError(ConnectionResetError('closed')), socket.gaierror(socket.EAI_AGAIN, 'temporary DNS'),
+                  HTTPError(LIST_URL, 429, 'rate limited', {}, None),
+                  HTTPError(LIST_URL, 503, 'unavailable', {}, None)]
+        for error in errors:
+            with self.subTest(error=type(error).__name__), patch('services.lp.src.discover_kfinco_originals.time.sleep') as sleep:
+                fetch = unittest.mock.Mock(side_effect=[error, listing([row()]), detail(row())])
+                out = discover({'notices': [source()]}, fetch, NOW)
+                self.assertEqual(out['coverage']['kfinco_original']['linked'], 1)
+                self.assertEqual(fetch.call_count, 3)
+                sleep.assert_called_once_with(1)
+
+    def test_tls_host_http_refusal_and_source_validation_errors_do_not_retry(self):
+        errors = [URLError(ssl.SSLCertVerificationError('certificate hostname mismatch')),
+                  HTTPError(LIST_URL, 404, 'missing', {}, None),
+                  HTTPError(LIST_URL, 403, 'forbidden', {}, None),
+                  ValueError('host validation failed')]
+        for error in errors:
+            with self.subTest(error=type(error).__name__), patch('services.lp.src.discover_kfinco_originals.time.sleep') as sleep:
+                fetch = unittest.mock.Mock(side_effect=error)
+                out = discover({'notices': [source()]}, fetch, NOW)
+                self.assertEqual(fetch.call_count, 1)
+                self.assertEqual(out['holds'][0]['phase'], 'listing')
+                sleep.assert_not_called()
+        with patch('services.lp.src.discover_kfinco_originals.time.sleep') as sleep:
+            fetch = unittest.mock.Mock(return_value=b'{"success": false}')
+            out = discover({'notices': [source()]}, fetch, NOW)
+            self.assertEqual(fetch.call_count, 1)
+            self.assertEqual(out['holds'][0]['phase'], 'listing')
+            sleep.assert_not_called()
+
+    def test_persistent_dns_error_stops_after_three_attempts_and_preserves_existing(self):
+        retained = {**source(), 'original_notices': [{'body': 'previous verified original'}]}
+        collection = {'notices': [source(), retained]}
+        before = copy.deepcopy(collection)
+        with patch('services.lp.src.discover_kfinco_originals.time.sleep') as sleep:
+            fetch = unittest.mock.Mock(side_effect=URLError(socket.gaierror(8, 'nodename nor servname provided, or not known')))
+            out = discover(collection, fetch, NOW)
+        self.assertEqual(fetch.call_count, 3)
+        self.assertEqual([c.args[0] for c in sleep.call_args_list], [1, 2])
+        self.assertEqual(collection, before)
+        self.assertEqual(out['notices'][1], retained)
+        self.assertEqual(out['holds'][0]['phase'], 'listing')
+        self.assertNotIn('original_notices', out['notices'][0])
+
+    def test_temporary_detail_failure_recovers_but_invalid_body_is_not_retried(self):
+        with patch('services.lp.src.discover_kfinco_originals.time.sleep') as sleep:
+            fetch = unittest.mock.Mock(side_effect=[listing([row()]), TimeoutError('detail timeout'), detail(row())])
+            out = discover({'notices': [source()]}, fetch, NOW)
+            self.assertEqual(out['coverage']['kfinco_original']['linked'], 1)
+            self.assertEqual(fetch.call_count, 3)
+            sleep.assert_called_once_with(1)
+        invalid = encode({'success': True, 'detail': {**row(), 'ntContent': 'scope missing'}})
+        with patch('services.lp.src.discover_kfinco_originals.time.sleep') as sleep:
+            fetch = unittest.mock.Mock(side_effect=[listing([row()]), invalid])
+            out = discover({'notices': [source()]}, fetch, NOW)
+            self.assertEqual(fetch.call_count, 2)
+            self.assertEqual(out['holds'][0]['phase'], 'validation')
+            sleep.assert_not_called()
+
+    def test_listing_detail_and_attachment_share_four_extra_attempts(self):
+        r = {**row(), 'noticeAttachModelList': [{'ntCode': CODE, 'filepath': '/pds/notice/2026-09', 'filenameSave': 'a.hwp', 'filenameOriginal': '공고문.hwp'}]}
+        counts = {'listing': 0, 'detail': 0, 'attachment': 0}
+        def fetch(url):
+            phase = 'listing' if url == LIST_URL else 'detail' if '/api/pr/notice/detail/' in url else 'attachment'
+            counts[phase] += 1
+            if counts[phase] <= 2 or phase == 'attachment':
+                raise TimeoutError('temporary ' + phase)
+            return listing([r]) if phase == 'listing' else detail(r)
+        with patch('services.lp.src.discover_kfinco_originals.time.sleep') as sleep:
+            out = discover({'notices': [source()]}, fetch, NOW)
+        self.assertEqual(counts, {'listing': 3, 'detail': 3, 'attachment': 1})
+        self.assertEqual(sleep.call_count, 4)
+        self.assertEqual(out['coverage']['kfinco_original']['retry_requests'], 4)
+        self.assertEqual(out['holds'][0]['phase'], 'attachment')
+        self.assertTrue(out['notices'][0]['original_notices'][0]['body'])
+
+    def test_previous_success_does_not_hide_a_later_run_dns_failure(self):
+        first = self.fixture()
+        self.assertEqual(first['coverage']['kfinco_original']['linked'], 1)
+        with patch('services.lp.src.discover_kfinco_originals.time.sleep'):
+            fetch = unittest.mock.Mock(side_effect=URLError(socket.gaierror(8, 'DNS unavailable')))
+            later = discover({'notices': [source()]}, fetch, NOW)
+        self.assertEqual(fetch.call_count, 3)
+        self.assertEqual(later['coverage']['kfinco_original']['linked'], 0)
+        self.assertEqual(later['holds'][0]['phase'], 'listing')
 
     def test_new_arbitrary_identifier_and_unchanged_title(self):
         out=self.fixture();o=out['notices'][0]['original_notices'][0]

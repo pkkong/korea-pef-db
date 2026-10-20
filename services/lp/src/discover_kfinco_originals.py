@@ -9,9 +9,14 @@ import hashlib
 import json
 import os
 import re
+import errno
+import socket
+import ssl
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote, urlsplit
+from urllib.error import HTTPError, URLError
 try:
     from .collect_lp_original_notices import fetch_bytes, safe_host, original_body_hash
     from .collect_shared_lp_notices import Document, valid_date
@@ -138,9 +143,44 @@ def validate_api_provenance(original,association_notice):
         if url not in hashes or not isinstance(text,str) or not text.strip() or '\x00' in text:raise ValueError('invalid attachment text')
     return True
 
+
+def _transient_fetch_error(error):
+    # macOS occasionally fails resolution of an otherwise available K-FINCO
+    # host with EAI_NONAME (errno 8). Retry the transport, never source parsing.
+    if isinstance(error, HTTPError):
+        return error.code == 429 or 500 <= error.code <= 599
+    if isinstance(error, URLError):
+        return _transient_fetch_error(error.reason)
+    if isinstance(error, ssl.SSLError):
+        return False
+    if isinstance(error, socket.gaierror):
+        return error.errno in {socket.EAI_AGAIN, socket.EAI_NONAME, 8}
+    if isinstance(error, (TimeoutError, ConnectionError)):
+        return True
+    return isinstance(error, OSError) and error.errno in {
+        errno.ETIMEDOUT, errno.ECONNRESET, errno.ECONNABORTED,
+        errno.ECONNREFUSED, errno.ENETUNREACH, errno.EHOSTUNREACH,
+    }
+
+
+def _fetch_with_retry(fetch, url, budget):
+    # At most three attempts per URL, and four extra attempts shared by the
+    # complete discovery run. Failures still reach the ordinary hold path.
+    for attempt in range(3):
+        try:
+            return fetch(url)
+        except Exception as error:
+            if attempt == 2 or not _transient_fetch_error(error) or budget[0] == 0:
+                raise
+            budget[0] -= 1
+            time.sleep(attempt + 1)
+
 def discover(collection,fetch=fetch_bytes,checked_at=None):
     result=copy.deepcopy(collection);checked_at=checked_at or datetime.now(timezone.utc).isoformat()
     cache=None;attempted=False;linked=0
+    retry_budget=[4]
+    def request(url):
+        return _fetch_with_retry(fetch, url, retry_budget)
     def hold(n,phase,error,url):
         result.setdefault('holds',[]).append({'stage':'kfinco_original','source_id':n.get('source_id'),'phase':phase,'url':url,'error':str(error)})
     for n in result.get('notices',[]):
@@ -148,7 +188,7 @@ def discover(collection,fetch=fetch_bytes,checked_at=None):
         phase='listing';request_url=LIST_URL
         try:
             if not attempted:
-                attempted=True;cache=listing(fetch(LIST_URL))
+                attempted=True;cache=listing(request(LIST_URL))
             if cache is None:raise ValueError('previous official listing fetch failed')
             raw,rows=cache;phase='matching'
             candidates=[r for r in rows if matching(r,n)]
@@ -156,7 +196,7 @@ def discover(collection,fetch=fetch_bytes,checked_at=None):
             row=candidates[0]
             if type(row.get('closed')) is not int or row['closed']!=0:raise ValueError('official public listing marks notice closed')
             ident=code(row.get('ntCode'));request_url=BASE+'/api/pr/notice/detail/'+ident;phase='detail'
-            detail_raw,d,parsed=parse_detail(fetch(request_url),ident)
+            detail_raw,d,parsed=parse_detail(request(request_url),ident)
             phase='validation'
             original={**parsed,'institution_id':'kfinco','url':BASE+'/pr/notice/detail/'+ident,
                 'checked_at':checked_at,'matched_republication_url':n['url'],'review_only':True,'hash_kind':'semantic_v1',
@@ -168,7 +208,7 @@ def discover(collection,fetch=fetch_bytes,checked_at=None):
             validate_api_provenance(original,n)
             for a in original['attachments'][:1]:
                 try:
-                    data=fetch(a['url']);original['attachment_hashes'][a['url']]=hashlib.sha256(data).hexdigest()
+                    data=request(a['url']);original['attachment_hashes'][a['url']]=hashlib.sha256(data).hexdigest()
                     text=extract_attachment(data)['text'].replace('\x00',' ')
                     if not text.strip():raise ValueError('attachment has no decoded text')
                     original['attachment_texts'][a['url']]=text
@@ -177,7 +217,7 @@ def discover(collection,fetch=fetch_bytes,checked_at=None):
             n['original_notices']=[original];linked+=1
         except EvidenceMismatch as exc:hold(n,'validation',exc,request_url)
         except Exception as exc:hold(n,phase,exc,request_url)
-    result.setdefault('coverage',{})['kfinco_original']={'listing_requests':int(attempted),'linked':linked}
+    result.setdefault('coverage',{})['kfinco_original']={'listing_requests':int(attempted),'linked':linked,'retry_requests':4-retry_budget[0]}
     return result
 
 def native_tls_fetch(url):
