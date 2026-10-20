@@ -1,11 +1,16 @@
 name: Diagnose LP official HTTP responses
 on:
   workflow_dispatch:
+    inputs:
+      runner:
+        type: choice
+        default: ubuntu-latest
+        options: [ubuntu-latest, macos-latest]
 permissions:
   contents: read
 jobs:
   diagnose:
-    runs-on: macos-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 5
     steps:
       - name: Compare bounded anonymous official requests
