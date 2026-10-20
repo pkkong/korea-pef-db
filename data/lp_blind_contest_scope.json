@@ -37,8 +37,7 @@
     "poba",
     "pmaa",
     "tp",
-    "cu",
-    "kfcc"
+    "cu"
   ],
   "supporting_collector_ids": [
     "kdb",
@@ -73,5 +72,9 @@
     "분석 대시보드",
     "로그인"
   ],
-  "supporting_collector_policy": "산업·기업은행 공식 게시판 발견·본문·첨부 수집. PE 블라인드와 독립 배정 근거 미확인 공고는 보존하며 공개하지 않는다."
+  "supporting_collector_policy": "산업·기업은행 공식 게시판 발견·본문·첨부 수집. PE 블라인드와 독립 배정 근거 미확인 공고는 보존하며 공개하지 않는다.",
+  "blocked_collector_ids": [
+    "kfcc"
+  ],
+  "blocked_collector_reason": "공식 MG공지에 대한 GitHub macOS/Linux 익명 요청이 HTTP400 Request Blocked. 수집 코드 및 로컬 PE 판독 완료와 운영 수집 미완료를 구분한다."
 }

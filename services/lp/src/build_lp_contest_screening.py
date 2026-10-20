@@ -42,6 +42,9 @@ def validate(rows, scope):
         raise ValueError('Priority confirmation queue is invalid')
     if not set(scope['operating_collector_ids']) <= wanted:
         raise ValueError('Operating collector is outside confirmed scope')
+    blocked = set(scope.get('blocked_collector_ids', []))
+    if not blocked <= wanted or blocked & set(scope['operating_collector_ids']):
+        raise ValueError('Blocked collectors must be confirmed and not reported operating')
     return by_id
 
 
@@ -72,7 +75,7 @@ def build(rows, scope, discovered, directory):
     for identity in scope['confirmed_institution_ids']:
         row = by_id[identity]
         item = next((e for e in row['evidence'] if e.get('pe_explicit')), row['evidence'][0])
-        linked = '운영 연결' if identity in active else '추가 연결 필요'
+        linked = '접속 차단' if identity in scope.get('blocked_collector_ids', []) else '운영 연결' if identity in active else '추가 연결 필요'
         lines.append(f"| {row['name']} | {item['date']} · {item['title']} | [원문]({item['url']}) | {linked} |")
     lines += ['', '## 출시 전 우선 확인', '', '| 기관 | 남은 확인 |', '|---|---|']
     for identity in scope['priority_verification_ids']:

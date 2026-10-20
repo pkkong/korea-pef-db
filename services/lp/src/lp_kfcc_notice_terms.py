@@ -71,7 +71,7 @@ def allocation(notice):
         if not (1 <= month <= end_month <= 12 and 1 <= week <= 5 and 1 <= end_week <= 5) or (month == end_month and week > end_week):
             raise ValueError('invalid planned week range')
         key, title = stages[label]
-        planned.append({'stage': key, 'label': title, 'original_label': cells[0],
+        planned.append({'stage': key, 'label': title, 'original_label': title,
             'date': f'{notice["date"][:4]}-{month:02}', 'end_date': f'{notice["date"][:4]}-{end_month:02}',
             'date_label': cells[1].strip(), 'precision': 'month_range', 'status': 'planned', 'source_url': notice['url']})
     return {'planned_schedule': planned, 'commitment_amount_krw': total, 'commitment_label': f'{total/100_000_000:,.0f}억원',
