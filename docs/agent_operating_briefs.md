@@ -316,3 +316,10 @@
 - dashboard 데이터와 앱: `dashboard/data/dashboard_data.json`, `dashboard/index.html`, `dashboard/assets/app.js`, `dashboard/assets/app.css`
 - 공개 사이트 번들: `services/newsletter/deploy/site/`
 - 운영 상태 보고서: `exports/operational_status_latest.md`, `exports/operational_status_YYYYMMDD_HHMMSS.md`
+
+
+## LP 공식 접속 오류 대응
+
+간헐적인 DNS 조회 실패가 여러 기관에서 나오면 기관별 예외를 계속 추가하기 전에 공통 전송 경로를 확인한다. `lp_transport_errors.transient_dns`는 실제 resolver 예외만 분류하며 오류 문자열을 근거로 성공 처리하지 않는다. 협회 수집은 기존 3시도/추가4회 예산, 새 기관 세션은 기존 2시도, 기관 원문 공통 수신은 DNS에만 최대3시도를 적용한다. KFINCO는 단일 수신 함수를 사용해 자체 3시도/추가4회 예산과 중첩하지 않는다. TLS·호스트·본문 검증은 완화하지 않고 소진된 오류는 기존 자료를 보존한 뒤 보고한다. 발행 성공과 마지막 장애 보고 성공을 구분하며 두 결과를 현황 문서에 함께 기록한다.
+
+금투협 판독 오류는 먼저 실제 수신 길이·HTML 종료·잘린 멀티바이트 위치를 확인한다. 2026-10-20 동일 요청의 HTTP/1.0 curl 응답은 32,120바이트에서 두 번 잘렸지만 종료 코드가0이었고, HTTP/1.1 curl은50,965바이트의 완전한 원문을 받았다. 현재 복구 경로는 `--http1.1`이며 종료 코드만으로 성공을 선언하지 않는다. 엄격한 문자·HTML 검사와 크기/TLS 검증을 유지한다. 추가 원문이나 판독 결과를 코드에 고정해 넣지 않는다.
