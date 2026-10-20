@@ -69,7 +69,9 @@ def render_detail_body(p):
         for segment in segments:
             amount = f'{segment["amount_krw"]/100000000:,.0f}억원' if segment.get('amount_krw') is not None else '미확인'
             per_amount = segment.get('per_fund_max_krw') or segment.get('per_fund_amount_krw')
-            extra = (f'<td data-label="펀드당 출자액">{per_amount/100000000:,.0f}억원' + (' 이내' if segment.get('per_fund_max_krw') else '') + '</td>') if per_fund and per_amount else ('<td data-label="펀드당 출자액">미확인</td>' if per_fund else '')
+            minimum = segment.get('per_fund_min_krw')
+            per_label = (f'{minimum/100000000:,.0f}~{per_amount/100000000:,.0f}억원' if minimum and per_amount else f'{per_amount/100000000:,.0f}억원' if per_amount else '')
+            extra = (f'<td data-label="펀드당 출자액">{per_label}' + (' 이내' if segment.get('per_fund_max_krw') and not minimum else '') + '</td>') if per_fund and per_amount else ('<td data-label="펀드당 출자액">미확인</td>' if per_fund else '')
             body += f'<tr><td class="league-name">{h(segment["name"])}</td><td data-label="출자 예정액">{amount}</td><td data-label="선정 예정">{h(segment.get("manager_count") or "미확인")}</td>{extra}</tr>'
         body += '</tbody></table></div>'
     body += '</section>'

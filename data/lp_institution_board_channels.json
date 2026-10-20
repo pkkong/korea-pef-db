@@ -41,6 +41,36 @@
       ],
       "page_param": "currPage",
       "pages": 1
+    },
+    {
+      "institution_id": "kfcc",
+      "listing_url": "https://www.kfcc.co.kr/mgNotice/mgNoticeList.do?schType=subject",
+      "search_param": "schValue",
+      "searches": [
+        "위탁",
+        "운용사"
+      ],
+      "page_param": "pageNo",
+      "pages": 1
+    },
+    {
+      "institution_id": "kdb",
+      "listing_url": "https://www.kdb.co.kr/CHBIPR23N00.act?_mnuId=IHIHIR0087",
+      "search_terms": [
+        "펀드"
+      ],
+      "pages": 3,
+      "history_years": 1,
+      "max_details": 50
+    },
+    {
+      "institution_id": "ibk",
+      "listing_url": "https://www.ibk.co.kr/cyber/noticeListCyber.ibk?pageId=IR03010400",
+      "search_terms": [
+        "펀드",
+        "위탁운용사"
+      ],
+      "pages": 2
     }
   ],
   "history_years": 4

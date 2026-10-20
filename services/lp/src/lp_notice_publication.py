@@ -23,6 +23,7 @@ try:
     from .lp_shared_notice_terms import extract_shared_terms
     from .collect_lp_institution_boards import validate_notice as validate_institution_notice
     from .lp_institution_notice_terms import extract_terms as extract_institution_terms
+    from .lp_kfcc_notice_terms import allocation as kfcc_allocation
 except ImportError:
     from collect_shared_lp_notices import classify_scope
     from collect_lp_original_notices import load_channels, validate_url, validate_original
@@ -31,6 +32,7 @@ except ImportError:
     from lp_shared_notice_terms import extract_shared_terms
     from collect_lp_institution_boards import validate_notice as validate_institution_notice
     from lp_institution_notice_terms import extract_terms as extract_institution_terms
+    from lp_kfcc_notice_terms import allocation as kfcc_allocation
 
 ROOT = Path(__file__).resolve().parents[3]
 OFFERING_FIELDS = (
@@ -134,6 +136,8 @@ def _texts(n):
 
 
 def _scope(n):
+    if n.get('institution_id') == 'kfcc':
+        return 'mixed_pe_blind' if kfcc_allocation(n) else 'unknown'
     text = '\n'.join(_texts(n))
     if (n.get('source_channel') == 'institution_board'
             and re.search(r'(?<![A-Za-z])VC(?![A-Za-z])', n['title'], re.I)

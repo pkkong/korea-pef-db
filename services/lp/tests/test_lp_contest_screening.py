@@ -14,9 +14,11 @@ class ScreeningContracts(unittest.TestCase):
 
     def test_reviewed_scope_is_complete_and_central_funds_are_not_duplicate_issuers(self):
         by_id = validate(self.rows, self.scope)
-        self.assertEqual(len(self.scope['confirmed_institution_ids']), 16)
+        self.assertEqual(len(self.scope['confirmed_institution_ids']), 17)
         self.assertIn('nps', self.scope['priority_verification_ids'])
-        self.assertIn('kfcc', self.scope['priority_verification_ids'])
+        self.assertIn('kfcc', self.scope['confirmed_institution_ids'])
+        self.assertIn('kfcc', self.scope['operating_collector_ids'])
+        self.assertEqual(by_id['kfcc']['decision'], 'core_confirmed')
         self.assertNotEqual(by_id['moel_iaci']['issuer_name'], by_id['moel_iaci']['name'])
         self.assertEqual(by_id['noran_umbrella']['decision'], 'exclude_scope')
 

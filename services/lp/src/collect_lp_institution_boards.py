@@ -27,6 +27,7 @@ try:
     from .collect_lp_original_notices import OfficialRedirect, original_body_hash, safe_host
     from .lp_attachment_text import extract_attachment
     from . import lp_board_adapters_mutuals as mutuals, lp_board_adapters_pensions as pensions
+    from . import lp_board_adapter_kfcc as kfcc, lp_board_adapters_banks as banks
 except ImportError:
     from lp_transport_errors import transient_dns
     from collect_shared_lp_notices import decode_html, classify_scope
@@ -34,6 +35,8 @@ except ImportError:
     from lp_attachment_text import extract_attachment
     import lp_board_adapters_mutuals as mutuals
     import lp_board_adapters_pensions as pensions
+    import lp_board_adapter_kfcc as kfcc
+    import lp_board_adapters_banks as banks
 
 ROOT = Path(__file__).resolve().parents[3]
 CONFIG = ROOT / 'data/lp_institution_board_channels.json'
@@ -47,14 +50,30 @@ def is_form(name):
 
 def load_configs():
     settings = json.loads(CONFIG.read_text())
-    return {c['institution_id']: dict(c, history_years=settings['history_years']) for c in settings['channels']}
+    configs = {c['institution_id']: {'history_years': settings['history_years'], **c} for c in settings['channels']}
+    for c in configs.values():
+        if not 1 <= c.get('max_details', MAX_DETAILS) <= 60 or not 1 <= c['history_years'] <= 4:
+            raise ValueError('institution discovery budget outside supported limits')
+    return configs
 
 
 def adapter(config):
-    return mutuals if config['institution_id'] in {'poba', 'pmaa'} else pensions
+    institution = config['institution_id']
+    if institution in {'kdb', 'ibk'}:
+        return banks
+    if institution == 'kfcc':
+        return kfcc
+    if institution in {'poba', 'pmaa'}:
+        return mutuals
+    if institution in {'tp', 'cu'}:
+        return pensions
+    raise ValueError('unsupported institution board adapter')
 
 
 def listing_urls(config):
+    if config['institution_id'] in {'kdb', 'ibk'}:
+        yield from (request['url'] for request in banks.listing_requests(config))
+        return
     parsed = urlsplit(config['listing_url'])
     for search in config['searches']:
         for page in range(1, config['pages'] + 1):
@@ -153,11 +172,13 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
     for institution, config in (configs or load_configs()).items():
         fetch = fetch_factory(config)
         receipts, candidates = {}, {}
-        coverage = {'listing_pages': [], 'detail_count': 0, 'attachment_count': 0}
+        coverage = {'listing_pages': [], 'detail_count': 0, 'attachment_count': 0,
+                    'history_years': config.get('history_years', 4)}
         result['coverage'][institution] = coverage
         for url in listing_urls(config):
             try:
-                html = _html(fetch(url))
+                raw = fetch(url, config['listing_url'])
+                html = raw.decode('utf-8') if institution == 'kdb' else _html(raw)
                 rows = adapter(config).parse_listing(html, url, config)
                 receipts[url] = {'url': url, 'html': html, 'sha256': digest(html)}
                 coverage['listing_pages'].append({'url': url, 'count': len(rows)})
@@ -172,10 +193,13 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
                 result['holds'].append({'institution_id': institution, 'stage': 'institution_listing',
                                         'url': url, 'error': str(exc)})
         ordered = sorted(candidates.values(), key=lambda item: (item[0]['date'], item[0]['url']), reverse=True)
-        if len(ordered) > MAX_DETAILS:
+        limit = config.get('max_details', MAX_DETAILS)
+        coverage['candidate_count'] = len(ordered)
+        coverage['detail_budget'] = limit
+        if len(ordered) > limit:
             result['holds'].append({'institution_id': institution, 'stage': 'institution_depth',
                                     'error': 'detail budget reached; older candidates retained in listing receipts'})
-        for row, listing_url in ordered[:MAX_DETAILS]:
+        for row, listing_url in ordered[:limit]:
             try:
                 html = _html(fetch(row['url'], listing_url))
                 detail = adapter(config).parse_detail(html, row['url'], config)

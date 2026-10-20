@@ -176,12 +176,25 @@
       "institution_id": "kfcc",
       "name": "새마을금고중앙회",
       "category": "협동조합·중앙회",
-      "decision": "needs_confirmation",
-      "reason": "사용자 지정 핵심 기관. 위탁펀드형 대체투자 공모의 공식 원문을 이번 제한 조사에서 확보하지 못해 PE·블라인드 확정은 보류.",
-      "evidence": [],
-      "official_listing_url": "https://www.kfcc.co.kr/noticeofTender/noticeofTenderList.do",
+      "decision": "core_confirmed",
+      "reason": "공식 MG공지의 2025년 모집에서 국내 PE 부문, 공개모집, 기관전용 사모집합투자기구와 블라인드형을 확인. VC 600억원과 구분되는 PE 4,400억원·10개사.",
+      "evidence": [
+        {
+          "url": "https://www.kfcc.co.kr/mgNotice/mgNoticeDetail.do?no=436",
+          "title": "2025년 새마을금고중앙회 위탁펀드형 대체투자 운용사 선정 공고",
+          "date": "2025-04-30",
+          "official": true,
+          "pe_explicit": true,
+          "blind_explicit": true,
+          "quote": "PE 부문선정개요 / 위탁펀드형 대체투자 (블라인드형)",
+          "sha256": "c5d4f222b9609d9014808022d3f2cd8ae9e3ee004545ef0fd0c639f59ddb6120",
+          "observed_at": "2026-10-20",
+          "observation_source": "official board listing and replayed detail"
+        }
+      ],
+      "official_listing_url": "https://www.kfcc.co.kr/mgNotice/mgNoticeList.do?schType=subject",
       "issuer_name": "새마을금고중앙회",
-      "collection_hint": "mgNotice 및 noticeofTender 두 게시판에서 위탁펀드형 대체투자 모집 발견. PE/VC/크레딧 구분; 접속 실패를 미공모로 판단하지 않음."
+      "collection_hint": "공식 검색 위탁/운용사 목록의 관측 ID로 상세·공고 첨부 수집. PE/VC 표 경계를 유지하며 Credit은 공개 대상에서 보류."
     },
     {
       "institution_id": "nh_central",

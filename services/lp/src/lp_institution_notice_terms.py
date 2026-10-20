@@ -3,8 +3,10 @@ import re
 from datetime import date, datetime
 try:
     from .lp_shared_notice_terms import extract_offering_sources
+    from .lp_kfcc_notice_terms import allocation as kfcc_allocation
 except ImportError:
     from lp_shared_notice_terms import extract_offering_sources
+    from lp_kfcc_notice_terms import allocation as kfcc_allocation
 
 NUM = r'(\d[\d,]*)'
 
@@ -16,6 +18,9 @@ def extract_terms(n):
         result = extract_offering_sources(n, sources)
     except ValueError:
         result = {}
+    allocation = kfcc_allocation(n)
+    if allocation:
+        result = allocation
     evidence = result.setdefault('extraction_evidence', {})
     totals, counts, per_fund, deadlines = set(), set(), set(), set()
     mixed = bool(re.search(r'PE\s*[·,/]\s*VC|PE.*VC', n['title'], re.I))
@@ -57,7 +62,7 @@ def extract_terms(n):
                 record('per_fund', match[0])
         # Only explicitly labelled dates; historical-fund dates cannot supply a
         # deadline. Date-only is retained when source submission times disagree.
-        pattern = (r'(?:제안서)?(?:접수마감(?:일시|일|시한)?|제출기한|마감일시)[:：]*'
+        pattern = (r'(?:제안서)?(?:접수마감(?:일시|일|시한)?|접수기한|제출기한|마감일시)[:：]*'
                    r'(20\d{2})[.년](\d{1,2})[.월](\d{1,2})[.일]?'
                    r'(?:\([월화수목금토일]\))?(오후|오전)?(\d{1,2})(?::(\d{2})|시)')
         for m in re.finditer(pattern, text):
