@@ -22,11 +22,13 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 try:
+    from .lp_transport_errors import transient_dns
     from .collect_shared_lp_notices import decode_html, classify_scope
     from .collect_lp_original_notices import OfficialRedirect, original_body_hash, safe_host
     from .lp_attachment_text import extract_attachment
     from . import lp_board_adapters_mutuals as mutuals, lp_board_adapters_pensions as pensions
 except ImportError:
+    from lp_transport_errors import transient_dns
     from collect_shared_lp_notices import decode_html, classify_scope
     from collect_lp_original_notices import OfficialRedirect, original_body_hash, safe_host
     from lp_attachment_text import extract_attachment
@@ -95,7 +97,7 @@ class Session:
                 if isinstance(exc, HTTPError):
                     transient = exc.code in {408, 429, 500, 502, 503, 504}
                 elif isinstance(exc, URLError):
-                    transient = isinstance(exc.reason, (TimeoutError, ConnectionError))
+                    transient = transient_dns(exc) or isinstance(exc.reason, (TimeoutError, ConnectionError))
                 if attempt or not transient:
                     raise
                 time.sleep(1)

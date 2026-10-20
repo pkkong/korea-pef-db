@@ -23,6 +23,11 @@ from urllib.parse import parse_qs, urljoin, urlsplit
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, HTTPRedirectHandler, build_opener
 
+try:
+    from .lp_transport_errors import transient_dns
+except ImportError:
+    from lp_transport_errors import transient_dns
+
 ROOT = Path(__file__).resolve().parents[3]
 CHANNELS = {
     'kvca': 'https://www.kvca.or.kr/Program/invest/list.html?a_cd=8&a_gb=board&a_item=0&sm=2_2_2',
@@ -290,6 +295,8 @@ def _fetch_bytes_once(url, referer=None, *, html_kind=None):
 
 
 def _transient_fetch_error(error):
+    if transient_dns(error):
+        return True
     if isinstance(error, HTTPError):
         return error.code in {408, 429, 500, 502, 503, 504}
     if isinstance(error, URLError):

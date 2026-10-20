@@ -9,6 +9,7 @@ import copy
 import hashlib
 import json
 import re
+import time
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -17,9 +18,11 @@ from urllib.request import Request, HTTPRedirectHandler, HTTPSHandler, build_ope
 
 try:
     from .collect_shared_lp_notices import Document, Node, decode_html, valid_date, load_aliases
+    from .lp_transport_errors import transient_dns
     from .lp_attachment_text import extract_attachment
 except ImportError:
     from collect_shared_lp_notices import Document, Node, decode_html, valid_date, load_aliases
+    from lp_transport_errors import transient_dns
     from lp_attachment_text import extract_attachment
 
 ROOT=Path(__file__).resolve().parents[3]
@@ -51,7 +54,7 @@ class OfficialRedirect(HTTPRedirectHandler):
         return super().redirect_request(req,fp,code,msg,headers,newurl)
 
 
-def fetch_bytes(url,referer=None,*,ssl_context=None):
+def fetch_bytes_once(url,referer=None,*,ssl_context=None):
     allowed={safe_host(url)}
     headers={'User-Agent':'Mozilla/5.0 (LP original notice collector)','Accept-Encoding':'identity','Connection':'close'}
     if referer:headers['Referer']=referer
@@ -61,6 +64,19 @@ def fetch_bytes(url,referer=None,*,ssl_context=None):
         data=r.read(MAX_BYTES+1)
         if len(data)>MAX_BYTES:raise ValueError('original response exceeds size limit')
         return data
+
+
+
+def fetch_bytes(url, referer=None, *, ssl_context=None):
+    # Retry complete reads only for resolver failures. URL, TLS, response-size
+    # and content validation remain strict; unrelated errors keep their paths.
+    for attempt in range(3):
+        try:
+            return fetch_bytes_once(url, referer, ssl_context=ssl_context)
+        except Exception as error:
+            if attempt == 2 or not transient_dns(error):
+                raise
+            time.sleep(attempt + 1)
 
 
 def load_channels(root=ROOT):

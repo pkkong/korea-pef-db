@@ -18,11 +18,11 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit
 from urllib.error import HTTPError, URLError
 try:
-    from .collect_lp_original_notices import fetch_bytes, safe_host, original_body_hash
+    from .collect_lp_original_notices import fetch_bytes_once as fetch_bytes, safe_host, original_body_hash
     from .collect_shared_lp_notices import Document, valid_date
     from .lp_attachment_text import extract_attachment
 except ImportError:
-    from collect_lp_original_notices import fetch_bytes, safe_host, original_body_hash
+    from collect_lp_original_notices import fetch_bytes_once as fetch_bytes, safe_host, original_body_hash
     from collect_shared_lp_notices import Document, valid_date
     from lp_attachment_text import extract_attachment
 
