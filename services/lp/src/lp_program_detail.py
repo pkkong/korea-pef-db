@@ -49,6 +49,11 @@ def render_detail_body(p):
         body += f'<div><small>결성 목표</small><strong>{h(p["fund_target_label"])}</strong></div>'
     if p.get('manager_count_label'):
         body += f'<div><small>선정 예정</small><strong>{h(p["manager_count_label"])}</strong></div>'
+    if not p.get('segments') and p.get('per_fund_amount_krw'):
+        amount = f'{p["per_fund_amount_krw"]/100000000:,.0f}억원'
+        if p.get('per_fund_qualifier'):
+            amount += ' ' + p['per_fund_qualifier']
+        body += f'<div><small>펀드당 출자액</small><strong>{h(amount)}</strong></div>'
     body += '</div>'
     if p.get('commitment_detail'):
         body += f'<p class="muted contribution-detail">{h(p["commitment_detail"])}<br>{h(p.get("contribution_note"))}</p>'

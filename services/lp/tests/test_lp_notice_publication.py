@@ -28,6 +28,13 @@ def publish(documents, *, existing=None, now=NOW):
 
 
 class BasicNoticePublicationTests(unittest.TestCase):
+    def test_single_track_per_fund_limit_is_visible_without_invented_total(self):
+        program = publish([notice()])[0][0]
+        program.update(per_fund_amount_krw=50_000_000_000, per_fund_qualifier='이내')
+        html = render_detail_body(program)
+        self.assertIn('펀드당 출자액</small><strong>500억원 이내', html)
+        self.assertNotIn('출자 예정액</small>', html)
+
     def test_official_pe_recruitment_publishes_without_complete_terms_or_gps(self):
         original = notice()
         programs, holds = publish([original])
