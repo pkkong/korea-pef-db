@@ -278,9 +278,10 @@ def _fetch_bytes_once(url, referer=None, *, html_kind=None):
     except (IncompleteRead, IncompleteHTML):
         # KOFIA can truncate a 200 response without a transport exception, as
         # well as send invalid chunk framing. Retry the whole document over
-        # HTTP/1.0; validate its HTML too, never accept partial rows as complete.
+        # curl HTTP/1.1; HTTP/1.0 itself truncates this server at ~32 KiB.
+        # Validate its HTML too, never accept partial rows as complete.
         command=['curl','--fail','--silent','--show-error',
-                 '--http1.0','--user-agent','Mozilla/5.0 (LP public notice collector)',
+                 '--http1.1','--user-agent','Mozilla/5.0 (LP public notice collector)',
                  '--header','Accept-Encoding: identity','--header','Connection: close',
                  '--max-time','25','--max-filesize',str(MAX_BYTES),
                  '--proto','=https,http','--proto-redir','=https,http']

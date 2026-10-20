@@ -14,6 +14,17 @@ KVCA='https://www.kvca.or.kr/Program/invest/list.html?a_cd=8&page=1'
 KOFIA='https://www.kofia.or.kr/brd/m_212/list.do'
 
 class SharedCollectionTests(unittest.TestCase):
+    def test_multibyte_truncation_recovers_complete_listing_over_http11(self):
+        complete = '<html><table><tr><td><a href="view.do?seq=777">한글 공고</a></td></tr></table></html>'.encode()
+        partial = complete[:complete.index('글'.encode()) + 2]
+        with patch.object(shared, '_fetch_bytes_urllib', return_value=partial), \
+             patch.object(shared.subprocess, 'run', return_value=SimpleNamespace(stdout=complete)) as curl:
+            result = collect(pages=1, aliases={}, channels={'kofia_212': KOFIA})
+        self.assertFalse(result['holds'])
+        self.assertEqual(result['unmatched_notices'][0]['title'], '한글 공고')
+        self.assertIn('--http1.1', curl.call_args.args[0])
+        self.assertNotIn('--http1.0', curl.call_args.args[0])
+
     def test_undecodable_200_uses_strict_whole_document_recovery(self):
         complete = b'<html>complete</html>'
         with patch.object(shared, '_fetch_bytes_urllib', return_value=b'<html>\xff\xff'), \
@@ -49,7 +60,8 @@ class SharedCollectionTests(unittest.TestCase):
             self.assertEqual(shared.fetch_bytes(KOFIA), b'<html>complete</html>')
             self.assertEqual(curl.call_count, 2)
             command = curl.call_args.args[0]
-            self.assertIn('--http1.0', command)
+            self.assertIn('--http1.1', command)
+            self.assertNotIn('--http1.0', command)
             self.assertEqual(command[command.index('--user-agent') + 1],
                              'Mozilla/5.0 (LP public notice collector)')
             self.assertIn('Connection: close', command)
@@ -89,7 +101,7 @@ class SharedCollectionTests(unittest.TestCase):
                 self.assertFalse(result['notices'])
                 self.assertTrue(all(h['stage'] == 'listing' for h in result['holds']))
 
-    def test_http_200_truncation_uses_complete_http10_response(self):
+    def test_http_200_truncation_uses_complete_http11_response(self):
         partial = b'<html><table><tr><td><a href="view.do?seq=777">partial row</a></td></tr>'
         complete = b'<html><table><tr><td><a href="view.do?seq=888">verified row</a></td></tr></table></html>'
         with patch.object(shared, '_fetch_bytes_urllib', return_value=partial) as urllib, \
@@ -101,7 +113,7 @@ class SharedCollectionTests(unittest.TestCase):
         self.assertEqual([r['source_id'] for r in result['unmatched_notices']], ['kofia_212:888'])
         self.assertEqual(result['coverage']['channel_pages']['kofia_212']['pages'][0]['count'], 1)
 
-    def test_incomplete_http10_response_retries_with_existing_budget(self):
+    def test_incomplete_http11_response_retries_with_existing_budget(self):
         partial = b'<html>incomplete'
         complete = b'<html><table><tr><td><a href="view.do?seq=919">new row</a></td></tr></table></html>'
         with patch.object(shared, '_fetch_bytes_urllib', side_effect=[partial, complete]) as urllib, \
