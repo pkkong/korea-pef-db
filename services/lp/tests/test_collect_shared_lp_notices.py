@@ -14,6 +14,21 @@ KVCA='https://www.kvca.or.kr/Program/invest/list.html?a_cd=8&page=1'
 KOFIA='https://www.kofia.or.kr/brd/m_212/list.do'
 
 class SharedCollectionTests(unittest.TestCase):
+    def test_undecodable_200_uses_strict_whole_document_recovery(self):
+        complete = b'<html>complete</html>'
+        with patch.object(shared, '_fetch_bytes_urllib', return_value=b'<html>\xff\xff'), \
+             patch.object(shared.subprocess, 'run', return_value=SimpleNamespace(stdout=complete)):
+            self.assertEqual(shared.fetch_bytes(KOFIA, html_kind='listing'), complete)
+
+    def test_permanently_undecodable_html_remains_bounded_failure(self):
+        invalid = b'<html>\xff\xff</html>'
+        with patch.object(shared, '_fetch_bytes_urllib', return_value=invalid) as fetch, \
+             patch.object(shared.subprocess, 'run', return_value=SimpleNamespace(stdout=invalid)), \
+             patch.object(shared.time, 'sleep'):
+            with self.assertRaisesRegex(shared.IncompleteHTML, 'undecodable listing'):
+                shared.fetch_bytes(KOFIA, html_kind='listing')
+            self.assertEqual(fetch.call_count, 3)
+
     def test_transport_retries_temporary_timeout_and_server_error(self):
         errors = [TimeoutError('slow'), URLError(TimeoutError('slow')),
                   HTTPError(KOFIA, 503, 'busy', {}, None)]

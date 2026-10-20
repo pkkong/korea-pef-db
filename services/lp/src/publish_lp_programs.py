@@ -20,6 +20,7 @@ from kgrowth_notice_terms import discovery as discover_growth_terms
 from lp_shared_notice_catalog import update_shared_catalog
 from discover_lp_original_boards import reuse_native_originals
 from lp_notice_publication import publish_basic_notices
+from collect_lp_institution_boards import update_catalog as update_institution_catalog
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -194,6 +195,7 @@ def prepare(current, report):
     if shared is not None:
         shared=reuse_native_originals(shared,growth_notices+official_notices,report['checked_at'])
     data.update(update_shared_catalog(current, shared, report['checked_at']))
+    data.update(update_institution_catalog(current, report.get('institution_collection'), report['checked_at']))
     seen_urls = {n['url'] for n in data['discovery_candidates']}
     data['discovery_candidates'].extend(n for n in data['shared_discovery_candidates'] if n['url'] not in seen_urls)
     apply_decisions(data, report['notices'], current.get('review_decisions', []))
@@ -216,6 +218,7 @@ def main():
     parser.add_argument('--collection', type=Path)
     parser.add_argument('--priority-collection', type=Path)
     parser.add_argument('--shared-collection', type=Path)
+    parser.add_argument('--institution-collection', type=Path)
     args = parser.parse_args()
     with connect() as conn:
         if args.export_baseline:
@@ -228,6 +231,10 @@ def main():
         if args.shared_collection:
             report['shared_collection'] = (json.loads(args.shared_collection.read_text()) if args.shared_collection.exists() else
                                           {'notices': [], 'holds': [{'stage': 'listing', 'error': '협회 수집 파일 없음; 이전 자료 유지'}]})
+        if args.institution_collection:
+            report['institution_collection'] = (json.loads(args.institution_collection.read_text())
+                if args.institution_collection.exists() else {'notices': [], 'holds': [
+                    {'stage': 'institution_listing', 'error': '기관 게시판 수집 파일 없음; 이전 자료 유지'}]})
         # Late original searches happen after the native collection report.
         # Keep its timestamp and validate every source against publication time.
         report['collection_checked_at'] = report['checked_at']
@@ -240,7 +247,7 @@ def main():
         stamp = datetime.now(timezone.utc).isoformat()
         run_id = hashlib.sha256((stamp+json.dumps(report,sort_keys=True)).encode()).hexdigest()[:24]
         conn.execute('INSERT INTO lp_program_private.collection_runs(run_id,institution,report) VALUES (%s,%s,%s)', (run_id,'multi_lp' if args.priority_collection else 'kgrowth',Jsonb(report)))
-        for doc in report['notices'] + data.get('priority_notices', []) + data.get('supporting_notices', []) + data.get('shared_notices', []):
+        for doc in report['notices'] + data.get('priority_notices', []) + data.get('supporting_notices', []) + data.get('shared_notices', []) + data.get('institution_notices', []):
             digest = document_hash(doc)
             conn.execute('INSERT INTO lp_program_private.documents(source_url,content_hash,document) VALUES(%s,%s,%s) ON CONFLICT DO NOTHING', (doc['url'],digest,Jsonb(doc)))
         for notice in data.get('shared_notices', []):
@@ -249,6 +256,9 @@ def main():
         conn.execute('INSERT INTO lp_program_private.program_state(id,data,pages,run_id) VALUES(1,%s,%s,%s) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,pages=EXCLUDED.pages,run_id=EXCLUDED.run_id,updated_at=now()', (Jsonb(data),Jsonb(pages),run_id))
     print(json.dumps({'run_id':run_id,'programs':len(data['programs']),'program_ids':[p['id'] for p in data['programs']],
                       'notices':len(report['notices']),'review':len(report.get('review',[])),
+                      'institution_notices':len(data.get('institution_notices',[])),
+                      'institution_validation_errors':sum(h.get('stage')=='institution_validation' for h in data.get('institution_collection_holds',[])),
+                      'institution_institutions':sorted({n['institution_id'] for n in data.get('institution_notices',[])}),
                       'shared_notices':len(data.get('shared_notices',[])),
                       'shared_originals':sum(len(n.get('original_notices',[])) for n in data.get('shared_notices',[])),
                       'shared_offering_terms':len(data.get('shared_offering_terms',{})),

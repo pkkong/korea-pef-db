@@ -253,7 +253,12 @@ class IncompleteHTML(ValueError):
 
 
 def _complete_html(raw, kind):
-    html = decode_html(raw)
+    try:
+        html = decode_html(raw)
+    except ValueError as exc:
+        # A truncated multi-byte character is another incomplete 200 response.
+        # Keep strict decoding, but use the same bounded whole-response recovery.
+        raise IncompleteHTML(f'undecodable {kind} HTML') from exc
     if '</html>' not in html.lower():
         raise IncompleteHTML(f'incomplete {kind} HTML')
     return html

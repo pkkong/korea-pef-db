@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "channels": [
+    {
+      "institution_id": "poba",
+      "listing_url": "https://www.poba.or.kr/bbs/selectNttList?sechBbsSeq=10&sechWrdTySeCd=T",
+      "search_param": "sechWrd",
+      "searches": [
+        "위탁"
+      ],
+      "page_param": "pageIndex",
+      "pages": 2
+    },
+    {
+      "institution_id": "pmaa",
+      "listing_url": "https://www.pmaa.or.kr/www/1461128463820/bbs.do?searchType1=TITLE",
+      "search_param": "searchText1",
+      "searches": [
+        "위탁"
+      ],
+      "page_param": "c_page",
+      "pages": 2
+    },
+    {
+      "institution_id": "tp",
+      "listing_url": "https://www.tp.or.kr/tp-kr/bbs/i-151/list.do?searchCondition=1&pageItm=100",
+      "search_param": "searchKeyword",
+      "searches": [
+        "위탁운용사"
+      ],
+      "page_param": "pageIndex",
+      "pages": 1
+    },
+    {
+      "institution_id": "cu",
+      "listing_url": "https://www.cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007&searchType=sj&listCo=50",
+      "search_param": "searchValue",
+      "searches": [
+        "블라인드",
+        "위탁운용사"
+      ],
+      "page_param": "currPage",
+      "pages": 1
+    }
+  ],
+  "history_years": 4
+}

@@ -21,12 +21,16 @@ try:
     from .lp_notice_triage import program_key, notice_stage, compact
     from .lp_notice_terms import INSTITUTIONS, extract_terms
     from .lp_shared_notice_terms import extract_shared_terms
+    from .collect_lp_institution_boards import validate_notice as validate_institution_notice
+    from .lp_institution_notice_terms import extract_terms as extract_institution_terms
 except ImportError:
     from collect_shared_lp_notices import classify_scope
     from collect_lp_original_notices import load_channels, validate_url, validate_original
     from lp_notice_triage import program_key, notice_stage, compact
     from lp_notice_terms import INSTITUTIONS, extract_terms
     from lp_shared_notice_terms import extract_shared_terms
+    from collect_lp_institution_boards import validate_notice as validate_institution_notice
+    from lp_institution_notice_terms import extract_terms as extract_institution_terms
 
 ROOT = Path(__file__).resolve().parents[3]
 OFFERING_FIELDS = (
@@ -105,6 +109,12 @@ def _sources(data, growth_notices, checked_at):
             docs.setdefault(source['url'], source)
         except (KeyError, TypeError, ValueError) as exc:
             holds.append({'stage': 'basic_publication', 'url': raw.get('url'), 'reason': str(exc)})
+    for raw in data.get('institution_notices', []):
+        try:
+            n = _valid(validate_institution_notice(raw, checked_at), checked_at)
+            docs[n['url']] = n
+        except (KeyError, TypeError, ValueError) as exc:
+            holds.append({'stage': 'basic_publication', 'url': raw.get('url'), 'reason': str(exc)})
     return docs, shared, holds
 
 
@@ -117,7 +127,7 @@ def _texts(n):
                 not re.fullmatch('[0-9a-f]{64}', n.get('attachment_hashes', {}).get(url, ''))):
             continue
         name = next((a.get('name', '') for a in n.get('attachments', []) if isinstance(a, dict) and a.get('url') == url), '')
-        if re.search('서식|양식|제안서작성|제출서류', compact(name + raw[:100])):
+        if n.get('source_channel') != 'institution_board' and re.search('서식|양식|제안서작성|제출서류', compact(name + raw[:100])):
             continue
         texts.append(raw)
     return texts
@@ -125,6 +135,10 @@ def _texts(n):
 
 def _scope(n):
     text = '\n'.join(_texts(n))
+    if (n.get('source_channel') == 'institution_board'
+            and re.search(r'(?<![A-Za-z])VC(?![A-Za-z])', n['title'], re.I)
+            and not re.search(r'(?<![A-Za-z])PEF?(?![A-Za-z])', n['title'], re.I)):
+        return 'vc_only'
     # Co-investments, project funds and private debt are distinct product scope.
     if re.search(r'공동투자|프로젝트|사모대출|대출형|크레딧|private\s*debt', n['title'], re.I):
         return 'outside'
@@ -157,7 +171,9 @@ def _deadline(n):
 def _terms(n, shared_notice, checked_at):
     terms = {}
     try:
-        if shared_notice:
+        if n.get('source_channel') == 'institution_board':
+            terms = extract_institution_terms(n)
+        elif shared_notice:
             terms = extract_shared_terms(shared_notice, checked_at)
         elif n['institution_id'] in INSTITUTIONS:
             terms = extract_terms(n)
@@ -175,7 +191,7 @@ def _terms(n, shared_notice, checked_at):
     if result.get('primary_investment'):
         result['primary_investment'].setdefault('source_url', n['url'])
     try:
-        deadline = _deadline(n)
+        deadline = None if n.get('source_channel') == 'institution_board' else _deadline(n)
     except ValueError as exc:
         deadline = None
         result.pop('deadline', None)
@@ -293,6 +309,9 @@ def publish_basic_notices(data, growth_notices, checked_at):
             if raw_terms.get('deadline_error'):
                 holds.append({'stage': 'basic_deadline', 'url': original['url'], 'reason': raw_terms['deadline_error']})
             if not reviewed and _scope(original) == 'mixed_pe_blind' and not (raw_terms.get('amount_scope') == 'pe_only' and raw_terms.get('commitment_amount_krw')):
+                continue
+            if (not reviewed and original.get('source_channel') == 'institution_board'
+                    and '공동투자' in original['body'] and not raw_terms.get('extraction_evidence', {}).get('blind_allocation')):
                 continue
             if matches:
                 p = matches[0]

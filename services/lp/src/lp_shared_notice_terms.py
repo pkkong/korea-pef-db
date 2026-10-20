@@ -89,6 +89,11 @@ def extract_shared_terms(notice, checked_at):
         sources.append((original['url'], original['body'], original['sha256']))
         sources.extend((url, text, original['attachment_hashes'][url])
                        for url, text in original.get('attachment_texts', {}).items())
+    return extract_offering_sources(notice, sources)
+
+
+def extract_offering_sources(notice, sources):
+    """Parse already validated offering receipts, independent of board layout."""
     scope = classify_scope(notice['title'], ' '.join(text for _, text, _ in sources))
     if scope not in ('pe_blind', 'mixed_pe_blind'):
         raise ValueError('국내 PE 블라인드 모집 범위 미확인')
