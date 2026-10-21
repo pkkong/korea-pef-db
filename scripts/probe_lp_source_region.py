@@ -46,7 +46,7 @@ module.exports = async (req, res) => {
 
 def api(path, method='GET', data=None):
     owner=os.environ['VERCEL_ORG_ID']
-    query='?'+urlencode({'teamId':owner}) if owner.startswith('team_') else ''
+    query=('&' if '?' in path else '?')+urlencode({'teamId':owner}) if owner.startswith('team_') else ''
     req=Request('https://api.vercel.com'+path+query, method=method,
         data=json.dumps(data).encode() if data is not None else None,
         headers={'Authorization':'Bearer '+os.environ['VERCEL_TOKEN'],'Content-Type':'application/json'})
@@ -65,6 +65,15 @@ def main():
     project=None
     report={'status':'error','region_requested':'icn1'}
     try:
+        # Remove only accidental source-folder projects from this probe's first
+        # two runs. The unique prefix and original probe start bound ownership.
+        prior=api('/v9/projects?limit=100').get('projects',[])
+        removed=[]
+        for item in prior:
+            if item.get('name','').startswith('lp-seoul-probe-') and item.get('createdAt',0)>=1792550100000:
+                api('/v9/projects/'+item['id'],'DELETE')
+                removed.append(item['name'])
+        report['abandoned_probe_projects_removed']=removed
         # Never reuse or overwrite an existing project with this name.
         project=api('/v11/projects','POST',{'name':PROJECT,'framework':None,'publicSource':False})
         token=secrets.token_urlsafe(32)
@@ -72,6 +81,8 @@ def main():
             [{'key':'SOURCE_PROBE_TOKEN','value':token,'type':'encrypted','target':['production']}])
         with tempfile.TemporaryDirectory(prefix='lp-seoul-probe-') as folder:
             root=Path(folder);(root/'api').mkdir()
+            (root/'.vercel').mkdir()
+            (root/'.vercel/project.json').write_text(json.dumps({'projectId':project['id'],'orgId':project['accountId'],'projectName':PROJECT}))
             (root/'api/probe.js').write_text(SOURCE)
             (root/'package.json').write_text(json.dumps({'private':True}))
             (root/'vercel.json').write_text(json.dumps({'regions':['icn1'],'git':{'deploymentEnabled':False}}))
@@ -84,8 +95,10 @@ def main():
             urls=[line.strip() for line in result.stdout.splitlines() if line.strip().startswith('https://')]
             if not urls or not (urlsplit(urls[-1]).hostname or '').endswith('.vercel.app'):
                 raise RuntimeError('Temporary deployment URL missing')
-            deployed=api('/v9/projects/'+project['id'])
-            aliases=deployed.get('targets',{}).get('production',{}).get('alias',[])
+            deployed=api('/v13/deployments/'+urlsplit(urls[-1]).hostname)
+            if deployed.get('projectId')!=project['id']:
+                raise RuntimeError('Temporary deployment project mismatch')
+            aliases=deployed.get('alias',[])
             host=next((a for a in aliases if isinstance(a,str) and a.startswith(PROJECT+'.') and a.endswith('.vercel.app')),None)
             if not host:
                 raise RuntimeError('Verified production alias missing')
