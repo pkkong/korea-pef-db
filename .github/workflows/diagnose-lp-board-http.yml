@@ -13,6 +13,9 @@ on:
       verify_cu_recovery:
         type: boolean
         default: false
+      verify_institution_boards:
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -72,7 +75,7 @@ jobs:
                 print(json.dumps({'institution':institution,'mode':mode,'status':status,'size':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'error_excerpt':raw[:240].decode('utf-8','replace') if str(status)!='200' else None},ensure_ascii=False))
               except Exception as error:print(json.dumps({'institution':institution,'mode':mode,'error':str(error)}))
       - name: Install readers for explicit CU recovery verification
-        if: inputs.verify_cu_recovery
+        if: inputs.verify_cu_recovery || inputs.verify_institution_boards
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
       - name: Verify injected DNS failure with real official CU documents
         if: inputs.verify_cu_recovery
@@ -93,4 +96,17 @@ jobs:
           assert not report['holds'], 'CU recovery failed'
           assert report['notices'], 'CU recovery did not find official documents'
           assert report['coverage']['cu']['native_ipv4_fetch_count']>0
+          PY
+      - name: Verify real configured institution boards without publication
+        if: inputs.verify_institution_boards
+        run: |
+          python3 - <<'PY'
+          import json
+          from services.lp.src.collect_lp_institution_boards import collect, validate_notice
+          report=collect()
+          for notice in report['notices']:validate_notice(notice,report['checked_at'])
+          outages=[h for h in report['holds'] if h['stage'] in {'institution_listing','institution_detail','institution_depth'}]
+          print(json.dumps({'mode':'real official requests; no injected errors; no DB writes',
+            'coverage':report['coverage'],'holds':report['holds'],'validated_notices':len(report['notices'])},ensure_ascii=False))
+          assert not outages, 'Official institution collection failed'
           PY
