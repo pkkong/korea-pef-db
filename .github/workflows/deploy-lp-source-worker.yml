@@ -1,0 +1,27 @@
+name: Deploy LP source worker
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lp-source-worker-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Test isolated worker boundaries
+        run: node --test services/lp/collector/tests/fetch.test.js
+      - name: Install deployment CLI
+        run: npm install --global vercel@64.5.0
+      - name: Deploy source-only transport and verify official listing
+        run: python3 scripts/deploy_lp_source_worker.py

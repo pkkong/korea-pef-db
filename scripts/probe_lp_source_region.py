@@ -65,15 +65,6 @@ def main():
     project=None
     report={'status':'error','region_requested':'icn1'}
     try:
-        # Remove only accidental source-folder projects from this probe's first
-        # two runs. The unique prefix and original probe start bound ownership.
-        prior=api('/v9/projects?limit=100').get('projects',[])
-        removed=[]
-        for item in prior:
-            if item.get('name','').startswith('lp-seoul-probe-') and item.get('createdAt',0)>=1792550100000:
-                api('/v9/projects/'+item['id'],'DELETE')
-                removed.append(item['name'])
-        report['abandoned_probe_projects_removed']=removed
         # Never reuse or overwrite an existing project with this name.
         project=api('/v11/projects','POST',{'name':PROJECT,'framework':None,'publicSource':False})
         # Only this empty temporary project is changed; the handler itself

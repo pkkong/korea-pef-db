@@ -1,0 +1,6 @@
+{
+  "version": 2,
+  "regions": ["icn1"],
+  "git": { "deploymentEnabled": false },
+  "functions": { "api/*.js": { "maxDuration": 60 } }
+}

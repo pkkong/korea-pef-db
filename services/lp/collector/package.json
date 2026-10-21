@@ -1,0 +1,8 @@
+{
+  "name": "lp-source-worker",
+  "private": true,
+  "version": "1.0.0",
+  "type": "commonjs",
+  "engines": { "node": "24.x" },
+  "scripts": { "test": "node --test tests/*.test.js" }
+}

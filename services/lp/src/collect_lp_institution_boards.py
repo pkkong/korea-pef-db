@@ -11,6 +11,7 @@ import copy
 import hashlib
 import io
 import json
+import os
 import re
 import time
 import zipfile
@@ -22,6 +23,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 try:
+    from .lp_regional_transport import fetch_kfcc
     from .lp_transport_errors import transient_dns
     from .collect_shared_lp_notices import decode_html, classify_scope
     from .collect_lp_original_notices import OfficialRedirect, original_body_hash, safe_host
@@ -29,6 +31,7 @@ try:
     from . import lp_board_adapters_mutuals as mutuals, lp_board_adapters_pensions as pensions
     from . import lp_board_adapter_kfcc as kfcc, lp_board_adapters_banks as banks
 except ImportError:
+    from lp_regional_transport import fetch_kfcc
     from lp_transport_errors import transient_dns
     from collect_shared_lp_notices import decode_html, classify_scope
     from collect_lp_original_notices import OfficialRedirect, original_body_hash, safe_host
@@ -94,6 +97,7 @@ def _same_host(url, config):
 class Session:
     def __init__(self, config):
         self.config = config
+        self.regional_fetches = 0
         self.opener = build_opener(OfficialRedirect({safe_host(config['listing_url'])}),
                                    HTTPCookieProcessor(CookieJar()))
 
@@ -114,6 +118,12 @@ class Session:
                 # Certificate/HTTP validation failures are not transient retries.
                 transient = isinstance(exc, (TimeoutError, ConnectionError))
                 if isinstance(exc, HTTPError):
+                    token = os.environ.get('LP_SOURCE_WORKER_TOKEN', '')
+                    if (self.config['institution_id'] == 'kfcc' and exc.code == 400 and token
+                            and b'Request Blocked' in exc.read(4096)):
+                        raw = fetch_kfcc(url, referer, token)
+                        self.regional_fetches += 1
+                        return raw
                     transient = exc.code in {408, 429, 500, 502, 503, 504}
                 elif isinstance(exc, URLError):
                     transient = transient_dns(exc) or isinstance(exc.reason, (TimeoutError, ConnectionError))
@@ -234,6 +244,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
             except Exception as exc:
                 result['holds'].append({'institution_id': institution, 'stage': 'institution_detail',
                                         'url': row['url'], 'error': str(exc)})
+        coverage['regional_fetch_count'] = getattr(fetch, 'regional_fetches', 0)
     return result
 
 
