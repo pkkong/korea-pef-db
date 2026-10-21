@@ -6,6 +6,10 @@ on:
         type: choice
         default: ubuntu-latest
         options: [ubuntu-latest, macos-latest]
+      institution:
+        type: choice
+        default: cu
+        options: [cu, kfcc, kfinco, all]
 permissions:
   contents: read
 jobs:
@@ -13,30 +17,47 @@ jobs:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 5
     steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
       - name: Compare bounded anonymous official requests
         shell: python3 {0}
+        env:
+          DIAGNOSE_INSTITUTION: ${{ inputs.institution }}
         run: |
-          import hashlib, json, subprocess, tempfile
+          import hashlib, json, os, socket, subprocess, tempfile, time
           from http.cookiejar import CookieJar
           from pathlib import Path
           from urllib.error import HTTPError
-          from urllib.parse import quote
+          from urllib.parse import quote, urlsplit
           from urllib.request import Request, HTTPCookieProcessor, build_opener
           targets = [
+            ('cu', 'https://www.cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007&searchType=sj&listCo=50&searchValue='+quote('블라인드')+'&currPage=1', 'https://www.cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007'),
             ('kfcc', 'https://www.kfcc.co.kr/mgNotice/mgNoticeList.do?schType=subject&schValue='+quote('위탁')+'&pageNo=1', 'https://www.kfcc.co.kr/mgNotice/mgNoticeList.do?schType=subject'),
             ('kfinco', 'https://www.kfinco.co.kr/api/pr/notice/list?page=1&size=10&searchKeyword='+quote('위탁운용사'), 'https://www.kfinco.co.kr/pr/notice')]
           for institution,url,referer in targets:
-            for mode in ['collector','browser','warm_session','curl_h1']:
+            if os.environ['DIAGNOSE_INSTITUTION'] not in {institution,'all'}:continue
+            host=urlsplit(url).hostname
+            for family in [socket.AF_UNSPEC,socket.AF_INET,socket.AF_INET6]:
+              started=time.monotonic()
+              try:
+                addresses=sorted({a[4][0] for a in socket.getaddrinfo(host,443,family,socket.SOCK_STREAM)})
+                print(json.dumps({'institution':institution,'resolver_family':family.name,'addresses':addresses,'seconds':round(time.monotonic()-started,3)}))
+              except OSError as error:print(json.dumps({'institution':institution,'resolver_family':family.name,'errno':error.errno,'error':str(error),'seconds':round(time.monotonic()-started,3)}))
+            modes=['collector','curl_h1','curl_ipv4'] if institution=='cu' else ['collector','browser','warm_session','curl_h1']
+            for mode in modes:
               headers={'User-Agent': 'Mozilla/5.0 (LP official board collector)' if mode=='collector' else 'Mozilla/5.0', 'Accept-Encoding':'identity','Connection':'close','Referer':referer}
               try:
-                if mode=='curl_h1':
+                if mode.startswith('curl_'):
                   with tempfile.TemporaryDirectory() as folder:
                     path=Path(folder)/'body'
                     args=['curl','--http1.1','--fail-with-body','--max-time','20','--max-filesize','12582912','--silent','--show-error','--output',str(path),'--write-out','%{http_code}']
+                    if mode=='curl_ipv4':args+=['--ipv4']
                     for key,value in headers.items():args+=['-H',key+': '+value]
                     result=subprocess.run(args+[url],capture_output=True,text=True,timeout=25)
                     raw=path.read_bytes() if path.exists() else b''
                     status=result.stdout
+                    print(json.dumps({'institution':institution,'mode':mode,'curl_exit':result.returncode,'curl_error':result.stderr[:240]}))
                 else:
                   opener=build_opener(HTTPCookieProcessor(CookieJar()))
                   if mode=='warm_session':
