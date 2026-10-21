@@ -1,0 +1,31 @@
+name: Probe LP source from Seoul
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lp-source-region-probe
+  cancel-in-progress: false
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Install deployment CLI
+        run: npm install --global vercel@64.5.0
+      - name: Measure fixed public sources and remove temporary project
+        run: python3 scripts/probe_lp_source_region.py --output /tmp/lp-source-region-probe.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-source-region-probe
+          path: /tmp/lp-source-region-probe.json
+          retention-days: 7
+          if-no-files-found: error
