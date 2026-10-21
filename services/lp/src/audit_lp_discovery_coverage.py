@@ -121,9 +121,14 @@ def _issuer(site, title, aliases):
     return None, 'unmatched'
 
 
-def extract_known(document):
+def extract_known(document, channels=None):
     """Extract notice identities only, inheriting issuer through program events."""
     records = []
+    channels = load_channels() if channels is None else channels
+    hosts = {}
+    for institution, official_hosts in channels.items():
+        for host in official_hosts:
+            hosts.setdefault(host, set()).add(institution)
 
     def walk(node, institution=None, depth=0):
         if depth > 24:
@@ -136,6 +141,14 @@ def extract_known(document):
             if not isinstance(issuer, str) or not issuer:
                 issuer = None
             title, url = node.get('title'), node.get('url')
+            if issuer is None and isinstance(url, str):
+                try:
+                    parsed = urlsplit(normalize_url(url))
+                    candidates = hosts.get(parsed.hostname.removeprefix('www.'),set())
+                    if parsed.scheme == 'https' and len(candidates) == 1:
+                        issuer = next(iter(candidates))
+                except ValueError:
+                    pass
             if issuer and (isinstance(title, str) and title.strip() or isinstance(url, str)):
                 normalized_url = None
                 if isinstance(url, str):
@@ -172,7 +185,7 @@ def audit_coverage(payload, documents=(), *, aliases=None, channels=None, observ
         for channel in json.loads((ROOT/'data/lp_institution_board_channels.json').read_text())['channels']:
             host = urlsplit(channel['listing_url']).hostname.removeprefix('www.')
             channels.setdefault(channel['institution_id'], set()).add(host)
-    known = [record for document in documents for record in extract_known(document)]
+    known = [record for document in documents for record in extract_known(document, channels)]
     urls = {(issuer, url) for issuer, _, url in known if url}
     titles = {(issuer, title) for issuer, title, _ in known if title}
     results = []

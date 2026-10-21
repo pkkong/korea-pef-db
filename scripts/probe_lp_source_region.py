@@ -76,6 +76,9 @@ def main():
         report['abandoned_probe_projects_removed']=removed
         # Never reuse or overwrite an existing project with this name.
         project=api('/v11/projects','POST',{'name':PROJECT,'framework':None,'publicSource':False})
+        # Only this empty temporary project is changed; the handler itself
+        # requires its own random bearer token and has no DB credentials.
+        api('/v9/projects/'+project['id'],'PATCH',{'ssoProtection':None})
         token=secrets.token_urlsafe(32)
         api('/v10/projects/'+project['id']+'/env','POST',
             [{'key':'SOURCE_PROBE_TOKEN','value':token,'type':'encrypted','target':['production']}])
@@ -106,7 +109,12 @@ def main():
             for attempt in range(3):
                 try:
                     with urlopen(Request(url,headers={'Authorization':'Bearer '+token}),timeout=55) as response:
-                        report.update(json.load(response),status='measured')
+                        raw=response.read(65537)
+                        report['probe_response']={'status':response.status,'content_type':response.headers.get('Content-Type'),'bytes':len(raw)}
+                        measurement=json.loads(raw)
+                        if measurement.get('region')!='icn1' or not isinstance(measurement.get('results'),list):
+                            raise RuntimeError('Temporary probe did not execute in the requested region')
+                        report.update(measurement,status='measured')
                     break
                 except (OSError,ValueError) as error:
                     if isinstance(error,HTTPError):report['probe_http_status']=error.code

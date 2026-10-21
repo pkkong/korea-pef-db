@@ -66,6 +66,15 @@ def baseline(conn):
     return data
 
 
+def source_index(conn):
+    rows = conn.execute(
+        "SELECT DISTINCT document->>'institution_id', document->>'title', source_url "
+        "FROM lp_program_private.documents WHERE document->>'title' IS NOT NULL"
+    ).fetchall()
+    return {'notices': [{'institution_id': institution, 'title': title, 'url': url}
+                        for institution, title, url in rows]}
+
+
 def prepare(current, report):
     current, report = clean_database_text(current), clean_database_text(report)
     if not report.get('notices'):
@@ -215,12 +224,16 @@ def prepare(current, report):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--export-baseline', type=Path)
+    parser.add_argument('--export-source-index', type=Path)
     parser.add_argument('--collection', type=Path)
     parser.add_argument('--priority-collection', type=Path)
     parser.add_argument('--shared-collection', type=Path)
     parser.add_argument('--institution-collection', type=Path)
     args = parser.parse_args()
     with connect() as conn:
+        if args.export_source_index:
+            args.export_source_index.write_text(json.dumps(source_index(conn), ensure_ascii=False))
+            return
         if args.export_baseline:
             args.export_baseline.write_text(json.dumps(baseline(conn), ensure_ascii=False))
             return

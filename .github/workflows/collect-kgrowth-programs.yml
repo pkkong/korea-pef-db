@@ -178,7 +178,9 @@ jobs:
           name: lp-institution-collection
           path: /tmp
       - name: Load last published data
-        run: python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json
+        run: |
+          python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json
+          python3 services/lp/src/publish_lp_programs.py --export-source-index /tmp/lp-source-index.json
       - name: Collect official announcements
         run: python3 services/lp/src/collect_kgrowth_programs.py --baseline /tmp/lp-baseline.json --output /tmp/kgrowth-collection.json
       - name: Collect Korea Post, KTCU, and KEXIM announcements
@@ -198,7 +200,7 @@ jobs:
       - name: Compare independent discovery without approving public facts
         if: always()
         run: |
-          python3 services/lp/src/audit_lp_discovery_coverage.py --baseline /tmp/lp-baseline.json --official-collection /tmp/kgrowth-collection.json --official-collection /tmp/lp-priority-collection.json --official-collection /tmp/lp-shared-collection.json --official-collection /tmp/lp-institution-collection.json --output /tmp/lp-discovery-audit.json --markdown /tmp/lp-discovery-audit.md
+          python3 services/lp/src/audit_lp_discovery_coverage.py --baseline /tmp/lp-baseline.json --official-collection /tmp/lp-source-index.json --official-collection /tmp/kgrowth-collection.json --official-collection /tmp/lp-priority-collection.json --official-collection /tmp/lp-shared-collection.json --official-collection /tmp/lp-institution-collection.json --output /tmp/lp-discovery-audit.json --markdown /tmp/lp-discovery-audit.md
           python3 - <<'PY'
           import json, os
           report=json.load(open('/tmp/lp-discovery-audit.json'))

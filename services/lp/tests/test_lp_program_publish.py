@@ -8,9 +8,21 @@ from unittest.mock import patch
 
 SRC = Path(__file__).resolve().parents[1]/'src'
 sys.path.insert(0,str(SRC))
-from publish_lp_programs import prepare, document_hash, clean_database_text
+from publish_lp_programs import prepare, document_hash, clean_database_text, source_index
 
 class PublishContracts(unittest.TestCase):
+    def test_source_index_projects_only_notice_identity_without_writes(self):
+        from unittest.mock import Mock
+        conn = Mock()
+        conn.execute.return_value.fetchall.return_value = [(None, 'official title', 'https://www.kgrowth.or.kr/n?id=1')]
+        data = source_index(conn)
+        self.assertEqual(set(data['notices'][0]), {'institution_id', 'title', 'url'})
+        query = conn.execute.call_args.args[0]
+        self.assertTrue(query.startswith('SELECT DISTINCT '))
+        self.assertNotIn('SELECT *', query)
+        self.assertNotIn('body', query)
+        self.assertEqual(conn.execute.call_count, 1)
+
     def test_nested_original_proof_refresh_is_not_a_content_change(self):
         old={'body':'same','original_notices':[{'body':'same original','checked_at':'before',
              'discovery_provenance':{'listing_html':'old counter','listing_sha256':'first'}}]}

@@ -101,6 +101,16 @@ class DiscoveryCoverageTests(unittest.TestCase):
             with self.subTest(document=document):
                 self.assertEqual(compare(row, documents=[document])['items'][0]['known_match'], 'url')
 
+    def test_official_archive_without_issuer_uses_unique_verified_host_only(self):
+        row = notice(site='한국성장금융', url='https://www.kgrowth.or.kr/notice_view.asp?idx=777')
+        documents = [{'notices': [{'title': row['title'], 'url': row['url'], 'body': 'not copied'}]}]
+        self.assertEqual(compare(row, documents=documents)['items'][0]['known_match'], 'url')
+        for url in ['https://api.pe-vc-lp.com/att/kgrowth/777.pdf', 'https://kgrowth.or.kr.attacker.example/?idx=777']:
+            documents[0]['notices'][0]['url'] = url
+            self.assertIsNone(compare(row, documents=documents)['items'][0]['known_match'])
+        ambiguous = {**CHANNELS, 'other': {'kgrowth.or.kr'}}
+        self.assertFalse(audit.extract_known({'notices':[{'title': row['title'], 'url':row['url']}]}, ambiguous))
+
     def test_verified_direct_bank_config_supplies_only_a_host_to_check(self):
         row = notice(site='IBK기업은행', url='https://www.ibk.co.kr/cyber/noticeDetailCyber.ibk?srno=1')
         report = audit.audit_coverage(payload(row))
