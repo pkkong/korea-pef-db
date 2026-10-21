@@ -358,3 +358,12 @@ python3 scripts/build_site_bundle.py --services wiki --date YYYY-MM-DD
 외부 링크가 이미 보존된 공식 문서와 일치하면 이미 수집된 자료로 구분한다. 외부 자체 PDF 주소는 원문 링크로 승격하지 않으며 확인 후보에 남긴다. 미확인 기관, VC 명시, 범위 외, 공식 원문 확인 필요 상태는 검사용 보고서에만 남긴다. 대조 실패는 보고하되 별개의 정상 공식 자료 발행을 막지 않는다. 보고서가 사업 승인이나 DB 변경을 수행하지 않는다.
 
 새마을금고 지역 전송기는 허용된 공식 HTTPS 게시판·첨부의 바이트만 전달한다. 공식 주소가 `source_url`이며 worker 주소를 원문으로 기록하지 않는다. 수신 크기·서울 지역 응답·SHA256을 확인한 뒤 동일한 기존 본문/첨부 파서와 출처 검증을 적용한다. 수집기는 성공한 지역 요청 수를 `regional_fetch_count`에 기록한다. 전송기는 DB 접근 권한과 공고 공개 권한이 없다.
+
+
+## 신협 DNS 대체 전송 — 2026-10-21
+
+`lp_cu_transport.py`는 신협의 typed DNS 오류가 발생한 경우에만 기존 두 번째 시도로 호출된다. 공식 HTTPS 호스트와 관측 가능한 목록·상세·첨부 경로만 허용하며 기본 TLS, 원래 hostname/SNI, 12MiB, 20초 전송/25초 프로세스 제한을 유지한다. 고정 IP·curl 설정 파일·리다이렉트·제3자 프록시·추가 재시도는 사용하지 않는다. 공식 수신 바이트를 기존 파서와 `validate_notice`로 다시 검증하고 URL/본문/첨부 근거 계약은 바꾸지 않는다.
+
+기관 수집 `coverage.native_ipv4_fetch_count`는 이 경로로 성공한 수신 횟수다. 실패하면 보류와 기존 자료 보존으로 처리하며 성공 수를 올리지 않는다. 수동 진단의 `verify_cu_recovery`는 주입된 DNS 오류와 실제 공식 자료를 사용하는 DB 미변경 검증이다. 이 결과를 오류를 주입하지 않은 운영 수집이나 실제 예약 성공으로 세지 않는다.
+
+공통 `lp_ipv4_transport.py`는 새 HTTPS 연결의 DNS 주소군만 AF_INET으로 지정한다. 원래 호스트/SNI/TLS context를 유지하며 Session의 두 opener는 같은 CookieJar와 OfficialRedirect 허용 호스트 정책을 사용한다. 신협 native 경로 이외의 직접 기관은 typed DNS 오류 후 기존 두 번째 직접 시도에서만 선택한다. 12MiB·20초 제한과 본문/첨부 재검증은 기존 Session이 수행한다. `coverage.dns_ipv4_fetch_count`는 성공 수신 횟수다. macOS의 기존 실제 DNS 오류와 Ubuntu의 산업은행 TLS EOF를 기록하고 실행 환경을 무조건 전환하지 않는다. 이 공통 전송기의 존재가 과거 장애 원인 규명이나 예약 정상화 완료를 뜻하지 않는다.
