@@ -84,13 +84,21 @@ def main():
             urls=[line.strip() for line in result.stdout.splitlines() if line.strip().startswith('https://')]
             if not urls or not (urlsplit(urls[-1]).hostname or '').endswith('.vercel.app'):
                 raise RuntimeError('Temporary deployment URL missing')
-            url=urls[-1]+'/api/probe'
+            deployed=api('/v9/projects/'+project['id'])
+            aliases=deployed.get('targets',{}).get('production',{}).get('alias',[])
+            host=next((a for a in aliases if isinstance(a,str) and a.startswith(PROJECT+'.') and a.endswith('.vercel.app')),None)
+            if not host:
+                raise RuntimeError('Verified production alias missing')
+            url='https://'+host+'/api/probe'
             for attempt in range(3):
                 try:
                     with urlopen(Request(url,headers={'Authorization':'Bearer '+token}),timeout=55) as response:
                         report.update(json.load(response),status='measured')
                     break
-                except (OSError,ValueError):
+                except (OSError,ValueError) as error:
+                    if isinstance(error,HTTPError):report['probe_http_status']=error.code
+                    if isinstance(error,HTTPError) and error.code in {401,403}:
+                        raise RuntimeError('Temporary probe access failed HTTP '+str(error.code)) from None
                     if attempt==2:raise RuntimeError('Temporary regional probe unavailable') from None
                     time.sleep(3)
     except (OSError,ValueError,RuntimeError,subprocess.SubprocessError) as error:
