@@ -1,5 +1,5 @@
 {
-  "as_of": "2026-10-20",
+  "as_of": "2026-10-21",
   "product_scope": "공식 공개모집으로 선정하는 국내 PE/PEF 블라인드 펀드 출자사업",
   "confirmed_institution_ids": [
     "koreapost",
@@ -37,7 +37,8 @@
     "poba",
     "pmaa",
     "tp",
-    "cu"
+    "cu",
+    "kfcc"
   ],
   "supporting_collector_ids": [
     "kdb",
@@ -73,8 +74,6 @@
     "로그인"
   ],
   "supporting_collector_policy": "산업·기업은행 공식 게시판 발견·본문·첨부 수집. PE 블라인드와 독립 배정 근거 미확인 공고는 보존하며 공개하지 않는다.",
-  "blocked_collector_ids": [
-    "kfcc"
-  ],
-  "blocked_collector_reason": "공식 MG공지에 대한 GitHub macOS/Linux 익명 요청이 HTTP400 Request Blocked. 수집 코드 및 로컬 PE 판독 완료와 운영 수집 미완료를 구분한다."
+  "blocked_collector_ids": [],
+  "regional_transport_policy": "새마을금고 공식 경로의 GitHub HTTP400 Request Blocked만 인증된 서울 전송기로 한 번 수신하고 기존 원문·첨부 판독과 공개 검증을 적용한다. 일시 수집 장애는 운영 현황에 별도 기록한다."
 }
