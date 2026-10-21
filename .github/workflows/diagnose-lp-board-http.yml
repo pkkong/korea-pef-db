@@ -99,6 +99,8 @@ jobs:
           PY
       - name: Verify real configured institution boards without publication
         if: inputs.verify_institution_boards
+        env:
+          LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
         run: |
           python3 - <<'PY'
           import json
