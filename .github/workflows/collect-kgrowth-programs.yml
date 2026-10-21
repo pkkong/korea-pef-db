@@ -195,6 +195,18 @@ jobs:
         run: |
           set -o pipefail
           python3 services/lp/src/publish_lp_programs.py --collection /tmp/kgrowth-collection.json --priority-collection /tmp/lp-priority-collection.json --shared-collection /tmp/lp-shared-collection.json --institution-collection /tmp/lp-institution-collection.json | tee /tmp/kgrowth-publication.json
+      - name: Compare independent discovery without approving public facts
+        if: always()
+        run: |
+          python3 services/lp/src/audit_lp_discovery_coverage.py --baseline /tmp/lp-baseline.json --official-collection /tmp/kgrowth-collection.json --official-collection /tmp/lp-priority-collection.json --official-collection /tmp/lp-shared-collection.json --official-collection /tmp/lp-institution-collection.json --output /tmp/lp-discovery-audit.json --markdown /tmp/lp-discovery-audit.md
+          python3 - <<'PY'
+          import json, os
+          report=json.load(open('/tmp/lp-discovery-audit.json'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as summary:
+              summary.write('\nLP independent discovery comparison: '+json.dumps(report['summary'])+'\n')
+          if report['status'] != 'ok':
+              print('::warning::Discovery comparison unavailable; official collection status remains independent')
+          PY
       - name: Verify published page
         run: |
           python3 - <<'PY'
@@ -261,5 +273,7 @@ jobs:
             /tmp/lp-shared-collection.json
             /tmp/lp-institution-collection.json
             /tmp/kgrowth-publication.json
+            /tmp/lp-discovery-audit.json
+            /tmp/lp-discovery-audit.md
           if-no-files-found: ignore
           retention-days: 30

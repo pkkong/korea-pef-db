@@ -98,10 +98,10 @@ def main():
             deployed=api('/v13/deployments/'+urlsplit(urls[-1]).hostname)
             if deployed.get('projectId')!=project['id']:
                 raise RuntimeError('Temporary deployment project mismatch')
-            aliases=deployed.get('alias',[])
-            host=next((a for a in aliases if isinstance(a,str) and a.startswith(PROJECT+'.') and a.endswith('.vercel.app')),None)
-            if not host:
-                raise RuntimeError('Verified production alias missing')
+            host='lp-source-probe-'+secrets.token_hex(6)+'.vercel.app'
+            assigned=api('/v2/deployments/'+deployed['id']+'/aliases','POST',{'alias':host})
+            if assigned.get('alias')!=host:
+                raise RuntimeError('Temporary alias assignment differs')
             url='https://'+host+'/api/probe'
             for attempt in range(3):
                 try:

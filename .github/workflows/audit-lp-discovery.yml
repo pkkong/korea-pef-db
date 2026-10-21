@@ -1,0 +1,41 @@
+name: Audit LP discovery coverage
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install baseline reader
+        run: python3 -m pip install 'psycopg[binary]==3.2.10'
+      - name: Verify discovery comparison contracts
+        run: python3 -m unittest services.lp.tests.test_audit_lp_discovery_coverage
+      - name: Read current catalog without publishing
+        run: python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json
+      - name: Compare the anonymous discovery feed
+        run: |
+          python3 services/lp/src/audit_lp_discovery_coverage.py --baseline /tmp/lp-baseline.json --output /tmp/lp-discovery-audit.json --markdown /tmp/lp-discovery-audit.md
+          python3 - <<'PY'
+          import json, os
+          report=json.load(open('/tmp/lp-discovery-audit.json'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as summary:
+              summary.write('LP discovery comparison: '+json.dumps(report['summary'])+'\n')
+          assert report['status']=='ok', 'Discovery feed unavailable; no data was published'
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-discovery-audit
+          path: |
+            /tmp/lp-discovery-audit.json
+            /tmp/lp-discovery-audit.md
+          retention-days: 7
+          if-no-files-found: error
