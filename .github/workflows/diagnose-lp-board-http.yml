@@ -16,12 +16,15 @@ on:
       verify_institution_boards:
         type: boolean
         default: false
+      verify_dns_recovery:
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   diagnose:
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -75,7 +78,7 @@ jobs:
                 print(json.dumps({'institution':institution,'mode':mode,'status':status,'size':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'error_excerpt':raw[:240].decode('utf-8','replace') if str(status)!='200' else None},ensure_ascii=False))
               except Exception as error:print(json.dumps({'institution':institution,'mode':mode,'error':str(error)}))
       - name: Install readers for explicit CU recovery verification
-        if: inputs.verify_cu_recovery || inputs.verify_institution_boards
+        if: inputs.verify_cu_recovery || inputs.verify_institution_boards || inputs.verify_dns_recovery
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
       - name: Verify injected DNS failure with real official CU documents
         if: inputs.verify_cu_recovery
@@ -111,4 +114,28 @@ jobs:
           print(json.dumps({'mode':'real official requests; no injected errors; no DB writes',
             'coverage':report['coverage'],'holds':report['holds'],'validated_notices':len(report['notices'])},ensure_ascii=False))
           assert not outages, 'Official institution collection failed'
+          PY
+      - name: Verify injected DNS recovery across configured official boards
+        if: inputs.verify_dns_recovery
+        env:
+          LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
+        run: |
+          python3 -u - <<'PY'
+          import json, socket
+          from unittest.mock import Mock
+          from urllib.error import URLError
+          from services.lp.src.collect_lp_institution_boards import Session, collect, load_configs, validate_notice
+          def injected_session(config):
+            session=Session(config)
+            session.opener.open=Mock(side_effect=URLError(socket.gaierror(8,'injected resolver failure')))
+            return session
+          outages=[]
+          for identity,config in load_configs().items():
+            report=collect({identity:config},fetch_factory=injected_session)
+            for notice in report['notices']:validate_notice(notice,report['checked_at'])
+            outages.extend(h for h in report['holds'] if h['stage'] in {'institution_listing','institution_detail','institution_depth'})
+            print(json.dumps({'mode':'injected DNS failure; real official HTTPS bytes; no DB writes',
+              'institution':identity,'coverage':report['coverage'],'holds':report['holds'],
+              'validated_notices':len(report['notices'])},ensure_ascii=False),flush=True)
+          assert not outages, 'Official institution DNS recovery failed'
           PY

@@ -23,6 +23,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 try:
+    from .lp_ipv4_transport import IPv4HTTPSHandler
     from .lp_cu_transport import fetch_cu_ipv4
     from .lp_regional_transport import fetch_kfcc
     from .lp_transport_errors import transient_dns
@@ -32,6 +33,7 @@ try:
     from . import lp_board_adapters_mutuals as mutuals, lp_board_adapters_pensions as pensions
     from . import lp_board_adapter_kfcc as kfcc, lp_board_adapters_banks as banks
 except ImportError:
+    from lp_ipv4_transport import IPv4HTTPSHandler
     from lp_cu_transport import fetch_cu_ipv4
     from lp_regional_transport import fetch_kfcc
     from lp_transport_errors import transient_dns
@@ -101,8 +103,12 @@ class Session:
         self.config = config
         self.regional_fetches = 0
         self.native_ipv4_fetches = 0
+        self.dns_ipv4_fetches = 0
+        cookies = CookieJar()
         self.opener = build_opener(OfficialRedirect({safe_host(config['listing_url'])}),
-                                   HTTPCookieProcessor(CookieJar()))
+                                   HTTPCookieProcessor(cookies))
+        self.ipv4_opener = build_opener(OfficialRedirect({safe_host(config['listing_url'])}),
+                                        HTTPCookieProcessor(cookies), IPv4HTTPSHandler())
 
     def __call__(self, url, referer=None):
         _same_host(url, self.config)
@@ -111,16 +117,20 @@ class Session:
         if referer:
             headers['Referer'] = referer
         native_ipv4 = False
+        dns_ipv4 = False
         for attempt in range(2):
             if native_ipv4:
                 raw = fetch_cu_ipv4(url, referer)
                 self.native_ipv4_fetches += 1
                 return raw
             try:
-                with self.opener.open(Request(url, headers=headers), timeout=20) as response:
+                opener = self.ipv4_opener if dns_ipv4 else self.opener
+                with opener.open(Request(url, headers=headers), timeout=20) as response:
                     raw = response.read(MAX_BYTES + 1)
                     if len(raw) > MAX_BYTES:
                         raise ValueError('official response exceeds 12 MiB')
+                    if dns_ipv4:
+                        self.dns_ipv4_fetches += 1
                     return raw
             except (TimeoutError, ConnectionError, URLError) as exc:
                 # Certificate/HTTP validation failures are not transient retries.
@@ -138,6 +148,7 @@ class Session:
                 # Use the existing second attempt, never add a third request.
                 # An ordinary timeout/HTTP/TLS/content error cannot select it.
                 native_ipv4 = self.config['institution_id'] == 'cu' and transient_dns(exc)
+                dns_ipv4 = transient_dns(exc) and not native_ipv4
                 if attempt or not transient:
                     raise
                 time.sleep(1)
@@ -257,6 +268,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
                                         'url': row['url'], 'error': str(exc)})
         coverage['regional_fetch_count'] = getattr(fetch, 'regional_fetches', 0)
         coverage['native_ipv4_fetch_count'] = getattr(fetch, 'native_ipv4_fetches', 0)
+        coverage['dns_ipv4_fetch_count'] = getattr(fetch, 'dns_ipv4_fetches', 0)
     return result
 
 

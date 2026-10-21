@@ -49,9 +49,9 @@ class ResolverRecoveryTests(unittest.TestCase):
         session=boards.Session(boards.load_configs()['tp'])
         response=MagicMock()
         response.__enter__.return_value.read.return_value=b'complete'
-        with patch.object(session.opener,'open',side_effect=[self.error(),response]) as fetch, patch.object(boards.time,'sleep'):
+        with patch.object(session.opener,'open',side_effect=self.error()) as fetch, patch.object(session.ipv4_opener,'open',return_value=response) as ipv4, patch.object(boards.time,'sleep'):
             self.assertEqual(session('https://www.tp.or.kr/tp-kr/bbs/i-151/list.do'),b'complete')
-            self.assertEqual(fetch.call_count,2)
+            self.assertEqual(fetch.call_count+ipv4.call_count,2)
 
     def test_kfinco_owns_one_budget_without_nested_original_retries(self):
         self.assertIs(kfinco.fetch_bytes,original.fetch_bytes_once)

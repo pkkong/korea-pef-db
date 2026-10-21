@@ -92,9 +92,9 @@ class NativeCuTransportTests(unittest.TestCase):
                 with self.assertRaises(type(error)):session(URL)
                 fetch.assert_not_called()
         session=self.session(URLError(socket.gaierror(8,'resolver unavailable')),'tp')
-        with patch.object(boards,'fetch_cu_ipv4') as fetch,patch.object(boards.time,'sleep'):
+        with patch.object(session.ipv4_opener,'open',side_effect=URLError(socket.gaierror(8,'resolver unavailable'))) as ipv4,patch.object(boards,'fetch_cu_ipv4') as fetch,patch.object(boards.time,'sleep'):
             with self.assertRaises(URLError):session('https://www.tp.or.kr/tp-kr/bbs/i-151/list.do')
-            self.assertEqual(session.opener.open.call_count,2)
+            self.assertEqual(session.opener.open.call_count+ipv4.call_count,2)
             fetch.assert_not_called()
 
 
