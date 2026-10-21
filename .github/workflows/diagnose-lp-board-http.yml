@@ -10,6 +10,9 @@ on:
         type: choice
         default: cu
         options: [cu, kfcc, kfinco, all]
+      verify_cu_recovery:
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -17,6 +20,7 @@ jobs:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -67,3 +71,26 @@ jobs:
                   except HTTPError as error:status=error.code;raw=error.read(4096)
                 print(json.dumps({'institution':institution,'mode':mode,'status':status,'size':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'error_excerpt':raw[:240].decode('utf-8','replace') if str(status)!='200' else None},ensure_ascii=False))
               except Exception as error:print(json.dumps({'institution':institution,'mode':mode,'error':str(error)}))
+      - name: Install readers for explicit CU recovery verification
+        if: inputs.verify_cu_recovery
+        run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
+      - name: Verify injected DNS failure with real official CU documents
+        if: inputs.verify_cu_recovery
+        run: |
+          python3 - <<'PY'
+          import json, socket
+          from unittest.mock import Mock
+          from urllib.error import URLError
+          from services.lp.src.collect_lp_institution_boards import Session, collect, load_configs, validate_notice
+          def injected_session(config):
+            session=Session(config)
+            session.opener.open=Mock(side_effect=URLError(socket.gaierror(8,'injected resolver failure')))
+            return session
+          report=collect({'cu':load_configs()['cu']},fetch_factory=injected_session)
+          for notice in report['notices']:validate_notice(notice,report['checked_at'])
+          print(json.dumps({'mode':'injected DNS failure; real official HTTPS bytes; no DB writes',
+            'coverage':report['coverage'],'holds':report['holds'],'validated_notices':len(report['notices'])},ensure_ascii=False))
+          assert not report['holds'], 'CU recovery failed'
+          assert report['notices'], 'CU recovery did not find official documents'
+          assert report['coverage']['cu']['native_ipv4_fetch_count']>0
+          PY

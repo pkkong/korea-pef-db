@@ -23,6 +23,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 try:
+    from .lp_cu_transport import fetch_cu_ipv4
     from .lp_regional_transport import fetch_kfcc
     from .lp_transport_errors import transient_dns
     from .collect_shared_lp_notices import decode_html, classify_scope
@@ -31,6 +32,7 @@ try:
     from . import lp_board_adapters_mutuals as mutuals, lp_board_adapters_pensions as pensions
     from . import lp_board_adapter_kfcc as kfcc, lp_board_adapters_banks as banks
 except ImportError:
+    from lp_cu_transport import fetch_cu_ipv4
     from lp_regional_transport import fetch_kfcc
     from lp_transport_errors import transient_dns
     from collect_shared_lp_notices import decode_html, classify_scope
@@ -98,6 +100,7 @@ class Session:
     def __init__(self, config):
         self.config = config
         self.regional_fetches = 0
+        self.native_ipv4_fetches = 0
         self.opener = build_opener(OfficialRedirect({safe_host(config['listing_url'])}),
                                    HTTPCookieProcessor(CookieJar()))
 
@@ -107,7 +110,12 @@ class Session:
                    'Accept-Encoding': 'identity', 'Connection': 'close'}
         if referer:
             headers['Referer'] = referer
+        native_ipv4 = False
         for attempt in range(2):
+            if native_ipv4:
+                raw = fetch_cu_ipv4(url, referer)
+                self.native_ipv4_fetches += 1
+                return raw
             try:
                 with self.opener.open(Request(url, headers=headers), timeout=20) as response:
                     raw = response.read(MAX_BYTES + 1)
@@ -127,6 +135,9 @@ class Session:
                     transient = exc.code in {408, 429, 500, 502, 503, 504}
                 elif isinstance(exc, URLError):
                     transient = transient_dns(exc) or isinstance(exc.reason, (TimeoutError, ConnectionError))
+                # Use the existing second attempt, never add a third request.
+                # An ordinary timeout/HTTP/TLS/content error cannot select it.
+                native_ipv4 = self.config['institution_id'] == 'cu' and transient_dns(exc)
                 if attempt or not transient:
                     raise
                 time.sleep(1)
@@ -245,6 +256,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
                 result['holds'].append({'institution_id': institution, 'stage': 'institution_detail',
                                         'url': row['url'], 'error': str(exc)})
         coverage['regional_fetch_count'] = getattr(fetch, 'regional_fetches', 0)
+        coverage['native_ipv4_fetch_count'] = getattr(fetch, 'native_ipv4_fetches', 0)
     return result
 
 
