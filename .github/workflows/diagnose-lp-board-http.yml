@@ -21,6 +21,9 @@ on:
         default: false
 permissions:
   contents: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
 jobs:
   diagnose:
     runs-on: ${{ inputs.runner }}
@@ -119,9 +122,10 @@ jobs:
         if: inputs.verify_dns_recovery
         env:
           LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
+          DIAGNOSE_INSTITUTION: ${{ inputs.institution }}
         run: |
           python3 -u - <<'PY'
-          import json, socket
+          import json, os, socket
           from unittest.mock import Mock
           from urllib.error import URLError
           from services.lp.src.collect_lp_institution_boards import Session, collect, load_configs, validate_notice
@@ -131,6 +135,7 @@ jobs:
             return session
           outages=[]
           for identity,config in load_configs().items():
+            if os.environ['DIAGNOSE_INSTITUTION'] not in {identity,'all'}:continue
             report=collect({identity:config},fetch_factory=injected_session)
             for notice in report['notices']:validate_notice(notice,report['checked_at'])
             outages.extend(h for h in report['holds'] if h['stage'] in {'institution_listing','institution_detail','institution_depth'})

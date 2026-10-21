@@ -56,4 +56,13 @@ def fetch_kfcc(url, referer, token):
                 raise ValueError('regional response hash mismatch')
             return raw
     except HTTPError as error:
-        raise ValueError('regional KFCC source unavailable HTTP '+str(error.code)) from None
+        reason = ''
+        try:
+            detail = json.loads(error.read(1024))
+            if isinstance(detail, dict) and detail.get('error') in {
+                    'source_fetch_failed', 'upstream_status', 'source_too_large',
+                    'invalid_source_url', 'unauthorized'}:
+                reason = ' ('+detail['error']+')'
+        except (ValueError, OSError):
+            pass
+        raise ValueError('regional KFCC source unavailable HTTP '+str(error.code)+reason) from None

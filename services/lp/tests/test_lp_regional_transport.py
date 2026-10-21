@@ -59,6 +59,14 @@ class RegionalTransportTests(unittest.TestCase):
             self.assertNotIn('secret',str(caught.exception))
             self.assertEqual(opener.return_value.open.call_count,1)
 
+    def test_only_known_worker_failure_category_is_reported_without_raw_body(self):
+        for code in ['upstream_status','source_fetch_failed']:
+            error=HTTPError(relay.WORKER,502,'private',{},io.BytesIO(json.dumps({'error':code,'secret':'private'}).encode()))
+            with patch.object(relay,'build_opener') as opener:
+                opener.return_value.open.side_effect=error
+                with self.assertRaisesRegex(ValueError,code) as caught:relay.fetch_kfcc(URL,None,'key')
+                self.assertNotIn('private',str(caught.exception))
+
     def session(self,institution='kfcc',body=b'<h1>Request Blocked</h1>',code=400):
         session=boards.Session(boards.load_configs()[institution])
         session.opener=Mock()
