@@ -38,7 +38,7 @@ jobs:
         env:
           DIAGNOSE_INSTITUTION: ${{ inputs.institution }}
         run: |
-          import hashlib, json, os, socket, subprocess, tempfile, time
+          import hashlib, json, os, re, socket, subprocess, tempfile, time
           from http.cookiejar import CookieJar
           from pathlib import Path
           from urllib.error import HTTPError
@@ -58,6 +58,18 @@ jobs:
                 addresses=sorted({a[4][0] for a in socket.getaddrinfo(host,443,family,socket.SOCK_STREAM)})
                 print(json.dumps({'institution':institution,'resolver_family':family.name,'addresses':addresses,'seconds':round(time.monotonic()-started,3)}))
               except OSError as error:print(json.dumps({'institution':institution,'resolver_family':family.name,'errno':error.errno,'error':str(error),'seconds':round(time.monotonic()-started,3)}))
+            if institution=='tp':
+              for probe_url in ['https://www.tp.or.kr/tp-kr/bbs/i-151/list.do','https://www.tp.or.kr/']:
+                try:
+                  try:
+                    with build_opener().open(Request(probe_url,headers={'User-Agent':'Mozilla/5.0'}),timeout=20) as response:
+                      probe_raw=response.read(12582913);probe_status=response.status
+                  except HTTPError as error:
+                    probe_status=error.code;probe_raw=error.read(4096)
+                  print(json.dumps({'institution':institution,'mode':'bare_official_page','url':probe_url,
+                    'status':probe_status,'size':len(probe_raw),'sha256':hashlib.sha256(probe_raw).hexdigest(),
+                    'text_excerpt':re.sub(r'\s+',' ',re.sub(r'<[^>]*>',' ',probe_raw.decode('utf-8','replace')))[:400]},ensure_ascii=False))
+                except Exception as error:print(json.dumps({'institution':institution,'mode':'bare_official_page','url':probe_url,'error':str(error)}))
             modes=['collector','curl_h1','curl_ipv4'] if institution=='cu' else ['collector','browser','warm_session','curl_h1']
             for mode in modes:
               headers={'User-Agent': 'Mozilla/5.0 (LP official board collector)' if mode=='collector' else 'Mozilla/5.0', 'Accept-Encoding':'identity','Connection':'close','Referer':referer}
