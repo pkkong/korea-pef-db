@@ -13,12 +13,12 @@ import io
 import json
 import re
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, quote, urljoin, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 
@@ -96,12 +96,51 @@ def _listing(html_bytes):
         url = urljoin(BASE, href)
         parsed = urlparse(url)
         params = parse_qs(parsed.query)
-        if parsed.path != "/board.es" or params.get("bid") != ["0041"] or params.get("act") != ["view"]:
+        if (parsed.scheme != "https" or parsed.hostname != "www.kpasset.go.kr" or parsed.username or parsed.password
+                or parsed.path != "/board.es" or params.get("bid") != ["0041"] or params.get("act") != ["view"]):
             continue
         number = params.get("list_no", [""])[0]
         if number.isdigit():
             links.append((number, unescape(title_match.group(1))))
     return list(dict.fromkeys(links))
+
+
+
+def _date_window(checked_at):
+    checked = datetime.fromisoformat(checked_at.replace("Z", "+00:00"))
+    if checked.tzinfo is None:
+        raise ValueError("checked_at requires a timezone")
+    end = checked.astimezone(timezone(timedelta(hours=9))).date()
+    return (end - timedelta(days=364)).isoformat(), end.isoformat()
+
+
+class _SearchInputs(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.values = {}
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "input" and attrs.get("name"):
+            self.values.setdefault(attrs["name"], []).append(attrs.get("value", ""))
+
+
+def _listing_filter_evidence(raw, start, end):
+    parser = _SearchInputs()
+    parser.feed(raw.decode("utf-8"))
+    for key, expected in (("keySDate", start), ("keyEDate", end)):
+        if any(value != expected for value in parser.values.get(key, [])):
+            raise ValueError("Official Korea Post listing date filters differ from requested window")
+    confirmed = all(parser.values.get(key) for key in ("keySDate", "keyEDate"))
+    return "echo_confirmed" if confirmed else "unknown"
+
+
+def _explicit_empty_listing(raw):
+    html = raw.decode("utf-8")
+    parser = _SearchInputs()
+    parser.feed(html)
+    return (parser.values.get("bid") and all(value == "0041" for value in parser.values["bid"]) and bool(re.search(
+        r"(?:등록된|검색된|조회된)\s*게시물(?:이|은)?\s*없습니다[.]?", _text(html))))
 
 
 def _related(title):
@@ -133,7 +172,7 @@ def discovery_candidates(notices):
     return [{"institution_id": "koreapost", "source_id": n["source_id"],
              "title": n["title"], "date": n["date"], "url": n["url"]}
             for n in notices if n["source_id"] not in approved
-            and n["date"] >= "2026-01-01" and not _current_program_title(n["title"])]
+            and not _current_program_title(n["title"])]
 
 
 def _detail(number, raw):
@@ -278,44 +317,34 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
         raise ValueError("Unexpected Korea Post program seed")
     fetch = fetch or _get
     recipe = json.loads(REGISTRY.read_text())
-    discovered = {}
-    cached_details = {}
+    window_start, window_end = _date_window(checked_at)
+    discovered, seen_rows = {}, set()
+    listing_pages = []
     for page in range(1, 11):
-        url = LIST_URL + f"&nPage={page}"
-        links = _listing(fetch(url))
-        if page == 1 and not links:
-            raise ValueError("Official Korea Post listing has no notice links")
+        url = LIST_URL + "&" + urlencode({"keySDate": window_start, "keyEDate": window_end, "nPage": page})
+        raw = fetch(url)
+        filter_evidence = _listing_filter_evidence(raw, window_start, window_end)
+        links = _listing(raw)
+        listing_pages.append({"url": url, "row_count": len(links),
+                              "date_filter_validation": filter_evidence,
+                              "sha256": hashlib.sha256(raw).hexdigest()})
         if not links:
+            if not _explicit_empty_listing(raw):
+                raise ValueError("Official Korea Post listing has no recognized notices or explicit empty result")
+            pagination_end = "explicit_empty"
             break
+        page_ids = {number for number, _ in links}
+        if not page_ids - seen_rows:
+            raise ValueError("Official Korea Post listing pagination did not advance")
+        seen_rows.update(page_ids)
         for number, title in links:
             if _pe_discovery_title(title):
                 discovered[number] = title
         if len(links) < 10:
+            pagination_end = "short_page"
             break
     else:
         raise ValueError("Korea Post listing pagination exceeded safety limit")
-    # The board can hide older 2026 notices while their official detail URLs
-    # remain accessible. Walk backward from the oldest listed ID until the
-    # prior year; do not encode individual notice IDs as a backfill list.
-    if discovered:
-        oldest = min(map(int, discovered))
-        for number in range(oldest - 1, max(oldest - 81, 0), -1):
-            url = f"{BASE}/board.es?mid=a10510000000&bid=0041&act=view&list_no={number}"
-            try:
-                raw = fetch(url)
-            except HTTPError as error:
-                if error.code in (404, 410):
-                    continue
-                raise
-            try:
-                notice = _detail(str(number), raw)
-            except ValueError:
-                continue
-            if notice["date"] < "2026-01-01":
-                break
-            if _pe_discovery_title(notice["title"]):
-                discovered[str(number)] = notice["title"]
-                cached_details[str(number)] = notice
     # Keep the known source under observation if pagination is changed.
     discovered.setdefault("400", seed_program["title"])
     for stage in recipe.get("stages", []):
@@ -324,12 +353,13 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
     reviewed_ids = {SOURCE_ID} | {s["source_id"] for s in recipe.get("stages", [])}
     for number in sorted(discovered, key=int):
         url = f"{BASE}/board.es?mid=a10510000000&bid=0041&act=view&list_no={number}"
-        notice = cached_details.get(number) or _detail(number, fetch(url))
+        notice = _detail(number, fetch(url))
         if not _pe_discovery_title(notice["title"]):
             if number == "400":
                 raise ValueError("Reviewed Korea Post notice no longer matches program")
             continue
-        if notice["date"] < "2026-01-01" and notice["source_id"] not in reviewed_ids:
+        official_date = date.fromisoformat(notice["date"]).isoformat()
+        if not window_start <= official_date <= window_end and notice["source_id"] not in reviewed_ids:
             continue
         notice["attachment_hashes"] = {}
         notice["attachment_texts"] = {}
@@ -352,7 +382,13 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
     programs, holds = project(notices, checked_at)
     return {"checked_at": checked_at, "notices": notices, "programs": programs,
             "holds": holds, "link_suggestions": _suggestions(notices),
-            "discovery_candidates": discovery_candidates(notices)}
+            "discovery_candidates": discovery_candidates(notices),
+            "collection_coverage": {"window_start": window_start, "window_end": window_end,
+                                    "window_days": 365, "date_basis": "Asia/Seoul",
+                                    "listing_pages": listing_pages, "pagination_end": pagination_end,
+                                    "date_filter_validation": "echo_confirmed" if all(
+                                        p["date_filter_validation"] == "echo_confirmed" for p in listing_pages) else "unknown",
+                                    "window_completeness": "not_assessed"}}
 
 
 def main() -> None:

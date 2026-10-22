@@ -49,6 +49,7 @@ def load_post_collection(path: Path, checked_at: str) -> dict:
     return {"checked_at": report["checked_at"], "notices": notices,
             "programs": programs, "holds": holds,
             "link_suggestions": suggest_post(notices),
+            "collection_coverage": report.get("collection_coverage", {}),
             "discovery_candidates": discover_post(notices)}
 
 

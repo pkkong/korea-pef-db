@@ -1,0 +1,54 @@
+name: Audit LP official yearly inventory
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install read-only catalog and attachment dependencies
+        run: python3 -m pip install 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47'
+      - name: Test official inventory boundaries and period filters
+        run: python3 -m unittest services.lp.tests.test_audit_lp_official_inventory services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_priority_lp_programs
+      - name: Read current catalog without publication
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from services.lp.src.publish_lp_programs import connect, baseline, source_index
+          with connect() as conn:
+              conn.execute('SET TRANSACTION READ ONLY')
+              Path('/tmp/lp-baseline.json').write_text(json.dumps(baseline(conn),ensure_ascii=False))
+              Path('/tmp/lp-source-index.json').write_text(json.dumps(source_index(conn),ensure_ascii=False))
+          PY
+      - name: Inventory official lists and compare retained notice identities
+        run: |
+          python3 services/lp/src/audit_lp_official_inventory.py --baseline /tmp/lp-baseline.json --archive /tmp/lp-source-index.json --output /tmp/lp-official-inventory.json --markdown /tmp/lp-official-inventory.md
+          python3 - <<'PY'
+          import json, os
+          report=json.load(open('/tmp/lp-official-inventory.json'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as summary:
+              summary.write('Read-only official listing comparison: '+json.dumps(report['summary'])+'\n')
+          assert not report['holds'], 'Official listing audit has source errors; no data was published'
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-official-inventory
+          path: |
+            /tmp/lp-official-inventory.json
+            /tmp/lp-official-inventory.md
+          retention-days: 7
+          if-no-files-found: error

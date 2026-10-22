@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
 SRC = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC))
@@ -85,29 +86,101 @@ class KoreaPostReviewTests(unittest.TestCase):
         self.assertEqual(notice["body"], "모집\n공고")
         self.assertEqual(len(notice["attachments"]), 1)
 
-    def test_bounded_history_finds_recruitment_missing_from_recent_listing(self):
-        titles = {
-            '400': ('2026-09-10', self.recipe['source_title']),
-            '349': ('2026-04-13', '우체국예금 국내 공동투자 전략 펀드 정량평가 결과 안내'),
-            '348': ('2026-03-30', '우체국예금 해외 사모펀드 국내 재간접 위탁운용사 선정 공고'),
-            '347': ('2026-03-23', '2026년도 우체국예금 국내 공동투자 전략 펀드 위탁운용사 선정 공고'),
-            '346': ('2025-12-20', '우체국예금 해외부동산 위탁운용사 선정 공고'),
-        }
-        listing = ('<a href="/board.es?mid=a10510000000&amp;bid=0041&amp;act=view&amp;list_no=349" '
-                   'title="우체국예금 국내 공동투자 전략 펀드 정량평가 결과 안내">공고</a>').encode()
+    def listing(self, rows, start="2025-10-23", end="2026-10-22", empty=False):
+        # Minimal structure from the observed board: date inputs, board ID and
+        # source links. Raw captured HTML is deliberately not versioned.
+        controls = (f'<form><input name="bid" value="0041">'
+                    f'<input name="keySDate" value="{start}">'
+                    f'<input name="keyEDate" value="{end}"></form>')
+        links = ''.join(f'<a href="/board.es?mid=a10510000000&amp;bid=0041&amp;act=view&amp;list_no={number}" title="{title}">공고</a>'
+                        for number, title in rows)
+        return (controls + links + ('<p>등록된 게시물이 없습니다.</p>' if empty else '')).encode()
+
+    def collect_fixture(self, listing, details=None, checked="2026-10-22T05:00:00+00:00"):
+        details = details or {}
+        requests = []
         def fetch(url):
-            if 'nPage=' in url:
-                return listing
-            number = url.split('list_no=')[-1]
-            date, title = titles[number]
-            return (f'<p class="title">{title}</p><th>작성일시</th><td>{date} 09:00</td>'
+            requests.append(url)
+            query = parse_qs(urlparse(url).query)
+            if 'nPage' in query:
+                return listing[int(query['nPage'][0])] if isinstance(listing, dict) else listing
+            number = query['list_no'][0]
+            if number == '400':
+                date_value, title = self.recipe['source_date'], self.recipe['source_title']
+            else:
+                date_value, title = details[number]
+            return (f'<p class="title">{title}</p><th>작성일시</th><td>{date_value} 09:00</td>'
                     '<td colspan="4" class="tb_contents">공식 본문</td>').encode()
-        seed = {'id':post.PROGRAM_ID,'title':self.recipe['program']['title']}
-        with patch.object(post,'project',return_value=([],[])):
-            report = post.collect(seed,'2026-10-03T00:00:00+09:00',fetch=fetch)
-        self.assertEqual({'0041:347','0041:348','0041:349','0041:400'},
-                         {n['source_id'] for n in report['notices']})
-        self.assertEqual(3,len(report['discovery_candidates']))
+        seed = {'id': post.PROGRAM_ID, 'title': self.recipe['program']['title']}
+        with patch.object(post, 'project', return_value=([], [])):
+            return post.collect(seed, checked, fetch=fetch), requests
+
+    def test_rolling_window_uses_aware_korean_dates_and_exactly_365_days(self):
+        from datetime import date
+        start, end = post._date_window('2026-10-22T05:00:00Z')
+        self.assertEqual((start, end), ('2025-10-23', '2026-10-22'))
+        self.assertEqual((date.fromisoformat(end) - date.fromisoformat(start)).days + 1, 365)
+        self.assertEqual(post._date_window('2026-10-22T15:30:00+00:00'), ('2025-10-24', '2026-10-23'))
+        self.assertEqual(post._date_window('2024-03-01T12:00:00+09:00'), ('2023-03-03', '2024-03-01'))
+        with self.assertRaises(ValueError): post._date_window('2026-10-22T12:00:00')
+
+    def test_explicit_date_query_discovers_prior_year_only_from_observed_rows(self):
+        title = '2025년도 우체국금융 국내 블라인드 PEF 위탁운용사 선정 공고'
+        report, requests = self.collect_fixture(self.listing([('347', title)]), {'347': ('2025-12-20', title)})
+        query = parse_qs(urlparse(requests[0]).query)
+        self.assertEqual(query['keySDate'], ['2025-10-23'])
+        self.assertEqual(query['keyEDate'], ['2026-10-22'])
+        self.assertEqual({'0041:347', '0041:400'}, {n['source_id'] for n in report['notices']})
+        self.assertEqual(['0041:347'], [n['source_id'] for n in report['discovery_candidates']])
+        self.assertEqual({'347', '400'}, {parse_qs(urlparse(url).query)['list_no'][0] for url in requests if 'list_no=' in url})
+        self.assertEqual(report['collection_coverage']['date_filter_validation'], 'echo_confirmed')
+        self.assertEqual(report['collection_coverage']['window_completeness'], 'not_assessed')
+
+    def test_detail_dates_enforce_inclusive_boundary_and_exclude_future_rows(self):
+        title = '우체국금융 국내 사모투자펀드 운용사 모집 공고'
+        details = {'395': ('2025-10-22', title), '396': ('2025-10-23', title),
+                   '397': ('2026-10-22', title), '398': ('2026-10-23', title)}
+        report, _ = self.collect_fixture(self.listing([(number, title) for number in details]), details)
+        self.assertEqual({'0041:396', '0041:397', '0041:400'}, {n['source_id'] for n in report['notices']})
+
+    def test_server_ignoring_filters_fails_and_missing_echo_stays_unknown(self):
+        with self.assertRaisesRegex(ValueError, 'date filters differ'):
+            self.collect_fixture(self.listing([], start='2026-04-22', empty=True))
+        legacy = '<a href="/board.es?bid=0041&amp;act=view&amp;list_no=400" title="우체국금융 국내 PEF 공고">공고</a>'.encode()
+        report, _ = self.collect_fixture(legacy)
+        self.assertEqual(report['collection_coverage']['date_filter_validation'], 'unknown')
+        self.assertEqual(report['collection_coverage']['window_completeness'], 'not_assessed')
+
+    def test_explicit_empty_period_retains_reviewed_historical_source(self):
+        report, requests = self.collect_fixture(self.listing([], start='2027-10-24', end='2028-10-22', empty=True),
+                                               checked='2028-10-22T12:00:00+09:00')
+        self.assertEqual([n['source_id'] for n in report['notices']], ['0041:400'])
+        self.assertEqual(report['discovery_candidates'], [])
+        self.assertEqual(report['collection_coverage']['pagination_end'], 'explicit_empty')
+        self.assertEqual(len(requests), 2)
+
+    def test_unrecognized_empty_is_failure_and_repeated_pages_do_not_complete(self):
+        for malformed in [b'', b'<html>error</html>', self.listing([])]:
+            with self.assertRaisesRegex(ValueError, 'no recognized notices'):
+                self.collect_fixture(malformed)
+        ten = self.listing([(str(n), '기타 자산 공고') for n in range(10)])
+        with self.assertRaisesRegex(ValueError, 'pagination did not advance'):
+            self.collect_fixture(ten)
+        report, requests = self.collect_fixture({1: ten, 2: self.listing([], empty=True)})
+        self.assertEqual(report['collection_coverage']['pagination_end'], 'explicit_empty')
+        self.assertEqual(len([u for u in requests if 'nPage=' in u]), 2)
+        for url in requests[:2]:
+            self.assertIn('keySDate=2025-10-23', url)
+            self.assertIn('keyEDate=2026-10-22', url)
+
+    def test_pagination_budget_exhaustion_fails_instead_of_claiming_complete(self):
+        pages = {p: self.listing([(str(p * 10 + i), '기타 공고') for i in range(10)]) for p in range(1, 11)}
+        with self.assertRaisesRegex(ValueError, 'pagination exceeded'):
+            self.collect_fixture(pages)
+
+    def test_foreign_board_link_is_not_a_discovery_source(self):
+        raw = b'<a href="https://foreign.example/board.es?bid=0041&amp;act=view&amp;list_no=123" title="PEF">link</a>'
+        self.assertEqual(post._listing(raw), [])
 
     def test_hash_reviewed_result_can_add_gps_without_changing_code(self):
         result = {"source_id": "0041:402", "url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&act=view&list_no=402",
