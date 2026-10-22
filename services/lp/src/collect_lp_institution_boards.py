@@ -93,6 +93,23 @@ def digest(value):
     return hashlib.sha256(value.encode() if isinstance(value, str) else value).hexdigest()
 
 
+def listing_receipt_urls(config):
+    """Keep captured TP receipts valid after the 100-to-10 row migration.
+
+    This is validation-only: discovery still requests the current configuration.
+    Preserve the exact issuer, board, title query and configured page number.
+    """
+    urls = set(listing_urls(config))
+    if config['institution_id'] == 'tp':
+        for url in list(urls):
+            parsed = urlsplit(url)
+            params = dict(parse_qsl(parsed.query))
+            if params.get('pageItm') == '10':
+                params['pageItm'] = '100'
+                urls.add(urlunsplit(parsed._replace(query=urlencode(params))))
+    return urls
+
+
 def _same_host(url, config):
     if urlsplit(url).scheme != 'https' or safe_host(url) != safe_host(config['listing_url']):
         raise ValueError('official institution HTTPS host mismatch')
@@ -280,7 +297,7 @@ def validate_notice(raw, checked_at, config=None):
     _same_host(n['url'], config)
     proof = n['discovery_provenance']
     listing = proof['listing']
-    if (proof['kind'] != 'institution_board_v1' or listing['url'] not in set(listing_urls(config))
+    if (proof['kind'] != 'institution_board_v1' or listing['url'] not in listing_receipt_urls(config)
             or digest(listing['html']) != listing['sha256']
             or digest(proof['detail_html']) != proof['detail_sha256']):
         raise ValueError('institution source receipt mismatch')

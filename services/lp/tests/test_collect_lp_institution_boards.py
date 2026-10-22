@@ -60,6 +60,26 @@ class InstitutionCollectionTests(unittest.TestCase):
         self.assertEqual(boards.validate_notice(report['notices'][0], STAMP), report['notices'][0])
         self.assertTrue(any('detail.do?' in url for url in calls))
 
+    def test_tp_page_size_migration_retains_verified_history_without_false_errors(self):
+        incoming = self.collect()
+        previous = copy.deepcopy(incoming['notices'][0])
+        listing = previous['discovery_provenance']['listing']
+        listing['url'] = listing['url'].replace('pageItm=10&', 'pageItm=100&')
+        self.assertEqual(boards.validate_notice(previous, STAMP), previous)
+        merged = boards.update_catalog({'institution_notices': [previous]}, incoming, STAMP)
+        self.assertFalse(merged['institution_collection_holds'])
+        self.assertEqual(len(merged['institution_notices']), 1)
+        self.assertIn('pageItm=10&', merged['institution_notices'][0]['discovery_provenance']['listing']['url'])
+        for old,new in [('searchCondition=1','searchCondition=2'), ('searchKeyword=','searchKeyword=forged'), ('pageItm=100','pageItm=999'),
+                        ('pageIndex=1','pageIndex=999'), ('www.tp.or.kr','evil.example')]:
+            forged = copy.deepcopy(previous)
+            forged['discovery_provenance']['listing']['url'] = listing['url'].replace(old,new)
+            with self.subTest(replacement=new), self.assertRaises(ValueError):
+                boards.validate_notice(forged, STAMP)
+        forged = copy.deepcopy(previous)
+        forged['discovery_provenance']['listing']['html'] += 'modified'
+        with self.assertRaises(ValueError):boards.validate_notice(forged, STAMP)
+
     def test_forged_detail_listing_date_host_or_future_receipt_fails(self):
         original = self.collect()['notices'][0]
         mutations = [lambda n: n.update(body='국내 PE 블라인드 위조 본문'),
