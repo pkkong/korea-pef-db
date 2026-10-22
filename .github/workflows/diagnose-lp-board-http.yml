@@ -9,7 +9,7 @@ on:
       institution:
         type: choice
         default: cu
-        options: [cu, kfcc, kfinco, all]
+        options: [cu, kfcc, kfinco, tp, all]
       verify_cu_recovery:
         type: boolean
         default: false
@@ -47,7 +47,8 @@ jobs:
           targets = [
             ('cu', 'https://www.cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007&searchType=sj&listCo=50&searchValue='+quote('블라인드')+'&currPage=1', 'https://www.cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007'),
             ('kfcc', 'https://www.kfcc.co.kr/mgNotice/mgNoticeList.do?schType=subject&schValue='+quote('위탁')+'&pageNo=1', 'https://www.kfcc.co.kr/mgNotice/mgNoticeList.do?schType=subject'),
-            ('kfinco', 'https://www.kfinco.co.kr/api/pr/notice/list?page=1&size=10&searchKeyword='+quote('위탁운용사'), 'https://www.kfinco.co.kr/pr/notice')]
+            ('kfinco', 'https://www.kfinco.co.kr/api/pr/notice/list?page=1&size=10&searchKeyword='+quote('위탁운용사'), 'https://www.kfinco.co.kr/pr/notice'),
+            ('tp', 'https://www.tp.or.kr/tp-kr/bbs/i-151/list.do?searchCondition=1&pageItm=100&searchKeyword='+quote('위탁운용사')+'&pageIndex=1', 'https://www.tp.or.kr/tp-kr/bbs/i-151/list.do?searchCondition=1&pageItm=100')]
           for institution,url,referer in targets:
             if os.environ['DIAGNOSE_INSTITUTION'] not in {institution,'all'}:continue
             host=urlsplit(url).hostname
@@ -74,7 +75,19 @@ jobs:
                 else:
                   opener=build_opener(HTTPCookieProcessor(CookieJar()))
                   if mode=='warm_session':
-                    with opener.open(Request(referer,headers=headers),timeout=20) as response:response.read(12582913)
+                    if institution=='tp':
+                      # One ordinary board read distinguishes a board-wide HTTP
+                      # failure from the configured title-search response.
+                      try:
+                        with opener.open(Request(referer,headers=headers),timeout=20) as response:
+                          default_raw=response.read(12582913);default_status=response.status
+                      except HTTPError as error:
+                        default_status=error.code;default_raw=error.read(4096)
+                      print(json.dumps({'institution':institution,'mode':'warm_default_page','url':referer,
+                        'status':default_status,'size':len(default_raw),'sha256':hashlib.sha256(default_raw).hexdigest(),
+                        'error_excerpt':default_raw[:240].decode('utf-8','replace') if default_status!=200 else None},ensure_ascii=False))
+                    else:
+                      with opener.open(Request(referer,headers=headers),timeout=20) as response:response.read(12582913)
                   try:
                     with opener.open(Request(url,headers=headers),timeout=20) as response:raw=response.read(12582913);status=response.status
                   except HTTPError as error:status=error.code;raw=error.read(4096)
