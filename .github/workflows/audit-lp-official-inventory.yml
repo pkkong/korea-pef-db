@@ -23,11 +23,13 @@ jobs:
       - name: Test official inventory boundaries and period filters
         run: python3 -m unittest services.lp.tests.test_audit_lp_official_inventory services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_priority_lp_programs
       - name: Read current catalog without publication
+        env:
+          PYTHONPATH: services/lp/src
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
-          from services.lp.src.publish_lp_programs import connect, baseline, source_index
+          from publish_lp_programs import connect, baseline, source_index
           with connect() as conn:
               conn.execute('SET TRANSACTION READ ONLY')
               Path('/tmp/lp-baseline.json').write_text(json.dumps(baseline(conn),ensure_ascii=False))
