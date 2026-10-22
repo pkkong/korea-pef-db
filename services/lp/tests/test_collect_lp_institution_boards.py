@@ -3,6 +3,8 @@ import copy
 import io
 import unittest
 import zipfile
+from urllib.error import HTTPError
+from urllib.parse import parse_qs, urlsplit
 from services.lp.src import collect_lp_institution_boards as boards
 from services.lp.src.lp_notice_publication import publish_basic_notices
 from services.lp.tests.test_lp_board_adapters_pensions import TP_LIST, TP_DETAIL, TP_URL
@@ -36,6 +38,27 @@ class InstitutionCollectionTests(unittest.TestCase):
         self.assertEqual(programs[0]['status'], '접수 마감')
         again, _ = publish_basic_notices({'programs': programs, 'institution_notices': report['notices']}, [], STAMP)
         self.assertEqual([p['id'] for p in programs], [p['id'] for p in again])
+
+    def test_tp_title_search_survives_official_100_row_server_error(self):
+        # Observed 2026-10-22: title search + pageItm=100 returned HTTP500;
+        # the same official title search with pageItm=10 returned valid rows.
+        config = boards.load_configs()['tp']
+        calls = []
+        detail = TP_DETAIL.replace('선정 공고.zip', '제안서 양식.zip')
+        def fetch(url, referer=None):
+            calls.append(url)
+            if 'list.do?' in url:
+                query = parse_qs(urlsplit(url).query)
+                self.assertEqual(query['searchCondition'], ['1'])
+                self.assertEqual(query['searchKeyword'], ['위탁운용사'])
+                if int(query['pageItm'][0]) > 10:
+                    raise HTTPError(url, 500, 'Internal Server Error', {}, None)
+            return ('<html>'+(detail if 'detail.do?' in url else TP_LIST)+'</html>').encode()
+        report = boards.collect({'tp': config}, fetch_factory=lambda c: fetch, checked_at=STAMP)
+        self.assertFalse(report['holds'])
+        self.assertEqual(len(report['notices']), 1)
+        self.assertEqual(boards.validate_notice(report['notices'][0], STAMP), report['notices'][0])
+        self.assertTrue(any('detail.do?' in url for url in calls))
 
     def test_forged_detail_listing_date_host_or_future_receipt_fails(self):
         original = self.collect()['notices'][0]

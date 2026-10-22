@@ -23,7 +23,7 @@
     },
     {
       "institution_id": "tp",
-      "listing_url": "https://www.tp.or.kr/tp-kr/bbs/i-151/list.do?searchCondition=1&pageItm=100",
+      "listing_url": "https://www.tp.or.kr/tp-kr/bbs/i-151/list.do?searchCondition=1&pageItm=10",
       "search_param": "searchKeyword",
       "searches": [
         "위탁운용사"

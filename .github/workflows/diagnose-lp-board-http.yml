@@ -16,6 +16,9 @@ on:
       verify_institution_boards:
         type: boolean
         default: false
+      verify_tp_collection:
+        type: boolean
+        default: false
       verify_dns_recovery:
         type: boolean
         default: false
@@ -168,7 +171,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
       - name: Install readers for explicit CU recovery verification
-        if: inputs.verify_cu_recovery || inputs.verify_institution_boards || inputs.verify_dns_recovery
+        if: inputs.verify_cu_recovery || inputs.verify_institution_boards || inputs.verify_dns_recovery || inputs.verify_tp_collection
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
       - name: Verify injected DNS failure with real official CU documents
         if: inputs.verify_cu_recovery
@@ -189,6 +192,20 @@ jobs:
           assert not report['holds'], 'CU recovery failed'
           assert report['notices'], 'CU recovery did not find official documents'
           assert report['coverage']['cu']['native_ipv4_fetch_count']>0
+          PY
+      - name: Verify only configured TP collection without publication
+        if: inputs.verify_tp_collection
+        run: |
+          python3 - <<'PY'
+          import json
+          from services.lp.src.collect_lp_institution_boards import collect, load_configs, validate_notice
+          report=collect({'tp':load_configs()['tp']})
+          for notice in report['notices']:validate_notice(notice,report['checked_at'])
+          outages=[h for h in report['holds'] if h['stage'] in {'institution_listing','institution_detail','institution_depth'}]
+          print(json.dumps({'mode':'TP only; real official requests; no injected errors; no DB writes',
+            'coverage':report['coverage'],'holds':report['holds'],'validated_notices':len(report['notices'])},ensure_ascii=False))
+          assert not outages, 'TP official collection failed'
+          assert report['notices'], 'TP official collection found no documents'
           PY
       - name: Verify real configured institution boards without publication
         if: inputs.verify_institution_boards
