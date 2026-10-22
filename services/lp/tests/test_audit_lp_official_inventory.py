@@ -81,6 +81,20 @@ class OfficialInventoryTests(unittest.TestCase):
         self.assertEqual(len(inventory.core_rows('koreapost',html,url)),1)
         with self.assertRaises(ValueError):inventory.core_rows('koreapost',html.replace('2025-10-23','2026-04-22',1),url)
 
+    def test_ktcu_advertised_final_page_avoids_empty_overrun(self):
+        html='<html><div class="sort-tit txt-s">총 <em>1</em>건 (<em>1</em> / 1 페이지)</div><ul id="ulList"><li><span class="num">1</span><a href="javascript:fn_view(&#39;61742&#39;)">국내 PE 블라인드 위탁운용사 선정 공고</a><span>2026-09-04</span></li></ul></html>'
+        calls=[]
+        def fetch(url):
+            calls.append(url)
+            self.assertEqual(parse_qs(urlsplit(url).query)['curPage'],['1'])
+            return html.encode()
+        report=inventory.audit({'programs':[]},as_of='2026-10-22',scope={'confirmed_institution_ids':['ktcu'],'priority_verification_ids':[]},configs={},fetch_factory=lambda *a:fetch)
+        self.assertEqual(report['holds'],[])
+        self.assertEqual(len(calls),2)
+        self.assertTrue(all(q['boundary']=='observed_final_page' for q in report['institutions'][0]['queries']))
+        with self.assertRaisesRegex(ValueError,'page count'):
+            inventory.core_last_page('ktcu',html,calls[0].replace('curPage=1','curPage=2'))
+
     def test_notice_identity_ignores_presentation_but_preserves_issuer_and_id(self):
         a='https://www.kgrowth.or.kr/notice_view.asp?idx=200&str_type=1&tab=1'
         b=a+'&page=2&search_text=test'

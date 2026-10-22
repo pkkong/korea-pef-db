@@ -178,6 +178,54 @@ class KoreaPostReviewTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'pagination exceeded'):
             self.collect_fixture(pages)
 
+    def pager_listing(self, current, pages=(1, 2, 3), rows=()):
+        html = self.listing(rows).decode()
+        html += f'<input name="nPage" value="{current}"><input name="nPage" value="{current}">'
+        html += '<div class="board_pager"><span class="inner">'
+        for page in pages:
+            cls = 'pageNow' if page == current else 'pageNone'
+            html += (f'<a class="{cls}" href="/board.es?mid=a10510000000&amp;bid=0041&amp;nPage={page}">{page}</a>')
+        return ('<html>' + html + '</span></div></html>').encode()
+
+    def test_advertised_last_page_avoids_an_unrecognized_empty_page_after_it(self):
+        # A full final page must not require a speculative fourth-page request.
+        pages = {page: self.pager_listing(page, rows=[(str(page * 10 + i), '기타 자산 공고') for i in range(10)])
+                 for page in (1, 2, 3)}
+        report, requests = self.collect_fixture(pages)
+        listing_urls = [url for url in requests if 'nPage=' in url]
+        self.assertEqual([parse_qs(urlparse(u).query)['nPage'][0] for u in listing_urls], ['1', '2', '3'])
+        self.assertEqual(report['collection_coverage']['pagination_end'], 'advertised_last_page')
+        self.assertEqual(report['collection_coverage']['listing_pages'][-1]['advertised_last_page'], 3)
+
+    def test_pager_helper_validates_own_links_request_and_current_page(self):
+        url = post.LIST_URL + '&keySDate=2025-10-23&keyEDate=2026-10-22&nPage=2'
+        raw = self.pager_listing(2)
+        self.assertEqual(post._listing_last_page(raw, url), 3)
+        invalid = [raw.replace(b'bid=0041', b'bid=0042'),
+                   raw.replace(b'/board.es?mid=', b'https://foreign.example/board.es?mid='),
+                   raw.replace(b'name="nPage" value="2"', b'name="nPage" value="1"'),
+                   raw.replace(b'pageNow', b'pageNone'), raw.replace(b'</html>', b'')]
+        for html in invalid:
+            with self.subTest(html=html[:80]), self.assertRaises(ValueError):
+                post._listing_last_page(html, url)
+        with self.assertRaises(ValueError):
+            post._listing_last_page(raw, url.replace('bid=0041', 'bid=0042'))
+
+    def test_pager_number_block_is_not_assumed_to_be_the_final_block(self):
+        url = post.LIST_URL + '&nPage=1'
+        self.assertIsNone(post._listing_last_page(self.pager_listing(1, pages=tuple(range(1, 11))), url))
+        self.assertIsNone(post._listing_last_page(self.pager_listing(1, pages=(1, 3)), url))
+        self.assertIsNone(post._listing_last_page('<html><tbody></tbody></html>', url))
+
+    def test_bare_empty_table_is_still_not_a_valid_empty_date_window(self):
+        # The observed out-of-range page advertises 1..3 but returns empty on 4.
+        raw = self.pager_listing(4).replace(b'<span class="inner">',
+              '<table><thead><tr><th>번호</th><th>제목</th><th>작성자</th><th>작성일</th><th>첨부</th></tr></thead><tbody></tbody></table><span class="inner">'.encode())
+        self.assertEqual(post._listing_last_page(raw, post.LIST_URL + '&nPage=4'), 3)
+        self.assertFalse(post._explicit_empty_listing(raw))
+        with self.assertRaises(ValueError):
+            self.collect_fixture({1: self.pager_listing(1, rows=())})
+
     def test_foreign_board_link_is_not_a_discovery_source(self):
         raw = b'<a href="https://foreign.example/board.es?bid=0041&amp;act=view&amp;list_no=123" title="PEF">link</a>'
         self.assertEqual(post._listing(raw), [])

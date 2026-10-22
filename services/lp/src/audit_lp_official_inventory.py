@@ -134,6 +134,23 @@ def _query(url, values):
     return urlunsplit(p._replace(query=urlencode(q)))
 
 
+def core_last_page(institution, html, url):
+    if institution=='koreapost':
+        try:from .collect_koreapost_program import _listing_last_page
+        except ImportError:from collect_koreapost_program import _listing_last_page
+        return _listing_last_page(html,url)
+    if institution!='ktcu':return None
+    root=_Document(html).root
+    matches={tuple(map(int,m.groups())) for n in root.nodes('div','sort-tit')
+             if (m:=re.fullmatch(r'총\s*([\d,]+)\s*건\s*\(\s*(\d+)\s*/\s*(\d+)\s*페이지\s*\)',n.clean().replace(',','')))}
+    if not matches:return None
+    if len(matches)!=1:raise ValueError('conflicting KTCU page count')
+    total,current,last=matches.pop()
+    requested=int(parse_qs(urlsplit(url).query).get('curPage',['1'])[0])
+    if current!=requested or last<1 or current<1 or total<0:raise ValueError('invalid KTCU page count')
+    return last
+
+
 def streams(institution, config, start, end):
     if institution in CORE:
         return ['PEF','블라인드'] if institution=='ktcu' else ['']
@@ -227,6 +244,9 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
                             observed[key]=item
                     regular=[row for row in rows if not row.get('pinned')]
                     if not rows:query['boundary']='confirmed_empty';break
+                    if institution in CORE:
+                        last_page=core_last_page(institution,html,url)
+                        if last_page is not None and page==last_page:query['boundary']='observed_final_page';break
                     if regular and all(row['date']<start for row in regular):query['boundary']='observed_older_page';break
                 except Exception as error:
                     query['boundary']='source_error';failed=True
@@ -250,6 +270,8 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
                        'unconnected':sum(e['status']=='inventory_not_connected' for e in report['institutions']),
                        'unmeasured':sum(e['counts'] is None for e in report['institutions']),'pages':len(report['receipts']),
                        'source_errors':len(report['holds']),'unarchived_relevant':sum((e['counts'] or {}).get('unarchived_relevant',0) for e in report['institutions'])}
+    candidates=[r for e in report['institutions'] for r in e['rows'] if r['relevant'] and r['disposition']=='not_in_archive']
+    report['summary']['unarchived_by_title_scope']=dict(Counter(r['title_scope'] for r in candidates))
     return report
 
 
@@ -262,10 +284,13 @@ def markdown(report):
     for e in report['institutions']:
         c=e['counts'];search='게시판 목록' if e['query_scope']=='board_listing' else '설정 검색어'
         lines.append(f"| {e['name']} | {search} | {labels[e['status']]} | {c['observed_recent_rows'] if c else '미측정'} | {c['unarchived_relevant'] if c else '미측정'} |")
-    lines+=['','## 보관에 없는 관련 자료','제목 기준 후보이며 국내 PE 블라인드 모집 여부·재공고·후속 단계는 공식 본문 확인이 필요합니다.','']
+    scopes=report['summary']['unarchived_by_title_scope']
+    lines+=['','## 원문 판독 대상',
+            f"보관에 없는 제목 후보: PE 블라인드 명시 {scopes.get('pe_blind_title',0)}건, 범위 미확인 {scopes.get('scope_unconfirmed',0)}건, PE/VC 혼합 {scopes.get('mixed_pe_vc',0)}건. 제목상 범위 외 {scopes.get('outside_policy',0)}건과 VC {scopes.get('vc_explicit',0)}건은 아래에서 제외했습니다. 전체 목록은 JSON에 보존합니다.",
+            '국내 PE 블라인드 모집 여부·재공고·후속 단계는 공식 본문 확인이 필요하며 확정 누락 사업 수가 아닙니다.','']
     for e in report['institutions']:
         for r in e['rows']:
-            if r['relevant'] and r['disposition']=='not_in_archive':
+            if r['relevant'] and r['disposition']=='not_in_archive' and r['title_scope'] not in {'outside_policy','vc_explicit'}:
                 title=r['title'].replace('[','(').replace(']',')').replace('|',' ')
                 lines.append(f"- {e['name']} · {r['date']} · {r['stage']} · [{title}]({r['url']})")
     if report['holds']:lines+=['','접속/판독 실패가 있는 기관은 0건으로 해석하지 않습니다.']

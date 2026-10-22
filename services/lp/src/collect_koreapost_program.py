@@ -125,6 +125,95 @@ class _SearchInputs(HTMLParser):
             self.values.setdefault(attrs["name"], []).append(attrs.get("value", ""))
 
 
+
+class _Pagination(_SearchInputs):
+    def __init__(self):
+        super().__init__()
+        self.stack, self.links = [], []
+        self.pager_depth = None
+        self.pager_count = 0
+
+    def handle_starttag(self, tag, attrs):
+        super().handle_starttag(tag, attrs)
+        attrs = dict(attrs)
+        if tag == "div" and "board_pager" in attrs.get("class", "").split():
+            self.pager_count += 1
+            self.pager_depth = len(self.stack)
+        if self.pager_depth is not None and tag == "a":
+            self.links.append(attrs)
+        if tag not in {"input", "br", "hr", "img", "meta", "link", "col", "area", "source", "wbr"}:
+            self.stack.append(tag)
+
+    def handle_endtag(self, tag):
+        for index in range(len(self.stack) - 1, -1, -1):
+            if self.stack[index] == tag:
+                del self.stack[index:]
+                break
+        if self.pager_depth is not None and len(self.stack) <= self.pager_depth:
+            self.pager_depth = None
+
+
+def _listing_last_page(html, url):
+    """Return an observed final numeric pager, never a guessed page boundary.
+
+    Only a contiguous, first-page number block shorter than ten is conclusive
+    without an explicit last-page control. Larger/unrecognized blocks remain
+    unknown. A bare empty table is never evidence of an empty date window.
+    """
+    if isinstance(html, bytes):
+        html = html.decode("utf-8")
+    request = urlparse(url)
+    query = parse_qs(request.query, keep_blank_values=True)
+    if (request.scheme != "https" or request.hostname != "www.kpasset.go.kr"
+            or request.username or request.password or request.port not in {None, 443}
+            or request.fragment or request.path != "/board.es" or query.get("bid") != ["0041"]
+            or query.get("mid") != ["a10510000000"] or len(query.get("nPage", [])) != 1
+            or not query["nPage"][0].isdigit() or int(query["nPage"][0]) < 1):
+        raise ValueError("Invalid Korea Post listing pager request")
+    parser = _Pagination()
+    parser.feed(html)
+    if not parser.pager_count:
+        return None
+    if parser.pager_count != 1 or "</html>" not in html.lower():
+        raise ValueError("Incomplete or ambiguous Korea Post pagination")
+    requested = int(query["nPage"][0])
+    forms = parser.values.get("nPage", [])
+    if not forms or any(not value.isdigit() or int(value) != requested for value in forms):
+        raise ValueError("Korea Post listing page was not echoed")
+    if not parser.values.get("bid") or any(value != "0041" for value in parser.values["bid"]):
+        raise ValueError("Korea Post listing pager board differs")
+    pages, current = set(), []
+    for anchor in parser.links:
+        target = urlparse(urljoin(url, anchor.get("href", "")))
+        params = parse_qs(target.query, keep_blank_values=True)
+        if (target.scheme != "https" or target.hostname != "www.kpasset.go.kr"
+                or target.username or target.password or target.port not in {None, 443}
+                or target.fragment or target.path != "/board.es" or params.get("bid") != ["0041"]
+                or params.get("mid") != ["a10510000000"] or len(params.get("nPage", [])) != 1
+                or not params["nPage"][0].isdigit() or int(params["nPage"][0]) < 1):
+            raise ValueError("Invalid official Korea Post pager link")
+        for key in ("keySDate", "keyEDate"):
+            if key in params and params[key] != query.get(key):
+                raise ValueError("Korea Post pager date filters differ")
+        if set(params) - {"mid", "bid", "nPage", "keySDate", "keyEDate"}:
+            return None
+        number = int(params["nPage"][0])
+        pages.add(number)
+        classes = set(anchor.get("class", "").split())
+        if "pageNow" in classes:
+            current.append(number)
+        elif "pageNone" not in classes:
+            return None
+    if not pages:
+        return None
+    last = max(pages)
+    if current != ([requested] if requested <= last else []):
+        raise ValueError("Korea Post current page marker differs")
+    if last >= 10 or pages != set(range(1, last + 1)):
+        return None
+    return last
+
+
 def _listing_filter_evidence(raw, start, end):
     parser = _SearchInputs()
     parser.feed(raw.decode("utf-8"))
@@ -325,8 +414,10 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
         raw = fetch(url)
         filter_evidence = _listing_filter_evidence(raw, window_start, window_end)
         links = _listing(raw)
+        advertised_last = _listing_last_page(raw, url)
         listing_pages.append({"url": url, "row_count": len(links),
                               "date_filter_validation": filter_evidence,
+                              "advertised_last_page": advertised_last,
                               "sha256": hashlib.sha256(raw).hexdigest()})
         if not links:
             if not _explicit_empty_listing(raw):
@@ -340,7 +431,12 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
         for number, title in links:
             if _pe_discovery_title(title):
                 discovered[number] = title
-        if len(links) < 10:
+        if advertised_last is not None and page > advertised_last:
+            raise ValueError("Populated Korea Post page exceeds advertised final page")
+        if advertised_last == page:
+            pagination_end = "advertised_last_page"
+            break
+        if len(links) < 10 and advertised_last is None:
             pagination_end = "short_page"
             break
     else:
