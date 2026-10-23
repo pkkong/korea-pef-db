@@ -4,7 +4,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: lp-source-region-probe
+  group: lp-program-collection
   cancel-in-progress: false
 jobs:
   probe:
