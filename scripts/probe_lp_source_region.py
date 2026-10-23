@@ -19,6 +19,29 @@ from urllib.request import Request, urlopen
 PROJECT = 'kpef-lp-source-probe'
 SOURCE = r'''
 const crypto = require('node:crypto');
+const https = require('node:https');
+const tls = require('node:tls');
+const fs = require('node:fs');
+function strictKfinco(url) {
+  const pem=fs.readFileSync(__dirname+'/kfinco-intermediates.pem','utf8');
+  const blocks=pem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g)||[];
+  if(!blocks.length || pem.includes('TRUSTED CERTIFICATE'))throw Error('invalid intermediate bundle');
+  for(const block of blocks){
+    const cert=new crypto.X509Certificate(block);
+    if(!cert.ca || cert.subject===cert.issuer || Date.now()<Date.parse(cert.validFrom) || Date.now()>Date.parse(cert.validTo))throw Error('invalid intermediate');
+  }
+  return new Promise((resolve,reject)=>{
+    const request=https.request(url,{method:'GET',ca:[...tls.rootCertificates,...blocks],
+      rejectUnauthorized:true,allowPartialTrustChain:false,headers:{'User-Agent':'Mozilla/5.0','Accept-Encoding':'identity'}},response=>{
+      const authorized=response.socket.authorized;const parts=[];let size=0;
+      response.on('data',part=>{size+=part.length;if(size>512000)request.destroy(Error('probe response exceeds bound'));else parts.push(part);});
+      response.on('error',reject);
+      response.on('end',()=>resolve({status:response.statusCode,raw:Buffer.concat(parts),authorized}));
+    });
+    const timer=setTimeout(()=>request.destroy(Error('probe timeout')),20000);
+    request.on('close',()=>clearTimeout(timer));request.on('error',reject);request.end();
+  });
+}
 module.exports = async (req, res) => {
   if (req.method !== 'GET' || !process.env.SOURCE_PROBE_TOKEN || req.headers.authorization !== 'Bearer '+process.env.SOURCE_PROBE_TOKEN) return res.status(401).end();
   const targets = [
@@ -28,6 +51,13 @@ module.exports = async (req, res) => {
   const results = [];
   for (const [source,url] of targets) {
     try {
+      if(source==='kfinco' && fs.existsSync(__dirname+'/kfinco-intermediates.pem')){
+        const response=await strictKfinco(url);let data={};try{data=JSON.parse(response.raw.toString('utf8'));}catch{}
+        results.push({source,url,status:response.status,bytes:response.raw.length,officialShape:data.success===true&&Array.isArray(data.list),tlsAuthorized:response.authorized,
+          sha256:crypto.createHash('sha256').update(response.raw).digest('hex'),chainCompletion:true,
+          errorExcerpt:response.status===200?null:response.raw.toString('utf8').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').slice(0,200)});
+        continue;
+      }
       const response = await fetch(url,{redirect:'error',headers:{'User-Agent':'Mozilla/5.0'},signal:AbortSignal.timeout(20000)});
       const reader=response.body.getReader(); const chunks=[]; let size=0;
       while (true) {const {done,value}=await reader.read(); if(done)break; size+=value.length; if(size>512000){await reader.cancel();throw Error('probe response exceeds bound');} chunks.push(Buffer.from(value));}
@@ -61,6 +91,7 @@ def api(path, method='GET', data=None):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--kfinco-intermediates',type=Path,help='Public non-root CA intermediates; system roots and hostname verification remain required')
     args=parser.parse_args()
     project=None
     report={'status':'error','region_requested':'icn1'}
@@ -78,7 +109,9 @@ def main():
             (root/'.vercel').mkdir()
             (root/'.vercel/project.json').write_text(json.dumps({'projectId':project['id'],'orgId':project['accountId'],'projectName':PROJECT}))
             (root/'api/probe.js').write_text(SOURCE)
-            (root/'package.json').write_text(json.dumps({'private':True}))
+            if args.kfinco_intermediates:
+                (root/'api/kfinco-intermediates.pem').write_bytes(args.kfinco_intermediates.read_bytes())
+            (root/'package.json').write_text(json.dumps({'private':True,'engines':{'node':'24.x'}}))
             (root/'vercel.json').write_text(json.dumps({'regions':['icn1'],'git':{'deploymentEnabled':False}}))
             subprocess.run(['node','--check',str(root/'api/probe.js')],check=True,capture_output=True)
             env={**os.environ,'VERCEL_PROJECT_ID':project['id']}

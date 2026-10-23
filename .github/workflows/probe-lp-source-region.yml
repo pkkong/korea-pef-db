@@ -1,6 +1,10 @@
 name: Probe LP source from Seoul
 on:
   workflow_dispatch:
+    inputs:
+      complete_kfinco_chain:
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -20,8 +24,20 @@ jobs:
           node-version: '24'
       - name: Install deployment CLI
         run: npm install --global vercel@64.5.0
+      - name: Fetch pinned public Sectigo intermediate for strict chain completion
+        if: inputs.complete_kfinco_chain
+        run: |
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 30 'https://support.sectigo.com/sfc/servlet.shepherd/version/download/0681N0000068m2W' --output /tmp/kfinco-intermediates.pem
+          echo '8b2077d25599d05e5b39942091371d6f4b86e2cbd072fdb7426c47261c56981d  /tmp/kfinco-intermediates.pem' | sha256sum --check
       - name: Measure fixed public sources and remove temporary project
-        run: python3 scripts/probe_lp_source_region.py --output /tmp/lp-source-region-probe.json
+        env:
+          COMPLETE_KFINCO_CHAIN: ${{ inputs.complete_kfinco_chain }}
+        run: |
+          if [ "$COMPLETE_KFINCO_CHAIN" = 'true' ]; then
+            python3 scripts/probe_lp_source_region.py --output /tmp/lp-source-region-probe.json --kfinco-intermediates /tmp/kfinco-intermediates.pem
+          else
+            python3 scripts/probe_lp_source_region.py --output /tmp/lp-source-region-probe.json
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
