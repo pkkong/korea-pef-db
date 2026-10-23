@@ -1,4 +1,5 @@
 import io
+import os
 from pathlib import Path
 import socket
 import ssl
@@ -68,11 +69,12 @@ class NativeCuTransportTests(unittest.TestCase):
 
     def test_cu_dns_uses_native_in_existing_second_attempt_only(self):
         session=self.session(URLError(socket.gaierror(8,'resolver unavailable')))
-        with patch.object(boards,'fetch_cu_ipv4',return_value=b'official') as fetch, patch.object(boards.time,'sleep'):
+        with patch.object(boards,'fetch_cu_ipv4',return_value=b'official') as fetch, patch.object(boards,'fetch_cu') as regional, patch.object(boards.time,'sleep'):
             self.assertEqual(session(URL,URL),b'official')
             self.assertEqual(session.opener.open.call_count,1)
             fetch.assert_called_once_with(URL,URL)
             self.assertEqual(session.native_ipv4_fetches,1)
+            regional.assert_not_called()
 
     def test_failed_native_recovery_is_reported_without_third_attempt(self):
         session=self.session(URLError(socket.gaierror(8,'resolver unavailable')))
@@ -96,6 +98,50 @@ class NativeCuTransportTests(unittest.TestCase):
             with self.assertRaises(URLError):session('https://www.tp.or.kr/tp-kr/bbs/i-151/list.do')
             self.assertEqual(session.opener.open.call_count+ipv4.call_count,2)
             fetch.assert_not_called()
+
+    def test_only_native_exit_six_has_typed_dns_error(self):
+        for code in [6, 22, 28, 35, 60]:
+            with patch.object(native.subprocess, 'run', side_effect=self.run_response(status=b'000', code=code)):
+                with self.assertRaises(ValueError) as caught:
+                    native.fetch_cu_ipv4(URL)
+                self.assertEqual(isinstance(caught.exception, native.CuDnsError), code == 6)
+
+    def test_two_dns_failures_use_seoul_once_and_count_only_success(self):
+        session = self.session(URLError(socket.gaierror(8, 'resolver unavailable')))
+        with patch.dict(os.environ, {'LP_SOURCE_WORKER_TOKEN': 'test-token'}), \
+                patch.object(boards, 'fetch_cu_ipv4', side_effect=native.CuDnsError('native CU transport failed (curl exit 6)')) as direct, \
+                patch.object(boards, 'fetch_cu', return_value=b'official') as regional, \
+                patch.object(boards.time, 'sleep'):
+            self.assertEqual(session(URL, URL), b'official')
+            self.assertEqual(session.opener.open.call_count, 1)
+            direct.assert_called_once_with(URL, URL)
+            regional.assert_called_once_with(URL, URL, 'test-token')
+            self.assertEqual(session.native_ipv4_fetches, 0)
+            self.assertEqual(session.regional_fetches, 1)
+
+    def test_missing_token_and_non_dns_native_errors_never_use_seoul(self):
+        for token, error in [('', native.CuDnsError('exit 6')),
+                             ('test-token', ValueError('native CU transport failed (curl exit 6)')),
+                             ('test-token', ValueError('curl exit 60'))]:
+            session = self.session(URLError(socket.gaierror(8, 'resolver unavailable')))
+            with patch.dict(os.environ, {'LP_SOURCE_WORKER_TOKEN': token}), \
+                    patch.object(boards, 'fetch_cu_ipv4', side_effect=error), \
+                    patch.object(boards, 'fetch_cu') as regional, patch.object(boards.time, 'sleep'):
+                with self.assertRaises(ValueError): session(URL)
+                regional.assert_not_called()
+                self.assertEqual(session.regional_fetches, 0)
+
+    def test_seoul_failure_is_visible_without_more_attempts(self):
+        session = self.session(URLError(socket.gaierror(8, 'resolver unavailable')))
+        with patch.dict(os.environ, {'LP_SOURCE_WORKER_TOKEN': 'test-token'}), \
+                patch.object(boards, 'fetch_cu_ipv4', side_effect=native.CuDnsError('exit 6')) as direct, \
+                patch.object(boards, 'fetch_cu', side_effect=ValueError('regional unavailable')) as regional, \
+                patch.object(boards.time, 'sleep'):
+            with self.assertRaisesRegex(ValueError, 'regional unavailable'): session(URL)
+            self.assertEqual(session.opener.open.call_count, 1)
+            self.assertEqual(direct.call_count, 1)
+            self.assertEqual(regional.call_count, 1)
+            self.assertEqual(session.regional_fetches, 0)
 
 
 if __name__=='__main__':unittest.main()

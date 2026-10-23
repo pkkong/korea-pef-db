@@ -13,6 +13,10 @@ ROUTES = {'/cu/na/ntt/selectNttList.do', '/cu/na/ntt/selectNttInfo.do',
           '/common/nttFileDownload.do'}
 
 
+class CuDnsError(ValueError):
+    """Native curl could not resolve the official CU hostname (exit 6 only)."""
+
+
 def official_url(url):
     if not isinstance(url, str) or len(url) > 8192:
         raise ValueError('invalid CU transport URL')
@@ -44,6 +48,8 @@ def fetch_cu_ipv4(url, referer=None):
             result = subprocess.run(command, capture_output=True, timeout=25)
         except (OSError, subprocess.TimeoutExpired):
             raise ValueError('native CU transport did not complete') from None
+        if result.returncode == 6:
+            raise CuDnsError('native CU transport failed (curl exit 6)')
         if result.returncode:
             raise ValueError(f'native CU transport failed (curl exit {result.returncode})')
         if result.stdout != b'200':

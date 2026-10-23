@@ -75,17 +75,22 @@ def main():
             if attempt==7:raise RuntimeError('Source worker health verification failed') from None
             time.sleep(3)
     sys.path.insert(0,str(ROOT))
-    from services.lp.src.lp_regional_transport import fetch_kfcc, fetch_kfinco
+    from services.lp.src.lp_regional_transport import fetch_kfcc, fetch_kfinco, fetch_cu
     from services.lp.src.discover_kfinco_originals import LIST_URL, listing
     from services.lp.src.collect_lp_institution_boards import load_configs,listing_urls
     from services.lp.src.lp_board_adapter_kfcc import parse_listing
+    from services.lp.src import lp_board_adapters_pensions
     config=load_configs()['kfcc'];url=next(listing_urls(config))
     raw=fetch_kfcc(url,config['listing_url'],token)
     rows=parse_listing(raw.decode('utf-8'),url,config)
     kfinco_raw=fetch_kfinco(LIST_URL,token)
     _,kfinco_rows=listing(kfinco_raw)
+    cu_config=load_configs()['cu'];cu_url=next(listing_urls(cu_config))
+    cu_raw=fetch_cu(cu_url,cu_config['listing_url'],token)
+    cu_rows=lp_board_adapters_pensions.parse_listing(cu_raw.decode('utf-8'),cu_url,cu_config)
     print(json.dumps({'service':'lp-source-worker','region':health['region'],'release':release,
-        'url':BASE,'verified_kfinco_listing_rows':len(kfinco_rows),'kfinco_bytes':len(kfinco_raw),
+        'url':BASE,'verified_cu_listing_rows':len(cu_rows),'cu_bytes':len(cu_raw),
+        'verified_kfinco_listing_rows':len(kfinco_rows),'kfinco_bytes':len(kfinco_raw),
         'verified_listing_rows':len(rows),'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}))
 
 

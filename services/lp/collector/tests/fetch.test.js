@@ -190,3 +190,51 @@ test('configured listing-base referer is allowed without inventing search parame
   assert.equal(res.statusCode,200);
   assert.equal(calls.length,1);
 });
+
+const CU_BASE='https://www.cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007&searchType=sj&listCo=50';
+const CU_LIST=CU_BASE+'&searchValue='+encodeURIComponent('블라인드')+'&currPage=1';
+const CU_DETAIL='https://www.cu.co.kr/cu/na/ntt/selectNttInfo.do?nttSn=987654321&mi=100007';
+const CU_FILE='https://www.cu.co.kr/common/nttFileDownload.do?fileKey=0123456789abcdef0123456789ABCDEF';
+
+test('CU official listing, observed detail and opaque attachment key preserve exact bytes',async()=>{
+  const bytes=Buffer.from([0x25,0x50,0x44,0x46,0,255]);
+  global.fetch=async(...args)=>{calls.push(args);return new Response(bytes);};
+  for(const [url,referer] of [[CU_LIST,CU_BASE],[CU_DETAIL,CU_BASE],[CU_FILE,CU_DETAIL]]){
+    const res=await invoke({url,referer});assert.equal(res.statusCode,200);assert.deepEqual(res.body,bytes);
+    assert.equal(res.headers['X-LP-Upstream-SHA256'],crypto.createHash('sha256').update(bytes).digest('hex'));
+  }
+  for(const [url,options] of calls){
+    assert.equal(new URL(url).hostname,'www.cu.co.kr');assert.equal(options.redirect,'error');
+    assert.equal(options.headers.Authorization,undefined);assert.equal(options.headers['Accept-Encoding'],'identity');
+    assert.equal(options.dispatcher,undefined);assert.equal(options.agent,undefined);
+  }
+});
+
+test('CU rejects foreign hosts, unconfigured boards, malformed queries, traversal and invalid file keys',async()=>{
+  const invalid=[CU_LIST.replace('https:','http:'),CU_LIST.replace('www.cu.co.kr','127.0.0.1'),
+    CU_LIST.replace('www.cu.co.kr','www.cu.co.kr.evil.example'),CU_LIST.replace('www.cu.co.kr','u:p@www.cu.co.kr'),
+    CU_LIST.replace('www.cu.co.kr','www.cu.co.kr:444'),CU_LIST+'#section',CU_LIST.replace('bbsId=1020','bbsId=1021'),
+    CU_LIST.replace('mi=100007','mi=100008'),CU_LIST.replace('searchType=sj','searchType=body'),
+    CU_LIST.replace('listCo=50','listCo=100'),CU_LIST.replace('currPage=1','currPage=0'),CU_LIST.replace('currPage=1','currPage=1001'),
+    CU_LIST+'&currPage=2',CU_LIST+'&extra=1',CU_BASE,CU_LIST.replace('searchValue=','unknown='),
+    CU_DETAIL.replace('987654321','1x'),CU_DETAIL+'&mi=100008',CU_DETAIL+'&redirect=https://evil.example',
+    CU_DETAIL.replace('/cu/na/','/cu/../cu/na/'),CU_DETAIL.replace('/cu/na/','/cu/%2e%2e/cu/na/'),
+    CU_DETAIL.replace('/cu/na/','/cu/%252e%252e/cu/na/'),CU_FILE+'&extra=1',CU_FILE+'&fileKey=x',
+    CU_FILE.replace('0123456789abcdef0123456789ABCDEF','../secret'),CU_FILE.replace('0123456789abcdef0123456789ABCDEF','a'.repeat(31))];
+  for(const url of invalid)assert.equal((await invoke({url})).statusCode,400,url);
+  assert.equal(calls.length,0);
+});
+
+test('CU rejects attachment referers and cross-institution referers before fetching',async()=>{
+  for(const referer of [CU_FILE,LIST,'https://evil.example/'])assert.equal((await invoke({url:CU_LIST,referer})).statusCode,400);
+  assert.equal((await invoke({url:LIST,referer:CU_BASE})).statusCode,400);assert.equal(calls.length,0);
+});
+
+test('CU upstream TLS failure, non-200 response and oversize data retain failure signals',async()=>{
+  global.fetch=async()=>{throw Error('certificate verification failed private detail');};
+  let res=await invoke({url:CU_LIST});assert.equal(res.statusCode,502);assert.equal(res.body.includes('private detail'),false);
+  global.fetch=async()=>new Response('private error body',{status:302});
+  res=await invoke({url:CU_LIST});assert.equal(res.statusCode,502);assert.equal(res.headers['X-LP-Upstream-SHA256'],undefined);
+  global.fetch=async()=>new Response(Buffer.alloc(handler.SOURCE_LIMIT+1));
+  res=await invoke({url:CU_FILE});assert.equal(res.statusCode,413);assert.equal(res.headers['X-LP-Upstream-SHA256'],undefined);
+});

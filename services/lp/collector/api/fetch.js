@@ -1,6 +1,7 @@
 'use strict';
 const crypto = require('node:crypto');
 const kfinco = require('../lib/kfinco');
+const cu = require('../lib/cu');
 const REQUEST_LIMIT = 8 * 1024;
 const SOURCE_LIMIT = 3 * 1024 * 1024;
 const fail = (status, code) => Object.assign(new Error(code), {status, code});
@@ -14,6 +15,7 @@ function authorized(req) {
 }
 
 function officialUrl(value, referer = false) {
+  if (typeof value === 'string' && /^https:\/\/www\.cu\.co\.kr(?::443)?\//.test(value)) return cu.officialUrl(value, referer);
   if (typeof value === 'string' && /^https:\/\/www\.kfinco\.co\.kr(?::443)?\//.test(value)) return kfinco.officialUrl(value, referer);
   if (typeof value !== 'string' || value.length > 4096 || /[\x00-\x20\x7f\\#]/.test(value) ||
       !/^https:\/\/www\.kfcc\.co\.kr(?::443)?\//.test(value)) throw fail(400, 'invalid_source_url');

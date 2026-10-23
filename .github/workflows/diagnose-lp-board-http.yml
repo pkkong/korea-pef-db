@@ -10,6 +10,9 @@ on:
         type: choice
         default: cu
         options: [cu, kfcc, kfinco, tp, all]
+      verify_cu_regional_recovery:
+        type: boolean
+        default: false
       verify_cu_recovery:
         type: boolean
         default: false
@@ -37,6 +40,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compare bounded anonymous official requests
+        if: ${{ !inputs.verify_cu_regional_recovery }}
         shell: python3 {0}
         env:
           DIAGNOSE_INSTITUTION: ${{ inputs.institution }}
@@ -281,8 +285,33 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
       - name: Install readers for explicit CU recovery verification
-        if: inputs.verify_cu_recovery || inputs.verify_institution_boards || inputs.verify_dns_recovery || inputs.verify_tp_collection
+        if: inputs.verify_cu_regional_recovery || inputs.verify_cu_recovery || inputs.verify_institution_boards || inputs.verify_dns_recovery || inputs.verify_tp_collection
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
+      - name: Verify two injected CU DNS failures with real Seoul documents
+        if: inputs.verify_cu_regional_recovery
+        env:
+          LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
+        run: |
+          python3 - <<'PYCODE'
+          import json, socket
+          from unittest.mock import Mock, patch
+          from urllib.error import URLError
+          from services.lp.src import collect_lp_institution_boards as boards
+          from services.lp.src.lp_cu_transport import CuDnsError
+          def injected_session(config):
+              session=boards.Session(config)
+              session.opener.open=Mock(side_effect=URLError(socket.gaierror(8,'injected first resolver failure')))
+              return session
+          with patch.object(boards,'fetch_cu_ipv4',side_effect=CuDnsError('injected native DNS failure')):
+              report=boards.collect({'cu':boards.load_configs()['cu']},fetch_factory=injected_session)
+          for notice in report['notices']:boards.validate_notice(notice,report['checked_at'])
+          coverage=report['coverage']['cu']
+          print(json.dumps({'mode':'two injected direct DNS failures; actual strict Seoul HTTPS bytes; no DB writes',
+              'coverage':report['coverage'],'holds':report['holds'],'validated_notices':len(report['notices'])},ensure_ascii=False))
+          assert not report['holds'], 'CU regional recovery failed'
+          assert report['notices'] and coverage['attachment_count']>0, 'CU original documents or decoded attachments missing'
+          assert coverage['regional_fetch_count']>0 and coverage['native_ipv4_fetch_count']==0
+          PYCODE
       - name: Verify injected DNS failure with real official CU documents
         if: inputs.verify_cu_recovery
         run: |

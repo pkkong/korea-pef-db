@@ -24,8 +24,8 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 try:
     from .lp_ipv4_transport import IPv4HTTPSHandler
-    from .lp_cu_transport import fetch_cu_ipv4
-    from .lp_regional_transport import fetch_kfcc
+    from .lp_cu_transport import CuDnsError, fetch_cu_ipv4
+    from .lp_regional_transport import fetch_kfcc, fetch_cu
     from .lp_transport_errors import transient_dns
     from .collect_shared_lp_notices import decode_html, classify_scope
     from .collect_lp_original_notices import OfficialRedirect, original_body_hash, safe_host
@@ -34,8 +34,8 @@ try:
     from . import lp_board_adapter_kfcc as kfcc, lp_board_adapters_banks as banks
 except ImportError:
     from lp_ipv4_transport import IPv4HTTPSHandler
-    from lp_cu_transport import fetch_cu_ipv4
-    from lp_regional_transport import fetch_kfcc
+    from lp_cu_transport import CuDnsError, fetch_cu_ipv4
+    from lp_regional_transport import fetch_kfcc, fetch_cu
     from lp_transport_errors import transient_dns
     from collect_shared_lp_notices import decode_html, classify_scope
     from collect_lp_original_notices import OfficialRedirect, original_body_hash, safe_host
@@ -137,7 +137,17 @@ class Session:
         dns_ipv4 = False
         for attempt in range(2):
             if native_ipv4:
-                raw = fetch_cu_ipv4(url, referer)
+                try:
+                    raw = fetch_cu_ipv4(url, referer)
+                except CuDnsError:
+                    token = os.environ.get('LP_SOURCE_WORKER_TOKEN', '')
+                    if not token:
+                        raise
+                    # Only the first typed resolver failure and curl exit 6
+                    # permit one regional request after two direct attempts.
+                    raw = fetch_cu(url, referer, token)
+                    self.regional_fetches += 1
+                    return raw
                 self.native_ipv4_fetches += 1
                 return raw
             try:
@@ -162,7 +172,7 @@ class Session:
                     transient = exc.code in {408, 429, 500, 502, 503, 504}
                 elif isinstance(exc, URLError):
                     transient = transient_dns(exc) or isinstance(exc.reason, (TimeoutError, ConnectionError))
-                # Use the existing second attempt, never add a third request.
+                # Use the existing second direct attempt; CU DNS may then use one regional request.
                 # An ordinary timeout/HTTP/TLS/content error cannot select it.
                 native_ipv4 = self.config['institution_id'] == 'cu' and transient_dns(exc)
                 dns_ipv4 = transient_dns(exc) and not native_ipv4

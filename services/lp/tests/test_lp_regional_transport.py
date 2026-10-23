@@ -18,6 +18,56 @@ class RegionalTransportTests(unittest.TestCase):
         response.headers={'X-LP-Source-Region':'icn1','X-LP-Upstream-SHA256':hashlib.sha256(raw).hexdigest()}
         return response
 
+    def test_cu_exact_routes_and_authenticated_bytes(self):
+        from urllib.parse import urlencode
+        base = 'https://www.cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007&searchType=sj&listCo=50'
+        listing = base + '&' + urlencode({'searchValue': '위탁운용사', 'currPage': '1'})
+        detail = 'https://www.cu.co.kr/cu/na/ntt/selectNttInfo.do?nttSn=76543&mi=100007'
+        attachment = 'https://www.cu.co.kr/common/nttFileDownload.do?fileKey=' + 'a'*32
+        for url, referer in [(listing, base), (detail, listing), (detail+'&bbsId=1020', base), (attachment, detail)]:
+            with patch.object(relay, 'build_opener') as opener:
+                opener.return_value.open.return_value = self.response(b'official CU')
+                self.assertEqual(relay.fetch_cu(url, referer, 'test-token'), b'official CU')
+                req = opener.return_value.open.call_args.args[0]
+                self.assertEqual(req.full_url, relay.WORKER)
+                self.assertEqual(json.loads(req.data), {'url': url, 'referer': referer})
+                self.assertEqual(req.get_header('Authorization'), 'Bearer test-token')
+                self.assertEqual(opener.return_value.open.call_count, 1)
+        self.assertEqual(relay.cu_url(listing.replace('currPage=1','currPage=1000')), listing.replace('currPage=1','currPage=1000'))
+
+    def test_cu_unsafe_urls_and_unconfigured_credentials_never_connect(self):
+        from urllib.parse import quote
+        base = 'https://www.cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007&searchType=sj&listCo=50'
+        url = base + '&searchValue=' + quote('블라인드') + '&currPage=1'
+        bad = [url.replace('www.cu.co.kr','evil.example'), url.replace('https:', 'http:'),
+               url.replace('www.cu.co.kr','user:pass@www.cu.co.kr'), url.replace('www.cu.co.kr','www.cu.co.kr:444'),
+               url+'#fragment', url+'&currPage=2', url+'&extra=yes', url.replace('1020','9999'),
+               url.replace('100007','100008'), url.replace('currPage=1','currPage=0'),
+               url.replace('currPage=1','currPage=1001'), url.replace('listCo=50','listCo=500'),
+               url.replace('/cu/na/', '/cu/../na/'), url.replace('/cu/na/', '/cu/%252e%252e/na/'),
+               url.replace('/cu/na/', '/cu/%6ea/'), base,
+               'https://www.cu.co.kr/common/nttFileDownload.do?fileKey=wrong',
+               'https://www.cu.co.kr/cu/na/ntt/selectNttInfo.do?nttSn=1&mi=100008']
+        with patch.object(relay, 'build_opener') as opener:
+            for value in bad:
+                with self.subTest(url=value), self.assertRaises(ValueError): relay.fetch_cu(value, base, 'test-token')
+            for token in ['', 'bad token', 'bad\nvalue']:
+                with self.assertRaises(ValueError): relay.fetch_cu(url, base, token)
+            with self.assertRaises(ValueError): relay.fetch_cu(url, 'https://evil.example/', 'test-token')
+            opener.assert_not_called()
+
+    def test_cu_bad_regional_receipts_fail_closed(self):
+        from urllib.parse import quote
+        url = 'https://www.cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007&searchType=sj&listCo=50&searchValue='+quote('블라인드')+'&currPage=1'
+        receipts = [self.response(), self.response(), self.response(b''), self.response(b'x'*(relay.MAX_BYTES+1))]
+        receipts[0].headers['X-LP-Source-Region'] = 'iad1'
+        receipts[1].headers['X-LP-Upstream-SHA256'] = 'bad'
+        for receipt in receipts:
+            with patch.object(relay, 'build_opener') as opener:
+                opener.return_value.open.return_value = receipt
+                with self.assertRaises(ValueError): relay.fetch_cu(url, None, 'test-token')
+                self.assertEqual(opener.return_value.open.call_count, 1)
+
     def test_token_goes_only_to_fixed_worker_and_exact_bytes_are_returned(self):
         response=self.response(b'\xd0\xcf\x11\xe0bytes')
         with patch.object(relay,'build_opener') as opener:

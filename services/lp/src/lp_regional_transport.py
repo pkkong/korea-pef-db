@@ -1,6 +1,6 @@
 """Authenticated LP-only byte transport for observed official-source runner blocks.
 
-The service runs in Seoul and allows only fixed official KFCC/KFINCO routes.
+The service runs in Seoul and allows only fixed official KFCC/KFINCO/CU routes.
 Its response is still reparsed and validated by the ordinary issuer collector.
 """
 import hashlib
@@ -105,3 +105,55 @@ def fetch_kfinco(url,token):
         raise
     except Exception:
         raise ValueError('regional KFINCO transport unavailable') from None
+
+
+def cu_url(url, referer=False):
+    """Allow only CU board 1020 and its discovered notice/download routes."""
+    if (not isinstance(url, str) or len(url) > 4096
+            or re.search(r'[\x00-\x20\x7f\\#]', url)):
+        raise ValueError('invalid CU regional URL')
+    p = urlsplit(url)
+    if (p.scheme != 'https' or p.hostname != 'www.cu.co.kr' or p.username or p.password
+            or p.port not in {None, 443} or p.fragment):
+        raise ValueError('regional transport accepts only official CU HTTPS')
+    if '%' in p.path or any(part in {'.', '..'} for part in p.path.split('/')):
+        raise ValueError('unsafe CU regional path')
+    pairs = parse_qsl(p.query, keep_blank_values=True, strict_parsing=True)
+    q = dict(pairs)
+    if len(q) != len(pairs):
+        raise ValueError('duplicate CU query keys')
+    if p.path == '/cu/na/ntt/selectNttList.do':
+        base = {'bbsId': '1020', 'mi': '100007', 'searchType': 'sj', 'listCo': '50'}
+        if referer and q == base:
+            return url
+        if (set(q) != set(base) | {'searchValue', 'currPage'}
+                or any(q.get(k) != v for k, v in base.items())
+                or q.get('searchValue') not in {'블라인드', '위탁운용사'}
+                or not re.fullmatch(r'[1-9][0-9]{0,3}', q.get('currPage', ''))
+                or int(q['currPage']) > 1000):
+            raise ValueError('unsupported CU listing query')
+    elif p.path == '/cu/na/ntt/selectNttInfo.do':
+        if (set(q) not in ({'nttSn', 'mi'}, {'nttSn', 'mi', 'bbsId'})
+                or q.get('mi') != '100007' or q.get('bbsId', '1020') != '1020'
+                or not re.fullmatch(r'[0-9]{1,12}', q.get('nttSn', ''))):
+            raise ValueError('unsupported CU detail query')
+    elif p.path == '/common/nttFileDownload.do' and not referer:
+        if set(q) != {'fileKey'} or not re.fullmatch(r'[0-9a-fA-F]{32}', q.get('fileKey', '')):
+            raise ValueError('unsupported CU attachment query')
+    else:
+        raise ValueError('unsupported CU regional route')
+    return url
+
+
+def fetch_cu(url, referer, token):
+    cu_url(url)
+    if referer:
+        cu_url(referer, referer=True)
+    if isinstance(token, str) and re.search(r'[\x00-\x20\x7f]', token):
+        raise ValueError('invalid regional token')
+    try:
+        return _fetch(url, referer, token, 'CU')
+    except ValueError:
+        raise
+    except Exception:
+        raise ValueError('regional CU transport unavailable') from None
