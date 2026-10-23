@@ -246,6 +246,24 @@ jobs:
           probe('native_root_page',ROOT,{'User-Agent':'Mozilla/5.0','Accept':'text/html','Accept-Encoding':'identity','Connection':'close'},root_warmed)
           probe('native_root_warmed',EXACT,{**browser,'Referer':ROOT},root_warmed)
           probe('native_apex_production',APEX,production,opener())
+      - name: Inspect served K-FINCO public certificate chain
+        if: inputs.institution == 'kfinco' || inputs.institution == 'all'
+        shell: python3 {0}
+        run: |
+          import hashlib, json, re, subprocess
+          from pathlib import Path
+          folder=Path('/tmp/kfinco-http-diagnostic');folder.mkdir(exist_ok=True)
+          result=subprocess.run(['openssl','s_client','-connect','www.kfinco.co.kr:443','-servername','www.kfinco.co.kr',
+            '-showcerts','-verify_return_error','-verify_hostname','www.kfinco.co.kr'],input='',capture_output=True,text=True,timeout=25)
+          certificates=re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',result.stdout,re.S)
+          print(json.dumps({'mode':'strict public certificate inspection; no HTTP request','exit':result.returncode,'served_certificates':len(certificates),
+            'verification_excerpt':result.stderr[-1000:]}))
+          for index,pem in enumerate(certificates):
+            path=folder/('served-chain-'+str(index)+'.pem');path.write_text(pem+'\n')
+            info=subprocess.run(['openssl','x509','-in',str(path),'-noout','-text'],capture_output=True,text=True,timeout=5)
+            lines=info.stdout.splitlines()
+            metadata=[line.strip() for line in lines if any(key in line for key in ['Issuer:','Subject:','CA Issuers - URI:','Not Before:','Not After :'])]
+            print(json.dumps({'mode':'public certificate metadata','index':index,'sha256':hashlib.sha256(pem.encode()).hexdigest(),'metadata':metadata}))
       - name: Keep public K-FINCO diagnostic HTML and JSON
         if: always() && (inputs.institution == 'kfinco' || inputs.institution == 'all')
         uses: actions/upload-artifact@v4
