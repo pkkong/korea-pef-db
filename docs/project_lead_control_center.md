@@ -511,3 +511,10 @@ CI39439261862:619검사 실패0/오류0, 로컬 원본 fixture없는5skip, Postg
 - 검증: Python691검사·Node25검사·구조 계약 검사 통과. 명령 `node --test services/lp/collector/tests/*.test.js`, `scripts/run_regression_tests.py`, `scripts/check_architecture_contracts.py`. 배포 workflow도 Node전체 검사를 실행한다. 모든 실제 공식 호출은 같은 수집 대기열을 사용한다.
 
 - 다음은 신협DNS 재발 대응·수정 이후 예약 확인이다. 이번 신협3본문/첨부2건은 정상 수집했지만 과거DNS 원인은 미확인이다. 산업은행 ZIP1건 추출 한도 보류와 부분 연결8기관·추가 확인7기관은 남긴다. 최신 세부 근거는 status/checklist를 따른다.
+
+## LP 신협 DNS 복구 보완 — 2026-10-23
+
+- Source `65b63d4`: 첫 DNS 오류와 두 번째 native curl exit6이 이어질 때만 서울 전송을 한 번 사용한다. 일반 HTTP·TLS·내용 오류로 확대하지 않는다. 공식 경로, 지역, 해시, 3MiB, 기존 판독 검증을 유지한다. Newsletter·GP·화면·DB 구조는 변경하지 않았다.
+- 배포39957331933에서 CU/KFCC/KFINCO 공식 목록을 각각 3행 검증했다. Source `0fbde97`의 오류 주입39957487910은 실제 서울 7요청으로 3본문·PDF 텍스트 2건·출처 검증·보류0을 확인했다. 이 시험은 DB 쓰기가 없고 실제 DNS 발생이나 예약 성공과 구분한다. 임시 진단39956931281 프로젝트는 삭제했다.
+- Python698·Node29 검사와 구조 계약, CI39957478244를 통과했다. 일반 운영39957583501은 신협3본문/첨부2건, 공개26사업/기존26주소, 보관69문서, 출처오류0을 확인했다. 공개 실행은 `43ad76d6acf410d0c64b3dc2`이며 외부26상세 검증도 통과했다.
+- 전체 실행은 산업은행3목록의 DNS Err8로 실패했다. 이번 새 직접본문31건과 이전 산업은행38건을 구분한다. 산업은행의 두 번째 요청도 Python getaddrinfo(AF_INET)를 쓰므로 조회 경로는 같다. 다음은 DNS 조회 부분의 별도 경로를 검증하되 기존 HTTPS/SNI/TLS·쿠키·리디렉션을 보존하는 범위다. 신협 curl을 그대로 확대하지 않는다. 고정 IP·임의 CA·무조건 재시도는 금지한다. 이후 예약은 미확인이며 최신 세부 현황은 `docs/lp_collection_status.md`를 따른다.
