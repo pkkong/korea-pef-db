@@ -1,12 +1,13 @@
-"""Authenticated LP-only byte transport for the observed KFCC runner block.
+"""Authenticated LP-only byte transport for observed official-source runner blocks.
 
-The service runs in Seoul and allows only fixed official KFCC board/file routes.
+The service runs in Seoul and allows only fixed official KFCC/KFINCO routes.
 Its response is still reparsed and validated by the ordinary issuer collector.
 """
 import hashlib
 import json
+import re
 from urllib.error import HTTPError
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urlsplit, parse_qsl
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 WORKER = 'https://kpef-lp-source-worker.vercel.app/api/fetch'
@@ -37,6 +38,9 @@ def fetch_kfcc(url, referer, token):
     official_url(url)
     if referer:
         official_url(referer)
+    return _fetch(url, referer, token, 'KFCC')
+
+def _fetch(url, referer, token, institution):
     if not isinstance(token, str) or not token or len(token) > 512:
         raise ValueError('regional transport token unavailable')
     payload = {'url': url}
@@ -65,4 +69,39 @@ def fetch_kfcc(url, referer, token):
                 reason = ' ('+detail['error']+')'
         except (ValueError, OSError):
             pass
-        raise ValueError('regional KFCC source unavailable HTTP '+str(error.code)+reason) from None
+        raise ValueError('regional '+institution+' source unavailable HTTP '+str(error.code)+reason) from None
+
+
+def kfinco_url(url):
+    if not isinstance(url,str) or len(url)>8192 or re.search(r'[\x00-\x20\x7f\\#]',url):
+        raise ValueError('invalid KFINCO transport URL')
+    p=urlsplit(url)
+    if p.scheme!='https' or p.hostname!='www.kfinco.co.kr' or p.username or p.password or p.port not in {None,443} or p.fragment:
+        raise ValueError('regional transport accepts only official KFINCO HTTPS')
+    pairs=parse_qsl(p.query,keep_blank_values=True,strict_parsing=True)
+    q=dict(pairs)
+    if len(q)!=len(pairs):raise ValueError('duplicate KFINCO query keys')
+    if p.path=='/api/pr/notice/list':
+        if q!={'page':'1','size':'10','searchKeyword':'위탁운용사'}:raise ValueError('unsupported KFINCO listing query')
+    elif re.fullmatch(r'/api/pr/notice/detail/NT[0-9]{14}',p.path):
+        if q:raise ValueError('unsupported KFINCO detail query')
+    elif p.path=='/util/download':
+        if set(q)!={'filePath','downloadName'}:raise ValueError('unsupported KFINCO attachment query')
+        if not re.fullmatch(r'/pds/notice/[0-9]{4}-[0-9]{2}/[A-Za-z0-9_-]+\.(?:hwp|hwpx|pdf)',q['filePath'],re.I):
+            raise ValueError('unsafe KFINCO attachment path')
+        name=q['downloadName']
+        if not name or len(name)>255 or '..' in name or re.search(r'[%/\\\x00-\x1f\x7f?#:]',name) or not re.search(r'\.(?:hwp|hwpx|pdf)$',name,re.I):
+            raise ValueError('unsafe KFINCO attachment filename')
+    else:raise ValueError('unsupported KFINCO transport route')
+    return url
+
+
+def fetch_kfinco(url,token):
+    kfinco_url(url)
+    if isinstance(token,str) and re.search(r'[\x00-\x20\x7f]',token):raise ValueError('invalid regional token')
+    try:
+        return _fetch(url,None,token,'KFINCO')
+    except ValueError:
+        raise
+    except Exception:
+        raise ValueError('regional KFINCO transport unavailable') from None

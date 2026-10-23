@@ -21,10 +21,12 @@ try:
     from .collect_lp_original_notices import fetch_bytes_once as fetch_bytes, safe_host, original_body_hash
     from .collect_shared_lp_notices import Document, valid_date
     from .lp_attachment_text import extract_attachment
+    from .lp_regional_transport import fetch_kfinco, kfinco_url
 except ImportError:
     from collect_lp_original_notices import fetch_bytes_once as fetch_bytes, safe_host, original_body_hash
     from collect_shared_lp_notices import Document, valid_date
     from lp_attachment_text import extract_attachment
+    from lp_regional_transport import fetch_kfinco, kfinco_url
 
 BASE='https://www.kfinco.co.kr'
 LIST_URL=BASE+'/api/pr/notice/list?page=1&size=10&searchKeyword='+quote('위탁운용사',safe='')
@@ -227,7 +229,18 @@ def native_tls_fetch(url):
     context=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     if context.verify_mode!=ssl.CERT_REQUIRED or not context.check_hostname:
         raise ValueError('native TLS must verify certificate and hostname')
-    return fetch_bytes(url,ssl_context=context)
+    kfinco_url(url)
+    try:
+        return fetch_bytes(url,ssl_context=context)
+    except HTTPError as error:
+        token=os.environ.get('LP_SOURCE_WORKER_TOKEN','')
+        if error.code!=400 or not token or error.geturl()!=url:raise
+        body=error.read(4097)
+        text=body.decode('utf-8','replace').lower()
+        if len(body)>4096 or '400 bad request' not in text or 'contact the administrator' not in text:raise
+        # The worker token is sent only to the fixed authenticated Seoul worker.
+        # Worker failure becomes a non-retryable hold; native retry budget is unchanged.
+        return fetch_kfinco(url,token)
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--input',required=True);p.add_argument('--output',required=True);p.add_argument('--system-trust',action='store_true');args=p.parse_args()

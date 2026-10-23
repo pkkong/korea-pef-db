@@ -1,4 +1,5 @@
 import copy
+import io
 import json
 import unittest
 import ssl
@@ -137,6 +138,36 @@ class KfincoTests(unittest.TestCase):
         self.assertEqual(fetch.call_count, 3)
         self.assertEqual(later['coverage']['kfinco_original']['linked'], 0)
         self.assertEqual(later['holds'][0]['phase'], 'listing')
+
+    def test_native_verified_block_falls_back_once_without_upstream_token(self):
+        from services.lp.src import discover_kfinco_originals as module
+        context=SimpleNamespace(verify_mode=ssl.CERT_REQUIRED,check_hostname=True)
+        block=HTTPError(LIST_URL,400,'Bad Request',{},io.BytesIO(b'<html>400 Bad Request contact the administrator</html>'))
+        with patch.dict('sys.modules',{'truststore':SimpleNamespace(SSLContext=lambda protocol:context)}), patch.dict(module.os.environ,{'LP_SOURCE_WORKER_TOKEN':'private-key'}), patch.object(module,'fetch_bytes',side_effect=block) as native, patch.object(module,'fetch_kfinco',return_value=b'official') as regional:
+            self.assertEqual(module.native_tls_fetch(LIST_URL),b'official')
+            native.assert_called_once_with(LIST_URL,ssl_context=context)
+            regional.assert_called_once_with(LIST_URL,'private-key')
+
+    def test_wrong_400_no_token_ssl_or_404_never_use_regional(self):
+        from services.lp.src import discover_kfinco_originals as module
+        context=SimpleNamespace(verify_mode=ssl.CERT_REQUIRED,check_hostname=True)
+        cases=[(400,b'invalid parameter','key'),(400,b'400 Bad Request contact the administrator',''),(404,b'400 Bad Request contact the administrator','key'),(400,b'x'*4097+b'400 Bad Request contact the administrator','key')]
+        errors=[(HTTPError(LIST_URL,status,'failure',{},io.BytesIO(body)),token) for status,body,token in cases]
+        errors.append((URLError(ssl.SSLCertVerificationError('certificate failure')),'key'))
+        for error,token in errors:
+            with patch.dict('sys.modules',{'truststore':SimpleNamespace(SSLContext=lambda protocol:context)}), patch.dict(module.os.environ,{'LP_SOURCE_WORKER_TOKEN':token}), patch.object(module,'fetch_bytes',side_effect=error), patch.object(module,'fetch_kfinco') as regional:
+                with self.assertRaises((HTTPError,URLError)):module.native_tls_fetch(LIST_URL)
+                regional.assert_not_called()
+
+    def test_worker_failure_does_not_restart_native_retry_budget(self):
+        from services.lp.src import discover_kfinco_originals as module
+        context=SimpleNamespace(verify_mode=ssl.CERT_REQUIRED,check_hostname=True)
+        block=HTTPError(LIST_URL,400,'failure',{},io.BytesIO(b'400 Bad Request contact the administrator'))
+        with patch.dict('sys.modules',{'truststore':SimpleNamespace(SSLContext=lambda protocol:context)}), patch.dict(module.os.environ,{'LP_SOURCE_WORKER_TOKEN':'key'}), patch.object(module,'fetch_bytes',side_effect=block) as native, patch.object(module,'fetch_kfinco',side_effect=ValueError('regional failure')) as regional, patch.object(module.time,'sleep') as sleep:
+            result=module.discover({'notices':[source()]},fetch=module.native_tls_fetch,checked_at=NOW)
+            self.assertEqual(native.call_count,1);self.assertEqual(regional.call_count,1);sleep.assert_not_called()
+            self.assertEqual(result['holds'][0]['phase'],'listing')
+            self.assertEqual(result['coverage']['kfinco_original']['retry_requests'],0)
 
     def test_new_arbitrary_identifier_and_unchanged_title(self):
         out=self.fixture();o=out['notices'][0]['original_notices'][0]

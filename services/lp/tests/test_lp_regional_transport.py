@@ -67,6 +67,35 @@ class RegionalTransportTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,code) as caught:relay.fetch_kfcc(URL,None,'key')
                 self.assertNotIn('private',str(caught.exception))
 
+    def test_kfinco_exact_routes_and_worker_authentication(self):
+        from urllib.parse import quote
+        url='https://www.kfinco.co.kr/api/pr/notice/list?page=1&size=10&searchKeyword='+quote('위탁운용사')
+        with patch.object(relay,'build_opener') as opener:
+            opener.return_value.open.return_value=self.response(b'official')
+            self.assertEqual(relay.fetch_kfinco(url,'private-key'),b'official')
+            req=opener.return_value.open.call_args.args[0]
+            self.assertEqual(req.full_url,relay.WORKER)
+            self.assertEqual(json.loads(req.data),{'url':url})
+            self.assertEqual(req.get_header('Authorization'),'Bearer private-key')
+        self.assertEqual(relay.kfinco_url('https://www.kfinco.co.kr/api/pr/notice/detail/NT20990101010101'),'https://www.kfinco.co.kr/api/pr/notice/detail/NT20990101010101')
+        bad=[url.replace('www.kfinco.co.kr','evil.test'),url+'&page=1',url.replace('size=10','size=100'),url.replace('page=1','page=2'),
+             'https://www.kfinco.co.kr/api/pr/notice/detail/NT20990101010101?x=1',
+             'https://www.kfinco.co.kr/util/download?filePath=%2Fpds%2Fnotice%2F2026-09%2F%252e%252e%2Fa.hwp&downloadName=a.hwp',
+             'https://www.kfinco.co.kr/util/download?filePath=%2Fpds%2Fnotice%2F2026-09%2Fa.hwp&downloadName=..%2Fa.hwp']
+        with patch.object(relay,'build_opener') as opener:
+            for value in bad:
+                with self.subTest(value=value),self.assertRaises(ValueError):relay.fetch_kfinco(value,'private-key')
+            opener.assert_not_called()
+
+    def test_kfinco_worker_network_failure_is_not_retryable_or_secret_bearing(self):
+        from urllib.error import URLError
+        url='https://www.kfinco.co.kr/api/pr/notice/detail/NT20990101010101'
+        with patch.object(relay,'build_opener') as opener:
+            opener.return_value.open.side_effect=URLError('private-key')
+            with self.assertRaisesRegex(ValueError,'transport unavailable') as error:relay.fetch_kfinco(url,'private-key')
+            self.assertNotIn('private-key',str(error.exception))
+            self.assertEqual(opener.return_value.open.call_count,1)
+
     def session(self,institution='kfcc',body=b'<h1>Request Blocked</h1>',code=400):
         session=boards.Session(boards.load_configs()[institution])
         session.opener=Mock()

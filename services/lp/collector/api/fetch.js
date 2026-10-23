@@ -1,5 +1,6 @@
 'use strict';
 const crypto = require('node:crypto');
+const kfinco = require('../lib/kfinco');
 const REQUEST_LIMIT = 8 * 1024;
 const SOURCE_LIMIT = 3 * 1024 * 1024;
 const fail = (status, code) => Object.assign(new Error(code), {status, code});
@@ -13,6 +14,7 @@ function authorized(req) {
 }
 
 function officialUrl(value, referer = false) {
+  if (typeof value === 'string' && /^https:\/\/www\.kfinco\.co\.kr(?::443)?\//.test(value)) return kfinco.officialUrl(value, referer);
   if (typeof value !== 'string' || value.length > 4096 || /[\x00-\x20\x7f\\#]/.test(value) ||
       !/^https:\/\/www\.kfcc\.co\.kr(?::443)?\//.test(value)) throw fail(400, 'invalid_source_url');
   const url = new URL(value);
@@ -61,7 +63,9 @@ async function readRequest(req) {
   } catch (error) { throw error.status ? error : fail(400, 'invalid_json'); }
   if (!body || typeof body !== 'object' || Array.isArray(body) ||
       Object.keys(body).some(key => !['url', 'referer'].includes(key)) || !Object.hasOwn(body, 'url')) throw fail(400, 'invalid_request');
-  return {url: officialUrl(body.url), referer: Object.hasOwn(body, 'referer') ? officialUrl(body.referer, true) : undefined};
+  const url = officialUrl(body.url), referer = Object.hasOwn(body, 'referer') ? officialUrl(body.referer, true) : undefined;
+  if (referer && new URL(url).hostname !== new URL(referer).hostname) throw fail(400, 'invalid_source_url');
+  return {url, referer};
 }
 
 async function sourceBytes(response) {
@@ -92,11 +96,16 @@ async function handler(req, res) {
     try {
       const headers = {'User-Agent': 'Mozilla/5.0', 'Accept-Encoding': 'identity'};
       if (referer) headers.Referer = referer;
+      let bytes;
+      if (new URL(url).hostname === 'www.kfinco.co.kr') {
+        bytes = await kfinco.sourceBytes(url, referer, SOURCE_LIMIT, controller.signal);
+      } else {
       const response = await fetch(url, {method: 'GET', headers, redirect: 'error', signal: controller.signal});
       if (response.status !== 200 || response.redirected) {
         await response.body?.cancel(); throw fail(502, 'upstream_status');
       }
-      const bytes = await sourceBytes(response);
+      bytes = await sourceBytes(response);
+      }
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/octet-stream');
       res.setHeader('X-LP-Upstream-SHA256', crypto.createHash('sha256').update(bytes).digest('hex'));

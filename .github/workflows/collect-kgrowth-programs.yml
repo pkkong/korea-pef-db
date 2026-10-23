@@ -117,6 +117,8 @@ jobs:
           name: lp-shared-collection
           path: /tmp
       - name: Collect K-FINCO originals with system TLS verification
+        env:
+          LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
         run: python3 services/lp/src/discover_kfinco_originals.py --system-trust --input /tmp/lp-shared-collection.json --output /tmp/lp-kfinco-collection.json
       - name: Pass original evidence to publisher
         if: always()
