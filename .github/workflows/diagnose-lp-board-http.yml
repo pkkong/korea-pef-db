@@ -306,8 +306,10 @@ jobs:
               report=boards.collect({'cu':boards.load_configs()['cu']},fetch_factory=injected_session)
           for notice in report['notices']:boards.validate_notice(notice,report['checked_at'])
           coverage=report['coverage']['cu']
+          decoded=sum(bool(text.strip()) for notice in report['notices'] for text in notice.get('attachment_texts',{}).values())
           print(json.dumps({'mode':'two injected direct DNS failures; actual strict Seoul HTTPS bytes; no DB writes',
-              'coverage':report['coverage'],'holds':report['holds'],'validated_notices':len(report['notices'])},ensure_ascii=False))
+              'coverage':report['coverage'],'holds':report['holds'],'validated_notices':len(report['notices']),'decoded_attachments':decoded},ensure_ascii=False))
+          assert decoded>0, 'CU attachments have no decoded text'
           assert not report['holds'], 'CU regional recovery failed'
           assert report['notices'] and coverage['attachment_count']>0, 'CU original documents or decoded attachments missing'
           assert coverage['regional_fetch_count']>0 and coverage['native_ipv4_fetch_count']==0
