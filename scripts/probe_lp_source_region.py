@@ -44,7 +44,9 @@ function strictKfinco(url) {
 }
 module.exports = async (req, res) => {
   if (req.method !== 'GET' || !process.env.SOURCE_PROBE_TOKEN || req.headers.authorization !== 'Bearer '+process.env.SOURCE_PROBE_TOKEN) return res.status(401).end();
-  const targets = [
+  const targets = __PROBE_INSTITUTION__ === 'cu' ? [
+    ['cu','https://www.cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007&searchType=sj&listCo=50&searchValue='+encodeURIComponent('블라인드')+'&currPage=1']
+  ] : [
     ['kfcc','https://www.kfcc.co.kr/mgNotice/mgNoticeList.do?schType=subject&schValue='+encodeURIComponent('위탁')+'&pageNo=1'],
     ['kfinco','https://www.kfinco.co.kr/api/pr/notice/list?page=1&size=10&searchKeyword='+encodeURIComponent('위탁운용사')]
   ];
@@ -64,6 +66,7 @@ module.exports = async (req, res) => {
       const raw=Buffer.concat(chunks); const body=raw.toString('utf8');
       let officialShape=false;
       if(source==='kfcc')officialShape=/name=["']brdForm/.test(body)&&body.includes('magazine')&&body.includes('fnDetail');
+      else if(source==='cu')officialShape=body.includes('bbs_ListA')&&body.includes('selectNttInfo.do?');
       else {try{const data=JSON.parse(body);officialShape=data.success===true&&Array.isArray(data.list);}catch{}}
       results.push({source,url,status:response.status,bytes:size,officialShape,sha256:crypto.createHash('sha256').update(raw).digest('hex'),errorExcerpt:response.ok?null:body.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').slice(0,200)});
     } catch(error) {results.push({source,error:String(error.cause?.code||error.name)});}
@@ -92,6 +95,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--kfinco-intermediates',type=Path,help='Public non-root CA intermediates; system roots and hostname verification remain required')
+    parser.add_argument('--institution',choices=['all','cu'],default='all')
     args=parser.parse_args()
     project=None
     report={'status':'error','region_requested':'icn1'}
@@ -108,7 +112,7 @@ def main():
             root=Path(folder);(root/'api').mkdir()
             (root/'.vercel').mkdir()
             (root/'.vercel/project.json').write_text(json.dumps({'projectId':project['id'],'orgId':project['accountId'],'projectName':PROJECT}))
-            (root/'api/probe.js').write_text(SOURCE)
+            (root/'api/probe.js').write_text(SOURCE.replace('__PROBE_INSTITUTION__',json.dumps(args.institution)))
             if args.kfinco_intermediates:
                 (root/'api/kfinco-intermediates.pem').write_bytes(args.kfinco_intermediates.read_bytes())
             (root/'package.json').write_text(json.dumps({'private':True,'engines':{'node':'24.x'}}))

@@ -2,6 +2,10 @@ name: Probe LP source from Seoul
 on:
   workflow_dispatch:
     inputs:
+      institution:
+        type: choice
+        options: [all, cu]
+        default: all
       complete_kfinco_chain:
         type: boolean
         default: false
@@ -31,12 +35,13 @@ jobs:
           echo '8b2077d25599d05e5b39942091371d6f4b86e2cbd072fdb7426c47261c56981d  /tmp/kfinco-intermediates.pem' | sha256sum --check
       - name: Measure fixed public sources and remove temporary project
         env:
+          PROBE_INSTITUTION: ${{ inputs.institution }}
           COMPLETE_KFINCO_CHAIN: ${{ inputs.complete_kfinco_chain }}
         run: |
           if [ "$COMPLETE_KFINCO_CHAIN" = 'true' ]; then
-            python3 scripts/probe_lp_source_region.py --output /tmp/lp-source-region-probe.json --kfinco-intermediates /tmp/kfinco-intermediates.pem
+            python3 scripts/probe_lp_source_region.py --institution "$PROBE_INSTITUTION" --output /tmp/lp-source-region-probe.json --kfinco-intermediates /tmp/kfinco-intermediates.pem
           else
-            python3 scripts/probe_lp_source_region.py --output /tmp/lp-source-region-probe.json
+            python3 scripts/probe_lp_source_region.py --institution "$PROBE_INSTITUTION" --output /tmp/lp-source-region-probe.json
           fi
       - uses: actions/upload-artifact@v4
         if: always()
