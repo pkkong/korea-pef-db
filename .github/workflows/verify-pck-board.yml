@@ -1,0 +1,26 @@
+name: Verify PCK official notice board
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: macos-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Inspect observed official listing and detail markup without DB writes
+        run: python3 scripts/inspect_lp_pck_board.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-pck-board-verification
+          path: /tmp/lp-pck-inspection/
+          retention-days: 7
+          if-no-files-found: error
