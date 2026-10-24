@@ -15,8 +15,24 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - name: Install official attachment readers
+        run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
+      - name: Test observed board and bounded attachment contracts
+        run: python3 -m unittest services.lp.tests.test_lp_board_adapter_pck services.lp.tests.test_lp_attachment_text services.lp.tests.test_collect_lp_institution_boards
       - name: Inspect observed official listing and detail markup without DB writes
         run: python3 scripts/inspect_lp_pck_board.py
+      - name: Collect and replay PCK official bodies and offering attachments
+        run: |
+          python3 services/lp/src/collect_lp_institution_boards.py --institution pck_pension --output /tmp/lp-pck-inspection/collection.json
+          python3 - <<'PY'
+          import json
+          from services.lp.src.collect_lp_institution_boards import validate_notice
+          report=json.load(open('/tmp/lp-pck-inspection/collection.json'))
+          assert report['notices'], 'No observed PCK source documents'
+          for n in report['notices']: validate_notice(n,report['checked_at'])
+          assert not report['holds'], 'PCK source or attachment errors remain'
+          print('Validated PCK bodies:',len(report['notices']))
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:

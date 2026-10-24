@@ -33,6 +33,7 @@ try:
     from .lp_attachment_text import extract_attachment
     from . import lp_board_adapters_mutuals as mutuals, lp_board_adapters_pensions as pensions
     from . import lp_board_adapter_kfcc as kfcc, lp_board_adapters_banks as banks
+    from . import lp_board_adapter_pck as pck
 except ImportError:
     from lp_ipv4_transport import IPv4HTTPSHandler
     from lp_kdb_dns import resolve_kdb_ipv4
@@ -46,6 +47,7 @@ except ImportError:
     import lp_board_adapters_pensions as pensions
     import lp_board_adapter_kfcc as kfcc
     import lp_board_adapters_banks as banks
+    import lp_board_adapter_pck as pck
 
 ROOT = Path(__file__).resolve().parents[3]
 CONFIG = ROOT / 'data/lp_institution_board_channels.json'
@@ -72,6 +74,8 @@ def adapter(config):
         return banks
     if institution == 'kfcc':
         return kfcc
+    if institution == 'pck_pension':
+        return pck
     if institution in {'poba', 'pmaa'}:
         return mutuals
     if institution in {'tp', 'cu'}:
@@ -213,7 +217,7 @@ def attachment_text(raw, name):
             if item.flag_bits & 1 or item.file_size > MAX_BYTES:
                 raise ValueError('encrypted or oversized ZIP document')
             if (is_form(member_name) or item.is_dir()
-                    or not re.search(r'\.(pdf|hwp|hwpx)$', member_name, re.I)):
+                    or not re.search(r'\.(pdf|hwp|hwpx|docx)$', member_name, re.I)):
                 continue
             # Archives can include useful historical references; only a labelled
             # offering document is evidence about this recruitment.
@@ -243,13 +247,31 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
         coverage = {'listing_pages': [], 'detail_count': 0, 'attachment_count': 0,
                     'history_years': config.get('history_years', 4)}
         result['coverage'][institution] = coverage
+        stopped_searches = set()
         for url in listing_urls(config):
+            search = parse_qsl(urlsplit(url).query)
+            search = next((value for key, value in search if key == config.get('search_param')), '')
+            if search in stopped_searches:
+                continue
             try:
                 raw = fetch(url, config['listing_url'])
                 html = raw.decode('utf-8') if institution == 'kdb' else _html(raw)
                 rows = adapter(config).parse_listing(html, url, config)
                 receipts[url] = {'url': url, 'html': html, 'sha256': digest(html)}
                 coverage['listing_pages'].append({'url': url, 'count': len(rows)})
+                if institution == 'pck_pension':
+                    current_page = int(dict(parse_qsl(urlsplit(url).query))[config['page_param']])
+                    final_page = pck.last_page(html, url, config)
+                    regular = [row for row in rows if not row.get('pinned')]
+                    oldest_year = str(int(checked_at[:4]) - config.get('history_years', 4) + 1)
+                    older = regular and all(row['date'][:4] < oldest_year for row in regular)
+                    if current_page == final_page or older:
+                        stopped_searches.add(search)
+                        coverage.setdefault('listing_boundaries', []).append({'search': search, 'page': current_page,
+                            'boundary': 'observed_older_page' if older else 'observed_final_page'})
+                    elif current_page == config['pages']:
+                        result['holds'].append({'institution_id': institution, 'stage': 'institution_depth',
+                                               'error': 'PCK configured listing limit reached before history boundary'})
                 for row in rows:
                     if (re.search(r'위탁|운용사|블라인드|PEF?|사모|선정', row['title'], re.I)
                             and classify_scope(row['title'], row['title']) != 'outside'):
@@ -371,8 +393,9 @@ def update_catalog(current, incoming, checked_at):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--institution', choices=sorted(load_configs()), help='Verify one configured institution without publication')
     args = parser.parse_args()
-    result = collect()
+    result = collect({args.institution: load_configs()[args.institution]} if args.institution else None)
     args.output.write_text(json.dumps(result, ensure_ascii=False))
     print(json.dumps({'notices': len(result['notices']), 'holds': len(result['holds']),
                       'coverage': result['coverage']}, ensure_ascii=False))

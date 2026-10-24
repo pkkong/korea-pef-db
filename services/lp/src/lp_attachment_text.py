@@ -14,6 +14,10 @@ import struct
 import zipfile
 import zlib
 from xml.etree import ElementTree as ET
+try:
+    from .lp_docx_text import extract_docx
+except ImportError:
+    from lp_docx_text import extract_docx
 
 MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_EXPANDED_BYTES = 64 * 1024 * 1024
@@ -142,6 +146,8 @@ def _hwpx(raw):
         names = [i.filename for i in items]
         if len(names) != len(set(names)) or any(i.flag_bits & 1 for i in items):
             raise ValueError("Duplicate or encrypted attachment archive members")
+        if 'word/document.xml' in names:
+            return extract_docx(archive, MAX_SECTION_BYTES)
         sections = sorted([n for n in names if re.fullmatch(r"Contents/section\d+\.xml", n)],
                           key=lambda n: int(re.search(r"(\d+)\.xml$", n)[1]))
         if not sections:

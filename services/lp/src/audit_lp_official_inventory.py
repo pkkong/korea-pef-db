@@ -36,7 +36,7 @@ CORE = {
 }
 HOSTS = {'kgrowth':'kgrowth.or.kr','ktcu':'ktcu.or.kr','koreapost':'kpasset.go.kr',
          'kexim':'koreaexim.go.kr','poba':'poba.or.kr','pmaa':'pmaa.or.kr',
-         'tp':'tp.or.kr','cu':'cu.co.kr','kfcc':'kfcc.co.kr','kdb':'kdb.co.kr','ibk':'ibk.co.kr'}
+         'tp':'tp.or.kr','cu':'cu.co.kr','kfcc':'kfcc.co.kr','kdb':'kdb.co.kr','ibk':'ibk.co.kr', 'pck_pension':'pension.or.kr'}
 
 
 def window(as_of):
@@ -51,6 +51,9 @@ def notice_key(institution, url):
             or p.username or p.password or p.port not in {None,443}):
         raise ValueError('official notice identity host mismatch')
     q = parse_qs(p.query, keep_blank_values=True)
+    if institution == 'pck_pension':
+        canonical = boards.pck.canonical_notice(url)
+        return institution + ':' + parse_qs(urlsplit(canonical).query)['seq'][0]
     query_routes = {'kgrowth':('/notice_view.asp','idx'), 'koreapost':('/board.es','list_no'),
                     'poba':('/bbs/selectNttDetail','sechBbstSeq'),
                     'pmaa':('/www/1461128463820/bbs.do','bbsIdx'),
@@ -248,6 +251,8 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
                     if institution in CORE:
                         last_page=core_last_page(institution,html,url)
                         if last_page is not None and page==last_page:query['boundary']='observed_final_page';break
+                    elif institution == 'pck_pension' and page == boards.pck.last_page(html, url, config):
+                        query['boundary']='observed_final_page';break
                     if regular and all(row['date']<start for row in regular):query['boundary']='observed_older_page';break
                 except Exception as error:
                     query['boundary']='source_error';failed=True
