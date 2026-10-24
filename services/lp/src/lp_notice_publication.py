@@ -24,6 +24,7 @@ try:
     from .collect_lp_institution_boards import validate_notice as validate_institution_notice
     from .lp_institution_notice_terms import extract_terms as extract_institution_terms
     from .lp_kfcc_notice_terms import allocation as kfcc_allocation
+    from . import lp_pck_programs as pck_programs
 except ImportError:
     from collect_shared_lp_notices import classify_scope
     from collect_lp_original_notices import load_channels, validate_url, validate_original
@@ -33,6 +34,7 @@ except ImportError:
     from collect_lp_institution_boards import validate_notice as validate_institution_notice
     from lp_institution_notice_terms import extract_terms as extract_institution_terms
     from lp_kfcc_notice_terms import allocation as kfcc_allocation
+    import lp_pck_programs as pck_programs
 
 ROOT = Path(__file__).resolve().parents[3]
 OFFERING_FIELDS = (
@@ -136,6 +138,8 @@ def _texts(n):
 
 
 def _scope(n):
+    if n.get('institution_id') == 'pck_pension':
+        return 'pe_blind' if pck_programs.offering_sources(n) else 'unknown'
     if n.get('institution_id') == 'kfcc':
         return 'mixed_pe_blind' if kfcc_allocation(n) else 'unknown'
     text = '\n'.join(_texts(n))
@@ -176,7 +180,7 @@ def _terms(n, shared_notice, checked_at):
     terms = {}
     try:
         if n.get('source_channel') == 'institution_board':
-            terms = extract_institution_terms(n)
+            terms = pck_programs.terms(n) if n['institution_id'] == 'pck_pension' else extract_institution_terms(n)
         elif shared_notice:
             terms = extract_shared_terms(shared_notice, checked_at)
         elif n['institution_id'] in INSTITUTIONS:
@@ -217,7 +221,7 @@ def _terms(n, shared_notice, checked_at):
 
 
 def _event(n):
-    stage = notice_stage(n['title'])
+    stage = pck_programs.stage(n) if n['institution_id'] == 'pck_pension' else notice_stage(n['title'])
     if stage == '변경 공고' and '재공고' in n['title'] and not re.search(r'취소|정정|수정|연장|변경', n['title']):
         stage = '모집 공고'
     return {'date': n['date'], 'type': stage, 'title': n['title'], 'url': n['url']}
@@ -241,6 +245,11 @@ def _schedule_order(stages):
 def _refresh(p, members, checked_at):
     existing_events = {e['url']: copy.deepcopy(e) for e in p['events']}
     for n in members:
+        if p['institution_id'] == 'pck_pension':
+            previous = next((e for e in existing_events.values() if pck_programs._canonical(e['url']) == n['url']), None)
+            if previous:
+                existing_events[previous['url']] = {**_event(n), 'url': previous['url']}
+                continue
         existing_events.setdefault(n['url'], _event(n))
     p['events'] = sorted(existing_events.values(), key=lambda e: (e['date'], e['url']))
     changed = any(_event(n)['type'] == '변경 공고' for n in members)
@@ -287,8 +296,11 @@ def publish_basic_notices(data, growth_notices, checked_at):
     docs, shared, holds = _sources(data, growth_notices, checked_at)
     groups = defaultdict(list)
     for n in docs.values():
-        if n['institution_id'] in names and notice_stage(n['title']) in STAGES:
+        if n['institution_id'] in names and n['institution_id'] != 'pck_pension' and notice_stage(n['title']) in STAGES:
             groups[_identity(n)].append(n)
+    pck_groups, pck_holds = pck_programs.groups([n for n in docs.values() if n['institution_id'] == 'pck_pension'], data['programs'])
+    groups.update(pck_groups)
+    holds.extend(pck_holds)
     programs = {p['id']: copy.deepcopy(p) for p in data['programs']}
     for key, members in sorted(groups.items()):
         try:
@@ -298,7 +310,9 @@ def publish_basic_notices(data, growth_notices, checked_at):
             original = originals[0]
             urls = {n['url'] for n in members}
             matches = [p for p in programs.values() if p['institution_id'] == original['institution_id']
-                       and (p.get('source_program_key') == key or urls & {e['url'] for e in p['events']})]
+                       and (p.get('source_program_key') == key or urls & {e['url'] for e in p['events']}
+                            or (original['institution_id'] == 'pck_pension' and urls & {
+                                pck_programs._canonical(e['url']) for e in p['events']}))]
             if len(matches) > 1:
                 raise ValueError('복수 기존 사업과 연결; 차수 확인 필요')
             if matches and matches[0].get('manual_review_id'):
@@ -319,7 +333,9 @@ def publish_basic_notices(data, growth_notices, checked_at):
                 continue
             if matches:
                 p = matches[0]
-                if not p.get('basic_publication') and not p.get('publication_version') and not (urls - {e['url'] for e in p['events']}):
+                if (not p.get('basic_publication') and not p.get('publication_version')
+                        and not (urls - {e['url'] for e in p['events']})
+                        and original['institution_id'] != 'pck_pension'):
                     continue
                 # Complete reviewed programs retain their validated offering
                 # facts. Lifecycle links can advance without guessing GP names.
@@ -327,6 +343,12 @@ def publish_basic_notices(data, growth_notices, checked_at):
                     for field in OFFERING_FIELDS:
                         p.pop(field, None)
                     p.update(terms)
+                elif original['institution_id'] == 'pck_pension' and pck_programs.offering_sources(original):
+                    # Refresh only sourced dates for the old reviewed round;
+                    # never reinterpret its GP list or combined budget.
+                    for field in ('deadline', 'deadline_precision', 'extraction_evidence'):
+                        if field in terms:
+                            p[field] = copy.deepcopy(terms[field])
             else:
                 identity = original['institution_id'] + '-' + original['date'][:4] + '-' + hashlib.sha256(original['url'].encode()).hexdigest()[:16]
                 p = {'id': identity, 'institution_id': original['institution_id'],

@@ -18,7 +18,7 @@ jobs:
       - name: Install official attachment readers
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
       - name: Test observed board and bounded attachment contracts
-        run: python3 -m unittest services.lp.tests.test_lp_board_adapter_pck services.lp.tests.test_lp_attachment_text services.lp.tests.test_collect_lp_institution_boards
+        run: python3 -m unittest services.lp.tests.test_lp_board_adapter_pck services.lp.tests.test_lp_attachment_text services.lp.tests.test_collect_lp_institution_boards services.lp.tests.test_lp_pck_programs
       - name: Inspect observed official listing and detail markup without DB writes
         run: python3 scripts/inspect_lp_pck_board.py
       - name: Collect and replay PCK official bodies and offering attachments

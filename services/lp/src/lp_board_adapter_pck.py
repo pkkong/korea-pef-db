@@ -115,7 +115,13 @@ def parse_detail(html, url, config):
     # The source sometimes pastes a second content div inside the first one.
     contents = list(root.nodes('div', 'sboard_cont_details'))
     outer = [n for n in contents if not any(n in list(parent.nodes()) for parent in contents if parent is not n)]
-    body = _one(outer, 'PCK detail body').clean()
+    content = _one(outer, 'PCK detail body')
+    body = content.clean()
+    related = set()
+    for a in content.nodes('a'):
+        target = urljoin(url, a.attrs.get('href', ''))
+        if urlsplit(target).path == DETAIL_PATH:
+            related.add(canonical_notice(target))
     if not title or not body:
         raise ValueError('PCK title or body missing')
     attachments = {}
@@ -132,4 +138,5 @@ def parse_detail(html, url, config):
                     or a.clean() != names[0]):
                 raise ValueError('PCK attachment board, filename or observed label mismatch')
             attachments[target] = {'url': target, 'name': names[0]}
-    return {'title': title, 'date': stamps[0], 'body': body, 'attachments': list(attachments.values())}
+    return {'title': title, 'date': stamps[0], 'body': body, 'attachments': list(attachments.values()),
+            'related_notice_urls': sorted(related)}

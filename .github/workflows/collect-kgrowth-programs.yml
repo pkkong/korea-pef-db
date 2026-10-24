@@ -149,6 +149,8 @@ jobs:
           psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 --file services/lp/supabase/migrations/20260929090000_lp_review.sql
       - name: Verify review access boundary
         run: psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 --file services/lp/tests/check_lp_review_access.sql
+      - name: Test PCK track and round publication contracts
+        run: python3 -m unittest services.lp.tests.test_lp_pck_programs
       - name: Test collection and publishing contracts
         run: python3 -m unittest services.lp.tests.test_lp_attachment_text services.lp.tests.test_kgrowth_notice_terms services.lp.tests.test_lp_review_preview services.lp.tests.test_lp_review_decisions services.lp.tests.test_kgrowth_collection services.lp.tests.test_kgrowth_program_review services.lp.tests.test_collect_ktcu_program services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_kexim_programs services.lp.tests.test_collect_kdb_related services.lp.tests.test_collect_priority_lp_programs services.lp.tests.test_lp_notice_triage services.lp.tests.test_lp_notice_terms services.lp.tests.test_lp_joint_terms services.lp.tests.test_lp_program_service services.lp.tests.test_lp_program_publish services.lp.tests.test_lp_notice_publication services.lp.tests.test_lp_notice_stages
       - name: Receive official KEXIM evidence
