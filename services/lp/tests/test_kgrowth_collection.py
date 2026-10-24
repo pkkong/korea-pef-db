@@ -63,6 +63,19 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(result["review"][0]["source_id"], "9999")
         self.assertEqual(len(result["programs"][0]["events"]), 4)
 
+    def test_official_response_size_limit_is_enforced_without_retry(self):
+        from unittest.mock import MagicMock
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.geturl.return_value = c.LIST_URL
+        response.read.return_value = b'x' * (12 * 1024 * 1024 + 1)
+        with patch.object(c, 'build_opener', return_value=MagicMock(open=MagicMock(return_value=response))) as opener:
+            fetch = c.official_fetcher()
+            with self.assertRaisesRegex(ValueError, 'exceeds 12 MiB'):
+                fetch(c.LIST_URL)
+        response.read.assert_called_once_with(12 * 1024 * 1024 + 1)
+        self.assertEqual(opener.return_value.open.call_count, 1)
+
     def test_listing_pagination_detects_new_notice_without_registered_id(self):
         self.docs[c.LIST_URL] += b'<a href="Javascript:ListView(2,1,0)">2</a>'
         self.docs[c.LIST_URL+'&page=2'] = b'<a href="notice_view.asp?idx=987654">new</a>'

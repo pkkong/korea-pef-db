@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Discover official notices and retain verified attachment body evidence.
 
-Failure never replaces an existing output. The publisher independently checks
+Collection failure never replaces an existing output. Listing-only diagnostics
+retain incomplete evidence with an unsuccessful exit. The publisher checks
 source-derived terms before refreshing or introducing any public program.
 """
 import argparse

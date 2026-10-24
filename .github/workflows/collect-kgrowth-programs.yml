@@ -186,7 +186,7 @@ jobs:
           python3 services/lp/src/publish_lp_programs.py --export-baseline /tmp/lp-baseline.json
           python3 services/lp/src/publish_lp_programs.py --export-source-index /tmp/lp-source-index.json
       - name: Collect official announcements
-        run: python3 services/lp/src/collect_kgrowth_programs.py --baseline /tmp/lp-baseline.json --output /tmp/kgrowth-collection.json
+        run: python3 services/lp/src/collect_kgrowth_programs.py --baseline /tmp/lp-baseline.json --lookback-days 365 --listing-pages 20 --output /tmp/kgrowth-collection.json
       - name: Collect Korea Post, KTCU, and KEXIM announcements
         run: python3 services/lp/src/collect_priority_lp_programs.py --koreapost-input /tmp/koreapost-collection.json --kexim-input /tmp/kexim-collection.json --output /tmp/lp-priority-collection.json
       - name: Find earlier and remaining institution recruitment originals
