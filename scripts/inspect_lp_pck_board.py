@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import re
 import sys
+from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit, urlunsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -33,17 +34,24 @@ def main():
         (folder / name).write_text(html)
         report['receipts'].append({'url': url, 'sha256': digest, 'file': name})
         return _Document(html).root
-    details = set()
+    details = {}
     for term in ('', '위탁', '출자'):
         p = urlsplit(listing); q = dict(parse_qs(p.query)); q = {k: v[0] for k, v in q.items()}
         q.update(search_select='subject', search_text=term, page='1')
         for a in keep(urlunsplit(p._replace(query=urlencode(q)))).nodes('a', 'sboard_list_sbj'):
             if re.search('위탁|운용사|출자', a.clean()) and not re.search('채용', a.clean()):
-                details.add(urljoin(listing, a.attrs.get('href', '')))
-    report['detail_urls'] = sorted(details)
-    if len(details) > 12:
-        raise ValueError('PCK diagnostic detail limit reached')
-    for url in sorted(details):
+                target = urljoin(listing, a.attrs.get('href', ''))
+                query = parse_qs(urlsplit(target).query)
+                cells = [n for n in a.parent.parent.children if getattr(n, 'tag', None) == 'td']
+                stamp = cells[3].clean()
+                if stamp[:4].isdigit() and int(stamp[:4]) >= datetime.now(timezone.utc).year - 3:
+                    if query.get('board_seq') != ['1'] or query.get('board_sub_seq') != ['1'] or len(query.get('seq', [])) != 1:
+                        raise ValueError('Observed PCK notice board mismatch')
+                    canonical = urlunsplit(urlsplit(target)._replace(query=urlencode({k: query[k][0] for k in ('board_seq', 'board_sub_seq', 'seq')})))
+                    details[canonical] = stamp
+    report['detail_urls'] = sorted(details, key=lambda u: (details[u], u), reverse=True)
+    report['detail_limit_reached'] = len(details) > 12
+    for url in report['detail_urls'][:12]:
         keep(url)
     (folder / 'inspection.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
     print(json.dumps({'listing_pages': 3, 'details': len(details), 'receipts': len(report['receipts'])}))
