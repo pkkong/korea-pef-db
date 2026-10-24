@@ -46,7 +46,7 @@ OFFERING_FIELDS = (
 )
 STAGES = {'모집 공고': 'announcement', '접수 결과': 'application',
           '1차 심사 결과': 'screening', '우선협상대상자': 'selection',
-          '선정 결과': 'selection', '변경 공고': 'announcement'}
+          '선정 결과': 'selection', '최종 선정': 'selection', '변경 공고': 'announcement'}
 
 
 def _identity(n):
@@ -248,7 +248,10 @@ def _refresh(p, members, checked_at):
         if p['institution_id'] == 'pck_pension':
             previous = next((e for e in existing_events.values() if pck_programs._canonical(e['url']) == n['url']), None)
             if previous:
-                existing_events[previous['url']] = {**_event(n), 'url': previous['url']}
+                event = _event(n)
+                if previous['type'] == '최종 선정' and event['type'] == '선정 결과':
+                    event['type'] = previous['type']
+                existing_events[previous['url']] = {**event, 'url': previous['url']}
                 continue
         existing_events.setdefault(n['url'], _event(n))
     p['events'] = sorted(existing_events.values(), key=lambda e: (e['date'], e['url']))

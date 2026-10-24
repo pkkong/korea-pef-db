@@ -6,6 +6,7 @@ from urllib.parse import parse_qs, urlsplit
 from services.lp.src import collect_lp_institution_boards as boards
 from services.lp.src import lp_pck_programs as pck
 from services.lp.src.lp_notice_publication import publish_basic_notices
+from services.lp.src.lp_program_service import validate
 from services.lp.tests.test_lp_board_adapter_pck import CONFIG, TITLE, detail_url, listing, detail, docx
 
 OFFERING = '''2026년도 하반기 대체투자 위탁운용사 선정 공고
@@ -59,7 +60,7 @@ def collect(text=OFFERING, extra=None):
 
 def old_program():
     return {'id':'old-pck-pe','institution_id':'pck_pension','institution_name':'총회연금재단','title':TITLE,
-            'asset_scope':'PE','status':'선정 완료','selected_gps':[{'name':'기존 검증 GP'}],
+            'asset_scope':'PE','status':'선정 완료','selected_gps':[{'name':'기존 검증 GP','source_url':detail_url(991003),'asset_scope':'PE'}],
             'events':[{'type':'모집 공고','date':'2026-07-08','title':TITLE,'url':detail_url(991001)},
                       {'type':'최종 선정','date':'2026-08-11','title':'기존 결과','url':detail_url(991003)}]}
 
@@ -78,6 +79,8 @@ class PckProgramTests(unittest.TestCase):
         old=next(p for p in programs if p['id']=='old-pck-pe')
         self.assertEqual(old['selected_gps'],old_program()['selected_gps']);self.assertEqual(old['status'],'선정 완료')
         self.assertNotIn(detail_url(991002),[e['url'] for e in old['events']])
+        validate({'as_of':r['checked_at'][:10],'programs':programs})
+        self.assertEqual(next(e['type'] for e in old['events'] if e['url']==detail_url(991003)), '최종 선정')
 
     def test_missing_separate_track_or_form_only_evidence_never_qualifies_pe(self):
         for raw in [OFFERING.replace('각각 별도 제출함','함께 제출함'),
