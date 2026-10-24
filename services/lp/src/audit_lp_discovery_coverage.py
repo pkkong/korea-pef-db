@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+import csv
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -109,6 +110,16 @@ def validate_payload(payload):
     return clean
 
 
+def load_directory_aliases(root=ROOT):
+    """Identify stored directory entities without extending collection scope."""
+    result = {}
+    with (root/'data/lp_institutions.csv').open(encoding='utf-8', newline='') as stream:
+        for row in csv.DictReader(stream):
+            names = [row['lp_name'], *row.get('aliases', '').split(';')]
+            result.setdefault(row['lp_code'], set()).update(name.strip() for name in names if name.strip())
+    return result
+
+
 def _issuer(site, title, aliases):
     normalized = normalize_title(site)
     exact = {code for code, names in aliases.items() if normalized in {normalize_title(n) for n in names}}
@@ -177,9 +188,14 @@ def title_scope(title):
     return scope, {'pe': pe, 'vc': vc, 'blind': blind}
 
 
-def audit_coverage(payload, documents=(), *, aliases=None, channels=None, observed_at=None):
+def audit_coverage(payload, documents=(), *, aliases=None, channels=None, observed_at=None, directory_aliases=None):
     items = validate_payload(payload)
+    # Explicitly injected aliases remain a complete test/caller boundary unless
+    # the caller also supplies a directory. Production loads both independently.
+    use_directory = aliases is None
     aliases = load_aliases() if aliases is None else aliases
+    directory_aliases = (load_directory_aliases() if use_directory else {}) if directory_aliases is None else directory_aliases
+    outside_aliases = {code: names for code, names in directory_aliases.items() if code not in aliases}
     if channels is None:
         channels = load_channels()
         for channel in json.loads((ROOT/'data/lp_institution_board_channels.json').read_text())['channels']:
@@ -191,6 +207,16 @@ def audit_coverage(payload, documents=(), *, aliases=None, channels=None, observ
     results = []
     for row in items:
         institution, identity = _issuer(row['site'], row['title'], aliases)
+        identified_outside = False
+        directory_institution, directory_identity = _issuer(row['site'], row['title'], outside_aliases)
+        if identity == 'site_exact' and directory_identity != 'unmatched':
+            institution, identity = None, 'ambiguous'
+        elif identity == 'unmatched':
+            if directory_institution:
+                institution = directory_institution
+                identity, identified_outside = 'directory_site_exact', True
+            elif directory_identity == 'ambiguous':
+                identity = 'ambiguous'
         url = normalize_url(row['url'])
         host = urlsplit(url).hostname.removeprefix('www.')
         scope, mentions = title_scope(row['title'])
@@ -201,11 +227,11 @@ def audit_coverage(payload, documents=(), *, aliases=None, channels=None, observ
         else:
             source_status, official_url = 'external_source_unverified', None
         matching = None
-        if institution and (institution, url) in urls:
+        if not identified_outside and institution and (institution, url) in urls:
             matching = 'url'
-        elif institution and (institution, normalize_title(row['title'])) in titles:
+        elif not identified_outside and institution and (institution, normalize_title(row['title'])) in titles:
             matching = 'title'
-        disposition = 'already_known' if matching else 'institution_ambiguous' if identity == 'ambiguous' else 'institution_unknown' if not institution else scope if scope in {'outside_policy', 'vc_explicit', 'mixed_pe_vc'} else source_status
+        disposition = 'identified_outside_collection' if identified_outside else 'already_known' if matching else 'institution_ambiguous' if identity == 'ambiguous' else 'institution_unknown' if not institution else scope if scope in {'outside_policy', 'vc_explicit', 'mixed_pe_vc'} else source_status
         results.append({**row, 'institution_id': institution, 'identity': identity,
                         'title_mentions': mentions, 'scope': scope, 'source_status': source_status,
                         'official_url': official_url, 'status': disposition, 'known_match': matching})

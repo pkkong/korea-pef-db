@@ -32,6 +32,64 @@ def compare(*rows, documents=(), aliases=ALIASES):
 
 
 class DiscoveryCoverageTests(unittest.TestCase):
+    def test_known_directory_entities_are_identified_but_held_outside_collection(self):
+        for name, code in [('한국벤처투자', 'kvic'), ('농업정책보험금융원', 'kafi')]:
+            row = notice(site=name)
+            documents = [{'notices': [{'institution_id': code, 'url': row['url'], 'title': row['title']}]}]
+            item = audit.audit_coverage(payload(row), documents)['items'][0]
+            self.assertEqual(item['institution_id'], code)
+            self.assertEqual(item['identity'], 'directory_site_exact')
+            self.assertEqual(item['status'], 'identified_outside_collection')
+            self.assertIsNone(item['known_match'])
+            self.assertEqual(item['scope'], 'pe_blind_title')
+            self.assertIsNone(item['official_url'])
+        row = notice(site='농업정책보험금융원', url='https://www.apfs.kr/front/notice')
+        item = audit.audit_coverage(payload(row))['items'][0]
+        self.assertEqual(item['status'], 'identified_outside_collection')
+
+    def test_directory_ambiguity_and_scoped_ambiguity_remain_held(self):
+        directory = {'one': ['공통이름'], 'two': ['공통이름']}
+        item = audit.audit_coverage(payload(notice(site='공통이름')), aliases=ALIASES,
+                                    channels=CHANNELS, directory_aliases=directory)['items'][0]
+        self.assertEqual(item['status'], 'institution_ambiguous')
+        self.assertIsNone(item['institution_id'])
+        item = audit.audit_coverage(payload(notice(site='공통이름')),
+            aliases={'ktcu':['공통이름'], 'ibk':['공통이름']}, channels=CHANNELS,
+            directory_aliases={'outside':['공통이름']})['items'][0]
+        self.assertEqual(item['status'], 'institution_ambiguous')
+        self.assertIsNone(item['institution_id'])
+
+    def test_cross_boundary_alias_collision_cannot_borrow_target_identity(self):
+        row = notice(site='공통이름')
+        documents = [{'notices': [{'institution_id':'ktcu', 'title':row['title'], 'url':row['url']}]}]
+        for directory in [{'outside':['공통이름']},
+                          {'outside':['공통이름'], 'other':['공통이름']}]:
+            item = audit.audit_coverage(payload(row), documents,
+                aliases={'ktcu':['공통이름']}, channels=CHANNELS,
+                directory_aliases=directory)['items'][0]
+            self.assertEqual(item['status'], 'institution_ambiguous')
+            self.assertIsNone(item['institution_id'])
+            self.assertIsNone(item['known_match'])
+        item = audit.audit_coverage(payload(row), documents,
+            aliases={'ktcu':['공통이름']}, channels=CHANNELS,
+            directory_aliases={'outside':['다른이름']})['items'][0]
+        self.assertEqual(item['status'], 'already_known')
+        self.assertEqual(item['institution_id'], 'ktcu')
+
+    def test_injected_aliases_do_not_implicitly_load_other_entities(self):
+        item = compare(notice(site='한국벤처투자'))['items'][0]
+        self.assertEqual(item['status'], 'institution_unknown')
+        with patch.object(audit, 'load_directory_aliases', side_effect=AssertionError('unexpected directory read')):
+            compare(notice(site='한국벤처투자'))
+
+    def test_reposters_ocio_and_gp_names_cannot_borrow_title_identity(self):
+        for site in ['한국벤처캐피탈협회', '삼성자산운용', '노틱인베스트먼트']:
+            item = audit.audit_coverage(payload(notice(site=site,
+                title='한국벤처투자 산재보험기금 한국성장금융 국내 PEF 모집')),
+                directory_aliases={'kvic':['한국벤처투자']})['items'][0]
+            self.assertEqual(item['status'], 'institution_unknown')
+            self.assertIsNone(item['institution_id'])
+
     def test_mirror_never_infers_original_or_copies_facts(self):
         row = notice(scope='verified_domestic_pe_blind', commitment_amount_krw=999,
                      selected_gps=[{'name': 'Secret GP'}], body='private', deadline='2026-12-01')
