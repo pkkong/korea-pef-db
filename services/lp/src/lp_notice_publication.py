@@ -46,7 +46,7 @@ OFFERING_FIELDS = (
 )
 STAGES = {'모집 공고': 'announcement', '접수 결과': 'application',
           '1차 심사 결과': 'screening', '우선협상대상자': 'selection',
-          '선정 결과': 'selection', '최종 선정': 'selection', '변경 공고': 'announcement'}
+          '선정 결과': 'selection', '변경 공고': 'announcement'}
 
 
 def _identity(n):
@@ -243,6 +243,9 @@ def _schedule_order(stages):
 
 
 def _refresh(p, members, checked_at):
+    phases = dict(STAGES)
+    if p['institution_id'] == 'pck_pension':
+        phases['최종 선정'] = 'selection'
     existing_events = {e['url']: copy.deepcopy(e) for e in p['events']}
     for n in members:
         if p['institution_id'] == 'pck_pension':
@@ -256,12 +259,12 @@ def _refresh(p, members, checked_at):
         existing_events.setdefault(n['url'], _event(n))
     p['events'] = sorted(existing_events.values(), key=lambda e: (e['date'], e['url']))
     changed = any(_event(n)['type'] == '변경 공고' for n in members)
-    confirmed = {STAGES[e['type']] for e in p['events'] if e['type'] in STAGES}
+    confirmed = {phases[e['type']] for e in p['events'] if e['type'] in phases}
     stages = [s for s in p.get('schedule_stages', []) if not changed
               and s.get('status') == 'planned' and s['stage'] not in confirmed
               and s.get('source_url') in {e['url'] for e in p['events']}]
     for event in p['events']:
-        kind = STAGES.get(event['type'])
+        kind = phases.get(event['type'])
         if kind:
             stages.append({'stage': kind, 'label': event['type'], 'original_label': event['type'],
                            'date': event['date'], 'precision': 'date', 'status': 'confirmed',
