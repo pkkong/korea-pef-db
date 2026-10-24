@@ -10,6 +10,9 @@ on:
         type: choice
         default: cu
         options: [cu, kfcc, kfinco, tp, all]
+      verify_kdb_dns_recovery:
+        type: boolean
+        default: false
       verify_cu_regional_recovery:
         type: boolean
         default: false
@@ -40,7 +43,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compare bounded anonymous official requests
-        if: ${{ !inputs.verify_cu_regional_recovery }}
+        if: ${{ !inputs.verify_cu_regional_recovery && !inputs.verify_kdb_dns_recovery }}
         shell: python3 {0}
         env:
           DIAGNOSE_INSTITUTION: ${{ inputs.institution }}
@@ -285,8 +288,21 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
       - name: Install readers for explicit CU recovery verification
-        if: inputs.verify_cu_regional_recovery || inputs.verify_cu_recovery || inputs.verify_institution_boards || inputs.verify_dns_recovery || inputs.verify_tp_collection
+        if: inputs.verify_kdb_dns_recovery || inputs.verify_cu_regional_recovery || inputs.verify_cu_recovery || inputs.verify_institution_boards || inputs.verify_dns_recovery || inputs.verify_tp_collection
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
+      - name: Verify KDB alternate DNS with real official documents
+        if: inputs.verify_kdb_dns_recovery
+        run: python3 scripts/verify_lp_kdb_dns.py --output /tmp/lp-kdb-dns-verification.json
+      - name: Keep KDB public DNS verification evidence
+        if: always() && inputs.verify_kdb_dns_recovery
+        uses: actions/upload-artifact@v4
+        with:
+          name: lp-kdb-dns-verification
+          path: |
+            /tmp/lp-kdb-dns-verification.json
+            /tmp/lp-kdb-injected-collection.json
+          retention-days: 7
+          if-no-files-found: error
       - name: Verify two injected CU DNS failures with real Seoul documents
         if: inputs.verify_cu_regional_recovery
         env:

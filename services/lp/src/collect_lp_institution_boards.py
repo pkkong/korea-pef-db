@@ -24,6 +24,7 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 try:
     from .lp_ipv4_transport import IPv4HTTPSHandler
+    from .lp_kdb_dns import resolve_kdb_ipv4
     from .lp_cu_transport import CuDnsError, fetch_cu_ipv4
     from .lp_regional_transport import fetch_kfcc, fetch_cu
     from .lp_transport_errors import transient_dns
@@ -34,6 +35,7 @@ try:
     from . import lp_board_adapter_kfcc as kfcc, lp_board_adapters_banks as banks
 except ImportError:
     from lp_ipv4_transport import IPv4HTTPSHandler
+    from lp_kdb_dns import resolve_kdb_ipv4
     from lp_cu_transport import CuDnsError, fetch_cu_ipv4
     from lp_regional_transport import fetch_kfcc, fetch_cu
     from lp_transport_errors import transient_dns
@@ -121,11 +123,18 @@ class Session:
         self.regional_fetches = 0
         self.native_ipv4_fetches = 0
         self.dns_ipv4_fetches = 0
+        self.alternate_dns_lookups = 0
         cookies = CookieJar()
         self.opener = build_opener(OfficialRedirect({safe_host(config['listing_url'])}),
                                    HTTPCookieProcessor(cookies))
         self.ipv4_opener = build_opener(OfficialRedirect({safe_host(config['listing_url'])}),
-                                        HTTPCookieProcessor(cookies), IPv4HTTPSHandler())
+                                        HTTPCookieProcessor(cookies), IPv4HTTPSHandler(
+                                            fallback_resolver=self._resolve_kdb_dns if config['institution_id'] == 'kdb' else None))
+
+    def _resolve_kdb_dns(self, host, port, timeout):
+        rows = resolve_kdb_ipv4(host, port, timeout)
+        self.alternate_dns_lookups += 1
+        return rows
 
     def __call__(self, url, referer=None):
         _same_host(url, self.config)
@@ -296,6 +305,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
         coverage['regional_fetch_count'] = getattr(fetch, 'regional_fetches', 0)
         coverage['native_ipv4_fetch_count'] = getattr(fetch, 'native_ipv4_fetches', 0)
         coverage['dns_ipv4_fetch_count'] = getattr(fetch, 'dns_ipv4_fetches', 0)
+        coverage['alternate_dns_lookup_count'] = getattr(fetch, 'alternate_dns_lookups', 0)
     return result
 
 
