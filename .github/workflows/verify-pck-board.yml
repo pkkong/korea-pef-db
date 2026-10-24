@@ -19,10 +19,9 @@ jobs:
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
       - name: Test observed board and bounded attachment contracts
         run: python3 -m unittest services.lp.tests.test_lp_board_adapter_pck services.lp.tests.test_lp_attachment_text services.lp.tests.test_collect_lp_institution_boards services.lp.tests.test_lp_pck_programs
-      - name: Inspect observed official listing and detail markup without DB writes
-        run: python3 scripts/inspect_lp_pck_board.py
       - name: Collect and replay PCK official bodies and offering attachments
         run: |
+          mkdir -p /tmp/lp-pck-inspection
           python3 services/lp/src/collect_lp_institution_boards.py --institution pck_pension --output /tmp/lp-pck-inspection/collection.json
           python3 - <<'PY'
           import json
@@ -32,6 +31,27 @@ jobs:
           for n in report['notices']: validate_notice(n,report['checked_at'])
           assert not report['holds'], 'PCK source or attachment errors remain'
           print('Validated PCK bodies:',len(report['notices']))
+          PY
+      - name: Validate existing selection links and generate complete pages without DB writes
+        env:
+          PYTHONPATH: services/lp/src
+        run: |
+          python3 - <<'PY'
+          import json,tempfile
+          from pathlib import Path
+          from lp_notice_publication import publish_basic_notices
+          from lp_program_service import validate,build
+          report=json.load(open('/tmp/lp-pck-inspection/collection.json'))
+          data=json.load(open('data/lp_programs_pilot.json'))
+          data['institution_notices']=report['notices']
+          data['programs'],holds=publish_basic_notices(data,[],report['checked_at'])
+          data['as_of']=report['checked_at'][:10]
+          validate(data)
+          with tempfile.TemporaryDirectory() as folder:
+              build(data,Path(folder))
+              print('Validated complete LP pages:',len(list(Path(folder).glob('*.html'))))
+          Path('/tmp/lp-pck-inspection/publication-preflight.json').write_text(json.dumps({
+              'program_ids':[p['id'] for p in data['programs']], 'holds':holds},ensure_ascii=False))
           PY
       - uses: actions/upload-artifact@v4
         if: always()
