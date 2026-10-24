@@ -20,10 +20,9 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener
 from kgrowth_program_review import recipes, candidate_queue, link_suggestions, reviewed_programs
 from lp_attachment_text import extract_attachment
 from kgrowth_notice_terms import discovery as discover_terms
+from kgrowth_listing import BASE, LIST_URL, discover_window
 
 ROOT = Path(__file__).resolve().parents[3]
-BASE = "https://www.kgrowth.or.kr/"
-LIST_URL = BASE + "notice.asp?str_type=1&tab=1"
 PROGRAM_ID = "kgrowth-2026-bank-valueup-3"
 KNOWN_IDS = (1047, 1075, 1090, 1100)
 KNOWN_EVENTS = {1047: ("2026-06-04", "모집 공고"), 1075: ("2026-07-07", "접수 현황"),
@@ -128,8 +127,7 @@ def extract_teams(body, expected, bullets=True):
     return names
 
 
-def collect(seed, baseline=None, fetch=None, listing_pages=3):
-    baseline = baseline or {}
+def official_fetcher():
     opener = build_opener(HTTPCookieProcessor(CookieJar()))
 
     def get(url, referer=LIST_URL):
@@ -139,19 +137,33 @@ def collect(seed, baseline=None, fetch=None, listing_pages=3):
                 with opener.open(request, timeout=25) as response:
                     if urlparse(response.geturl()).hostname != "www.kgrowth.or.kr":
                         raise ValueError("Unexpected official source redirect")
-                    return response.read()
+                    raw = response.read(12 * 1024 * 1024 + 1)
+                    if len(raw) > 12 * 1024 * 1024:
+                        raise ValueError('Official Korea Growth response exceeds 12 MiB')
+                    return raw
             except (URLError, TimeoutError):
                 if attempt == 2:
                     raise
                 time.sleep(attempt + 1)
+    return get
 
-    fetch = fetch or get
+
+def collect(seed, baseline=None, fetch=None, listing_pages=3, *, lookback_days=None, as_of=None):
+    baseline = baseline or {}
+    fetch = fetch or official_fetcher()
     checked = datetime.now(timezone.utc).isoformat()
     if not 1 <= listing_pages <= 20:
         raise ValueError("Listing page limit must be between 1 and 20")
     discovered = set()
     listing_urls = []
-    pending = [LIST_URL]
+    inventory = None
+    if lookback_days is not None:
+        inventory = discover_window(fetch, days=lookback_days, as_of=as_of, max_pages=listing_pages)
+        if not inventory['complete']:
+            raise ValueError('Korea Growth date discovery incomplete: ' + inventory['boundary'])
+        discovered = {int(row['source_id']) for row in inventory['rows']}
+        listing_urls = [receipt['url'] for receipt in inventory['receipts']]
+    pending = [] if inventory is not None else [LIST_URL]
     while pending and len(listing_urls) < listing_pages:
         listing_url = pending.pop(0)
         listing = Page()
@@ -180,9 +192,12 @@ def collect(seed, baseline=None, fetch=None, listing_pages=3):
                baseline.get('accepted_notices', baseline.get('notices', [])))
                if str(n.get('source_id', '')).isdigit()}
     approved_sources = {int(s['source_id']):s for r in recipes() for s in r['sources']}
+    listing_dates = {row['source_id']: row['date'] for row in inventory['rows']} if inventory else {}
     notices = []
     for idx in sorted(discovered | tracked | set(KNOWN_IDS) | set(approved_sources)):
         notice = parse_notice(idx, fetch(notice_url(idx)))
+        if str(idx) in listing_dates and listing_dates[str(idx)] != notice['date']:
+            raise ValueError(f'Official listing and notice {idx} publication dates differ')
         notice["checked_at"] = checked
         notice["attachment_hashes"] = {}
         if notice['attachments']:
@@ -259,6 +274,8 @@ def collect(seed, baseline=None, fetch=None, listing_pages=3):
                                  "readable": bool(n.get('attachment_texts', {}).get(url)),
                                  "reason": n.get('attachment_errors', {}).get(url, '')}
                                 for n in notices for url, digest in n.get('attachment_hashes', {}).items()]}
+    if inventory is not None:
+        coverage['date_discovery'] = inventory
     return {"checked_at": checked, "notices": notices, "tracked_notices": notices,
             "accepted_notices": accepted,
             "candidate_groups": candidate_queue([n for n in notices if n['source_id'] in {i['source_id'] for i in review}]),
@@ -275,13 +292,28 @@ def main():
     parser.add_argument("--baseline", type=Path)
     parser.add_argument("--seed", type=Path, default=ROOT / "data/lp_programs_pilot.json")
     parser.add_argument("--listing-pages", type=int, default=3)
+    parser.add_argument("--lookback-days", type=int, help="Discover by official publication date, bounded by --listing-pages")
+    parser.add_argument("--as-of", help="Inclusive publication window end (YYYY-MM-DD), default current Seoul date")
+    parser.add_argument("--inventory-only", action="store_true", help="Keep listing evidence without details, DB writes or publication")
     args = parser.parse_args()
     baseline = json.loads(args.baseline.read_text()) if args.baseline else None
-    result = collect(json.loads(args.seed.read_text()), baseline, listing_pages=args.listing_pages)
+    if args.inventory_only:
+        if args.lookback_days is None:
+            parser.error('--inventory-only requires --lookback-days')
+        result = discover_window(official_fetcher(), days=args.lookback_days, as_of=args.as_of, max_pages=args.listing_pages)
+    else:
+        result = collect(json.loads(args.seed.read_text()), baseline, listing_pages=args.listing_pages,
+                         lookback_days=args.lookback_days, as_of=args.as_of)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.output.with_suffix(args.output.suffix + ".tmp")
     temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     temporary.replace(args.output)
+    if args.inventory_only:
+        print(json.dumps({key: value for key, value in result.items() if key not in {'rows', 'receipts'}} |
+                         {'rows': len(result['rows']), 'pages': len(result['receipts'])}))
+        if not result['complete']:
+            raise SystemExit('Korea Growth date discovery incomplete: ' + result['boundary'])
+        return
     lines = ['# 한국성장금융 공고 검토', '', '## 신규 공개 대상', '']
     lines += [f"- {p['title']}" for p in result['reviewed_programs']]
     coverage = result['collection_coverage']
@@ -289,6 +321,9 @@ def main():
               f"- 공식 목록 {len(coverage['listing_urls'])}페이지 · 발견 {coverage['discovered_count']}건 · 수집 {coverage['fetched_count']}건",
               f"- 발견 후 누락: {len(coverage['missing_source_ids'])}건",
               f"- 첨부 {len(coverage['attachments'])}개 · 본문 읽기 완료 {sum(a['readable'] for a in coverage['attachments'])}개"]
+    if coverage.get('date_discovery'):
+        inventory = coverage['date_discovery']
+        lines += [f"- 게시일 범위 {inventory['window']['start']}~{inventory['window']['end']} · 탐색 경계 {inventory['boundary']}"]
     lines += ['', '## 첨부 읽기 실패', '']
     lines += [f"- [{a['source_id']}]({a['source_url']}): {a['reason']}" for a in coverage['attachments']
               if not a['readable'] and a.get('reason')]

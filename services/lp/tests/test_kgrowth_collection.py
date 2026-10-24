@@ -43,7 +43,7 @@ class CollectionTests(unittest.TestCase):
             def __enter__(self): return self
             def __exit__(self, *_): pass
             def geturl(self): return self.url
-            def read(self): return self.body
+            def read(self, limit=-1): return self.body[:limit] if limit >= 0 else self.body
         failures = []
         def open_request(request, timeout):
             url = request.full_url
@@ -110,6 +110,31 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(notice['body'], '변경된 공고')
         self.assertIn('9999', [n['source_id'] for n in second['review']])
         self.assertEqual(first['accepted_notices'], second['accepted_notices'])
+
+    def test_date_window_fetches_prior_year_and_keeps_older_tracked_notices(self):
+        from services.lp.tests.test_kgrowth_listing import page
+        baseline = c.collect(self.seed, fetch=self.fetch)
+        self.docs[c.LIST_URL] = page([('3', '987654', '과거 사업', '2025-12-15')]).encode('cp949')
+        self.docs[c.LIST_URL + '&page=2'] = page([('1', '987653', '오래된 사업', '2025-01-01')]).encode('cp949')
+        self.docs[c.notice_url(987654)] = html('과거 사업', '공고 원문', '2025-12-15')
+        result = c.collect(self.seed, baseline, self.fetch, listing_pages=20, lookback_days=365, as_of='2026-10-24')
+        self.assertEqual({n['source_id'] for n in result['notices']}, {'1047', '1075', '1090', '1100', '9999', '987654'})
+        self.assertEqual(result['collection_coverage']['discovered_count'], 1)
+        self.assertTrue(result['collection_coverage']['date_discovery']['complete'])
+        self.assertEqual(result['accepted_notices'], baseline['accepted_notices'])
+
+    def test_incomplete_year_does_not_start_details_or_replace_baseline(self):
+        from services.lp.tests.test_kgrowth_listing import page
+        self.docs[c.LIST_URL] = page([('1', '9999', '최신', '2026-10-24')]).encode('cp949')
+        with self.assertRaisesRegex(ValueError, 'discovery incomplete'):
+            c.collect(self.seed, fetch=self.fetch, listing_pages=1, lookback_days=365, as_of='2026-10-24')
+
+    def test_listing_detail_date_conflict_is_not_silently_accepted(self):
+        from services.lp.tests.test_kgrowth_listing import page
+        self.docs[c.LIST_URL] = page([('2', '9999', '최신', '2026-07-30')]).encode('cp949')
+        self.docs[c.LIST_URL + '&page=2'] = page([('1', '9998', '과거', '2025-01-01')]).encode('cp949')
+        with self.assertRaisesRegex(ValueError, 'publication dates differ'):
+            c.collect(self.seed, fetch=self.fetch, listing_pages=20, lookback_days=365, as_of='2026-10-24')
 
     def test_failure_raises_without_empty_program(self):
         self.docs[c.notice_url(1047)] = b'<html>error</html>'

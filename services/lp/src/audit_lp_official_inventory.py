@@ -19,11 +19,13 @@ try:
     from .audit_lp_discovery_coverage import extract_known, title_scope
     from .lp_board_adapters_pensions import _Document
     from .lp_notice_triage import notice_stage
+    from .kgrowth_listing import parse_listing as growth_rows
 except ImportError:
     import collect_lp_institution_boards as boards
     from audit_lp_discovery_coverage import extract_known, title_scope
     from lp_board_adapters_pensions import _Document
     from lp_notice_triage import notice_stage
+    from kgrowth_listing import parse_listing as growth_rows
 
 ROOT = Path(__file__).resolve().parents[3]
 CORE = {
@@ -86,6 +88,8 @@ def _date(text):
 
 
 def core_rows(institution, html, url):
+    if institution == 'kgrowth':
+        return [{**row, 'source_id': notice_key(institution, row['url'])} for row in growth_rows(html, url)]
     if '</html>' not in html.lower():raise ValueError('incomplete official listing')
     root=_Document(html).root
     nodes=root.nodes('li') if institution=='ktcu' else root.nodes('div','notice-list-item') if institution=='kexim' else root.nodes('tr')
@@ -113,10 +117,7 @@ def core_rows(institution, html, url):
         title=anchor.attrs.get('title') or anchor.clean()
         if not title:raise ValueError('missing listing title')
         num=next((n.clean() for n in node.nodes('span','num')), '')
-        if institution=='kgrowth':
-            cells=[n for n in node.children if getattr(n,'tag',None)=='td']
-            num=cells[0].clean() if cells else ''
-        pinned=(not num.isdigit()) if institution in {'kgrowth','ktcu'} else (institution=='kexim' and any(n.attrs.get('alt')=='공지' for n in node.nodes('img')))
+        pinned=(not num.isdigit()) if institution=='ktcu' else (institution=='kexim' and any(n.attrs.get('alt')=='공지' for n in node.nodes('img')))
         rows.append({'source_id':notice_key(institution,target),'title':title,'date':stamp,'url':target,'pinned':pinned})
     if not rows:
         if institution=='ktcu':containers=[n for n in root.nodes('ul') if n.attrs.get('id')=='ulList']

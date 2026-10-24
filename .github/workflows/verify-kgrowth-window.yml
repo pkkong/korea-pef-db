@@ -1,0 +1,39 @@
+name: Verify Korea Growth rolling-year discovery
+on:
+  workflow_dispatch:
+    inputs:
+      collect_documents:
+        type: boolean
+        default: false
+        description: Fetch official bodies and attachments after listing verification; no publication
+permissions:
+  contents: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install attachment readers
+        run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
+      - name: Verify date discovery and existing collection contracts
+        run: python3 -m unittest services.lp.tests.test_kgrowth_listing services.lp.tests.test_kgrowth_collection services.lp.tests.test_audit_lp_official_inventory
+      - name: Keep recent-year official listing evidence
+        run: python3 services/lp/src/collect_kgrowth_programs.py --lookback-days 365 --listing-pages 20 --inventory-only --output /tmp/kgrowth-window-inventory.json
+      - name: Verify discovered bodies and attachments without publication
+        if: inputs.collect_documents
+        run: python3 services/lp/src/collect_kgrowth_programs.py --lookback-days 365 --listing-pages 20 --output /tmp/kgrowth-window-collection.json
+      - name: Retain public source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kgrowth-window-verification
+          path: /tmp/kgrowth-window-*.json
+          if-no-files-found: error
+          retention-days: 7
