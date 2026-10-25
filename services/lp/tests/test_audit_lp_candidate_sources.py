@@ -33,7 +33,8 @@ class CandidateSourceTests(unittest.TestCase):
                 self.assertEqual(audit.official_scope(dict(title=title,body=body)), ('outside_policy', reason))
                 self.assertEqual(audit.official_scope(dict(title=title,body='원문 확인 불가')), ('scope_unconfirmed', None))
                 self.assertEqual(audit.official_scope(dict(title='국내 PE 블라인드 '+title,body=body)), ('scope_unconfirmed', None))
-        for body in ['투자대상 : 일본 비상장 주식', '투자대상 : 상장 주식 및 비상장 사모펀드']:
+        for body in ['투자대상 : 일본 비상장 주식', '투자대상 : 상장 주식 및 비상장 사모펀드',
+                     '투자대상 : 일본 상장 주식 및 경영참여형 PEF']:
             self.assertEqual(audit.official_scope(dict(title=cases[1][0],body=body)), ('scope_unconfirmed', None))
 
     def test_inventory_unknowns_are_resolved_without_manual_notice_selection(self):

@@ -41,7 +41,7 @@ def official_scope(source):
     title, body = source['title'], source['body']
     # A private-equity offer is not excluded because eligibility mentions listed
     # holdings, performance evaluation, or prior feasibility studies.
-    if re.search(r'(?<![A-Za-z])PEF?(?![A-Za-z])|기관전용|경영참여형', title, re.I):
+    if re.search(r'(?<![A-Za-z])PEF?(?![A-Za-z])|기관전용|경영참여형', title + ' ' + body, re.I):
         return 'scope_unconfirmed', None
     if ('사업타당성조사' in title and '지원사업' in title
             and '사업타당성조사 지원사업' in body and '신청기업' in body):
