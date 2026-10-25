@@ -36,6 +36,26 @@ def key_title(title, names):
     return normalize_title(title)
 
 
+def official_scope(source):
+    """Conservative exclusions from a verified detail body, never a feed title."""
+    title, body = source['title'], source['body']
+    # A private-equity offer is not excluded because eligibility mentions listed
+    # holdings, performance evaluation, or prior feasibility studies.
+    if re.search(r'(?<![A-Za-z])PEF?(?![A-Za-z])|기관전용|경영참여형', title, re.I):
+        return 'scope_unconfirmed', None
+    if ('사업타당성조사' in title and '지원사업' in title
+            and '사업타당성조사 지원사업' in body and '신청기업' in body):
+        return 'outside_policy', 'feasibility_study_support'
+    if (re.search(r'주식형.*(?:위탁운용사|운용사)', title)
+            and re.search(r'투자대상\s*[:：-]?\s*.{0,30}상장\s*주식', body)
+            and not re.search(r'비상장|사모펀드|기관전용', body)):
+        return 'outside_policy', 'listed_equity_mandate'
+    if ('성과평가' in title and re.search(r'성과평가\s*수행을\s*위한\s*평가기관\s*선정', body)
+            and '제한경쟁입찰' in body and '계약방법' in body):
+        return 'outside_policy', 'performance_evaluation_procurement'
+    return 'scope_unconfirmed', None
+
+
 def sema_identity(url, config):
     p = urlsplit(url); q = parse_qs(p.query)
     if (p.scheme != 'https' or p.hostname != 'www.sema.or.kr' or p.port not in {None, 443}
@@ -166,11 +186,14 @@ def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, se
             if source['date'] > end:
                 raise ValueError('Official candidate has a future publication date')
             source.update(institution_id=institution, checked_at=report['checked_at'], sha256=original_body_hash(source))
-            item.update(status='official_source_verified', official_notice=source)
+            scope, reason = official_scope(source)
+            item.update(status='official_source_verified', official_notice=source, classification=scope, scope_reason=reason)
         except (ValueError, KeyError, TypeError, OSError) as error:
             item['reason'] = str(error)
             report['holds'].append({'institution_id': institution, 'stage': 'official_candidate', 'reason': str(error)})
     report['summary'] = {'candidates': len(candidates), 'verified': sum(n['status'] == 'official_source_verified' for n in report['sources']),
+                         'outside_policy_verified': sum(n['classification'] == 'outside_policy' for n in report['sources']),
+                         'scope_unconfirmed': sum(n['classification'] == 'scope_unconfirmed' for n in report['sources']),
                          'unresolved': len(report['holds'])}
     return report
 

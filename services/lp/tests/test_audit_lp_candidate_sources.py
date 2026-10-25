@@ -23,6 +23,19 @@ def receipt():
 
 
 class CandidateSourceTests(unittest.TestCase):
+    def test_official_scope_requires_body_confirmation_and_preserves_pe(self):
+        cases = [
+            ('사업타당성조사 지원사업 결과', '사업타당성조사 지원사업 선정 결과는 신청기업 앞 통보', 'feasibility_study_support'),
+            ('일본주식형펀드 위탁운용사 공고', '투자대상 : 일본 상장 주식 펀드에 투자', 'listed_equity_mandate'),
+            ('모펀드 성과평가', '성과평가 수행을 위한 평가기관 선정 계약방법 제한경쟁입찰', 'performance_evaluation_procurement')]
+        for title, body, reason in cases:
+            with self.subTest(title=title):
+                self.assertEqual(audit.official_scope(dict(title=title,body=body)), ('outside_policy', reason))
+                self.assertEqual(audit.official_scope(dict(title=title,body='원문 확인 불가')), ('scope_unconfirmed', None))
+                self.assertEqual(audit.official_scope(dict(title='국내 PE 블라인드 '+title,body=body)), ('scope_unconfirmed', None))
+        for body in ['투자대상 : 일본 비상장 주식', '투자대상 : 상장 주식 및 비상장 사모펀드']:
+            self.assertEqual(audit.official_scope(dict(title=cases[1][0],body=body)), ('scope_unconfirmed', None))
+
     def test_inventory_unknowns_are_resolved_without_manual_notice_selection(self):
         from services.lp.tests.test_lp_board_adapters_banks import IBK_LIST,IBK_HTML,IBK_URL
         config=audit.load_configs()['ibk'];url=audit.inventory.page_url('ibk',config,'펀드',1,'2025-10-26','2026-10-25')

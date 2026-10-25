@@ -49,6 +49,23 @@ def fixture():
 
 
 class KeximCollectorTests(unittest.TestCase):
+    def test_attachmentless_body_ends_before_adjacent_fund_notice(self):
+        page = ('<h1 class="detail-view-title">지원사업 결과</h1><span title="작성일">2026.10.01</span>'
+                '<div class="detail-view-box"><p>사업타당성조사 지원사업</p><div>신청기업 안내</div></div>'
+                '<div class="detail-view-paging">국내 PE 블라인드펀드 선정 결과</div>')
+        n = kexim.parse_detail('123', page)
+        self.assertEqual(n['body'], '사업타당성조사 지원사업 신청기업 안내')
+        self.assertEqual(n['attachments'], [])
+        for invalid in [page.replace('신청기업 안내</div></div>', '신청기업 안내'),
+                        page + '<div class="detail-view-box">추가 본문</div>']:
+            with self.assertRaises(ValueError):
+                kexim.parse_detail('123', invalid)
+
+    def test_existing_attachment_body_fingerprint_is_preserved(self):
+        n = detail('123', 'PE 모집', '2026.10.01', '본문 <b>내용</b>', '/comm/getFile?fileNo=1')
+        expected = hashlib.sha256(json.dumps(['PE 모집', '2026-10-01', '본문 내용'], ensure_ascii=False).encode()).hexdigest()
+        self.assertEqual(n['sha256'], expected)
+
     def test_verified_cookie_redirect_keeps_original_host(self):
         class Response(BytesIO):
             def geturl(self):

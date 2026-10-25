@@ -18,6 +18,7 @@ import tempfile
 import time
 from datetime import datetime, timezone
 from http.cookies import SimpleCookie
+from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
@@ -52,13 +53,54 @@ def _decode(raw: bytes | str) -> str:
     raise ValueError("Official KEXIM page encoding is unreadable")
 
 
+class _BodyWithoutAttachments(HTMLParser):
+    """Read the actual body element, excluding adjacent notices and navigation."""
+    def __init__(self):
+        super().__init__(convert_charrefs=False)
+        self.depth = 0
+        self.parts = []
+        self.count = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'div' and 'detail-view-box' in dict(attrs).get('class', '').split():
+            self.count += 1
+            self.depth = 1
+        elif self.depth:
+            if tag == 'div':
+                self.depth += 1
+            self.parts.append(self.get_starttag_text())
+
+    def handle_endtag(self, tag):
+        if self.depth:
+            if tag == 'div':
+                self.depth -= 1
+            if self.depth:
+                self.parts.append('</' + tag + '>')
+
+    def handle_data(self, data):
+        if self.depth:
+            self.parts.append(data)
+
+    def handle_entityref(self, name):
+        self.handle_data('&' + name + ';')
+
+    def handle_charref(self, name):
+        self.handle_data('&#' + name + ';')
+
+
 def parse_detail(source_id: str, raw: bytes | str) -> dict:
     page = _decode(raw)
     title = re.search(r'<h1\b[^>]*class="detail-view-title"[^>]*>(.*?)</h1>', page, re.I | re.S)
     date = re.search(r'<span\b[^>]*title="작성일"[^>]*>(.*?)</span>', page, re.I | re.S)
     body = re.search(r'<div\b[^>]*class="detail-view-box"[^>]*>(.*?)<div\b[^>]*class="detail-view-file"', page, re.I | re.S)
     file_area = re.search(r'<div\b[^>]*class="detail-view-file"[^>]*>(.*?)</div>', page, re.I | re.S)
-    if not (title and date and body):
+    body_markup = body.group(1) if body else None
+    if body_markup is None and not file_area:
+        parser = _BodyWithoutAttachments()
+        parser.feed(page)
+        if parser.count == 1 and parser.depth == 0:
+            body_markup = ''.join(parser.parts)
+    if not (title and date and body_markup):
         raise ValueError(f"KEXIM notice {source_id} has no stable detail fields")
     date_value = _clean(date.group(1)).replace(".", "-").strip("-")
     datetime.fromisoformat(date_value)
@@ -68,7 +110,7 @@ def parse_detail(source_id: str, raw: bytes | str) -> dict:
             attachments.append({"name": _clean(link.group(2)), "url": urljoin(BASE, html.unescape(link.group(1)))})
     record = {"source_id": str(source_id), "url": f"{BOARD}/{source_id}",
               "title": _clean(title.group(1)), "date": date_value,
-              "body": _clean(body.group(1)), "attachments": attachments}
+              "body": _clean(body_markup), "attachments": attachments}
     if not record["body"]:
         raise ValueError(f"KEXIM notice {source_id} has an empty body")
     record["sha256"] = fingerprint(record)
