@@ -17,14 +17,14 @@ from zoneinfo import ZoneInfo
 try:
     from . import audit_lp_official_inventory as inventory
     from .audit_lp_discovery_coverage import normalize_title
-    from .collect_lp_institution_boards import Session, decode_html
+    from .collect_lp_institution_boards import Session, decode_html, load_configs, adapter
     from .collect_lp_original_notices import parse_original, load_aliases, original_body_hash
     from .discover_lp_original_boards import channels, page_url, listing_links
     from .collect_kexim_programs import parse_detail as parse_kexim
 except ImportError:
     import audit_lp_official_inventory as inventory
     from audit_lp_discovery_coverage import normalize_title
-    from collect_lp_institution_boards import Session, decode_html
+    from collect_lp_institution_boards import Session, decode_html, load_configs, adapter
     from collect_lp_original_notices import parse_original, load_aliases, original_body_hash
     from discover_lp_original_boards import channels, page_url, listing_links
     from collect_kexim_programs import parse_detail as parse_kexim
@@ -68,9 +68,19 @@ def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, se
         report['holds'].append({'stage': 'discovery', 'reason': 'Discovery comparison unavailable'})
         return report
     candidates = [n for n in discovery['items'] if n['status'] in {'official_link_to_verify', 'official_source_needed'}]
+    seen = {(n['institution_id'], n.get('official_url')) for n in candidates}
+    for entry in official_inventory.get('institutions', []):
+        for row in entry['rows']:
+            if (row['relevant'] and row['disposition'] == 'not_in_archive'
+                    and row['title_scope'] in {'scope_unconfirmed', 'pe_blind_title', 'mixed_pe_vc'}
+                    and (entry['institution_id'], row['url']) not in seen):
+                candidates.append({'id': 'inventory:' + row['source_id'], 'institution_id': entry['institution_id'],
+                                   'title': row['title'], 'official_url': row['url']})
+                seen.add((entry['institution_id'], row['url']))
     if len(candidates) > 20:
         raise ValueError('Official candidate verification limit exceeded')
     aliases = load_aliases()
+    configs = load_configs()
     cache = {}; sessions = {}; total_bytes = 0
     def get(institution, url, config, kind):
         nonlocal total_bytes
@@ -97,28 +107,34 @@ def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, se
                 'status': 'unresolved', 'official_notice': None, 'classification': 'scope_unconfirmed'}
         report['sources'].append(item)
         try:
-            if institution == 'kexim':
-                wanted = inventory.notice_key(institution, candidate['official_url'])
+            if institution == 'kexim' or institution in configs:
+                config = configs.get(institution, {'institution_id': institution, 'listing_url': inventory.CORE.get(institution)})
+                wanted = inventory.notice_key(institution, candidate['official_url']) if candidate.get('official_url') else None
                 matches = {}
                 for receipt in official_inventory['receipts']:
                     if receipt['institution_id'] != institution:
                         continue
-                    p = urlsplit(receipt['url'])
-                    if p.scheme != 'https' or p.hostname != 'www.koreaexim.go.kr' or p.path != '/HPHKBI039M01':
-                        raise ValueError('KEXIM official listing receipt route mismatch')
+                    if institution == 'kexim':
+                        p = urlsplit(receipt['url'])
+                        if p.scheme != 'https' or p.hostname != 'www.koreaexim.go.kr' or p.path != '/HPHKBI039M01':
+                            raise ValueError('KEXIM official listing receipt route mismatch')
                     if hashlib.sha256(receipt['html'].encode()).hexdigest() != receipt['sha256']:
                         raise ValueError('Official inventory receipt fingerprint mismatch')
-                    for row in inventory.core_rows(institution, receipt['html'], receipt['url']):
-                        if inventory.notice_key(institution, row['url']) == wanted and key_title(row['title'], names) == key_title(candidate['title'], names):
-                            matches[wanted] = (row, receipt)
+                    rows = (inventory.core_rows(institution, receipt['html'], receipt['url']) if institution == 'kexim'
+                            else adapter(config).parse_listing(receipt['html'], receipt['url'], config))
+                    for row in rows:
+                        identity = inventory.notice_key(institution, row['url'])
+                        if (wanted is None or identity == wanted) and key_title(row['title'], names) == key_title(candidate['title'], names):
+                            matches[identity] = (row, receipt)
                 if len(matches) != 1:
-                    raise ValueError('Candidate not uniquely observed on official KEXIM listing')
-                row, receipt = next(iter(matches.values()))
+                    raise ValueError('Candidate not uniquely observed on official institution listing')
+                wanted, (row, receipt) = next(iter(matches.items()))
                 report['receipts'].append({**receipt, 'kind': 'listing'})
-                config = {'institution_id': institution, 'listing_url': inventory.CORE[institution]}
-                source = parse_kexim(wanted.split(':')[1], get(institution, row['url'], config, 'detail'))
+                raw = get(institution, row['url'], config, 'detail')
+                source = (parse_kexim(wanted.split(':')[1], raw) if institution == 'kexim' else
+                          dict(adapter(config).parse_detail(decode_html(raw), row['url'], config), url=row['url']))
                 if source['date'] != row['date'] or key_title(source['title'], names) != key_title(row['title'], names):
-                    raise ValueError('Official KEXIM listing/detail metadata differs')
+                    raise ValueError('Official listing/detail metadata differs')
             elif institution == 'sema':
                 matches = {}
                 # A bounded asset/title search, never an attachment URL or ID

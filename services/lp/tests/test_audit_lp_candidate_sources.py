@@ -23,6 +23,19 @@ def receipt():
 
 
 class CandidateSourceTests(unittest.TestCase):
+    def test_inventory_unknowns_are_resolved_without_manual_notice_selection(self):
+        from services.lp.tests.test_lp_board_adapters_banks import IBK_LIST,IBK_HTML,IBK_URL
+        config=audit.load_configs()['ibk'];url=audit.inventory.page_url('ibk',config,'펀드',1,'2025-10-26','2026-10-25')
+        html=IBK_LIST+'</html>';row=audit.adapter(config).parse_listing(html,url,config)[0]
+        row.update(relevant=True,disposition='not_in_archive',title_scope='scope_unconfirmed')
+        source={'receipts':[{'institution_id':'ibk','url':url,'html':html,'sha256':hashlib.sha256(html.encode()).hexdigest()}],
+                'institutions':[{'institution_id':'ibk','rows':[row]}]}
+        calls=[]
+        def fetch(url):calls.append(url);return IBK_HTML.encode()
+        r=audit.resolve({'status':'ok','items':[]},source,fetch_factory=lambda *a:fetch,as_of='2026-10-25')
+        self.assertFalse(r['holds']);self.assertEqual(calls,[IBK_URL]);self.assertEqual(r['summary']['verified'],1)
+        self.assertEqual(r['sources'][0]['classification'],'scope_unconfirmed')
+
     def run_audit(self, candidate_row, fetch, receipts=None, **kw):
         return audit.resolve({'status':'ok','items':[candidate_row]}, {'receipts': receipts or []},
                              fetch_factory=lambda *args: fetch, as_of='2026-10-25',sema_channels=[SEMA],**kw)
