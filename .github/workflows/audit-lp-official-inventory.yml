@@ -21,7 +21,7 @@ jobs:
       - name: Install read-only catalog and attachment dependencies
         run: python3 -m pip install 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47'
       - name: Test official inventory boundaries and period filters
-        run: python3 -m unittest services.lp.tests.test_audit_lp_official_inventory services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_priority_lp_programs
+        run: python3 -m unittest services.lp.tests.test_audit_lp_official_inventory services.lp.tests.test_audit_lp_candidate_sources services.lp.tests.test_lp_board_adapters_banks services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_priority_lp_programs
       - name: Read current catalog without publication
         env:
           PYTHONPATH: services/lp/src
@@ -38,11 +38,20 @@ jobs:
       - name: Inventory official lists and compare retained notice identities
         run: |
           python3 services/lp/src/audit_lp_official_inventory.py --baseline /tmp/lp-baseline.json --archive /tmp/lp-source-index.json --output /tmp/lp-official-inventory.json --markdown /tmp/lp-official-inventory.md
+      - name: Resolve remaining discovery clues on official sources without publication
+        run: |
+          python3 services/lp/src/audit_lp_discovery_coverage.py --baseline /tmp/lp-baseline.json --official-collection /tmp/lp-source-index.json --output /tmp/lp-discovery-audit.json
+          python3 services/lp/src/audit_lp_candidate_sources.py --inventory /tmp/lp-official-inventory.json --discovery /tmp/lp-discovery-audit.json --output /tmp/lp-official-candidate-sources.json
+      - name: Report inventory boundaries and verification failures
+        run: |
           python3 - <<'PY'
           import json, os
           report=json.load(open('/tmp/lp-official-inventory.json'))
+          candidates=json.load(open('/tmp/lp-official-candidate-sources.json'))
           with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as summary:
               summary.write('Read-only official listing comparison: '+json.dumps(report['summary'])+'\n')
+              summary.write('Read-only official candidate sources: '+json.dumps(candidates.get('summary',{}))+'\n')
+          if candidates['holds']: print('::warning::Some discovery clues remain unresolved; see retained official source evidence')
           assert not report['holds'], 'Official listing audit has source errors; no data was published'
           PY
       - uses: actions/upload-artifact@v4
@@ -52,5 +61,7 @@ jobs:
           path: |
             /tmp/lp-official-inventory.json
             /tmp/lp-official-inventory.md
+            /tmp/lp-discovery-audit.json
+            /tmp/lp-official-candidate-sources.json
           retention-days: 7
           if-no-files-found: error

@@ -4,7 +4,7 @@ import json
 import unittest
 from urllib.parse import parse_qs, urlencode, urlsplit
 
-from services.lp.src.lp_board_adapters_banks import listing_requests, parse_detail, parse_listing
+from services.lp.src.lp_board_adapters_banks import ibk_last_page, listing_requests, parse_detail, parse_listing
 
 KDB = {'institution_id': 'kdb', 'listing_url': 'https://www.kdb.co.kr/CHBIPR23N00.act?_mnuId=IHIHIR0087'}
 IBK = {'institution_id': 'ibk', 'listing_url': 'https://www.ibk.co.kr/cyber/noticeListCyber.ibk?pageId=IR03010400'}
@@ -16,6 +16,13 @@ KDB_DATA = {'ITR_BLB_ID': 'STD119', 'COMMON_HEAD': {'ERROR': False},
                              'FST_ENR_DTM': '20260507100418', 'NAC_SMRY_CONE': 'This listing summary is not the detail body.'}]}
 IBK_ROW = '<tr><td>12</td><td class="subject"><a href="/cyber/noticeDetailCyber.ibk?pageId=IR03010400&amp;srno=900002">2026 IBK 동행펀드 선정계획 공고</a></td><td>-</td><td>Mon May 18 00:00:00 KST 2026</td><td class="day">100</td></tr>'
 IBK_LIST = '<div id="contents_in"><table><tbody>' + IBK_ROW + '</tbody></table></div>'
+IBK_PAGER = '''<div class="m_pagination"><strong class="current_m_page">1</strong>
+<span class="others_m_page">/2</span><a href="javascript:getListData(2)" class="m_direction">
+<img alt="마지막 페이지로 이동"></a></div>
+<form name="searchForm" method="post" action="/cyber/noticeListCyber.ibk">
+<input name="pageId" value="IR03010400"><input name="pageNum" value="1">
+<select name="searchKey"><option value="ALL">전체</option><option value="TTL" selected>제목</option></select>
+<input name="searchValue" value="펀드"></form>'''
 IBK_URL = 'https://www.ibk.co.kr/cyber/noticeDetailCyber.ibk?pageId=IR03010400&srno=900002'
 KDB_HTML = '<input id="itrNacIdMngSno" value="900001"><input id="itrBlbId" value="STD119"><input name="APG_FL_MPN_ID" value="' + GROUP + '"><article class="bbs"><p class="tit">2026 남부권 지역성장지원펀드 위탁운용사 선정계획 공고</p><div class="bbsInfo"><span>작성일 : <time datetime="2026-05-07">2026-05-07</time></span><span>조회 : 100</span></div><div class="context editor"><p>실제 공식 상세 공고 본문입니다.</p></div><div class="fileList"><a href="/fileView?groupId=' + GROUP + '&amp;fileId=' + FILE + '">붙임1. 선정계획 공고.hwp</a></div></article><div class="bbs_view01">Mobile duplicated content is not a second source.</div>'
 IBK_HTML = '<input name="srno" value="900002"><div id="contents_in"><table><tbody><tr><td class="view_tit">2026 IBK 동행펀드 선정계획 공고</td><td class="update">등록일 Mon May 18 00:00:00 KST 2026</td></tr><tr><td class="view"><p>공식 자체 출자 공고입니다.</p></td></tr><tr><td class="down_flie"><a href="/common/download.ibk?fileName=선정 공고.pdf&amp;fullName=fup/finemall/general/news/observed.pdf&amp;seq=900002&amp;category=null">선정 공고.pdf</a></td></tr></tbody></table></div>'
@@ -27,6 +34,29 @@ def kdb_url():
 
 
 class PolicyBankAdapterTests(unittest.TestCase):
+    def test_ibk_last_page_uses_explicit_total_and_final_control(self):
+        url = listing_requests(IBK)[0]['url']
+        self.assertEqual(ibk_last_page(IBK_LIST + IBK_PAGER, url, IBK), 2)
+        second = IBK_PAGER.replace('current_m_page">1', 'current_m_page">2').replace('pageNum" value="1', 'pageNum" value="2')
+        self.assertEqual(ibk_last_page(IBK_LIST + second, url.replace('pageNum=1', 'pageNum=2'), IBK), 2)
+        # A visible page-number window alone cannot prove the last page.
+        self.assertIsNone(ibk_last_page(IBK_LIST + '<a href="javascript:getListData(2)">2</a>', url, IBK))
+
+    def test_ibk_last_page_rejects_conflicting_or_unbound_markup(self):
+        url = listing_requests(IBK)[0]['url']
+        for old, new in [('getListData(2)', 'getListData(3)'), ('/2</span>', '/0</span>'),
+                         ('current_m_page">1', 'current_m_page">3'), ('value="펀드"', 'value="다른검색"'),
+                         ('pageNum" value="1', 'pageNum" value="2'), ('value="TTL" selected', 'value="ALL" selected'),
+                         ('IR03010400', 'IR03010200'), ('/cyber/noticeListCyber.ibk', '/other')]:
+            with self.subTest(change=new), self.assertRaises(ValueError):
+                ibk_last_page(IBK_LIST + IBK_PAGER.replace(old, new), url, IBK)
+        with self.assertRaises(ValueError):
+            ibk_last_page(IBK_LIST + IBK_PAGER * 2, url, IBK)
+        with self.assertRaises(ValueError):
+            ibk_last_page(IBK_PAGER, url.replace('www.ibk.co.kr', 'other.example'), IBK)
+        with self.assertRaises(ValueError):
+            ibk_last_page(IBK_PAGER, listing_requests(KDB)[0]['url'], KDB)
+
     def test_requests_are_bounded_observed_get_templates(self):
         for config, count in [(KDB, 3), (IBK, 4)]:
             requests = listing_requests(config)

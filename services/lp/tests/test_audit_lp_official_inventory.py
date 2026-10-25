@@ -10,6 +10,19 @@ def growth(rows):
 
 
 class OfficialInventoryTests(unittest.TestCase):
+    def test_ibk_stops_at_observed_last_page_without_requesting_repeated_overrun(self):
+        from services.lp.tests.test_lp_board_adapters_banks import IBK, IBK_LIST, IBK_PAGER
+        calls=[]
+        def fetch(url):
+            page=int(parse_qs(urlsplit(url).query)['pageNum'][0]);calls.append(page)
+            self.assertLessEqual(page,2)
+            row=IBK_LIST.replace('900002',str(900000+page))
+            pager=IBK_PAGER.replace('current_m_page">1','current_m_page">'+str(page)).replace('pageNum" value="1','pageNum" value="'+str(page))
+            return (row+pager+'</html>').encode()
+        report=inventory.audit({'programs':[]},as_of='2026-10-25',scope={'confirmed_institution_ids':[], 'priority_verification_ids':['ibk']},
+            configs={'ibk':{**IBK,'search_terms':['펀드'],'pages':2}},fetch_factory=lambda *a:fetch)
+        self.assertFalse(report['holds']);self.assertEqual(calls,[1,2])
+        self.assertEqual(report['institutions'][0]['queries'][0]['boundary'],'observed_final_page')
     def audit(self, fetch, **kwargs):
         return inventory.audit({'programs':[]},as_of='2026-10-22',scope={'confirmed_institution_ids':['kgrowth','sema'],'priority_verification_ids':[]},configs={},fetch_factory=lambda *a:fetch,**kwargs)
 

@@ -119,6 +119,43 @@ def listing_requests(config: dict) -> list[dict]:
     return result
 
 
+def ibk_last_page(html: str, url: str, config: dict) -> int | None:
+    """Read the observed mobile total and final-page control, never a pager window."""
+    institution, query = _context(url, config)
+    if institution != 'ibk':
+        raise ValueError('IBK pagination requires the IBK board')
+    root = _Document(html).root
+    pagers = list(root.nodes(cls='m_pagination'))
+    if not pagers:
+        return None
+    pager = _one(pagers, 'IBK mobile pager')
+    current = _one(pager.nodes(cls='current_m_page'), 'IBK current page').clean()
+    total = _one(pager.nodes(cls='others_m_page'), 'IBK page total').clean()
+    if not re.fullmatch(r'[1-9]\d{0,5}', current) or not re.fullmatch(r'/\s*[1-9]\d{0,5}', total):
+        raise ValueError('Invalid IBK page counters')
+    last = int(total.lstrip('/').strip())
+    if int(current) > last or query.get('pageNum') != [current]:
+        raise ValueError('IBK requested and displayed page mismatch')
+    controls = [a for a in pager.nodes('a') if any(
+        img.attrs.get('alt') == '마지막 페이지로 이동' for img in a.nodes('img'))]
+    control = _one(controls, 'IBK final-page control')
+    match = re.fullmatch(r'javascript:getListData\(([1-9]\d{0,5})\);?', control.attrs.get('href', ''))
+    if not match or int(match[1]) != last:
+        raise ValueError('Conflicting IBK final page')
+    form = _one((f for f in root.nodes('form') if f.attrs.get('name') == 'searchForm'), 'IBK search form')
+    if form.attrs.get('action') != '/cyber/noticeListCyber.ibk':
+        raise ValueError('IBK search form route mismatch')
+    for key in ('pageId', 'pageNum', 'searchValue'):
+        value = _one((n for n in form.nodes('input') if n.attrs.get('name') == key), 'IBK ' + key).attrs.get('value')
+        if query.get(key) != [value]:
+            raise ValueError('IBK requested and displayed search mismatch')
+    select = _one((n for n in form.nodes('select') if n.attrs.get('name') == 'searchKey'), 'IBK search field')
+    selected = _one((n for n in select.nodes('option') if 'selected' in n.attrs), 'IBK selected search field')
+    if query.get('searchKey') != [selected.attrs.get('value')]:
+        raise ValueError('IBK requested and displayed search field mismatch')
+    return last
+
+
 def _identifier(value):
     if not isinstance(value, str) or not re.fullmatch(r'\d+', value):
         raise ValueError('Missing or invalid observed bank notice identifier')

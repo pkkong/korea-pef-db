@@ -1,0 +1,172 @@
+"""Resolve remaining discovery clues on official sources, without publication.
+
+Third-party titles/links select a search only. Official board receipts and
+official detail fields supply every retained fact. A missing or ambiguous
+source remains unresolved; no selected-notice registry is used.
+"""
+import argparse
+import csv
+from datetime import datetime, timezone
+import hashlib
+import json
+from pathlib import Path
+import re
+from urllib.parse import parse_qs, urlsplit
+from zoneinfo import ZoneInfo
+
+try:
+    from . import audit_lp_official_inventory as inventory
+    from .audit_lp_discovery_coverage import normalize_title
+    from .collect_lp_institution_boards import Session, decode_html
+    from .collect_lp_original_notices import parse_original, load_aliases, original_body_hash
+    from .discover_lp_original_boards import channels, page_url, listing_links
+    from .collect_kexim_programs import parse_detail as parse_kexim
+except ImportError:
+    import audit_lp_official_inventory as inventory
+    from audit_lp_discovery_coverage import normalize_title
+    from collect_lp_institution_boards import Session, decode_html
+    from collect_lp_original_notices import parse_original, load_aliases, original_body_hash
+    from discover_lp_original_boards import channels, page_url, listing_links
+    from collect_kexim_programs import parse_detail as parse_kexim
+
+
+def key_title(title, names):
+    for name in sorted(names, key=len, reverse=True):
+        title = title.replace(name, '')
+    return normalize_title(title)
+
+
+def sema_identity(url, config):
+    p = urlsplit(url); q = parse_qs(p.query)
+    if (p.scheme != 'https' or p.hostname != 'www.sema.or.kr' or p.port not in {None, 443}
+            or p.username or p.password or p.fragment or p.path != config['detail_path']
+            or len(q.get('nttId', [])) != 1 or not re.fullmatch('[0-9]+', q['nttId'][0])):
+        raise ValueError('SEMA official detail route or identity mismatch')
+    return q['nttId'][0]
+
+
+def sema_configs():
+    primary = channels()['sema']
+    result = {primary['listing_url']: primary}
+    with (inventory.ROOT / 'data/lp_commitment_sources.csv').open() as stream:
+        for row in csv.DictReader(stream):
+            if row['lp_code'] != 'sema' or row['is_active'] != '1':
+                continue
+            url = row['locator']; p = urlsplit(url)
+            if (p.scheme != 'https' or p.hostname != 'www.sema.or.kr' or p.port not in {None, 443}
+                    or p.username or p.password or p.fragment
+                    or not re.fullmatch('/sema/bbs/B[0-9]{7}/list.do', p.path)):
+                raise ValueError('Unsupported configured SEMA board')
+            result[url] = {**primary, 'listing_url': url, 'detail_path': p.path.replace('/list.do','/view.do')}
+    return list(result.values())
+
+
+def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, sema_channels=None):
+    report = {'checked_at': datetime.now(timezone.utc).isoformat(), 'mode': 'read_only_official_source_verification',
+              'sources': [], 'receipts': [], 'holds': []}
+    if discovery.get('status') != 'ok':
+        report['holds'].append({'stage': 'discovery', 'reason': 'Discovery comparison unavailable'})
+        return report
+    candidates = [n for n in discovery['items'] if n['status'] in {'official_link_to_verify', 'official_source_needed'}]
+    if len(candidates) > 20:
+        raise ValueError('Official candidate verification limit exceeded')
+    aliases = load_aliases()
+    cache = {}; sessions = {}; total_bytes = 0
+    def get(institution, url, config, kind):
+        nonlocal total_bytes
+        if url in cache:
+            return cache[url]
+        if institution not in sessions:
+            sessions[institution] = (fetch_factory(institution, config) if fetch_factory else
+                                      inventory.kexim_fetcher() if institution == 'kexim' else Session(config))
+        raw = sessions[institution](url)
+        total_bytes += len(raw)
+        if total_bytes > 20 * 1024 * 1024:
+            raise ValueError('Official verification body budget exceeded')
+        html = decode_html(raw)
+        report['receipts'].append({'institution_id': institution, 'kind': kind, 'url': url,
+                                  'html': html, 'sha256': hashlib.sha256(html.encode()).hexdigest()})
+        cache[url] = raw
+        return raw
+    for candidate in candidates:
+        institution = candidate['institution_id']
+        names = aliases.get(institution, [])
+        item = {'discovery_id': candidate['id'], 'institution_id': institution, 'discovery_title': candidate['title'],
+                'status': 'unresolved', 'official_notice': None, 'classification': 'scope_unconfirmed'}
+        report['sources'].append(item)
+        try:
+            if institution == 'kexim':
+                wanted = inventory.notice_key(institution, candidate['official_url'])
+                matches = {}
+                for receipt in official_inventory['receipts']:
+                    if receipt['institution_id'] != institution:
+                        continue
+                    p = urlsplit(receipt['url'])
+                    if p.scheme != 'https' or p.hostname != 'www.koreaexim.go.kr' or p.path != '/HPHKBI039M01':
+                        raise ValueError('KEXIM official listing receipt route mismatch')
+                    if hashlib.sha256(receipt['html'].encode()).hexdigest() != receipt['sha256']:
+                        raise ValueError('Official inventory receipt fingerprint mismatch')
+                    for row in inventory.core_rows(institution, receipt['html'], receipt['url']):
+                        if inventory.notice_key(institution, row['url']) == wanted and key_title(row['title'], names) == key_title(candidate['title'], names):
+                            matches[wanted] = (row, receipt)
+                if len(matches) != 1:
+                    raise ValueError('Candidate not uniquely observed on official KEXIM listing')
+                row, receipt = next(iter(matches.values()))
+                report['receipts'].append({**receipt, 'kind': 'listing'})
+                config = {'institution_id': institution, 'listing_url': inventory.CORE[institution]}
+                source = parse_kexim(wanted.split(':')[1], get(institution, row['url'], config, 'detail'))
+                if source['date'] != row['date'] or key_title(source['title'], names) != key_title(row['title'], names):
+                    raise ValueError('Official KEXIM listing/detail metadata differs')
+            elif institution == 'sema':
+                matches = {}
+                # A bounded asset/title search, never an attachment URL or ID
+                # guessed from the third-party PDF filename.
+                terms = ['일본주식', '일본', '재간접'] if '일본' in candidate['title'] else ['블라인드', '위탁운용사']
+                for config in sema_configs() if sema_channels is None else sema_channels:
+                    for term in terms:
+                        query_config = {**config, 'search_params': {**config['search_params'], 'searchWrd': term}}
+                        for page in (1, 2):
+                            url = page_url(query_config, page)
+                            html = decode_html(get(institution, url, config, 'listing'))
+                            for row in listing_links(html, url, config):
+                                if key_title(row['title'], names) != key_title(candidate['title'], names):
+                                    continue
+                                ident = sema_identity(row['url'], config)
+                                matches.setdefault((config['detail_path'], ident), (row, config))
+                if len(matches) != 1:
+                    raise ValueError('Candidate not uniquely observed on official SEMA listing')
+                row, config = next(iter(matches.values()))
+                raw = get(institution, row['url'], config, 'detail')
+                source = parse_original(decode_html(raw), row['url'])
+                source['url'] = row['url']
+                if not source.get('date') or key_title(source['title'], names) != key_title(row['title'], names):
+                    raise ValueError('Official SEMA detail title or publication date missing/different')
+            else:
+                raise ValueError('Official candidate resolver not connected for this institution')
+            # Never substitute detection/receive time for the official date.
+            end = as_of or datetime.now(ZoneInfo('Asia/Seoul')).date().isoformat()
+            if source['date'] > end:
+                raise ValueError('Official candidate has a future publication date')
+            source.update(institution_id=institution, checked_at=report['checked_at'], sha256=original_body_hash(source))
+            item.update(status='official_source_verified', official_notice=source)
+        except (ValueError, KeyError, TypeError, OSError) as error:
+            item['reason'] = str(error)
+            report['holds'].append({'institution_id': institution, 'stage': 'official_candidate', 'reason': str(error)})
+    report['summary'] = {'candidates': len(candidates), 'verified': sum(n['status'] == 'official_source_verified' for n in report['sources']),
+                         'unresolved': len(report['holds'])}
+    return report
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--discovery', required=True, type=Path)
+    parser.add_argument('--inventory', required=True, type=Path)
+    parser.add_argument('--output', required=True, type=Path)
+    args = parser.parse_args()
+    report = resolve(json.loads(args.discovery.read_text()), json.loads(args.inventory.read_text()))
+    args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
+    print(json.dumps(report.get('summary', {'unresolved': len(report['holds'])})))
+
+
+if __name__ == '__main__':
+    main()

@@ -253,6 +253,9 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
                         if last_page is not None and page==last_page:query['boundary']='observed_final_page';break
                     elif institution == 'pck_pension' and page == boards.pck.last_page(html, url, config):
                         query['boundary']='observed_final_page';break
+                    elif institution == 'ibk':
+                        last_page=boards.banks.ibk_last_page(html,url,config)
+                        if last_page is not None and page==last_page:query['boundary']='observed_final_page';break
                     if regular and all(row['date']<start for row in regular):query['boundary']='observed_older_page';break
                 except Exception as error:
                     query['boundary']='source_error';failed=True
