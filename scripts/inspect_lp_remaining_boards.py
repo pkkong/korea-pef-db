@@ -23,7 +23,8 @@ def inspect(output):
         nonlocal total
         if url in cache:return cache[url]
         if total>=32*1024*1024:raise ValueError('inspection total body budget exhausted')
-        fetch=sessions.setdefault(institution,Session(config))
+        if institution not in sessions:sessions[institution]=Session(config)
+        fetch=sessions[institution]
         raw=fetch(url,config['listing_url']);total+=len(raw)
         if total>32*1024*1024:raise ValueError('inspection total body budget exceeded')
         digest=hashlib.sha256(raw).hexdigest();suffix='.html' if raw.lstrip().startswith(b'<') else '.bin'
@@ -41,7 +42,7 @@ def inspect(output):
             try:
                 html=decode_html(get(institution,url,config,'listing'))
                 root=Document(html).root
-                response=report['responses'][-1]
+                response=next(r for r in report['responses'] if r['url']==url)
                 response['forms']=[{'attrs':n.attrs,'inputs':[p.attrs for p in n.nodes('input')],
                                     'selects':[{'attrs':p.attrs,'options':[o.attrs|{'label':o.clean()} for o in p.nodes('option')]} for p in n.nodes('select')]} for n in root.nodes('form')][:5]
                 response['scripts']=[urljoin(url,n.attrs['src']) for n in root.nodes('script') if n.attrs.get('src')][:30]
@@ -55,11 +56,11 @@ def inspect(output):
                 html=decode_html(get(institution,row['url'],config,'detail'))
                 try:
                     source=parse_original(html,row['url'])
-                    report['responses'][-1]['parsed']=source
+                    next(r for r in report['responses'] if r['url']==row['url'])['parsed']=source
                     for item in source['attachments'][:2]:
                         if not is_form(item['name']) and urlsplit(item['url']).hostname==urlsplit(config['listing_url']).hostname:
                             get(institution,item['url'],config,'attachment')
-                except ValueError as error:report['responses'][-1]['parse_error']=str(error)
+                except ValueError as error:next(r for r in report['responses'] if r['url']==row['url'])['parse_error']=str(error)
             except Exception as error:report['holds'].append({'institution_id':institution,'stage':'detail','url':row['url'],'error':str(error)})
     (output/'index.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
     print(json.dumps({'responses':len(report['responses']),'holds':report['holds'],'bytes':total},ensure_ascii=False))
