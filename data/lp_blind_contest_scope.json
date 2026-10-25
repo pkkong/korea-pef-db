@@ -39,7 +39,8 @@
     "tp",
     "cu",
     "kfcc",
-    "pck_pension"
+    "pck_pension",
+    "sema"
   ],
   "supporting_collector_ids": [
     "kdb",
