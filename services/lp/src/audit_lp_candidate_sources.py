@@ -76,6 +76,8 @@ def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, se
         nonlocal total_bytes
         if url in cache:
             return cache[url]
+        if total_bytes >= 20 * 1024 * 1024:
+            raise ValueError('Official verification body budget exhausted')
         if institution not in sessions:
             sessions[institution] = (fetch_factory(institution, config) if fetch_factory else
                                       inventory.kexim_fetcher() if institution == 'kexim' else Session(config))

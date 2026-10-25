@@ -80,3 +80,13 @@ class CandidateSourceTests(unittest.TestCase):
         r=audit.resolve({'status':'error'},{'receipts':[]},fetch_factory=lambda *a:self.fail('unexpected fetch'))
         self.assertTrue(r['holds'])
         with self.assertRaises(ValueError):audit.resolve({'status':'ok','items':[candidate('sema')]*21},{'receipts':[]})
+
+    def test_body_budget_exhaustion_blocks_later_candidate_network_requests(self):
+        first=candidate('kexim');second=copy.deepcopy(first)
+        second.update(id='other-candidate',official_url=second['official_url'].replace('991100','991101'),title=KEXIM_TITLE+' 추가')
+        other=receipt();other['html']=other['html'].replace('991100','991101').replace(KEXIM_TITLE,second['title'])
+        other['sha256']=hashlib.sha256(other['html'].encode()).hexdigest()
+        calls=[]
+        def fetch(url):calls.append(url);return b'x'*(20*1024*1024+1)
+        r=audit.resolve({'status':'ok','items':[first,second]},{'receipts':[receipt(),other]},fetch_factory=lambda *a:fetch)
+        self.assertEqual(len(calls),1);self.assertEqual(len(r['holds']),2)
