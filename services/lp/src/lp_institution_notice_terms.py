@@ -63,11 +63,12 @@ def extract_terms(n):
         # Only explicitly labelled dates; historical-fund dates cannot supply a
         # deadline. Date-only is retained when source submission times disagree.
         pattern = (r'(?:제안서)?(?:접수마감(?:일시|일|시한)?|접수기한|제출기한|마감일시)[:：]*'
-                   r'(20\d{2})[.년](\d{1,2})[.월](\d{1,2})[.일]?'
+                   r"[’'‘]?(20\d{2}|\d{2})[.년](\d{1,2})[.월](\d{1,2})[.일]?"
                    r'(?:\([월화수목금토일]\))?(오후|오전)?(\d{1,2})(?::(\d{2})|시)')
         for m in re.finditer(pattern, text):
             hour = int(m[5]) % 12 + 12 if m[4]=='오후' else (0 if m[4]=='오전' and m[5]=='12' else int(m[5]))
-            stamp = datetime(int(m[1]),int(m[2]),int(m[3]),hour,int(m[6] or 0)).isoformat() + '+09:00'
+            year = int(m[1]) if len(m[1]) == 4 else 2000 + int(m[1])
+            stamp = datetime(year,int(m[2]),int(m[3]),hour,int(m[6] or 0)).isoformat() + '+09:00'
             deadlines.add(stamp)
             record('deadline',m[0])
         # A direct/quick-delivery cutoff can conflict with the captioned time.

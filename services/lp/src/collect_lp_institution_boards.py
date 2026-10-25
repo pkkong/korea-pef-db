@@ -15,7 +15,8 @@ import os
 import re
 import time
 import zipfile
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from http.cookiejar import CookieJar
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -34,6 +35,7 @@ try:
     from . import lp_board_adapters_mutuals as mutuals, lp_board_adapters_pensions as pensions
     from . import lp_board_adapter_kfcc as kfcc, lp_board_adapters_banks as banks
     from . import lp_board_adapter_pck as pck
+    from . import lp_board_adapter_sema as sema
 except ImportError:
     from lp_ipv4_transport import IPv4HTTPSHandler
     from lp_kdb_dns import resolve_kdb_ipv4
@@ -48,6 +50,7 @@ except ImportError:
     import lp_board_adapter_kfcc as kfcc
     import lp_board_adapters_banks as banks
     import lp_board_adapter_pck as pck
+    import lp_board_adapter_sema as sema
 
 ROOT = Path(__file__).resolve().parents[3]
 CONFIG = ROOT / 'data/lp_institution_board_channels.json'
@@ -65,6 +68,8 @@ def load_configs():
     for c in configs.values():
         if not 1 <= c.get('max_details', MAX_DETAILS) <= 60 or not 1 <= c['history_years'] <= 4:
             raise ValueError('institution discovery budget outside supported limits')
+        if c.get('lookback_days') is not None and not 1 <= c['lookback_days'] <= 1461:
+            raise ValueError('institution lookback period outside supported limits')
     return configs
 
 
@@ -76,6 +81,8 @@ def adapter(config):
         return kfcc
     if institution == 'pck_pension':
         return pck
+    if institution == 'sema':
+        return sema
     if institution in {'poba', 'pmaa'}:
         return mutuals
     if institution in {'tp', 'cu'}:
@@ -248,6 +255,12 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
                     'history_years': config.get('history_years', 4)}
         result['coverage'][institution] = coverage
         stopped_searches = set()
+        seen_by_search = {}
+        cutoff = None
+        if config.get('lookback_days'):
+            observed_day = datetime.fromisoformat(checked_at.replace('Z', '+00:00')).astimezone(ZoneInfo('Asia/Seoul')).date()
+            cutoff = (observed_day - timedelta(days=config['lookback_days'] - 1)).isoformat()
+            coverage.update(lookback_days=config['lookback_days'], window_start=cutoff, window_end=observed_day.isoformat())
         for url in listing_urls(config):
             search = parse_qsl(urlsplit(url).query)
             search = next((value for key, value in search if key == config.get('search_param')), '')
@@ -259,6 +272,23 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
                 rows = adapter(config).parse_listing(html, url, config)
                 receipts[url] = {'url': url, 'html': html, 'sha256': digest(html)}
                 coverage['listing_pages'].append({'url': url, 'count': len(rows)})
+                if institution == 'sema':
+                    seen = seen_by_search.setdefault(search, set())
+                    identities = {row['source_id'] for row in rows}
+                    if rows and not identities - seen:
+                        raise ValueError('SEMA listing repeated before observed history boundary')
+                    seen.update(identities)
+                    current_page = int(dict(parse_qsl(urlsplit(url).query))[config['page_param']])
+                    final_page = sema.last_page(html, url, config)
+                    regular = [row for row in rows if not row.get('pinned')]
+                    older = cutoff and regular and all(row['date'] < cutoff for row in regular)
+                    if current_page == final_page or older:
+                        stopped_searches.add(search)
+                        coverage.setdefault('listing_boundaries', []).append({'search': search, 'page': current_page,
+                            'boundary': 'observed_older_page' if older else 'observed_final_page'})
+                    elif current_page == config['pages']:
+                        result['holds'].append({'institution_id': institution, 'stage': 'institution_depth',
+                                               'error': 'SEMA configured listing limit reached before history boundary'})
                 if institution == 'pck_pension':
                     current_page = int(dict(parse_qsl(urlsplit(url).query))[config['page_param']])
                     final_page = pck.last_page(html, url, config)
@@ -275,11 +305,17 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
                 for row in rows:
                     if (re.search(r'위탁|운용사|블라인드|PEF?|사모|선정', row['title'], re.I)
                             and classify_scope(row['title'], row['title']) != 'outside'):
-                        if row['date'][:4] >= str(int(checked_at[:4]) - config.get('history_years', 4) + 1):
-                            candidates.setdefault(row['url'], (row, url))
+                        if (row['date'] >= cutoff if cutoff else row['date'][:4] >= str(int(checked_at[:4]) - config.get('history_years', 4) + 1)):
+                            key = row['source_id'] if institution == 'sema' else row['url']
+                            previous = candidates.get(key)
+                            if previous and any(previous[0][k] != row[k] for k in ('title', 'date')):
+                                raise ValueError('Conflicting official listing identity metadata')
+                            candidates.setdefault(key, (row, url))
                         else:
                             coverage['older_rows_skipped'] = coverage.get('older_rows_skipped', 0) + 1
             except Exception as exc:
+                if institution == 'sema':
+                    stopped_searches.add(search)
                 result['holds'].append({'institution_id': institution, 'stage': 'institution_listing',
                                         'url': url, 'error': str(exc)})
         ordered = sorted(candidates.values(), key=lambda item: (item[0]['date'], item[0]['url']), reverse=True)
@@ -344,6 +380,8 @@ def validate_notice(raw, checked_at, config=None):
             or digest(proof['detail_html']) != proof['detail_sha256']):
         raise ValueError('institution source receipt mismatch')
     rows = adapter(config).parse_listing(listing['html'], listing['url'], config)
+    if n['institution_id'] == 'sema':
+        sema.last_page(listing['html'], listing['url'], config)
     detail = adapter(config).parse_detail(proof['detail_html'], n['url'], config)
     if not any(all(row[k] == n[k] for k in ('url', 'title', 'date', 'source_id')) for row in rows):
         raise ValueError('notice was not observed on the configured official listing')

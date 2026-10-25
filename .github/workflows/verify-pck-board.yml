@@ -1,6 +1,12 @@
-name: Verify PCK official notice board
+name: Verify LP official notice board
 on:
   workflow_dispatch:
+    inputs:
+      institution:
+        description: Official board to collect and replay without publication
+        type: choice
+        options: [pck_pension, sema]
+        default: pck_pension
 permissions:
   contents: read
 concurrency:
@@ -9,54 +15,72 @@ concurrency:
 jobs:
   verify:
     runs-on: macos-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
+    env:
+      LP_INSTITUTION: ${{ inputs.institution || 'pck_pension' }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install official attachment readers
-        run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
+        run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47' 'psycopg[binary]==3.2.10'
       - name: Test observed board and bounded attachment contracts
-        run: python3 -m unittest services.lp.tests.test_lp_board_adapter_pck services.lp.tests.test_lp_attachment_text services.lp.tests.test_collect_lp_institution_boards services.lp.tests.test_lp_pck_programs
-      - name: Collect and replay PCK official bodies and offering attachments
+        run: python3 -m unittest services.lp.tests.test_lp_board_adapter_pck services.lp.tests.test_lp_board_adapter_sema services.lp.tests.test_lp_attachment_text services.lp.tests.test_collect_lp_institution_boards services.lp.tests.test_lp_pck_programs
+      - name: Collect and replay configured official bodies and offering attachments
         run: |
-          mkdir -p /tmp/lp-pck-inspection
-          python3 services/lp/src/collect_lp_institution_boards.py --institution pck_pension --output /tmp/lp-pck-inspection/collection.json
+          mkdir -p /tmp/lp-board-inspection
+          python3 services/lp/src/collect_lp_institution_boards.py --institution "$LP_INSTITUTION" --output /tmp/lp-board-inspection/collection.json
           python3 - <<'PY'
           import json
           from services.lp.src.collect_lp_institution_boards import validate_notice
-          report=json.load(open('/tmp/lp-pck-inspection/collection.json'))
-          assert report['notices'], 'No observed PCK source documents'
+          report=json.load(open('/tmp/lp-board-inspection/collection.json'))
+          assert report['notices'], 'No observed official source documents'
           for n in report['notices']: validate_notice(n,report['checked_at'])
-          assert not report['holds'], 'PCK source or attachment errors remain'
-          print('Validated PCK bodies:',len(report['notices']))
+          assert not report['holds'], 'Official source or attachment errors remain'
+          print('Validated official bodies:',len(report['notices']))
           PY
       - name: Validate existing selection links and generate complete pages without DB writes
         env:
           PYTHONPATH: services/lp/src
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           python3 - <<'PY'
-          import json,tempfile
+          import copy,json,tempfile
           from pathlib import Path
           from lp_notice_publication import publish_basic_notices
           from lp_program_service import validate,build
-          report=json.load(open('/tmp/lp-pck-inspection/collection.json'))
-          data=json.load(open('data/lp_programs_pilot.json'))
-          data['institution_notices']=report['notices']
+          from publish_lp_programs import connect,baseline
+          from collect_lp_institution_boards import update_catalog
+          report=json.load(open('/tmp/lp-board-inspection/collection.json'))
+          with connect() as conn:
+              conn.execute('SET TRANSACTION READ ONLY')
+              data=baseline(conn)
+          before=copy.deepcopy(data['programs'])
+          data.update(update_catalog(data,report,report['checked_at']))
+          assert not data['institution_collection_holds'], 'Official receipt validation failed'
           data['programs'],holds=publish_basic_notices(data,[],report['checked_at'])
           data['as_of']=report['checked_at'][:10]
           validate(data)
+          after={p['id']:p for p in data['programs']}
+          for previous in before:
+              assert previous['id'] in after, 'Existing public program missing'
+              current=after[previous['id']]
+              assert {e['url'] for e in previous['events']} <= {e['url'] for e in current['events']}, 'Existing source URL missing'
+              if previous['institution_id']=='sema':
+                  for field in ('commitment_amount_krw','manager_count','deadline','selected_gps'):
+                      if field in previous:
+                          assert current.get(field)==previous[field], 'Existing SEMA public field changed: '+field
           with tempfile.TemporaryDirectory() as folder:
               build(data,Path(folder))
               print('Validated complete LP pages:',len(list(Path(folder).glob('*.html'))))
-          Path('/tmp/lp-pck-inspection/publication-preflight.json').write_text(json.dumps({
+          Path('/tmp/lp-board-inspection/publication-preflight.json').write_text(json.dumps({
               'program_ids':[p['id'] for p in data['programs']], 'holds':holds},ensure_ascii=False))
           PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: lp-pck-board-verification
-          path: /tmp/lp-pck-inspection/
+          name: lp-${{ inputs.institution || 'pck_pension' }}-board-verification
+          path: /tmp/lp-board-inspection/
           retention-days: 7
           if-no-files-found: error

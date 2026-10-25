@@ -5,10 +5,27 @@
       "institution_id": "pck_pension",
       "listing_url": "https://www.pension.or.kr/modu/s_board/list.asp?board_seq=1&board_sub_seq=1&view_sub_seq=0&search_select=subject",
       "search_param": "search_text",
-      "searches": ["위탁", "출자"],
+      "searches": [
+        "위탁",
+        "출자"
+      ],
       "page_param": "page",
       "pages": 2,
       "history_years": 2
+    },
+    {
+      "institution_id": "sema",
+      "listing_url": "https://www.sema.or.kr/sema/bbs/B0000022/list.do?menuNo=200017&optn1=S&searchCnd=1",
+      "search_param": "searchWrd",
+      "searches": [
+        "블라인드",
+        "위탁운용사",
+        "출자"
+      ],
+      "page_param": "pageIndex",
+      "pages": 10,
+      "history_years": 2,
+      "lookback_days": 365
     },
     {
       "institution_id": "poba",

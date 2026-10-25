@@ -36,7 +36,7 @@ CORE = {
 }
 HOSTS = {'kgrowth':'kgrowth.or.kr','ktcu':'ktcu.or.kr','koreapost':'kpasset.go.kr',
          'kexim':'koreaexim.go.kr','poba':'poba.or.kr','pmaa':'pmaa.or.kr',
-         'tp':'tp.or.kr','cu':'cu.co.kr','kfcc':'kfcc.co.kr','kdb':'kdb.co.kr','ibk':'ibk.co.kr', 'pck_pension':'pension.or.kr'}
+         'tp':'tp.or.kr','cu':'cu.co.kr','kfcc':'kfcc.co.kr','kdb':'kdb.co.kr','ibk':'ibk.co.kr', 'pck_pension':'pension.or.kr', 'sema':'sema.or.kr'}
 
 
 def window(as_of):
@@ -54,6 +54,12 @@ def notice_key(institution, url):
     if institution == 'pck_pension':
         canonical = boards.pck.canonical_notice(url)
         return institution + ':' + parse_qs(urlsplit(canonical).query)['seq'][0]
+    if institution == 'sema':
+        query = boards.sema._url(url, boards.sema.BOARD + 'view.do')
+        ident = query.get('nttId', [''])[0]
+        if not ident.isdigit():
+            raise ValueError('invalid SEMA notice identifier')
+        return institution + ':' + ident
     query_routes = {'kgrowth':('/notice_view.asp','idx'), 'koreapost':('/board.es','list_no'),
                     'poba':('/bbs/selectNttDetail','sechBbstSeq'),
                     'pmaa':('/www/1461128463820/bbs.do','bbsIdx'),
@@ -251,7 +257,7 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
                     if institution in CORE:
                         last_page=core_last_page(institution,html,url)
                         if last_page is not None and page==last_page:query['boundary']='observed_final_page';break
-                    elif institution == 'pck_pension' and page == boards.pck.last_page(html, url, config):
+                    elif institution in {'pck_pension', 'sema'} and page == boards.adapter(config).last_page(html, url, config):
                         query['boundary']='observed_final_page';break
                     elif institution == 'ibk':
                         last_page=boards.banks.ibk_last_page(html,url,config)

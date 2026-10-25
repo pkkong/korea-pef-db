@@ -127,7 +127,7 @@ def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, se
                 'status': 'unresolved', 'official_notice': None, 'classification': 'scope_unconfirmed'}
         report['sources'].append(item)
         try:
-            if institution == 'kexim' or institution in configs:
+            if institution == 'kexim' or (institution in configs and (institution != 'sema' or candidate.get('official_url'))):
                 config = configs.get(institution, {'institution_id': institution, 'listing_url': inventory.CORE.get(institution)})
                 wanted = inventory.notice_key(institution, candidate['official_url']) if candidate.get('official_url') else None
                 matches = {}
