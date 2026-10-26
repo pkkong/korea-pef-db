@@ -5,7 +5,7 @@ on:
       institution:
         description: Official board to collect and replay without publication
         type: choice
-        options: [pck_pension, sema, remaining]
+        options: [pck_pension, sema, ibk, remaining]
         default: pck_pension
 permissions:
   contents: read
