@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install read-only catalog and attachment dependencies
-        run: python3 -m pip install 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47'
+        run: python3 -m pip install 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47' 'truststore==0.10.5'
       - name: Test official inventory boundaries and period filters
         run: python3 -m unittest services.lp.tests.test_audit_lp_official_inventory services.lp.tests.test_audit_lp_candidate_sources services.lp.tests.test_lp_board_adapters_banks services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_priority_lp_programs
       - name: Read current catalog without publication
