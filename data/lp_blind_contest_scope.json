@@ -1,5 +1,5 @@
 {
-  "as_of": "2026-10-25",
+  "as_of": "2026-10-26",
   "product_scope": "공식 공개모집으로 선정하는 국내 PE/PEF 블라인드 펀드 출자사업",
   "confirmed_institution_ids": [
     "koreapost",
@@ -40,7 +40,14 @@
     "cu",
     "kfcc",
     "pck_pension",
-    "sema"
+    "sema",
+    "mmaa",
+    "kbiz",
+    "kamco",
+    "moel_eif",
+    "moel_iaci",
+    "kfinco",
+    "geps"
   ],
   "supporting_collector_ids": [
     "kdb",

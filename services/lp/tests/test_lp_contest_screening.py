@@ -40,8 +40,17 @@ class ScreeningContracts(unittest.TestCase):
             row['evidence'] = [{**row['evidence'][0], 'url': url, 'official': official}]
             with self.assertRaises(ValueError):validate(rows, self.scope)
 
+    def test_fully_connected_scope_has_no_false_missing_collector_label(self):
+        complete = copy.deepcopy(self.scope)
+        complete['operating_collector_ids'] = list(complete['confirmed_institution_ids'])
+        _, markdown = build(self.rows, complete, {'issuers': []}, [])
+        self.assertNotIn('추가 연결 필요', markdown)
+        self.assertIn('운영 연결', markdown)
+
     def test_report_distinguishes_scope_from_working_collectors(self):
-        _, markdown = build(self.rows, self.scope, {'issuers': []}, [{}]*133)
+        partial = copy.deepcopy(self.scope)
+        partial['operating_collector_ids'].remove('kfcc')
+        _, markdown = build(self.rows, partial, {'issuers': []}, [{}]*133)
         self.assertIn('추가 연결 필요', markdown)
         self.assertIn('운영 연결', markdown)
         blocked = copy.deepcopy(self.scope)
