@@ -31,11 +31,38 @@ class LPWebRuntimeTests(unittest.TestCase):
                 response = self.client.get(path)
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.headers['X-LP-Run'], 'lp-test-run')
-                self.assertIn('noindex', response.headers['X-Robots-Tag'])
+                self.assertEqual(response.headers['X-Robots-Tag'], 'index, follow')
             self.assertEqual(self.client.get('/health.json').json['service'], 'lp')
             self.assertEqual(self.client.get('/assets/service.css').status_code, 200)
             self.assertEqual(self.client.get('/assets/service.js').status_code, 200)
             self.assertEqual(fetch.call_count, 2)
+
+    def test_review_and_error_responses_stay_out_of_search(self):
+        with patch.object(web, 'fetch_lp_program_page', return_value=self.page):
+            for path in ('/review.html', '/samples/lp/review.html'):
+                response = self.client.get(path)
+                self.assertIn('noindex', response.headers['X-Robots-Tag'])
+                self.assertEqual(response.headers['Cache-Control'], 'no-store')
+                self.assertEqual(response.headers['Referrer-Policy'], 'no-referrer')
+                self.assertEqual(response.headers['X-Frame-Options'], 'DENY')
+        with patch.object(web, 'fetch_lp_program_page', return_value=None):
+            for path in ('/program-missing.html', '/unknown.html', '/admin/missing'):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 404)
+                self.assertIn('noindex', response.headers['X-Robots-Tag'])
+        with patch.object(web, 'fetch_lp_program_page', side_effect=TimeoutError):
+            self.assertIn('noindex', self.client.get('/').headers['X-Robots-Tag'])
+        self.assertIn('noindex', self.client.post('/review.html').headers['X-Robots-Tag'])
+
+    def test_robots_and_assets_do_not_require_the_database(self):
+        with patch.object(web, 'fetch_lp_program_page', side_effect=TimeoutError) as fetch:
+            response = self.client.get('/robots.txt')
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('Allow: /\n', response.text)
+            for path in ('/review.html', '/samples/lp/review.html', '/admin/', '/health.json'):
+                self.assertIn('Disallow: ' + path + '\n', response.text)
+            self.assertEqual(self.client.get('/assets/service.css').status_code, 200)
+            fetch.assert_not_called()
 
     def test_reader_failure_is_contained_and_assets_keep_working(self):
         with patch.object(web, 'fetch_lp_program_page', side_effect=RuntimeError('PRIVATE SENTINEL')):

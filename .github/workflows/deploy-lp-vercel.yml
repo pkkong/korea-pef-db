@@ -39,3 +39,32 @@ jobs:
           python3 -m unittest services.lp.tests.test_lp_web_runtime
       - name: Deploy and verify own service
         run: python3 scripts/deploy_service_runtime.py --service lp
+      - name: Verify public search policy and review exclusions
+        run: |
+          python3 - <<'PYCODE'
+          import os,urllib.request
+          from urllib.error import HTTPError
+          base=os.environ['LP_PUBLIC_URL'].rstrip('/')
+          for path in ('/','/index.html'):
+              with urllib.request.urlopen(base+path,timeout=30) as response:
+                  assert response.headers.get('X-Robots-Tag')=='index, follow'
+                  assert response.headers.get('X-LP-Data-Source')=='supabase'
+          with urllib.request.urlopen(base+'/robots.txt',timeout=30) as response:
+              text=response.read().decode()
+              assert 'Allow: /\n' in text
+              for path in ('/review.html','/samples/lp/review.html','/admin/','/health.json'):
+                  assert 'Disallow: '+path+'\n' in text
+          for path in ('/review.html','/samples/lp/review.html'):
+              with urllib.request.urlopen(base+path,timeout=30) as response:
+                  assert 'noindex' in response.headers.get('X-Robots-Tag','')
+                  assert response.headers.get('Cache-Control')=='no-store'
+                  assert response.headers.get('Referrer-Policy')=='no-referrer'
+                  assert response.headers.get('X-Frame-Options')=='DENY'
+          try:
+              urllib.request.urlopen(base+'/program-release-check-missing.html',timeout=30)
+          except HTTPError as error:
+              assert error.code==404 and 'noindex' in error.headers.get('X-Robots-Tag','')
+          else:
+              raise AssertionError('Missing LP page was served as public content')
+          print('Public LP search policy and review exclusions verified')
+          PYCODE

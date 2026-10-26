@@ -121,8 +121,24 @@ def serve_page(filename: str):
         return Response('잠시 후 다시 시도해 주세요.', status=503, headers={**headers, 'Retry-After': '60'}, content_type='text/plain; charset=utf-8')
     if page is None:
         return Response('페이지를 찾을 수 없습니다.', status=404, headers=headers, content_type='text/plain; charset=utf-8')
+    if filename != 'review.html':
+        headers['X-Robots-Tag'] = 'index, follow'
     headers.update({'X-LP-Data-Source': 'supabase', 'X-LP-Run': page['run_id'], 'X-LP-Cache': page['cache_status']})
     return Response(rewrite_navigation(page['page_html']), headers=headers, content_type='text/html; charset=utf-8')
+
+
+@app.after_request
+def default_crawler_policy(response):
+    # Only successfully served public pages opt in to search indexing.
+    response.headers.setdefault('X-Robots-Tag', 'noindex, nofollow')
+    return response
+
+
+@app.get('/robots.txt')
+def robots():
+    return Response('User-agent: *\nAllow: /\nDisallow: /review.html\nDisallow: /samples/lp/review.html\nDisallow: /admin/\nDisallow: /health.json\n',
+                    content_type='text/plain; charset=utf-8',
+                    headers={'Cache-Control': 'public, max-age=300'})
 
 
 @app.get('/')
