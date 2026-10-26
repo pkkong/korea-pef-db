@@ -1,7 +1,7 @@
 """Pure parsers for MMAA's observed official notice board controls."""
 import json
 import re
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit, urljoin
 try:
     from .lp_board_adapters_pensions import _Document, _Node, _one, _date
     from .collect_lp_original_notices import parse_original
@@ -87,12 +87,30 @@ def last_page(html,url,config):
     return int(match[1])
 
 
-def parse_detail(html,url,config):
+def parse_detail(html,url,config,*,attachment_listing=None):
     context(html,url,config,True)
     source=parse_original(html,url)
     if not source.get('date') or not source['body']:raise ValueError('MMAA detail metadata/body missing')
     # Dynamic files remain explicitly visible until their official resolver is
     # independently supported; do not invent a download URL or notice ID.
+    if attachment_listing is not None:
+        request=attachment_request(html,url,config)
+        if not request or len(attachment_listing)>2_000_000:raise ValueError('MMAA unobserved or oversized file list')
+        files=json.loads(attachment_listing)
+        if not isinstance(files,list) or len(files)>50:raise ValueError('MMAA file list format/limit differs')
+        expected=parse_qs(urlsplit(request).query)['fileId'][0]
+        observed=set();attachments=[]
+        for item in files:
+            if not isinstance(item,dict):raise ValueError('MMAA file record differs')
+            ident=item.get('fileIdx','');name=item.get('fileName','')
+            if (item.get('fileId')!=expected or type(item.get('result')) is not int or item['result']!=1
+                    or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}',ident) or ident in observed
+                    or not isinstance(name,str) or not name.strip() or len(name)>500
+                    or item.get('downloadPath')!='/afile/fileDownload/'+ident):
+                raise ValueError('MMAA file identity or observed download path differs')
+            observed.add(ident)
+            attachments.append({'name':name,'url':urljoin(BASE,item['downloadPath'])})
+        source.update(attachments=attachments,dynamic_attachments=False)
     source.update(source_id='mmaa:'+query(url,True)['id'][0],url=url)
     return source
 

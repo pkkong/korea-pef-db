@@ -156,13 +156,22 @@ def _hwpx(raw):
         if len(sections) > MAX_SECTIONS or [int(re.search(r"(\d+)\.xml$", n)[1]) for n in sections] != list(range(len(sections))):
             raise ValueError("HWPX body section numbering is incomplete")
         texts, tables = [], []
+        table_depth, table_count, table_cells = 0, 0, 0
 
         def walk(element):
+            nonlocal table_depth, table_count
             kind = _local(element)
             if kind in {"header", "footer", "secPr", "masterPage", "memo", "comment"}:
                 return ""
             if kind == "tbl":
-                grid = table(element)
+                if table_depth >= 8 or table_count >= 1000:
+                    raise ValueError("HWPX table nesting/count exceeds extraction limit")
+                table_depth += 1
+                table_count += 1
+                try:
+                    grid = table(element)
+                finally:
+                    table_depth -= 1
                 tables.append(grid)
                 return "\n".join("\t".join(row) for row in grid)
             if kind == "t":
@@ -175,22 +184,33 @@ def _hwpx(raw):
             return value + ("\n" if kind == "p" else "")
 
         def table(element):
+            nonlocal table_cells
             rows = [e for e in element if _local(e) == "tr"]
             nr, nc = int(element.get("rowCnt", len(rows))), int(element.get("colCnt", 0))
             if not 0 < nr <= 1000 or not 0 < nc <= 100 or nr * nc > 10000 or len(rows) != nr:
                 raise ValueError("HWPX table dimensions are invalid")
+            table_cells += nr * nc
+            if table_cells > 100000:
+                raise ValueError("HWPX total table cells exceed extraction limit")
             grid = [[None] * nc for _ in range(nr)]
             for row in rows:
                 for cell in [e for e in row if _local(e) == "tc"]:
-                    if any(_local(e) == "tbl" for e in cell.iter()):
-                        raise ValueError("Nested HWPX tables require structural review")
                     addr = next((e for e in cell if _local(e) == "cellAddr"), None)
                     span = next((e for e in cell if _local(e) == "cellSpan"), None)
-                    if addr is None or span is None or int(span.get("rowSpan", 1)) != 1 or int(span.get("colSpan", 1)) != 1:
-                        raise ValueError("Merged or unaddressed HWPX cells require structural review")
+                    if addr is None or span is None:
+                        raise ValueError("Unaddressed HWPX cells require structural review")
                     r, c = int(addr.get("rowAddr", -1)), int(addr.get("colAddr", -1))
-                    if not (0 <= r < nr and 0 <= c < nc) or grid[r][c] is not None:
+                    rs, cs = int(span.get("rowSpan", 0)), int(span.get("colSpan", 0))
+                    if not (0 <= r < nr and 0 <= c < nc and rs > 0 and cs > 0 and r + rs <= nr and c + cs <= nc):
+                        raise ValueError("HWPX table cell span/address is invalid")
+                    if any(grid[rr][cc] is not None for rr in range(r, r + rs) for cc in range(c, c + cs)):
                         raise ValueError("HWPX table cell address is invalid or duplicated")
+                    # A merged cell owns its entire explicit rectangle. Keep
+                    # covered positions empty rather than duplicating a label,
+                    # amount or date into columns that did not supply it.
+                    for rr in range(r, r + rs):
+                        for cc in range(c, c + cs):
+                            grid[rr][cc] = ""
                     grid[r][c] = "".join(walk(e) for e in cell if _local(e) == "subList").strip()
             if any(cell is None for row in grid for cell in row):
                 raise ValueError("HWPX table grid has missing cells")

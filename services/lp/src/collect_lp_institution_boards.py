@@ -36,6 +36,12 @@ try:
     from . import lp_board_adapter_kfcc as kfcc, lp_board_adapters_banks as banks
     from . import lp_board_adapter_pck as pck
     from . import lp_board_adapter_sema as sema
+    from . import lp_board_adapter_kfinco as kfinco
+    from . import lp_board_adapter_kbiz as kbiz
+    from . import lp_board_adapter_moel as moel
+    from . import lp_board_adapter_mmaa as mmaa
+    from . import lp_board_adapter_geps as geps
+    from . import lp_board_adapter_kamco as kamco
 except ImportError:
     from lp_ipv4_transport import IPv4HTTPSHandler
     from lp_kdb_dns import resolve_kdb_ipv4
@@ -51,6 +57,12 @@ except ImportError:
     import lp_board_adapters_banks as banks
     import lp_board_adapter_pck as pck
     import lp_board_adapter_sema as sema
+    import lp_board_adapter_kfinco as kfinco
+    import lp_board_adapter_kbiz as kbiz
+    import lp_board_adapter_moel as moel
+    import lp_board_adapter_mmaa as mmaa
+    import lp_board_adapter_geps as geps
+    import lp_board_adapter_kamco as kamco
 
 ROOT = Path(__file__).resolve().parents[3]
 CONFIG = ROOT / 'data/lp_institution_board_channels.json'
@@ -83,6 +95,18 @@ def adapter(config):
         return pck
     if institution == 'sema':
         return sema
+    if institution == 'kbiz':
+        return kbiz
+    if institution == 'mmaa':
+        return mmaa
+    if institution == 'geps':
+        return geps
+    if institution == 'kamco':
+        return kamco
+    if institution in {'moel_eif', 'moel_iaci'}:
+        return moel
+    if institution == 'kfinco':
+        return kfinco
     if institution in {'poba', 'pmaa'}:
         return mutuals
     if institution in {'tp', 'cu'}:
@@ -149,6 +173,15 @@ class Session:
 
     def __call__(self, url, referer=None):
         _same_host(url, self.config)
+        if self.config['institution_id'] == 'kfinco':
+            try:
+                from .discover_kfinco_originals import native_tls_fetch, _fetch_with_retry
+            except ImportError:
+                from discover_kfinco_originals import native_tls_fetch, _fetch_with_retry
+            if not hasattr(self, '_kfinco_retry_budget'):
+                self._kfinco_retry_budget = [4]
+            request_url = kfinco.detail_request(url) if urlsplit(url).path.startswith('/pr/notice/detail/') else url
+            return _fetch_with_retry(native_tls_fetch, request_url, self._kfinco_retry_budget)
         headers = {'User-Agent': 'Mozilla/5.0 (LP official board collector)',
                    'Accept-Encoding': 'identity', 'Connection': 'close'}
         if referer:
@@ -245,9 +278,26 @@ def _html(raw):
     return html
 
 
+def _detail(html, url, config, resolution=None):
+    parser = adapter(config)
+    request = getattr(parser, 'attachment_request', lambda *a: None)(html, url, config)
+    kwargs = {}
+    if resolution is not None:
+        kind = 'attachment_listing' if config['institution_id']=='mmaa' else 'resolver_script'
+        if (not request or set(resolution) != {'url','text','sha256','kind'}
+                or resolution['url'] != request or resolution['kind'] != kind
+                or digest(resolution['text']) != resolution['sha256']):
+            raise ValueError('Official attachment resolver receipt mismatch')
+        _same_host(request, config)
+        kwargs[kind] = resolution['text']
+    return parser.parse_detail(html, url, config, **kwargs)
+
+
 def collect(configs=None, fetch_factory=Session, checked_at=None):
     checked_at = checked_at or datetime.now(timezone.utc).isoformat()
     result = {'checked_at': checked_at, 'notices': [], 'holds': [], 'coverage': {}}
+    shared_listings = {}
+    resolver_cache = {}
     for institution, config in (configs or load_configs()).items():
         fetch = fetch_factory(config)
         receipts, candidates = {}, {}
@@ -267,19 +317,24 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
             if search in stopped_searches:
                 continue
             try:
-                raw = fetch(url, config['listing_url'])
-                html = raw.decode('utf-8') if institution == 'kdb' else _html(raw)
+                if institution in {'moel_eif', 'moel_iaci'} and url in shared_listings:
+                    raw = shared_listings[url]
+                else:
+                    raw = fetch(url, config['listing_url'])
+                    if institution in {'moel_eif', 'moel_iaci'}:
+                        shared_listings[url] = raw
+                html = raw.decode('utf-8') if institution == 'kdb' or config.get('response_format') == 'json' else _html(raw)
                 rows = adapter(config).parse_listing(html, url, config)
                 receipts[url] = {'url': url, 'html': html, 'sha256': digest(html)}
                 coverage['listing_pages'].append({'url': url, 'count': len(rows)})
-                if institution == 'sema':
+                if config.get('lookback_days'):
                     seen = seen_by_search.setdefault(search, set())
                     identities = {row['source_id'] for row in rows}
                     if rows and not identities - seen:
-                        raise ValueError('SEMA listing repeated before observed history boundary')
+                        raise ValueError(institution + ' listing repeated before observed history boundary')
                     seen.update(identities)
                     current_page = int(dict(parse_qsl(urlsplit(url).query))[config['page_param']])
-                    final_page = sema.last_page(html, url, config)
+                    final_page = adapter(config).last_page(html, url, config)
                     regular = [row for row in rows if not row.get('pinned')]
                     older = cutoff and regular and all(row['date'] < cutoff for row in regular)
                     if current_page == final_page or older:
@@ -288,7 +343,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
                             'boundary': 'observed_older_page' if older else 'observed_final_page'})
                     elif current_page == config['pages']:
                         result['holds'].append({'institution_id': institution, 'stage': 'institution_depth',
-                                               'error': 'SEMA configured listing limit reached before history boundary'})
+                                               'error': institution + ' configured listing limit reached before history boundary'})
                 if institution == 'pck_pension':
                     current_page = int(dict(parse_qsl(urlsplit(url).query))[config['page_param']])
                     final_page = pck.last_page(html, url, config)
@@ -303,10 +358,12 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
                         result['holds'].append({'institution_id': institution, 'stage': 'institution_depth',
                                                'error': 'PCK configured listing limit reached before history boundary'})
                 for row in rows:
+                    if 'institution_id' in row and row['institution_id'] != institution:
+                        continue
                     if (re.search(r'위탁|운용사|블라인드|PEF?|사모|선정', row['title'], re.I)
                             and classify_scope(row['title'], row['title']) != 'outside'):
                         if (row['date'] >= cutoff if cutoff else row['date'][:4] >= str(int(checked_at[:4]) - config.get('history_years', 4) + 1)):
-                            key = row['source_id'] if institution == 'sema' else row['url']
+                            key = row['source_id'] if config.get('lookback_days') else row['url']
                             previous = candidates.get(key)
                             if previous and any(previous[0][k] != row[k] for k in ('title', 'date')):
                                 raise ValueError('Conflicting official listing identity metadata')
@@ -314,7 +371,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
                         else:
                             coverage['older_rows_skipped'] = coverage.get('older_rows_skipped', 0) + 1
             except Exception as exc:
-                if institution == 'sema':
+                if config.get('lookback_days'):
                     stopped_searches.add(search)
                 result['holds'].append({'institution_id': institution, 'stage': 'institution_listing',
                                         'url': url, 'error': str(exc)})
@@ -327,15 +384,32 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
                                     'error': 'detail budget reached; older candidates retained in listing receipts'})
         for row, listing_url in ordered[:limit]:
             try:
-                html = _html(fetch(row['url'], listing_url))
-                detail = adapter(config).parse_detail(html, row['url'], config)
-                if detail['date'] != row['date'] or detail['title'] != row['title']:
+                raw = fetch(row['url'], listing_url)
+                html = raw.decode('utf-8') if config.get('response_format') == 'json' else _html(raw)
+                resolution = None
+                request = getattr(adapter(config), 'attachment_request', lambda *a: None)(html, row['url'], config)
+                if request:
+                    try:
+                        _same_host(request, config)
+                        if request not in resolver_cache:
+                            text = decode_html(fetch(request, row['url']))
+                            resolver_cache[request] = {'url':request,'text':text,'sha256':digest(text),
+                                'kind':'attachment_listing' if institution=='mmaa' else 'resolver_script'}
+                        resolution = resolver_cache[request]
+                    except Exception as error:
+                        result['holds'].append({'institution_id':institution,'stage':'institution_attachment_discovery',
+                                                'notice_url':row['url'],'url':request,'error':str(error)})
+                detail = _detail(html, row['url'], config, resolution)
+                titles_match = getattr(adapter(config), 'titles_match', lambda a,b: a==b)
+                if detail['date'] != row['date'] or not titles_match(row['title'], detail['title']):
                     raise ValueError('official listing/detail title or date differs')
                 n = {**detail, 'institution_id': institution, 'source_id': row['source_id'],
                      'url': row['url'], 'checked_at': checked_at, 'source_channel': 'institution_board',
                      'discovery_provenance': {'kind': 'institution_board_v1',
                          'listing': receipts[listing_url], 'detail_html': html, 'detail_sha256': digest(html)},
                      'attachment_hashes': {}, 'attachment_texts': {}, 'attachment_bytes': {}}
+                if resolution is not None:
+                    n['discovery_provenance']['attachment_resolution'] = resolution
                 n['sha256'] = original_body_hash(n)
                 coverage['detail_count'] += 1
                 # Unrelated investment boards remain discoverable, but their
@@ -380,10 +454,11 @@ def validate_notice(raw, checked_at, config=None):
             or digest(proof['detail_html']) != proof['detail_sha256']):
         raise ValueError('institution source receipt mismatch')
     rows = adapter(config).parse_listing(listing['html'], listing['url'], config)
-    if n['institution_id'] == 'sema':
-        sema.last_page(listing['html'], listing['url'], config)
-    detail = adapter(config).parse_detail(proof['detail_html'], n['url'], config)
-    if not any(all(row[k] == n[k] for k in ('url', 'title', 'date', 'source_id')) for row in rows):
+    if config.get('lookback_days'):
+        adapter(config).last_page(listing['html'], listing['url'], config)
+    detail = _detail(proof['detail_html'], n['url'], config, proof.get('attachment_resolution'))
+    titles_match = getattr(adapter(config), 'titles_match', lambda a,b: a==b)
+    if not any(all(row[k] == n[k] for k in ('url', 'date', 'source_id')) and titles_match(row['title'], n['title']) for row in rows):
         raise ValueError('notice was not observed on the configured official listing')
     if any(n[k] != detail[k] for k in ('title', 'date', 'body', 'attachments')):
         raise ValueError('notice differs from official detail receipt')

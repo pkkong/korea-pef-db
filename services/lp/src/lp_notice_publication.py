@@ -25,6 +25,7 @@ try:
     from .lp_institution_notice_terms import extract_terms as extract_institution_terms
     from .lp_kfcc_notice_terms import allocation as kfcc_allocation
     from . import lp_pck_programs as pck_programs
+    from . import lp_kbiz_notice_terms as kbiz_terms
 except ImportError:
     from collect_shared_lp_notices import classify_scope
     from collect_lp_original_notices import load_channels, validate_url, validate_original
@@ -35,6 +36,7 @@ except ImportError:
     from lp_institution_notice_terms import extract_terms as extract_institution_terms
     from lp_kfcc_notice_terms import allocation as kfcc_allocation
     import lp_pck_programs as pck_programs
+    import lp_kbiz_notice_terms as kbiz_terms
 
 ROOT = Path(__file__).resolve().parents[3]
 OFFERING_FIELDS = (
@@ -138,6 +140,8 @@ def _texts(n):
 
 
 def _scope(n):
+    if n.get('institution_id') == 'kbiz' and kbiz_terms.pe_track(n):
+        return 'mixed_pe_blind'
     if n.get('institution_id') == 'pck_pension':
         return 'pe_blind' if pck_programs.offering_sources(n) else 'unknown'
     if n.get('institution_id') == 'kfcc':
@@ -148,7 +152,7 @@ def _scope(n):
             and not re.search(r'(?<![A-Za-z])PEF?(?![A-Za-z])', n['title'], re.I)):
         return 'vc_only'
     # Co-investments, project funds and private debt are distinct product scope.
-    if re.search(r'공동투자|프로젝트|사모대출|대출형|크레딧|private\s*debt', n['title'], re.I):
+    if re.search(r'공동투자|프로젝트|사모대출|대출형|크레딧|부동산|인프라|헤지펀드|private\s*debt|평가\s*기관\s*선정', n['title'], re.I):
         return 'outside'
     return classify_scope(n['title'], text)
 
@@ -180,7 +184,8 @@ def _terms(n, shared_notice, checked_at):
     terms = {}
     try:
         if n.get('source_channel') == 'institution_board':
-            terms = pck_programs.terms(n) if n['institution_id'] == 'pck_pension' else extract_institution_terms(n)
+            terms = (pck_programs.terms(n) if n['institution_id'] == 'pck_pension' else
+                     kbiz_terms.terms(n) if n['institution_id'] == 'kbiz' and kbiz_terms.pe_track(n) else extract_institution_terms(n))
         elif shared_notice:
             terms = extract_shared_terms(shared_notice, checked_at)
         elif n['institution_id'] in INSTITUTIONS:
@@ -332,7 +337,7 @@ def publish_basic_notices(data, growth_notices, checked_at):
             terms, raw_terms = _terms(original, shared.get(original['url']), checked_at)
             if raw_terms.get('deadline_error'):
                 holds.append({'stage': 'basic_deadline', 'url': original['url'], 'reason': raw_terms['deadline_error']})
-            if not reviewed and _scope(original) == 'mixed_pe_blind' and not (raw_terms.get('amount_scope') == 'pe_only' and raw_terms.get('commitment_amount_krw')):
+            if not reviewed and _scope(original) == 'mixed_pe_blind' and not ((raw_terms.get('amount_scope') == 'pe_only' and raw_terms.get('commitment_amount_krw')) or kbiz_terms.pe_track(original)):
                 continue
             if (not reviewed and original.get('source_channel') == 'institution_board'
                     and '공동투자' in original['body'] and not raw_terms.get('extraction_evidence', {}).get('blind_allocation')):

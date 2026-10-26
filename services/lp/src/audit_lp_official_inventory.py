@@ -36,7 +36,7 @@ CORE = {
 }
 HOSTS = {'kgrowth':'kgrowth.or.kr','ktcu':'ktcu.or.kr','koreapost':'kpasset.go.kr',
          'kexim':'koreaexim.go.kr','poba':'poba.or.kr','pmaa':'pmaa.or.kr',
-         'tp':'tp.or.kr','cu':'cu.co.kr','kfcc':'kfcc.co.kr','kdb':'kdb.co.kr','ibk':'ibk.co.kr', 'pck_pension':'pension.or.kr', 'sema':'sema.or.kr'}
+         'tp':'tp.or.kr','cu':'cu.co.kr','kfcc':'kfcc.co.kr','kdb':'kdb.co.kr','ibk':'ibk.co.kr', 'pck_pension':'pension.or.kr', 'sema':'sema.or.kr', 'geps':'geps.or.kr', 'kamco':'kamco.or.kr', 'kbiz':'kbiz.or.kr', 'mmaa':'mmaa.or.kr', 'kfinco':'kfinco.co.kr', 'moel_eif':'moel.go.kr', 'moel_iaci':'moel.go.kr'}
 
 
 def window(as_of):
@@ -54,6 +54,11 @@ def notice_key(institution, url):
     if institution == 'pck_pension':
         canonical = boards.pck.canonical_notice(url)
         return institution + ':' + parse_qs(urlsplit(canonical).query)['seq'][0]
+    if institution == 'geps':
+        pp,_ = boards.geps.validate(url, {'institution_id':'geps','listing_url':boards.geps.BASE+boards.geps.PATH}, True)
+        return institution + ':' + pp.path.rsplit('/',1)[1]
+    if institution == 'kfinco':
+        return institution + ':' + boards.kfinco._public_identifier(url)
     if institution == 'sema':
         query = boards.sema._url(url, boards.sema.BOARD + 'view.do')
         ident = query.get('nttId', [''])[0]
@@ -66,7 +71,12 @@ def notice_key(institution, url):
                     'tp':('/tp-kr/bbs/i-151/detail.do','ntt_sn'),
                     'cu':('/cu/na/ntt/selectNttInfo.do','nttSn'),
                     'kfcc':('/mgNotice/mgNoticeDetail.do','no'),
-                    'ibk':('/cyber/noticeDetailCyber.ibk','srno')}
+                    'ibk':('/cyber/noticeDetailCyber.ibk','srno'),
+                    'kamco':('/portal/bbs/view.do','bIdx'),
+                    'kbiz':('/ko/contents/bbs/view.do','seq'),
+                    'mmaa':('/web/contents/notice.do','id'),
+                    'moel_eif':('/info/astmgmt/employ/imchaeBbsView.do','bbs_seq'),
+                    'moel_iaci':('/info/astmgmt/employ/imchaeBbsView.do','bbs_seq')}
     if institution in {'ktcu','kexim'}:
         prefix='/PPW-CSB-000101/' if institution=='ktcu' else '/HPHKBI039M01/'
         ident=p.path[len(prefix):] if p.path.startswith(prefix) else ''
@@ -81,6 +91,9 @@ def notice_key(institution, url):
         if p.path!=route or len(q.get(field,[]))!=1:raise ValueError('invalid official notice route')
         if institution=='koreapost' and q.get('bid')!=['0041']:raise ValueError('Korea Post board mismatch')
         if institution=='ibk' and q.get('pageId')!=['IR03010400']:raise ValueError('IBK board mismatch')
+        if institution=='kamco' and (q.get('ptIdx')!=['380'] or q.get('mId')!=['0701010000']):raise ValueError('KAMCO board mismatch')
+        if institution=='kbiz' and q.get('mnSeq')!=['211']:raise ValueError('KBIZ board mismatch')
+        if institution=='mmaa' and q.get('schM')!=['view']:raise ValueError('MMAA detail mismatch')
         expected={'poba':{'sechBbsSeq':'10'},'cu':{'bbsId':'1020','mi':'100007'},
                   'kgrowth':{'str_type':'1','tab':'1'},'pmaa':{'type':'view'}}
         for board_field,value in expected.get(institution,{}).items():
@@ -236,7 +249,7 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
                     if body_bytes>32*1024*1024:
                         remaining=0
                         raise ValueError('inventory total body budget exceeded')
-                    html=raw.decode('utf-8') if institution=='kdb' else boards.decode_html(raw)
+                    html=raw.decode('utf-8') if institution=='kdb' or config.get('response_format')=='json' else boards.decode_html(raw)
                     receipt={'institution_id':institution,'term':term,'page':page,'url':url,'html':html,
                              'sha256':hashlib.sha256(html.encode()).hexdigest(),'row_count':None}
                     report['receipts'].append(receipt);query['pages'].append(len(report['receipts'])-1)
@@ -248,7 +261,7 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
                     for row in rows:
                         stamp=date.fromisoformat(row['date']).isoformat()
                         oldest=min(oldest or stamp,stamp);newest=max(newest or stamp,stamp)
-                        if start<=stamp<=end:
+                        if start<=stamp<=end and ('institution_id' not in row or row['institution_id']==institution):
                             key=notice_key(institution,row['url']);item={**row,'source_id':key}
                             if key in observed and any(observed[key][k]!=item[k] for k in ('title','date')):raise ValueError('conflicting official listing metadata')
                             observed[key]=item
@@ -257,7 +270,7 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
                     if institution in CORE:
                         last_page=core_last_page(institution,html,url)
                         if last_page is not None and page==last_page:query['boundary']='observed_final_page';break
-                    elif institution in {'pck_pension', 'sema'} and page == boards.adapter(config).last_page(html, url, config):
+                    elif hasattr(boards.adapter(config), 'last_page') and page == boards.adapter(config).last_page(html, url, config):
                         query['boundary']='observed_final_page';break
                     elif institution == 'ibk':
                         last_page=boards.banks.ibk_last_page(html,url,config)

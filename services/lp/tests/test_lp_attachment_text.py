@@ -163,10 +163,35 @@ class AttachmentTextTests(unittest.TestCase):
         self.assertEqual(value["tables"], [[["A", "B"], ["10", "20"]]])
         self.assertEqual(value["text"], "A\tB\n10\t20")
 
-    def test_hwpx_merged_or_duplicate_cells_are_not_inferred(self):
-        for cells in [cell("A", 0, 0, span=2), cell("A", 0, 0) + cell("B", 0, 0)]:
+    def test_hwpx_merged_cells_keep_only_the_source_anchor_value(self):
+        cells=cell("PE 600억원",0,0,span=2)
+        value=extract_attachment(hwpx([section('<hp:tbl rowCnt="1" colCnt="2"><hp:tr>'+cells+'</hp:tr></hp:tbl>')]))
+        self.assertEqual(value['tables'],[[['PE 600억원','']]])
+        self.assertEqual(value['text'].count('600'),1)
+        rows='<hp:tr>'+cell('PE',0,0).replace('rowSpan="1"','rowSpan="2"')+cell('600',0,1)+'</hp:tr><hp:tr>'+cell('2개사',1,1)+'</hp:tr>'
+        value=extract_attachment(hwpx([section('<hp:tbl rowCnt="2" colCnt="2">'+rows+'</hp:tbl>')]))
+        self.assertEqual(value['tables'],[[['PE','600'],['','2개사']]])
+
+    def test_hwpx_missing_overlapping_or_out_of_bounds_cells_are_rejected(self):
+        for cells in [cell("A", 0, 0, span=3), cell("A",0,0,span=0),
+                      cell("A",0,0,span=2)+cell("B",0,1), cell("A",0,0),
+                      cell("A", 0, 0) + cell("B", 0, 0),
+                      cell('A',0,0).replace('<hp:cellAddr rowAddr="0" colAddr="0"/>','')]:
             with self.assertRaises(ValueError):
                 extract_attachment(hwpx([section('<hp:tbl rowCnt="1" colCnt="2"><hp:tr>' + cells + '</hp:tr></hp:tbl>')]))
+
+    def test_nested_hwpx_tables_preserve_explicit_grids_and_enforce_depth(self):
+        def enclosing(inner):
+            return ('<hp:tbl rowCnt="1" colCnt="1"><hp:tr><hp:tc><hp:subList><hp:p><hp:run>'
+                    +inner+'</hp:run></hp:p></hp:subList><hp:cellAddr rowAddr="0" colAddr="0"/>'
+                    '<hp:cellSpan rowSpan="1" colSpan="1"/></hp:tc></hp:tr></hp:tbl>')
+        inner='<hp:tbl rowCnt="1" colCnt="2"><hp:tr>'+cell('PEF',0,0)+cell('600억원',0,1)+'</hp:tr></hp:tbl>'
+        result=extract_attachment(hwpx([section(enclosing(inner))]))
+        self.assertEqual(result['tables'][0],[['PEF','600억원']])
+        self.assertEqual(result['text'].count('600억원'),1)
+        for _ in range(9):inner=enclosing(inner)
+        with self.assertRaisesRegex(ValueError,'nesting'):
+            extract_attachment(hwpx([section(inner)]))
 
     def test_hwpx_entities_and_archive_expansion_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "declarations"):

@@ -97,6 +97,104 @@
         "위탁운용사"
       ],
       "pages": 2
+    },
+    {
+      "institution_id": "mmaa",
+      "listing_url": "https://www.mmaa.or.kr/web/contents/notice.do?schM=list&schFld=1&viewCount=10",
+      "search_param": "schStr",
+      "searches": [
+        "블라인드",
+        "위탁운용사",
+        "출자"
+      ],
+      "page_param": "page",
+      "pages": 10,
+      "history_years": 2,
+      "lookback_days": 365
+    },
+    {
+      "institution_id": "kbiz",
+      "listing_url": "https://www.kbiz.or.kr/ko/contents/bbs/list.do?mnSeq=211&schFld=ttl",
+      "search_param": "schTxt",
+      "searches": [
+        "블라인드",
+        "위탁운용사",
+        "출자"
+      ],
+      "page_param": "pg",
+      "pages": 10,
+      "max_details": 60,
+      "history_years": 2,
+      "lookback_days": 365
+    },
+    {
+      "institution_id": "geps",
+      "listing_url": "https://www.geps.or.kr/notiCommunication_notice_center?srchKey=sj",
+      "search_param": "srchText",
+      "searches": [
+        "위탁운용사",
+        "PEF",
+        "사모투자",
+        "블라인드"
+      ],
+      "page_param": "curPage",
+      "pages": 10,
+      "max_details": 60,
+      "history_years": 2,
+      "lookback_days": 365
+    },
+    {
+      "institution_id": "kamco",
+      "listing_url": "https://www.kamco.or.kr/portal/bbs/list.do?mId=0701010000&ptIdx=380&searchType=0",
+      "search_param": "searchTxt",
+      "searches": [
+        "주력산업",
+        "PEF",
+        "블라인드",
+        "출자"
+      ],
+      "page_param": "page",
+      "pages": 10,
+      "max_details": 60,
+      "history_years": 2,
+      "lookback_days": 365
+    },
+    {
+      "institution_id": "moel_eif",
+      "listing_url": "https://www.moel.go.kr/info/astmgmt/employ/imchaeBbsList.do?pageUnit=10",
+      "search_param": "searchText",
+      "searches": [
+        ""
+      ],
+      "page_param": "pageIndex",
+      "pages": 20,
+      "history_years": 2,
+      "lookback_days": 365
+    },
+    {
+      "institution_id": "moel_iaci",
+      "listing_url": "https://www.moel.go.kr/info/astmgmt/employ/imchaeBbsList.do?pageUnit=10",
+      "search_param": "searchText",
+      "searches": [
+        ""
+      ],
+      "page_param": "pageIndex",
+      "pages": 20,
+      "history_years": 2,
+      "lookback_days": 365
+    },
+    {
+      "institution_id": "kfinco",
+      "listing_url": "https://www.kfinco.co.kr/api/pr/notice/list?page=1&size=10&searchKeyword=%EC%9C%84%ED%83%81%EC%9A%B4%EC%9A%A9%EC%82%AC",
+      "search_param": "searchKeyword",
+      "searches": [
+        "위탁운용사"
+      ],
+      "page_param": "page",
+      "pages": 1,
+      "response_format": "json",
+      "history_years": 2,
+      "lookback_days": 365
     }
   ],
   "history_years": 4
