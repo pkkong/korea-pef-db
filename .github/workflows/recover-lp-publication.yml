@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
-    runs-on: ${{ inputs.retry_failed_institutions && 'macos-latest' || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.retry_failed_institutions && 'macos-15-intel' || 'ubuntu-latest' }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
