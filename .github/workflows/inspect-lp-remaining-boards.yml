@@ -4,7 +4,7 @@ on:
     inputs:
       profile:
         type: choice
-        options: [initial, followup, mmaa_files]
+        options: [initial, followup, mmaa_files, geps_pck_recovery]
         default: initial
 permissions:
   contents: read

@@ -7,16 +7,99 @@ import json
 from pathlib import Path
 import re
 import sys
+import subprocess
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urljoin, urlsplit, urlencode, urlunsplit
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from services.lp.src.collect_lp_institution_boards import Session,is_form
+from services.lp.src.collect_lp_institution_boards import Session,is_form,load_configs,listing_urls,MAX_BYTES,adapter
 from services.lp.src.collect_shared_lp_notices import Document,decode_html
 from services.lp.src.collect_lp_original_notices import parse_original
 from services.lp.src.discover_lp_original_boards import channels,page_url,listing_links
 from services.lp.src import lp_board_adapter_mmaa as mmaa
 
 
+def dns_observation(host, family):
+    """Bound the platform resolver probe without changing official transport."""
+    code = ('import socket,json,sys;'
+            'print(json.dumps(sorted(set(r[4][0] for r in socket.getaddrinfo('
+            'sys.argv[1],443,int(sys.argv[2]),socket.SOCK_STREAM)))))')
+    try:
+        result = subprocess.run([sys.executable, '-c', code, host, str(family)],
+                                capture_output=True, text=True, timeout=5, check=False)
+        if result.returncode:
+            return {'family': family, 'status': 'resolver_error', 'exit_code': result.returncode}
+        return {'family': family, 'status': 'ok', 'addresses': json.loads(result.stdout)}
+    except subprocess.TimeoutExpired:
+        return {'family': family, 'status': 'timeout'}
+
+
+def diagnostic_targets(configs):
+    """Only first GEPS query and first pages of the first two PCK searches."""
+    for institution, count in [('geps', 1), ('pck_pension', 2)]:
+        config = configs[institution]
+        bounded = {**config, 'pages': 1, 'searches': config['searches'][:count]}
+        for url in listing_urls(bounded):
+            yield institution, config, url
+
+
+def inspect_recovery(output):
+    report = {'mode': 'geps_pck_read_only_transport_diagnostic', 'responses': [], 'holds': [], 'dns': []}
+    output.mkdir(parents=True, exist_ok=True)
+    total = 0
+    def save(raw, institution, label):
+        nonlocal total
+        if len(raw) > MAX_BYTES or total + len(raw) > 32 * 1024 * 1024:
+            raise ValueError('diagnostic response body budget exceeded')
+        total += len(raw)
+        digest = hashlib.sha256(raw).hexdigest()
+        name = institution + '-' + label + '-' + digest[:16] + '.html'
+        (output / name).write_bytes(raw)
+        return {'file': name, 'sha256': digest, 'bytes': len(raw)}
+    try:
+        for institution, config, url in diagnostic_targets(load_configs()):
+            if institution == 'geps':
+                host = urlsplit(config['listing_url']).hostname
+                report['dns'] = [dns_observation(host, family) for family in (0, 2)]
+            row = {'institution_id': institution, 'url': url, 'attempts': []}
+            report['responses'].append(row)
+            session = Session(config)
+            for transport, opener in [('system', session.opener), ('ipv4', session.ipv4_opener)]:
+                original = opener.open
+                def observed(request, *args, _open=original, _transport=transport, **kwargs):
+                    attempt = {'transport': _transport}
+                    row['attempts'].append(attempt)
+                    try:
+                        response = _open(request, *args, **kwargs)
+                        attempt.update(status=response.status, final_url=response.geturl())
+                        return response
+                    except HTTPError as error:
+                        attempt.update(status=error.code, final_url=error.geturl())
+                        attempt.update(save(error.read(MAX_BYTES + 1), institution, 'http-error'))
+                        raise
+                    except Exception as error:
+                        attempt['error_type'] = type(error).__name__
+                        raise
+                opener.open = observed
+            try:
+                if total >= 32 * 1024 * 1024:
+                    raise ValueError('diagnostic body budget exhausted')
+                raw = session(url, config['listing_url'])
+                row.update(save(raw, institution, 'listing'))
+                row['row_count'] = len(adapter(config).parse_listing(decode_html(raw), url, config))
+            except Exception as error:
+                row['error'] = str(error)
+                report['holds'].append({'institution_id': institution, 'url': url, 'error': str(error)})
+            row['dns_ipv4_successes'] = session.dns_ipv4_fetches
+    finally:
+        (output / 'index.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
+    print(json.dumps({'responses': len(report['responses']), 'holds': report['holds'], 'bytes': total}, ensure_ascii=False))
+    if report['holds']:
+        raise SystemExit('Official source diagnostic found failures; receipts retained')
+
+
 def inspect(output, profile="initial"):
+    if profile == 'geps_pck_recovery':
+        return inspect_recovery(output)
     output.mkdir(parents=True,exist_ok=True)
     report={'mode':'official_read_only_observed_link_inspection','responses':[],'holds':[]}
     cache={};total=0;sessions={}
