@@ -1,8 +1,14 @@
 name: Audit LP official yearly inventory
 on:
   workflow_dispatch:
+    inputs:
+      inventory_run:
+        description: Optional recent inventory run to replay saved lists and verify only unresolved original notices
+        required: false
+        type: string
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: lp-program-collection
   cancel-in-progress: false
@@ -11,10 +17,36 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 15
     env:
+      LP_INVENTORY_RUN: ${{ inputs.inventory_run || '' }}
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
     steps:
       - uses: actions/checkout@v6
+      - name: Verify saved inventory provenance
+        if: inputs.inventory_run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          python3 - <<'PYCODE'
+          import datetime,json,os,subprocess
+          ident=os.environ['LP_INVENTORY_RUN']
+          assert ident.isascii() and ident.isdecimal(), 'Numeric inventory run required'
+          run=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{ident}"]))
+          assert run['repository']['full_name']==os.environ['GH_REPO']
+          assert run['path']=='.github/workflows/audit-lp-official-inventory.yml'
+          assert run['head_branch']=='main' and run['event']=='workflow_dispatch' and run['status']=='completed'
+          created=datetime.datetime.fromisoformat(run['created_at'].replace('Z','+00:00'))
+          assert datetime.timedelta(0)<=datetime.datetime.now(datetime.timezone.utc)-created<=datetime.timedelta(hours=48)
+          print(json.dumps({k:run[k] for k in ('id','head_sha','conclusion','created_at')}))
+          PYCODE
+      - uses: actions/download-artifact@v4
+        if: inputs.inventory_run != ''
+        with:
+          name: lp-official-inventory
+          run-id: ${{ inputs.inventory_run }}
+          github-token: ${{ github.token }}
+          path: /tmp
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -23,6 +55,7 @@ jobs:
       - name: Test official inventory boundaries and period filters
         run: python3 -m unittest services.lp.tests.test_audit_lp_official_inventory services.lp.tests.test_audit_lp_candidate_sources services.lp.tests.test_lp_board_adapters_banks services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_priority_lp_programs
       - name: Read current catalog without publication
+        if: inputs.inventory_run == ''
         env:
           PYTHONPATH: services/lp/src
         run: |
@@ -36,11 +69,34 @@ jobs:
               Path('/tmp/lp-source-index.json').write_text(json.dumps(source_index(conn),ensure_ascii=False))
           PY
       - name: Inventory official lists and compare retained notice identities
+        if: inputs.inventory_run == ''
         run: |
           python3 services/lp/src/audit_lp_official_inventory.py --baseline /tmp/lp-baseline.json --archive /tmp/lp-source-index.json --output /tmp/lp-official-inventory.json --markdown /tmp/lp-official-inventory.md
       - name: Resolve remaining discovery clues on official sources without publication
         run: |
-          python3 services/lp/src/audit_lp_discovery_coverage.py --baseline /tmp/lp-baseline.json --official-collection /tmp/lp-source-index.json --output /tmp/lp-discovery-audit.json
+          if [ -z "$LP_INVENTORY_RUN" ]; then
+            python3 services/lp/src/audit_lp_discovery_coverage.py --baseline /tmp/lp-baseline.json --official-collection /tmp/lp-source-index.json --output /tmp/lp-discovery-audit.json
+          fi
+          python3 - <<'PYCODE'
+          import json,os
+          from pathlib import Path
+          from collections import Counter
+          from services.lp.src.audit_lp_discovery_coverage import title_scope
+          from services.lp.src.audit_lp_official_inventory import markdown
+          p=Path('/tmp/lp-official-inventory.json');report=json.loads(p.read_text())
+          assert not report['holds'], 'Resolve source failures before replaying inventory'
+          counts=Counter()
+          for entry in report['institutions']:
+              for row in entry['rows']:
+                  row['title_scope']=title_scope(row['title'])[0]
+                  if row['relevant'] and row['disposition']=='not_in_archive': counts[row['title_scope']]+=1
+              if entry['counts'] is not None:
+                  entry['counts']['explicit_pe_blind_unarchived']=sum(r['relevant'] and r['disposition']=='not_in_archive' and r['title_scope']=='pe_blind_title' for r in entry['rows'])
+          report['summary']['unarchived_by_title_scope']=dict(counts)
+          if os.environ['LP_INVENTORY_RUN']: report['classification_replay_of']=os.environ['LP_INVENTORY_RUN']
+          p.write_text(json.dumps(report,ensure_ascii=False))
+          Path('/tmp/lp-official-inventory.md').write_text(markdown(report))
+          PYCODE
           python3 services/lp/src/audit_lp_candidate_sources.py --inventory /tmp/lp-official-inventory.json --discovery /tmp/lp-discovery-audit.json --output /tmp/lp-official-candidate-sources.json
       - name: Report inventory boundaries and verification failures
         run: |

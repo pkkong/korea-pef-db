@@ -187,7 +187,8 @@ class DiscoveryCoverageTests(unittest.TestCase):
         cases = [('2026 VC 블라인드 모집', 'vc_explicit'), ('벤처펀드 선정', 'vc_explicit'),
                  ('2026 PE/VC 모집', 'mixed_pe_vc'), ('해외 블라인드 PEF 모집', 'outside_policy'),
                  ('국내주식 헤지펀드 선정', 'outside_policy'), ('국내 PD 모집', 'outside_policy'),
-                 ('2026 성장펀드 모집', 'scope_unconfirmed')]
+                 ('2026 성장펀드 모집', 'scope_unconfirmed'),
+                 ('정책금융기관 글로벌 스케일업 협력펀드 위탁운용사 선정계획 공고', 'scope_unconfirmed')]
         for title, scope in cases:
             item = compare(notice(title=title, scope='pe_blind_title'))['items'][0]
             self.assertEqual(item['scope'], scope, title)

@@ -194,7 +194,8 @@ def classify_scope(title,body):
     vc_pattern = r'(?<![A-Za-z])VC(?![A-Za-z])|벤처투자조합|신기술사업투자조합'
     if re.search(r'채용|전문위원|국내주식|인덱스|해외채권|해외주식|해외부동산|해외 부동산|OCIO',title,re.I):
         return 'outside'
-    if re.search(r'해외|글로벌',title) and not re.search(r'국내|중소|중견|수출',title):
+    # A global-branded business does not establish its investment geography.
+    if re.search(r'해외',title) and not re.search(r'국내|중소|중견|수출',title):
         return 'outside'
     title_pe = bool(re.search(pe_pattern,title,re.I))
     title_blind = bool(re.search(r'블라인드|blind',title,re.I))

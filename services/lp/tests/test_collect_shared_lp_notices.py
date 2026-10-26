@@ -196,6 +196,15 @@ class SharedCollectionTests(unittest.TestCase):
         self.assertEqual(classify_scope('국내 PEF 모집', '기존 블라인드펀드 소진율 60% 이상인 운용사'), 'needs_confirmation')
         self.assertEqual(classify_scope('국내 PEF 모집', '최근 블라인드펀드 GP 모집 이력 보유자만 지원 가능'), 'needs_confirmation')
 
+    def test_global_brand_requires_current_offering_evidence(self):
+        title = '정책금융기관 글로벌 스케일업 협력펀드 위탁운용사 선정계획 공고'
+        for body in ['', '선정계획은 첨부파일을 참조하십시오.',
+                     '기존 국내 블라인드 PEF 운용경험과 소진율을 평가합니다.']:
+            self.assertEqual(classify_scope(title, body), 'needs_confirmation')
+        self.assertEqual(classify_scope(title, '선정유형: 국내 블라인드 PEF 모집'), 'pe_blind')
+        self.assertEqual(classify_scope(title, '선정유형: 블라인드 PEF 모집'), 'needs_confirmation')
+        self.assertEqual(classify_scope('해외 글로벌 PE 블라인드 선정', ''), 'outside')
+
     def test_reversed_kvca_dates_use_labelled_registration_not_fake_original_date(self):
         html='<table><tr><th>공고명</th><td>국내 PE 블라인드</td></tr><tr><th>공고일</th><td>2026-08-31</td><th>신청기한</th><td>2026-08-14</td></tr><tr><th>등록일</th><td>2026-08-05</td></tr><tr><th>공고 내용</th><td>국내 PE 블라인드 모집</td></tr></table>'
         d=parse_detail(html,KVCA,'kvca')
