@@ -8,11 +8,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 try:
-    from .collect_ktcu_program import collect as collect_ktcu
+    from .collect_ktcu_program import collect as collect_ktcu, project as project_ktcu, link_suggestions as suggest_ktcu, discovery_candidates as discover_ktcu
     from .collect_koreapost_program import collect as collect_post, project as project_post, _suggestions as suggest_post, discovery_candidates as discover_post
     from .collect_kexim_programs import collect as collect_kexim, project as project_kexim, link_suggestions as suggest_kexim, discovery_candidates as discover_kexim
 except ImportError:
-    from collect_ktcu_program import collect as collect_ktcu
+    from collect_ktcu_program import collect as collect_ktcu, project as project_ktcu, link_suggestions as suggest_ktcu, discovery_candidates as discover_ktcu
     from collect_koreapost_program import collect as collect_post, project as project_post, _suggestions as suggest_post, discovery_candidates as discover_post
     from collect_kexim_programs import collect as collect_kexim, project as project_kexim, link_suggestions as suggest_kexim, discovery_candidates as discover_kexim
 
@@ -28,6 +28,16 @@ def _current_artifact(path: Path, checked_at: str, institution: str) -> dict:
     if not report["notices"]:
         raise ValueError(f"{institution} official collection is empty")
     return report
+
+
+def load_ktcu_collection(path: Path, checked_at: str, seed_program: dict) -> dict:
+    report = _current_artifact(path, checked_at, 'KTCU')
+    notices = report['notices']
+    programs, holds = project_ktcu(notices, checked_at, seed_program)
+    return {'checked_at': report['checked_at'], 'notices': notices,
+            'programs': programs, 'holds': holds,
+            'link_suggestions': suggest_ktcu(notices, seed_program['title']),
+            'discovery_candidates': discover_ktcu(notices)}
 
 
 def load_kexim_collection(path: Path, checked_at: str) -> dict:
@@ -54,12 +64,13 @@ def load_post_collection(path: Path, checked_at: str) -> dict:
 
 
 def collect(seed=None, checked_at=None, collectors=None, kexim_input: Path | None = None,
-            koreapost_input: Path | None = None):
+            koreapost_input: Path | None = None, ktcu_input: Path | None = None):
     seed = seed or json.loads((ROOT / "data/lp_programs_pilot.json").read_text())
     by_id = {p["id"]: p for p in seed["programs"]}
     checked_at = checked_at or datetime.now(timezone.utc).isoformat()
     collectors = collectors or {
-        "ktcu": lambda: collect_ktcu(by_id["ktcu-2026-blind-pef"], checked_at),
+        "ktcu": (lambda: load_ktcu_collection(ktcu_input, checked_at, by_id["ktcu-2026-blind-pef"])) if ktcu_input else
+                (lambda: collect_ktcu(by_id["ktcu-2026-blind-pef"], checked_at)),
         "koreapost": (lambda: load_post_collection(koreapost_input, checked_at)) if koreapost_input else
                      (lambda: collect_post(by_id["koreapost-2026-domestic-pe"], checked_at)),
         "kexim": (lambda: load_kexim_collection(kexim_input, checked_at)) if kexim_input else
@@ -81,12 +92,13 @@ def collect(seed=None, checked_at=None, collectors=None, kexim_input: Path | Non
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--ktcu-input", type=Path, help="official KTCU artifact from this run’s macOS runner")
     parser.add_argument("--kexim-input", type=Path,
                         help="official collection artifact from this run's macOS runner")
     parser.add_argument("--koreapost-input", type=Path,
                         help="official collection artifact from this run's macOS runner")
     args = parser.parse_args()
-    report = collect(kexim_input=args.kexim_input, koreapost_input=args.koreapost_input)
+    report = collect(kexim_input=args.kexim_input, koreapost_input=args.koreapost_input, ktcu_input=args.ktcu_input)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.output.with_suffix(args.output.suffix + ".tmp")
     temporary.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")

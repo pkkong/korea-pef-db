@@ -5,13 +5,14 @@ sources may alter the public program or GP list.
 """
 from __future__ import annotations
 
+import argparse
 import copy
 import hashlib
 import io
 import json
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlencode, urljoin, urlparse
@@ -273,3 +274,21 @@ def collect(seed_program, checked_at, fetch=None):
     suggestions = link_suggestions(notices, seed_program["title"])
     return {"notices": notices, "programs": programs, "holds": holds,
             "link_suggestions": suggestions, "discovery_candidates": discovery_candidates(notices)}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', type=Path, required=True)
+    args = parser.parse_args()
+    checked_at = datetime.now(timezone.utc).isoformat()
+    seed = next(p for p in json.loads((ROOT / 'data/lp_programs_pilot.json').read_text())['programs'] if p['id'] == PROGRAM_ID)
+    result = {'checked_at': checked_at, **collect(seed, checked_at)}
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = args.output.with_suffix(args.output.suffix + '.tmp')
+    temporary.write_text(json.dumps(result, ensure_ascii=False) + '\n')
+    temporary.replace(args.output)
+    print(json.dumps({'notices': len(result['notices']), 'programs': len(result['programs']), 'holds': len(result['holds'])}))
+
+
+if __name__ == '__main__':
+    main()

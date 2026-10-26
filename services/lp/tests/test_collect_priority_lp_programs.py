@@ -29,6 +29,26 @@ class MacOSArtifactTests(unittest.TestCase):
         self.assertEqual(result["programs"], [{"id": "verified"}])
         self.assertEqual(result["notices"], [{"source_id": "official"}])
 
+    def test_ktcu_artifact_is_reprojected_instead_of_trusting_prepared_programs(self):
+        self.write(self.now - timedelta(minutes=2))
+        seed = {'id': 'ktcu-2026-blind-pef', 'title': 'Existing KTCU program'}
+        with patch.object(priority, 'project_ktcu', return_value=([{'id': 'verified-ktcu'}], [])) as project, \
+             patch.object(priority, 'suggest_ktcu', return_value=[]), \
+             patch.object(priority, 'discover_ktcu', return_value=[{'source_id': 'discovered'}]):
+            result = priority.load_ktcu_collection(self.path, self.now.isoformat(), seed)
+        project.assert_called_once_with([{'source_id': 'official'}], self.now.isoformat(), seed)
+        self.assertEqual(result['programs'], [{'id': 'verified-ktcu'}])
+        self.assertEqual(result['discovery_candidates'], [{'source_id': 'discovered'}])
+
+    def test_stale_ktcu_artifact_keeps_an_outage_signal(self):
+        self.write(self.now - timedelta(hours=3))
+        source = lambda: priority.load_ktcu_collection(self.path, self.now.isoformat(), {'title': 'KTCU'})
+        report = priority.collect(checked_at=self.now.isoformat(), collectors={'ktcu': source})
+        self.assertIn('current run', report['sources']['ktcu']['error'])
+        self.assertEqual(report['sources']['ktcu']['notices'], [])
+        self.assertEqual(report['sources']['ktcu']['programs'], [])
+        self.assertTrue(report['sources']['ktcu']['holds'])
+
     def test_stale_artifact_is_rejected(self):
         self.write(self.now - timedelta(hours=3))
         with self.assertRaisesRegex(ValueError, "current run"):

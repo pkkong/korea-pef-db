@@ -146,13 +146,16 @@ def reuse_native_originals(collection,official_notices,checked_at):
     return result
 
 
-def discover(collection,fetch=fetch_bytes,pages=2,checked_at=None):
+def discover(collection,fetch=fetch_bytes,pages=2,checked_at=None,deferred_institutions=()):
     if not 1<=pages<=3:raise ValueError('Official listing pages must be between 1 and 3')
     result=copy.deepcopy(collection);checked_at=checked_at or datetime.now(timezone.utc).isoformat()
     aliases=load_aliases();allowed=load_channels();stats={};seen=[];listing_cache={}
     for institution,config in channels().items():
         targets=[n for n in result.get('notices',[]) if n.get('institution_id')==institution and not n.get('original_notices') and n.get('source_scope') not in ('outside','vc_only')]
         stats[institution]={'pages':0,'discovered':0,'matched':0,'errors':0,'target_notices':len(targets)}
+        if institution in deferred_institutions:
+            stats[institution]['delegated_to']='institution_board'
+            continue
         for page in range(1,pages+1):
             if page>1 and all(n.get('original_notices') for n in targets):break
             url=page_url(config,page)
@@ -202,8 +205,15 @@ def discover(collection,fetch=fetch_bytes,pages=2,checked_at=None):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--input',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--pages',type=int,default=2);args=parser.parse_args()
-    result=discover(json.loads(args.input.read_text()),pages=args.pages)
+    parser.add_argument('--pages',type=int,default=2)
+    parser.add_argument('--skip-native-boards',action='store_true')
+    args=parser.parse_args()
+    deferred=()
+    if args.skip_native_boards:
+        try: from .collect_lp_institution_boards import load_configs
+        except ImportError: from collect_lp_institution_boards import load_configs
+        deferred=set(load_configs())
+    result=discover(json.loads(args.input.read_text()),pages=args.pages,deferred_institutions=deferred)
     args.output.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
     print(json.dumps(result['coverage']['official_boards'],ensure_ascii=False))
 

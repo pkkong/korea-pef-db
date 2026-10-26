@@ -9,6 +9,19 @@ from services.lp.src.collect_lp_original_notices import validate_identity, load_
 
 
 class OfficialBoardTests(unittest.TestCase):
+    def test_native_discovery_delegation_avoids_duplicate_requests_without_erasing_errors(self):
+        notice = {'institution_id': 'geps', 'title': '국내 PE 블라인드 모집',
+                  'url': 'https://www.kvca.or.kr/observed', 'source_scope': 'pe_blind'}
+        hold = {'stage': 'original_board', 'institution_id': 'geps', 'error': 'existing outage'}
+        source = {'notices': [notice], 'holds': [hold]}
+        fetch = unittest.mock.Mock(side_effect=AssertionError('Duplicate official board request'))
+        result = discover(source, fetch=fetch, deferred_institutions=set(channels()))
+        fetch.assert_not_called()
+        self.assertEqual(result['notices'], [notice])
+        self.assertEqual(result['holds'], [hold])
+        self.assertEqual(result['coverage']['official_boards']['geps']['delegated_to'], 'institution_board')
+        self.assertNotIn('coverage', source)
+
     def test_observed_javascript_controls_use_arbitrary_new_identifiers(self):
         config=channels()['kbiz'];url=page_url(config,1)
         html="<html><span onclick=\"goView(987654, 'N')\">2026년 국내 블라인드 펀드 선정 공고</span></html>"
