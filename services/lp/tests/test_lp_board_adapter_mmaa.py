@@ -33,6 +33,13 @@ class MmaaTests(unittest.TestCase):
   self.assertEqual(boards.validate_notice(n,r['checked_at'],CFG),n)
   bad=copy.deepcopy(n);bad['discovery_provenance']['attachment_resolution']['text']='[]'
   with self.assertRaises(ValueError):boards.validate_notice(bad,r['checked_at'],CFG)
+ def test_short_pager_uses_observed_total_and_numbered_controls(self):
+  html=LISTING.replace('<a class="nextAll" onclick="fn_egov_link_page(1); return false;">마지막</a>',
+       '<a onclick="fn_egov_link_page(2); return false;">2</a>')
+  html=html.replace('<div class="paging">','<div class="no-srch"><p>총 19 건 Page : 1 / 2</p></div><div class="paging">')
+  self.assertEqual(a.last_page(html,URL,CFG),2)
+  for old,new in [('총 19','총 29'),('fn_egov_link_page(2)','fn_egov_link_page(3)'),('Page : 1','Page : 2')]:
+   with self.assertRaises(ValueError):a.last_page(html.replace(old,new),URL,CFG)
  def test_file_identity_route_and_security_are_strict(self):
   for value in [FILES.replace('abc123','other'),FILES.replace('/afile/fileDownload/xyz1','/afile/fileRemove/xyz1'),FILES.replace('"result": 1','"result": true')]:
    with self.assertRaises(ValueError):a.parse_detail(DETAIL,DETAIL_URL,CFG,attachment_listing=value)

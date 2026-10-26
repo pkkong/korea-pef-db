@@ -77,10 +77,21 @@ def last_page(html,url,config):
     if current!=q.get('page',['1'])[0]:raise ValueError('MMAA active page differs from request')
     last_controls=list(pager.nodes('a','nextAll'))
     if not last_controls:
+        summaries=[n.clean() for box in root.nodes('div','no-srch') for n in box.nodes('p')]
+        summary=_one(summaries,'MMAA total/page summary')
+        count=re.fullmatch(r'총\s*([0-9,]+)\s*건\s*Page\s*:\s*([0-9]+)\s*/\s*([0-9]+)',summary)
+        if not count or count[2]!=current:
+            raise ValueError('MMAA short pager summary differs')
+        total=int(count[1].replace(',',''));last=int(count[3]);size=int(q.get('viewCount',['10'])[0])
         controls=list(pager.nodes('a'))
-        if len(controls)==1 and current=='1':
-            return 1
-        raise ValueError('MMAA last page control missing')
+        values=[int(n.clean()) for n in controls if n.clean().isdigit()]
+        if (size not in {10,30,50,100} or last!=max(1,(total+size-1)//size)
+                or not 1<=last<=10 or values!=list(range(1,last+1))):
+            raise ValueError('MMAA short pager count/range differs')
+        for n in controls:
+            if n.clean()!=current and n.attrs.get('onclick')!='fn_egov_link_page('+n.clean()+'); return false;':
+                raise ValueError('MMAA short page control differs')
+        return last
     last=_one(last_controls,'MMAA last page')
     match=re.fullmatch(r'fn_egov_link_page\(([0-9]+)\); return false;',last.attrs.get('onclick',''))
     if not match or int(match[1])<int(current):raise ValueError('MMAA invalid last page control')
