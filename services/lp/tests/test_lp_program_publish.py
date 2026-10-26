@@ -8,9 +8,32 @@ from unittest.mock import patch
 
 SRC = Path(__file__).resolve().parents[1]/'src'
 sys.path.insert(0,str(SRC))
-from publish_lp_programs import prepare, document_hash, clean_database_text, source_index, store_documents
+from publish_lp_programs import prepare, document_hash, clean_database_text, source_index, store_documents, store_public_state
 
 class PublishContracts(unittest.TestCase):
+    def test_public_payload_preserves_unicode_zero_and_literal_escapes(self):
+        from unittest.mock import Mock
+        conn = Mock()
+        data = {'programs': [{'title': '국내 PE 출자', 'count': 0, 'flag': False, 'source': r'\u0000'}]}
+        pages = {'index.html': '<h1>출자사업</h1>'}
+        with patch('publish_lp_programs.publication_phase'):
+            store_public_state(conn, data, pages, 'new-run')
+        query, params = conn.execute.call_args.args
+        self.assertIn('%s::jsonb', query)
+        self.assertEqual(json.loads(params[0]), data)
+        self.assertEqual(json.loads(params[1]), pages)
+        self.assertIn('국내 PE', params[0])
+        self.assertEqual(params[2], 'new-run')
+        conn.commit.assert_not_called()
+
+    def test_invalid_public_number_fails_before_writing_or_committing(self):
+        from unittest.mock import Mock
+        conn = Mock()
+        with patch('publish_lp_programs.publication_phase'), self.assertRaises(ValueError):
+            store_public_state(conn, {'amount': float('nan')}, {}, 'bad-run')
+        conn.execute.assert_not_called()
+        conn.commit.assert_not_called()
+
     def test_batched_evidence_keeps_versions_and_deduplicates_repeated_receipts(self):
         from unittest.mock import MagicMock
         conn=MagicMock();cursor=conn.cursor.return_value.__enter__.return_value

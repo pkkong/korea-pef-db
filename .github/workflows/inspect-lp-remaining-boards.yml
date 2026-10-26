@@ -49,10 +49,11 @@ jobs:
                          WHEN query LIKE 'INSERT INTO lp_program_private.collection_runs%%' THEN 'collection_report_storage'
                          WHEN query LIKE 'INSERT INTO lp_program_private.program_state%%' THEN 'public_state_storage'
                          WHEN query LIKE 'SELECT pg_advisory_xact_lock(728160921)%%' THEN 'publication_lock'
+                         WHEN query='COMMIT' THEN 'publication_commit'
                          ELSE 'lp_read_or_validation' END AS phase
                   FROM pg_stat_activity
                   WHERE pid<>pg_backend_pid() AND datname=current_database()
-                    AND (query LIKE '%%lp_program_private%%' OR query LIKE 'SELECT pg_advisory_xact_lock(728160921)%%')
+                    AND (application_name='lp-program-publisher' OR query LIKE '%%lp_program_private%%' OR query LIKE 'SELECT pg_advisory_xact_lock(728160921)%%')
                   ORDER BY pid
               """).fetchall()
           root=Path('/tmp/lp-remaining-board-receipts');root.mkdir(exist_ok=True)

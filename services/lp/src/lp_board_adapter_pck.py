@@ -49,7 +49,8 @@ def _listing(html, url, config):
                 'search_select': q.get('search_select', ['']), 'search_text': q.get('search_text', [''])}
     if fields != expected or any(len(value) != 1 for value in expected.values()):
         raise ValueError('PCK listing board/page/search response not echoed')
-    table = _one(form.nodes('table', 'sboard_list_tbl'), 'PCK notice table')
+    table = _one((n for n in form.nodes('table') if
+                  {'sboard_list_tbl', 'sboard_listA_tbl'} & set(n.attrs.get('class', '').split())), 'PCK notice table')
     return root, table
 
 

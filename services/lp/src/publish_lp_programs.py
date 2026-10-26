@@ -83,9 +83,20 @@ def publication_phase(name, started, **counts):
     print(json.dumps({'lp_phase':name,'seconds':round(time.monotonic()-started,2),**counts}), file=sys.stderr, flush=True)
 
 
+def store_public_state(conn, data, pages, run_id):
+    started = time.monotonic()
+    publication_phase('public_payload_serialization_started', started)
+    data_json = json.dumps(data, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+    pages_json = json.dumps(pages, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+    publication_phase('public_payload_serialization', started,
+                      data_bytes=len(data_json.encode()), pages_bytes=len(pages_json.encode()))
+    conn.execute('INSERT INTO lp_program_private.program_state(id,data,pages,run_id) VALUES(1,%s::jsonb,%s::jsonb,%s) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,pages=EXCLUDED.pages,run_id=EXCLUDED.run_id,updated_at=now()',
+                 (data_json, pages_json, run_id))
+
+
 def connect():
     import psycopg
-    return psycopg.connect(os.environ['SUPABASE_DB_URL'], connect_timeout=20, prepare_threshold=None)
+    return psycopg.connect(os.environ['SUPABASE_DB_URL'], connect_timeout=20, prepare_threshold=None, application_name='lp-program-publisher')
 
 
 def baseline(conn):
@@ -284,6 +295,9 @@ def main():
         report = clean_database_text(report)
         # One transaction and lock: evidence and public view always agree.
         phase_started = time.monotonic()
+        conn.execute("SET LOCAL lock_timeout='20s'")
+        conn.execute("SET LOCAL statement_timeout='120s'")
+        conn.execute("SET LOCAL idle_in_transaction_session_timeout='300s'")
         conn.execute('SELECT pg_advisory_xact_lock(728160921)')
         publication_phase('publication_lock', phase_started)
         phase_started = time.monotonic()
@@ -297,7 +311,7 @@ def main():
         documents = store_documents(conn, report, data, Jsonb)
         publication_phase('evidence_storage', phase_started, documents=documents)
         phase_started = time.monotonic()
-        conn.execute('INSERT INTO lp_program_private.program_state(id,data,pages,run_id) VALUES(1,%s,%s,%s) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,pages=EXCLUDED.pages,run_id=EXCLUDED.run_id,updated_at=now()', (Jsonb(data),Jsonb(pages),run_id))
+        store_public_state(conn, data, pages, run_id)
         publication_phase('public_state_storage', phase_started)
     print(json.dumps({'run_id':run_id,'programs':len(data['programs']),'program_ids':[p['id'] for p in data['programs']],
                       'notices':len(report['notices']),'review':len(report.get('review',[])),

@@ -26,6 +26,18 @@ class InstitutionCollectionTests(unittest.TestCase):
             return (detail if 'detail.do?' in url else listing).encode()
         return boards.collect({'tp': config}, fetch_factory=lambda c: fetch, checked_at=STAMP)
 
+    def test_observed_official_maintenance_is_retained_without_repeated_searches(self):
+        config = boards.load_configs()['kamco']
+        fetch = Mock(side_effect=HTTPError('https://www.kamco.or.kr/error/system_work.html', 404, 'Not found', {}, None))
+        factory = Mock(return_value=fetch)
+        result = boards.collect({'kamco': config}, fetch_factory=factory, checked_at=STAMP)
+        fetch.assert_called_once()
+        factory.assert_called_once()
+        self.assertEqual(result['notices'], [])
+        self.assertEqual(result['holds'][0]['failure_kind'], 'official_maintenance')
+        self.assertEqual(result['holds'][0]['http_status'], 404)
+        self.assertNotIn('retry_history', result)
+
     def test_failed_issuer_is_retried_with_independently_validated_evidence(self):
         config = boards.load_configs()['tp']
         original = {'checked_at': STAMP, 'notices': [], 'coverage': {'tp': {}},

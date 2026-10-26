@@ -60,6 +60,15 @@ class PckBoardTests(unittest.TestCase):
         self.assertEqual(rows[0]['source_id'],'pck_pension:990001')
         self.assertTrue(rows[1]['pinned'])
 
+    def test_observed_responsive_table_skin_preserves_identity_and_uniqueness(self):
+        original = listing([(990001, TITLE, '2026-10-22', False)])
+        alternate = original.replace('class="sboard_list_tbl"', 'class="ap_tbl ap_tbl03 tbl_res sboard_listA_tbl"')
+        self.assertEqual(pck.parse_listing(original, URL, CONFIG), pck.parse_listing(alternate, URL, CONFIG))
+        duplicate = alternate.replace('</form>', '<table class="sboard_list_tbl"></table></form>')
+        for invalid in (duplicate, alternate.replace('sboard_listA_tbl', 'unobserved_table'),
+                        alternate.replace('name="board_seq" value="1"', 'name="board_seq" value="2"')):
+            with self.assertRaises(ValueError): pck.parse_listing(invalid, URL, CONFIG)
+
     def test_wrong_echo_missing_markup_unrelated_row_and_date_fail(self):
         good=listing([(990001,TITLE,'2026-10-22',False)])
         for bad in [good.replace('name="board_seq" value="1"','name="board_seq" value="2"'),

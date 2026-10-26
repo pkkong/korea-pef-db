@@ -374,8 +374,20 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
             except Exception as exc:
                 if config.get('lookback_days'):
                     stopped_searches.add(search)
-                result['holds'].append({'institution_id': institution, 'stage': 'institution_listing',
-                                        'url': url, 'error': str(exc)})
+                failure = {'institution_id': institution, 'stage': 'institution_listing', 'url': url, 'error': str(exc)}
+                if isinstance(exc, HTTPError):
+                    response_url = exc.geturl()
+                    try:
+                        _same_host(response_url, config)
+                    except ValueError:
+                        pass
+                    else:
+                        failure.update(http_status=exc.code, response_url=response_url)
+                        if institution == 'kamco' and exc.code == 404 and urlsplit(response_url).path == '/error/system_work.html':
+                            failure.update(failure_kind='official_maintenance', reason='공식 사이트 점검 안내로 이동')
+                result['holds'].append(failure)
+                if failure.get('failure_kind') == 'official_maintenance':
+                    break
         ordered = sorted(candidates.values(), key=lambda item: (item[0]['date'], item[0]['url']), reverse=True)
         limit = config.get('max_details', MAX_DETAILS)
         coverage['candidate_count'] = len(ordered)
@@ -447,6 +459,7 @@ def retry_failed_sources(report, configs=None, fetch_factory=Session, checked_at
     configs = load_configs() if configs is None else configs
     failed = list(dict.fromkeys(h.get('institution_id') for h in report.get('holds', [])
                   if h.get('stage') in {'institution_listing', 'institution_detail'}
+                  and h.get('failure_kind') != 'official_maintenance'
                   and h.get('institution_id') in configs))[:2]
     if not failed:
         return report
