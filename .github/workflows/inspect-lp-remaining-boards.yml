@@ -1,19 +1,19 @@
-name: Inspect remaining LP official board receipts
+name: Inspect LP collection diagnostics
 on:
   workflow_dispatch:
     inputs:
       profile:
         type: choice
-        options: [initial, followup, mmaa_files, geps_pck_recovery, pck_kamco_recovery]
+        options: [initial, followup, mmaa_files, geps_pck_recovery, pck_kamco_recovery, publication_waits]
         default: initial
 permissions:
   contents: read
 concurrency:
-  group: lp-program-collection
+  group: ${{ inputs.profile == 'publication_waits' && 'lp-publication-diagnostic' || 'lp-program-collection' }}
   cancel-in-progress: false
 jobs:
   inspect:
-    runs-on: macos-latest
+    runs-on: ${{ inputs.profile == 'publication_waits' && 'ubuntu-latest' || 'macos-latest' }}
     timeout-minutes: 10
     env:
       LP_INSPECTION_PROFILE: ${{ inputs.profile || 'initial' }}
@@ -23,7 +23,42 @@ jobs:
         with:
           python-version: '3.12'
       - name: Capture bounded official lists and observed detail links without DB writes
+        if: inputs.profile != 'publication_waits'
         run: python3 scripts/inspect_lp_remaining_boards.py /tmp/lp-remaining-board-receipts "$LP_INSPECTION_PROFILE"
+      - name: Install read-only publication inspector
+        if: inputs.profile == 'publication_waits'
+        run: python3 -m pip install 'psycopg[binary]==3.2.10'
+      - name: Inspect only LP publication waits without writes or query contents
+        if: inputs.profile == 'publication_waits'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python3 - <<'PYCODE'
+          import json,os
+          from pathlib import Path
+          import psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['SUPABASE_DB_URL'],connect_timeout=10,row_factory=dict_row,application_name='lp-publication-diagnostic') as conn:
+              conn.execute('SET TRANSACTION READ ONLY')
+              conn.execute("SET LOCAL statement_timeout='10s'")
+              rows=conn.execute("""
+                  SELECT pid,state,wait_event_type,wait_event,
+                    now()-xact_start AS transaction_age,now()-query_start AS query_age,
+                    pg_blocking_pids(pid) AS blocking_pids,
+                    CASE WHEN query LIKE 'INSERT INTO lp_program_private.documents%%' THEN 'evidence_storage'
+                         WHEN query LIKE 'INSERT INTO lp_program_private.collection_runs%%' THEN 'collection_report_storage'
+                         WHEN query LIKE 'INSERT INTO lp_program_private.program_state%%' THEN 'public_state_storage'
+                         WHEN query LIKE 'SELECT pg_advisory_xact_lock(728160921)%%' THEN 'publication_lock'
+                         ELSE 'lp_read_or_validation' END AS phase
+                  FROM pg_stat_activity
+                  WHERE pid<>pg_backend_pid() AND datname=current_database()
+                    AND (query LIKE '%%lp_program_private%%' OR query LIKE 'SELECT pg_advisory_xact_lock(728160921)%%')
+                  ORDER BY pid
+              """).fetchall()
+          root=Path('/tmp/lp-remaining-board-receipts');root.mkdir(exist_ok=True)
+          (root/'publication-waits.json').write_text(json.dumps(rows,default=str))
+          print(json.dumps(rows,default=str))
+          PYCODE
       - uses: actions/upload-artifact@v4
         if: always()
         with:
