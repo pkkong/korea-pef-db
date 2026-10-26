@@ -7,15 +7,16 @@ import json
 from pathlib import Path
 import re
 import sys
-from urllib.parse import parse_qs, urljoin, urlsplit
+from urllib.parse import parse_qs, urljoin, urlsplit, urlencode, urlunsplit
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from services.lp.src.collect_lp_institution_boards import Session,is_form
 from services.lp.src.collect_shared_lp_notices import Document,decode_html
 from services.lp.src.collect_lp_original_notices import parse_original
 from services.lp.src.discover_lp_original_boards import channels,page_url,listing_links
+from services.lp.src import lp_board_adapter_mmaa as mmaa
 
 
-def inspect(output):
+def inspect(output, profile="initial"):
     output.mkdir(parents=True,exist_ok=True)
     report={'mode':'official_read_only_observed_link_inspection','responses':[],'holds':[]}
     cache={};total=0;sessions={}
@@ -34,11 +35,20 @@ def inspect(output):
         cache[url]=raw;return raw
     configs=channels()
     configs['mmaa']={'institution_id':'mmaa','listing_url':'https://www.mmaa.or.kr/web/contents/notice.do',
-                     'detail_path':'/web/contents/notice.do','adapter':'href','search_params':{},'page_param':'page'}
-    for institution in ['mmaa','kbiz','moel_eif','moel_iaci','kamco','geps']:
+                     'detail_path':'/web/contents/notice.do','adapter':'href','search_params':{'schM':'list','schFld':'1','schStr':'위탁운용사','viewCount':'10'},'page_param':'page'}
+    selected = ['mmaa','kbiz','kamco','geps'] if profile=='followup' else ['mmaa','kbiz','moel_eif','moel_iaci','kamco','geps']
+    for institution in selected:
         config=configs[institution];observed={}
-        for page in range(1,2 if institution=='mmaa' else 3):
-            url=config['listing_url'] if institution=='mmaa' else page_url(config,page)
+        variants=[config]
+        if profile=='followup':
+            terms={'kbiz':('schTxt',['블라인드','zzlpnomatch20261025']),
+                   'kamco':('searchTxt',['PEF','블라인드','출자']),
+                   'geps':('srchText',['PEF','사모투자','블라인드'])}
+            if institution in terms:
+                field,words=terms[institution]
+                variants=[{**config,'search_params':{**config['search_params'],field:word}} for word in words]
+        urls=[page_url(v,page) for v in variants for page in (1,2)]
+        for url in urls:
             try:
                 html=decode_html(get(institution,url,config,'listing'))
                 root=Document(html).root
@@ -46,12 +56,18 @@ def inspect(output):
                 response['forms']=[{'attrs':n.attrs,'inputs':[p.attrs for p in n.nodes('input')],
                                     'selects':[{'attrs':p.attrs,'options':[o.attrs|{'label':o.clean()} for o in p.nodes('option')]} for p in n.nodes('select')]} for n in root.nodes('form')][:5]
                 response['scripts']=[urljoin(url,n.attrs['src']) for n in root.nodes('script') if n.attrs.get('src')][:30]
-                for row in listing_links(html,url,config):
+                if institution=='kamco':
+                    for node in root.nodes('script'):
+                        script_url=urljoin(url,node.attrs.get('src',''))
+                        if urlsplit(script_url).hostname=='www.kamco.or.kr' and urlsplit(script_url).path.endswith('/EgovFileUtils.js'):
+                            get(institution,script_url,config,'script')
+                links=mmaa.parse_listing(html,url,config) if institution=='mmaa' else listing_links(html,url,config)
+                for row in links:
                     if institution=='mmaa' and parse_qs(urlsplit(row['url']).query).get('schM')!=['view']:continue
-                    if re.search(r'블라인드|출자|운용사|(?<![A-Za-z])PEF?(?![A-Za-z])',row['title'],re.I):observed.setdefault(row['url'],row)
+                    if re.search(r'펀드|블라인드|출자|운용사|(?<![A-Za-z])PEF?(?![A-Za-z])',row['title'],re.I):observed.setdefault(row['url'],row)
                 response['observed_candidates']=list(observed.values())
             except Exception as error:report['holds'].append({'institution_id':institution,'stage':'listing','url':url,'error':str(error)})
-        for row in list(observed.values())[:6]:
+        for row in sorted(observed.values(),key=lambda r: (not bool(re.search(r'블라인드|(?<![A-Za-z])PEF?(?![A-Za-z])',r['title'],re.I)),r['title']))[:8]:
             try:
                 html=decode_html(get(institution,row['url'],config,'detail'))
                 try:
@@ -66,4 +82,4 @@ def inspect(output):
     print(json.dumps({'responses':len(report['responses']),'holds':report['holds'],'bytes':total},ensure_ascii=False))
 
 if __name__=='__main__':
-    inspect(Path(sys.argv[1]))
+    inspect(Path(sys.argv[1]),sys.argv[2] if len(sys.argv)>2 else 'initial')

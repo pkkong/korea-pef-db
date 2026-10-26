@@ -1,6 +1,11 @@
 name: Inspect remaining LP official board receipts
 on:
   workflow_dispatch:
+    inputs:
+      profile:
+        type: choice
+        options: [initial, followup]
+        default: initial
 permissions:
   contents: read
 concurrency:
@@ -10,13 +15,15 @@ jobs:
   inspect:
     runs-on: macos-latest
     timeout-minutes: 10
+    env:
+      LP_INSPECTION_PROFILE: ${{ inputs.profile || 'initial' }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Capture bounded official lists and observed detail links without DB writes
-        run: python3 scripts/inspect_lp_remaining_boards.py /tmp/lp-remaining-board-receipts
+        run: python3 scripts/inspect_lp_remaining_boards.py /tmp/lp-remaining-board-receipts "$LP_INSPECTION_PROFILE"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
