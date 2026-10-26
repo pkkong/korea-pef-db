@@ -36,6 +36,13 @@ class InstitutionTermsTests(unittest.TestCase):
         self.assertEqual(result['deadline_precision'],'date')
         self.assertIn('불일치',result['deadline_error'])
 
+    def test_one_digit_day_keeps_the_date_time_boundary(self):
+        result=extract_terms(self.notice('제출기한: 2025.7.1 15:00'))
+        self.assertEqual(result['deadline'],'2025-07-01T15:00:00+09:00')
+        ambiguous=extract_terms(self.notice('제출기한: 2025.7.115:00'))
+        self.assertNotIn('deadline',ambiguous)
+        self.assertIn('경계',ambiguous['deadline_error'])
+
     def test_total_count_qualifier_and_labeled_deadline(self):
         result=extract_terms(self.notice('위탁운용금액 : 총 4,000억원 이내. 선정 운용사 수 : 평가결과 상위 4개사 이내. 배정금액 : 1개사별 1,000억원 이하. 제출기한 : 2025년 9월 5일 오후 3시까지'))
         self.assertEqual(result['commitment_label'],'4,000억원 이내')

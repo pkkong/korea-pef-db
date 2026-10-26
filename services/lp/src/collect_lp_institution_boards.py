@@ -462,8 +462,8 @@ def validate_notice(raw, checked_at, config=None):
         raise ValueError('notice was not observed on the configured official listing')
     if any(n[k] != detail[k] for k in ('title', 'date', 'body', 'attachments')):
         raise ValueError('notice differs from official detail receipt')
-    if n['institution_id'] == 'pck_pension' and n.get('related_notice_urls', []) != detail['related_notice_urls']:
-        raise ValueError('PCK related notice links differ from official body receipt')
+    if n['institution_id'] in {'pck_pension','kfinco'} and n.get('related_notice_urls', []) != detail['related_notice_urls']:
+        raise ValueError('Related notice links differ from official body receipt')
     observed = datetime.fromisoformat(n['checked_at'].replace('Z', '+00:00'))
     limit = datetime.fromisoformat(checked_at.replace('Z', '+00:00'))
     if (observed.tzinfo is None or limit.tzinfo is None or observed > limit

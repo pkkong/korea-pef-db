@@ -1,0 +1,139 @@
+name: Recover LP publication
+
+on:
+  workflow_dispatch:
+    inputs:
+      collection_run:
+        description: Completed main-branch Collect LP programs run with retained evidence
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify collection provenance before reading artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COLLECTION_RUN: ${{ inputs.collection_run }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import datetime,json,os,subprocess
+          run=os.environ['COLLECTION_RUN']
+          assert run.isascii() and run.isdecimal(), 'Numeric Actions run required'
+          source=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{run}"]))
+          assert source['repository']['full_name']==os.environ['GH_REPO']
+          assert source['path']=='.github/workflows/collect-kgrowth-programs.yml'
+          assert source['head_branch']=='main' and source['event'] in {'schedule','workflow_dispatch'}
+          assert source['status']=='completed', 'Wait for the source collection to finish'
+          created=datetime.datetime.fromisoformat(source['created_at'].replace('Z','+00:00'))
+          assert datetime.timedelta(0)<=datetime.datetime.now(datetime.timezone.utc)-created<=datetime.timedelta(hours=48), 'Use recent evidence only'
+          print(json.dumps({k:source[k] for k in ('id','head_sha','event','conclusion','created_at')}))
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: kgrowth-collection
+          run-id: ${{ inputs.collection_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-recovery
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install publication readers
+        run: python3 -m pip install 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47'
+      - name: Replay source proofs and preserve existing public programs
+        env:
+          PYTHONPATH: services/lp/src
+          NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS: '1'
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python3 - <<'PY'
+          import copy,json,tempfile
+          from datetime import datetime,timezone
+          from pathlib import Path
+          from publish_lp_programs import connect,baseline,prepare
+          root=Path('/tmp/lp-recovery')
+          report=json.loads((root/'kgrowth-collection.json').read_text())
+          report['priority_sources']=json.loads((root/'lp-priority-collection.json').read_text())['sources']
+          for name in ('shared','institution'):
+              report[name+'_collection']=json.loads((root/f'lp-{name}-collection.json').read_text())
+          report['collection_checked_at']=report['checked_at']
+          report['checked_at']=datetime.now(timezone.utc).isoformat()
+          with connect() as conn:
+              conn.execute('SET TRANSACTION READ ONLY')
+              old=baseline(conn)
+          (root/'baseline.json').write_text(json.dumps(old,ensure_ascii=False))
+          data,pages=prepare(copy.deepcopy(old),report)
+          after={p['id']:p for p in data['programs']}
+          for previous in old['programs']:
+              assert previous['id'] in after, 'Previously published program missing'
+              current=after[previous['id']]
+              assert current.get('selected_gps')==previous.get('selected_gps'), 'Existing GP identity changed'
+              assert {e['url'] for e in previous['events']} <= {e['url'] for e in current['events']}, 'Existing source URL missing'
+              if previous['institution_id'] in {'sema','mmaa','kfinco'}:
+                  for field in ('commitment_amount_krw','manager_count','deadline'):
+                      if field in previous: assert current.get(field)==previous[field], 'Existing public field changed: '+field
+          errors=data.get('institution_collection_holds',[])
+          assert not any(h.get('stage')=='institution_validation' for h in errors), 'Invalid official receipt'
+          new=[p for p in data['programs'] if p['id'] not in {old['id'] for old in old['programs']}]
+          for p in new:
+              if p['institution_id']=='kbiz':
+                  assert not any(p.get(k) for k in ('commitment_amount_krw','manager_count','per_fund_amount_krw')), 'Common PE/VC budget cannot become PE facts'
+          summary={'programs':len(after),'pages':len(pages),'new_programs':new,'institution_holds':errors}
+          (root/'preflight.json').write_text(json.dumps(summary,ensure_ascii=False))
+          print(json.dumps({'programs':len(after),'pages':len(pages),'new_program_ids':[p['id'] for p in new],'institution_holds':len(errors)}))
+          PY
+      - name: Publish validated evidence in one transaction
+        env:
+          NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS: '1'
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -o pipefail
+          python3 services/lp/src/publish_lp_programs.py --collection /tmp/lp-recovery/kgrowth-collection.json --priority-collection /tmp/lp-recovery/lp-priority-collection.json --shared-collection /tmp/lp-recovery/lp-shared-collection.json --institution-collection /tmp/lp-recovery/lp-institution-collection.json | tee /tmp/lp-recovery/publication.json
+      - name: Verify all published details and report remaining source failures
+        run: |
+          python3 - <<'PY'
+          import json,time,urllib.request
+          from pathlib import Path
+          root=Path('/tmp/lp-recovery')
+          publication=json.loads((root/'publication.json').read_text())
+          for program in publication['program_ids']:
+              for attempt in range(3):
+                  try:
+                      with urllib.request.urlopen(f'https://kpef-lp.vercel.app/program-{program}.html',timeout=30) as response:
+                          assert response.headers.get('X-LP-Data-Source')=='supabase'
+                          assert response.headers.get('X-LP-Run')==publication['run_id']
+                          assert '진행 일정' in response.read().decode()
+                      break
+                  except Exception:
+                      if attempt==2: raise
+                      time.sleep(5)
+          assert publication['institution_validation_errors']==0
+          print('Verified all public details:',publication['programs'],publication['run_id'])
+          direct=json.loads((root/'lp-institution-collection.json').read_text())
+          shared=json.loads((root/'lp-shared-collection.json').read_text())
+          priority=json.loads((root/'lp-priority-collection.json').read_text())
+          failures=[h for h in direct.get('holds',[]) if h.get('stage') in {'institution_listing','institution_detail','institution_depth'}]
+          failures += [h for h in shared.get('holds',[]) if h.get('stage') in {'listing','detail','original_board'} or (h.get('stage') in {'growth_search','kfinco_original'} and h.get('phase') in {'listing','detail'})]
+          failures += [dict(institution_id=k,error=v['error']) for k,v in priority['sources'].items() if v.get('error')]
+          (root/'remaining-failures.json').write_text(json.dumps(failures,ensure_ascii=False))
+          if failures: raise SystemExit('Publication recovered; official source failures remain: '+json.dumps(failures,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-publication-recovery
+          path: |
+            /tmp/lp-recovery/preflight.json
+            /tmp/lp-recovery/publication.json
+            /tmp/lp-recovery/remaining-failures.json
+          retention-days: 7
+          if-no-files-found: warn

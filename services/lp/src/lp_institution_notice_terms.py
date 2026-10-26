@@ -62,15 +62,20 @@ def extract_terms(n):
                 record('per_fund', match[0])
         # Only explicitly labelled dates; historical-fund dates cannot supply a
         # deadline. Date-only is retained when source submission times disagree.
-        pattern = (r'(?:제안서)?(?:접수마감(?:일시|일|시한)?|접수기한|제출기한|마감일시)[:：]*'
-                   r"[’'‘]?(20\d{2}|\d{2})[.년](\d{1,2})[.월](\d{1,2})[.일]?"
-                   r'(?:\([월화수목금토일]\))?(오후|오전)?(\d{1,2})(?::(\d{2})|시)')
-        for m in re.finditer(pattern, text):
+        date_text = re.sub(r'(?<=[가-힣])\s+(?=[가-힣])', '', raw)
+        labels = r'(?:제안서)?(?:접수마감(?:일시|일|시한)?|접수기한|제출기한|마감일시)'
+        pattern = (labels + r"\s*[:：]*\s*[’'‘]?(20\d{2}|\d{2})[.년]\s*(\d{1,2})[.월]\s*(\d{1,2})"
+                   r'(?:[.일]\s*(?:\([월화수목금토일](?:요일)?\)\s*)?|\([월화수목금토일](?:요일)?\)\s*|\s+)'
+                   r'(오후|오전)?\s*(\d{1,2})(?::(\d{2})|시)')
+        for m in re.finditer(pattern, date_text):
             hour = int(m[5]) % 12 + 12 if m[4]=='오후' else (0 if m[4]=='오전' and m[5]=='12' else int(m[5]))
             year = int(m[1]) if len(m[1]) == 4 else 2000 + int(m[1])
             stamp = datetime(year,int(m[2]),int(m[3]),hour,int(m[6] or 0)).isoformat() + '+09:00'
             deadlines.add(stamp)
             record('deadline',m[0])
+        if re.search(labels + r"\s*[:：]*\s*[’'‘]?(?:20\d{2}|\d{2})[.년]\d{1,2}[.월]\d{2,4}:\d{2}", date_text):
+            result.pop('deadline', None)
+            result['deadline_error'] = '접수 날짜와 시각 경계 불명확'
         # A direct/quick-delivery cutoff can conflict with the captioned time.
         delivery = re.findall(r'(?:직접제출|퀵).{0,90}?(\d{1,2})(?:시|:\d{2})까지', text)
         if delivery and deadlines and any(int(h) != int(d[11:13]) for h in delivery for d in deadlines):

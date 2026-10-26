@@ -26,6 +26,7 @@ try:
     from .lp_kfcc_notice_terms import allocation as kfcc_allocation
     from . import lp_pck_programs as pck_programs
     from . import lp_kbiz_notice_terms as kbiz_terms
+    from . import lp_kfinco_notice_terms as kfinco_terms
 except ImportError:
     from collect_shared_lp_notices import classify_scope
     from collect_lp_original_notices import load_channels, validate_url, validate_original
@@ -37,6 +38,7 @@ except ImportError:
     from lp_kfcc_notice_terms import allocation as kfcc_allocation
     import lp_pck_programs as pck_programs
     import lp_kbiz_notice_terms as kbiz_terms
+    import lp_kfinco_notice_terms as kfinco_terms
 
 ROOT = Path(__file__).resolve().parents[3]
 OFFERING_FIELDS = (
@@ -185,7 +187,8 @@ def _terms(n, shared_notice, checked_at):
     try:
         if n.get('source_channel') == 'institution_board':
             terms = (pck_programs.terms(n) if n['institution_id'] == 'pck_pension' else
-                     kbiz_terms.terms(n) if n['institution_id'] == 'kbiz' and kbiz_terms.pe_track(n) else extract_institution_terms(n))
+                     kbiz_terms.terms(n) if n['institution_id'] == 'kbiz' and kbiz_terms.pe_track(n) else
+                     kfinco_terms.terms(n) if n['institution_id'] == 'kfinco' else extract_institution_terms(n))
         elif shared_notice:
             terms = extract_shared_terms(shared_notice, checked_at)
         elif n['institution_id'] in INSTITUTIONS:
@@ -307,8 +310,21 @@ def publish_basic_notices(data, growth_notices, checked_at):
     docs, shared, holds = _sources(data, growth_notices, checked_at)
     groups = defaultdict(list)
     for n in docs.values():
-        if n['institution_id'] in names and n['institution_id'] != 'pck_pension' and notice_stage(n['title']) in STAGES:
+        if n['institution_id'] in names and n['institution_id'] not in {'pck_pension','kfinco'} and notice_stage(n['title']) in STAGES:
             groups[_identity(n)].append(n)
+    # Each observed recruitment anchors its own solicitation. Similar June and
+    # September titles do not establish one round or share each other's dates.
+    kfinco_originals={n['url']:n for n in docs.values() if n['institution_id']=='kfinco' and _event(n)['type']=='모집 공고'}
+    for source in kfinco_originals.values():
+        groups[_identity(source)+':'+source['url']].append(source)
+    for source in docs.values():
+        if source['institution_id']!='kfinco' or source['url'] in kfinco_originals or _event(source)['type'] not in STAGES:
+            continue
+        anchors=[kfinco_originals[url] for url in source.get('related_notice_urls',[]) if url in kfinco_originals and kfinco_originals[url]['date']<=source['date']]
+        if len(anchors)==1:
+            anchor=anchors[0];groups[_identity(anchor)+':'+anchor['url']].append(source)
+        else:
+            holds.append({'stage':'basic_stage_link','url':source['url'],'reason':'KFINCO stage has no unique official recruitment link'})
     pck_groups, pck_holds = pck_programs.groups([n for n in docs.values() if n['institution_id'] == 'pck_pension'], data['programs'])
     groups.update(pck_groups)
     holds.extend(pck_holds)

@@ -26,7 +26,7 @@ jobs:
       - name: Install official attachment readers
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47' 'psycopg[binary]==3.2.10' 'truststore==0.10.5'
       - name: Test observed board and bounded attachment contracts
-        run: python3 -m unittest services.lp.tests.test_lp_board_adapter_pck services.lp.tests.test_lp_board_adapter_sema services.lp.tests.test_lp_board_adapter_mmaa services.lp.tests.test_lp_board_adapter_kbiz services.lp.tests.test_lp_board_adapter_geps services.lp.tests.test_lp_board_adapter_kamco services.lp.tests.test_lp_board_adapter_moel services.lp.tests.test_lp_board_adapter_kfinco services.lp.tests.test_lp_kbiz_notice_terms services.lp.tests.test_lp_attachment_text services.lp.tests.test_collect_lp_institution_boards services.lp.tests.test_lp_pck_programs
+        run: python3 -m unittest services.lp.tests.test_lp_board_adapter_pck services.lp.tests.test_lp_board_adapter_sema services.lp.tests.test_lp_board_adapter_mmaa services.lp.tests.test_lp_board_adapter_kbiz services.lp.tests.test_lp_board_adapter_geps services.lp.tests.test_lp_board_adapter_kamco services.lp.tests.test_lp_board_adapter_moel services.lp.tests.test_lp_board_adapter_kfinco services.lp.tests.test_lp_kbiz_notice_terms services.lp.tests.test_lp_kfinco_notice_terms services.lp.tests.test_lp_attachment_text services.lp.tests.test_collect_lp_institution_boards services.lp.tests.test_lp_pck_programs
       - name: Collect and replay configured official bodies and offering attachments
         env:
           LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
@@ -84,15 +84,16 @@ jobs:
               current=after[previous['id']]
               assert current.get('selected_gps')==previous.get('selected_gps'), 'Existing selection identity changed'
               assert {e['url'] for e in previous['events']} <= {e['url'] for e in current['events']}, 'Existing source URL missing'
-              if previous['institution_id']=='sema':
+              if previous['institution_id'] in {'sema','mmaa','kfinco'}:
                   for field in ('commitment_amount_krw','manager_count','deadline','selected_gps'):
                       if field in previous:
-                          assert current.get(field)==previous[field], 'Existing SEMA public field changed: '+field
+                          assert current.get(field)==previous[field], 'Existing LP public field changed: '+field
           with tempfile.TemporaryDirectory() as folder:
               build(data,Path(folder))
               print('Validated complete LP pages:',len(list(Path(folder).glob('*.html'))))
           Path('/tmp/lp-board-inspection/publication-preflight.json').write_text(json.dumps({
-              'program_ids':[p['id'] for p in data['programs']], 'holds':holds},ensure_ascii=False))
+              'program_ids':[p['id'] for p in data['programs']], 'holds':holds,
+              'new_programs':[{k:p[k] for k in ('id','institution_id','title','deadline','commitment_amount_krw','manager_count') if k in p} for p in data['programs'] if p['id'] not in {old['id'] for old in before}]},ensure_ascii=False))
           PY
       - uses: actions/upload-artifact@v4
         if: always()

@@ -8,9 +8,34 @@ from unittest.mock import patch
 
 SRC = Path(__file__).resolve().parents[1]/'src'
 sys.path.insert(0,str(SRC))
-from publish_lp_programs import prepare, document_hash, clean_database_text, source_index
+from publish_lp_programs import prepare, document_hash, clean_database_text, source_index, store_documents
 
 class PublishContracts(unittest.TestCase):
+    def test_batched_evidence_keeps_versions_and_deduplicates_repeated_receipts(self):
+        from unittest.mock import MagicMock
+        conn=MagicMock();cursor=conn.cursor.return_value.__enter__.return_value
+        first={'url':'https://official.example/1','body':'first','checked_at':'earlier'}
+        same=dict(first,checked_at='later')
+        changed=dict(first,body='corrected')
+        docs=[first,same,changed]+[{'url':f'https://official.example/{i}','body':str(i)} for i in range(2,65)]
+        count=store_documents(conn,{'notices':docs},{'shared_notices':[{'url':first['url'],'body':'first','original_notices':[]}]},lambda value:value)
+        rows=[row for call in cursor.executemany.call_args_list for row in call.args[1]]
+        self.assertEqual(len(rows),count)
+        self.assertEqual(len({(row[0],row[1]) for row in rows}),len(rows))
+        self.assertEqual(sum(row[0]==first['url'] for row in rows),3)
+        self.assertLess(cursor.executemany.call_count,len(rows))
+        self.assertFalse(conn.commit.called)
+        self.assertTrue(all('ON CONFLICT DO NOTHING' in call.args[0] for call in cursor.executemany.call_args_list))
+
+    def test_bulk_storage_failure_propagates_without_committing_or_writing_public_state(self):
+        from unittest.mock import MagicMock
+        conn=MagicMock();cursor=conn.cursor.return_value.__enter__.return_value
+        cursor.executemany.side_effect=RuntimeError('database write failed')
+        with self.assertRaisesRegex(RuntimeError,'database write failed'):
+            store_documents(conn,{'notices':[{'url':'https://official.example/1','body':'source'}]}, {},lambda value:value)
+        self.assertFalse(conn.commit.called)
+        self.assertFalse(conn.execute.called)
+
     def test_source_index_projects_only_notice_identity_without_writes(self):
         from unittest.mock import Mock
         conn = Mock()

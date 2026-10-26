@@ -4,7 +4,7 @@ Scope classification and publication are deliberately separate from parsing.
 Only the currently observed page-one API contract is accepted.
 """
 import re
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urljoin
 try:
     from .discover_kfinco_originals import BASE, code, read_json, listing, attachments
     from .collect_shared_lp_notices import Document, valid_date
@@ -80,8 +80,14 @@ def parse_detail(rawjson,url,config):
     if observed!=ident:raise ValueError('KFINCO detail identifier mismatch')
     html=row.get('ntContent')
     if not isinstance(html,str) or not html.strip():raise ValueError('missing KFINCO detail content')
-    body=Document(html).root.clean().replace('\x00',' ')
+    root=Document(html).root
+    body=root.clean().replace('\x00',' ')
     if not body.strip():raise ValueError('empty KFINCO detail content')
     files=attachments(row)
     for item in files:kfinco_url(item['url'])
-    return {'title':title,'date':published,'body':body,'attachments':files}
+    related=set()
+    for a in root.nodes('a'):
+        target=urljoin(url,a.attrs.get('href',''))
+        if urlsplit(target).path.startswith('/pr/notice/detail/'):
+            _public_identifier(target);related.add(target)
+    return {'title':title,'date':published,'body':body,'attachments':files,'related_notice_urls':sorted(related)}

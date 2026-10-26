@@ -5,6 +5,8 @@ import hashlib
 import json
 import os
 import tempfile
+import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from lp_program_service import build, validate
@@ -52,6 +54,33 @@ def document_hash(document):
         return value
     content = durable(document)
     return hashlib.sha256(json.dumps(content, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def store_documents(conn, report, data, wrap_json):
+    """Batch immutable evidence in the caller's publication transaction."""
+    docs = report['notices'] + data.get('priority_notices', []) + data.get('supporting_notices', []) + data.get('shared_notices', []) + data.get('institution_notices', [])
+    docs += [original for notice in data.get('shared_notices', []) for original in notice.get('original_notices', [])]
+    query = 'INSERT INTO lp_program_private.documents(source_url,content_hash,document) VALUES(%s,%s,%s) ON CONFLICT DO NOTHING'
+    seen = set()
+    pending = []
+    with conn.cursor() as cursor:
+        for doc in docs:
+            digest = document_hash(doc)
+            key = (doc['url'], digest)
+            if key in seen:
+                continue
+            seen.add(key)
+            pending.append((doc['url'], digest, wrap_json(doc)))
+            if len(pending) == 25:
+                cursor.executemany(query, pending)
+                pending = []
+        if pending:
+            cursor.executemany(query, pending)
+    return len(seen)
+
+
+def publication_phase(name, started, **counts):
+    print(json.dumps({'lp_phase':name,'seconds':round(time.monotonic()-started,2),**counts}), file=sys.stderr, flush=True)
 
 
 def connect():
@@ -254,19 +283,22 @@ def main():
         report['checked_at'] = datetime.now(timezone.utc).isoformat()
         report = clean_database_text(report)
         # One transaction and lock: evidence and public view always agree.
+        phase_started = time.monotonic()
         conn.execute('SELECT pg_advisory_xact_lock(728160921)')
+        publication_phase('publication_lock', phase_started)
+        phase_started = time.monotonic()
         data, pages = prepare(baseline(conn), report)
+        publication_phase('source_validation_and_pages', phase_started, programs=len(data['programs']))
         from psycopg.types.json import Jsonb
         stamp = datetime.now(timezone.utc).isoformat()
         run_id = hashlib.sha256((stamp+json.dumps(report,sort_keys=True)).encode()).hexdigest()[:24]
+        phase_started = time.monotonic()
         conn.execute('INSERT INTO lp_program_private.collection_runs(run_id,institution,report) VALUES (%s,%s,%s)', (run_id,'multi_lp' if args.priority_collection else 'kgrowth',Jsonb(report)))
-        for doc in report['notices'] + data.get('priority_notices', []) + data.get('supporting_notices', []) + data.get('shared_notices', []) + data.get('institution_notices', []):
-            digest = document_hash(doc)
-            conn.execute('INSERT INTO lp_program_private.documents(source_url,content_hash,document) VALUES(%s,%s,%s) ON CONFLICT DO NOTHING', (doc['url'],digest,Jsonb(doc)))
-        for notice in data.get('shared_notices', []):
-            for doc in notice.get('original_notices', []):
-                conn.execute('INSERT INTO lp_program_private.documents(source_url,content_hash,document) VALUES(%s,%s,%s) ON CONFLICT DO NOTHING', (doc['url'],document_hash(doc),Jsonb(doc)))
+        documents = store_documents(conn, report, data, Jsonb)
+        publication_phase('evidence_storage', phase_started, documents=documents)
+        phase_started = time.monotonic()
         conn.execute('INSERT INTO lp_program_private.program_state(id,data,pages,run_id) VALUES(1,%s,%s,%s) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,pages=EXCLUDED.pages,run_id=EXCLUDED.run_id,updated_at=now()', (Jsonb(data),Jsonb(pages),run_id))
+        publication_phase('public_state_storage', phase_started)
     print(json.dumps({'run_id':run_id,'programs':len(data['programs']),'program_ids':[p['id'] for p in data['programs']],
                       'notices':len(report['notices']),'review':len(report.get('review',[])),
                       'institution_notices':len(data.get('institution_notices',[])),
