@@ -36,12 +36,12 @@ def inspect(output, profile="initial"):
     configs=channels()
     configs['mmaa']={'institution_id':'mmaa','listing_url':'https://www.mmaa.or.kr/web/contents/notice.do',
                      'detail_path':'/web/contents/notice.do','adapter':'href','search_params':{'schM':'list','schFld':'1','schStr':'위탁운용사','viewCount':'10'},'page_param':'page'}
-    selected = ['mmaa','kbiz','kamco','geps'] if profile=='followup' else ['mmaa','kbiz','moel_eif','moel_iaci','kamco','geps']
+    selected = ['mmaa'] if profile=='mmaa_files' else ['mmaa','kbiz','kamco','geps'] if profile=='followup' else ['mmaa','kbiz','moel_eif','moel_iaci','kamco','geps']
     for institution in selected:
         config=configs[institution];observed={}
         variants=[config]
-        if profile=='followup':
-            terms={'kbiz':('schTxt',['블라인드','zzlpnomatch20261025']),
+        if profile in {'followup','mmaa_files'}:
+            terms={'mmaa':('schStr',['블라인드','위탁운용사','출자']),'kbiz':('schTxt',['블라인드','zzlpnomatch20261025']),
                    'kamco':('searchTxt',['PEF','블라인드','출자']),
                    'geps':('srchText',['PEF','사모투자','블라인드'])}
             if institution in terms:
@@ -71,6 +71,10 @@ def inspect(output, profile="initial"):
             try:
                 html=decode_html(get(institution,row['url'],config,'detail'))
                 try:
+                    if institution=='mmaa':
+                        request=mmaa.attachment_request(html,row['url'],config)
+                        if request:
+                            get(institution,request,config,'attachment_listing')
                     source=parse_original(html,row['url'])
                     next(r for r in report['responses'] if r['url']==row['url'])['parsed']=source
                     for item in source['attachments'][:2]:

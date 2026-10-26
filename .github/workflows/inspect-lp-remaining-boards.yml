@@ -4,7 +4,7 @@ on:
     inputs:
       profile:
         type: choice
-        options: [initial, followup]
+        options: [initial, followup, mmaa_files]
         default: initial
 permissions:
   contents: read

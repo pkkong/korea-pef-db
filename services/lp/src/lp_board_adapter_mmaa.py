@@ -53,6 +53,8 @@ def parse_listing(html,url,config):
     for tr in table.nodes('tr'):
         cells=[n for n in tr.children if isinstance(n,_Node) and n.tag=='td']
         if not cells:continue
+        if len(cells)==1 and cells[0].clean()=='등록 된 데이터가 없습니다.':
+            continue
         if len(cells)!=5:raise ValueError('MMAA listing columns/empty result not established')
         a=_one(cells[1].nodes('a'),'MMAA title control')
         call=re.fullmatch(r"\s*fn_goView\('([0-9]+)'(?:,\s*'(inotice)')?\)\s*;?\s*",a.attrs.get('onclick',''))
@@ -73,7 +75,13 @@ def last_page(html,url,config):
     pager=_one(root.nodes('div','paging'),'MMAA pager')
     current=_one(pager.nodes('a','active'),'MMAA active page').clean()
     if current!=q.get('page',['1'])[0]:raise ValueError('MMAA active page differs from request')
-    last=_one(pager.nodes('a','nextAll'),'MMAA last page')
+    last_controls=list(pager.nodes('a','nextAll'))
+    if not last_controls:
+        controls=list(pager.nodes('a'))
+        if len(controls)==1 and current=='1':
+            return 1
+        raise ValueError('MMAA last page control missing')
+    last=_one(last_controls,'MMAA last page')
     match=re.fullmatch(r'fn_egov_link_page\(([0-9]+)\); return false;',last.attrs.get('onclick',''))
     if not match or int(match[1])<int(current):raise ValueError('MMAA invalid last page control')
     return int(match[1])
@@ -87,3 +95,21 @@ def parse_detail(html,url,config):
     # independently supported; do not invent a download URL or notice ID.
     source.update(source_id='mmaa:'+query(url,True)['id'][0],url=url)
     return source
+
+
+def attachment_request(html,url,config):
+    root,_=context(html,url,config,True)
+    boxes=[n for n in root.nodes('div') if n.attrs.get('data-ax5uploader')]
+    if not boxes:return None
+    box=_one(boxes,'MMAA attachment box')
+    fields={n.attrs.get('name'):n.attrs.get('value') for n in box.nodes('input')}
+    ident=fields.get('fileId','')
+    if fields.get('useSecurity')!='false' or fields.get('uploadMode')!='db' or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}',ident):
+        raise ValueError('MMAA files are protected or identity is unsupported')
+    if not re.search(r'url:\s*"/afile/fileList.do"\s*,\s*data:"fileId='+re.escape(ident)+r'"',html):
+        raise ValueError('MMAA attachment request differs from observed file box')
+    return 'https://www.mmaa.or.kr/afile/fileList.do?'+urlencode({'fileId':ident})
+
+
+def titles_match(left,right):
+    return left.translate(str.maketrans({'’':"'",'‘':"'"})).strip()==right.translate(str.maketrans({'’':"'",'‘':"'"})).strip()
