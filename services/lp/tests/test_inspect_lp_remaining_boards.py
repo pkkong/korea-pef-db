@@ -19,6 +19,13 @@ class RecoveryDiagnosticTests(unittest.TestCase):
             self.assertEqual(q[config['page_param']], ['1'])
             self.assertIn(q[config['search_param']][0], configs[institution]['searches'][:2])
 
+    def test_pck_kamco_profile_uses_only_registered_board_first_pages(self):
+        configs = inspection.load_configs()
+        targets = list(inspection.diagnostic_targets(configs, 'pck_kamco_recovery'))
+        self.assertEqual([r[0] for r in targets], ['pck_pension', 'pck_pension', 'kamco'])
+        for institution, config, url in targets:
+            self.assertEqual(parse_qs(urlsplit(url).query)[config['page_param']], ['1'])
+
     def test_dns_probe_is_bounded_and_never_exposes_stderr(self):
         with patch.object(inspection.subprocess, 'run') as run:
             run.return_value = subprocess.CompletedProcess([], 1, '', 'private diagnostics')

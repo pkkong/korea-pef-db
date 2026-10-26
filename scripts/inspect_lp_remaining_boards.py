@@ -33,17 +33,18 @@ def dns_observation(host, family):
         return {'family': family, 'status': 'timeout'}
 
 
-def diagnostic_targets(configs):
+def diagnostic_targets(configs, profile="geps_pck_recovery"):
     """Only first GEPS query and first pages of the first two PCK searches."""
-    for institution, count in [('geps', 1), ('pck_pension', 2)]:
+    targets = [('pck_pension', 2), ('kamco', 1)] if profile == 'pck_kamco_recovery' else [('geps', 1), ('pck_pension', 2)]
+    for institution, count in targets:
         config = configs[institution]
         bounded = {**config, 'pages': 1, 'searches': config['searches'][:count]}
         for url in listing_urls(bounded):
             yield institution, config, url
 
 
-def inspect_recovery(output):
-    report = {'mode': 'geps_pck_read_only_transport_diagnostic', 'responses': [], 'holds': [], 'dns': []}
+def inspect_recovery(output, profile="geps_pck_recovery"):
+    report = {'mode': profile + '_read_only_transport_diagnostic', 'responses': [], 'holds': [], 'dns': []}
     output.mkdir(parents=True, exist_ok=True)
     total = 0
     def save(raw, institution, label):
@@ -56,7 +57,7 @@ def inspect_recovery(output):
         (output / name).write_bytes(raw)
         return {'file': name, 'sha256': digest, 'bytes': len(raw)}
     try:
-        for institution, config, url in diagnostic_targets(load_configs()):
+        for institution, config, url in diagnostic_targets(load_configs(), profile):
             if institution == 'geps':
                 host = urlsplit(config['listing_url']).hostname
                 report['dns'] = [dns_observation(host, family) for family in (0, 2)]
@@ -89,6 +90,16 @@ def inspect_recovery(output):
             except Exception as error:
                 row['error'] = str(error)
                 report['holds'].append({'institution_id': institution, 'url': url, 'error': str(error)})
+                if profile == 'pck_kamco_recovery':
+                    homepage = urlsplit(config['listing_url'])._replace(path='/', query='', fragment='').geturl()
+                    try:
+                        raw = session(homepage)
+                        row['homepage'] = {'url': homepage, **save(raw, institution, 'homepage')}
+                        raw = session(url, homepage)
+                        row['after_homepage'] = {**save(raw, institution, 'after-homepage'),
+                                                'row_count': len(adapter(config).parse_listing(decode_html(raw), url, config))}
+                    except Exception as followup_error:
+                        row['after_homepage_error'] = str(followup_error)
             row['dns_ipv4_successes'] = session.dns_ipv4_fetches
     finally:
         (output / 'index.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
@@ -98,8 +109,8 @@ def inspect_recovery(output):
 
 
 def inspect(output, profile="initial"):
-    if profile == 'geps_pck_recovery':
-        return inspect_recovery(output)
+    if profile in {'geps_pck_recovery', 'pck_kamco_recovery'}:
+        return inspect_recovery(output, profile)
     output.mkdir(parents=True,exist_ok=True)
     report={'mode':'official_read_only_observed_link_inspection','responses':[],'holds':[]}
     cache={};total=0;sessions={}
