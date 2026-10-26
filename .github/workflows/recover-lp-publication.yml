@@ -7,6 +7,11 @@ on:
         description: Completed main-branch Collect LP programs run with retained evidence
         required: true
         type: string
+      retry_failed_institutions:
+        description: Retry at most two failed institution boards before publication
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -15,7 +20,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.retry_failed_institutions && 'macos-latest' || 'ubuntu-latest' }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
@@ -48,7 +53,21 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install publication readers
-        run: python3 -m pip install 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47'
+        run: python3 -m pip install 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47' 'truststore==0.10.5'
+      - name: Retry only failed configured institution boards
+        if: inputs.retry_failed_institutions
+        env:
+          LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
+        run: |
+          python3 - <<'PYCODE'
+          import json
+          from pathlib import Path
+          from services.lp.src.collect_lp_institution_boards import retry_failed_sources
+          path=Path('/tmp/lp-recovery/lp-institution-collection.json')
+          result=retry_failed_sources(json.loads(path.read_text()))
+          path.write_text(json.dumps(result,ensure_ascii=False))
+          print(json.dumps({'notices':len(result['notices']),'retried':[h['institution_id'] for h in result.get('retry_history',[])],'holds':result['holds']},ensure_ascii=False))
+          PYCODE
       - name: Replay source proofs and preserve existing public programs
         env:
           PYTHONPATH: services/lp/src
@@ -132,6 +151,7 @@ jobs:
         with:
           name: lp-publication-recovery
           path: |
+            /tmp/lp-recovery/lp-institution-collection.json
             /tmp/lp-recovery/preflight.json
             /tmp/lp-recovery/publication.json
             /tmp/lp-recovery/remaining-failures.json

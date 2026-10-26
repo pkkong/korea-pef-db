@@ -4,6 +4,7 @@ import io
 import unittest
 import zipfile
 from urllib.error import HTTPError
+from unittest.mock import patch, Mock
 from urllib.parse import parse_qs, urlsplit
 from services.lp.src import collect_lp_institution_boards as boards
 from services.lp.src.lp_notice_publication import publish_basic_notices
@@ -24,6 +25,47 @@ class InstitutionCollectionTests(unittest.TestCase):
         def fetch(url, referer=None):
             return (detail if 'detail.do?' in url else listing).encode()
         return boards.collect({'tp': config}, fetch_factory=lambda c: fetch, checked_at=STAMP)
+
+    def test_failed_issuer_is_retried_with_independently_validated_evidence(self):
+        config = boards.load_configs()['tp']
+        original = {'checked_at': STAMP, 'notices': [], 'coverage': {'tp': {}},
+                    'holds': [{'institution_id': 'tp', 'stage': 'institution_listing', 'error': 'bad temporary page'}]}
+        detail = TP_DETAIL.replace('선정 공고.zip', '제안서 양식.zip')
+        def fetch(url, referer=None):
+            return ('<html>' + (detail if 'detail.do?' in url else TP_LIST) + '</html>').encode()
+        result = boards.retry_failed_sources(original, {'tp': config}, lambda c: fetch, checked_at=STAMP)
+        self.assertFalse(result['holds'])
+        self.assertEqual(len(result['notices']), 1)
+        self.assertEqual(boards.validate_notice(result['notices'][0], STAMP), result['notices'][0])
+        self.assertEqual(result['retry_history'][0]['previous_holds'], original['holds'])
+        self.assertNotIn('retry_history', original)
+
+    def test_repeated_issuer_failure_remains_visible_without_recursive_retries(self):
+        config = boards.load_configs()['tp']
+        original = {'checked_at': STAMP, 'notices': [], 'coverage': {'tp': {}},
+                    'holds': [{'institution_id': 'tp', 'stage': 'institution_listing', 'error': 'first error'}]}
+        def fetch(url, referer=None):
+            raise HTTPError(url, 404, 'Missing', {}, None)
+        factory = Mock(return_value=fetch)
+        result = boards.retry_failed_sources(original, {'tp': config}, factory, checked_at=STAMP)
+        factory.assert_called_once()
+        self.assertTrue(result['holds'])
+        self.assertTrue(all(h['stage'] == 'institution_listing' for h in result['holds']))
+        self.assertEqual(result['notices'], [])
+        self.assertEqual(len(result['retry_history']), 1)
+
+    def test_retry_budget_does_not_expand_across_a_widespread_outage(self):
+        ids = ['tp', 'cu', 'pck_pension']
+        configs = {i: boards.load_configs()[i] for i in ids}
+        original = {'checked_at': STAMP, 'notices': [], 'coverage': {i: {} for i in ids},
+                    'holds': [{'institution_id': i, 'stage': 'institution_listing', 'error': 'offline'} for i in ids]}
+        result = {'checked_at': STAMP, 'notices': [], 'coverage': {i: {} for i in ids[:2]}, 'holds': []}
+        with patch.object(boards, 'collect', return_value=result) as retry:
+            recovered = boards.retry_failed_sources(original, configs, checked_at=STAMP)
+        self.assertEqual(list(retry.call_args.args[0]), ids[:2])
+        self.assertFalse(retry.call_args.kwargs['retry_failures'])
+        self.assertEqual([h['institution_id'] for h in recovered['holds']], ['pck_pension'])
+        self.assertEqual(len(recovered['retry_history']), 2)
 
     def test_discovery_replays_actual_listing_and_detail_without_fixed_ids(self):
         report = self.collect()

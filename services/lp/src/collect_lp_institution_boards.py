@@ -293,12 +293,13 @@ def _detail(html, url, config, resolution=None):
     return parser.parse_detail(html, url, config, **kwargs)
 
 
-def collect(configs=None, fetch_factory=Session, checked_at=None):
+def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures=True):
     checked_at = checked_at or datetime.now(timezone.utc).isoformat()
     result = {'checked_at': checked_at, 'notices': [], 'holds': [], 'coverage': {}}
+    configs = load_configs() if configs is None else configs
     shared_listings = {}
     resolver_cache = {}
-    for institution, config in (configs or load_configs()).items():
+    for institution, config in configs.items():
         fetch = fetch_factory(config)
         receipts, candidates = {}, {}
         coverage = {'listing_pages': [], 'detail_count': 0, 'attachment_count': 0,
@@ -438,6 +439,34 @@ def collect(configs=None, fetch_factory=Session, checked_at=None):
         coverage['native_ipv4_fetch_count'] = getattr(fetch, 'native_ipv4_fetches', 0)
         coverage['dns_ipv4_fetch_count'] = getattr(fetch, 'dns_ipv4_fetches', 0)
         coverage['alternate_dns_lookup_count'] = getattr(fetch, 'alternate_dns_lookups', 0)
+    return retry_failed_sources(result, configs, fetch_factory, checked_at=checked_at) if retry_failures else result
+
+
+def retry_failed_sources(report, configs=None, fetch_factory=Session, checked_at=None):
+    """One fresh session for at most two failed issuers; retain both attempts."""
+    configs = load_configs() if configs is None else configs
+    failed = list(dict.fromkeys(h.get('institution_id') for h in report.get('holds', [])
+                  if h.get('stage') in {'institution_listing', 'institution_detail'}
+                  and h.get('institution_id') in configs))[:2]
+    if not failed:
+        return report
+    result = copy.deepcopy(report)
+    stamp = checked_at or datetime.now(timezone.utc).isoformat()
+    retried = collect({i: configs[i] for i in failed}, fetch_factory=fetch_factory,
+                      checked_at=stamp, retry_failures=False)
+    notices = {n['url']: n for n in result['notices']}
+    notices.update({n['url']: n for n in retried['notices']})
+    result['notices'] = list(notices.values())
+    history = result.setdefault('retry_history', [])
+    for institution in failed:
+        history.append({'institution_id': institution, 'retried_at': datetime.now(timezone.utc).isoformat(),
+                        'previous_checked_at': report['checked_at'],
+                        'previous_holds': [h for h in report['holds'] if h.get('institution_id') == institution],
+                        'previous_coverage': copy.deepcopy(report['coverage'].get(institution, {}))})
+        result['coverage'][institution] = retried['coverage'][institution]
+    result['holds'] = [h for h in report['holds'] if h.get('institution_id') not in failed] + retried['holds']
+    result['initial_checked_at'] = report.get('initial_checked_at', report['checked_at'])
+    result['checked_at'] = retried['checked_at']
     return result
 
 
