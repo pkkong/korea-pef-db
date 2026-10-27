@@ -593,3 +593,7 @@ CI39439261862:619검사 실패0/오류0, 로컬 원본 fixture없는5skip, Postg
 - 일반 진단40424998741은ECHECKOUTTIMEOUT15초, session진단40425647847은 DB 연결timeout이었다. 마지막00:21:17UTC 공개health503/10.28초. 뉴스레터 동기화40424915542도00:16:49 Supabase POST 읽기timeout. 공유 인프라 장애와 일치하지만 LP 원인이나 코드 결합은 입증되지 않았다. 재시작·DB 연결 종료·요금 변경·다른 서비스 수정은 없다.
 - Source17887e2는 prepare_publication에서 짧은 REPEATABLE READ READ ONLY 기준/버전 읽기 후 연결을 닫고 원문을 검증한다. publish_prepared는 READ COMMITTED·같은 advisory lock 획득 후 별도 revision 쿼리로 run_id/updated_at/전체 검토 결정을 확인하며 변경 시 쓰기 전에 실패한다. 실제 저장은 여전히 같은 트랜잭션이다. 로컬835검사/실패·오류·skip0·구조 계약·CI40425522128 성공. Sourcea5d9b16/CI40425634378은 설정된 Supabase 풀러6543에 한해 읽기 전용session5432 진단을 허용했다. 운영 접속 설정은 바꾸지 않았다.
 - 공개 앱release2840e0c·마지막 정상 자료142a6253e7b95123de1de722/29사업이나 현재 DB 조회503이다. 관리 API 토큰과 관리 브라우저 세션이 없어 Supabase 관리 로그인을 요청했다. 다음은 로그인 후 DB 상태 확인·복구→health/29상세→새 코드 발행→실제 예약 확인이다. 예약09:20/15:20과 실패 신호는 유지한다. 관리 로그인 답변 대기이며 장애 미해결을 완료라고 보고하지 않는다. 세부 근거는lp_collection_status/checklist/delivery_plan을 따른다.
+
+## 관리 로그인 진행 상태 — 2026-10-27
+
+Supabase의 정상 GitHub 로그인 경로를 실제 시도했지만 인앱 브라우저에도 GitHub 로그인 세션이 없다. 기존 브라우저 확인은 Mac 잠금 때문에 차단됐다. 사용자에게는 Mac 잠금 해제만 요청했고 로그인 화면을 유지했다. 관리자 로그인·DB 복구는 미완료이며 잠금 해제 후 기존 세션 확인부터 이어간다. 공개 health는 이번 재확인에서도503이었다.
