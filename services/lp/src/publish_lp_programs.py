@@ -261,6 +261,56 @@ def prepare(current, report):
     return data, pages
 
 
+def publication_revision(conn):
+    """Compare both published state and all review edits under the write lock."""
+    state = conn.execute('SELECT run_id, updated_at FROM lp_program_private.program_state WHERE id=1').fetchone()
+    decisions = [row[0] for row in conn.execute(
+        'SELECT to_jsonb(d) FROM lp_program_private.review_decisions d ORDER BY id').fetchall()]
+    return state, decisions
+
+
+def prepare_publication(report):
+    # Release the pooled database connection before expensive source replay.
+    # A single read snapshot keeps the baseline and its revision consistent.
+    with connect() as conn:
+        conn.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+        conn.execute("SET LOCAL statement_timeout='120s'")
+        current = baseline(conn)
+        revision = publication_revision(conn)
+    started = time.monotonic()
+    data, pages = prepare(current, report)
+    publication_phase('source_validation_and_pages', started, programs=len(data['programs']))
+    return data, pages, revision
+
+
+def publish_prepared(report, data, pages, revision, institution, wrap_json=None):
+    if wrap_json is None:
+        from psycopg.types.json import Jsonb
+        wrap_json = Jsonb
+    stamp = datetime.now(timezone.utc).isoformat()
+    run_id = hashlib.sha256((stamp+json.dumps(report,sort_keys=True)).encode()).hexdigest()[:24]
+    with connect() as conn:
+        # READ COMMITTED sees changes made while this lock was waiting.
+        conn.execute('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
+        conn.execute("SET LOCAL lock_timeout='20s'")
+        conn.execute("SET LOCAL statement_timeout='120s'")
+        conn.execute("SET LOCAL idle_in_transaction_session_timeout='300s'")
+        started = time.monotonic()
+        conn.execute('SELECT pg_advisory_xact_lock(728160921)')
+        publication_phase('publication_lock', started)
+        if publication_revision(conn) != revision:
+            raise RuntimeError('LP publication or review changed during source validation; keep existing publication')
+        started = time.monotonic()
+        conn.execute('INSERT INTO lp_program_private.collection_runs(run_id,institution,report) VALUES (%s,%s,%s)',
+                     (run_id, institution, wrap_json(report)))
+        documents = store_documents(conn, report, data, wrap_json)
+        publication_phase('evidence_storage', started, documents=documents)
+        started = time.monotonic()
+        store_public_state(conn, data, pages, run_id)
+        publication_phase('public_state_storage', started)
+    return run_id
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--export-baseline', type=Path)
@@ -270,49 +320,31 @@ def main():
     parser.add_argument('--shared-collection', type=Path)
     parser.add_argument('--institution-collection', type=Path)
     args = parser.parse_args()
-    with connect() as conn:
-        if args.export_source_index:
-            args.export_source_index.write_text(json.dumps(source_index(conn), ensure_ascii=False))
-            return
-        if args.export_baseline:
-            args.export_baseline.write_text(json.dumps(baseline(conn), ensure_ascii=False))
-            return
-        report = json.loads(args.collection.read_text())
-        if args.priority_collection:
-            priority_report = json.loads(args.priority_collection.read_text())
-            report['priority_sources'] = priority_report['sources']
-        if args.shared_collection:
-            report['shared_collection'] = (json.loads(args.shared_collection.read_text()) if args.shared_collection.exists() else
-                                          {'notices': [], 'holds': [{'stage': 'listing', 'error': '협회 수집 파일 없음; 이전 자료 유지'}]})
-        if args.institution_collection:
-            report['institution_collection'] = (json.loads(args.institution_collection.read_text())
-                if args.institution_collection.exists() else {'notices': [], 'holds': [
-                    {'stage': 'institution_listing', 'error': '기관 게시판 수집 파일 없음; 이전 자료 유지'}]})
-        # Late original searches happen after the native collection report.
-        # Keep its timestamp and validate every source against publication time.
-        report['collection_checked_at'] = report['checked_at']
-        report['checked_at'] = datetime.now(timezone.utc).isoformat()
-        report = clean_database_text(report)
-        # One transaction and lock: evidence and public view always agree.
-        phase_started = time.monotonic()
-        conn.execute("SET LOCAL lock_timeout='20s'")
-        conn.execute("SET LOCAL statement_timeout='120s'")
-        conn.execute("SET LOCAL idle_in_transaction_session_timeout='300s'")
-        conn.execute('SELECT pg_advisory_xact_lock(728160921)')
-        publication_phase('publication_lock', phase_started)
-        phase_started = time.monotonic()
-        data, pages = prepare(baseline(conn), report)
-        publication_phase('source_validation_and_pages', phase_started, programs=len(data['programs']))
-        from psycopg.types.json import Jsonb
-        stamp = datetime.now(timezone.utc).isoformat()
-        run_id = hashlib.sha256((stamp+json.dumps(report,sort_keys=True)).encode()).hexdigest()[:24]
-        phase_started = time.monotonic()
-        conn.execute('INSERT INTO lp_program_private.collection_runs(run_id,institution,report) VALUES (%s,%s,%s)', (run_id,'multi_lp' if args.priority_collection else 'kgrowth',Jsonb(report)))
-        documents = store_documents(conn, report, data, Jsonb)
-        publication_phase('evidence_storage', phase_started, documents=documents)
-        phase_started = time.monotonic()
-        store_public_state(conn, data, pages, run_id)
-        publication_phase('public_state_storage', phase_started)
+    if args.export_source_index or args.export_baseline:
+        with connect() as conn:
+            conn.execute('SET TRANSACTION READ ONLY')
+            value = source_index(conn) if args.export_source_index else baseline(conn)
+        target = args.export_source_index or args.export_baseline
+        target.write_text(json.dumps(value, ensure_ascii=False))
+        return
+    report = json.loads(args.collection.read_text())
+    if args.priority_collection:
+        priority_report = json.loads(args.priority_collection.read_text())
+        report['priority_sources'] = priority_report['sources']
+    if args.shared_collection:
+        report['shared_collection'] = (json.loads(args.shared_collection.read_text()) if args.shared_collection.exists() else
+                                      {'notices': [], 'holds': [{'stage': 'listing', 'error': '협회 수집 파일 없음; 이전 자료 유지'}]})
+    if args.institution_collection:
+        report['institution_collection'] = (json.loads(args.institution_collection.read_text())
+            if args.institution_collection.exists() else {'notices': [], 'holds': [
+                {'stage': 'institution_listing', 'error': '기관 게시판 수집 파일 없음; 이전 자료 유지'}]})
+    # Late original searches happen after the native collection report.
+    report['collection_checked_at'] = report['checked_at']
+    report['checked_at'] = datetime.now(timezone.utc).isoformat()
+    report = clean_database_text(report)
+    data, pages, revision = prepare_publication(report)
+    run_id = publish_prepared(report, data, pages, revision,
+                             'multi_lp' if args.priority_collection else 'kgrowth')
     print(json.dumps({'run_id':run_id,'programs':len(data['programs']),'program_ids':[p['id'] for p in data['programs']],
                       'notices':len(report['notices']),'review':len(report.get('review',[])),
                       'institution_notices':len(data.get('institution_notices',[])),

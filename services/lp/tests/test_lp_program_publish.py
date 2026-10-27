@@ -11,6 +11,60 @@ sys.path.insert(0,str(SRC))
 from publish_lp_programs import prepare, document_hash, clean_database_text, source_index, store_documents, store_public_state
 
 class PublishContracts(unittest.TestCase):
+    def test_source_replay_runs_after_read_connection_is_closed(self):
+        from unittest.mock import MagicMock
+        from publish_lp_programs import prepare_publication
+        conn = MagicMock()
+        active = []
+        conn.__enter__.side_effect = lambda: active.append(True) or conn
+        conn.__exit__.side_effect = lambda *args: active.pop()
+        def offline(current, report):
+            self.assertFalse(active, 'Source replay must not hold a pooled connection')
+            return {'programs': []}, {'index.html': 'valid'}
+        with patch('publish_lp_programs.connect', return_value=conn), patch('publish_lp_programs.baseline', return_value={}), \
+             patch('publish_lp_programs.publication_revision', return_value=('old', [])), \
+             patch('publish_lp_programs.prepare', side_effect=offline), patch('publish_lp_programs.publication_phase'):
+            self.assertEqual(prepare_publication({})[2], ('old', []))
+        self.assertIn('REPEATABLE READ READ ONLY', conn.execute.call_args_list[0].args[0])
+
+    def test_changed_publication_or_review_cannot_write_prepared_results(self):
+        from unittest.mock import MagicMock
+        from publish_lp_programs import publish_prepared
+        old = (('run1', 'stamp1'), [{'id': 1, 'action': 'hold'}])
+        changes = [(('run2', 'stamp2'), old[1]), (('run1', 'stamp2'), old[1]),
+                   (old[0], [{'id': 1, 'action': 'approve'}]), (old[0], []),
+                   (old[0], old[1] + [{'id': 2, 'action': 'exclude'}])]
+        for newer in changes:
+            with self.subTest(revision=newer):
+                conn = MagicMock()
+                conn.__enter__.return_value = conn
+                def read_after_lock(_):
+                    self.assertIn('pg_advisory_xact_lock', conn.execute.call_args.args[0])
+                    return newer
+                with patch('publish_lp_programs.connect', return_value=conn), \
+                     patch('publish_lp_programs.publication_revision', side_effect=read_after_lock), \
+                     patch('publish_lp_programs.publication_phase'), self.assertRaisesRegex(RuntimeError, 'changed during'):
+                    publish_prepared({}, {'programs': []}, {}, old, 'multi_lp', wrap_json=lambda value: value)
+                self.assertTrue(all(not c.args[0].startswith('INSERT') for c in conn.execute.call_args_list))
+                self.assertIn('READ COMMITTED', conn.execute.call_args_list[0].args[0])
+                self.assertIs(conn.__exit__.call_args.args[0], RuntimeError)
+
+    def test_prepared_storage_failure_rolls_back_evidence_and_public_state_together(self):
+        from unittest.mock import MagicMock
+        from publish_lp_programs import publish_prepared
+        conn = MagicMock()
+        conn.__enter__.return_value = conn
+        revision = (('same', 'stamp'), [])
+        with patch('publish_lp_programs.connect', return_value=conn), \
+             patch('publish_lp_programs.publication_revision', return_value=revision), \
+             patch('publish_lp_programs.store_documents', return_value=2), \
+             patch('publish_lp_programs.store_public_state', side_effect=RuntimeError('state write failed')), \
+             patch('publish_lp_programs.publication_phase'), self.assertRaisesRegex(RuntimeError, 'state write failed'):
+            publish_prepared({}, {'programs': []}, {}, revision, 'multi_lp', wrap_json=lambda value: value)
+        self.assertIs(conn.__exit__.call_args.args[0], RuntimeError)
+        self.assertTrue(any(c.args[0].startswith('INSERT INTO lp_program_private.collection_runs') for c in conn.execute.call_args_list))
+        conn.commit.assert_not_called()
+
     def test_public_payload_preserves_unicode_zero_and_literal_escapes(self):
         from unittest.mock import Mock
         conn = Mock()
