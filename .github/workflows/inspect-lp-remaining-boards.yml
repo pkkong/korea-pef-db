@@ -6,6 +6,11 @@ on:
         type: choice
         options: [initial, followup, mmaa_files, geps_pck_recovery, pck_kamco_recovery, publication_waits]
         default: initial
+      connection_mode:
+        description: Read-only publication diagnostic connection mode
+        type: choice
+        options: [transaction, session]
+        default: transaction
 permissions:
   contents: read
 concurrency:
@@ -17,6 +22,7 @@ jobs:
     timeout-minutes: 10
     env:
       LP_INSPECTION_PROFILE: ${{ inputs.profile || 'initial' }}
+      LP_DIAGNOSTIC_CONNECTION_MODE: ${{ inputs.connection_mode || 'transaction' }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -38,7 +44,13 @@ jobs:
           from pathlib import Path
           import psycopg
           from psycopg.rows import dict_row
-          with psycopg.connect(os.environ['SUPABASE_DB_URL'],connect_timeout=10,row_factory=dict_row,application_name='lp-publication-diagnostic') as conn:
+          options={}
+          if os.environ['LP_DIAGNOSTIC_CONNECTION_MODE']=='session':
+              configured=psycopg.conninfo.conninfo_to_dict(os.environ['SUPABASE_DB_URL'])
+              host=configured.get('host','')
+              assert host.endswith('.pooler.supabase.com') and ',' not in host and configured.get('port')=='6543','Session diagnostic requires a configured Supabase transaction pooler'
+              options['port']=5432
+          with psycopg.connect(os.environ['SUPABASE_DB_URL'],connect_timeout=10,row_factory=dict_row,application_name='lp-publication-diagnostic',**options) as conn:
               conn.execute('SET TRANSACTION READ ONLY')
               conn.execute("SET LOCAL statement_timeout='10s'")
               rows=conn.execute("""
