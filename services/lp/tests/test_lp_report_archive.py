@@ -29,6 +29,25 @@ class MemoryTransport:
         return (200,self.objects[key]) if key in self.objects else (404,b'{}')
 
 class ArchiveTests(unittest.TestCase):
+    def test_storage_failure_diagnostic_never_echoes_provider_details(self):
+        raw=json.dumps({'statusCode':'404','error':'Bucket not found','message':'SECRET https://private.example/path'}).encode()
+        error=a._safe_http_failure('bucket failed',400,raw)
+        self.assertEqual(str(error),'bucket failed (HTTP 400, statusCode 404, Bucket not found)')
+        for body in [b'{"error":"SECRET","statusCode":"SECRET"}', b'not-json SECRET', b'[]', b'{"error":[]}']:
+            self.assertEqual(str(a._safe_http_failure('bucket failed',400,body)),'bucket failed (HTTP 400)')
+
+    def test_legacy_missing_response_creates_private_bucket(self):
+        transport=MemoryTransport(exists=False)
+        def legacy(method,url,headers,body,limit,timeout):
+            if '/bucket/' in url and not transport.exists:
+                return 400,b'{"statusCode":"404","error":"Bucket not found","message":"Bucket not found"}'
+            return transport(method,url,headers,body,limit,timeout)
+        self.assertTrue(a.ArchiveStore(ORIGIN,'key',legacy).ensure_private_bucket())
+        for error in ['Bucket not found','Object not found','NoSuchKey','NoSuchBucket','not_found']:
+            self.assertTrue(a._missing(400,json.dumps({'statusCode':'404','error':error}).encode()))
+            self.assertFalse(a._missing(400,json.dumps({'statusCode':'403','error':error}).encode()))
+        self.assertFalse(a._missing(400,b'{"statusCode":"404","error":"AccessDenied"}'))
+
     def test_deterministic_roundtrip_preserves_all_json_values(self):
         b,m=a.encode_report(REPORT)
         self.assertEqual((b,m),a.encode_report(dict(reversed(list(REPORT.items())))))

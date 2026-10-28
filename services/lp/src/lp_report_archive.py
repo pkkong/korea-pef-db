@@ -176,7 +176,8 @@ def _missing(status, raw):
     try:
         error = json.loads(raw)
         return (isinstance(error, dict) and str(error.get('statusCode')) == '404'
-                and error.get('error', error.get('code')) in {'not_found', 'NoSuchKey', 'NoSuchBucket'})
+                and error.get('error', error.get('code')) in {'not_found', 'NoSuchKey', 'NoSuchBucket',
+                    'Bucket not found', 'Object not found'})
     except (ValueError, UnicodeError):
         return False
 
