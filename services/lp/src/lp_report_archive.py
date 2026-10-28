@@ -299,6 +299,17 @@ class ArchiveStore:
             raise ArchiveError('archive readback differs from source report')
         return stub
 
+    def assert_private(self, stub, public_key):
+        descriptor = validate_locator(stub)
+        if public_key == self._key:
+            raise ArchiveError('archive denial probe requires an unprivileged key')
+        reader = ArchiveStore(self._origin, public_key, self._transport)
+        status, raw = reader._request('GET', '/storage/v1/object/authenticated/' + BUCKET + '/' + descriptor['object_path'],
+                                      limit=MAX_COMPRESSED_BYTES)
+        if status in (403, 404) or _missing(status, raw):
+            return status
+        raise ArchiveError('archive is not proven inaccessible to public readers')
+
     def restore(self, stub):
         descriptor = validate_locator(stub)
         self.ensure_private_bucket()

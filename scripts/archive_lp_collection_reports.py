@@ -46,6 +46,25 @@ def readonly(conn):
     conn.execute("SET LOCAL lock_timeout='5s'")
 
 
+def install_archive_guard():
+    # Restrictive policies compose with every existing permissive policy. This
+    # protects only the archive bucket; other services' storage stays unchanged.
+    with connect() as conn:
+        conn.execute("SET LOCAL lock_timeout='5s'")
+        conn.execute("SET LOCAL statement_timeout='10s'")
+        rls = conn.execute("SELECT relrowsecurity FROM pg_class WHERE oid='storage.objects'::regclass").fetchone()
+        if not rls or rls[0] is not True:
+            raise MaintenanceError('Storage row-level security is not enabled')
+        row = conn.execute("SELECT permissive,roles,qual,with_check,cmd FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='lp_collection_report_archive_guard'").fetchone()
+        if not row:
+            conn.execute("CREATE POLICY lp_collection_report_archive_guard ON storage.objects AS RESTRICTIVE FOR ALL TO anon,authenticated USING (bucket_id <> 'lp-collection-reports') WITH CHECK (bucket_id <> 'lp-collection-reports')")
+        else:
+            expected = "bucket_id<>'lp-collection-reports'::text"
+            expressions = [None if expr is None else ''.join(expr.split()).replace('(', '').replace(')', '') for expr in row[2:4]]
+            if row[0] != 'RESTRICTIVE' or row[4] != 'ALL' or set(row[1]) != {'anon','authenticated'} or expressions != [expected,expected]:
+                raise MaintenanceError('Existing archive access guard differs; no permissions changed')
+
+
 def protected_runs(conn, keep=3):
     if type(keep) is not int or not 3 <= keep <= 20:
         raise MaintenanceError('Keep between three and twenty recent reports')
@@ -57,14 +76,11 @@ def protected_runs(conn, keep=3):
     return ids
 
 
-def inspect(keep=3, *, measure_transfer=False):
+def inspect(keep=3):
     with connect() as conn:
         readonly(conn)
         protected = protected_runs(conn, keep)
-        if measure_transfer:
-            conn.execute("SET LOCAL statement_timeout='60s'")
-        extra = ',octet_length(report::text)' if measure_transfer else ''
-        rows = conn.execute(f'SELECT run_id,collected_at,pg_column_size(report){extra} FROM {TABLE} ORDER BY collected_at DESC,run_id DESC LIMIT 5001').fetchall()
+        rows = conn.execute(f'SELECT run_id,collected_at,pg_column_size(report) FROM {TABLE} ORDER BY collected_at DESC,run_id DESC LIMIT 5001').fetchall()
         if len(rows) > 5000:
             raise MaintenanceError('Report inventory exceeds bounded inspection size')
         database_bytes, table_bytes = conn.execute(
@@ -72,10 +88,11 @@ def inspect(keep=3, *, measure_transfer=False):
         storage_bytes = conn.execute("SELECT COALESCE(sum(CASE WHEN metadata->>'size' ~ '^[0-9]+$' THEN (metadata->>'size')::bigint ELSE 0 END),0) FROM storage.objects").fetchone()[0]
         current = conn.execute("SELECT run_id,updated_at,md5(pages::text),ARRAY(SELECT jsonb_object_keys(pages)) FROM lp_program_private.program_state WHERE id=1").fetchone()
         reviews = conn.execute("SELECT count(*),md5(COALESCE(jsonb_agg(to_jsonb(d) ORDER BY id),'[]'::jsonb)::text) FROM lp_program_private.review_decisions d").fetchone()
+        archive_count = conn.execute(f"SELECT count(*) FROM {TABLE} WHERE CASE WHEN pg_column_size(report)<=%s THEN report ? '_lp_report_archive' ELSE false END", (MIN_REPORT_BYTES,)).fetchone()[0]
     inventory = [{'run_id': row[0], 'collected_at': row[1].isoformat(), 'stored_bytes': row[2],
-                  'protected': row[0] in protected, **({'transfer_bytes':row[3]} if measure_transfer else {})} for row in rows]
+                  'protected': row[0] in protected} for row in rows]
     return {'checked_at': datetime.now(timezone.utc).isoformat(), 'database_bytes': int(database_bytes),
-            'table_bytes': int(table_bytes), 'storage_bytes': int(storage_bytes), 'rows': inventory,
+            'table_bytes': int(table_bytes), 'storage_bytes': int(storage_bytes), 'archive_count': archive_count, 'rows': inventory,
             'protected_runs': sorted(protected), 'candidate_runs': [row['run_id'] for row in reversed(inventory)
                 if not row['protected'] and row['stored_bytes'] > MIN_REPORT_BYTES],
             'published': None if not current else {'run_id': current[0], 'updated_at': current[1].isoformat(),
@@ -107,7 +124,7 @@ def replace_with_stub(run_id, revision, stub, keep=3):
         return 'archived' if row else 'changed'
 
 
-def archive(store, *, keep=3, limit=50):
+def archive(store, *, keep=3, limit=50, public_key=None):
     from services.lp.src.lp_report_archive import is_archive_stub, validate_locator, estimate_report
     if type(limit) is not int or not 1 <= limit <= 100:
         raise MaintenanceError('Archive batch must contain one to one hundred reports')
@@ -126,6 +143,7 @@ def archive(store, *, keep=3, limit=50):
             raise MaintenanceError('Private archive storage budget would be exceeded; original DB reports retained')
         stub = store.put_verified(run_id, report)
         descriptor = validate_locator(stub, run_id)
+        store.assert_private(stub, public_key)
         raw = json.dumps(report, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
         if hashlib.sha256(raw).hexdigest() != descriptor['raw_sha256'] or len(raw) != descriptor['raw_bytes']:
             raise MaintenanceError('Archive descriptor differs from the source report')
@@ -140,6 +158,7 @@ def archive(store, *, keep=3, limit=50):
 
 
 def restore(store, run_id):
+    before = inspect()
     from services.lp.src.lp_report_archive import is_archive_stub, validate_locator
     stub, revision = read_report(run_id)
     if not is_archive_stub(stub):
@@ -155,7 +174,10 @@ def restore(store, run_id):
         if not row or row != (stub, revision):
             raise MaintenanceError('Archive descriptor changed before restoration; no report overwritten')
         conn.execute(f'UPDATE {TABLE} SET report=%s::jsonb WHERE run_id=%s AND xmin::text=%s', (encoded, run_id, revision))
-    return {'restored_run_id': run_id, 'raw_bytes': len(encoded.encode())}
+    after = inspect()
+    if before['published'] != after['published'] or before['reviews'] != after['reviews'] or len(before['rows']) != len(after['rows']):
+        raise MaintenanceError('Public state, review or report inventory changed during restoration')
+    return {'before': before, 'after': after, 'restored_run_id': run_id, 'raw_bytes': len(encoded.encode())}
 
 
 def verify_archives(store, *, limit=100):
@@ -179,11 +201,11 @@ def verify_archives(store, *, limit=100):
     return {'verified': results}
 
 
-def reclaim():
+def reclaim(*, full=True):
     before = inspect()
     live_bytes = sum(row['stored_bytes'] for row in before['rows'])
-    archived = sum(row['stored_bytes'] <= MIN_REPORT_BYTES and not row['protected'] for row in before['rows'])
-    if not archived or live_bytes > MAX_REWRITE_BYTES:
+    archived = before['archive_count']
+    if not archived or (full and live_bytes > MAX_REWRITE_BYTES):
         raise MaintenanceError('Reclaim requires archived reports and a bounded live table size')
     # VACUUM cannot run in a transaction. A session connection keeps this
     # LP-only maintenance lock/settings for the whole autocommit operation.
@@ -194,7 +216,11 @@ def reclaim():
         if not locked:
             raise MaintenanceError('LP publication or review is active; reclaim skipped')
         try:
-            conn.execute(f'VACUUM (FULL, ANALYZE) {TABLE}')
+            fresh_live, fresh_archived = conn.execute(f"SELECT COALESCE(sum(pg_column_size(report)),0),count(*) FILTER (WHERE CASE WHEN pg_column_size(report)<=%s THEN report ? '_lp_report_archive' ELSE false END) FROM {TABLE}", (MIN_REPORT_BYTES,)).fetchone()
+            if not fresh_archived or (full and fresh_live > MAX_REWRITE_BYTES):
+                raise MaintenanceError('Report storage changed before the maintenance lock; reclaim skipped')
+            command = 'VACUUM (FULL, ANALYZE)' if full else 'VACUUM (ANALYZE)'
+            conn.execute(f'{command} {TABLE}')
         finally:
             conn.execute('SELECT pg_advisory_unlock(%s)', (LOCK,))
     after = inspect()
@@ -209,19 +235,25 @@ def main():
     parser.add_argument('--keep', type=int, default=3)
     parser.add_argument('--limit', type=int, default=50)
     parser.add_argument('--run-id')
-    parser.add_argument('--measure-transfer', action='store_true')
+    parser.add_argument('--reuse-space', action='store_true')
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
     try:
         if args.mode == 'inspect':
-            result = inspect(args.keep, measure_transfer=args.measure_transfer)
-        elif args.mode == 'reclaim':
-            result = reclaim()
+            result = inspect(args.keep)
         else:
             from services.lp.src.lp_report_archive import ArchiveStore
             store = ArchiveStore(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_ROLE_KEY'])
             if args.mode == 'archive':
-                result = archive(store, keep=args.keep, limit=args.limit)
+                public_key = os.environ['SUPABASE_PUBLISHABLE_KEY']
+                install_archive_guard()
+                result = archive(store, keep=args.keep, limit=args.limit, public_key=public_key)
+                if args.reuse_space and any(row['status']=='archived' for row in result['results']):
+                    result['reuse_space'] = reclaim(full=False)
+            elif args.mode == 'reclaim':
+                verified = verify_archives(store, limit=args.limit)
+                result = reclaim()
+                result['verified_count'] = len(verified['verified'])
             elif args.mode == 'verify':
                 result = verify_archives(store, limit=args.limit)
             else:
@@ -231,7 +263,7 @@ def main():
         output = {'mode': args.mode, 'status': 'ok', **result}
     except Exception as error:
         output = {'mode': args.mode, 'status': 'error', 'error_type': type(error).__name__}
-        if isinstance(error, MaintenanceError):
+        if isinstance(error, MaintenanceError) or type(error).__name__ == 'ArchiveError':
             output['reason'] = str(error)
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)

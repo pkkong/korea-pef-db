@@ -5,7 +5,7 @@ on:
       mode:
         description: Inspect, archive with verified private backups, verify, restore, or reclaim only LP report storage
         type: choice
-        options: [inspect]
+        options: [inspect, archive, verify, restore, reclaim]
         default: inspect
       limit:
         description: Maximum report batch size
@@ -38,14 +38,12 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           LP_MAINTENANCE_MODE: ${{ inputs.mode }}
           LP_MAINTENANCE_LIMIT: ${{ inputs.limit }}
           LP_RESTORE_RUN_ID: ${{ inputs.run_id }}
         run: |
           args=(--mode "$LP_MAINTENANCE_MODE" --limit "$LP_MAINTENANCE_LIMIT" --output /tmp/lp-report-maintenance/result.json)
-          if [ "$LP_MAINTENANCE_MODE" = inspect ]; then
-            args+=(--measure-transfer)
-          fi
           if [ -n "$LP_RESTORE_RUN_ID" ]; then
             args+=(--run-id "$LP_RESTORE_RUN_ID")
           fi

@@ -124,6 +124,16 @@ class ArchiveTests(unittest.TestCase):
             with self.assertRaises(a.ArchiveError) as caught:a.ArchiveStore(ORIGIN,'key',transport).ensure_private_bucket()
             self.assertNotIn('SECRET',str(caught.exception))
 
+    def test_archive_private_probe_rejects_any_publicly_readable_object(self):
+        _,meta=a.encode_report(REPORT);stub=a.make_stub('r',meta)
+        store=a.ArchiveStore(ORIGIN,'service',Mock(return_value=(200,b'private object')))
+        with self.assertRaises(a.ArchiveError):store.assert_private(stub,'anon')
+        store=a.ArchiveStore(ORIGIN,'service',Mock(return_value=(403,b'{}')))
+        self.assertEqual(store.assert_private(stub,'anon'),403)
+        with self.assertRaises(a.ArchiveError):store.assert_private(stub,'service')
+        store=a.ArchiveStore(ORIGIN,'service',Mock(return_value=(401,b'{}')))
+        with self.assertRaises(a.ArchiveError):store.assert_private(stub,'invalid')
+
     def test_default_transport_bounds_reads_and_preserves_no_redirect_handler(self):
         response=Mock();response.__enter__=Mock(return_value=response);response.__exit__=Mock(return_value=False);response.code=200;response.read.return_value=b'12345'
         with patch.object(a,'build_opener') as build:
