@@ -181,6 +181,26 @@ def _missing(status, raw):
         return False
 
 
+def _safe_http_failure(label, status, raw):
+    # Provider errors can contain credentials/URLs. Retain only numeric status
+    # and a fixed vocabulary, never the response body or arbitrary message.
+    details = [f'HTTP {status}']
+    try:
+        payload = json.loads(raw)
+        if isinstance(payload, dict):
+            code = str(payload.get('statusCode', ''))
+            if code.isascii() and code.isdigit() and 100 <= int(code) <= 599:
+                details.append('statusCode ' + code)
+            error = payload.get('error', payload.get('code'))
+            known = {'not_found', 'NoSuchKey', 'NoSuchBucket', 'Bucket not found',
+                     'Not Found', 'Unauthorized', 'InvalidJWT', 'AccessDenied'}
+            if isinstance(error, str) and error in known:
+                details.append(error)
+    except (ValueError, UnicodeError):
+        pass
+    return ArchiveError(label + ' (' + ', '.join(details) + ')')
+
+
 class ArchiveStore:
     def __init__(self, base_url, key, transport=None):
         if not isinstance(base_url, str) or not re.fullmatch(r'https://[a-z0-9-]+\.supabase\.co', base_url):
@@ -218,7 +238,7 @@ class ArchiveStore:
                 raise ArchiveError('private archive bucket creation failed')
             status, raw = self._request('GET', path)
         if status != 200:
-            raise ArchiveError('archive bucket verification failed')
+            raise _safe_http_failure('archive bucket verification failed', status, raw)
         try:
             bucket = json.loads(raw)
         except (ValueError, UnicodeError):
