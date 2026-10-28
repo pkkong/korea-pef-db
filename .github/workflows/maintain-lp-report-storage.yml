@@ -1,0 +1,76 @@
+name: Maintain LP report storage
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Inspect, archive with verified private backups, verify, restore, or reclaim only LP report storage
+        type: choice
+        options: [inspect]
+        default: inspect
+      limit:
+        description: Maximum report batch size
+        type: string
+        default: '50'
+      run_id:
+        description: Exact run ID for restoration only
+        type: string
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install LP database driver
+        run: python3 -m pip install 'psycopg[binary]==3.2.10'
+      - name: Test immutable archives and database preservation contracts
+        run: python3 -m unittest services.lp.tests.test_lp_report_archive scripts.tests.test_archive_lp_collection_reports
+      - name: Maintain only LP collection report storage
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          LP_MAINTENANCE_MODE: ${{ inputs.mode }}
+          LP_MAINTENANCE_LIMIT: ${{ inputs.limit }}
+          LP_RESTORE_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          args=(--mode "$LP_MAINTENANCE_MODE" --limit "$LP_MAINTENANCE_LIMIT" --output /tmp/lp-report-maintenance/result.json)
+          if [ "$LP_MAINTENANCE_MODE" = inspect ]; then
+            args+=(--measure-transfer)
+          fi
+          if [ -n "$LP_RESTORE_RUN_ID" ]; then
+            args+=(--run-id "$LP_RESTORE_RUN_ID")
+          fi
+          python3 scripts/archive_lp_collection_reports.py "${args[@]}"
+      - name: Verify published pages remain available and unchanged
+        run: |
+          python3 - <<'PY'
+          import json,urllib.request
+          from pathlib import Path
+          report=json.loads(Path('/tmp/lp-report-maintenance/result.json').read_text())
+          snapshot=report.get('after') or report
+          published=snapshot.get('published')
+          if published:
+              names=[name for name in published['page_names'] if name.startswith('program-')]+['index.html']
+              for name in names:
+                  with urllib.request.urlopen('https://kpef-lp.vercel.app/'+name,timeout=30) as response:
+                      assert response.status==200
+                      assert response.headers.get('X-LP-Run')==published['run_id']
+                      assert response.headers.get('X-LP-Data-Source')=='supabase'
+              print('Verified public LP pages:',len(names),published['run_id'])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-report-maintenance
+          path: /tmp/lp-report-maintenance/
+          retention-days: 7
+          if-no-files-found: warn
