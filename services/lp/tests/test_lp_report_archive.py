@@ -236,4 +236,79 @@ class ChunkedArchiveTests(unittest.TestCase):
         with patch.object(a,'MAX_PATH_DEPTH',1):
             with self.assertRaises(a.ArchiveError):a.estimate_report({'nested':{'body':'x'*9000}})
 
+class ValidatedChunkCacheTests(unittest.TestCase):
+    def test_cross_report_reuse_restores_identically_and_manifests_stay_fresh(self):
+        transport=MemoryTransport();store=a.ArchiveStore(ORIGIN,'key',transport,cache_bytes=1024*1024)
+        first={'body':'한글 original '*2000,'when':'first','zero':0,'null':None}
+        second={**first,'when':'second'}
+        one=store.put_verified('one',first)
+        before=len(transport.calls)
+        two=store.put_verified('two',second)
+        self.assertFalse(any('/chunks/' in c[1] for c in transport.calls[before:]))
+        for stub,report in [(one,first),(two,second)]:
+            before=len(transport.calls)
+            self.assertEqual(store.restore(stub),report)
+            calls=transport.calls[before:]
+            self.assertTrue(any('/bucket/' in c[1] for c in calls))
+            self.assertTrue(any('.manifest.json.gz' in c[1] for c in calls))
+            self.assertFalse(any('/chunks/' in c[1] for c in calls))
+        # New store/process must authenticate and download the chunk afresh.
+        fresh=a.ArchiveStore(ORIGIN,'key',transport,cache_bytes=1024*1024)
+        before=len(transport.calls);self.assertEqual(fresh.restore(one),first)
+        self.assertEqual(sum('/chunks/' in c[1] for c in transport.calls[before:]),1)
+        # Cached chunks do not conceal a missing or corrupt manifest.
+        transport.objects[a.BUCKET+'/'+one[a.MARKER]['object_path']]=b'bad'
+        with self.assertRaises(a.ArchiveError):store.restore(one)
+
+    def test_lru_eviction_is_bounded_by_compressed_bytes(self):
+        _,_,chunks=a._prepare_chunks({'a':'A'*9000,'b':'B'*9000,'c':'C'*9000})
+        items=list(chunks.items());limit=sum(len(pair[1][0]) for pair in items[:2])
+        transport=MemoryTransport();transport.objects.update({a.BUCKET+'/'+path:blob for path,(blob,meta) in items})
+        store=a.ArchiveStore(ORIGIN,'key',transport,cache_bytes=limit)
+        for i in [0,1,0,2]:
+            path,(blob,meta)=items[i];store._chunk(path,meta)
+            self.assertLessEqual(store._cache_size,limit)
+        self.assertIn(items[0][0],store._chunk_cache);self.assertNotIn(items[1][0],store._chunk_cache)
+        before=len(transport.calls);path,(_,meta)=items[1];store._chunk(path,meta)
+        self.assertEqual(len(transport.calls),before+1)
+        small=a.ArchiveStore(ORIGIN,'key',transport,cache_bytes=1)
+        small._chunk(path,meta);self.assertEqual(small._cache_size,0)
+
+    def test_failed_read_or_upload_never_populates_cache(self):
+        _,_,chunks=a._prepare_chunks({'body':'A'*9000});path,(blob,meta)=next(iter(chunks.items()))
+        transport=MemoryTransport();store=a.ArchiveStore(ORIGIN,'key',transport,cache_bytes=1024)
+        with self.assertRaises(a.ArchiveError):store._chunk(path,meta)
+        self.assertFalse(store._chunk_cache)
+        transport.objects[a.BUCKET+'/'+path]=b'bad'
+        with self.assertRaises(a.ArchiveError):store._chunk(path,meta)
+        self.assertFalse(store._chunk_cache)
+        transport=MemoryTransport();transport.corrupt=True;store=a.ArchiveStore(ORIGIN,'key',transport,cache_bytes=1024)
+        with self.assertRaises(a.ArchiveError):store.put_verified('r',{'body':'A'*9000})
+        self.assertFalse(store._chunk_cache)
+        uploads=[i for i,c in enumerate(transport.calls) if c[0]=='POST' and '/chunks/' in c[1]]
+        self.assertEqual(len(uploads),1)
+        self.assertEqual(transport.calls[uploads[0]+1][0],'GET')
+
+    def test_cached_blob_must_match_each_reference_including_gzip_metadata(self):
+        _,_,chunks=a._prepare_chunks({'body':'A'*9000});path,(blob,meta)=next(iter(chunks.items()))
+        transport=MemoryTransport();transport.objects[a.BUCKET+'/'+path]=blob
+        store=a.ArchiveStore(ORIGIN,'key',transport,cache_bytes=1024);store._chunk(path,meta)
+        other=gzip.compress(b'A'*9000,compresslevel=1,mtime=99)
+        changed={**meta,'gzip_bytes':len(other),'gzip_sha256':hashlib.sha256(other).hexdigest()}
+        before=len(transport.calls)
+        with self.assertRaises(a.ArchiveError):store._chunk(path,changed)
+        self.assertEqual(len(transport.calls),before);self.assertFalse(store._chunk_cache)
+        self.assertEqual(store._cache_size,0)
+
+    def test_existing_alternative_gzip_blob_is_cached_after_raw_validation(self):
+        report={'body':'A'*9000};raw=report['body'].encode();path='chunks/'+hashlib.sha256(raw).hexdigest()+'.txt.gz'
+        blob=gzip.compress(raw,compresslevel=1,mtime=99)
+        transport=MemoryTransport();transport.objects[a.BUCKET+'/'+path]=blob
+        store=a.ArchiveStore(ORIGIN,'key',transport,cache_bytes=1024)
+        stub=store.put_verified('r',report);self.assertEqual(store._chunk_cache[path],blob)
+        self.assertEqual(store.restore(stub),report)
+        self.assertEqual(sum(c[0]=='GET' and '/chunks/' in c[1] for c in transport.calls),1)
+        for invalid in [-1,True,1.5,a.MAX_RAW_BYTES+1]:
+            with self.assertRaises(a.ArchiveError):a.ArchiveStore(ORIGIN,'key',transport,cache_bytes=invalid)
+
 if __name__=='__main__':unittest.main()

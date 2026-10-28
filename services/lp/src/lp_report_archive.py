@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 import zlib
+from collections import OrderedDict
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import Request, HTTPRedirectHandler, build_opener
@@ -203,11 +204,22 @@ def _safe_http_failure(label, status, raw):
 
 
 class ArchiveStore:
-    def __init__(self, base_url, key, transport=None):
+    """Private storage client; optional cache holds verified compressed chunks only.
+
+    ``cache_bytes=0`` preserves fresh-read behavior. A nonzero budget applies to
+    this client instance only (maximum 256 MiB), with least-recently-used eviction.
+    Manifests and bucket/privacy checks always use authenticated fresh requests.
+    """
+    def __init__(self, base_url, key, transport=None, *, cache_bytes=0):
         if not isinstance(base_url, str) or not re.fullmatch(r'https://[a-z0-9-]+\.supabase\.co', base_url):
             raise ArchiveError('archive storage requires a Supabase HTTPS origin')
         if not isinstance(key, str) or not key or re.search(r'[\x00-\x20\x7f]', key):
             raise ArchiveError('archive storage credentials unavailable')
+        if type(cache_bytes) is not int or not 0 <= cache_bytes <= MAX_RAW_BYTES:
+            raise ArchiveError('invalid archive chunk cache limit')
+        self._cache_limit = cache_bytes
+        self._cache_size = 0
+        self._chunk_cache = OrderedDict()
         self._origin, self._key = base_url, key
         self._transport = transport or _transport
 
@@ -269,11 +281,37 @@ class ArchiveStore:
         if status not in (200, 201, 409) and not duplicate:
             raise ArchiveError('immutable archive upload failed')
 
+    def _validated_chunk(self, path, blob, meta):
+        # Validate every reference, even on cache hits and even if another
+        # manifest describes a different gzip encoding of the same plaintext.
+        try:
+            if path != 'chunks/' + meta['raw_sha256'] + '.txt.gz':
+                raise ArchiveError('chunk cache path differs from checksum')
+            text = _decode_chunk(blob, meta)
+        except Exception:
+            self._cache_drop(path)
+            raise ArchiveError('archive chunk integrity validation failed') from None
+        if self._cache_limit and len(blob) <= self._cache_limit:
+            self._cache_drop(path)
+            while self._cache_size + len(blob) > self._cache_limit:
+                _, evicted = self._chunk_cache.popitem(last=False)
+                self._cache_size -= len(evicted)
+            self._chunk_cache[path] = blob
+            self._cache_size += len(blob)
+        return text
+
+    def _cache_drop(self, path):
+        old = self._chunk_cache.pop(path, None)
+        if old is not None:
+            self._cache_size -= len(old)
+
     def _chunk(self, path, meta):
+        if path in self._chunk_cache:
+            return self._validated_chunk(path, self._chunk_cache[path], meta)
         status, blob = self._request('GET', '/storage/v1/object/authenticated/' + BUCKET + '/' + path,
             limit=max(MAX_CONTROL_BYTES, meta['gzip_bytes']))
         if status != 200:raise ArchiveError('archive chunk download failed')
-        return _decode_chunk(blob, meta)
+        return self._validated_chunk(path, blob, meta)
 
     def put_verified(self, run_id, report):
         manifest, metadata, chunks = _prepare_chunks(report)
@@ -295,15 +333,18 @@ class ArchiveStore:
             raise ArchiveError('archive manifest lookup failed')
         actual_chunks = {}
         for path, (blob, meta) in chunks.items():
-            status, existing = self._request('GET', '/storage/v1/object/authenticated/' + BUCKET + '/' + path,
-                                             limit=MAX_COMPRESSED_BYTES)
+            if path in self._chunk_cache:
+                status, existing = 200, self._chunk_cache[path]
+            else:
+                status, existing = self._request('GET', '/storage/v1/object/authenticated/' + BUCKET + '/' + path,
+                                                 limit=MAX_COMPRESSED_BYTES)
             if _missing(status, existing):
                 self._put_object(path, blob)
                 self._chunk(path, meta)
                 actual_chunks[path] = meta
             elif status == 200:
                 actual = {**meta, 'gzip_sha256': _sha(existing), 'gzip_bytes': len(existing)}
-                _decode_chunk(existing, actual)
+                self._validated_chunk(path, existing, actual)
                 actual_chunks[path] = actual
             else:
                 raise ArchiveError('archive chunk lookup failed')

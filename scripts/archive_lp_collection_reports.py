@@ -243,7 +243,11 @@ def main():
             result = inspect(args.keep)
         else:
             from services.lp.src.lp_report_archive import ArchiveStore
-            store = ArchiveStore(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_ROLE_KEY'])
+            # Content-addressed immutable chunks are shared by many histories.
+            # Read each from Storage once per bounded process, then revalidate
+            # hashes on reuse. Manifests/privacy checks are always fresh reads.
+            store = ArchiveStore(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_ROLE_KEY'],
+                                 cache_bytes=64 * 1024 * 1024)
             if args.mode == 'archive':
                 public_key = os.environ['SUPABASE_PUBLISHABLE_KEY']
                 install_archive_guard()
