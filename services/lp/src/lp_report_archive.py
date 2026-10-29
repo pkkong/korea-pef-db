@@ -5,6 +5,8 @@ Injected transport: (method, url, headers, body, max_bytes, timeout) ->
 This module never changes a database or deletes an object/report.
 """
 from __future__ import annotations
+import base64
+import binascii
 import gzip
 import io
 import hashlib
@@ -417,6 +419,20 @@ def _compress_chunk(raw):
         writer.write(raw)
     return output.getvalue()
 
+def _should_chunk(text, path):
+    size = len(text.encode('utf-8'))
+    if size >= CHUNK_THRESHOLD:
+        return True
+    # Decode only bounded attachment values, never arbitrary HTML or large text.
+    if not 8192 <= size < 256 * 1024 or len(path) < 2 or path[-2] != 'attachment_bytes':
+        return False
+    try:
+        raw = base64.b64decode(text.encode('ascii'), validate=True)
+    except (UnicodeEncodeError, binascii.Error, ValueError):
+        return False
+    return raw.startswith((b'%PDF-', bytes.fromhex('d0cf11e0a1b11ae1'), b'PK\x03\x04'))
+
+
 def _prepare_chunks(report):
     if isinstance(report,dict) and MARKER in report:raise ArchiveError('cannot archive an archive descriptor')
     original_raw=_canonical(report)
@@ -435,7 +451,7 @@ def _prepare_chunks(report):
         for key,item in items:
             child=path+[key]
             if len(child)>MAX_PATH_DEPTH:raise ArchiveError('archive path depth exceeded')
-            if isinstance(item,str) and len(item.encode('utf-8'))>=CHUNK_THRESHOLD:
+            if isinstance(item,str) and _should_chunk(item, child):
                 raw=item.encode('utf-8');sha=_sha(raw);object_path='chunks/'+sha+'.txt.gz'
                 if object_path not in chunks:
                     blob=_compress_chunk(raw)

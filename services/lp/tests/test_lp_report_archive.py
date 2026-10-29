@@ -1,4 +1,5 @@
 import copy
+import base64
 import gzip
 import hashlib
 import io
@@ -322,6 +323,57 @@ class ValidatedChunkCacheTests(unittest.TestCase):
             with self.assertRaises(a.ArchiveError):a.ArchiveStore(ORIGIN,'key',transport,cache_bytes=invalid)
 
 class ProductionChunkThresholdTests(unittest.TestCase):
+    def test_medium_binary_attachments_share_objects_and_restore_exactly(self):
+        for signature in (b'%PDF-', bytes.fromhex('d0cf11e0a1b11ae1'), b'PK\x03\x04'):
+            with self.subTest(signature=signature):
+                encoded = base64.b64encode(signature + b'x' * 16000).decode('ascii')
+                report = {**REPORT, 'attachment_bytes': {'url-one': encoded, 'url-two': encoded}}
+                transport = MemoryTransport()
+                store = a.ArchiveStore(ORIGIN, 'key', transport)
+                first = store.put_verified('one', report)
+                second_report = {**report, 'timestamp': 'two'}
+                second = store.put_verified('two', second_report)
+                self.assertEqual(store.restore(first), report)
+                self.assertEqual(store.restore(second), second_report)
+                self.assertEqual(len([key for key in transport.objects if '/chunks/' in key]), 1)
+                self.assertEqual(sum(c[0] == 'POST' and '/chunks/' in c[1] for c in transport.calls), 1)
+
+    def test_nonbinary_malformed_wrong_field_and_boundaries_preserve_inline(self):
+        encoded = base64.b64encode(b'%PDF-' + b'x' * 16000).decode('ascii')
+        inline = {
+            'html': base64.b64encode(b'<html>' + b'x' * 16000).decode('ascii'),
+            'malformed': encoded[:-1] + '!',
+            'unicode': '한' * 4000,
+            'small': base64.b64encode(b'%PDF-' + b'x' * 100).decode('ascii'),
+            'plain': '<html>' + 'x' * 16000,
+        }
+        report = {'attachment_bytes': inline, 'body': encoded, 'other_base64': encoded}
+        blob, _, chunks = a._prepare_chunks(report)
+        self.assertEqual(chunks, {})
+        self.assertEqual(json.loads(gzip.decompress(blob))['skeleton'], report)
+        store = a.ArchiveStore(ORIGIN, 'key', MemoryTransport())
+        self.assertEqual(store.restore(store.put_verified('inline', report)), report)
+        for raw_size, expected in ((6141, False), (6144, True)):
+            value = base64.b64encode(b'%PDF-' + b'x' * (raw_size - 5)).decode('ascii')
+            self.assertEqual(a._should_chunk(value, ['attachment_bytes', 'url']), expected)
+        with patch.object(a.base64, 'b64decode', side_effect=AssertionError('must not decode large values')):
+            self.assertTrue(a._should_chunk('x' * (256 * 1024), ['attachment_bytes', 'url']))
+
+    def test_existing_inline_binary_manifest_is_reused_without_repacking(self):
+        encoded = base64.b64encode(b'%PDF-' + b'x' * 16000).decode('ascii')
+        report = {'attachment_bytes': {'url': encoded}}
+        transport = MemoryTransport()
+        store = a.ArchiveStore(ORIGIN, 'key', transport)
+        with patch.object(a, '_should_chunk', return_value=False):
+            old_stub = store.put_verified('existing', report)
+        self.assertEqual(len(a._prepare_chunks(report)[2]), 1)
+        old_objects = dict(transport.objects)
+        before = len(transport.calls)
+        self.assertEqual(store.put_verified('existing', report), old_stub)
+        self.assertEqual(store.restore(old_stub), report)
+        self.assertEqual(transport.objects, old_objects)
+        self.assertFalse(any(c[0] == 'POST' for c in transport.calls[before:]))
+
     def test_ordinary_html_inline_large_repeated_attachment_has_bounded_requests(self):
         self.assertEqual(a.CHUNK_THRESHOLD, 256 * 1024)
         attachment = 'A' * (512 * 1024)
