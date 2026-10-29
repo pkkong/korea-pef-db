@@ -211,7 +211,9 @@ def reclaim(*, full=True):
     # LP-only maintenance lock/settings for the whole autocommit operation.
     with connect(session=True, autocommit=True) as conn:
         conn.execute("SET lock_timeout='5s'")
-        conn.execute("SET statement_timeout='180s'")
+        # Routine cleanup must yield before the publisher's 20-second lock
+        # budget. Only explicitly serialized FULL maintenance may run longer.
+        conn.execute("SET statement_timeout='180s'" if full else "SET statement_timeout='5s'")
         locked = conn.execute('SELECT pg_try_advisory_lock(%s)', (LOCK,)).fetchone()[0]
         if not locked:
             raise MaintenanceError('LP publication or review is active; reclaim skipped')

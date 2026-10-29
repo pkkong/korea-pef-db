@@ -134,7 +134,20 @@ class MaintenanceContracts(unittest.TestCase):
         with patch.object(m,'inspect',side_effect=[before,copy.deepcopy(before)]),patch.object(m,'connect',return_value=conn):m.reclaim(full=False)
         queries=[c.args[0] for c in conn.execute.call_args_list]
         self.assertIn('VACUUM (ANALYZE) '+m.TABLE,queries)
+        self.assertIn("SET statement_timeout='5s'",queries)
+        self.assertNotIn("SET statement_timeout='180s'",queries)
         self.assertFalse(any('FULL' in q or 'DELETE' in q or 'TRUNCATE' in q for q in queries))
+
+    def test_routine_cleanup_failure_releases_publication_lock(self):
+        conn=connection()
+        def execute(query,*args):
+            if query.startswith('VACUUM'):
+                raise RuntimeError('statement timeout')
+            return Mock(fetchone=lambda:(1000,1) if 'sum(pg_column_size' in query else (True,))
+        conn.execute.side_effect=execute
+        with patch.object(m,'inspect',return_value=snapshot()),patch.object(m,'connect',return_value=conn),self.assertRaisesRegex(RuntimeError,'statement timeout'):
+            m.reclaim(full=False)
+        self.assertIn('pg_advisory_unlock',conn.execute.call_args.args[0])
 
     def test_reclaim_is_bounded_session_autocommit_and_lp_table_only(self):
         conn=connection();conn.execute.side_effect=lambda q,*a:Mock(fetchone=lambda:(1000,1) if 'sum(pg_column_size' in q else (True,))
@@ -144,6 +157,7 @@ class MaintenanceContracts(unittest.TestCase):
         factory.assert_called_once_with(session=True,autocommit=True)
         queries=[c.args[0] for c in conn.execute.call_args_list]
         self.assertIn('VACUUM (FULL, ANALYZE) '+m.TABLE,queries)
+        self.assertIn("SET statement_timeout='180s'",queries)
         self.assertTrue(any('pg_advisory_unlock' in q for q in queries))
         huge=snapshot();huge['rows'][1]['stored_bytes']=m.MAX_REWRITE_BYTES+1
         with patch.object(m,'inspect',return_value=huge),patch.object(m,'connect') as factory,self.assertRaises(m.MaintenanceError):m.reclaim()

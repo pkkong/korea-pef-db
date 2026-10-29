@@ -21,7 +21,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: lp-program-collection
+  group: ${{ github.event_name == 'workflow_run' && 'lp-report-retention' || 'lp-program-collection' }}
   cancel-in-progress: false
 jobs:
   maintain:

@@ -18,7 +18,8 @@ class MaintenanceWorkflowTests(unittest.TestCase):
         self.assertIn('actions/checkout@v6\n        with:\n          ref: main', text)
         self.assertNotIn('ref: ${{', text)
         self.assertIn('permissions:\n  contents: read', text)
-        self.assertIn('group: lp-program-collection\n  cancel-in-progress: false', text)
+        self.assertIn("group: ${{ github.event_name == 'workflow_run' && 'lp-report-retention' || 'lp-program-collection' }}", text)
+        self.assertIn('cancel-in-progress: false', text)
 
     def test_automatic_small_batch_and_manual_defaults_are_separate(self):
         text = (ROOT / 'maintain-lp-report-storage.yml').read_text()
