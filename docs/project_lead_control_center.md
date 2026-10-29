@@ -603,3 +603,11 @@ CI39439261862:619검사 실패0/오류0, 로컬 원본 fixture없는5skip, Postg
 - 18:15:32 KST 외부29상세 전부200/Supabase/새실행/진행일정,healthok/stalefalse. 첫화면index/follow·검토두주소noindex/no-store/no-referrer/frame-deny도 통과했다. 관리 프로젝트는Healthy(CPU2%/RAM50%/연결4/60)로 확인돼 강제 재시작·연결 종료·설정 변경을 하지 않았다. 회복이 수동 DB 조치 때문이라고 설명하지 않는다. 오전503/연결timeout 실패 이력은 위 기록에 보존한다.
 - 읽기 전용 용량 점검에서 프로젝트1,009.02MB/무료0.5GB 초과를 확인했다. lp_program_private.collection_runs730.59MB(72.41%),documents36.36MB,program_state32.92MB다. 다음 우선순위는 원문 증거를 보존하면서 실행별 반복 보관을 줄이는 구조의 설계·검증이다. 자료 삭제·이전·유료 전환은 하지 않았다. 관측된 한도 경고를 오전 장애의 단일 원인이나 결제 필요로 단정하지 않는다.
 - 첫 공개 기능·자료·실제 정기 실행 검증은 완료다. 전체시장 확보율/벤치마크 동등 확보·영구 무중단을 주장하지 않는다. 추가6기관·GP·로그인·모든과거는 별도다. 최신 기관/운영 근거는lp_collection_status.md/checklist/delivery_plan을 따른다. 현재 관리 브라우저 탭은 로그인된 용량 보고서로 유지했다.
+
+## LP 이력 보관 운영 반영 — 2026-10-29
+
+최종 소스16aeddb·CI40795067512 통과(881검사/실패0·원본fixture없는5skip), 대상46검사·구조 계약도 통과했다. 일반 HTML은256KiB 기준으로 묶고 attachment_bytes의검증된PDF/OLE/ZIP은8KiB부터 중복 보관한다. 기존 보관본은 재작성하지 않는다. 자동 보관을 수집25분 작업 밖의 별도 workflow_run/대기열로 분리했다. 같은repo/main/예약·수동 완료만 허용하고 항상main을 checkout한다. 수동 FULL만LP 공통 대기열을 유지하고, 자동 일반VACUUM은5초로 발행20초 잠금보다 먼저 종료한다.
+
+실제 보관40794080828이94이력 중91개 비공개 보관·최신3개 전체 보관·공개/검토 지문 동일·외부29상세와목록을 확인했다. 남은 후보0, 보고서 저장 합계102,114,786bytes다. 아직 물리DB는1,145,564,307bytes이며 Storage280,919,128bytes다. 보관 위치 치환과 물리 공간 회수 완료를 혼동하지 않는다. 현재40795575999가91보관본 새 복원·지문 검증 후LP 실행 이력 테이블만 FULL 회수하는 작업을 수행 중이다. 다음은 해당 run의결과/metadata artifact를 확인하고 실제 DB감소·공개29상세를 검증하는 것이다. /tmp/finalize_lp_storage_docs_20261029.py는실제reclaim결과를 읽어 최신수치를 반영하는 로컬 helper이며 source커밋 대상이 아니다.
+
+현재 공개는fd111cf4f9a1a79848b5e95f/29사업, 앱2840e0c다. 정기40694398568은 자료 발행 성공 후보관중25분 취소이며 KFINCO `public UI restricts closed notice; preserve as collection hold`를남겼다. 정기40640824559는공개상태 저장 완료전25분 취소다. 수집과 보관의 상태를각각구분한다. 새 분리 자동 workflow_run의실제완료는관찰전이다. Newsletter/GP 앱이나자료 배포·유료전환·한도증액은없다. 기관18/추가6·GP후순위·로그인불필요 규칙은유지한다. 상세는 lp_collection_status/lp_report_storage_operations를따른다.
