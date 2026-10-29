@@ -91,3 +91,23 @@ def parse_detail(rawjson,url,config):
         if urlsplit(target).path.startswith('/pr/notice/detail/'):
             _public_identifier(target);related.add(target)
     return {'title':title,'date':published,'body':body,'attachments':files,'related_notice_urls':sorted(related)}
+
+
+def diagnostic_listing_metadata(rawjson):
+    """Allowlist diagnostics only; never retain titles, contents or attachment fields."""
+    _, rows = listing(rawjson)
+    _, value = read_json(rawjson)
+    safe = []
+    for index, row in enumerate(rows):
+        identifier = row.get('ntCode')
+        closed = row.get('closed')
+        entry = {'row': index + 1, 'source_id': identifier if isinstance(identifier, str)
+                 and re.fullmatch(r'NT[0-9]{14}', identifier) else None,
+                 'closed_type': type(closed).__name__ if 'closed' in row else 'missing'}
+        # Arbitrary strings/objects may contain private content: record type only.
+        if type(closed) is int and -1000 <= closed <= 1000:
+            entry['closed'] = closed
+        elif closed is None or type(closed) is bool:
+            entry['closed'] = closed
+        safe.append(entry)
+    return {'page': 1, 'row_count': len(rows), 'total_count': value['totalCount'], 'rows': safe}

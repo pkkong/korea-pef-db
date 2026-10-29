@@ -12,6 +12,27 @@ def detail(r,body='<p>공식 공고 본문입니다.</p>'):return json.dumps({'s
 def public(ident=CODE):return BASE+'/pr/notice/detail/'+ident
 
 class KfincoAdapterTests(unittest.TestCase):
+    def test_diagnostic_retains_only_safe_identifiers_and_closed_flags(self):
+        from services.lp.src.lp_board_adapter_kfinco import diagnostic_listing_metadata
+        rows=[{**row(),'closed':1,'ntContent':'PRIVATE','noticeAttachModelList':[{'secret':'PRIVATE'}]},
+              {**row('NT20990202020202'),'closed':0}]
+        report=diagnostic_listing_metadata(listing(rows))
+        self.assertEqual([r['closed'] for r in report['rows']],[1,0])
+        self.assertEqual(report['total_count'],2)
+        self.assertNotIn('PRIVATE',json.dumps(report))
+        self.assertNotIn('ntTitle',json.dumps(report))
+        self.assertEqual(set(report['rows'][0]),{'row','source_id','closed_type','closed'})
+
+    def test_diagnostic_does_not_echo_malformed_private_values(self):
+        from services.lp.src.lp_board_adapter_kfinco import diagnostic_listing_metadata
+        r={**row(),'ntCode':'PRIVATE','closed':'PRIVATE'}
+        report=diagnostic_listing_metadata(listing([r]))
+        self.assertNotIn('PRIVATE',json.dumps(report))
+        self.assertEqual(report['rows'][0]['closed_type'],'str')
+        del r['closed']
+        self.assertEqual(diagnostic_listing_metadata(listing([r]))['rows'][0]['closed_type'],'missing')
+        with self.assertRaises(ValueError):diagnostic_listing_metadata('{"success":false}')
+
     def test_arbitrary_observed_id_public_url_and_request_mapping(self):
         found=parse_listing(listing([row()]),LIST_URL,CONFIG)[0]
         self.assertEqual(found['source_id'],'kfinco:'+CODE)

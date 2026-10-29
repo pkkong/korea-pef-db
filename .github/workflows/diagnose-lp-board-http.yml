@@ -108,6 +108,7 @@ jobs:
             ('tp', 'https://www.tp.or.kr/tp-kr/bbs/i-151/list.do?searchCondition=1&pageItm=100&searchKeyword='+quote('위탁운용사')+'&pageIndex=1', 'https://www.tp.or.kr/tp-kr/bbs/i-151/list.do?searchCondition=1&pageItm=100')]
           for institution,url,referer in targets:
             if os.environ['DIAGNOSE_INSTITUTION'] not in {institution,'all'}:continue
+            if institution == 'kfinco':continue  # Dedicated metadata-only probe below.
             host=urlsplit(url).hostname
             for family in [socket.AF_UNSPEC,socket.AF_INET,socket.AF_INET6]:
               started=time.monotonic()
@@ -169,90 +170,28 @@ jobs:
                   except HTTPError as error:status=error.code;raw=error.read(4096)
                 print(json.dumps({'institution':institution,'mode':mode,'status':status,'size':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'error_excerpt':raw[:240].decode('utf-8','replace') if str(status)!='200' else None},ensure_ascii=False))
               except Exception as error:print(json.dumps({'institution':institution,'mode':mode,'error':str(error)}))
-      - name: Install native TLS verifier for K-FINCO diagnosis
-        if: inputs.institution == 'kfinco' || inputs.institution == 'all'
-        run: python3 -m pip install 'truststore==0.10.5'
-      - name: Compare bounded K-FINCO API requests with native TLS
+      - name: Inspect only K-FINCO listing availability metadata
         if: inputs.institution == 'kfinco' || inputs.institution == 'all'
         shell: python3 {0}
+        env:
+          LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
         run: |
-          import hashlib, json, re, ssl
-          from html.parser import HTMLParser
-          from http.cookiejar import CookieJar
+          import hashlib, json, os
           from pathlib import Path
-          from urllib.error import HTTPError
-          from urllib.parse import quote, urljoin, urlsplit
-          from urllib.request import Request, HTTPRedirectHandler, HTTPSHandler, HTTPCookieProcessor, ProxyHandler, build_opener
-          import truststore
-          BASE='https://www.kfinco.co.kr'
-          PAGE=BASE+'/pr/notice'
-          ROOT=BASE+'/'
-          API=BASE+'/api/pr/notice/list?page=1&size=10'
-          EXACT=API+'&searchKeyword='+quote('위탁운용사',safe='')
-          SHORT=API+'&searchKeyword='+quote('위탁',safe='')
-          APEX='https://kfinco.co.kr/api/pr/notice/list?page=1&size=10&searchKeyword='+quote('위탁운용사',safe='')
-          ALLOWED={PAGE,ROOT,API,EXACT,SHORT,APEX}
-          LIMIT=2*1024*1024
+          from services.lp.src.lp_regional_transport import fetch_kfinco
+          from services.lp.src.lp_board_adapter_kfinco import diagnostic_listing_metadata
+          from services.lp.src.discover_kfinco_originals import LIST_URL
           folder=Path('/tmp/kfinco-http-diagnostic');folder.mkdir(exist_ok=True)
-          def check_url(url):
-            p=urlsplit(url)
-            if url not in ALLOWED or p.scheme!='https' or p.hostname not in {'www.kfinco.co.kr','kfinco.co.kr'} or p.port is not None or p.username or p.password or p.fragment:
-              raise ValueError('Unexpected diagnostic official URL')
-          class NoRedirect(HTTPRedirectHandler):
-            def redirect_request(self,req,fp,code,msg,headers,newurl):
-              raise ValueError('Diagnostic redirect refused; fixed official GET requests only')
-          class VisibleText(HTMLParser):
-            def __init__(self):
-              super().__init__(convert_charrefs=True);self.hidden=0;self.parts=[];self.scripts=[]
-            def handle_starttag(self,tag,attrs):
-              attrs=dict(attrs)
-              if tag=='script' and attrs.get('src') and len(self.scripts)<20:self.scripts.append(attrs['src'])
-              if tag in {'script','style'}:self.hidden+=1
-            def handle_endtag(self,tag):
-              if tag in {'script','style'} and self.hidden:self.hidden-=1
-            def handle_data(self,data):
-              if not self.hidden:self.parts.append(data)
-          def opener():
-            context=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            context.verify_mode=ssl.CERT_REQUIRED;context.check_hostname=True
-            if context.verify_mode!=ssl.CERT_REQUIRED or not context.check_hostname:raise ValueError('TLS verification is required')
-            return build_opener(ProxyHandler({}),NoRedirect(),HTTPSHandler(context=context),HTTPCookieProcessor(CookieJar()))
-          def probe(mode,url,headers,session):
-            check_url(url)
-            record={'institution':'kfinco','mode':mode,'url':url}
-            try:
-              try:
-                with session.open(Request(url,headers=headers,method='GET'),timeout=20) as response:
-                  check_url(response.geturl());status=response.status;raw=response.read(LIMIT+1)
-                  if len(raw)>LIMIT:raise ValueError('Diagnostic response exceeds 2 MB')
-                  content_type=response.headers.get('Content-Type','')
-              except HTTPError as error:
-                status=error.code;raw=error.read(4096);content_type=error.headers.get('Content-Type','')
-              text=raw.decode('utf-8','replace');parsed=VisibleText();parsed.feed(text)
-              record.update({'status':status,'size':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),
-                'text_excerpt':re.sub(r'\s+',' ',' '.join(parsed.parts)).strip()[:1500] if status!=200 else None})
-              is_html='html' in content_type.lower() or bool(re.search(r'<(?:!doctype|html)',text,re.I))
-              is_json='json' in content_type.lower() or text.lstrip().startswith(('{','['))
-              if is_html or is_json:
-                destination=folder/(mode+('.html' if is_html else '.json'));destination.write_bytes(raw)
-                record['artifact']=destination.name
-              if url in {PAGE,ROOT} and status==200:
-                record['script_src_urls']=[urljoin(url,src) for src in parsed.scripts[:20]]
-              print(json.dumps(record,ensure_ascii=False),flush=True)
-            except Exception as error:
-              record['error']=str(error)[:500];print(json.dumps(record,ensure_ascii=False),flush=True)
-          production={'User-Agent':'Mozilla/5.0 (LP original notice collector)','Accept-Encoding':'identity','Connection':'close'}
-          browser={'User-Agent':'Mozilla/5.0','Accept':'application/json','Accept-Encoding':'identity','Connection':'close','Referer':PAGE}
-          probe('native_production',EXACT,production,opener())
-          warmed=opener()
-          probe('native_warm_page',PAGE,{'User-Agent':'Mozilla/5.0','Accept':'text/html','Accept-Encoding':'identity','Connection':'close'},warmed)
-          probe('native_browser_warmed',EXACT,browser,warmed)
-          probe('native_no_keyword',API,production,opener())
-          probe('native_short_keyword',SHORT,production,opener())
-          root_warmed=opener()
-          probe('native_root_page',ROOT,{'User-Agent':'Mozilla/5.0','Accept':'text/html','Accept-Encoding':'identity','Connection':'close'},root_warmed)
-          probe('native_root_warmed',EXACT,{**browser,'Referer':ROOT},root_warmed)
-          probe('native_apex_production',APEX,production,opener())
+          result={'institution':'kfinco','url':LIST_URL,'mode':'regional metadata only'}
+          try:
+              raw=fetch_kfinco(LIST_URL,os.environ['LP_SOURCE_WORKER_TOKEN'])
+              result.update(size=len(raw),sha256=hashlib.sha256(raw).hexdigest(),
+                            listing=diagnostic_listing_metadata(raw),status='ok')
+          except Exception as error:
+              result.update(status='error',error_type=type(error).__name__)
+          (folder/'listing-metadata.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(result,ensure_ascii=False))
+          if result['status']!='ok':raise SystemExit('K-FINCO metadata diagnosis failed')
       - name: Inspect served K-FINCO public certificate chain
         if: inputs.institution == 'kfinco' || inputs.institution == 'all'
         shell: python3 {0}
