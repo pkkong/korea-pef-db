@@ -98,9 +98,70 @@ def event_type(title, body):
     return None
 
 
+class UnavailableNotice(ValueError):
+    """The official page is complete but its detail fields are all empty."""
+
+
+class EmptyTemplateShape(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.tags = []
+        self.closed = False
+        self.valid = True
+        self.fields = set()
+
+    def handle_starttag(self, tag, attrs):
+        classes = dict(attrs).get('class', '').split()
+        if 'notice_view_wrap' in classes:
+            if self.tags or self.closed:
+                self.valid = False
+            self.tags = [tag]
+            return
+        if self.tags:
+            self.fields.update(set(classes) & {'view_info', 'veiw_contents', 'file_list'})
+            if tag not in ('br', 'img', 'input', 'hr', 'meta', 'link'):
+                self.tags.append(tag)
+
+    def handle_endtag(self, tag):
+        if self.tags:
+            if self.tags[-1] != tag:
+                self.valid = False
+                return
+            self.tags.pop()
+            if not self.tags:
+                self.closed = True
+
+
+def official_empty_detail(text):
+    # Match the observed empty detail template, not arbitrary missing content.
+    # This says nothing about deletion, privacy, or the reason for emptiness.
+    if any(marker in text for marker in ('비정상적인 접근', '접근 권한', '접근권한', '비공개', '접근이 제한')):
+        return False
+    if not re.search(r'</body>\s*</html>', text, re.I):
+        return False
+    if len(re.findall(r'class="notice_view_wrap"', text)) != 1:
+        return False
+    shape = EmptyTemplateShape()
+    shape.feed(text)
+    if not shape.valid or not shape.closed or shape.tags or shape.fields != {'view_info', 'veiw_contents', 'file_list'}:
+        return False
+    pattern = (r'<div[^>]*class="view_info"[^>]*>\s*'
+               r'<p\s+class="tit">\s*</p>\s*'
+               r'<p\s+class="date">작성일\s*<span>\s*</span>\s*</p>\s*</div>\s*'
+               r'<div[^>]*class="veiw_contents"[^>]*>\s*</div>\s*'
+               r'<ul\s+class="file_list">\s*</ul>')
+    return (len(re.findall(pattern, text)) == 1
+            and bool(re.search(r'<h3[^>]*>출자사업공고</h3>', text))
+            and all(len(re.findall(r'class="' + name + r'"', text)) == 1
+                    for name in ('view_info', 'veiw_contents', 'file_list')))
+
+
 def parse_notice(source_id, raw):
+    text = raw.decode("cp949")
+    if official_empty_detail(text):
+        raise UnavailableNotice("official_detail_empty")
     page = Page()
-    page.feed(raw.decode("cp949"))
+    page.feed(text)
     title, body = page.value("title"), page.value("body")
     match = re.search(r"\d{4}-\d{2}-\d{2}", page.value("date"))
     if not title or not body or not match or "비정상적인 접근" in raw.decode("cp949"):
@@ -195,8 +256,17 @@ def collect(seed, baseline=None, fetch=None, listing_pages=3, *, lookback_days=N
     approved_sources = {int(s['source_id']):s for r in recipes() for s in r['sources']}
     listing_dates = {row['source_id']: row['date'] for row in inventory['rows']} if inventory else {}
     notices = []
+    unavailable = []
     for idx in sorted(discovered | tracked | set(KNOWN_IDS) | set(approved_sources)):
-        notice = parse_notice(idx, fetch(notice_url(idx)))
+        raw = fetch(notice_url(idx))
+        try:
+            notice = parse_notice(idx, raw)
+        except UnavailableNotice:
+            unavailable.append({'source_id': str(idx), 'url': notice_url(idx),
+                                'reason': 'official_detail_empty', 'checked_at': checked,
+                                'response_sha256': hashlib.sha256(raw).hexdigest(),
+                                'response_size': len(raw)})
+            continue
         if str(idx) in listing_dates and listing_dates[str(idx)] != notice['date']:
             raise ValueError(f'Official listing and notice {idx} publication dates differ')
         notice["checked_at"] = checked
@@ -221,7 +291,7 @@ def collect(seed, baseline=None, fetch=None, listing_pages=3, *, lookback_days=N
     program = copy.deepcopy(next(p for p in candidates if p["id"] == PROGRAM_ID))
     previous = {str(n["source_id"]): n for n in baseline.get("accepted_notices", baseline.get("notices", []))}
     review = []
-    changed = False
+    changed = bool({int(n['source_id']) for n in unavailable} & set(KNOWN_IDS))
     for notice in notices:
         sid = notice["source_id"]
         if int(sid) not in KNOWN_IDS:
@@ -277,7 +347,15 @@ def collect(seed, baseline=None, fetch=None, listing_pages=3, *, lookback_days=N
                                 for n in notices for url, digest in n.get('attachment_hashes', {}).items()]}
     if inventory is not None:
         coverage['date_discovery'] = inventory
-    return {"checked_at": checked, "notices": notices, "tracked_notices": notices,
+    retained_tracking = {str(n['source_id']): copy.deepcopy(n) for n in baseline.get(
+        'tracked_notices', baseline.get('accepted_notices', baseline.get('notices', [])))}
+    retained_tracking.update({n['source_id']: n for n in notices})
+    # New empty pages remain tracked for retries without invented title/date/body.
+    for hold in unavailable:
+        retained_tracking.setdefault(hold['source_id'], {'source_id': hold['source_id'], 'url': hold['url']})
+    coverage['unavailable_notices'] = unavailable
+    return {"checked_at": checked, "notices": notices, "tracked_notices": list(retained_tracking.values()),
+            "unavailable_notices": unavailable,
             "accepted_notices": accepted,
             "candidate_groups": candidate_queue([n for n in notices if n['source_id'] in {i['source_id'] for i in review}]),
             "link_suggestions": link_suggestions(notices),

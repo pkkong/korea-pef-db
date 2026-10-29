@@ -149,6 +149,47 @@ class CollectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'publication dates differ'):
             c.collect(self.seed, fetch=self.fetch, listing_pages=20, lookback_days=365, as_of='2026-10-24')
 
+    def empty_detail(self):
+        return ('<html><body><div class="notice_view_wrap"><h3>출자사업공고</h3>'
+                '<div class="view_info"><p class="tit"></p>'
+                '<p class="date">작성일 <span></span></p></div>'
+                '<div class="veiw_contents"> </div><ul class="file_list"> </ul>'
+                '</div></body></html>').encode('cp949')
+
+    def test_complete_empty_new_detail_is_held_and_retried_without_fake_facts(self):
+        self.docs[c.notice_url(9999)] = self.empty_detail()
+        result = c.collect(self.seed, fetch=self.fetch)
+        self.assertNotIn('9999', [n['source_id'] for n in result['notices']])
+        self.assertEqual(result['unavailable_notices'][0]['reason'], 'official_detail_empty')
+        tracked = next(n for n in result['tracked_notices'] if n['source_id'] == '9999')
+        self.assertEqual(set(tracked), {'source_id', 'url'})
+        self.docs[c.LIST_URL] = b'<a href="notice_view.asp?idx=1100">known</a>'
+        self.docs[c.notice_url(9999)] = html('새 공고', '본문')
+        recovered = c.collect(self.seed, result, self.fetch)
+        self.assertIn('9999', [n['source_id'] for n in recovered['notices']])
+
+    def test_empty_tracked_detail_preserves_old_evidence_and_known_program(self):
+        baseline = c.collect(self.seed, fetch=self.fetch)
+        self.docs[c.notice_url(1100)] = self.empty_detail()
+        result = c.collect(self.seed, baseline, self.fetch)
+        self.assertTrue(result['requires_review'])
+        self.assertEqual(result['programs'], baseline['programs'])
+        self.assertEqual(result['accepted_notices'], baseline['accepted_notices'])
+        old = next(n for n in baseline['tracked_notices'] if n['source_id'] == '1100')
+        self.assertEqual(next(n for n in result['tracked_notices'] if n['source_id'] == '1100'), old)
+        self.assertNotIn('1100', [n['source_id'] for n in result['notices']])
+
+    def test_partial_malformed_restricted_and_attachment_pages_still_fail(self):
+        empty = self.empty_detail().decode('cp949')
+        for text in (empty.replace('</html>', ''), empty.replace('</div></body>', '</body>'), empty.replace('작성일', '오류'),
+                     empty.replace('<p class="tit"></p>', '<p class="tit">제목</p>'),
+                     empty.replace('<ul class="file_list"> </ul>', '<ul class="file_list"><a href="down_file.asp?idx=1">첨부</a></ul>'),
+                     empty + '비정상적인 접근', empty.replace('class="notice_view_wrap"', 'class="other"')):
+            with self.subTest(text=text):
+                with self.assertRaises(ValueError) as error:
+                    c.parse_notice(9999, text.encode('cp949'))
+                self.assertNotIsInstance(error.exception, c.UnavailableNotice)
+
     def test_failure_raises_without_empty_program(self):
         self.docs[c.notice_url(1047)] = b'<html>error</html>'
         with self.assertRaises(ValueError):
