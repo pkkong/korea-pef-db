@@ -294,13 +294,6 @@ jobs:
           if errors:
               raise SystemExit(f'Official board listing/detail collection failed: {errors}')
           PY
-      - name: Archive old LP reports without changing the publication
-        if: ${{ !cancelled() && steps.lp_publication_verify.outcome == 'success' }}
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-        run: python3 scripts/archive_lp_collection_reports.py --mode archive --limit 5 --reuse-space --output /tmp/lp-report-maintenance.json
       - name: Keep collection report
         if: always()
         uses: actions/upload-artifact@v4
@@ -313,7 +306,6 @@ jobs:
             /tmp/lp-shared-collection.json
             /tmp/lp-institution-collection.json
             /tmp/kgrowth-publication.json
-            /tmp/lp-report-maintenance.json
             /tmp/lp-discovery-audit.json
             /tmp/lp-discovery-audit.md
           if-no-files-found: ignore

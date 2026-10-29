@@ -146,13 +146,6 @@ jobs:
           (root/'remaining-failures.json').write_text(json.dumps(failures,ensure_ascii=False))
           if failures: raise SystemExit('Publication recovered; official source failures remain: '+json.dumps(failures,ensure_ascii=False))
           PY
-      - name: Keep only recent LP reports in the database
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-        run: python3 scripts/archive_lp_collection_reports.py --mode archive --limit 5 --reuse-space --output /tmp/lp-recovery/report-maintenance.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -162,6 +155,5 @@ jobs:
             /tmp/lp-recovery/preflight.json
             /tmp/lp-recovery/publication.json
             /tmp/lp-recovery/remaining-failures.json
-            /tmp/lp-recovery/report-maintenance.json
           retention-days: 7
           if-no-files-found: warn

@@ -1,5 +1,8 @@
 name: Maintain LP report storage
 on:
+  workflow_run:
+    workflows: [Collect LP programs, Recover LP publication]
+    types: [completed]
   workflow_dispatch:
     inputs:
       mode:
@@ -22,28 +25,41 @@ concurrency:
   cancel-in-progress: false
 jobs:
   maintain:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.head_branch == 'main' &&
+       contains(fromJSON('["schedule","workflow_dispatch"]'), github.event.workflow_run.event) &&
+       contains(fromJSON('["Collect LP programs","Recover LP publication"]'), github.event.workflow_run.name))
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: main
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install LP database driver
         run: python3 -m pip install 'psycopg[binary]==3.2.10'
       - name: Test immutable archives and database preservation contracts
-        run: python3 -m unittest services.lp.tests.test_lp_report_archive scripts.tests.test_archive_lp_collection_reports
+        run: python3 -m unittest services.lp.tests.test_lp_report_archive scripts.tests.test_archive_lp_collection_reports scripts.tests.test_lp_report_maintenance_workflow
       - name: Maintain only LP collection report storage
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-          LP_MAINTENANCE_MODE: ${{ inputs.mode }}
-          LP_MAINTENANCE_LIMIT: ${{ inputs.limit }}
-          LP_RESTORE_RUN_ID: ${{ inputs.run_id }}
+          LP_MAINTENANCE_MODE: ${{ github.event_name == 'workflow_run' && 'archive' || inputs.mode || 'inspect' }}
+          LP_MAINTENANCE_LIMIT: ${{ github.event_name == 'workflow_run' && '5' || inputs.limit || '50' }}
+          LP_RESTORE_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || '' }}
+          LP_MAINTENANCE_AUTOMATIC: ${{ github.event_name == 'workflow_run' && 'true' || 'false' }}
         run: |
           args=(--mode "$LP_MAINTENANCE_MODE" --limit "$LP_MAINTENANCE_LIMIT" --output /tmp/lp-report-maintenance/result.json)
+          if [ "$LP_MAINTENANCE_AUTOMATIC" = true ]; then
+            args+=(--reuse-space)
+          fi
           if [ -n "$LP_RESTORE_RUN_ID" ]; then
             args+=(--run-id "$LP_RESTORE_RUN_ID")
           fi
