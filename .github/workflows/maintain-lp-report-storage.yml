@@ -74,7 +74,7 @@ jobs:
           import json,urllib.request
           from pathlib import Path
           report=json.loads(Path('/tmp/lp-report-maintenance/result.json').read_text())
-          snapshot=report.get('after') or report
+          snapshot=report.get('reuse_space',{}).get('after') or report.get('after') or report
           published=snapshot.get('published')
           if published:
               names=[name for name in published['page_names'] if name.startswith('program-')]+['index.html']

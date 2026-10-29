@@ -29,6 +29,7 @@ class MaintenanceWorkflowTests(unittest.TestCase):
         self.assertIn('timeout-minutes: 45', text)
         self.assertIn('args+=(--reuse-space)', text)
         self.assertIn('"${args[@]}"', text)
+        self.assertIn("report.get('reuse_space',{}).get('after') or report.get('after')", text)
         self.assertIn("response.headers.get('X-LP-Run')==published['run_id']", text)
         self.assertIn("response.headers.get('X-LP-Data-Source')=='supabase'", text)
 
