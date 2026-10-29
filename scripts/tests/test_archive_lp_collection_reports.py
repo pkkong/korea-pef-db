@@ -142,13 +142,13 @@ class MaintenanceContracts(unittest.TestCase):
         before=snapshot()
         with patch.object(m,'inspect',side_effect=[before,copy.deepcopy(before)]),patch.object(m,'connect',return_value=conn):m.reclaim(full=False)
         queries=[c.args[0] for c in conn.execute.call_args_list]
-        self.assertIn('VACUUM (ANALYZE) '+m.TABLE,queries)
-        self.assertIn('VACUUM (ANALYZE) lp_program_private.program_state',queries)
-        self.assertIn("SET statement_timeout='5s'",queries)
-        self.assertNotIn("SET statement_timeout='180s'",queries)
-        self.assertFalse(any('FULL' in q or 'DELETE' in q or 'TRUNCATE' in q for q in queries))
+        self.assertIn('VACUUM (ANALYZE, TRUNCATE FALSE) '+m.TABLE,queries)
+        self.assertIn('VACUUM (ANALYZE, TRUNCATE FALSE) lp_program_private.program_state',queries)
+        self.assertIn("SET statement_timeout='180s'",queries)
+        self.assertFalse(any('advisory' in q for q in queries))
+        self.assertFalse(any('FULL' in q or q.startswith(('DELETE','TRUNCATE')) for q in queries))
 
-    def test_routine_cleanup_failure_releases_publication_lock(self):
+    def test_routine_cleanup_failure_closes_session_without_publication_lock(self):
         conn=connection()
         def execute(query,*args):
             if query.startswith('VACUUM'):
@@ -157,7 +157,16 @@ class MaintenanceContracts(unittest.TestCase):
         conn.execute.side_effect=execute
         with patch.object(m,'inspect',return_value=snapshot()),patch.object(m,'connect',return_value=conn),self.assertRaisesRegex(RuntimeError,'statement timeout'):
             m.reclaim(full=False)
-        self.assertIn('pg_advisory_unlock',conn.execute.call_args.args[0])
+        self.assertFalse(any('advisory' in c.args[0] for c in conn.execute.call_args_list))
+        self.assertTrue(conn.__exit__.called)
+
+    def test_routine_cleanup_allows_a_concurrent_publication(self):
+        conn=connection();conn.execute.side_effect=lambda q,*a:Mock(fetchone=lambda:(1000,1))
+        before=snapshot();after=copy.deepcopy(before);after['published']['run_id']='new-publication'
+        with patch.object(m,'inspect',side_effect=[before,after]),patch.object(m,'connect',return_value=conn):
+            result=m.reclaim(full=False)
+        self.assertTrue(result['concurrent_update'])
+        self.assertEqual(result['after']['published']['run_id'],'new-publication')
 
     def test_reclaim_is_bounded_session_autocommit_and_lp_table_only(self):
         conn=connection();conn.execute.side_effect=lambda q,*a:Mock(fetchone=lambda:(1000,1) if 'sum(pg_column_size' in q else (True,))

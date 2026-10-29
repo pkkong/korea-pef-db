@@ -18,6 +18,10 @@ on:
         description: Exact run ID for restoration only
         type: string
         required: false
+      reuse_space:
+        description: Recycle LP table space after a manual archive, without blocking publication
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -54,7 +58,7 @@ jobs:
           LP_MAINTENANCE_MODE: ${{ github.event_name == 'workflow_run' && 'archive' || inputs.mode || 'inspect' }}
           LP_MAINTENANCE_LIMIT: ${{ github.event_name == 'workflow_run' && '5' || inputs.limit || '50' }}
           LP_RESTORE_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || '' }}
-          LP_MAINTENANCE_AUTOMATIC: ${{ github.event_name == 'workflow_run' && 'true' || 'false' }}
+          LP_MAINTENANCE_AUTOMATIC: ${{ (github.event_name == 'workflow_run' || inputs.reuse_space) && 'true' || 'false' }}
         run: |
           args=(--mode "$LP_MAINTENANCE_MODE" --limit "$LP_MAINTENANCE_LIMIT" --output /tmp/lp-report-maintenance/result.json)
           if [ "$LP_MAINTENANCE_AUTOMATIC" = true ]; then

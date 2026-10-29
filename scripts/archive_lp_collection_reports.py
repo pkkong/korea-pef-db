@@ -207,33 +207,34 @@ def reclaim(*, full=True):
     archived = before['archive_count']
     if not archived or (full and live_bytes > MAX_REWRITE_BYTES):
         raise MaintenanceError('Reclaim requires archived reports and a bounded live table size')
-    # VACUUM cannot run in a transaction. A session connection keeps this
-    # LP-only maintenance lock/settings for the whole autocommit operation.
+    # FULL requires publication exclusion. Routine VACUUM uses only PostgreSQL's
+    # write-compatible lock, with tail truncation disabled to avoid ACCESS EXCLUSIVE.
     with connect(session=True, autocommit=True) as conn:
         conn.execute("SET lock_timeout='5s'")
-        # Routine cleanup must yield before the publisher's 20-second lock
-        # budget. Only explicitly serialized FULL maintenance may run longer.
-        conn.execute("SET statement_timeout='180s'" if full else "SET statement_timeout='5s'")
-        locked = conn.execute('SELECT pg_try_advisory_lock(%s)', (LOCK,)).fetchone()[0]
-        if not locked:
-            raise MaintenanceError('LP publication or review is active; reclaim skipped')
+        conn.execute("SET statement_timeout='180s'")
+        locked = False
+        if full:
+            locked = conn.execute('SELECT pg_try_advisory_lock(%s)', (LOCK,)).fetchone()[0]
+            if not locked:
+                raise MaintenanceError('LP publication or review is active; reclaim skipped')
         try:
             fresh_live, fresh_archived = conn.execute(f"SELECT COALESCE(sum(pg_column_size(report)),0),count(*) FILTER (WHERE CASE WHEN pg_column_size(report)<=%s THEN report ? '_lp_report_archive' ELSE false END) FROM {TABLE}", (MIN_REPORT_BYTES,)).fetchone()
             if not fresh_archived or (full and fresh_live > MAX_REWRITE_BYTES):
-                raise MaintenanceError('Report storage changed before the maintenance lock; reclaim skipped')
-            command = 'VACUUM (FULL, ANALYZE)' if full else 'VACUUM (ANALYZE)'
+                raise MaintenanceError('Report storage changed before maintenance; reclaim skipped')
+            command = 'VACUUM (FULL, ANALYZE)' if full else 'VACUUM (ANALYZE, TRUNCATE FALSE)'
+            print(json.dumps({'maintenance_stage':'vacuum_reports','full':full}),file=sys.stderr,flush=True)
             conn.execute(f'{command} {TABLE}')
             if not full:
-                # This single large publication row can accumulate old TOAST
-                # versions before tuple-count based autovacuum is triggered.
-                # Plain VACUUM reuses that space without rewriting live pages.
-                conn.execute('VACUUM (ANALYZE) lp_program_private.program_state')
+                print(json.dumps({'maintenance_stage':'vacuum_publication','full':False}),file=sys.stderr,flush=True)
+                conn.execute('VACUUM (ANALYZE, TRUNCATE FALSE) lp_program_private.program_state')
         finally:
-            conn.execute('SELECT pg_advisory_unlock(%s)', (LOCK,))
+            if locked:
+                conn.execute('SELECT pg_advisory_unlock(%s)', (LOCK,))
     after = inspect()
-    if before['published'] != after['published'] or before['reviews'] != after['reviews'] or len(before['rows']) != len(after['rows']):
+    changed = before['published'] != after['published'] or before['reviews'] != after['reviews'] or len(before['rows']) != len(after['rows'])
+    if full and changed:
         raise MaintenanceError('Post-maintenance public/review/report inventory differs')
-    return {'before': before, 'after': after}
+    return {'before': before, 'after': after, 'concurrent_update': changed}
 
 
 def main():
@@ -245,6 +246,7 @@ def main():
     parser.add_argument('--reuse-space', action='store_true')
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
+    stage = 'inspect'
     try:
         if args.mode == 'inspect':
             result = inspect(args.keep)
@@ -257,12 +259,17 @@ def main():
                                  cache_bytes=64 * 1024 * 1024)
             if args.mode == 'archive':
                 public_key = os.environ['SUPABASE_PUBLISHABLE_KEY']
+                stage = 'private_archive_guard'
                 install_archive_guard()
+                stage = 'archive_reports'
                 result = archive(store, keep=args.keep, limit=args.limit, public_key=public_key)
                 if args.reuse_space and result['after']['archive_count']:
+                    stage = 'routine_cleanup'
                     result['reuse_space'] = reclaim(full=False)
             elif args.mode == 'reclaim':
+                stage = 'verify_archives'
                 verified = verify_archives(store, limit=args.limit)
+                stage = 'full_reclaim'
                 result = reclaim()
                 result['verified_count'] = len(verified['verified'])
             elif args.mode == 'verify':
@@ -273,7 +280,7 @@ def main():
                 result = restore(store, args.run_id)
         output = {'mode': args.mode, 'status': 'ok', **result}
     except Exception as error:
-        output = {'mode': args.mode, 'status': 'error', 'error_type': type(error).__name__}
+        output = {'mode': args.mode, 'status': 'error', 'stage': stage, 'error_type': type(error).__name__}
         if isinstance(error, MaintenanceError) or type(error).__name__ == 'ArchiveError':
             output['reason'] = str(error)
         if args.output:
