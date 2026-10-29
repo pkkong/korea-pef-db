@@ -380,7 +380,9 @@ class ArchiveStore:
         return _restore_chunks(blob, descriptor, self._chunk)
 
 
-CHUNK_THRESHOLD = 8192
+# Keep ordinary notice HTML inline; only large bodies benefit from remote CAS.
+# This is an encoding policy only: old manifests retain their original chunks.
+CHUNK_THRESHOLD = 256 * 1024
 MAX_CHUNK_REFS = 10000
 MAX_PATH_DEPTH = 100
 _CHUNK_FIELDS = {'raw_sha256','gzip_sha256','raw_bytes','gzip_bytes'}

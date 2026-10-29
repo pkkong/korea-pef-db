@@ -162,6 +162,11 @@ class ArchiveTests(unittest.TestCase):
             self.assertIsInstance(build.call_args.args[0],a._NoRedirect)
 
 class ChunkedArchiveTests(unittest.TestCase):
+    def setUp(self):
+        threshold = patch.object(a, 'CHUNK_THRESHOLD', 8192)
+        threshold.start()
+        self.addCleanup(threshold.stop)
+
     def test_v2_shared_strings_and_lossless_restore(self):
         text='공고 원문\n'+('한글\\u1234 '+ 'x'*100)*100
         first={**REPORT,'timestamp':'one','body':text,'repeat':[None,text]}
@@ -237,6 +242,11 @@ class ChunkedArchiveTests(unittest.TestCase):
             with self.assertRaises(a.ArchiveError):a.estimate_report({'nested':{'body':'x'*9000}})
 
 class ValidatedChunkCacheTests(unittest.TestCase):
+    def setUp(self):
+        threshold = patch.object(a, 'CHUNK_THRESHOLD', 8192)
+        threshold.start()
+        self.addCleanup(threshold.stop)
+
     def test_cross_report_reuse_restores_identically_and_manifests_stay_fresh(self):
         transport=MemoryTransport();store=a.ArchiveStore(ORIGIN,'key',transport,cache_bytes=1024*1024)
         first={'body':'한글 original '*2000,'when':'first','zero':0,'null':None}
@@ -310,5 +320,43 @@ class ValidatedChunkCacheTests(unittest.TestCase):
         self.assertEqual(sum(c[0]=='GET' and '/chunks/' in c[1] for c in transport.calls),1)
         for invalid in [-1,True,1.5,a.MAX_RAW_BYTES+1]:
             with self.assertRaises(a.ArchiveError):a.ArchiveStore(ORIGIN,'key',transport,cache_bytes=invalid)
+
+class ProductionChunkThresholdTests(unittest.TestCase):
+    def test_ordinary_html_inline_large_repeated_attachment_has_bounded_requests(self):
+        self.assertEqual(a.CHUNK_THRESHOLD, 256 * 1024)
+        attachment = 'A' * (512 * 1024)
+        report = {
+            **REPORT,
+            'notices': [{'body': '<html>' + str(i) + 'x' * (32 * 1024) + '</html>'}
+                        for i in range(100)],
+            'attachments': [attachment, attachment],
+        }
+        transport = MemoryTransport()
+        store = a.ArchiveStore(ORIGIN, 'key', transport, cache_bytes=1024 * 1024)
+        stub = store.put_verified('production', report)
+        self.assertEqual(store.restore(stub), report)
+        self.assertEqual(len([key for key in transport.objects if '/chunks/' in key]), 1)
+        manifest = json.loads(gzip.decompress(transport.objects[a.BUCKET + '/' + stub[a.MARKER]['object_path']]))
+        self.assertEqual(manifest['skeleton']['notices'], report['notices'])
+        self.assertEqual(len(manifest['chunks']), 2)
+        # One unique attachment: missing GET, upload, authenticated readback.
+        self.assertEqual(sum('/chunks/' in call[1] for call in transport.calls), 3)
+        self.assertLessEqual(len(transport.calls), 10)
+
+    def test_old_8k_chunk_manifest_restores_and_is_reused_unchanged(self):
+        report = {**REPORT, 'body': 'x' * (32 * 1024)}
+        transport = MemoryTransport()
+        store = a.ArchiveStore(ORIGIN, 'key', transport)
+        with patch.object(a, 'CHUNK_THRESHOLD', 8192):
+            old_stub = store.put_verified('historical', report)
+        self.assertEqual(a.CHUNK_THRESHOLD, 256 * 1024)
+        self.assertEqual(len(a._prepare_chunks(report)[2]), 0)
+        self.assertEqual(store.restore(old_stub), report)
+        old_objects = dict(transport.objects)
+        before = len(transport.calls)
+        self.assertEqual(store.put_verified('historical', report), old_stub)
+        self.assertEqual(transport.objects, old_objects)
+        self.assertFalse(any(call[0] == 'POST' for call in transport.calls[before:]))
+
 
 if __name__=='__main__':unittest.main()
