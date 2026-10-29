@@ -223,6 +223,11 @@ def reclaim(*, full=True):
                 raise MaintenanceError('Report storage changed before the maintenance lock; reclaim skipped')
             command = 'VACUUM (FULL, ANALYZE)' if full else 'VACUUM (ANALYZE)'
             conn.execute(f'{command} {TABLE}')
+            if not full:
+                # This single large publication row can accumulate old TOAST
+                # versions before tuple-count based autovacuum is triggered.
+                # Plain VACUUM reuses that space without rewriting live pages.
+                conn.execute('VACUUM (ANALYZE) lp_program_private.program_state')
         finally:
             conn.execute('SELECT pg_advisory_unlock(%s)', (LOCK,))
     after = inspect()
@@ -254,7 +259,7 @@ def main():
                 public_key = os.environ['SUPABASE_PUBLISHABLE_KEY']
                 install_archive_guard()
                 result = archive(store, keep=args.keep, limit=args.limit, public_key=public_key)
-                if args.reuse_space and any(row['status']=='archived' for row in result['results']):
+                if args.reuse_space and result['after']['archive_count']:
                     result['reuse_space'] = reclaim(full=False)
             elif args.mode == 'reclaim':
                 verified = verify_archives(store, limit=args.limit)

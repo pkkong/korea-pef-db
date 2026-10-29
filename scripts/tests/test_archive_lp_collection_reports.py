@@ -1,5 +1,6 @@
 import copy
 import hashlib
+import io
 import json
 import unittest
 from unittest.mock import MagicMock, Mock, patch
@@ -21,6 +22,14 @@ def snapshot():
 
 
 class MaintenanceContracts(unittest.TestCase):
+    def test_automatic_cleanup_runs_even_when_no_new_report_was_archived(self):
+        # A failed publication can leave old large row versions without creating
+        # another collection run. Retention must still recycle that space.
+        result={'after':{'archive_count':91},'results':[]}
+        with patch('sys.argv',['maintenance','--mode','archive','--reuse-space']),patch.dict('os.environ',{'SUPABASE_URL':'https://sample-project.supabase.co','SUPABASE_SERVICE_ROLE_KEY':'fake-service','SUPABASE_PUBLISHABLE_KEY':'fake-public'}),patch.object(a,'ArchiveStore'),patch.object(m,'install_archive_guard'),patch.object(m,'archive',return_value=result),patch.object(m,'reclaim',return_value={'cleaned':True}) as cleanup,patch('sys.stdout',new_callable=io.StringIO):
+            m.main()
+        cleanup.assert_called_once_with(full=False)
+
     def test_current_run_is_kept_even_outside_latest_three(self):
         conn=connection();conn.execute.side_effect=[Mock(fetchall=lambda:[('new1',),('new2',),('new3',)]),Mock(fetchone=lambda:('current-old',))]
         self.assertEqual(m.protected_runs(conn),{'new1','new2','new3','current-old'})
@@ -134,6 +143,7 @@ class MaintenanceContracts(unittest.TestCase):
         with patch.object(m,'inspect',side_effect=[before,copy.deepcopy(before)]),patch.object(m,'connect',return_value=conn):m.reclaim(full=False)
         queries=[c.args[0] for c in conn.execute.call_args_list]
         self.assertIn('VACUUM (ANALYZE) '+m.TABLE,queries)
+        self.assertIn('VACUUM (ANALYZE) lp_program_private.program_state',queries)
         self.assertIn("SET statement_timeout='5s'",queries)
         self.assertNotIn("SET statement_timeout='180s'",queries)
         self.assertFalse(any('FULL' in q or 'DELETE' in q or 'TRUNCATE' in q for q in queries))
@@ -157,6 +167,7 @@ class MaintenanceContracts(unittest.TestCase):
         factory.assert_called_once_with(session=True,autocommit=True)
         queries=[c.args[0] for c in conn.execute.call_args_list]
         self.assertIn('VACUUM (FULL, ANALYZE) '+m.TABLE,queries)
+        self.assertFalse(any('program_state' in q for q in queries))
         self.assertIn("SET statement_timeout='180s'",queries)
         self.assertTrue(any('pg_advisory_unlock' in q for q in queries))
         huge=snapshot();huge['rows'][1]['stored_bytes']=m.MAX_REWRITE_BYTES+1
