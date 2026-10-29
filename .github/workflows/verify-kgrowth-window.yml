@@ -2,6 +2,10 @@ name: Verify Korea Growth rolling-year discovery
 on:
   workflow_dispatch:
     inputs:
+      diagnose_source_id:
+        type: string
+        default: ''
+        description: Diagnose one observed official notice ID without collecting other notices
       collect_documents:
         type: boolean
         default: false
@@ -24,16 +28,24 @@ jobs:
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
       - name: Verify date discovery and existing collection contracts
         run: python3 -m unittest services.lp.tests.test_kgrowth_listing services.lp.tests.test_kgrowth_collection services.lp.tests.test_audit_lp_official_inventory
+      - name: Diagnose one official notice without publication
+        if: inputs.diagnose_source_id != ''
+        env:
+          DIAGNOSE_SOURCE_ID: ${{ inputs.diagnose_source_id }}
+        run: python3 services/lp/src/diagnose_kgrowth_notice.py --source-id "$DIAGNOSE_SOURCE_ID" --output /tmp/kgrowth-diagnostic
       - name: Keep recent-year official listing evidence
+        if: inputs.diagnose_source_id == ''
         run: python3 services/lp/src/collect_kgrowth_programs.py --lookback-days 365 --listing-pages 20 --inventory-only --output /tmp/kgrowth-window-inventory.json
       - name: Verify discovered bodies and attachments without publication
-        if: inputs.collect_documents
+        if: inputs.collect_documents && inputs.diagnose_source_id == ''
         run: python3 services/lp/src/collect_kgrowth_programs.py --lookback-days 365 --listing-pages 20 --output /tmp/kgrowth-window-collection.json
       - name: Retain public source evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: kgrowth-window-verification
-          path: /tmp/kgrowth-window-*.json
+          path: |
+            /tmp/kgrowth-window-*.json
+            /tmp/kgrowth-diagnostic/
           if-no-files-found: error
           retention-days: 7
