@@ -86,6 +86,45 @@ class InstitutionCollectionTests(unittest.TestCase):
         self.assertEqual(result['holds'][0]['http_status'], 404)
         self.assertNotIn('retry_history', result)
 
+    def test_kamco_discovers_generic_fund_manager_titles_and_deduplicates_searches(self):
+        from services.lp.tests.test_lp_board_adapter_kamco import L, H
+        config = boards.load_configs()['kamco']
+        titles = ['소규모 구조조정 펀드 운용사 선정계획 공고',
+                  '지역 재도약 펀드 운용사 선정계획 공고']
+        ids = ['765432', '765433']
+        calls = []
+        def fetch(url, referer=None):
+            calls.append(url)
+            params = parse_qs(urlsplit(url).query)
+            if urlsplit(url).path.endswith('/view.do'):
+                index = ids.index(params['bIdx'][0])
+                detail = H.split('<tr><td colspan="4" class="grey-box">')[0]+'</tbody></table></html>'
+                return detail.replace('987654', ids[index]).replace('기업지원 PDF 모집', titles[index]).replace(
+                    'Private Debt Fund 모집입니다.',
+                    '선정대상: 국내 블라인드 PEF 펀드 운용사 모집').replace(
+                    '2026-09-10', '2026-10-19').encode()
+            word = params['searchTxt'][0]
+            template = L.replace('value="PEF"', 'value="'+word+'"').replace('1 / 2', '1 / 1')
+            row = template.split('<tr>')[1].split('</tr>')[0]
+            found = ''.join('<tr>'+row.replace('987654', ident).replace('펀드 모집', title).replace(
+                '2026-09-10', '2026-10-19')+'</tr>' for ident, title in zip(ids, titles) if word in title)
+            if not found:
+                found = '<tr><td>등록된 게시물이 없습니다.</td></tr>'
+                template = template.replace('<table>', '<table class="board-table">').replace(
+                    '<ul>', '<ul><li class="board-page-list">전체 0건</li>')
+            start, end = template.index('<tbody>')+len('<tbody>'), template.index('</tbody>')
+            return (template[:start]+found+template[end:]).encode()
+        result = boards.collect({'kamco': config}, fetch_factory=lambda c:fetch, checked_at=STAMP)
+        self.assertEqual(result['holds'], [])
+        self.assertEqual({n['title'] for n in result['notices']}, set(titles))
+        details = [u for u in calls if urlsplit(u).path.endswith('/view.do')]
+        self.assertEqual(len(details), len(ids))
+        for notice in result['notices']:
+            self.assertEqual(boards.validate_notice(notice, STAMP), notice)
+        programs, holds = publish_basic_notices({'programs': [], 'institution_notices':result['notices']}, [], STAMP)
+        self.assertEqual(len(programs), 2)
+        self.assertEqual(holds, [])
+
     def test_failed_issuer_is_retried_with_independently_validated_evidence(self):
         config = boards.load_configs()['tp']
         original = {'checked_at': STAMP, 'notices': [], 'coverage': {'tp': {}},

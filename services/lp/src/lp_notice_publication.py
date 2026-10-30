@@ -27,6 +27,7 @@ try:
     from . import lp_pck_programs as pck_programs
     from . import lp_kbiz_notice_terms as kbiz_terms
     from . import lp_kfinco_notice_terms as kfinco_terms
+    from . import lp_kamco_notice_terms as kamco_terms
 except ImportError:
     from collect_shared_lp_notices import classify_scope
     from collect_lp_original_notices import load_channels, validate_url, validate_original
@@ -39,6 +40,7 @@ except ImportError:
     import lp_pck_programs as pck_programs
     import lp_kbiz_notice_terms as kbiz_terms
     import lp_kfinco_notice_terms as kfinco_terms
+    import lp_kamco_notice_terms as kamco_terms
 
 ROOT = Path(__file__).resolve().parents[3]
 OFFERING_FIELDS = (
@@ -142,6 +144,8 @@ def _texts(n):
 
 
 def _scope(n):
+    if n.get('institution_id') == 'kamco' and kamco_terms.pe_track(n):
+        return 'pe_blind'
     if n.get('institution_id') == 'kbiz' and kbiz_terms.pe_track(n):
         return 'mixed_pe_blind'
     if n.get('institution_id') == 'pck_pension':
@@ -188,7 +192,9 @@ def _terms(n, shared_notice, checked_at):
         if n.get('source_channel') == 'institution_board':
             terms = (pck_programs.terms(n) if n['institution_id'] == 'pck_pension' else
                      kbiz_terms.terms(n) if n['institution_id'] == 'kbiz' and kbiz_terms.pe_track(n) else
-                     kfinco_terms.terms(n) if n['institution_id'] == 'kfinco' else extract_institution_terms(n))
+                     kfinco_terms.terms(n) if n['institution_id'] == 'kfinco' else
+                     kamco_terms.terms(n) if n['institution_id'] == 'kamco' and kamco_terms.pe_track(n) else
+                     extract_institution_terms(n))
         elif shared_notice:
             terms = extract_shared_terms(shared_notice, checked_at)
         elif n['institution_id'] in INSTITUTIONS:
