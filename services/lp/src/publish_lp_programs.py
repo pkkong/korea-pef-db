@@ -23,6 +23,7 @@ from lp_shared_notice_catalog import update_shared_catalog
 from discover_lp_original_boards import reuse_native_originals
 from lp_notice_publication import publish_basic_notices
 from collect_lp_institution_boards import update_catalog as update_institution_catalog
+from lp_state_storage import pack_state, unpack_state
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -86,7 +87,7 @@ def publication_phase(name, started, **counts):
 def store_public_state(conn, data, pages, run_id):
     started = time.monotonic()
     publication_phase('public_payload_serialization_started', started)
-    data_json = json.dumps(data, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+    data_json = json.dumps(pack_state(data), ensure_ascii=False, separators=(',', ':'), allow_nan=False)
     pages_json = json.dumps(pages, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
     publication_phase('public_payload_serialization', started,
                       data_bytes=len(data_json.encode()), pages_bytes=len(pages_json.encode()))
@@ -101,7 +102,7 @@ def connect():
 
 def baseline(conn):
     row = conn.execute('SELECT data FROM lp_program_private.program_state WHERE id=1').fetchone()
-    data = row[0] if row else json.loads((ROOT/'data/lp_programs_pilot.json').read_text())
+    data = unpack_state(row[0] if row else json.loads((ROOT/'data/lp_programs_pilot.json').read_text()))
     data['review_decisions'] = [r[0] for r in conn.execute("SELECT to_jsonb(d) FROM lp_program_private.review_decisions d ORDER BY id").fetchall()]
     return data
 
