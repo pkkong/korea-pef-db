@@ -384,4 +384,12 @@ LP 실행 이력의 행·식별자·문서 근거·공개 상태는 유지한다
 
 최초 공간 회수는 모든 보관본을 검증한 뒤 LP 이력 테이블만 제한시간/잠금/256MiB 살아 있는 자료 한도 안에서 재작성한다. main의 신뢰한 정기 수집/복구 완료 이벤트 뒤 별도 유지보수 작업에서 최대5개 보관과 일반 VACUUM만 수행한다. PR/fork 완료 이벤트는 제외하며 수집25분 제한을 보관 작업이 소모하지 않는다. 복원·실제 적용 근거는 [운영 절차](lp_report_storage_operations.md)와 [현황](lp_collection_status.md)을 따른다.
 
-자동 보관은 자체 대기열을 사용해 예약 수집의 pending 실행을 취소하지 않는다. 수동 점검/공간 회수는 기존LP 대기열을 유지한다. 치환 잠금과 행 버전 보호는 공통이며, 평상시 VACUUM은5초 제한으로 발행20초 잠금 대기를 먼저 소모하지 않는다. 수동 FULL 회수만180초를 허용한다.
+자동 보관은 자체 대기열을 사용해 예약 수집의 pending 실행을 취소하지 않는다. 수동 점검/공간 회수는 기존LP 대기열을 유지한다. 치환 잠금과 행 버전 보호는 공통이며, 평상시 VACUUM은 발행 advisory 잠금을 잡지 않고 TRUNCATE FALSE로 실행한다. 쿼리 제한은180초·경합 잠금 대기는5초다. 수동 FULL 회수만180초를 허용한다.
+
+## LP 누적 상태 압축 계약 — 2026-10-30
+
+`program_state.data`의 `accepted_notices`, `tracked_notices`, `priority_notices`, `supporting_notices`, `shared_notices`, `institution_notices`는 현재 회차 보고서에 없는 과거 증거도 누적 보존한다. `collection_runs.report`가 있다는 이유로 제거하지 않는다. `lp_state_storage`는 이6항목만 손실 없이 gzip/base64로 묶고 버전·길이·원문/압축 SHA256을 검증한다. `baseline()`은 기존 plain 상태와 압축 상태를 모두 복원한다.
+
+`programs`, `review_outcomes`와 나머지 SQL 소비 필드는 plain으로 유지한다. 전체 준비 자료/수집 보고서는 메모리와 `collection_runs`에 그대로 두고 SQL 상태 파라미터만 압축한다. 쓰기 직전에 복원본과 준비 자료를 대조하며 손상·버전 불명·키 중첩·용량 초과는 쓰기 전에 실패한다. 압축 writer를 되돌려도 decoder는 유지하거나 먼저 검증된 legacy 형태로 복원해야 한다.
+
+문서는 생산 함수가 만드는 단일 `jsonb_to_recordset` SQL/JSON 파라미터로25행·UTF8 1MiB 기준 전송한다. 한 문서가 크면 자르지 않고 단독 전송한다. 새 버전·중복 제거·0/false/null·원문을 보존하며 내부 commit/부분 재시도는 없다. 이후 오류는 호출자의 수집 보고서·문서·공개 상태 전체를 rollback한다. 실제 PostgreSQL 검사에서 이를 검증한다.

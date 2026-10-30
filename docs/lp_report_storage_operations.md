@@ -18,11 +18,13 @@ LP 공고 원문·첨부 근거를 버리지 않고 실행별 반복 보관을 �
 
 ## 실행 방법
 
-모든 실제 DB/Storage 작업은 `Maintain LP report storage` workflow에서 수행한다. 수동 점검/공간 회수는 정기 수집과 같은 `lp-program-collection` 대기열을 사용한다. 자동 보관은 `lp-report-retention` 대기열로 분리해 예약 수집의 대기 실행을 교체하지 않는다. 치환은 여전히 DB의 발행 잠금과 행 버전 검사로 보호한다. 기본 모드는 읽기 전용 `inspect`다. 결과 artifact에는 수치·식별자·해시만 넣고 원문과 비밀값은 넣지 않는다.
+모든 실제 DB/Storage 작업은 `Maintain LP report storage` workflow에서 수행한다. 수동 점검/공간 회수는 정기 수집과 같은 `lp-program-collection` 대기열을 사용한다. 자동 보관은 `lp-report-retention` 대기열로 분리해 예약 수집의 대기 실행을 교체하지 않는다. 원문 치환은 DB의 발행 잠금과 행 버전 검사로 보호한다. 일반 공간 정리는 이 잠금을 사용하지 않는다. 기본 모드는 읽기 전용 `inspect`다. 결과 artifact에는 수치·식별자·해시만 넣고 원문과 비밀값은 넣지 않는다.
 
 ```sh
 gh workflow run maintain-lp-report-storage.yml -f mode=inspect
 gh workflow run maintain-lp-report-storage.yml -f mode=archive -f limit=1
+# 자동 보관과 같은 일반 공간 정리 경로를 수동 점검할 때
+gh workflow run maintain-lp-report-storage.yml -f mode=archive -f limit=1 -f reuse_space=true
 gh workflow run maintain-lp-report-storage.yml -f mode=verify -f limit=100
 gh workflow run maintain-lp-report-storage.yml -f mode=restore -f run_id=검증대상실행ID
 ```
@@ -39,7 +41,7 @@ gh workflow run maintain-lp-report-storage.yml -f mode=reclaim -f limit=100
 
 이 작업은 session/autocommit 전용 연결과 발행 잠금을 사용한다. 잠금 대기는5초, 실행 제한은180초이며 잠금 획득 후 살아 있는 보고서 크기가256MiB 이하인지 다시 검사한다. 공개 페이지 테이블이나 다른 서비스 테이블을 재작성하지 않는다.
 
-정기 수집·복구가 끝나면 별도의 유지보수 workflow가 최대5건을 보관하고 LP 실행 이력과 큰 단일 공개상태 행의 일반 VACUUM으로 재사용 가능한 공간을 정리한다. 새 보관 후보가0개여도 이미 보관본이 있으면 정리를 수행해 실패한 발행의 빈 공간도 회수 대상으로 둔다. 원 실행은 같은 저장소의 main에서 실행한 schedule/workflow_dispatch만 허용하며 PR·fork 실행을 받지 않는다. 자동 유지보수는 수집의25분 제한을 소비하지 않고 자체 대기열에서 직렬 실행한다. 일반 VACUUM의 쿼리 제한은5초로, 발행의20초 잠금 대기보다 먼저 종료·잠금 반환한다. 수동 FULL 회수만180초 제한을 사용한다. 정기 작업에서 강한 잠금이 필요한 FULL 재작성을 반복하지 않는다. 수집 실패와 보관 실패는 숨기지 않으며 원래 장애 보고를 유지한다.
+정기 수집·복구가 끝나면 별도의 유지보수 workflow가 최대5건을 보관하고 LP 실행 이력과 큰 단일 공개상태 행의 일반 VACUUM으로 재사용 가능한 공간을 정리한다. 새 보관 후보가0개여도 이미 보관본이 있으면 정리를 수행해 실패한 발행의 빈 공간도 회수 대상으로 둔다. 원 실행은 같은 저장소의 main에서 실행한 schedule/workflow_dispatch만 허용하며 PR·fork 실행을 받지 않는다. 자동 유지보수는 수집의25분 제한을 소비하지 않고 자체 대기열에서 직렬 실행한다. 일반 VACUUM은 발행 advisory 잠금을 잡지 않으며 TRUNCATE FALSE로 강한 끝부분 축소 잠금을 피한다. 쿼리 제한은180초, 경합 잠금 대기는5초다. 수동 FULL 회수만180초 제한을 사용한다. 정기 작업에서 강한 잠금이 필요한 FULL 재작성을 반복하지 않는다. 수집 실패와 보관 실패는 숨기지 않으며 원래 장애 보고를 유지한다.
 
 ## 최초 운영 검증 — 2026-10-28
 
@@ -49,4 +51,15 @@ gh workflow run maintain-lp-report-storage.yml -f mode=reclaim -f limit=100
 
 ## 2026-10-29 원본 보존·공간 회수 운영 반영
 
-실행94개를 유지한 채91개 비공개 보관·최신3개 전체 보관·실제DB복원·91보관본 재검증·LP 이력 테이블 공간 회수를 완료했다. 프로젝트DB 1,145.3MB→484.6MB, Storage 280.9MB. 공개29사업/주소·검토 결정은 동일하며40794080828/40795575999에서 전체 상세/목록을 확인했다. 보관은 수집25분 제한에서 분리해 자체 자동 대기열로 실행하고, 일반VACUUM은5초로 제한했다. 최종 소스85475f6·CI40796957235 통과. 최신 정기40694398568은 발행 완료 뒤 보관 중 시간 제한 취소이며 KFINCO 비공개공고 보류도 남긴다. 새 분리 자동 이벤트의 실제 완료와 이후 정기 결과는 별도 관찰한다. 이 확인을 새로운 기관·GP·로그인 확대나 첫 공개 재보류의 근거로 쓰지 않는다. 상세는 [현황](lp_collection_status.md)과 [보관 운영](lp_report_storage_operations.md)을 따른다.
+실행94개를 유지한 채91개 비공개 보관·최신3개 전체 보관·실제DB복원·91보관본 재검증·LP 이력 테이블 공간 회수를 완료했다. 프로젝트DB 1,145.3MB→484.6MB, Storage 280.9MB. 공개29사업/주소·검토 결정은 동일하며40794080828/40795575999에서 전체 상세/목록을 확인했다. 보관은 수집25분 제한에서 분리해 자체 자동 대기열로 실행하고, 당시 일반VACUUM은5초로 제한했다(현재 정책은 아래10/30 기록 참조). 최종 소스85475f6·CI40796957235 통과. 최신 정기40694398568은 발행 완료 뒤 보관 중 시간 제한 취소이며 KFINCO 비공개공고 보류도 남긴다. 새 분리 자동 이벤트의 실제 완료와 이후 정기 결과는 별도 관찰한다. 이 확인을 새로운 기관·GP·로그인 확대나 첫 공개 재보류의 근거로 쓰지 않는다. 상세는 [현황](lp_collection_status.md)과 [보관 운영](lp_report_storage_operations.md)을 따른다.
+
+
+일반 정리의 잠금 정책은 [PostgreSQL VACUUM 문서](https://www.postgresql.org/docs/17/sql-vacuum.html)를 따른다. 첫 자동 실행의 QueryCanceled 뒤 단순히 발행 잠금을 잡은 채 시간을 늘리지 않았다. 동시 발행이 관측되면 새 발행 상태를 결과에 기록하고 FULL 회수에만 공개 상태 불변 검사를 강제한다. 단계별 오류는 안전한 단계명으로 기록하며 원문·키·응답 헤더는 출력하지 않는다.
+
+## 2026-10-30 발행·후속 자동 보관 완료
+
+c543e08 이후 일반 정리는 발행 advisory 잠금을 잡지 않고 VACUUM(ANALYZE, TRUNCATE FALSE), 쿼리180초/경합5초로 실행한다. 수동 FULL의 전체 복원·크기·발행 잠금·공개 상태 불변 보호는 유지한다. 동시 발행 시 외부 검증은 `reuse_space.after`의 최신 공개 실행을 사용한다.
+
+발행 복구40982170768 완료로 자동 호출된40983019866이1건을 추가 보관하고95이력/92보관/최신3전체/대상0을 확인했다. 10/30 10:01:54 KST DB419,327,123bytes·Storage288,376,538bytes이며 공개70페이지와 검토 지문은 동일하다. 원문 복원 일치·공개키 접근 차단 후 DB 위치를 치환하는 계약을 유지한다. 최신 실행은 수동 복구이며 수정 후 정기 수집 성공을 대신하지 않는다.
+
+누적 `program_state.data`의 증거6항목은 별도 손실 없는 압축 형식이다. 공개 HTML과 SQL 검토 필드는 그대로이며 읽기 경로가 복원한다. 보관 보고서 형식과 혼동하거나 구버전 reader만 되돌리지 않는다. 상세 계약은 [DB 운영 모델](data_operating_model.md)의 ‘LP 누적 상태 압축 계약’을 따른다.
