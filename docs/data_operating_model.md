@@ -393,3 +393,7 @@ LP 실행 이력의 행·식별자·문서 근거·공개 상태는 유지한다
 `programs`, `review_outcomes`와 나머지 SQL 소비 필드는 plain으로 유지한다. 전체 준비 자료/수집 보고서는 메모리와 `collection_runs`에 그대로 두고 SQL 상태 파라미터만 압축한다. 쓰기 직전에 복원본과 준비 자료를 대조하며 손상·버전 불명·키 중첩·용량 초과는 쓰기 전에 실패한다. 압축 writer를 되돌려도 decoder는 유지하거나 먼저 검증된 legacy 형태로 복원해야 한다.
 
 문서는 생산 함수가 만드는 단일 `jsonb_to_recordset` SQL/JSON 파라미터로25행·UTF8 1MiB 기준 전송한다. 한 문서가 크면 자르지 않고 단독 전송한다. 새 버전·중복 제거·0/false/null·원문을 보존하며 내부 commit/부분 재시도는 없다. 이후 오류는 호출자의 수집 보고서·문서·공개 상태 전체를 rollback한다. 실제 PostgreSQL 검사에서 이를 검증한다.
+
+## LP 전체 실행 보고서 전송 계약 — 2026-10-30
+
+`collection_runs.report`의 전체 JSONB 내용과 최신3회/현재 보고서의 직접 읽기 계약은 유지한다. 큰 클라이언트 bind 하나 대신 compact UTF8 JSON을1MiB 이하 텍스트 조각으로 보내고, 같은 트랜잭션의 `pg_temp.lp_collection_report_parts`에서 `seq`순으로 합쳐 JSONB로 저장한다. UTF8 코드포인트 경계를 끊지 않는다. 임시 테이블은 `ON COMMIT DROP`이고 오류 rollback 때도 제거된다. 문서/페이지/공개 실행을 별도로 commit하지 않으며 이후 오류는 보고서까지 함께 원복한다. JSON 유효성·직렬화는 쓰기 연결을 열기 전에 확인한다. 비공개 report의 형식·권한·보관/복원 계약과 발행 잠금/검토 버전 검사는 유지한다.
