@@ -56,11 +56,32 @@ class KfincoAdapterTests(unittest.TestCase):
         with self.assertRaises(ValueError):parse_listing(listing(rows[:1],3),LIST_URL,CONFIG)
 
     def test_malformed_metadata_and_closed_are_explicit_errors(self):
-        for r in [{**row(),'ntCode':'NT1'},{**row(),'ntDate':'2026-02-30'},{**row(),'ntTitle':''},{**row(),'closed':1},{**row(),'closed':False}]:
+        for r in [{**row(),'ntCode':'NT1'},{**row(),'ntDate':'2026-02-30'},{**row(),'ntTitle':''},{**row(),'closed':False}]:
             with self.assertRaises(ValueError):parse_listing(listing([r]),LIST_URL,CONFIG)
         with self.assertRaises(ValueError):parse_listing(listing([row(),row()]),LIST_URL,CONFIG)
         with self.assertRaises(ValueError):parse_detail(detail(row('NT20990202020202')),public(),CONFIG)
         with self.assertRaises(ValueError):parse_detail(detail(row(),'<script>not a notice</script>'),public(),CONFIG)
+
+    def test_mixed_and_all_closed_preserve_slots_without_private_metadata(self):
+        from services.lp.src.lp_board_adapter_kfinco import listing_parts,listing_receipt,RestrictedNotice
+        closed={**row('NT20990202020202'),'closed':1,'ntTitle':'PRIVATE','ntContent':'PRIVATE'}
+        raw=listing([row(),closed])
+        opened,holds,count,total=listing_parts(raw,LIST_URL,CONFIG)
+        self.assertEqual((len(opened),len(holds),count,total),(1,1,2,2))
+        self.assertEqual(set(holds[0]),{'source_id','url','reason'})
+        receipt=listing_receipt(raw,LIST_URL,CONFIG)
+        self.assertNotIn('PRIVATE',receipt)
+        self.assertEqual(parse_listing(receipt,LIST_URL,CONFIG),opened)
+        self.assertEqual(parse_listing(listing([closed]),LIST_URL,CONFIG),[])
+        self.assertEqual(last_page(listing([closed]),LIST_URL,CONFIG),1)
+        with self.assertRaises(RestrictedNotice):parse_detail(detail(closed),public(closed['ntCode']),CONFIG)
+        with self.assertRaises(ValueError):parse_listing(listing([row(),{**closed,'ntCode':CODE}]),LIST_URL,CONFIG)
+        with self.assertRaises(ValueError):parse_listing(listing([closed],2),LIST_URL,CONFIG)
+        for flag in (None,True,False,'1',2,-1,1.0):
+            with self.subTest(flag=flag),self.assertRaises(ValueError):
+                parse_listing(listing([{**row(),'closed':flag}]),LIST_URL,CONFIG)
+        missing=row();del missing['closed']
+        with self.assertRaises(ValueError):parse_listing(listing([missing]),LIST_URL,CONFIG)
 
     def test_foreign_query_and_encoded_traversal_rejected(self):
         for url in [public().replace('www.kfinco.co.kr','evil.test'),public()+'?x=1',public()+'#x',public().replace('/pr/','/private/../pr/'),public().replace('/pr/','/%70r/')]:

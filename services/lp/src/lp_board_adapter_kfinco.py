@@ -4,6 +4,7 @@ Scope classification and publication are deliberately separate from parsing.
 Only the currently observed page-one API contract is accepted.
 """
 import re
+import json
 from urllib.parse import urlsplit, urljoin
 try:
     from .discover_kfinco_originals import BASE, code, read_json, listing, attachments
@@ -41,34 +42,60 @@ def _config(url,config,detail=False):
         if urlsplit(url).path!='/api/pr/notice/list':raise ValueError('wrong KFINCO listing route')
 
 
+class RestrictedNotice(ValueError):
+    def __init__(self, ident):
+        self.source_id = 'kfinco:' + ident
+        self.url = BASE + '/pr/notice/detail/' + ident
+        super().__init__('owner_closed')
+
+
 def _metadata(row):
     ident=code(row.get('ntCode'))
+    if type(row.get('closed')) is not int or row['closed'] not in (0,1):
+        raise ValueError('Invalid KFINCO closed flag')
+    if row['closed'] == 1:
+        raise RestrictedNotice(ident)
     title=row.get('ntTitle');published=row.get('ntDate')
     if not isinstance(title,str) or not title.strip() or '\x00' in title:raise ValueError('missing KFINCO title')
     if not isinstance(published,str) or valid_date(published)!=published:raise ValueError('invalid KFINCO publication date')
-    if type(row.get('closed')) is not int or row['closed']!=0:
-        raise ValueError('KFINCO public UI restricts closed notice; preserve as collection hold')
     return ident,title,published
 
 
-def parse_listing(rawjson,url,config):
+def listing_parts(rawjson,url,config):
     _config(url,config)
     _,rows=listing(rawjson);_,value=read_json(rawjson)
     if len(rows)!=min(value['totalCount'],10):raise ValueError('incomplete KFINCO listing response')
-    result=[];seen=set()
+    result=[];restricted=[];seen=set()
     for row in rows:
-        ident,title,published=_metadata(row)
+        ident=code(row.get('ntCode'))
         if ident in seen:raise ValueError('duplicate KFINCO listing identifier')
         seen.add(ident)
+        try:
+            ident,title,published=_metadata(row)
+        except RestrictedNotice as error:
+            restricted.append({'source_id':error.source_id,'url':error.url,'reason':'owner_closed'})
+            continue
         result.append({'source_id':'kfinco:'+ident,'url':BASE+'/pr/notice/detail/'+ident,
                        'title':title,'date':published})
-    return result
+    return result,restricted,len(rows),value['totalCount']
+
+
+def parse_listing(rawjson,url,config):
+    return listing_parts(rawjson,url,config)[0]
+
+
+def listing_receipt(rawjson,url,config):
+    # Keep all physical slots for replay/count integrity, but no restricted content.
+    listing_parts(rawjson,url,config)
+    _,value=read_json(rawjson)
+    value['list']=[{'ntCode':row['ntCode'],'closed':1} if row['closed']==1 else row
+                   for row in value['list']]
+    return json.dumps({key:value[key] for key in ('success','list','totalCount')},ensure_ascii=False,separators=(',',':'))
 
 
 def last_page(rawjson,url,config):
-    parse_listing(rawjson,url,config)
-    _,value=read_json(rawjson)
-    return max(1,(value['totalCount']+9)//10)
+    _,_,_,total=listing_parts(rawjson,url,config)
+    return max(1,(total+9)//10)
 
 
 def parse_detail(rawjson,url,config):

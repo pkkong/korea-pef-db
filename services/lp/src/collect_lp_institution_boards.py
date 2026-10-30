@@ -326,8 +326,18 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                         shared_listings[url] = raw
                 html = raw.decode('utf-8') if institution == 'kdb' or config.get('response_format') == 'json' else _html(raw)
                 rows = adapter(config).parse_listing(html, url, config)
-                receipts[url] = {'url': url, 'html': html, 'sha256': digest(html)}
-                coverage['listing_pages'].append({'url': url, 'count': len(rows)})
+                receipt_html = html
+                listing_coverage = {'url': url, 'count': len(rows)}
+                if institution == 'kfinco':
+                    _, restricted, raw_count, _ = kfinco.listing_parts(html, url, config)
+                    result['holds'].extend({'institution_id': institution, 'stage': 'institution_restricted', **h}
+                                           for h in restricted)
+                    listing_coverage.update(raw_count=raw_count, restricted_count=len(restricted))
+                    receipt_html = kfinco.listing_receipt(html, url, config)
+                receipts[url] = {'url': url, 'html': receipt_html, 'sha256': digest(receipt_html)}
+                if institution == 'kfinco':
+                    receipts[url]['response_sha256'] = digest(raw)
+                coverage['listing_pages'].append(listing_coverage)
                 if config.get('lookback_days'):
                     seen = seen_by_search.setdefault(search, set())
                     identities = {row['source_id'] for row in rows}
@@ -444,6 +454,9 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                             result['holds'].append({'institution_id': institution, 'stage': 'institution_attachment',
                                                     'url': item['url'], 'notice_url': n['url'], 'error': str(exc)})
                 result['notices'].append(validate_notice(n, checked_at, config))
+            except kfinco.RestrictedNotice as exc:
+                result['holds'].append({'institution_id': institution, 'stage': 'institution_restricted',
+                                        'source_id': exc.source_id, 'url': exc.url, 'reason': 'owner_closed'})
             except Exception as exc:
                 result['holds'].append({'institution_id': institution, 'stage': 'institution_detail',
                                         'url': row['url'], 'error': str(exc)})

@@ -26,6 +26,54 @@ class InstitutionCollectionTests(unittest.TestCase):
             return (detail if 'detail.do?' in url else listing).encode()
         return boards.collect({'tp': config}, fetch_factory=lambda c: fetch, checked_at=STAMP)
 
+    def test_kfinco_closed_rows_never_requested_or_retained_as_fresh_evidence(self):
+        import json
+        from services.lp.tests.test_lp_board_adapter_kfinco import row,listing,detail,public
+        config=boards.load_configs()['kfinco']
+        opened=[row('NT20990101'+str(i).zfill(6)) for i in range(3)]
+        closed={**row('NT20990202020202'),'closed':1,'ntTitle':'PRIVATE','ntContent':'PRIVATE'}
+        calls=[]
+        def fetch(url,referer=None):
+            calls.append(url)
+            if '/api/pr/notice/list' in url:return listing(opened+[closed]).encode()
+            match=next((r for r in opened if public(r['ntCode'])==url),None)
+            self.assertIsNotNone(match,'Closed detail must never be requested')
+            return detail(match).encode()
+        original={'checked_at':STAMP,'notices':[],'coverage':{'kfinco':{}},
+                  'holds':[{'institution_id':'kfinco','stage':'institution_listing','error':'prior restriction'}]}
+        result=boards.retry_failed_sources(original,{'kfinco':config},lambda c:fetch,checked_at=STAMP)
+        self.assertEqual(len(result['notices']),3)
+        self.assertEqual(len(result['holds']),1)
+        self.assertEqual(result['holds'][0]['stage'],'institution_restricted')
+        self.assertNotIn('PRIVATE',json.dumps(result))
+        self.assertNotIn(public(closed['ntCode']),calls)
+        self.assertEqual(result['coverage']['kfinco']['listing_pages'][0]['raw_count'],4)
+        for notice in result['notices']:
+            self.assertEqual(boards.validate_notice(notice,STAMP,config),notice)
+        self.assertEqual(original['holds'][0]['stage'],'institution_listing')
+        factory=Mock()
+        self.assertIs(boards.retry_failed_sources(result,{'kfinco':config},factory),result)
+        factory.assert_not_called()
+
+    def test_kfinco_all_closed_and_closing_between_listing_and_detail(self):
+        import json
+        from services.lp.tests.test_lp_board_adapter_kfinco import row,listing,detail
+        config=boards.load_configs()['kfinco']
+        closed={**row(),'closed':1,'ntTitle':'PRIVATE','ntContent':'PRIVATE'}
+        fetch=Mock(return_value=listing([closed]).encode())
+        result=boards.collect({'kfinco':config},lambda c:fetch,checked_at=STAMP)
+        self.assertEqual(fetch.call_count,1)
+        self.assertEqual(result['notices'],[])
+        self.assertEqual(result['holds'][0]['stage'],'institution_restricted')
+        self.assertEqual(result['coverage']['kfinco']['listing_pages'][0]['raw_count'],1)
+        def changed_fetch(url,referer=None):
+            return (listing([row()]) if '/api/pr/notice/list' in url else detail(closed)).encode()
+        changed=boards.collect({'kfinco':config},lambda c:changed_fetch,checked_at=STAMP)
+        self.assertEqual(changed['notices'],[])
+        self.assertEqual(changed['holds'][0]['stage'],'institution_restricted')
+        self.assertNotIn('PRIVATE',json.dumps(changed))
+        self.assertNotIn('retry_history',changed)
+
     def test_observed_official_maintenance_is_retained_without_repeated_searches(self):
         config = boards.load_configs()['kamco']
         fetch = Mock(side_effect=HTTPError('https://www.kamco.or.kr/error/system_work.html', 404, 'Not found', {}, None))
