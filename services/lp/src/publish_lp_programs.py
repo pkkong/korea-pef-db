@@ -87,7 +87,10 @@ def publication_phase(name, started, **counts):
 def store_public_state(conn, data, pages, run_id):
     started = time.monotonic()
     publication_phase('public_payload_serialization_started', started)
-    data_json = json.dumps(pack_state(data), ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+    packed = pack_state(data)
+    if unpack_state(packed) != data:
+        raise ValueError('Compressed state differs from the prepared evidence')
+    data_json = json.dumps(packed, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
     pages_json = json.dumps(pages, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
     publication_phase('public_payload_serialization', started,
                       data_bytes=len(data_json.encode()), pages_bytes=len(pages_json.encode()))

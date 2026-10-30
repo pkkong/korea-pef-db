@@ -84,6 +84,13 @@ class StateStorageTests(unittest.TestCase):
         hydrated = baseline(conn)
         self.assertEqual(hydrated, {**before, 'review_decisions': []})
 
+    def test_writer_rejects_failed_roundtrip_before_any_sql_write(self):
+        from services.lp.tests.test_lp_program_publish import store_public_state
+        conn = Mock()
+        with patch('publish_lp_programs.unpack_state', return_value={}), self.assertRaisesRegex(ValueError, 'differs'):
+            store_public_state(conn, self.state, {'index.html': 'unchanged'}, 'r')
+        conn.execute.assert_not_called()
+
     def test_next_prepare_preserves_previous_only_sources_and_review(self):
         from services.lp.tests.test_lp_program_publish import SRC, prepare
         from services.lp.tests.test_lp_notice_terms import official
