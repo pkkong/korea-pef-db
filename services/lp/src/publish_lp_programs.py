@@ -98,6 +98,34 @@ def publication_phase(name, started, **counts):
     print(json.dumps({'lp_phase':name,'seconds':round(time.monotonic()-started,2),**counts}), file=sys.stderr, flush=True)
 
 
+def store_collection_report(conn, report_json, run_id, institution):
+    """Keep the complete JSONB report without one large client bind message.
+
+    The temporary parts and final report share the caller's transaction. Both
+    disappear on rollback; the parts also disappear after a successful commit.
+    """
+    payload = report_json.encode('utf-8')
+    started = time.monotonic()
+    conn.execute('CREATE TEMP TABLE lp_collection_report_parts '
+                 '(seq integer PRIMARY KEY,payload text NOT NULL) ON COMMIT DROP')
+    offset, count = 0, 0
+    while offset < len(payload):
+        end = min(offset + 1024 * 1024, len(payload))
+        # Never split a UTF-8 code point between PostgreSQL text parameters.
+        while end < len(payload) and payload[end] & 0xC0 == 0x80:
+            end -= 1
+        part = payload[offset:end].decode('utf-8')
+        conn.execute('INSERT INTO pg_temp.lp_collection_report_parts(seq,payload) VALUES (%s,%s)',
+                     (count, part))
+        offset, count = end, count + 1
+    publication_phase('collection_report_parts', started, report_bytes=len(payload), parts=count)
+    started = time.monotonic()
+    conn.execute('INSERT INTO lp_program_private.collection_runs(run_id,institution,report) '
+                 "SELECT %s,%s,string_agg(payload,'' ORDER BY seq)::jsonb "
+                 'FROM pg_temp.lp_collection_report_parts', (run_id, institution))
+    publication_phase('collection_report_storage', started)
+
+
 def store_public_state(conn, data, pages, run_id):
     started = time.monotonic()
     publication_phase('public_payload_serialization_started', started)
@@ -305,8 +333,12 @@ def publish_prepared(report, data, pages, revision, institution, wrap_json=None)
     if wrap_json is None:
         from psycopg.types.json import Jsonb
         wrap_json = Jsonb
+    started = time.monotonic()
+    report_json = json.dumps(report, sort_keys=True, ensure_ascii=False,
+                             separators=(',', ':'), allow_nan=False)
     stamp = datetime.now(timezone.utc).isoformat()
-    run_id = hashlib.sha256((stamp+json.dumps(report,sort_keys=True)).encode()).hexdigest()[:24]
+    run_id = hashlib.sha256((stamp+report_json).encode()).hexdigest()[:24]
+    publication_phase('collection_report_serialization', started, report_bytes=len(report_json.encode('utf-8')))
     with connect() as conn:
         # READ COMMITTED sees changes made while this lock was waiting.
         conn.execute('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
@@ -319,8 +351,7 @@ def publish_prepared(report, data, pages, revision, institution, wrap_json=None)
         if publication_revision(conn) != revision:
             raise RuntimeError('LP publication or review changed during source validation; keep existing publication')
         started = time.monotonic()
-        conn.execute('INSERT INTO lp_program_private.collection_runs(run_id,institution,report) VALUES (%s,%s,%s)',
-                     (run_id, institution, wrap_json(report)))
+        store_collection_report(conn, report_json, run_id, institution)
         documents = store_documents(conn, report, data, wrap_json)
         publication_phase('evidence_storage', started, documents=documents)
         started = time.monotonic()

@@ -8,9 +8,53 @@ from unittest.mock import patch
 
 SRC = Path(__file__).resolve().parents[1]/'src'
 sys.path.insert(0,str(SRC))
-from publish_lp_programs import prepare, document_hash, clean_database_text, source_index, store_documents, store_public_state
+from publish_lp_programs import prepare, document_hash, clean_database_text, source_index, store_documents, store_public_state, store_collection_report
 
 class PublishContracts(unittest.TestCase):
+    def test_complete_report_uses_bounded_utf8_parts_in_same_transaction(self):
+        from unittest.mock import Mock
+        conn = Mock()
+        report = {'body':'한글🙂'*190000,'zero':0,'flag':False,'null':None,'literal':r'\u0000'}
+        encoded = json.dumps(report, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+        with patch('publish_lp_programs.publication_phase'):
+            store_collection_report(conn, encoded, 'report-run', 'multi_lp')
+        calls = conn.execute.call_args_list
+        self.assertIn('ON COMMIT DROP', calls[0].args[0])
+        parts = [c.args[1] for c in calls if 'INSERT INTO pg_temp.lp_collection_report_parts' in c.args[0]]
+        self.assertGreater(len(parts), 1)
+        self.assertEqual([n for n, _ in parts], list(range(len(parts))))
+        self.assertTrue(all(len(p.encode('utf-8')) <= 1024*1024 for _, p in parts))
+        self.assertEqual(json.loads(''.join(p for _, p in parts)), report)
+        self.assertIn("string_agg(payload,'' ORDER BY seq)::jsonb", calls[-1].args[0])
+        self.assertEqual(calls[-1].args[1], ('report-run', 'multi_lp'))
+        conn.commit.assert_not_called(); conn.pipeline.assert_not_called()
+
+    def test_report_chunk_failure_does_not_reassemble_or_write_public_state(self):
+        from unittest.mock import MagicMock
+        from publish_lp_programs import publish_prepared
+        conn=MagicMock();conn.__enter__.return_value=conn
+        parts = []
+        def execute(query, params=None):
+            if 'INSERT INTO pg_temp.lp_collection_report_parts' in query:
+                parts.append(params)
+                if len(parts)==2:raise RuntimeError('part failed')
+        conn.execute.side_effect=execute
+        with patch('publish_lp_programs.connect',return_value=conn), \
+             patch('publish_lp_programs.publication_revision',return_value='same'), \
+             patch('publish_lp_programs.store_documents') as documents, \
+             patch('publish_lp_programs.store_public_state') as state, \
+             patch('publish_lp_programs.publication_phase'), self.assertRaisesRegex(RuntimeError,'part failed'):
+            publish_prepared({'body':'한'*800000},{},{},'same','multi',wrap_json=lambda x:x)
+        documents.assert_not_called();state.assert_not_called();conn.commit.assert_not_called()
+        self.assertFalse(any('INSERT INTO lp_program_private.collection_runs' in c.args[0] for c in conn.execute.call_args_list))
+        self.assertIs(conn.__exit__.call_args.args[0],RuntimeError)
+
+    def test_invalid_report_number_fails_before_opening_write_connection(self):
+        from publish_lp_programs import publish_prepared
+        with patch('publish_lp_programs.connect') as connect, self.assertRaises(ValueError):
+            publish_prepared({'bad':float('nan')},{},{},'same','multi',wrap_json=lambda x:x)
+        connect.assert_not_called()
+
     def test_source_replay_runs_after_read_connection_is_closed(self):
         from unittest.mock import MagicMock
         from publish_lp_programs import prepare_publication
