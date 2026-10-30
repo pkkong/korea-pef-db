@@ -29,7 +29,18 @@ def payload(extra):
  people={s.supabase_table:f['_rows'](s.supabase_table) for s in gp.PEOPLE_TABLES}
  state={'state_key':True,'fss_snapshot_id':snapshot['snapshot_id'],'source_hash':gp._person_source_hash(people)}
  return {'snapshot':snapshot,'tables':tables,'people':people,'state':state}
-print(json.dumps({'canonical':canonical,'old':payload(True),'new':payload(False)},ensure_ascii=False))
+import sys
+from unittest.mock import MagicMock
+sys.path.insert(0,str(Path('services/lp/src').resolve()))
+from publish_lp_programs import store_documents
+base={'url':'https://example.test/lp/a','title':'한국 공고','zero':0,'flag':False,'optional':None,'literal':chr(92)+'u0000','checked_at':'first'}
+def lp_queries(docs):
+ conn=MagicMock();cursor=conn.cursor.return_value.__enter__.return_value
+ store_documents(conn,{'notices':docs},{},lambda value:value)
+ return [{'sql':call.args[0],'params':list(call.args[1])} for call in cursor.execute.call_args_list]
+lp_documents={'versions':lp_queries([base,{**base,'checked_at':'second'},{**base,'title':'변경 공고'}]),
+ 'rollback':lp_queries([{'url':'https://example.test/lp/new/'+str(i),'value':i} for i in range(25)]+[{'url':None,'value':'invalid'}]),'base':base}
+print(json.dumps({'canonical':canonical,'old':payload(True),'new':payload(False),'lp_documents':lp_documents},ensure_ascii=False))
 `], {cwd:root,encoding:'utf8'});
 assert.equal(python.status, 0, python.stderr);
 const fixture=JSON.parse(python.stdout);
@@ -219,6 +230,42 @@ await check('published and retired FSS rows cannot be mutated',async()=>{
 });
 await check('People cannot be overwritten from a retired FSS source',async()=>{
  const before=await rows('people_persons');await assert.rejects(replacePeople(fixture.old,false),/current published/);assert.deepEqual(await rows('people_persons'),before);
+});
+// Exercise the exact publisher statement and serialized parameters, not a SQL copy.
+await db.exec(fs.readFileSync(path.join(root,'services/lp/supabase/migrations/20260921090000_lp_program_collection.sql'),'utf8'));
+async function lpExecute(batch){
+ assert.equal((batch.sql.match(/%s/g)||[]).length,1);
+ return db.query(batch.sql.replace('%s','$1'),batch.params);
+}
+await check('LP actual document SQL preserves values, versions and idempotent replay',async()=>{
+ for(const batch of fixture.lp_documents.versions)await lpExecute(batch);
+ const first=(await db.query('SELECT source_url,content_hash,document FROM lp_program_private.documents ORDER BY content_hash')).rows;
+ assert.equal(first.length,2);
+ assert.deepEqual(first.find(r=>r.document.title==='한국 공고').document,fixture.lp_documents.base);
+ const changed=first.find(r=>r.document.title==='변경 공고').document;
+ assert.equal(changed.zero,0);assert.equal(changed.flag,false);assert.equal(changed.optional,null);
+ assert.equal(changed.literal,fixture.lp_documents.base.literal);
+ for(const batch of fixture.lp_documents.versions)await lpExecute(batch);
+ assert.deepEqual((await db.query('SELECT source_url,content_hash,document FROM lp_program_private.documents ORDER BY content_hash')).rows,first);
+});
+await check('LP later invalid document batch rolls back earlier batch and public state',async()=>{
+ await db.query("INSERT INTO lp_program_private.collection_runs(run_id,institution,report) VALUES ('lp-test','kgrowth','{}')");
+ await db.query("INSERT INTO lp_program_private.program_state(id,data,pages,run_id) VALUES (1,'{}','{\"index.html\":\"preserved\"}','lp-test')");
+ const before=(await db.query('SELECT * FROM lp_program_private.documents ORDER BY content_hash')).rows;
+ const state=(await db.query('SELECT * FROM lp_program_private.program_state')).rows;
+ assert.equal(fixture.lp_documents.rollback.length,2);
+ await db.exec('BEGIN');
+ await lpExecute(fixture.lp_documents.rollback[0]);
+ await db.query("UPDATE lp_program_private.program_state SET pages='{\"index.html\":\"uncommitted\"}'");
+ await assert.rejects(lpExecute(fixture.lp_documents.rollback[1]),/null value.*source_url|not-null constraint/i);
+ await db.exec('ROLLBACK');
+ assert.deepEqual((await db.query('SELECT * FROM lp_program_private.documents ORDER BY content_hash')).rows,before);
+ assert.deepEqual((await db.query('SELECT * FROM lp_program_private.program_state')).rows,state);
+});
+await check('LP raw document evidence remains inaccessible to anon',async()=>{
+ await db.exec('SET ROLE anon');
+ try {await assert.rejects(db.query('SELECT document FROM lp_program_private.documents'),/permission denied/);}
+ finally {await db.exec('RESET ROLE');}
 });
 await db.close();
 console.log(`${checks} PostgreSQL integration checks passed`);

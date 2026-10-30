@@ -58,12 +58,16 @@ def document_hash(document):
 
 
 def store_documents(conn, report, data, wrap_json):
-    """Batch immutable evidence in the caller's publication transaction."""
+    """Bound single statements; never enter executemany's pipeline mode."""
     docs = report['notices'] + data.get('priority_notices', []) + data.get('supporting_notices', []) + data.get('shared_notices', []) + data.get('institution_notices', [])
     docs += [original for notice in data.get('shared_notices', []) for original in notice.get('original_notices', [])]
-    query = 'INSERT INTO lp_program_private.documents(source_url,content_hash,document) VALUES(%s,%s,%s) ON CONFLICT DO NOTHING'
+    query = ('INSERT INTO lp_program_private.documents(source_url,content_hash,document) '
+             'SELECT r.source_url,r.content_hash,r.document FROM jsonb_to_recordset(%s::jsonb) '
+             'AS r(source_url text,content_hash text,document jsonb) WHERE true ON CONFLICT DO NOTHING')
+    max_rows, max_bytes = 25, 1024 * 1024
     seen = set()
     pending = []
+    pending_bytes = 2  # JSON array brackets; commas are counted as rows are added.
     with conn.cursor() as cursor:
         for doc in docs:
             digest = document_hash(doc)
@@ -71,12 +75,22 @@ def store_documents(conn, report, data, wrap_json):
             if key in seen:
                 continue
             seen.add(key)
-            pending.append((doc['url'], digest, wrap_json(doc)))
-            if len(pending) == 25:
-                cursor.executemany(query, pending)
+            row = json.dumps({'source_url':doc['url'], 'content_hash':digest, 'document':doc},
+                             ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False)
+            row_bytes = len(row.encode('utf-8'))
+            if pending and (len(pending) >= max_rows or pending_bytes + 1 + row_bytes > max_bytes):
+                cursor.execute(query, ('[' + ','.join(pending) + ']',))
                 pending = []
+                pending_bytes = 2
+            pending_bytes += row_bytes + bool(pending)
+            pending.append(row)
+            # A single oversized document is retained whole in its own statement.
+            if pending_bytes > max_bytes:
+                cursor.execute(query, ('[' + ','.join(pending) + ']',))
+                pending = []
+                pending_bytes = 2
         if pending:
-            cursor.executemany(query, pending)
+            cursor.execute(query, ('[' + ','.join(pending) + ']',))
     return len(seen)
 
 

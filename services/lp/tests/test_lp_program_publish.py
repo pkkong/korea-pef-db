@@ -91,27 +91,62 @@ class PublishContracts(unittest.TestCase):
     def test_batched_evidence_keeps_versions_and_deduplicates_repeated_receipts(self):
         from unittest.mock import MagicMock
         conn=MagicMock();cursor=conn.cursor.return_value.__enter__.return_value
-        first={'url':'https://official.example/1','body':'first','checked_at':'earlier'}
+        first={'url':'https://official.example/1','body':'first','checked_at':'earlier','zero':0,'flag':False,'null':None}
         same=dict(first,checked_at='later')
         changed=dict(first,body='corrected')
         docs=[first,same,changed]+[{'url':f'https://official.example/{i}','body':str(i)} for i in range(2,65)]
         count=store_documents(conn,{'notices':docs},{'shared_notices':[{'url':first['url'],'body':'first','original_notices':[]}]},lambda value:value)
-        rows=[row for call in cursor.executemany.call_args_list for row in call.args[1]]
+        batches=[json.loads(call.args[1][0]) for call in cursor.execute.call_args_list]
+        rows=[row for batch in batches for row in batch]
         self.assertEqual(len(rows),count)
-        self.assertEqual(len({(row[0],row[1]) for row in rows}),len(rows))
-        self.assertEqual(sum(row[0]==first['url'] for row in rows),3)
-        self.assertLess(cursor.executemany.call_count,len(rows))
+        self.assertEqual(len({(row['source_url'],row['content_hash']) for row in rows}),len(rows))
+        self.assertEqual(sum(row['source_url']==first['url'] for row in rows),3)
+        self.assertEqual(rows[0]['document'],first)
+        self.assertEqual(rows[1]['document'],changed)
+        self.assertTrue(all(len(batch)<=25 for batch in batches))
+        self.assertLess(cursor.execute.call_count,len(rows))
+        cursor.executemany.assert_not_called();conn.pipeline.assert_not_called()
         self.assertFalse(conn.commit.called)
-        self.assertTrue(all('ON CONFLICT DO NOTHING' in call.args[0] for call in cursor.executemany.call_args_list))
+        self.assertTrue(all('AS r(source_url text,content_hash text,document jsonb) WHERE true ON CONFLICT DO NOTHING' in call.args[0] for call in cursor.execute.call_args_list))
 
     def test_bulk_storage_failure_propagates_without_committing_or_writing_public_state(self):
         from unittest.mock import MagicMock
         conn=MagicMock();cursor=conn.cursor.return_value.__enter__.return_value
-        cursor.executemany.side_effect=RuntimeError('database write failed')
+        cursor.execute.side_effect=RuntimeError('database write failed')
         with self.assertRaisesRegex(RuntimeError,'database write failed'):
             store_documents(conn,{'notices':[{'url':'https://official.example/1','body':'source'}]}, {},lambda value:value)
         self.assertFalse(conn.commit.called)
         self.assertFalse(conn.execute.called)
+
+    def test_document_batches_bound_utf8_bytes_and_keep_oversized_document_whole(self):
+        from unittest.mock import MagicMock
+        conn=MagicMock();cursor=conn.cursor.return_value.__enter__.return_value
+        docs=[{'url':f'https://official.example/{i}','body':'한'*180000} for i in range(3)]
+        docs += [{'url':'https://official.example/large','body':'한'*400000},
+                 {'url':'https://official.example/last','body':'end'}]
+        store_documents(conn,{'notices':docs},{},lambda _:self.fail('document wrapper must not be used'))
+        batches=[json.loads(c.args[1][0]) for c in cursor.execute.call_args_list]
+        self.assertEqual([r['document'] for b in batches for r in b],docs)
+        self.assertEqual(len(batches),5)
+        for call,batch in zip(cursor.execute.call_args_list,batches):
+            size=len(call.args[1][0].encode('utf-8'))
+            if size>1024*1024:
+                self.assertEqual(len(batch),1)
+                self.assertEqual(batch[0]['document'],docs[3])
+        cursor.executemany.assert_not_called();conn.pipeline.assert_not_called();conn.commit.assert_not_called()
+
+    def test_document_statement_failure_prevents_publication_state_write(self):
+        from unittest.mock import MagicMock
+        from publish_lp_programs import publish_prepared
+        conn=MagicMock();conn.__enter__.return_value=conn
+        conn.cursor.return_value.__enter__.return_value.execute.side_effect=RuntimeError('write failed')
+        with patch('publish_lp_programs.connect',return_value=conn), \
+             patch('publish_lp_programs.publication_revision',return_value='same'), \
+             patch('publish_lp_programs.store_public_state') as state, \
+             patch('publish_lp_programs.publication_phase'), self.assertRaisesRegex(RuntimeError,'write failed'):
+            publish_prepared({'notices':[{'url':'https://official.example/1','zero':0}]}, {}, {}, 'same', 'multi',wrap_json=lambda x:x)
+        state.assert_not_called();conn.commit.assert_not_called()
+        self.assertIs(conn.__exit__.call_args.args[0],RuntimeError)
 
     def test_source_index_projects_only_notice_identity_without_writes(self):
         from unittest.mock import Mock
