@@ -12,7 +12,12 @@ import io
 import json
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
+try:
+    from .ktcu_listing import parse_rows, last_page
+except ImportError:
+    from ktcu_listing import parse_rows, last_page
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlencode, urljoin, urlparse
@@ -22,7 +27,7 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parents[3]
 BASE = "https://www.ktcu.or.kr"
 LIST = BASE + "/PPW-CSB-000101?srchKey=sj&srchText=PEF"
-SEARCH_TERMS = ("PEF", "블라인드")
+SEARCH_TERMS = ("PEF", "블라인드", "운용사", "펀드")
 MAX_LIST_PAGES = 10
 REVIEW = ROOT / "data/ktcu_program_review.json"
 PROGRAM_ID = "ktcu-2026-blind-pef"
@@ -96,11 +101,10 @@ def parse_notice(source_id, raw):
 
 
 def _pe_candidate_title(title):
-    year = re.search(r"20\d{2}", title)
-    if not year or int(year.group()) < 2026:
-        return False
+    """Broad discovery only; a matching title never approves PE scope."""
     upper = title.upper()
-    return "PEF" in upper or ("블라인드" in title and "펀드" in title and "VC" not in upper)
+    return ("PEF" in upper or ("블라인드" in title and "펀드" in title)
+            or (any(t in title for t in ('운용사','펀드')) and any(t in title for t in ('모집','선정','출자'))))
 
 
 def _current_program_title(title):
@@ -226,34 +230,44 @@ def _get(url):
 def collect(seed_program, checked_at, fetch=None):
     fetch = fetch or _get
     ids = {}
+    end = datetime.fromisoformat(checked_at.replace('Z','+00:00'))
+    if end.tzinfo is None:
+        raise ValueError('KTCU checked_at must include timezone')
+    end = end.astimezone(ZoneInfo('Asia/Seoul')).date()
+    start = end - timedelta(days=364)
     for term in SEARCH_TERMS:
+        seen = set()
         for page_no in range(1, MAX_LIST_PAGES + 1):
             url = f"{BASE}/PPW-CSB-000101?" + urlencode({"srchKey": "sj", "srchText": term, "curPage": page_no})
             listing = fetch(url).decode("utf-8")
-            rows = re.findall(r"fn_view\('([0-9]+)'\).*?>([^<]+)</a>", listing)
-            if page_no == 1 and not rows:
-                raise ValueError(f"KTCU official {term} listing yielded no notices")
-            if not rows:
+            rows = parse_rows(listing,url)
+            final = last_page(listing,url)
+            for row in rows:
+                if start.isoformat() <= row['date'] <= end.isoformat():
+                    source_id=row['source_id'].split(':',1)[1]
+                    if source_id in ids and any(ids[source_id][k]!=row[k] for k in ('title','date')):
+                        raise ValueError('Conflicting KTCU listing metadata')
+                    ids[source_id]=row
+            regular=[r for r in rows if not r['pinned']]
+            if not rows or (final is not None and page_no==final) or (regular and all(r['date']<start.isoformat() for r in regular)):
                 break
-            old_count = len(ids)
-            ids.update({source_id: _clean(title) for source_id, title in rows})
-            if len(rows) < 10:
-                break
-            if len(ids) == old_count:
+            fresh={r['source_id'] for r in regular}-seen
+            if not fresh:
                 raise ValueError(f"KTCU official {term} listing pagination did not advance")
+            seen.update(r['source_id'] for r in regular)
         else:
             raise ValueError(f"KTCU official {term} listing exceeded {MAX_LIST_PAGES} pages")
-    if not ids:
-        raise ValueError("KTCU official listing yielded no notices")
     recipe = json.loads(REVIEW.read_text())
-    selected = {source["source_id"] for source in recipe["sources"]}
-    for source_id, title in ids.items():
-        if _pe_candidate_title(title):
+    selected = {str(source["source_id"]) for source in recipe["sources"]}
+    for source_id, row in ids.items():
+        if _pe_candidate_title(row['title']):
             selected.add(source_id)
     notices = []
     approved_by_id = {s["source_id"]: s for s in recipe["sources"]}
     for source_id in sorted(selected, key=int):
         notice = parse_notice(source_id, fetch(f"{BASE}/PPW-CSB-000101/{source_id}"))
+        if source_id in ids and any(notice[k]!=ids[source_id][k] for k in ('title','date')):
+            raise ValueError('KTCU listing/detail metadata differs')
         notice["attachment_hashes"] = {}
         if source_id in approved_by_id:
             names = set(approved_by_id[source_id].get("attachment_hashes", {}))
@@ -271,6 +285,9 @@ def collect(seed_program, checked_at, fetch=None):
         notice["attachments"] = [{"name": a["name"]} for a in notice["attachments"]]
         notices.append(notice)
     programs, holds = project(notices, checked_at, seed_program)
+    holds.extend({'source_id': n['source_id'], 'url': n['url'],
+                  'reason': '신규 공고 PE 범위·첨부 검토 필요'}
+                 for n in notices if n['source_id'] not in approved_by_id and not _current_program_title(n['title']))
     suggestions = link_suggestions(notices, seed_program["title"])
     return {"notices": notices, "programs": programs, "holds": holds,
             "link_suggestions": suggestions, "discovery_candidates": discovery_candidates(notices)}

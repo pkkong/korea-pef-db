@@ -41,6 +41,19 @@ class OfficialInventoryTests(unittest.TestCase):
         self.assertEqual(report['summary']['limited_institutions'],['kamco'])
         self.assertEqual(report['institutions'][0]['status'],'query_limit')
 
+    def test_small_budget_still_visits_other_institutions_before_extra_queries(self):
+        from services.lp.tests.test_lp_board_adapter_kamco import L
+        def factory(institution,config):
+            def fetch(url):
+                if institution=='kgrowth':return growth([('1','200','PE 모집 공고','2026-10-01')]).encode()
+                term=parse_qs(urlsplit(url).query,keep_blank_values=True)['searchTxt'][0]
+                return L.replace('value="PEF"','value="'+term+'"').encode()
+            return fetch
+        report=inventory.audit({'programs':[]},as_of='2026-10-22',scope={'confirmed_institution_ids':['kamco','kgrowth'],'priority_verification_ids':[]},
+            configs={'kamco':inventory.boards.load_configs()['kamco']},fetch_factory=factory,independent=True,page_budget=2)
+        self.assertEqual([r['institution_id'] for r in report['receipts']],['kamco','kgrowth'])
+        self.assertTrue(all(e['counts'] is not None for e in report['institutions']))
+
     def test_kfinco_audit_redacts_closed_content_and_marks_query_restriction(self):
         from services.lp.tests.test_lp_board_adapter_kfinco import row,listing
         config=inventory.boards.load_configs()['kfinco']
@@ -65,6 +78,29 @@ class OfficialInventoryTests(unittest.TestCase):
             plans=inventory.query_plan(institution,{},'2025-01-01','2026-01-01',independent=True)
             self.assertEqual([(p['term'],p['kind']) for p in plans],[('','board_listing')])
         self.assertEqual(inventory.query_plan('ktcu',{},'a','b')[0]['term'],'PEF')
+
+    def test_independent_bank_requests_never_use_unsupported_empty_search(self):
+        for institution in ('kdb','ibk'):
+            config=inventory.boards.load_configs()[institution]
+            for plan in inventory.query_plan(institution,config,'a','b',independent=True):
+                self.assertTrue(plan['term'])
+                self.assertTrue(inventory.page_url(institution,config,plan['term'],1,'a','b').startswith('https://'))
+
+    def test_invalid_query_builder_is_recorded_without_discarding_other_sources(self):
+        from unittest.mock import patch
+        from services.lp.tests.test_lp_board_adapter_kamco import L
+        original=inventory.page_url
+        def build(institution,*args):
+            if institution=='kamco':raise ValueError('unsupported query')
+            return original(institution,*args)
+        scope={'confirmed_institution_ids':['kamco','kgrowth'],'priority_verification_ids':[]}
+        with patch.object(inventory,'page_url',side_effect=build):
+            report=inventory.audit({'programs':[]},as_of='2026-10-22',scope=scope,
+                configs={'kamco':inventory.boards.load_configs()['kamco']},independent=True,max_pages=1,
+                fetch_factory=lambda *a:lambda u:growth([('1','200','국내 PE 모집 공고','2026-10-01')]).encode())
+        self.assertEqual(report['institutions'][0]['status'],'source_error')
+        self.assertIsNotNone(report['institutions'][1]['counts'])
+        self.assertEqual(report['institutions'][1]['rows'][0]['source_id'],'kgrowth:200')
 
     def test_ibk_stops_at_observed_last_page_without_requesting_repeated_overrun(self):
         from services.lp.tests.test_lp_board_adapters_banks import IBK, IBK_LIST, IBK_PAGER

@@ -8,12 +8,87 @@ from pathlib import Path
 from unittest.mock import patch
 from io import BytesIO
 from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qs, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import collect_ktcu_program as ktcu
+import ktcu_listing
+
+
+def listing(rows, page=1, last=1, term='운용사'):
+    items=''.join(f'<li><span class="num">{num}</span><a href="javascript:fn_view(\'{ident}\');">{title}</a><span>{day}</span></li>'
+                  for ident,title,day,num in rows)
+    return f'<html><input name="srchText" value="{term}"><input name="curPage" value="{page}"><div class="sort-tit">총 {len(rows)} 건 ({page}/{last} 페이지)</div><ul id="ulList">{items}</ul></html>'
 
 
 class KtcuProgramCollectionTest(unittest.TestCase):
+    def test_listing_contract_and_empty_scope(self):
+        url=ktcu.BASE+'/PPW-CSB-000101?srchKey=sj&srchText=운용사&curPage=1'
+        html=listing([('987','연도 없는 펀드 운용사 선정','2026-10-31','1')])
+        self.assertEqual(ktcu_listing.parse_rows(html,url)[0]['source_id'],'ktcu:987')
+        self.assertEqual(ktcu_listing.last_page(html,url),1)
+        for bad in [html.replace('</html>',''),html.replace('value="1"','value="2"'),
+                    html.replace('value="운용사"','value="다름"'),html.replace('2026-10-31','2026-99-31'),
+                    html.replace('id="ulList"','id="footer"'),html.replace('(1/1','(2/1')]:
+            with self.assertRaises(ValueError):ktcu_listing.parse_rows(bad,url)
+        empty=listing([]).replace('<ul id="ulList"></ul>','<ul id="ulList"><li>등록된 게시물이 없습니다.</li></ul>')
+        self.assertEqual(ktcu_listing.parse_rows(empty,url),[])
+        with self.assertRaises(ValueError):ktcu_listing.parse_rows(empty.replace('총 0','총 1'),url)
+
+    def test_rolling_dates_generic_titles_dedup_and_old_approved_retracking(self):
+        rows=[('90001','펀드 운용사 선정 공고','2026-11-01','5'),
+              ('90002','연도 없는 펀드 운용사 선정 공고','2026-10-31','4'),
+              ('90003','2025년 펀드 모집 공고','2025-11-01','3'),
+              ('90004','오래된 펀드 모집 공고','2025-10-31','2')]
+        calls=[]
+        def fetch(url):
+            calls.append(url)
+            if '?' in url:
+                q=parse_qs(urlsplit(url).query)
+                return listing(rows,term=q['srchText'][0],last=1).encode()
+            return b'detail'
+        def parse(ident,raw):
+            if ident=='61742':return {**self.notice,'attachments':[],'date':'2020-01-01'}
+            r=next(r for r in rows if r[0]==ident)
+            return {'source_id':ident,'url':ktcu.BASE+'/PPW-CSB-000101/'+ident,'title':r[1],'date':r[2],
+                    'body':'unverified','sha256':'a'*64,'attachments':[]}
+        with patch.object(ktcu,'parse_notice',side_effect=parse),patch.object(ktcu,'project',return_value=([],[])):
+            result=ktcu.collect(self.seed,'2026-10-30T15:30:00+00:00',fetch)
+        self.assertEqual([n['source_id'] for n in result['notices']],['61742','90002','90003'])
+        self.assertEqual(len([u for u in calls if '?' not in u]),3)
+        self.assertEqual(len(result['holds']),2)
+        self.assertFalse(result['programs'])
+
+    def test_unbounded_listing_fails_explicitly(self):
+        def fetch(url):
+            q=parse_qs(urlsplit(url).query);page=int(q['curPage'][0])
+            return listing([(str(90000+page),'펀드 운용사 선정','2026-10-31',str(page))],
+                           page=page,last=11,term=q['srchText'][0]).encode()
+        with self.assertRaisesRegex(ValueError,'exceeded 10 pages'):
+            ktcu.collect(self.seed,'2026-10-31T00:00:00+00:00',fetch)
+
+    def test_mixed_date_page_does_not_hide_following_recent_notice(self):
+        pages={1:[('90001','오래된 펀드 모집','2025-10-31','3'),
+                  ('90002','최근 펀드 모집','2026-10-20','2')],
+               2:[('90003','다음 페이지 펀드 모집','2026-09-01','1')],
+               3:[('90004','과거 펀드 모집','2025-10-30','1')]}
+        calls=[]
+        def fetch(url):
+            calls.append(url)
+            if '?' in url:
+                q=parse_qs(urlsplit(url).query);page=int(q['curPage'][0])
+                return listing(pages[page],page=page,last=8,term=q['srchText'][0]).encode()
+            return b'detail'
+        def parse(ident,raw):
+            if ident=='61742':return {**self.notice,'attachments':[]}
+            r=next(r for rows in pages.values() for r in rows if r[0]==ident)
+            return {'source_id':ident,'url':ktcu.BASE+'/PPW-CSB-000101/'+ident,'title':r[1],
+                    'date':r[2],'body':'unverified','sha256':'a'*64,'attachments':[]}
+        with patch.object(ktcu,'parse_notice',side_effect=parse),patch.object(ktcu,'project',return_value=([],[])):
+            result=ktcu.collect(self.seed,'2026-10-31T00:00:00+00:00',fetch)
+        self.assertEqual([n['source_id'] for n in result['notices']],['61742','90002','90003'])
+        self.assertEqual(len([u for u in calls if '?' in u]),len(ktcu.SEARCH_TERMS)*3)
+
     def test_official_timeout_is_retried_but_missing_notice_is_not(self):
         class Response(BytesIO):
             def geturl(self): return ktcu.BASE+'/official'

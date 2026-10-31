@@ -20,12 +20,14 @@ try:
     from .lp_board_adapters_pensions import _Document
     from .lp_notice_triage import notice_stage
     from .kgrowth_listing import parse_listing as growth_rows
+    from .ktcu_listing import parse_rows as ktcu_rows, last_page as ktcu_last_page
 except ImportError:
     import collect_lp_institution_boards as boards
     from audit_lp_discovery_coverage import extract_known, title_scope
     from lp_board_adapters_pensions import _Document
     from lp_notice_triage import notice_stage
     from kgrowth_listing import parse_listing as growth_rows
+    from ktcu_listing import parse_rows as ktcu_rows, last_page as ktcu_last_page
 
 ROOT = Path(__file__).resolve().parents[3]
 CORE = {
@@ -112,6 +114,8 @@ def _date(text):
 def core_rows(institution, html, url):
     if institution == 'kgrowth':
         return [{**row, 'source_id': notice_key(institution, row['url'])} for row in growth_rows(html, url)]
+    if institution == 'ktcu':
+        return ktcu_rows(html,url)
     if '</html>' not in html.lower():raise ValueError('incomplete official listing')
     root=_Document(html).root
     nodes=root.nodes('li') if institution=='ktcu' else root.nodes('div','notice-list-item') if institution=='kexim' else root.nodes('tr')
@@ -162,16 +166,8 @@ def core_last_page(institution, html, url):
         try:from .collect_koreapost_program import _listing_last_page
         except ImportError:from collect_koreapost_program import _listing_last_page
         return _listing_last_page(html,url)
-    if institution!='ktcu':return None
-    root=_Document(html).root
-    matches={tuple(map(int,m.groups())) for n in root.nodes('div','sort-tit')
-             if (m:=re.fullmatch(r'총\s*([\d,]+)\s*건\s*\(\s*(\d+)\s*/\s*(\d+)\s*페이지\s*\)',n.clean().replace(',','')))}
-    if not matches:return None
-    if len(matches)!=1:raise ValueError('conflicting KTCU page count')
-    total,current,last=matches.pop()
-    requested=int(parse_qs(urlsplit(url).query).get('curPage',['1'])[0])
-    if current!=requested or last<1 or current<1 or total<0:raise ValueError('invalid KTCU page count')
-    return last
+    if institution=='ktcu':return ktcu_last_page(html,url)
+    return None
 
 
 def streams(institution, config, start, end):
@@ -193,6 +189,9 @@ def query_plan(institution, config, start, end, *, independent=False, max_pages=
         # Do not widen it or call its restricted rows to claim independent recall.
         return [{'term':term,'kind':'restricted_public_api','limit':config['pages']}
                 for term in streams(institution,config,start,end)]
+    if institution in {'kdb','ibk'}:
+        return [{'term':term,'kind':'independent_title_query','limit':max_pages}
+                for term in ('운용사','펀드','출자')]
     return ([{'term':'','kind':'latest_board_probe','limit':1}]
             + [{'term':term,'kind':'independent_title_query','limit':max_pages}
                for term in ('운용사','펀드','출자')])
@@ -246,6 +245,7 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
     for institution in targets:
         config=configs.get(institution) or ({'institution_id':institution,'listing_url':CORE[institution]} if institution in CORE else None)
         query_scope=('restricted_public_api' if independent and institution=='kfinco' else
+                     'independent_title_queries' if independent and institution in {'kdb','ibk'} else
                      'independent_title_queries_with_latest_probe' if independent and institution not in CORE and institution not in {'moel_eif','moel_iaci'} else
                      'board_listing' if institution in {'kgrowth','koreapost','kexim'} or independent else 'configured_title_queries')
         entry={'institution_id':institution,'name':names.get(institution,institution),'role':'confirmed' if institution in scope['confirmed_institution_ids'] else 'verification',
@@ -265,13 +265,20 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
                    'boundary':'global_page_budget','minimum_date':None,'maximum_date':None}
             entry['queries'].append(query)
             queue.append((institution,query,1,set()))
+    initial={institution:deque() for institution in contexts}
+    for request in queue:initial[request[0]].append(request)
+    queue.clear()
+    while any(initial.values()):
+        for pending in initial.values():
+            if pending:queue.append(pending.popleft())
     # Breadth-first requests give every connected institution a first page
     # before any broad query consumes the remaining budget on its history.
     requests=0
     while queue and requests<page_budget:
         institution,query,page,seen=queue.popleft();ctx=contexts[institution];config=ctx['config']
-        url=page_url(institution,config,query['term'],page,start,end);requests+=1
+        url=config['listing_url'];requests+=1
         try:
+            url=page_url(institution,config,query['term'],page,start,end)
             if url not in cache:
                 raw=ctx['fetch'](url);body_bytes+=len(raw)
                 if body_bytes>32*1024*1024:raise ValueError('inventory total body budget exceeded')
@@ -353,7 +360,7 @@ def markdown(report):
            '| 기관 | 검색 범위 | 탐색 상태 | 기간 내 목록 | 보관에 없는 관련 자료 |','| --- | --- | --- | ---: | ---: |']
     labels={'inventory_not_connected':'공식 목록 대조 미연결','observed_query_boundary':'조회 경계 확인','query_limit':'조회 한도/반복 확인 필요','source_error':'접속/판독 오류'}
     for e in report['institutions']:
-        c=e['counts'];search={'board_listing':'게시판 목록','independent_title_queries_with_latest_probe':'독립 일반검색·최신 목록','restricted_public_api':'제한된 공개 API'}.get(e['query_scope'],'설정 검색어')
+        c=e['counts'];search={'board_listing':'게시판 목록','independent_title_queries':'독립 일반검색','independent_title_queries_with_latest_probe':'독립 일반검색·최신 목록','restricted_public_api':'제한된 공개 API'}.get(e['query_scope'],'설정 검색어')
         lines.append(f"| {e['name']} | {search} | {labels[e['status']]} | {c['observed_recent_rows'] if c else '미측정'} | {c['unarchived_relevant'] if c else '미측정'} |")
     scopes=report['summary']['unarchived_by_title_scope']
     lines+=['','## 원문 판독 대상',
