@@ -106,7 +106,44 @@ class CandidateSourceTests(unittest.TestCase):
     def test_discovery_unavailability_and_budget_never_mean_complete(self):
         r=audit.resolve({'status':'error'},{'receipts':[]},fetch_factory=lambda *a:self.fail('unexpected fetch'))
         self.assertTrue(r['holds'])
-        with self.assertRaises(ValueError):audit.resolve({'status':'ok','items':[candidate('sema')]*21},{'receipts':[]})
+        self.assertFalse(r['complete'])
+
+    def test_candidate_budget_preserves_all_metadata_and_limits_requests_deterministically(self):
+        candidates=[];receipts=[];responses={}
+        for i in range(23):
+            ident=str(991100+i);title=KEXIM_TITLE+f' {i:02d}'
+            n=candidate('kexim');n.update(id=f'candidate-{i:02d}',title=title,
+                official_url=n['official_url'].replace('991100',ident),extra={'flag':False,'count':0})
+            candidates.append(n)
+            r=receipt();r['html']=r['html'].replace('991100',ident).replace(KEXIM_TITLE,title)
+            r['sha256']=hashlib.sha256(r['html'].encode()).hexdigest();receipts.append(r)
+            responses[n['official_url'].split('?')[0]]=(f'<h1 class="detail-view-title">{title}</h1><span title="작성일">2026.10.01</span>'
+                '<div class="detail-view-box">공식 원문<div class="detail-view-file"></div>').encode()
+        discovery={'status':'ok','items':list(reversed(candidates))};before=copy.deepcopy(discovery)
+        calls=[]
+        def fetch(url):calls.append(url);return responses[url]
+        r=audit.resolve(discovery,{'receipts':receipts},fetch_factory=lambda *a:fetch,as_of='2026-10-25')
+        self.assertEqual(discovery,before)
+        self.assertEqual(len(calls),20)
+        self.assertEqual(r['summary']['verified'],20)
+        self.assertEqual(r['summary']['unresolved'],3)
+        self.assertFalse(r['complete']);self.assertEqual(r['remaining_count'],3)
+        self.assertEqual([s['candidate'] for s in r['sources']],candidates)
+        self.assertEqual(r['sources'][20]['discovery_id'],'candidate-20')
+        self.assertEqual(r['sources'][20]['status'],'pending')
+        self.assertIsNone(r['sources'][20]['official_notice'])
+        self.assertTrue(all(h['reason']=='candidate_budget' for h in r['holds']))
+        calls.clear()
+        second=audit.resolve({'status':'ok','items':candidates},{'receipts':receipts},
+            fetch_factory=lambda *a:fetch,as_of='2026-10-25',candidate_limit=1)
+        self.assertEqual(len(calls),1);self.assertEqual(second['remaining_count'],22)
+        self.assertEqual(second['sources'][0]['candidate'],r['sources'][0]['candidate'])
+
+    def test_invalid_candidate_limits_fail_before_fetch(self):
+        for limit in [0,-1,21,True,1.5,'20',None]:
+            with self.subTest(limit=limit),self.assertRaises(ValueError):
+                audit.resolve({'status':'ok','items':[candidate('sema')]},{'receipts':[]},
+                    candidate_limit=limit,fetch_factory=lambda *a:self.fail('unexpected fetch'))
 
     def test_body_budget_exhaustion_blocks_later_candidate_network_requests(self):
         first=candidate('kexim');second=copy.deepcopy(first)

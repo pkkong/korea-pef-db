@@ -170,5 +170,45 @@ class KeximCollectorTests(unittest.TestCase):
                              r['facts']['commitment_amount_krw']['value'])
 
 
+
+class KeximRollingWindowTests(unittest.TestCase):
+    def test_actual_publication_dates_bound_discovery_not_business_title_year(self):
+        # 2026 business recruitment can be announced in November 2025.
+        rows=[{'link':kexim.BOARD+'/'+ident,'announced_date':stamp,'title':title}
+              for ident,stamp,title in [
+                  ('981','2025-11-01','2026 상반기 공급망 펀드 공고'),
+                  ('982','2025-10-31','펀드 공고'),
+                  ('983','2026-10-31','연도 없는 펀드 공고'),
+                  ('984','2026-11-01','미래 펀드 공고')]]
+        calls=[]
+        def fetch(url):
+            calls.append(url)
+            return b'official fixture'
+        def parsed(ident,raw):
+            return {'source_id':ident,'url':kexim.BOARD+'/'+ident,'title':'공식 펀드',
+                    'date':'2024-01-01' if ident=='985' else next(r['announced_date'] for r in rows if r['link'].endswith('/'+ident)),
+                    'body':'공식 본문','attachments':[]}
+        with patch.object(kexim,'extract_kexim_notice_rows',return_value=rows), \
+             patch.object(kexim,'_approved_source_ids',return_value={'985'}), \
+             patch.object(kexim,'parse_detail',side_effect=parsed), \
+             patch.object(kexim,'project',return_value=([],[])), \
+             patch.object(kexim,'discovery_candidates',return_value=[]), \
+             patch.object(kexim,'link_suggestions',return_value=[]), \
+             patch('services.lp.src.collect_kdb_related.collect_related',return_value=([],[])):
+            # UTC October 30 already means October 31 in Seoul.
+            report=kexim.collect('2026-10-30T16:00:00+00:00',fetch=fetch)
+        self.assertEqual({n['source_id'] for n in report['notices']},{'981','983','985'})
+        self.assertEqual(len([u for u in calls if '?curPage=' in u]),8)
+        self.assertNotIn(kexim.BOARD+'/982',calls)
+        self.assertNotIn(kexim.BOARD+'/984',calls)
+        self.assertIn(kexim.BOARD+'/985',calls)
+
+    def test_timestamp_without_timezone_fails_before_official_request(self):
+        from unittest.mock import Mock
+        fetch=Mock()
+        with self.assertRaisesRegex(ValueError,'timezone'):
+            kexim.collect('2026-10-31T00:00:00',fetch=fetch)
+        fetch.assert_not_called()
+
 if __name__ == '__main__':
     unittest.main()

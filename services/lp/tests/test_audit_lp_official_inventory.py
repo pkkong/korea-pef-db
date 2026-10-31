@@ -10,6 +10,62 @@ def growth(rows):
 
 
 class OfficialInventoryTests(unittest.TestCase):
+    def test_independent_queries_do_not_reuse_a_narrow_collector_allowlist(self):
+        from services.lp.tests.test_lp_board_adapter_kamco import L
+        config=inventory.boards.load_configs()['kamco']
+        title='지역 재도약 펀드 운용사 선정계획 공고'
+        def fetch(url):
+            term=parse_qs(urlsplit(url).query,keep_blank_values=True)['searchTxt'][0]
+            return L.replace('value="PEF"','value="'+term+'"').replace('1 / 2','1 / 1').replace('펀드 모집',title).encode()
+        report=inventory.audit({'programs':[]},as_of='2026-10-22',scope={'confirmed_institution_ids':['kamco'],'priority_verification_ids':[]},
+            configs={'kamco':dict(config,searches=['PEF'])},fetch_factory=lambda *a:fetch,independent=True)
+        entry=report['institutions'][0]
+        self.assertFalse(report['holds'])
+        self.assertEqual({q['term'] for q in entry['queries']},{'','운용사','펀드','출자'})
+        self.assertEqual(len(entry['rows']),1)
+        self.assertEqual(entry['rows'][0]['title'],title)
+        self.assertEqual(entry['rows'][0]['disposition'],'not_in_archive')
+        self.assertEqual(len(entry['rows'][0]['observed_in_queries']),4)
+        self.assertEqual(entry['query_scope'],'independent_title_queries_with_latest_probe')
+
+    def test_page_budget_visits_each_query_before_requesting_its_next_page(self):
+        from services.lp.tests.test_lp_board_adapter_kamco import L
+        config=inventory.boards.load_configs()['kamco'];calls=[]
+        def fetch(url):
+            q=parse_qs(urlsplit(url).query,keep_blank_values=True);calls.append((q['searchTxt'][0],q['page'][0]))
+            return L.replace('value="PEF"','value="'+q['searchTxt'][0]+'"').encode()
+        report=inventory.audit({'programs':[]},as_of='2026-10-22',scope={'confirmed_institution_ids':['kamco'],'priority_verification_ids':[]},
+            configs={'kamco':config},fetch_factory=lambda *a:fetch,independent=True,page_budget=4)
+        self.assertEqual(calls,[('', '1'),('운용사','1'),('펀드','1'),('출자','1')])
+        self.assertEqual(report['institutions'][0]['queries'][0]['boundary'],'latest_board_probe')
+        self.assertEqual(report['summary']['limited_institutions'],['kamco'])
+        self.assertEqual(report['institutions'][0]['status'],'query_limit')
+
+    def test_kfinco_audit_redacts_closed_content_and_marks_query_restriction(self):
+        from services.lp.tests.test_lp_board_adapter_kfinco import row,listing
+        config=inventory.boards.load_configs()['kfinco']
+        closed={**row('NT20990202020202'),'closed':1,'ntTitle':'PRIVATE','ntContent':'PRIVATE'}
+        raw=listing([row(),closed]).encode()
+        report=inventory.audit({'programs':[]},as_of='2026-10-22',scope={'confirmed_institution_ids':['kfinco'],'priority_verification_ids':[]},
+            configs={'kfinco':config},fetch_factory=lambda *a:lambda u:raw,independent=True)
+        self.assertFalse(report['holds'])
+        self.assertNotIn('PRIVATE',json.dumps(report))
+        self.assertEqual(report['summary']['independent_unavailable'],['kfinco'])
+        self.assertFalse(report['institutions'][0]['independent_query_available'])
+        self.assertIn('response_sha256',report['receipts'][0])
+        bad=raw.replace(b'"closed": 1',b'"closed": "PRIVATE"')
+        failed=inventory.audit({'programs':[]},as_of='2026-10-22',scope={'confirmed_institution_ids':['kfinco'],'priority_verification_ids':[]},
+            configs={'kfinco':config},fetch_factory=lambda *a:lambda u:bad,independent=True)
+        self.assertNotIn('PRIVATE',json.dumps(failed))
+        self.assertEqual(failed['institutions'][0]['status'],'source_error')
+        self.assertIsNone(failed['institutions'][0]['counts'])
+
+    def test_core_and_existing_unfiltered_boards_use_one_independent_stream(self):
+        for institution in [*inventory.CORE,'moel_eif','moel_iaci']:
+            plans=inventory.query_plan(institution,{},'2025-01-01','2026-01-01',independent=True)
+            self.assertEqual([(p['term'],p['kind']) for p in plans],[('','board_listing')])
+        self.assertEqual(inventory.query_plan('ktcu',{},'a','b')[0]['term'],'PEF')
+
     def test_ibk_stops_at_observed_last_page_without_requesting_repeated_overrun(self):
         from services.lp.tests.test_lp_board_adapters_banks import IBK, IBK_LIST, IBK_PAGER
         calls=[]

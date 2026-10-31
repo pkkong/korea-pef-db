@@ -71,7 +71,7 @@ jobs:
       - name: Inventory official lists and compare retained notice identities
         if: inputs.inventory_run == ''
         run: |
-          python3 services/lp/src/audit_lp_official_inventory.py --baseline /tmp/lp-baseline.json --archive /tmp/lp-source-index.json --output /tmp/lp-official-inventory.json --markdown /tmp/lp-official-inventory.md
+          python3 services/lp/src/audit_lp_official_inventory.py --independent --page-budget 200 --baseline /tmp/lp-baseline.json --archive /tmp/lp-source-index.json --output /tmp/lp-official-inventory.json --markdown /tmp/lp-official-inventory.md
       - name: Resolve remaining discovery clues on official sources without publication
         run: |
           if [ -z "$LP_INVENTORY_RUN" ]; then
@@ -84,7 +84,7 @@ jobs:
           from services.lp.src.audit_lp_discovery_coverage import title_scope
           from services.lp.src.audit_lp_official_inventory import markdown
           p=Path('/tmp/lp-official-inventory.json');report=json.loads(p.read_text())
-          assert not report['holds'], 'Resolve source failures before replaying inventory'
+          if report['holds']: print('::warning::Official listing comparison is partial; retain source failures and verify only observed candidates')
           counts=Counter()
           for entry in report['institutions']:
               for row in entry['rows']:

@@ -5,6 +5,7 @@ official detail fields supply every retained fact. A missing or ambiguous
 source remains unresolved; no selected-notice registry is used.
 """
 import argparse
+import copy
 import csv
 from datetime import datetime, timezone
 import hashlib
@@ -81,9 +82,12 @@ def sema_configs():
     return list(result.values())
 
 
-def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, sema_channels=None):
+def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, sema_channels=None,
+            candidate_limit=20):
+    if type(candidate_limit) is not int or not 1 <= candidate_limit <= 20:
+        raise ValueError('Candidate limit must be an integer between 1 and 20')
     report = {'checked_at': datetime.now(timezone.utc).isoformat(), 'mode': 'read_only_official_source_verification',
-              'sources': [], 'receipts': [], 'holds': []}
+              'sources': [], 'receipts': [], 'holds': [], 'complete': False, 'remaining_count': 0}
     if discovery.get('status') != 'ok':
         report['holds'].append({'stage': 'discovery', 'reason': 'Discovery comparison unavailable'})
         return report
@@ -97,8 +101,8 @@ def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, se
                 candidates.append({'id': 'inventory:' + row['source_id'], 'institution_id': entry['institution_id'],
                                    'title': row['title'], 'official_url': row['url']})
                 seen.add((entry['institution_id'], row['url']))
-    if len(candidates) > 20:
-        raise ValueError('Official candidate verification limit exceeded')
+    candidates = sorted(candidates, key=lambda n: (n['institution_id'], n['id'],
+                                                    n.get('official_url') or '', n['title']))
     aliases = load_aliases()
     configs = load_configs()
     cache = {}; sessions = {}; total_bytes = 0
@@ -120,12 +124,19 @@ def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, se
                                   'html': html, 'sha256': hashlib.sha256(html.encode()).hexdigest()})
         cache[url] = raw
         return raw
-    for candidate in candidates:
+    for position, candidate in enumerate(candidates):
         institution = candidate['institution_id']
         names = aliases.get(institution, [])
         item = {'discovery_id': candidate['id'], 'institution_id': institution, 'discovery_title': candidate['title'],
-                'status': 'unresolved', 'official_notice': None, 'classification': 'scope_unconfirmed'}
+                'status': 'unresolved', 'official_notice': None, 'classification': 'scope_unconfirmed',
+                'candidate': copy.deepcopy(candidate)}
         report['sources'].append(item)
+        if position >= candidate_limit:
+            item.update(status='pending', reason='candidate_budget')
+            report['remaining_count'] += 1
+            report['holds'].append({'institution_id': institution, 'discovery_id': candidate['id'],
+                                    'stage': 'official_candidate', 'reason': 'candidate_budget'})
+            continue
         try:
             if institution == 'kexim' or (institution in configs and (institution != 'sema' or candidate.get('official_url'))):
                 config = configs.get(institution, {'institution_id': institution, 'listing_url': inventory.CORE.get(institution)})
@@ -191,10 +202,13 @@ def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, se
         except (ValueError, KeyError, TypeError, OSError) as error:
             item['reason'] = str(error)
             report['holds'].append({'institution_id': institution, 'stage': 'official_candidate', 'reason': str(error)})
+    report['complete'] = all(n['status'] == 'official_source_verified' for n in report['sources'])
     report['summary'] = {'candidates': len(candidates), 'verified': sum(n['status'] == 'official_source_verified' for n in report['sources']),
+                         'attempted': min(len(candidates), candidate_limit), 'candidate_limit': candidate_limit,
+                         'complete': report['complete'], 'remaining_count': report['remaining_count'],
                          'outside_policy_verified': sum(n['classification'] == 'outside_policy' for n in report['sources']),
                          'scope_unconfirmed': sum(n['classification'] == 'scope_unconfirmed' for n in report['sources']),
-                         'unresolved': len(report['holds'])}
+                         'unresolved': sum(n['status'] != 'official_source_verified' for n in report['sources'])}
     return report
 
 
@@ -203,8 +217,10 @@ def main():
     parser.add_argument('--discovery', required=True, type=Path)
     parser.add_argument('--inventory', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--candidate-limit', type=int, default=20)
     args = parser.parse_args()
-    report = resolve(json.loads(args.discovery.read_text()), json.loads(args.inventory.read_text()))
+    report = resolve(json.loads(args.discovery.read_text()), json.loads(args.inventory.read_text()),
+                     candidate_limit=args.candidate_limit)
     args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
     print(json.dumps(report.get('summary', {'unresolved': len(report['holds'])})))
 

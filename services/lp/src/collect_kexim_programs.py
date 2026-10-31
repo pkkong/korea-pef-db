@@ -16,7 +16,8 @@ import ssl
 import subprocess
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from http.cookies import SimpleCookie
 from html.parser import HTMLParser
 from pathlib import Path
@@ -405,7 +406,11 @@ def _official_fetch(url: str, cookies: dict[str, str] | None = None) -> bytes:
 
 def collect(checked_at: str, fetch=None) -> dict:
     """Discover board pages, fetch first evidence attachment, then re-project."""
-    datetime.fromisoformat(checked_at)
+    checked = datetime.fromisoformat(checked_at.replace('Z', '+00:00'))
+    if checked.tzinfo is None:
+        raise ValueError('KEXIM collection timestamp requires timezone')
+    window_end = checked.astimezone(ZoneInfo('Asia/Seoul')).date()
+    window_start = window_end - timedelta(days=364)
     if fetch is None:
         cookies = {}
         fetch = lambda url: _official_fetch(url, cookies)
@@ -414,12 +419,12 @@ def collect(checked_at: str, fetch=None) -> dict:
         page_url = f"{BOARD}?curPage={page_no}"
         page = _decode(fetch(page_url))
         for row in extract_kexim_notice_rows(page, page_url, ["펀드"]):
-            if row["announced_date"] >= "2026-01-01":
+            if window_start.isoformat() <= row["announced_date"] <= window_end.isoformat():
                 match = re.search(r"/HPHKBI039M01/(\d+)", row["link"])
                 if match:
                     discovered.add(match.group(1))
     if not discovered:
-        raise ValueError("KEXIM official board yielded no 2026 fund notices")
+        raise ValueError("KEXIM official board yielded no fund notices in rolling-year window")
     discovered.update(_approved_source_ids())
     notices = []
     for source_id in sorted(discovered, key=int):

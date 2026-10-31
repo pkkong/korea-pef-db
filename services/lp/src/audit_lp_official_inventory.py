@@ -5,7 +5,7 @@ query boundaries and archive/public matches are evidence, not market recall.
 """
 from __future__ import annotations
 import argparse
-from collections import Counter
+from collections import Counter, deque
 from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
@@ -180,6 +180,23 @@ def streams(institution, config, start, end):
     return config.get('searches',config.get('search_terms',[]))
 
 
+
+def query_plan(institution, config, start, end, *, independent=False, max_pages=20):
+    """Use an audit policy separate from the production title allowlist."""
+    if not independent:
+        return [{'term':term,'kind':'configured','limit':max_pages}
+                for term in streams(institution,config,start,end)]
+    if institution in CORE or institution in {'moel_eif','moel_iaci'}:
+        return [{'term':'','kind':'board_listing','limit':max_pages}]
+    if institution == 'kfinco':
+        # This public transport has only one observed, allowlisted API query.
+        # Do not widen it or call its restricted rows to claim independent recall.
+        return [{'term':term,'kind':'restricted_public_api','limit':config['pages']}
+                for term in streams(institution,config,start,end)]
+    return ([{'term':'','kind':'latest_board_probe','limit':1}]
+            + [{'term':term,'kind':'independent_title_query','limit':max_pages}
+               for term in ('운용사','펀드','출자')])
+
 def page_url(institution, config, term, page, start, end):
     if institution=='kgrowth':return _query(CORE[institution],{'page':page})
     if institution=='ktcu':return _query(CORE[institution],{'srchKey':'sj','srchText':term,'curPage':page})
@@ -211,7 +228,7 @@ def known_keys(documents):
 
 
 def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
-          configs=None, scope=None, fetch_factory=None):
+          configs=None, scope=None, fetch_factory=None, independent=False):
     as_of=as_of or datetime.now(ZoneInfo('Asia/Seoul')).date().isoformat()
     start,end=window(as_of)
     if not 1<=max_pages<=20 or not 1<=page_budget<=200:raise ValueError('inventory safety budget invalid')
@@ -219,16 +236,21 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
     scope=json.loads((ROOT/'data/lp_blind_contest_scope.json').read_text()) if scope is None else scope
     public=known_keys([{'programs':baseline.get('programs',[])}]);stored=known_keys([baseline,*archived])
     report={'as_of':as_of,'window':{'start':start,'end':end,'days':365},'purpose':'Read-only official discovery audit; no publication or market recall claim',
+            'query_policy':'independent_v1' if independent else 'configured',
             'market_recall':None,'institutions':[],'receipts':[],'holds':[]}
     names={}
     for path in (ROOT/'data').glob('lp_blind_contest_screening_*.json'):
         names.update({n['institution_id']:n['name'] for n in json.loads(path.read_text()).get('institutions',[])})
-    remaining=page_budget;body_bytes=0
     targets=list(dict.fromkeys(scope['confirmed_institution_ids']+scope['priority_verification_ids']))
+    contexts={};queue=deque();cache={};body_bytes=0
     for institution in targets:
         config=configs.get(institution) or ({'institution_id':institution,'listing_url':CORE[institution]} if institution in CORE else None)
+        query_scope=('restricted_public_api' if independent and institution=='kfinco' else
+                     'independent_title_queries_with_latest_probe' if independent and institution not in CORE and institution not in {'moel_eif','moel_iaci'} else
+                     'board_listing' if institution in {'kgrowth','koreapost','kexim'} or independent else 'configured_title_queries')
         entry={'institution_id':institution,'name':names.get(institution,institution),'role':'confirmed' if institution in scope['confirmed_institution_ids'] else 'verification',
-               'status':'inventory_not_connected','query_scope':'configured_title_queries' if institution not in {'kgrowth','koreapost','kexim'} else 'board_listing',
+               'status':'inventory_not_connected','query_scope':query_scope,
+               'independent_query_available':independent and institution!='kfinco' and config is not None,
                'queries':[],'rows':[],'counts':None,'market_recall':None}
         report['institutions'].append(entry)
         if config is None:continue
@@ -237,67 +259,88 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
         else:
             session=boards.Session(config)
             fetch=lambda url,s=session,c=config:s(url,c['listing_url'])
-        observed={};failed=False
-        for term in streams(institution,config,start,end):
-            query={'term':term,'pages':[],'boundary':'page_limit','minimum_date':None,'maximum_date':None}
-            entry['queries'].append(query);seen=set();oldest=None;newest=None
-            for page in range(1,max_pages+1):
-                if remaining==0:query['boundary']='global_page_budget';break
-                url=page_url(institution,config,term,page,start,end);remaining-=1
-                try:
-                    raw=fetch(url);body_bytes+=len(raw)
-                    if body_bytes>32*1024*1024:
-                        remaining=0
-                        raise ValueError('inventory total body budget exceeded')
-                    html=raw.decode('utf-8') if institution=='kdb' or config.get('response_format')=='json' else boards.decode_html(raw)
-                    receipt={'institution_id':institution,'term':term,'page':page,'url':url,'html':html,
-                             'sha256':hashlib.sha256(html.encode()).hexdigest(),'row_count':None}
-                    report['receipts'].append(receipt);query['pages'].append(len(report['receipts'])-1)
-                    rows=core_rows(institution,html,url) if institution in CORE else boards.adapter(config).parse_listing(html,url,config)
-                    receipt['row_count']=len(rows)
-                    ids={notice_key(institution,row['url']) for row in rows}
-                    if rows and not ids-seen:query['boundary']='repeated_page';break
-                    seen.update(ids)
-                    for row in rows:
-                        stamp=date.fromisoformat(row['date']).isoformat()
-                        oldest=min(oldest or stamp,stamp);newest=max(newest or stamp,stamp)
-                        if start<=stamp<=end and ('institution_id' not in row or row['institution_id']==institution):
-                            key=notice_key(institution,row['url']);item={**row,'source_id':key}
-                            if key in observed and any(observed[key][k]!=item[k] for k in ('title','date')):raise ValueError('conflicting official listing metadata')
-                            observed[key]=item
-                    regular=[row for row in rows if not row.get('pinned')]
-                    if not rows:query['boundary']='confirmed_empty';break
-                    if institution in CORE:
-                        last_page=core_last_page(institution,html,url)
-                        if last_page is not None and page==last_page:query['boundary']='observed_final_page';break
-                    elif hasattr(boards.adapter(config), 'last_page') and page == boards.adapter(config).last_page(html, url, config):
-                        query['boundary']='observed_final_page';break
-                    elif institution == 'ibk':
-                        last_page=boards.banks.ibk_last_page(html,url,config)
-                        if last_page is not None and page==last_page:query['boundary']='observed_final_page';break
-                    if regular and all(row['date']<start for row in regular):query['boundary']='observed_older_page';break
-                except Exception as error:
-                    query['boundary']='source_error';failed=True
-                    report['holds'].append({'institution_id':institution,'url':url,'error':str(error)})
-                    break
-            query.update(minimum_date=oldest,maximum_date=newest)
+        contexts[institution]={'config':config,'entry':entry,'fetch':fetch,'observed':{},'failed':False}
+        for plan in query_plan(institution,config,start,end,independent=independent,max_pages=max_pages):
+            query={'term':plan['term'],'kind':plan['kind'],'limit':plan['limit'],'pages':[],
+                   'boundary':'global_page_budget','minimum_date':None,'maximum_date':None}
+            entry['queries'].append(query)
+            queue.append((institution,query,1,set()))
+    # Breadth-first requests give every connected institution a first page
+    # before any broad query consumes the remaining budget on its history.
+    requests=0
+    while queue and requests<page_budget:
+        institution,query,page,seen=queue.popleft();ctx=contexts[institution];config=ctx['config']
+        url=page_url(institution,config,query['term'],page,start,end);requests+=1
+        try:
+            if url not in cache:
+                raw=ctx['fetch'](url);body_bytes+=len(raw)
+                if body_bytes>32*1024*1024:raise ValueError('inventory total body budget exceeded')
+                cache[url]=raw
+            raw=cache[url]
+            html=raw.decode('utf-8') if institution=='kdb' or config.get('response_format')=='json' else boards.decode_html(raw)
+            receipt_html=html
+            if institution=='kfinco':
+                # Never retain restricted title/body/files in an audit artifact.
+                receipt_html=boards.kfinco.listing_receipt(html,url,config)
+            receipt={'institution_id':institution,'term':query['term'],'kind':query['kind'],'page':page,'url':url,'html':receipt_html,
+                     'sha256':hashlib.sha256(receipt_html.encode()).hexdigest(),'row_count':None}
+            if institution=='kfinco':receipt['response_sha256']=hashlib.sha256(raw).hexdigest()
+            report['receipts'].append(receipt);query['pages'].append(len(report['receipts'])-1)
+            rows=core_rows(institution,html,url) if institution in CORE else boards.adapter(config).parse_listing(html,url,config)
+            receipt['row_count']=len(rows)
+            ids={notice_key(institution,row['url']) for row in rows}
+            if rows and not ids-seen:query['boundary']='repeated_page';continue
+            seen.update(ids)
+            for row in rows:
+                stamp=date.fromisoformat(row['date']).isoformat()
+                query['minimum_date']=min(query['minimum_date'] or stamp,stamp)
+                query['maximum_date']=max(query['maximum_date'] or stamp,stamp)
+                if start<=stamp<=end and ('institution_id' not in row or row['institution_id']==institution):
+                    key=notice_key(institution,row['url']);item={**row,'source_id':key}
+                    old=ctx['observed'].get(key)
+                    if old and any(old[k]!=item[k] for k in ('title','date')):raise ValueError('conflicting official listing metadata')
+                    item['observed_in_queries']=(old or {}).get('observed_in_queries',[])+[{'term':query['term'],'kind':query['kind']}]
+                    ctx['observed'][key]=item
+            regular=[row for row in rows if not row.get('pinned')]
+            if not rows:query['boundary']='confirmed_empty'
+            elif institution in CORE and (last:=core_last_page(institution,html,url)) is not None and page==last:
+                query['boundary']='observed_final_page'
+            elif institution not in CORE and hasattr(boards.adapter(config),'last_page') and page==boards.adapter(config).last_page(html,url,config):
+                query['boundary']='observed_final_page'
+            elif institution=='ibk' and (last:=boards.banks.ibk_last_page(html,url,config)) is not None and page==last:
+                query['boundary']='observed_final_page'
+            elif regular and all(row['date']<start for row in regular):query['boundary']='observed_older_page'
+            elif query['kind']=='latest_board_probe':query['boundary']='latest_board_probe'
+            elif page>=query['limit']:query['boundary']='page_limit'
+            else:
+                query['boundary']='global_page_budget'
+                queue.append((institution,query,page+1,seen))
+        except Exception as error:
+            query['boundary']='source_error';ctx['failed']=True
+            report['holds'].append({'institution_id':institution,'url':url,'error':str(error)})
+        if body_bytes>32*1024*1024:break
+    for institution,ctx in contexts.items():
+        entry=ctx['entry'];observed=ctx['observed']
         for key,row in observed.items():
             scope_label,_=title_scope(row['title']);stage=notice_stage(row['title'])
             relevant=bool(re.search(r'펀드|출자|블라인드|운용사|사모|(?<![A-Za-z])PEF?(?![A-Za-z])',row['title'],re.I))
             disposition='public_linked' if key in public else 'archived_unpublished' if key in stored else 'not_in_archive'
-            entry['rows'].append({k:row[k] for k in ('source_id','date','title','url')}|{'title_scope':scope_label,'stage':stage,'relevant':relevant,'disposition':disposition})
+            entry['rows'].append({k:row[k] for k in ('source_id','date','title','url','observed_in_queries')}|{'title_scope':scope_label,'stage':stage,'relevant':relevant,'disposition':disposition})
         entry['rows'].sort(key=lambda r:(r['date'],r['source_id']),reverse=True)
-        entry['status']='source_error' if failed else 'query_limit' if any(q['boundary'] in {'page_limit','repeated_page','global_page_budget'} for q in entry['queries']) else 'observed_query_boundary'
+        limited=any(q['boundary'] in {'page_limit','repeated_page','global_page_budget'} for q in entry['queries'])
+        entry['status']='source_error' if ctx['failed'] else 'query_limit' if limited or not entry['queries'] else 'observed_query_boundary'
         entry['counts']={'observed_recent_rows':len(observed),'relevant_rows':sum(r['relevant'] for r in entry['rows']),
                          'unarchived_relevant':sum(r['relevant'] and r['disposition']=='not_in_archive' for r in entry['rows']),
-                         'explicit_pe_blind_unarchived':sum(r['disposition']=='not_in_archive' and r['title_scope']=='pe_blind_title' for r in entry['rows']),
+                         'explicit_pe_blind_unarchived':sum(r['relevant'] and r['disposition']=='not_in_archive' and r['title_scope']=='pe_blind_title' for r in entry['rows']),
                          'by_disposition':dict(Counter(r['disposition'] for r in entry['rows']))}
-        if not any(report['receipts'][i]['row_count'] is not None for q in entry['queries'] for i in q['pages']):
-            entry['counts']=None
+        if not any(report['receipts'][i]['row_count'] is not None for q in entry['queries'] for i in q['pages']):entry['counts']=None
     report['summary']={'institutions':len(targets),'audited':sum(e['counts'] is not None for e in report['institutions']),
                        'unconnected':sum(e['status']=='inventory_not_connected' for e in report['institutions']),
                        'unmeasured':sum(e['counts'] is None for e in report['institutions']),'pages':len(report['receipts']),
-                       'source_errors':len(report['holds']),'unarchived_relevant':sum((e['counts'] or {}).get('unarchived_relevant',0) for e in report['institutions'])}
+                       'requests':requests,'source_errors':len(report['holds']),
+                       'limited_institutions':[e['institution_id'] for e in report['institutions'] if e['status']=='query_limit'],
+                       'independent_unavailable':[e['institution_id'] for e in report['institutions'] if independent and not e['independent_query_available']],
+                       'unarchived_relevant':sum((e['counts'] or {}).get('unarchived_relevant',0) for e in report['institutions'])}
     candidates=[r for e in report['institutions'] for r in e['rows'] if r['relevant'] and r['disposition']=='not_in_archive']
     report['summary']['unarchived_by_title_scope']=dict(Counter(r['title_scope'] for r in candidates))
     return report
@@ -310,7 +353,7 @@ def markdown(report):
            '| 기관 | 검색 범위 | 탐색 상태 | 기간 내 목록 | 보관에 없는 관련 자료 |','| --- | --- | --- | ---: | ---: |']
     labels={'inventory_not_connected':'공식 목록 대조 미연결','observed_query_boundary':'조회 경계 확인','query_limit':'조회 한도/반복 확인 필요','source_error':'접속/판독 오류'}
     for e in report['institutions']:
-        c=e['counts'];search='게시판 목록' if e['query_scope']=='board_listing' else '설정 검색어'
+        c=e['counts'];search={'board_listing':'게시판 목록','independent_title_queries_with_latest_probe':'독립 일반검색·최신 목록','restricted_public_api':'제한된 공개 API'}.get(e['query_scope'],'설정 검색어')
         lines.append(f"| {e['name']} | {search} | {labels[e['status']]} | {c['observed_recent_rows'] if c else '미측정'} | {c['unarchived_relevant'] if c else '미측정'} |")
     scopes=report['summary']['unarchived_by_title_scope']
     lines+=['','## 원문 판독 대상',
@@ -331,11 +374,12 @@ def main():
     parser.add_argument('--archive',type=Path,action='append',default=[])
     parser.add_argument('--as-of')
     parser.add_argument('--max-pages',type=int,default=20)
+    parser.add_argument('--independent',action='store_true',help='Compare broad queries independently of collector search terms')
     parser.add_argument('--page-budget',type=int,default=100)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--markdown',type=Path,required=True)
     args=parser.parse_args()
-    report=audit(json.loads(args.baseline.read_text()),[json.loads(p.read_text()) for p in args.archive],as_of=args.as_of,max_pages=args.max_pages,page_budget=args.page_budget)
+    report=audit(json.loads(args.baseline.read_text()),[json.loads(p.read_text()) for p in args.archive],as_of=args.as_of,max_pages=args.max_pages,page_budget=args.page_budget,independent=args.independent)
     args.output.parent.mkdir(parents=True,exist_ok=True);args.markdown.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n');args.markdown.write_text(markdown(report))
     print(json.dumps(report['summary'],ensure_ascii=False))
