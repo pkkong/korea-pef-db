@@ -1,5 +1,8 @@
 name: Audit LP official yearly inventory
 on:
+  schedule:
+    # Weekly independent discovery check, Sunday 10:00 KST.
+    - cron: '0 1 * * 0'
   workflow_dispatch:
     inputs:
       inventory_run:
@@ -35,7 +38,7 @@ jobs:
           run=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{ident}"]))
           assert run['repository']['full_name']==os.environ['GH_REPO']
           assert run['path']=='.github/workflows/audit-lp-official-inventory.yml'
-          assert run['head_branch']=='main' and run['event']=='workflow_dispatch' and run['status']=='completed'
+          assert run['head_branch']=='main' and run['event'] in {'workflow_dispatch','schedule'} and run['status']=='completed'
           created=datetime.datetime.fromisoformat(run['created_at'].replace('Z','+00:00'))
           assert datetime.timedelta(0)<=datetime.datetime.now(datetime.timezone.utc)-created<=datetime.timedelta(hours=48)
           print(json.dumps({k:run[k] for k in ('id','head_sha','conclusion','created_at')}))
