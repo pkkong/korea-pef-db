@@ -128,7 +128,8 @@ def cu_url(url, referer=False):
             return url
         if (set(q) != set(base) | {'searchValue', 'currPage'}
                 or any(q.get(k) != v for k, v in base.items())
-                or q.get('searchValue') not in {'블라인드', '위탁운용사'}
+                or q.get('searchValue') not in {'블라인드', '위탁운용사', '운용사', '펀드', '출자', ''}
+                or q.get('searchValue') == '' and q.get('currPage') != '1'
                 or not re.fullmatch(r'[1-9][0-9]{0,3}', q.get('currPage', ''))
                 or int(q['currPage']) > 1000):
             raise ValueError('unsupported CU listing query')

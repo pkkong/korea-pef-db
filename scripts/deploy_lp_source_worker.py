@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 from urllib.request import urlopen
 from deploy_service_runtime import api
 
@@ -88,7 +88,13 @@ def main():
     cu_config=load_configs()['cu'];cu_url=next(listing_urls(cu_config))
     cu_raw=fetch_cu(cu_url,cu_config['listing_url'],token)
     cu_rows=lp_board_adapters_pensions.parse_listing(cu_raw.decode('utf-8'),cu_url,cu_config)
-    print(json.dumps({'service':'lp-source-worker','region':health['region'],'release':release,
+    cu_audit_rows = {}
+    for term in ('운용사', '펀드', '출자', ''):
+        url = cu_config['listing_url'] + '&' + urlencode({'searchValue':term,'currPage':1})
+        body = fetch_cu(url,cu_config['listing_url'],token)
+        observed = lp_board_adapters_pensions.parse_listing(body.decode('utf-8'),url,cu_config)
+        cu_audit_rows[term or 'latest_first_page'] = len(observed)
+    print(json.dumps({'cu_audit_listing_rows':cu_audit_rows,'service':'lp-source-worker','region':health['region'],'release':release,
         'url':BASE,'verified_cu_listing_rows':len(cu_rows),'cu_bytes':len(cu_raw),
         'verified_kfinco_listing_rows':len(kfinco_rows),'kfinco_bytes':len(kfinco_raw),
         'verified_listing_rows':len(rows),'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}))

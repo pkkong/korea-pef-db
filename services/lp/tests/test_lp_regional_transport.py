@@ -35,6 +35,19 @@ class RegionalTransportTests(unittest.TestCase):
                 self.assertEqual(opener.return_value.open.call_count, 1)
         self.assertEqual(relay.cu_url(listing.replace('currPage=1','currPage=1000')), listing.replace('currPage=1','currPage=1000'))
 
+    def test_cu_independent_audit_terms_and_first_page_probe_are_bounded(self):
+        from urllib.parse import urlencode
+        base = 'https://www.cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007&searchType=sj&listCo=50'
+        for term in ('운용사', '펀드', '출자', ''):
+            url = base + '&' + urlencode({'searchValue':term, 'currPage':'1'})
+            self.assertEqual(relay.cu_url(url), url)
+            with patch.object(relay, 'build_opener') as opener:
+                opener.return_value.open.return_value = self.response(b'official audit listing')
+                self.assertEqual(relay.fetch_cu(url, base, 'test-token'), b'official audit listing')
+        for term, page in [('', '2'), ('임의검색', '1')]:
+            with self.assertRaises(ValueError):
+                relay.cu_url(base + '&' + urlencode({'searchValue':term, 'currPage':page}))
+
     def test_cu_unsafe_urls_and_unconfigured_credentials_never_connect(self):
         from urllib.parse import quote
         base = 'https://www.cu.co.kr/cu/na/ntt/selectNttList.do?bbsId=1020&mi=100007&searchType=sj&listCo=50'

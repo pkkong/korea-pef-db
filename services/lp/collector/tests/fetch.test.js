@@ -210,6 +210,19 @@ test('CU official listing, observed detail and opaque attachment key preserve ex
   }
 });
 
+test('CU independent audit terms and first-page probe preserve strict bounds',async()=>{
+  for(const term of ['운용사','펀드','출자','']) {
+    const res=await invoke({url:CU_BASE+'&searchValue='+encodeURIComponent(term)+'&currPage=1',referer:CU_BASE});
+    assert.equal(res.statusCode,200);
+  }
+  assert.equal(calls.length,4);
+  for(const [term,page] of [['','2'],['임의검색','1']]) {
+    const res=await invoke({url:CU_BASE+'&searchValue='+encodeURIComponent(term)+'&currPage='+page});
+    assert.equal(res.statusCode,400);
+  }
+  assert.equal(calls.length,4);
+});
+
 test('CU rejects foreign hosts, unconfigured boards, malformed queries, traversal and invalid file keys',async()=>{
   const invalid=[CU_LIST.replace('https:','http:'),CU_LIST.replace('www.cu.co.kr','127.0.0.1'),
     CU_LIST.replace('www.cu.co.kr','www.cu.co.kr.evil.example'),CU_LIST.replace('www.cu.co.kr','u:p@www.cu.co.kr'),

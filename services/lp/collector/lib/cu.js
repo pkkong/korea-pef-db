@@ -16,7 +16,8 @@ function officialUrl(value, referer = false) {
     if (referer && entries.length === 4 && entries.every(([key]) => base.includes(key))) return url.href;
     const page = query.get('currPage') || '';
     if (entries.length !== 6 || entries.some(([key]) => ![...base, 'searchValue', 'currPage'].includes(key)) ||
-        !['블라인드', '위탁운용사'].includes(query.get('searchValue')) || !/^[1-9]\d{0,3}$/.test(page) || Number(page) > 1000) throw fail('invalid_source_query');
+        !['블라인드', '위탁운용사', '운용사', '펀드', '출자', ''].includes(query.get('searchValue')) ||
+        (query.get('searchValue') === '' && page !== '1') || !/^[1-9]\d{0,3}$/.test(page) || Number(page) > 1000) throw fail('invalid_source_query');
   } else if (path === '/cu/na/ntt/selectNttInfo.do') {
     if (![2, 3].includes(entries.length) || !/^\d{1,12}$/.test(query.get('nttSn') || '') ||
         query.get('mi') !== '100007' || (query.has('bbsId') && query.get('bbsId') !== '1020') ||
