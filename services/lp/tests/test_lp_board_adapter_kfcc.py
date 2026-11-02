@@ -1,7 +1,7 @@
 """KFCC official controls and lossless offering table boundaries."""
 import unittest
 from urllib.parse import parse_qs, unquote, urlsplit
-from services.lp.src.lp_board_adapter_kfcc import parse_listing, parse_detail
+from services.lp.src.lp_board_adapter_kfcc import parse_listing, parse_detail, last_page
 
 BASE = 'https://www.kfcc.co.kr'
 LIST = BASE + '/mgNotice/mgNoticeList.do?schType=subject&schValue=운용사&pageNo=1'
@@ -21,6 +21,33 @@ def detail(body=None, attachments=''):
 
 
 class KfccBoardAdapterTests(unittest.TestCase):
+    def test_observed_single_page_prevents_unconfirmed_overrun(self):
+        html=listing().replace('</form>','<div class="total">총1건</div><input name="schValue" value="운용사"><select name="schType"><option value="subject" selected>제목</option></select></form>')
+        html=html.replace('</html>','<ul class="paging-list"><li class="active"><a href="#none">1</a></li></ul></html>')
+        self.assertEqual(last_page(html,LIST,CONFIG),1)
+        for bad in [html.replace('총1건','총10건'),html.replace('value="운용사"','value="펀드"'),
+                    html.replace('class="active"','class="inactive"')]:
+            with self.assertRaises(ValueError):last_page(bad,LIST,CONFIG)
+        with self.assertRaises(ValueError):last_page(html,LIST.replace('pageNo=1','pageNo=2'),CONFIG)
+
+    def test_observed_last_link_must_match_total_route_and_search(self):
+        rows=''.join('<li><a href="javascript:fnDetail(\''+str(i)+'\')">공고</a><div class="date">2026.09.01</div></li>' for i in range(8))
+        html=listing(rows).replace('</form>','<div class="total">총10건</div><input name="schValue" value="운용사"><select name="schType"><option value="subject" selected>제목</option></select></form>')
+        link='mgNoticeList.do?pageRows=8&amp;totalRows=10&amp;currentPageNo=1&amp;schType=subject&amp;schValue=운용사&amp;pageNo=2'
+        pager='<ul class="paging-list"><li class="active"><a href="#none">1</a></li><li><a href="javascript:fnSearch(\'2\');">2</a></li><li><a class="last" href="'+link+'">마지막</a></li></ul>'
+        html=html.replace('</html>',pager+'</html>')
+        self.assertEqual(last_page(html,LIST,CONFIG),2)
+        for bad in [html.replace('pageNo=2','pageNo=3'),html.replace('totalRows=10','totalRows=11'),
+                    html.replace('href="mgNoticeList.do','href="https://evil.example/mgNoticeList.do'),
+                    html.replace('schValue=운용사','schValue=펀드')]:
+            with self.assertRaises(ValueError):last_page(bad,LIST,CONFIG)
+
+    def test_independent_query_plan_does_not_request_unsupported_blank(self):
+        from services.lp.src.audit_lp_official_inventory import query_plan
+        plan=query_plan('kfcc',CONFIG,'2025-01-01','2026-01-01',independent=True)
+        self.assertEqual([p['term'] for p in plan],['운용사','펀드','출자'])
+        self.assertTrue(all(p['kind']=='independent_title_query' for p in plan))
+
     def test_observed_notice_identifier_and_exact_title_date(self):
         rows = parse_listing(listing(), LIST, CONFIG)
         self.assertEqual(rows, [{'url': DETAIL, 'title': TITLE, 'date': '2025-04-30', 'source_id': 'kfcc:880012'}])

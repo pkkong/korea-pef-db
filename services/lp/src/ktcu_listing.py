@@ -17,28 +17,43 @@ def _root(html, url):
             or '</html>' not in html.lower()):
         raise ValueError('Invalid KTCU listing route or incomplete HTML')
     root = _Document(html).root
-    for key in ('srchKey','srchText','curPage'):
+    for key in ('srchKey','srchText'):
         controls = [n.attrs.get('value','') for n in root.nodes('input') if n.attrs.get('name',n.attrs.get('id')) == key]
         for select in root.nodes('select'):
             if select.attrs.get('name',select.attrs.get('id')) == key:
                 controls += [n.attrs.get('value','') for n in select.nodes('option') if 'selected' in n.attrs]
         if controls and any(v != q.get(key, ['1' if key == 'curPage' else 'sj' if key == 'srchKey' else ''])[0] for v in controls):
             raise ValueError('KTCU search/page control mismatch')
+    # The official form keeps curPage=1 even on page 2+. The visible pager
+    # reports the actual response page; use that instead of the static input.
+    counts = _page_counts(root)
+    requested = int(q.get('curPage', ['1'])[0])
+    if counts:
+        total, current, last = counts
+        if current != requested or not 1 <= current <= last:
+            raise ValueError('Invalid KTCU page count')
+    else:
+        controls = [n.attrs.get('value', '') for n in root.nodes('input')
+                    if n.attrs.get('name', n.attrs.get('id')) == 'curPage']
+        if controls and any(v != str(requested) for v in controls):
+            raise ValueError('KTCU page control mismatch')
     return root, q
 
 
-def last_page(html, url):
-    root,q = _root(html,url)
+def _page_counts(root):
     matches={tuple(map(int,m.groups())) for n in root.nodes('div','sort-tit')
              if (m:=re.fullmatch(r'총\s*([\d,]+)\s*건\s*\(\s*(\d+)\s*/\s*(\d+)\s*페이지\s*\)',n.clean().replace(',','')))}
     if not matches:
         return None
     if len(matches)!=1:
         raise ValueError('Conflicting KTCU page counts')
-    total,current,last=matches.pop()
-    if current!=int(q.get('curPage',['1'])[0]) or not 1<=current<=last or total<0:
-        raise ValueError('Invalid KTCU page count')
-    return last
+    return matches.pop()
+
+
+def last_page(html, url):
+    root,q = _root(html,url)
+    counts = _page_counts(root)
+    return counts[2] if counts else None
 
 
 def parse_rows(html,url):

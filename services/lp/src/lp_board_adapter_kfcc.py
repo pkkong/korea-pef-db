@@ -115,6 +115,70 @@ def _table_text(table):
     return '\n'.join(lines)
 
 
+def last_page(html, url, config):
+    """Read observed pager/counts; never probe past a confirmed single page."""
+    rows = parse_listing(html, url, config)
+    root, listing_path, _ = _context(html, url, config)
+    q = parse_qs(urlsplit(url).query, keep_blank_values=True)
+    if any(len(values) != 1 for values in q.values()):
+        raise ValueError('KFCC duplicate query parameter')
+    requested = q.get('pageNo', ['1'])[0]
+    if not re.fullmatch('[1-9][0-9]*', requested):
+        raise ValueError('KFCC invalid requested page')
+    form = _one((n for n in root.nodes('form') if n.attrs.get('name') == 'brdForm'), 'listing form')
+    for field in ('schValue', 'pageNo'):
+        values = [n.attrs.get('value', '') for n in form.nodes('input') if n.attrs.get('name') == field]
+        if values != [q.get(field, ['1' if field == 'pageNo' else ''])[0]]:
+            raise ValueError('KFCC search/page echo mismatch')
+    selections = [o.attrs.get('value') for s in form.nodes('select') if s.attrs.get('name') == 'schType'
+                  for o in s.nodes('option') if 'selected' in o.attrs]
+    if selections != [q.get('schType', [''])[0]]:
+        raise ValueError('KFCC search type echo mismatch')
+    total_node = _one((n for n in form.nodes('div') if 'total' in _classes(n)), 'total count')
+    match = re.fullmatch(r'총\s*([0-9,]+)\s*건', total_node.clean())
+    if not match:
+        raise ValueError('KFCC invalid total count')
+    total = int(match[1].replace(',', ''))
+    pager = _one((n for n in root.nodes('ul') if 'paging-list' in _classes(n)), 'pager')
+    active = [n.clean() for n in pager.nodes('li') if 'active' in _classes(n)]
+    if active != [requested]:
+        raise ValueError('KFCC active page mismatch')
+    endings = []
+    for anchor in pager.nodes('a'):
+        href = anchor.attrs.get('href', '')
+        if href == '#none':
+            continue
+        if re.fullmatch(r"javascript:fnSearch\('([1-9][0-9]*)'\);", href):
+            # Numeric controls alone are never evidence of the final page.
+            continue
+        target = urlsplit(urljoin(url, href)); params = parse_qs(target.query, keep_blank_values=True)
+        if (target.scheme != 'https' or target.netloc != urlsplit(url).netloc or target.path != listing_path
+                or target.fragment or any(len(v) != 1 for v in params.values())
+                or any(params.get(k) != q.get(k, ['']) for k in ('schType','schValue'))
+                or params.get('currentPageNo') != [requested]
+                or params.get('totalRows') != [str(total)]):
+            raise ValueError('KFCC pager route/search/count mismatch')
+        size, page = params.get('pageRows',[''])[0], params.get('pageNo',[''])[0]
+        if not size.isdigit() or not 1 <= int(size) <= 100 or not page.isdigit() or int(page) < 1:
+            raise ValueError('KFCC pager size/page invalid')
+        expected = max(1, (total + int(size) - 1) // int(size))
+        if int(page) > expected or int(requested) > expected:
+            raise ValueError('KFCC pager overrun')
+        if len(rows) != min(int(size), max(0, total - (int(requested) - 1) * int(size))):
+            raise ValueError('KFCC row count differs from pager metadata')
+        if 'last' in _classes(anchor):
+            if int(page) != expected:
+                raise ValueError('KFCC last page disagrees with total')
+            endings.append(expected)
+    if endings:
+        if len(endings) != 1:
+            raise ValueError('KFCC ambiguous last page')
+        return endings[0]
+    if requested == '1' and total == len(rows) and len(list(pager.nodes('a'))) == 1:
+        return 1
+    raise ValueError('KFCC final page not confirmed')
+
+
 def _body(node):
     if isinstance(node, str):
         return node

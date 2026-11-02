@@ -12,6 +12,13 @@ PC = {'institution_id': 'poba', 'listing_url': POBA}
 MC = {'institution_id': 'pmaa', 'listing_url': PMAA}
 
 
+class PobaMaintenanceTest(unittest.TestCase):
+    def test_observed_maintenance_is_source_failure_not_empty_inventory(self):
+        html='<html><title>작업공지</title><div class="error_con"><h1>정보시스템 작업 안내</h1><li>작업 내용 : 본회 정보시스템 정기점검</li><li>작업 영향 : 홈페이지 접속 불가</li></div></html>'
+        with self.assertRaisesRegex(ValueError,'official system maintenance'):
+            parse_listing(html,POBA,PC)
+
+
 def poba_html(*, rows=None, total=1, page=1, detail=False):
     item = {'bbstSeq': 880012, 'bbsSeq': 10, 'bbstSj': '2026년 국내 PE 블라인드 위탁운용사 선정 계획 공고', 'rgstDt': '2026-09-01', 'bbstCten': '<p>모집전략 Buyout·Growth / 공동투자</p>'}
     data = {'bbsMastDvo': {'bbsSeq': 10}, 'nttPvo': {'pageIndex': page}, 'nttDvoList': [item] if rows is None else rows, 'allCnt': total, 'nttDvo': item if detail else None, 'atchDvoList': []}

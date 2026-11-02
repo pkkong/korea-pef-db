@@ -189,7 +189,7 @@ def query_plan(institution, config, start, end, *, independent=False, max_pages=
         # Do not widen it or call its restricted rows to claim independent recall.
         return [{'term':term,'kind':'restricted_public_api','limit':config['pages']}
                 for term in streams(institution,config,start,end)]
-    if institution in {'kdb','ibk'}:
+    if institution in {'kdb','ibk','kfcc'}:
         return [{'term':term,'kind':'independent_title_query','limit':max_pages}
                 for term in ('운용사','펀드','출자')]
     return ([{'term':'','kind':'latest_board_probe','limit':1}]
@@ -245,7 +245,7 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
     for institution in targets:
         config=configs.get(institution) or ({'institution_id':institution,'listing_url':CORE[institution]} if institution in CORE else None)
         query_scope=('restricted_public_api' if independent and institution=='kfinco' else
-                     'independent_title_queries' if independent and institution in {'kdb','ibk'} else
+                     'independent_title_queries' if independent and institution in {'kdb','ibk','kfcc'} else
                      'independent_title_queries_with_latest_probe' if independent and institution not in CORE and institution not in {'moel_eif','moel_iaci'} else
                      'board_listing' if institution in {'kgrowth','koreapost','kexim'} or independent else 'configured_title_queries')
         entry={'institution_id':institution,'name':names.get(institution,institution),'role':'confirmed' if institution in scope['confirmed_institution_ids'] else 'verification',

@@ -54,6 +54,9 @@ def _same_host_url(value, base):
 
 
 def _poba_data(html, url):
+    if ('정보시스템 작업 안내' in html and '정보시스템 정기점검' in html
+            and '홈페이지 접속 불가' in html and re.search(r'<title>\s*작업공지\s*</title>', html)):
+        raise ValueError('POBA official system maintenance; board unavailable')
     matches = list(re.finditer(r'\bvar\s+bbsMap\s*=\s*', html))
     if len(matches) != 1:
         raise ValueError('POBA board data missing or ambiguous')

@@ -27,13 +27,24 @@ class KtcuProgramCollectionTest(unittest.TestCase):
         html=listing([('987','연도 없는 펀드 운용사 선정','2026-10-31','1')])
         self.assertEqual(ktcu_listing.parse_rows(html,url)[0]['source_id'],'ktcu:987')
         self.assertEqual(ktcu_listing.last_page(html,url),1)
-        for bad in [html.replace('</html>',''),html.replace('value="1"','value="2"'),
+        for bad in [html.replace('</html>',''),
                     html.replace('value="운용사"','value="다름"'),html.replace('2026-10-31','2026-99-31'),
                     html.replace('id="ulList"','id="footer"'),html.replace('(1/1','(2/1')]:
             with self.assertRaises(ValueError):ktcu_listing.parse_rows(bad,url)
         empty=listing([]).replace('<ul id="ulList"></ul>','<ul id="ulList"><li>등록된 게시물이 없습니다.</li></ul>')
         self.assertEqual(ktcu_listing.parse_rows(empty,url),[])
         with self.assertRaises(ValueError):ktcu_listing.parse_rows(empty.replace('총 0','총 1'),url)
+
+    def test_visible_page_overrides_official_static_form_page(self):
+        url=ktcu.BASE+'/PPW-CSB-000101?srchKey=sj&srchText=운용사&curPage=2'
+        html=listing([('987','펀드 운용사 선정','2026-10-31','1')],page=2,last=3)
+        html=html.replace('name="curPage" value="2"','name="curPage" value="1"')
+        self.assertEqual(ktcu_listing.parse_rows(html,url)[0]['source_id'],'ktcu:987')
+        self.assertEqual(ktcu_listing.last_page(html,url),3)
+        with self.assertRaises(ValueError):
+            ktcu_listing.parse_rows(html.replace('(2/3','(1/3'),url)
+        with self.assertRaises(ValueError):
+            ktcu_listing.parse_rows(html.replace('class="sort-tit"','class="other"'),url)
 
     def test_rolling_dates_generic_titles_dedup_and_old_approved_retracking(self):
         rows=[('90001','펀드 운용사 선정 공고','2026-11-01','5'),
