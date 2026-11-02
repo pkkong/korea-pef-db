@@ -16,7 +16,7 @@ import ktcu_listing
 
 
 def listing(rows, page=1, last=1, term='운용사'):
-    items=''.join(f'<li><span class="num">{num}</span><a href="javascript:fn_view(\'{ident}\');">{title}</a><span>{day}</span></li>'
+    items=''.join(f'<li><span class="num">{num}</span><a href="javascript:fn_view(\'{ident}\');">{title}</a><span class="date">{day}</span></li>'
                   for ident,title,day,num in rows)
     return f'<html><input name="srchText" value="{term}"><input name="curPage" value="{page}"><div class="sort-tit">총 {len(rows)} 건 ({page}/{last} 페이지)</div><ul id="ulList">{items}</ul></html>'
 
@@ -34,6 +34,13 @@ class KtcuProgramCollectionTest(unittest.TestCase):
         empty=listing([]).replace('<ul id="ulList"></ul>','<ul id="ulList"><li>등록된 게시물이 없습니다.</li></ul>')
         self.assertEqual(ktcu_listing.parse_rows(empty,url),[])
         with self.assertRaises(ValueError):ktcu_listing.parse_rows(empty.replace('총 0','총 1'),url)
+
+    def test_publication_date_is_independent_of_dates_inside_title(self):
+        url=ktcu.BASE+'/PPW-CSB-000101?srchKey=sj&srchText=운용사&curPage=1'
+        html=listing([('987','펀드 공고 (2026.12.31. 기준)','2026-10-31','1')])
+        self.assertEqual(ktcu_listing.parse_rows(html,url)[0]['date'],'2026-10-31')
+        with self.assertRaises(ValueError):
+            ktcu_listing.parse_rows(html.replace('class="date"','class="other"'),url)
 
     def test_visible_page_overrides_official_static_form_page(self):
         url=ktcu.BASE+'/PPW-CSB-000101?srchKey=sj&srchText=운용사&curPage=2'

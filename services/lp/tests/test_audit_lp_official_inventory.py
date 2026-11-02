@@ -187,7 +187,7 @@ class OfficialInventoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):inventory.core_rows('koreapost',html.replace('2025-10-23','2026-04-22',1),url)
 
     def test_ktcu_advertised_final_page_avoids_empty_overrun(self):
-        html='<html><div class="sort-tit txt-s">총 <em>1</em>건 (<em>1</em> / 1 페이지)</div><ul id="ulList"><li><span class="num">1</span><a href="javascript:fn_view(&#39;61742&#39;)">국내 PE 블라인드 위탁운용사 선정 공고</a><span>2026-09-04</span></li></ul></html>'
+        html='<html><div class="sort-tit txt-s">총 <em>1</em>건 (<em>1</em> / 1 페이지)</div><ul id="ulList"><li><span class="num">1</span><a href="javascript:fn_view(&#39;61742&#39;)">국내 PE 블라인드 위탁운용사 선정 공고</a><span class="date">2026-09-04</span></li></ul></html>'
         calls=[]
         def fetch(url):
             calls.append(url)

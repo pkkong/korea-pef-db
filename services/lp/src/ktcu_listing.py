@@ -69,7 +69,8 @@ def parse_rows(html,url):
         if len(anchors)!=1:
             raise ValueError('Ambiguous KTCU row')
         a,m=anchors[0];ident=m[1];title=a.attrs.get('title') or a.clean()
-        dates=set(re.findall(r'20\d{2}[.-]\d{2}[.-]\d{2}',node.clean()))
+        dates={n.clean() for n in node.nodes('span','date')
+               if re.fullmatch(r'20\d{2}[.-]\d{2}[.-]\d{2}', n.clean())}
         if not title or len(dates)!=1 or ident in seen:
             raise ValueError('Invalid or duplicate KTCU row metadata')
         stamp=date.fromisoformat(next(iter(dates)).replace('.','-')).isoformat()
