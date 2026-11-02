@@ -4,7 +4,7 @@ on:
     inputs:
       profile:
         type: choice
-        options: [initial, followup, mmaa_files, geps_pck_recovery, pck_kamco_recovery, publication_waits]
+        options: [initial, followup, mmaa_files, geps_pck_recovery, pck_kamco_recovery, pending_institutions, publication_waits]
         default: initial
       connection_mode:
         description: Read-only publication diagnostic connection mode
@@ -28,6 +28,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - name: Test bounded pending institution inspection
+        if: inputs.profile == 'pending_institutions'
+        run: python3 -m unittest scripts.tests.test_inspect_lp_pending_boards
       - name: Capture bounded official lists and observed detail links without DB writes
         if: inputs.profile != 'publication_waits'
         run: python3 scripts/inspect_lp_remaining_boards.py /tmp/lp-remaining-board-receipts "$LP_INSPECTION_PROFILE"
