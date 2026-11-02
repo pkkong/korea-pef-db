@@ -371,7 +371,8 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                 for row in rows:
                     if 'institution_id' in row and row['institution_id'] != institution:
                         continue
-                    if (re.search(r'위탁|운용사|블라인드|PEF?|사모|선정', row['title'], re.I)
+                    if ((re.search(r'위탁|운용사|블라인드|PEF?|사모|선정', row['title'], re.I)
+                             or institution in {'kdb', 'ibk'} and re.search(r'출자사업|펀드', row['title']))
                             and classify_scope(row['title'], row['title']) != 'outside'):
                         if (row['date'] >= cutoff if cutoff else row['date'][:4] >= str(int(checked_at[:4]) - config.get('history_years', 4) + 1)):
                             key = row['source_id'] if config.get('lookback_days') else row['url']

@@ -26,6 +26,26 @@ class InstitutionCollectionTests(unittest.TestCase):
             return (detail if 'detail.do?' in url else listing).encode()
         return boards.collect({'tp': config}, fetch_factory=lambda c: fetch, checked_at=STAMP)
 
+    def test_ibk_generic_commitment_title_is_discovered_without_pe_approval(self):
+        from services.lp.tests.test_lp_board_adapters_banks import IBK_LIST, IBK_HTML
+        config = boards.load_configs()['ibk']
+        self.assertIn('출자', config['search_terms'])
+        old = '2026 IBK 동행펀드 선정계획 공고'
+        for title in ('2026년도 출자사업 공고', '2026년도 출자사업 서류심사 결과'):
+            calls = []
+            html = IBK_HTML.replace(old, title)
+            html = html[:html.index('<tr><td class="down_flie">')] + '</tbody></table></div>'
+            def fetch(url, referer=None):
+                calls.append(url)
+                return ('<html>' + (html if 'noticeDetailCyber' in url else IBK_LIST.replace(old,title)) + '</html>').encode()
+            result = boards.collect({'ibk': config}, fetch_factory=lambda c: fetch, checked_at=STAMP)
+            self.assertEqual(result['holds'], [])
+            self.assertEqual(len(result['notices']), 1)
+            self.assertEqual(result['notices'][0]['title'], title)
+            self.assertEqual(len([u for u in calls if 'noticeDetailCyber' in u]), 1)
+            programs, _ = publish_basic_notices({'programs': [], 'institution_notices': result['notices']}, [], STAMP)
+            self.assertEqual(programs, [])
+
     def test_kfinco_closed_rows_never_requested_or_retained_as_fresh_evidence(self):
         import json
         from services.lp.tests.test_lp_board_adapter_kfinco import row,listing,detail,public
