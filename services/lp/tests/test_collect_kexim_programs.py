@@ -3,13 +3,14 @@ import hashlib
 import json
 import re
 import ssl
+import socket
 import tempfile
 import unittest
 from email.message import Message
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import patch
-from urllib.error import HTTPError
+from unittest.mock import patch, Mock
+from urllib.error import HTTPError, URLError
 
 from services.lp.src import collect_kexim_programs as kexim
 
@@ -85,6 +86,37 @@ class KeximCollectorTests(unittest.TestCase):
         with patch.object(kexim,'build_opener',return_value=opener):
             self.assertEqual(kexim._official_fetch('https://www.koreaexim.go.kr/HPHKBI039M01'),b'official page')
         self.assertEqual(opener.calls,2)
+
+    def test_dns_only_recovery_keeps_cookie_redirect_and_pinned_context(self):
+        class Response(BytesIO):
+            def geturl(self):return kexim.BOARD
+        native=Mock();native.open.side_effect=URLError(socket.gaierror(socket.EAI_NONAME,'DNS'))
+        headers=Message();headers['Location']='/HPHKBI039M01';headers['Set-Cookie']='visit=ok; Path=/'
+        recovered=Mock();recovered.open.side_effect=[HTTPError(kexim.BOARD,302,'redirect',headers,None),Response(b'official')]
+        with patch.object(kexim,'build_opener',side_effect=[native,recovered]) as build,patch.object(kexim.time,'sleep'):
+            self.assertEqual(kexim._official_fetch(kexim.BOARD),b'official')
+            self.assertEqual(build.call_count,2)
+            handler=build.call_args_list[1].args[1]
+            self.assertIsInstance(handler,kexim.IPv4HTTPSHandler)
+            self.assertTrue(handler._context.check_hostname)
+            self.assertEqual(handler._context.verify_mode,ssl.CERT_REQUIRED)
+            self.assertIs(handler._connection_factory.keywords['fallback_resolver'],kexim.resolve_kexim_ipv4)
+            calls=recovered.open.call_args_list
+            self.assertTrue(all(call.args[0].full_url==kexim.BOARD for call in calls))
+            self.assertEqual(calls[-1].args[0].get_header('Cookie'),'visit=ok')
+
+    def test_tls_http_and_untyped_errors_never_retry_or_select_dns(self):
+        for error in (URLError(ssl.SSLCertVerificationError('bad cert')),URLError('name resolution failed'),HTTPError(kexim.BOARD,503,'failure',Message(),None)):
+            opener=Mock();opener.open.side_effect=error
+            with patch.object(kexim,'build_opener',return_value=opener) as build,patch.object(kexim.time,'sleep') as sleep:
+                with self.assertRaises(type(error)):kexim._official_fetch(kexim.BOARD)
+                self.assertEqual(build.call_count,1);self.assertEqual(opener.open.call_count,1);sleep.assert_not_called()
+
+    def test_dns_recovery_exhaustion_is_three_attempts_without_silent_empty(self):
+        opener=Mock();opener.open.side_effect=URLError(socket.gaierror(socket.EAI_NONAME,'DNS'))
+        with patch.object(kexim,'build_opener',return_value=opener) as build,patch.object(kexim.time,'sleep'):
+            with self.assertRaises(URLError):kexim._official_fetch(kexim.BOARD)
+            self.assertEqual(opener.open.call_count,3);self.assertEqual(build.call_count,2)
 
     def test_pinned_official_ca_chain_has_expected_certificates(self):
         pem=kexim.CA_CHAIN.read_text()

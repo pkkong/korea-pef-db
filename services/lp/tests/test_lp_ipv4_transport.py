@@ -27,6 +27,20 @@ class IPv4RecoveryTests(unittest.TestCase):
         with patch.object(transport.socket,'getaddrinfo',side_effect=socket.gaierror(8,'DNS unavailable')):
             with self.assertRaises(socket.gaierror):transport.create_ipv4_connection(('official.example',443),20)
 
+    def test_kexim_fallback_preserves_host_context_and_remaining_budget(self):
+        rows=[(socket.AF_INET,socket.SOCK_STREAM,socket.IPPROTO_TCP,'',('8.8.8.8',443))]
+        fallback=Mock(return_value=rows)
+        with patch.object(transport.socket,'getaddrinfo',side_effect=socket.gaierror(socket.EAI_NONAME,'unavailable')),patch.object(transport.socket,'socket') as factory,patch.object(transport.time,'monotonic',side_effect=[10,12,13]):
+            transport.create_ipv4_connection(('www.koreaexim.go.kr',443),4,fallback_resolver=fallback)
+            fallback.assert_called_once_with('www.koreaexim.go.kr',443,2)
+            factory.return_value.settimeout.assert_called_once_with(1)
+        context=ssl.create_default_context()
+        connection=transport.IPv4HTTPSConnection('www.koreaexim.go.kr',context=context,fallback_resolver=fallback)
+        self.assertEqual(connection.host,'www.koreaexim.go.kr')
+        self.assertIs(connection._context,context)
+        self.assertTrue(context.check_hostname)
+        self.assertEqual(context.verify_mode,ssl.CERT_REQUIRED)
+
     def test_https_retains_hostname_and_verifying_context(self):
         handler=transport.IPv4HTTPSHandler()
         context=handler._context or ssl.create_default_context()

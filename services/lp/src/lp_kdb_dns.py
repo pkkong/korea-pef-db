@@ -9,11 +9,14 @@ import tempfile
 
 HOST = 'www.kdb.co.kr'
 DNS_URL = 'https://dns.google/resolve?name=www.kdb.co.kr&type=A&cd=0&edns_client_subnet=0.0.0.0%2F0'
+KEXIM_HOST = 'www.koreaexim.go.kr'
+KEXIM_DNS_URL = 'https://dns.google/resolve?name=www.koreaexim.go.kr&type=A&cd=0&edns_client_subnet=0.0.0.0%2F0'
+ALLOWED_HOSTS = {HOST, KEXIM_HOST}
 MAX_BYTES = 16 * 1024
 
 
 def _fail():
-    return ValueError('KDB alternate DNS response invalid or unavailable')
+    return ValueError('Official alternate DNS response invalid or unavailable')
 
 
 def _unique(pairs):
@@ -37,7 +40,8 @@ def _name(value):
     return value
 
 
-def _addresses(raw):
+def _addresses(raw, host=HOST):
+    if host not in ALLOWED_HOSTS:raise _fail()
     try:
         data = json.loads(raw, object_pairs_hook=_unique)
         if (not isinstance(data, dict) or type(data.get('Status')) is not int
@@ -47,7 +51,7 @@ def _addresses(raw):
         question = data.get('Question')
         if (not isinstance(question, list) or len(question) != 1
                 or not isinstance(question[0], dict)
-                or question[0].get('name') != HOST + '.'
+                or question[0].get('name') != host + '.'
                 or type(question[0].get('type')) is not int or question[0]['type'] != 1):
             raise _fail()
         answers = data.get('Answer')
@@ -76,7 +80,7 @@ def _addresses(raw):
                 addresses.setdefault(name, set()).add(str(address))
         if set(aliases) & set(addresses):
             raise _fail()
-        seen, current = set(), HOST
+        seen, current = set(), host
         while current in aliases:
             if current in seen or len(seen) >= 8:
                 raise _fail()
@@ -92,12 +96,12 @@ def _addresses(raw):
         raise _fail() from None
 
 
-def resolve_kdb_ipv4(host, port, timeout=5):
-    """Resolve only KDB A records; no origin requests or persistent DNS cache."""
-    if (host != HOST or type(port) is not int or port != 443
+def _resolve_ipv4(host, port, timeout, expected_host):
+    """Resolve allowlisted issuer A records; no origin requests or persistent cache."""
+    if (host != expected_host or expected_host not in ALLOWED_HOSTS or type(port) is not int or port != 443
             or isinstance(timeout, bool) or not isinstance(timeout, (int, float))
             or not math.isfinite(timeout) or not 0 < timeout <= 5):
-        raise ValueError('KDB alternate DNS request not permitted')
+        raise ValueError('Official alternate DNS request not permitted')
     try:
         with tempfile.TemporaryDirectory(prefix='lp-kdb-dns-') as folder:
             body = Path(folder) / 'response'
@@ -105,7 +109,7 @@ def resolve_kdb_ipv4(host, port, timeout=5):
                        '--retry', '0', '--max-time', str(timeout), '--max-filesize', str(MAX_BYTES),
                        '--proto', '=https', '--proto-redir', '=https',
                        '--header', 'Accept: application/dns-json', '--header', 'Accept-Encoding: identity',
-                       '--output', str(body), '--write-out', '%{http_code}', DNS_URL]
+                       '--output', str(body), '--write-out', '%{http_code}', DNS_URL if host == HOST else KEXIM_DNS_URL]
             result = subprocess.run(command, capture_output=True, timeout=timeout)
             if result.returncode != 0 or result.stdout != b'200':
                 raise _fail()
@@ -113,8 +117,18 @@ def resolve_kdb_ipv4(host, port, timeout=5):
                 raw = stream.read(MAX_BYTES + 1)
             if not raw or len(raw) > MAX_BYTES:
                 raise _fail()
-            addresses = _addresses(raw)
+            addresses = _addresses(raw, host)
     except (OSError, subprocess.SubprocessError, ValueError):
         raise _fail() from None
     return [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', (address, port))
             for address in addresses]
+
+
+def resolve_kdb_ipv4(host, port, timeout=5):
+    """Backwards-compatible KDB-only entry point."""
+    return _resolve_ipv4(host, port, timeout, HOST)
+
+
+def resolve_kexim_ipv4(host, port, timeout=5):
+    """KEXIM-only DNS metadata; the origin session still performs verified TLS."""
+    return _resolve_ipv4(host, port, timeout, KEXIM_HOST)

@@ -27,8 +27,14 @@ from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Requ
 
 try:
     from .build_lp_commitment_monitor import extract_kexim_notice_rows
+    from .lp_kdb_dns import resolve_kexim_ipv4
+    from .lp_ipv4_transport import IPv4HTTPSHandler
+    from .lp_transport_errors import transient_dns
 except ImportError:
     from build_lp_commitment_monitor import extract_kexim_notice_rows
+    from lp_kdb_dns import resolve_kexim_ipv4
+    from lp_ipv4_transport import IPv4HTTPSHandler
+    from lp_transport_errors import transient_dns
 
 ROOT = Path(__file__).resolve().parents[3]
 REGISTRY = ROOT / "data/kexim_program_reviews.json"
@@ -357,6 +363,7 @@ def _official_fetch(url: str, cookies: dict[str, str] | None = None) -> bytes:
     context = ssl.create_default_context()
     context.load_verify_locations(cafile=str(CA_CHAIN))
     opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context), _ManualRedirect())
+    recovery_opener = None
     cookies = cookies if cookies is not None else {}
     current = url
     referer = BOARD
@@ -372,16 +379,22 @@ def _official_fetch(url: str, cookies: dict[str, str] | None = None) -> bytes:
         redirect_error = None
         for attempt in range(3):
             try:
-                response = opener.open(req, timeout=25)
+                response = (recovery_opener or opener).open(req, timeout=25)
                 break
             except HTTPError as exc:
                 if exc.code not in (301, 302, 303, 307, 308):
                     raise
                 redirect_error = exc
                 break
-            except (URLError, TimeoutError):
-                if attempt == 2:
+            except (URLError, TimeoutError) as exc:
+                dns_failure = transient_dns(exc)
+                # Certificate, HTTP and content failures must never select DNS recovery.
+                timeout_failure = isinstance(exc, TimeoutError) or (isinstance(exc, URLError) and isinstance(exc.reason, TimeoutError))
+                if attempt == 2 or not (dns_failure or timeout_failure):
                     raise
+                if dns_failure and recovery_opener is None:
+                    recovery_opener = build_opener(ProxyHandler({}),
+                        IPv4HTTPSHandler(context=context, fallback_resolver=resolve_kexim_ipv4), _ManualRedirect())
                 time.sleep(attempt + 1)
         if response is not None:
             with response:

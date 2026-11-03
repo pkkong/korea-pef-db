@@ -25,6 +25,20 @@ class KdbDnsTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, code, status, b'SECRET stderr')
         return run
 
+    def test_kexim_exact_host_dns_and_question_validation(self):
+        data=response([answer(dns.KEXIM_HOST+'.',data='8.8.8.8')])
+        data['Question'][0]['name']=dns.KEXIM_HOST+'.'
+        with patch.object(dns.subprocess,'run',side_effect=self.runner(json.dumps(data).encode())) as run:
+            rows=dns.resolve_kexim_ipv4(dns.KEXIM_HOST,443,3)
+            self.assertEqual(rows[0][-1],('8.8.8.8',443))
+            self.assertEqual(run.call_args.args[0][-1],dns.KEXIM_DNS_URL)
+        for host in (dns.HOST,'evil.invalid'):
+            with self.assertRaises(ValueError):dns.resolve_kexim_ipv4(host,443)
+        with self.assertRaises(ValueError):dns._addresses(json.dumps(response()),dns.KEXIM_HOST)
+        for address in ('127.0.0.1','10.0.0.1'):
+            data['Answer'][0]['data']=address
+            with self.assertRaises(ValueError):dns._addresses(json.dumps(data),dns.KEXIM_HOST)
+
     def test_command_keeps_tls_fixed_dns_url_no_proxy_and_hard_deadline(self):
         with patch.object(dns.subprocess, 'run', side_effect=self.runner()) as run:
             rows=dns.resolve_kdb_ipv4(dns.HOST,443,2.5)

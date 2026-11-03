@@ -34,6 +34,21 @@ NPS_DETAIL='''<html><script src="/js/common_utils.js"></script><div class="file-
 
 
 class PendingContractsTests(unittest.TestCase):
+    def test_legacy_page_is_requested_only_from_an_observed_page_control(self):
+        def fetch(method,url,fields,encoding,limit):
+            if url==m.PENDING_ROOTS['nps']:
+                return 200,url,nps().replace('</html>','<a onclick="fnc_egov_select_linkPage(3)">3</a></html>').encode()
+            if url.endswith('common_utils.js'):return 200,url,CONTROLLER.encode()
+            if fields and fields.get('pageIndex')==3:return 200,url,b'<div>legacy page</div>'
+            return 503,url,b'not available'
+        with tempfile.TemporaryDirectory() as directory:
+            report=m.inspect(directory,fetch)
+            legacy=[r for r in report['responses'] if r['kind']=='legacy_page']
+            self.assertEqual(len(legacy),1)
+            self.assertEqual(legacy[0]['request_fields']['pageIndex'],3)
+            self.assertEqual(legacy[0]['method'],'POST')
+            self.assertEqual(legacy[0]['status'],200)
+
     def test_observed_ids_forms_and_post_encoding(self):
         a=m.contracts(nps(),m.PENDING_ROOTS['nps'],'nps')
         self.assertEqual(a['detail']['fields']['pstId'],'ZZ209900000012345678')
