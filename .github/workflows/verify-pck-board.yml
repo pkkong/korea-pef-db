@@ -5,7 +5,7 @@ on:
       institution:
         description: Official board to collect and replay without publication
         type: choice
-        options: [pck_pension, sema, ibk, remaining]
+        options: [pck_pension, sema, ibk, remaining, nh_central, suhyup, central_screening]
         default: pck_pension
 permissions:
   contents: read
@@ -38,7 +38,8 @@ jobs:
           from services.lp.src.collect_lp_institution_boards import collect,load_configs
           target=os.environ['LP_INSTITUTION']
           ids={'mmaa','kbiz','geps','kamco','moel_eif','moel_iaci','kfinco'} if target=='remaining' else {target}
-          configs={k:v for k,v in load_configs().items() if k in ids}
+          if target=='central_screening':ids={'nh_central','suhyup'}
+          configs={k:v for k,v in load_configs(include_pending=True).items() if k in ids}
           assert set(configs)==ids,'Requested official board missing from configuration'
           result=collect(configs)
           Path('/tmp/lp-board-inspection/collection.json').write_text(json.dumps(result,ensure_ascii=False))
@@ -46,14 +47,17 @@ jobs:
           PY
           python3 - <<'PY'
           import json
-          from services.lp.src.collect_lp_institution_boards import validate_notice
+          import os
+          from services.lp.src.collect_lp_institution_boards import validate_notice,load_configs
           report=json.load(open('/tmp/lp-board-inspection/collection.json'))
-          assert report['notices'], 'No observed official source documents'
-          for n in report['notices']: validate_notice(n,report['checked_at'])
+          assert report['notices'] or os.environ['LP_INSTITUTION'] in {'nh_central','suhyup','central_screening'}, 'No observed official source documents'
+          configs=load_configs(include_pending=True)
+          for n in report['notices']: validate_notice(n,report['checked_at'],configs[n['institution_id']])
           assert not report['holds'], 'Official source or attachment errors remain'
           print('Validated official bodies:',len(report['notices']))
           PY
       - name: Validate existing selection links and generate complete pages without DB writes
+        if: inputs.institution != 'nh_central' && inputs.institution != 'suhyup' && inputs.institution != 'central_screening'
         env:
           PYTHONPATH: services/lp/src
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}

@@ -225,6 +225,46 @@
       "history_years": 2,
       "lookback_days": 365,
       "max_details": 30
+    },
+    {
+      "institution_id": "nh_central",
+      "enabled": false,
+      "listing_url": "https://www.nonghyup.com/ecenter/notice/noticeList.do?searchCnd=1",
+      "listing_urls": [
+        "https://www.nonghyup.com/ecenter/notice/noticeList.do?searchCnd=1",
+        "https://www.nonghyup.com/ecenter/bid/bidList.do?searchCnd=1"
+      ],
+      "search_param": "searchWrd",
+      "searches": [
+        "운용사",
+        "펀드",
+        "출자",
+        "PEF",
+        "사모"
+      ],
+      "page_param": "pageIndex",
+      "pages": 20,
+      "history_years": 2,
+      "lookback_days": 365,
+      "max_details": 30
+    },
+    {
+      "institution_id": "suhyup",
+      "enabled": false,
+      "listing_url": "https://www.suhyup.co.kr/suhyup/223/subview.do?srchColumn=sj",
+      "search_param": "srchWrd",
+      "searches": [
+        "운용사",
+        "펀드",
+        "출자",
+        "PEF",
+        "사모"
+      ],
+      "page_param": "page",
+      "pages": 20,
+      "history_years": 2,
+      "lookback_days": 365,
+      "max_details": 30
     }
   ],
   "history_years": 4

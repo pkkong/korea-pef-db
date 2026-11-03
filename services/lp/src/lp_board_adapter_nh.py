@@ -65,11 +65,32 @@ def listing_tree(html,url,config):
     total_text=one(n.clean() for dl in root.nodes('dl') if cls(dl,'sum') for n in dl.nodes('strong'))
     if not re.fullmatch(r'[0-9]+(?:,[0-9]{3})*',total_text):raise ValueError('invalid NH total count')
     total=int(total_text.replace(',',''))
-    if total==0:raise ValueError('NH zero-result response not yet verified')
     pager=one(n for n in root.nodes('div') if cls(n,'page'))
     current=one(n.clean() for n in pager.nodes('button') if cls(n,'on'))
     if current!=q.get('pageIndex','1'):raise ValueError('NH visible page mismatch')
-    last=one(n for n in pager.nodes('button') if cls(n,'btn_next0'))
+    last_controls=[n for n in pager.nodes('button') if cls(n,'btn_next0')]
+    if total<=10:
+        buttons=list(pager.nodes('button'))
+        if current!='1' or len(buttons)!=1 or not cls(buttons[0],'on') or buttons[0].attrs.get('onclick'):
+            raise ValueError('NH single-page controls mismatch')
+        empty=[n for n in table.nodes('span') if cls(n,'exclam') and n.clean()=='검색된 결과가 없습니다.']
+        if total==0:
+            cells=list(table.nodes('td'))
+            if len(empty)!=1 or len(cells)!=1 or cells[0].attrs.get('colspan')!='5' or cells[0].clean()!='검색된 결과가 없습니다.':
+                raise ValueError('NH zero-result marker mismatch')
+        elif empty:raise ValueError('NH contradictory empty marker')
+        return board,root,table,1,total,1
+    if not last_controls and total<=100:
+        final=(total+9)//10
+        buttons=list(pager.nodes('button'))
+        if [b.clean() for b in buttons]!=[str(x) for x in range(1,final+1)]:raise ValueError('NH compact pager sequence mismatch')
+        for b in buttons:
+            if b.clean()==current:
+                if b.attrs.get('onclick'):raise ValueError('NH current page control mismatch')
+            elif not re.fullmatch(r'fn_select_brdList\('+b.clean()+r'\);return false;\s*',b.attrs.get('onclick','')):
+                raise ValueError('NH compact pager action mismatch')
+        return board,root,table,int(current),total,final
+    last=one(last_controls)
     match=re.fullmatch(r'fn_select_brdList\(([1-9][0-9]*)\);return false;\s*',last.attrs.get('onclick',''))
     if not match or int(match[1])!=(total+9)//10 or int(current)>int(match[1]):raise ValueError('NH last-page/count mismatch')
     return board,root,table,int(current),total,int(match[1])
@@ -80,6 +101,7 @@ def last_page(html,url,config):return listing_tree(html,url,config)[5]
 
 def parse_listing(html,url,config):
     board,root,table,current,total,final=listing_tree(html,url,config)
+    if total==0:return []
     rows=[];seen=set();numbers=[]
     for tr in table.nodes('tr'):
         cells=list(tr.nodes('td'))
@@ -97,3 +119,50 @@ def parse_listing(html,url,config):
     expected=list(range(total-(current-1)*10,max(0,total-current*10),-1))
     if numbers!=expected or not rows:raise ValueError('NH row count/order mismatch')
     return rows
+
+
+def parse_detail(html,url,config):
+    board,q=validate(url,config,True)
+    if not isinstance(html,str) or len(html)>2_000_000 or '</html>' not in html.lower():raise ValueError('incomplete NH detail HTML')
+    root=Document(html).root
+    form=one(n for n in root.nodes('form') if n.attrs.get('id')=='frm')
+    if form.attrs.get('method','').lower()!='post' or one(n.attrs.get('value') for n in form.nodes('input') if n.attrs.get('name')=='intgBsnBlbdGrpC')!=BOARDS[board]:raise ValueError('NH detail group mismatch')
+    view=one(n for n in root.nodes('div') if cls(n,'viewbox'))
+    titlebox=one(n for n in view.nodes('div') if cls(n,'view_tit'))
+    title=one(n.clean() for n in titlebox.nodes('h4'))
+    published=date(one(n.clean() for n in titlebox.nodes('dd') if n.attrs.get('title')=='등록일'))
+    body=one(n.clean() for n in view.nodes('div') if cls(n,'view_cont')).replace('\x00',' ')
+    if not title or not body:raise ValueError('NH missing article content')
+    departments=[n.clean() for n in titlebox.nodes('dd') if n.attrs.get('title')=='담당부서']
+    if len(departments)>1:raise ValueError('NH ambiguous article department')
+    result={'title':title,'date':published,'body':body,'attachments':[],
+            'article_department':departments[0] if departments else None}
+    files=[n for n in view.nodes('div') if cls(n,'view_file')]
+    if files:
+        files=one(files)
+        # Exact inline official formula; never execute JS or guess a download ID.
+        controller=one(re.findall(r'function\s+fn_egov_downFile\(atchFileId,\s*fileSn\)\s*\{([^}]+)\}',html))
+        formula='"/cmm/fms/FileDown.do?atchFileId="+atchFileId+"&fileSn="+fileSn+""'
+        if not re.fullmatch(r'\s*window\.open\(' + re.escape(formula) + r',\s*"_self",\s*"[^"\n]*"\);\s*return false;\s*',controller):raise ValueError('NH unverified download formula')
+        for a in files.nodes('a'):
+            match=re.fullmatch(r"javascript:fn_egov_downFile\('(FILE_[0-9]+)','([0-9]+)'\)",a.attrs.get('onclick',''))
+            if not match or not a.clean():raise ValueError('NH invalid attachment control')
+            target=BASE+'/cmm/fms/FileDown.do?'+urlencode(dict(zip(('atchFileId','fileSn'),match.groups())))
+            if any(x['url']==target for x in result['attachments']):raise ValueError('NH duplicate attachment')
+            result['attachments'].append({'url':target,'name':a.clean()})
+        if not result['attachments']:raise ValueError('NH empty unresolved file widget')
+    result['issuer_evidence']=issuer_evidence(result)
+    return result
+
+
+def issuer_evidence(detail):
+    """Article-local issuer gate. Portal ownership and department alone prove none."""
+    title=detail.get('title','');body=detail.get('body','')
+    for marker,name in ((r'^\(\s*은행\s*\)','NH농협은행'),(r'^\(\s*증권\s*\)','NH투자증권')):
+        match=re.search(marker,title)
+        if match:return {'status':'affiliate','name':name if name in body else None,'quote':match[0],'location':'title'}
+    for name in ('NH농협은행','NH투자증권','농협생명','농협손해보험'):
+        if body.lstrip('□ •').startswith(name):return {'status':'affiliate','name':name,'quote':name,'location':'body'}
+    match=re.search(r'(?:발주기관|공고기관|출자기관)\s*[:：]\s*농협중앙회(?:\s|$)',body)
+    if match:return {'status':'central_explicit','name':'농협중앙회','quote':match[0].strip(),'location':'body'}
+    return {'status':'needs_confirmation','name':None,'quote':None,'location':None}

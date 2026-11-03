@@ -24,6 +24,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 try:
+    from . import lp_board_adapter_nh as nh
+    from . import lp_board_adapter_suhyup as suhyup
     from . import lp_board_adapter_cwma as cwma
     from .lp_pdf_ocr import recognize_pdf
     from . import lp_board_adapter_nps as nps
@@ -47,6 +49,8 @@ try:
     from . import lp_board_adapter_geps as geps
     from . import lp_board_adapter_kamco as kamco
 except ImportError:
+    import lp_board_adapter_nh as nh
+    import lp_board_adapter_suhyup as suhyup
     import lp_board_adapter_cwma as cwma
     from lp_pdf_ocr import recognize_pdf
     import lp_board_adapter_nps as nps
@@ -82,20 +86,26 @@ def is_form(name):
     return bool(FORM.search(name) and not re.search(r'공고|모집|선정계획', name))
 
 
-def load_configs():
+def load_configs(*, include_pending=False):
     settings = json.loads(CONFIG.read_text())
     configs = {c['institution_id']: {'history_years': settings['history_years'], **c} for c in settings['channels']}
     for c in configs.values():
+        if type(c.get('enabled',True)) is not bool:
+            raise ValueError('institution enabled flag must be boolean')
         if not 1 <= c.get('max_details', MAX_DETAILS) <= 60 or not 1 <= c['history_years'] <= 4:
             raise ValueError('institution discovery budget outside supported limits')
         if c.get('lookback_days') is not None and not 1 <= c['lookback_days'] <= 1461:
             raise ValueError('institution lookback period outside supported limits')
         _extraction_version(c)
-    return configs
+    return {i:c for i,c in configs.items() if include_pending or c.get('enabled',True)}
 
 
 def adapter(config):
     institution = config['institution_id']
+    if institution == 'nh_central':
+        return nh
+    if institution == 'suhyup':
+        return suhyup
     if institution == 'cwma':
         return cwma
     if institution == 'nps':
@@ -131,12 +141,13 @@ def listing_urls(config):
     if config['institution_id'] in {'kdb', 'ibk'}:
         yield from (request['url'] for request in banks.listing_requests(config))
         return
-    parsed = urlsplit(config['listing_url'])
-    for search in config['searches']:
-        for page in range(1, config['pages'] + 1):
-            params = dict(parse_qsl(parsed.query))
-            params.update({config['search_param']: search, config['page_param']: str(page)})
-            yield urlunsplit(parsed._replace(query=urlencode(params)))
+    for base in config.get('listing_urls',[config['listing_url']]):
+        parsed = urlsplit(base)
+        for search in config['searches']:
+            for page in range(1, config['pages'] + 1):
+                params = dict(parse_qsl(parsed.query))
+                params.update({config['search_param']: search, config['page_param']: str(page)})
+                yield urlunsplit(parsed._replace(query=urlencode(params)))
 
 
 def digest(value):
@@ -200,10 +211,19 @@ class Session:
         if referer:
             headers['Referer'] = referer
         request_url, request_data = url, None
-        planner = (nps if self.config['institution_id']=='nps' and urlsplit(url).path in {nps.LIST,nps.DETAIL}
+        planner = (nh if self.config['institution_id']=='nh_central' and re.fullmatch(r'/ecenter/(notice|bid)/\1(?:List|View)\.do',urlsplit(url).path) else
+                   suhyup if self.config['institution_id']=='suhyup' and urlsplit(url).path==suhyup.LANDING else
+                   nps if self.config['institution_id']=='nps' and urlsplit(url).path in {nps.LIST,nps.DETAIL}
                    else cwma if self.config['institution_id']=='cwma' and urlsplit(url).path=='/board.do' else None)
         if planner:
-            plan = planner.request_plan(url,self.config)
+            kwargs={}
+            if planner is suhyup and urlsplit(url).query:
+                suhyup.validate(url,self.config)
+                if not hasattr(self,'_suhyup_fields'):
+                    root=self(suhyup.BASE+suhyup.LANDING)
+                    self._suhyup_fields=suhyup.search_fields(_html(root))
+                kwargs['fields']=self._suhyup_fields
+            plan = planner.request_plan(url,self.config,**kwargs)
             request_url = plan['url']
             if plan['fields'] is not None:
                 request_data = (json.dumps(plan['fields'],ensure_ascii=False) if plan['encoding']=='json'
@@ -375,7 +395,8 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
         for url in listing_urls(config):
             search = parse_qsl(urlsplit(url).query)
             search = next((value for key, value in search if key == config.get('search_param')), '')
-            if search in stopped_searches:
+            stream=(urlsplit(url).path,search) if institution=='nh_central' else search
+            if stream in stopped_searches:
                 continue
             try:
                 if institution in {'moel_eif', 'moel_iaci'} and url in shared_listings:
@@ -400,7 +421,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                     receipts[url]['response_sha256'] = digest(raw)
                 coverage['listing_pages'].append(listing_coverage)
                 if config.get('lookback_days'):
-                    seen = seen_by_search.setdefault(search, set())
+                    seen = seen_by_search.setdefault(stream, set())
                     identities = {row['source_id'] for row in rows}
                     if rows and not identities - seen:
                         raise ValueError(institution + ' listing repeated before observed history boundary')
@@ -410,7 +431,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                     regular = [row for row in rows if not row.get('pinned')]
                     older = cutoff and regular and all(row['date'] < cutoff for row in regular)
                     if current_page == final_page or older:
-                        stopped_searches.add(search)
+                        stopped_searches.add(stream)
                         coverage.setdefault('listing_boundaries', []).append({'search': search, 'page': current_page,
                             'boundary': 'observed_older_page' if older else 'observed_final_page'})
                     elif current_page == config['pages']:
@@ -423,7 +444,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                     oldest_year = str(int(checked_at[:4]) - config.get('history_years', 4) + 1)
                     older = regular and all(row['date'][:4] < oldest_year for row in regular)
                     if current_page == final_page or older:
-                        stopped_searches.add(search)
+                        stopped_searches.add(stream)
                         coverage.setdefault('listing_boundaries', []).append({'search': search, 'page': current_page,
                             'boundary': 'observed_older_page' if older else 'observed_final_page'})
                     elif current_page == config['pages']:
@@ -446,7 +467,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                             coverage['older_rows_skipped'] = coverage.get('older_rows_skipped', 0) + 1
             except Exception as exc:
                 if config.get('lookback_days'):
-                    stopped_searches.add(search)
+                    stopped_searches.add(stream)
                 failure = {'institution_id': institution, 'stage': 'institution_listing', 'url': url, 'error': str(exc)}
                 if isinstance(exc, HTTPError):
                     response_url = exc.geturl()
@@ -584,6 +605,8 @@ def validate_notice(raw, checked_at, config=None):
         raise ValueError('notice was not observed on the configured official listing')
     if any(n[k] != detail[k] for k in ('title', 'date', 'body', 'attachments')):
         raise ValueError('notice differs from official detail receipt')
+    if n['institution_id']=='nh_central' and any(n.get(k)!=detail.get(k) for k in ('article_department','issuer_evidence')):
+        raise ValueError('NH article-local issuer evidence differs from source')
     if n['institution_id'] in {'pck_pension','kfinco'} and n.get('related_notice_urls', []) != detail['related_notice_urls']:
         raise ValueError('Related notice links differ from official body receipt')
     observed = datetime.fromisoformat(n['checked_at'].replace('Z', '+00:00'))
@@ -632,9 +655,9 @@ def update_catalog(current, incoming, checked_at):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--institution', choices=sorted(load_configs()), help='Verify one configured institution without publication')
+    parser.add_argument('--institution', choices=sorted(load_configs(include_pending=True)), help='Verify one configured or pending institution without publication')
     args = parser.parse_args()
-    result = collect({args.institution: load_configs()[args.institution]} if args.institution else None)
+    result = collect({args.institution: load_configs(include_pending=True)[args.institution]} if args.institution else None)
     args.output.write_text(json.dumps(result, ensure_ascii=False))
     print(json.dumps({'notices': len(result['notices']), 'holds': len(result['holds']),
                       'coverage': result['coverage']}, ensure_ascii=False))

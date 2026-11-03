@@ -148,6 +148,17 @@ def _texts(n):
 
 
 def _scope(n):
+    if n.get('institution_id')=='nh_central':
+        # This portal also hosts affiliate-bank and securities procurement.
+        # Recompute from the validated article, never trust a supplied flag.
+        try:
+            from .lp_board_adapter_nh import issuer_evidence
+        except ImportError:
+            from lp_board_adapter_nh import issuer_evidence
+        if issuer_evidence(n)['status']!='central_explicit':
+            return 'needs_confirmation'
+    if n.get('institution_id')=='suhyup' and re.search(r'(?:Sh)?수협은행',n['title']):
+        return 'outside'
     if n.get('institution_id') == 'kamco' and kamco_terms.pe_track(n):
         return 'pe_blind'
     if n.get('institution_id') == 'kbiz' and kbiz_terms.pe_track(n):
