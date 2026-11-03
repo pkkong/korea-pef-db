@@ -30,7 +30,7 @@ def validate(url,config,detail=False):
 
 
 def request_plan(url,config):
-    """Logical source URL → actual observed request; GET detail is unverified."""
+    """Logical source URL → observed request; public GET also verified by queued receipts."""
     detail=urlsplit(url).path==DETAIL;q=validate(url,config,detail)
     if detail:
         return {'url':BASE+DETAIL,'method':'POST','encoding':'form','fields':dict(q,pageIndex='1',searchGbu='',searchText='')}

@@ -15,7 +15,7 @@ from services.lp.src import lp_board_adapter_cwma as cwma
 from services.lp.src.collect_shared_lp_notices import Document, decode_html
 from scripts.inspect_lp_remaining_boards import PENDING_ROOTS
 
-MAX_REQUESTS = 12
+MAX_REQUESTS = 14
 MAX_RESPONSE = 3 * 1024 * 1024
 MAX_TOTAL = 20 * 1024 * 1024
 
@@ -220,6 +220,10 @@ def inspect(output, fetch=None):
                     raise ValueError('NPS JSON POST controller not confirmed')
             page=plan['page']
             page_result=capture(iid,'page',page['url'],page['fields'],page['encoding'],url)
+            if iid=='nps' and re.search(r'fnc_egov_select_linkPage\(3\)',html):
+                # Native rolling-year discovery reached a legacy third page.
+                # Capture its observed page control without guessing old IDs.
+                capture(iid,'legacy_page',page['url'],dict(page['fields'],pageIndex=3),page['encoding'],url)
             if not plan['detail'] and iid=='cwma' and page_result:
                 plan['detail']=cwma_detail(page_result[0],page_result[1],*plan['board_context'])
             if not plan['detail']:

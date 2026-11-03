@@ -30,7 +30,7 @@ def validate(url,config,detail=False):
 
 
 def request_plan(url,config):
-    """Logical detail links identify observed forms; public GET is unverified."""
+    """Logical links identify observed forms; public GET equality verified by queued receipts."""
     detail=dict(parse_qsl(urlsplit(url).query)).get('action')=='view'
     q=validate(url,config,detail)
     if detail:
