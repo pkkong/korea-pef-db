@@ -26,6 +26,14 @@ class NpsAdapterTests(unittest.TestCase):
         self.assertEqual(req['method'],'POST');self.assertEqual(req['fields']['pstId'],PID)
         self.assertEqual(n.request_plan(CONFIG['listing_url']+'?pageIndex=2',CONFIG)['fields']['pageIndex'],2)
 
+    def test_migrated_legacy_identifiers_remain_valid_for_history_boundary(self):
+        # Observed legacy KD and current ZZ IDs share the same official controller.
+        html=listing().replace(PID,PID.replace('ZZ','KD'))
+        row=n.parse_listing(html,CONFIG['listing_url'],CONFIG)[0]
+        self.assertIn('pstId=KD209900000000001234',row['url'])
+        self.assertEqual(n.request_plan(row['url'],CONFIG)['fields']['pstId'],'KD209900000000001234')
+        with self.assertRaises(ValueError):n.request_plan(row['url'].replace('KD2099','XX2099'),CONFIG)
+
     def test_fragment_page_two_echo_and_counts(self):
         html=listing(2).replace('<html>','').replace('</html>','<!-- 서브내용 끝 -->')
         self.assertEqual(n.last_page(html,CONFIG['listing_url']+'?pageIndex=2',CONFIG),2)

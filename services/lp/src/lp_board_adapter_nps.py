@@ -23,7 +23,7 @@ def validate(url,config,detail=False):
     pairs=parse_qsl(p.query,keep_blank_values=True);q=dict(pairs)
     if len(pairs)!=len(q):raise ValueError('duplicate NPS query')
     if detail:
-        if p.path!=DETAIL or set(q)!={'pstId','hmpgBbsCd'} or not re.fullmatch(r'ZZ[0-9]{18}',q['pstId']) or not re.fullmatch(r'BS[0-9]{8}',q['hmpgBbsCd']):raise ValueError('invalid NPS detail identity')
+        if p.path!=DETAIL or set(q)!={'pstId','hmpgBbsCd'} or not re.fullmatch(r'(?:ZZ|KD)[0-9]{18}',q['pstId']) or not re.fullmatch(r'BS[0-9]{8}',q['hmpgBbsCd']):raise ValueError('invalid NPS detail identity')
     elif p.path!=LIST or set(q)-{'pageIndex','searchGbu','searchText'} or not re.fullmatch(r'[1-9][0-9]{0,3}',q.get('pageIndex','1')) or q.get('searchGbu','') or q.get('searchText',''):
         raise ValueError('unsupported NPS listing request')
     return q
@@ -76,7 +76,7 @@ def parse_listing(html,url,config):
         cells=list(tr.nodes('td'))
         if not cells:continue
         a=one(a for cell in cells if cls(cell,'title') for a in cell.nodes('a'))
-        match=re.fullmatch(r"javascript:fnc_goBbsDetail\('(ZZ[0-9]{18})',\s*'(BS[0-9]{8})'\);?",a.attrs.get('href',''))
+        match=re.fullmatch(r"javascript:fnc_goBbsDetail\('((?:ZZ|KD)[0-9]{18})',\s*'(BS[0-9]{8})'\);?",a.attrs.get('href',''))
         if not match or not a.clean():raise ValueError('invalid NPS row')
         pid,board=match.groups();target=BASE+DETAIL+'?'+urlencode({'pstId':pid,'hmpgBbsCd':board})
         if target in seen:raise ValueError('duplicate NPS row')
