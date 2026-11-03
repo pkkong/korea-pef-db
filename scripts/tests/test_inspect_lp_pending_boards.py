@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from scripts.inspect_lp_remaining_boards import pending_links, inspect_pending, PENDING_ROOTS
+from scripts.inspect_lp_remaining_boards import pending_links, pending_redirect, inspect_pending, PENDING_ROOTS
 
 
 class PendingBoardTests(unittest.TestCase):
@@ -17,6 +17,19 @@ class PendingBoardTests(unittest.TestCase):
         self.assertEqual([r['url'] for r in links['menus']],
             ['https://www.cw.or.kr/board.do?menuNo=248&boardConfigNo=29','https://www.cw.or.kr/notice'])
         self.assertEqual(links['scripts'],[])
+
+    def test_literal_landing_redirects_are_same_origin_and_unambiguous(self):
+        for html in ('<meta http-equiv="refresh" content="0;url=./index.jsp">',
+                     "<script>document.location.href = '/index.jsp';</script>"):
+            self.assertEqual(pending_redirect(html,PENDING_ROOTS['nh_central'],'nh_central'),
+                             'https://www.nonghyup.com/index.jsp')
+        for target in ('https://evil.example/index.jsp','http://www.nonghyup.com/index.jsp'):
+            with self.assertRaises(ValueError):
+                pending_redirect('<meta http-equiv="refresh" content="0;url='+target+'">',
+                                 PENDING_ROOTS['nh_central'],'nh_central')
+        with self.assertRaises(ValueError):
+            pending_redirect("<script>document.location.href='/first'; document.location.href='/second';</script>",
+                             PENDING_ROOTS['nh_central'],'nh_central')
 
     def test_nps_scripts_first_party_and_bounded(self):
         html=''.join('<script src="'+url+'"></script>' for url in

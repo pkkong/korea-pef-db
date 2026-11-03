@@ -61,6 +61,25 @@ def pending_links(html, url, institution):
             'scripts': scripts[:2]}
 
 
+def pending_redirect(html, url, institution):
+    """Follow one literal first-party landing redirect; never execute scripts."""
+    root=Document(html).root
+    targets=[]
+    for node in root.nodes('meta'):
+        if node.attrs.get('http-equiv','').lower()=='refresh':
+            match=re.fullmatch(r'0\s*;\s*url\s*=\s*([^;]+)',node.attrs.get('content',''),re.I)
+            if match:targets.append(match[1].strip())
+    targets += re.findall(r"document\.location\.href\s*=\s*['\"]([^'\"]+)['\"]\s*;",html)
+    targets=set(urljoin(url,value) for value in targets)
+    if not targets:return None
+    if len(targets)!=1:raise ValueError('ambiguous official landing redirect')
+    target=targets.pop();actual=urlsplit(target);expected=urlsplit(PENDING_ROOTS[institution])
+    if (actual.scheme!='https' or actual.netloc!=expected.netloc or actual.fragment
+            or actual.username or actual.password or target==url):
+        raise ValueError('unsafe official landing redirect')
+    return target
+
+
 def inspect_pending(output, fetch=None):
     """Queued diagnostic only: four roots, two menu links each, two NPS scripts."""
     output.mkdir(parents=True, exist_ok=True)
@@ -127,6 +146,16 @@ def inspect_pending(output, fetch=None):
             result = get(iid, url, 'root')
             if result:
                 html, final, row = result
+                try:
+                    target=pending_redirect(html, final, iid)
+                except ValueError as error:
+                    report['holds'].append({'institution_id':iid,'url':final,'kind':'landing','error_type':type(error).__name__})
+                    continue
+                if target:
+                    row['observed_landing_redirect']=target
+                    result=get(iid,target,'landing',final)
+                    if not result:continue
+                    html,final,row=result
                 selected = pending_links(html, final, iid); row['observed_links'] = selected
                 for link in selected['menus']:
                     get(iid, link['url'], 'menu', final)
