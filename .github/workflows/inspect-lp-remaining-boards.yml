@@ -4,7 +4,7 @@ on:
     inputs:
       profile:
         type: choice
-        options: [initial, followup, mmaa_files, geps_pck_recovery, pck_kamco_recovery, pending_institutions, pending_contracts, kofia_transfer, publication_waits]
+        options: [initial, followup, mmaa_files, geps_pck_recovery, pck_kamco_recovery, pending_institutions, pending_contracts, central_contracts, kofia_transfer, publication_waits]
         default: initial
       connection_mode:
         description: Read-only publication diagnostic connection mode
@@ -32,7 +32,7 @@ jobs:
         if: inputs.profile == 'pending_institutions'
         run: python3 -m unittest scripts.tests.test_inspect_lp_pending_boards
       - name: Capture bounded official lists and observed detail links without DB writes
-        if: inputs.profile != 'publication_waits' && inputs.profile != 'pending_contracts' && inputs.profile != 'kofia_transfer'
+        if: inputs.profile != 'publication_waits' && inputs.profile != 'pending_contracts' && inputs.profile != 'kofia_transfer' && inputs.profile != 'central_contracts'
         run: python3 scripts/inspect_lp_remaining_boards.py /tmp/lp-remaining-board-receipts "$LP_INSPECTION_PROFILE"
       - name: Test and inspect observed NPS and CWMA request contracts
         if: inputs.profile == 'pending_contracts'
@@ -44,6 +44,11 @@ jobs:
         run: |
           python3 -m unittest scripts.tests.test_inspect_lp_kofia_transfer
           python3 scripts/inspect_lp_kofia_transfer.py --output /tmp/lp-remaining-board-receipts
+      - name: Inspect observed NH and Suhyup public search forms
+        if: inputs.profile == 'central_contracts'
+        run: |
+          python3 -m unittest services.lp.tests.test_lp_board_adapter_nh scripts.tests.test_inspect_lp_central_contracts
+          python3 scripts/inspect_lp_central_contracts.py --output /tmp/lp-remaining-board-receipts
       - name: Install read-only publication inspector
         if: inputs.profile == 'publication_waits'
         run: python3 -m pip install 'psycopg[binary]==3.2.10'
