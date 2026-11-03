@@ -24,6 +24,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 try:
+    from .lp_offering_policy import procurement_reason
     from . import lp_board_adapter_nh as nh
     from . import lp_board_adapter_suhyup as suhyup
     from . import lp_board_adapter_cwma as cwma
@@ -49,6 +50,7 @@ try:
     from . import lp_board_adapter_geps as geps
     from . import lp_board_adapter_kamco as kamco
 except ImportError:
+    from lp_offering_policy import procurement_reason
     import lp_board_adapter_nh as nh
     import lp_board_adapter_suhyup as suhyup
     import lp_board_adapter_cwma as cwma
@@ -523,7 +525,8 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                 coverage['detail_count'] += 1
                 # Unrelated investment boards remain discoverable, but their
                 # files cannot qualify the offered PE scope accidentally.
-                outside = classify_scope(n['title'], n['title']) in {'outside', 'vc_only'}
+                outside = (classify_scope(n['title'], n['title']) in {'outside', 'vc_only'}
+                           or procurement_reason(n['title'],n['body']) is not None)
                 if not outside:
                     for item in n['attachments'][:6]:
                         if is_submission_form(item['name']):

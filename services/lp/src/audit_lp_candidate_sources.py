@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
 try:
+    from .lp_offering_policy import procurement_reason
     from . import audit_lp_official_inventory as inventory
     from .audit_lp_discovery_coverage import normalize_title
     from .collect_lp_institution_boards import Session, decode_html, load_configs, adapter
@@ -23,6 +24,7 @@ try:
     from .discover_lp_original_boards import channels, page_url, listing_links
     from .collect_kexim_programs import parse_detail as parse_kexim
 except ImportError:
+    from lp_offering_policy import procurement_reason
     import audit_lp_official_inventory as inventory
     from audit_lp_discovery_coverage import normalize_title
     from collect_lp_institution_boards import Session, decode_html, load_configs, adapter
@@ -40,6 +42,8 @@ def key_title(title, names):
 def official_scope(source):
     """Conservative exclusions from a verified detail body, never a feed title."""
     title, body = source['title'], source['body']
+    if reason:=procurement_reason(title,body):
+        return 'outside_policy',reason
     # A private-equity offer is not excluded because eligibility mentions listed
     # holdings, performance evaluation, or prior feasibility studies.
     if re.search(r'(?<![A-Za-z])PEF?(?![A-Za-z])|기관전용|경영참여형', title + ' ' + body, re.I):
@@ -113,7 +117,7 @@ def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, se
     candidates = sorted(candidates, key=lambda n: (n['institution_id'], n['id'],
                                                     n.get('official_url') or '', n['title']))
     aliases = load_aliases()
-    configs = load_configs()
+    configs = load_configs(include_pending=True)
     cache = {}; sessions = {}; total_bytes = 0
     def get(institution, url, config, kind):
         nonlocal total_bytes

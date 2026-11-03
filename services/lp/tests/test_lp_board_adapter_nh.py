@@ -1,5 +1,5 @@
 import unittest
-from urllib.parse import urlencode
+from urllib.parse import urlencode,parse_qs,urlsplit
 from services.lp.src import lp_board_adapter_nh as n
 C={'institution_id':'nh_central'}
 
@@ -52,7 +52,7 @@ class NhAdapterTests(unittest.TestCase):
         for r in rows:
             self.assertEqual(r['date'],'2099-03-04')
             plan=n.request_plan(r['url'],C)
-            self.assertEqual(plan['fields']['blbdSqno'],'90011');self.assertEqual(plan['method'],'POST')
+            self.assertEqual(parse_qs(urlsplit(plan['url']).query)['blbdSqno'],['90011']);self.assertEqual(plan['method'],'GET')
         self.assertEqual(n.request_plan(url(),C)['method'],'GET')
 
     def test_search_echo_second_page_and_request_plan(self):

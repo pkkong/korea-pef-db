@@ -37,7 +37,7 @@ CORE = {
     'kexim': 'https://www.koreaexim.go.kr/HPHKBI039M01',
 }
 HOSTS = {'kgrowth':'kgrowth.or.kr','ktcu':'ktcu.or.kr','koreapost':'kpasset.go.kr',
-         'kexim':'koreaexim.go.kr','nps':'fund.nps.or.kr','cwma':'cw.or.kr','poba':'poba.or.kr','pmaa':'pmaa.or.kr',
+         'kexim':'koreaexim.go.kr','nps':'fund.nps.or.kr','cwma':'cw.or.kr','nh_central':'nonghyup.com','suhyup':'suhyup.co.kr','poba':'poba.or.kr','pmaa':'pmaa.or.kr',
          'tp':'tp.or.kr','cu':'cu.co.kr','kfcc':'kfcc.co.kr','kdb':'kdb.co.kr','ibk':'ibk.co.kr', 'pck_pension':'pension.or.kr', 'sema':'sema.or.kr', 'geps':'geps.or.kr', 'kamco':'kamco.or.kr', 'kbiz':'kbiz.or.kr', 'mmaa':'mmaa.or.kr', 'kfinco':'kfinco.co.kr', 'moel_eif':'moel.go.kr', 'moel_iaci':'moel.go.kr'}
 
 
@@ -53,6 +53,12 @@ def notice_key(institution, url):
             or p.username or p.password or p.port not in {None,443}):
         raise ValueError('official notice identity host mismatch')
     q = parse_qs(p.query, keep_blank_values=True)
+    if institution=='nh_central':
+        board,query=boards.nh.validate(url,{'institution_id':institution},True)
+        return 'nh_central:'+board+':'+query['blbdSqno']
+    if institution=='suhyup':
+        identifier,_=boards.suhyup.validate(url,{'institution_id':institution},True)
+        return 'suhyup:'+identifier
     if institution == 'cwma':
         query = boards.cwma.validate(url,{'institution_id':'cwma','listing_url':boards.cwma.BASE+'/board.do'},True)
         return 'cwma:'+query['boardNo']
@@ -185,6 +191,11 @@ def streams(institution, config, start, end):
 
 def query_plan(institution, config, start, end, *, independent=False, max_pages=20):
     """Use an audit policy separate from the production title allowlist."""
+    if institution=='nh_central':
+        plans=([{'term':'','kind':'latest_board_probe','limit':1}]+[
+            {'term':term,'kind':'independent_title_query','limit':max_pages} for term in ('운용사','펀드','출자')]
+            if independent else [{'term':term,'kind':'configured','limit':max_pages} for term in streams(institution,config,start,end)])
+        return [{**plan,'listing_url':base} for base in config.get('listing_urls',[config['listing_url']]) for plan in plans]
     if not independent:
         return [{'term':term,'kind':'configured','limit':max_pages}
                 for term in streams(institution,config,start,end)]
@@ -202,7 +213,11 @@ def query_plan(institution, config, start, end, *, independent=False, max_pages=
             + [{'term':term,'kind':'independent_title_query','limit':max_pages}
                for term in ('운용사','펀드','출자')])
 
-def page_url(institution, config, term, page, start, end):
+def page_url(institution, config, term, page, start, end, *, listing_url=None):
+    if listing_url is not None:
+        if institution!='nh_central':raise ValueError('unsupported multi-board inventory')
+        boards.nh.validate(listing_url,config)
+        config={**config,'listing_url':listing_url}
     if institution=='kgrowth':return _query(CORE[institution],{'page':page})
     if institution=='ktcu':return _query(CORE[institution],{'srchKey':'sj','srchText':term,'curPage':page})
     if institution=='koreapost':return _query(CORE[institution],{'keySDate':start,'keyEDate':end,'nPage':page})
@@ -212,7 +227,9 @@ def page_url(institution, config, term, page, start, end):
         if institution=='ibk':return _query(request,{'pageNum':page})
         p=urlsplit(request);payload=json.loads(parse_qs(p.query)['_JSON_'][0]);payload['HEADER_STD_WEB']['REQ_PAGE_NO']=page
         return _query(request,{'_JSON_':json.dumps(payload,ensure_ascii=False)})
-    return _query(config['listing_url'],{config['search_param']:term,config['page_param']:page})
+    values={config['search_param']:term,config['page_param']:page}
+    if institution=='nh_central':values['searchCnd']='1' if term else '0'
+    return _query(config['listing_url'],values)
 
 
 def kexim_fetcher():
@@ -237,7 +254,8 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
     as_of=as_of or datetime.now(ZoneInfo('Asia/Seoul')).date().isoformat()
     start,end=window(as_of)
     if not 1<=max_pages<=20 or not 1<=page_budget<=200:raise ValueError('inventory safety budget invalid')
-    configs=boards.load_configs() if configs is None else configs
+    # Pending institutions are read-only screening targets, not daily publication.
+    configs=boards.load_configs(include_pending=True) if configs is None else configs
     scope=json.loads((ROOT/'data/lp_blind_contest_scope.json').read_text()) if scope is None else scope
     public=known_keys([{'programs':baseline.get('programs',[])}]);stored=known_keys([baseline,*archived])
     report={'as_of':as_of,'window':{'start':start,'end':end,'days':365},'purpose':'Read-only official discovery audit; no publication or market recall claim',
@@ -269,6 +287,7 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
         for plan in query_plan(institution,config,start,end,independent=independent,max_pages=max_pages):
             query={'term':plan['term'],'kind':plan['kind'],'limit':plan['limit'],'pages':[],
                    'boundary':'global_page_budget','minimum_date':None,'maximum_date':None}
+            if 'listing_url' in plan:query['listing_url']=plan['listing_url']
             entry['queries'].append(query)
             queue.append((institution,query,1,set()))
     initial={institution:deque() for institution in contexts}
@@ -284,7 +303,8 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
         institution,query,page,seen=queue.popleft();ctx=contexts[institution];config=ctx['config']
         url=config['listing_url'];requests+=1
         try:
-            url=page_url(institution,config,query['term'],page,start,end)
+            extra={'listing_url':query['listing_url']} if 'listing_url' in query else {}
+            url=page_url(institution,config,query['term'],page,start,end,**extra)
             if url not in cache:
                 raw=ctx['fetch'](url);body_bytes+=len(raw)
                 if body_bytes>32*1024*1024:raise ValueError('inventory total body budget exceeded')

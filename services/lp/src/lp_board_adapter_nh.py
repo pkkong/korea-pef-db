@@ -32,10 +32,11 @@ def validate(url,config,detail=False):
 
 
 def request_plan(url,config):
-    """Logical URL to witnessed frm submission; public detail GET unverified."""
+    """Observed listing form; public detail GET verified against both POST boards."""
     detail=urlsplit(url).path.endswith('View.do');board,q=validate(url,config,detail)
     fields={'intgBsnBlbdGrpC':BOARDS[board],'pageIndex':'1','blbdSqno':'','searchCnd':'0','searchWrd':''}
     fields.update(q)
+    if detail:return {'url':url,'method':'GET','encoding':None,'fields':None}
     # Initial bare listing is proven GET; query-bearing pages use actual POST.
     if not detail and not q:return {'url':url,'method':'GET','encoding':None,'fields':None}
     return {'url':BASE+urlsplit(url).path,'method':'POST','encoding':'form','fields':fields}

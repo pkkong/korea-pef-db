@@ -16,6 +16,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 try:
+    from .lp_offering_policy import procurement_reason,central_not_investing
     from .lp_attachment_policy import is_submission_attachment
     from .collect_shared_lp_notices import classify_scope
     from .collect_lp_original_notices import load_channels, validate_url, validate_original
@@ -30,6 +31,7 @@ try:
     from . import lp_kfinco_notice_terms as kfinco_terms
     from . import lp_kamco_notice_terms as kamco_terms
 except ImportError:
+    from lp_offering_policy import procurement_reason,central_not_investing
     from lp_attachment_policy import is_submission_attachment
     from collect_shared_lp_notices import classify_scope
     from collect_lp_original_notices import load_channels, validate_url, validate_original
@@ -148,7 +150,11 @@ def _texts(n):
 
 
 def _scope(n):
+    if procurement_reason(n['title'],n['body']):
+        return 'outside'
     if n.get('institution_id')=='nh_central':
+        if any(central_not_investing(text) for text in _texts(n)):
+            return 'outside'
         # This portal also hosts affiliate-bank and securities procurement.
         # Recompute from the validated article, never trust a supplied flag.
         try:

@@ -10,6 +10,44 @@ def growth(rows):
 
 
 class OfficialInventoryTests(unittest.TestCase):
+    def test_pending_nh_screening_visits_both_boards_without_daily_activation(self):
+        from services.lp.tests.test_lp_board_adapter_nh import small
+        configs=inventory.boards.load_configs(include_pending=True)
+        self.assertNotIn('nh_central',inventory.boards.load_configs())
+        self.assertNotIn('suhyup',inventory.boards.load_configs())
+        calls=[]
+        def fetch(url):
+            p=urlsplit(url);q=parse_qs(p.query,keep_blank_values=True)
+            board='bid' if '/bid/' in p.path else 'notice'
+            term=q['searchWrd'][0];calls.append((board,term))
+            html=small(0,True) if board=='notice' else small(1)
+            if board=='bid':
+                html=html.replace('/notice/notice','/bid/bid').replace('000000000012','000000000019')
+            html=html.replace('name="searchWrd" value=""','name="searchWrd" value="'+term+'"')
+            if term:html=html.replace('<option value="1">','<option value="1" selected>')
+            return html.encode()
+        report=inventory.audit({'programs':[]},as_of='2099-03-05',independent=True,
+            configs={'nh_central':configs['nh_central']},
+            scope={'confirmed_institution_ids':[],'priority_verification_ids':['nh_central']},
+            fetch_factory=lambda *a:fetch)
+        self.assertFalse(report['holds'])
+        self.assertEqual(calls,[(b,t) for b in ('notice','bid') for t in ('','운용사','펀드','출자')])
+        entry=report['institutions'][0]
+        self.assertEqual(entry['status'],'observed_query_boundary')
+        self.assertEqual(len(entry['rows']),1)
+        self.assertEqual(entry['rows'][0]['source_id'],'nh_central:bid:90001')
+        self.assertTrue(all(q['boundary']=='confirmed_empty' for q in entry['queries'][:4]))
+        self.assertEqual(len(entry['rows'][0]['observed_in_queries']),4)
+
+    def test_pending_source_identities_preserve_board_and_reject_foreign_urls(self):
+        from services.lp.tests.test_lp_board_adapter_nh import DU
+        from services.lp.src.lp_board_adapter_nh import BOARDS
+        self.assertEqual(inventory.notice_key('nh_central',DU),'nh_central:bid:99999')
+        other=DU.replace('/bid/bidView','/notice/noticeView').replace(BOARDS['bid'],BOARDS['notice'])
+        self.assertEqual(inventory.notice_key('nh_central',other),'nh_central:notice:99999')
+        self.assertEqual(inventory.notice_key('suhyup','https://www.suhyup.co.kr/bbs/suhyup/23/99999/artclView.do'),'suhyup:99999')
+        with self.assertRaises(ValueError):inventory.notice_key('nh_central',DU.replace('nonghyup.com','evil.invalid'))
+
     def test_independent_queries_do_not_reuse_a_narrow_collector_allowlist(self):
         from services.lp.tests.test_lp_board_adapter_kamco import L
         config=inventory.boards.load_configs()['kamco']
