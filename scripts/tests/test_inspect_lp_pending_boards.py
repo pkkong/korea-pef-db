@@ -17,8 +17,17 @@ class PendingBoardTests(unittest.TestCase):
         <a href="/third">입찰</a><a href="/board.do?type=view">공지</a></html>'''
         links=pending_links(html,PENDING_ROOTS['cwma'],'cwma')
         self.assertEqual([r['url'] for r in links['menus']],
-            ['https://www.cw.or.kr/board.do?menuNo=248&boardConfigNo=29','https://www.cw.or.kr/notice'])
+            ['https://www.cw.or.kr/notice','https://www.cw.or.kr/board.do?menuNo=248&boardConfigNo=29'])
         self.assertEqual(links['scripts'],[])
+
+    def test_general_notice_precedes_deposit_fund_and_subsidiary_menus(self):
+        html='<a href="/deposit">예금자보호기금공지사항</a><a href="/asset">Sh수협자산운용</a><a href="/general">공지사항(입찰공고)</a>'
+        links=pending_links(html,PENDING_ROOTS['suhyup'],'suhyup')
+        self.assertEqual(links['menus'][0]['url'],'https://www.suhyup.co.kr/general')
+
+    def test_full_pages_click_handlers_are_not_landing_redirects(self):
+        html='<html>'+('navigation '*1000)+"<script>function go(){location.href='/first';} function back(){location.href='/second';}</script></html>"
+        self.assertIsNone(pending_redirect(html,PENDING_ROOTS['cwma'],'cwma'))
 
     def test_literal_landing_redirects_are_same_origin_and_unambiguous(self):
         for html in ('<meta http-equiv="refresh" content="0;url=./index.jsp">',

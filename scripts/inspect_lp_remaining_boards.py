@@ -57,12 +57,19 @@ def pending_links(html, url, institution):
             if target and urlsplit(target).path.lower().endswith('.js') and target not in scripts:
                 scripts.append(target)
         scripts.sort(key=lambda u: (not bool(re.search('bbs|board|ohef|dlng', u, re.I)), u))
-    return {'menus': [{'url': u, 'label': label} for u, label in list(menus.items())[:2]],
+    # Prefer the institution's general notices over an unrelated subsidiary or
+    # deposit-protection board that happens to occur first in the navigation.
+    ordered=sorted(menus.items(),key=lambda item:(not bool(re.fullmatch(r'공지사항(?:\(입찰공고\))?|입찰공고|자산운용\s*공고',item[1])),item[0]))
+    return {'menus': [{'url': u, 'label': label} for u, label in ordered[:2]],
             'scripts': scripts[:2]}
 
 
 def pending_redirect(html, url, institution):
     """Follow one literal first-party landing redirect; never execute scripts."""
+    # Full application pages contain location assignments inside click handlers.
+    # Those are navigation code, not an automatic landing redirect.
+    if len(html)>8192:
+        return None
     root=Document(html).root
     targets=[]
     for node in root.nodes('meta'):
