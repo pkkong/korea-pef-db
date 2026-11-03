@@ -24,6 +24,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 try:
+    from .lp_attachment_policy import is_submission_form
     from .lp_ipv4_transport import IPv4HTTPSHandler
     from .lp_kdb_dns import resolve_kdb_ipv4
     from .lp_cu_transport import CuDnsError, fetch_cu_ipv4
@@ -43,6 +44,7 @@ try:
     from . import lp_board_adapter_geps as geps
     from . import lp_board_adapter_kamco as kamco
 except ImportError:
+    from lp_attachment_policy import is_submission_form
     from lp_ipv4_transport import IPv4HTTPSHandler
     from lp_kdb_dns import resolve_kdb_ipv4
     from lp_cu_transport import CuDnsError, fetch_cu_ipv4
@@ -372,7 +374,8 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                     if 'institution_id' in row and row['institution_id'] != institution:
                         continue
                     if ((re.search(r'위탁|운용사|블라인드|PEF?|사모|선정', row['title'], re.I)
-                             or institution in {'kdb', 'ibk'} and re.search(r'출자사업|펀드', row['title']))
+                             or institution in {'kdb', 'ibk'} and re.search(r'출자사업|펀드', row['title'])
+                             or re.search(r'(?:출자|펀드).*(?:공고|모집|공모|요청|결과)', row['title']))
                             and classify_scope(row['title'], row['title']) != 'outside'):
                         if (row['date'] >= cutoff if cutoff else row['date'][:4] >= str(int(checked_at[:4]) - config.get('history_years', 4) + 1)):
                             key = row['source_id'] if config.get('lookback_days') else row['url']
@@ -441,7 +444,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                 outside = classify_scope(n['title'], n['title']) in {'outside', 'vc_only'}
                 if not outside:
                     for item in n['attachments'][:6]:
-                        if is_form(item['name']):
+                        if is_submission_form(item['name']):
                             continue
                         try:
                             raw = fetch(item['url'], n['url'])

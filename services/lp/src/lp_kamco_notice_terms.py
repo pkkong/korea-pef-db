@@ -5,6 +5,11 @@ import re
 from datetime import datetime
 from urllib.parse import urlsplit
 
+try:
+    from .lp_attachment_policy import is_submission_attachment
+except ImportError:
+    from lp_attachment_policy import is_submission_attachment
+
 
 def _sources(n):
     if n.get('institution_id') != 'kamco':
@@ -19,6 +24,8 @@ def _sources(n):
     sources = []
     names = {a['url']: a.get('name', '') for a in n.get('attachments', [])}
     for url, text in n.get('attachment_texts', {}).items():
+        if is_submission_attachment(n, url):
+            continue
         sha = n.get('attachment_hashes', {}).get(url, '')
         if (url not in names or not official(url) or not re.fullmatch('[0-9a-f]{64}', sha)
                 or not isinstance(text, str) or re.search('^(?:제안서|신청서|서식|양식)', names[url])):

@@ -46,6 +46,32 @@ class InstitutionCollectionTests(unittest.TestCase):
             programs, _ = publish_basic_notices({'programs': [], 'institution_notices': result['notices']}, [], STAMP)
             self.assertEqual(programs, [])
 
+    def test_notice_labelled_forms_are_not_downloaded_and_old_proofs_still_replay(self):
+        from services.lp.tests.test_lp_board_adapters_banks import IBK_LIST, IBK_HTML
+        config = {**boards.load_configs()['ibk'], 'pages':1, 'search_terms':['펀드']}
+        detail = IBK_HTML.replace('선정 공고.pdf','(공고)제안서 양식.hwp')
+        calls = []
+        def fetch(url, referer=None):
+            calls.append(url)
+            self.assertNotIn('/common/download.ibk',url)
+            return ('<html>'+(detail if 'noticeDetailCyber' in url else IBK_LIST)+'</html>').encode()
+        result = boards.collect({'ibk':config}, lambda c: fetch, checked_at=STAMP)
+        self.assertEqual(result['holds'],[])
+        self.assertEqual(len(calls),2)
+        n=result['notices'][0]
+        self.assertEqual(len(n['attachments']),1)
+        self.assertEqual(n['attachment_bytes'],{})
+        # Retained pre-policy forms remain reproducible evidence. They are
+        # excluded from public facts separately, without rewriting the archive.
+        url=n['attachments'][0]['url']; raw=b'archived form bytes'
+        n['attachment_bytes'][url]=base64.b64encode(raw).decode()
+        n['attachment_hashes'][url]=boards.digest(raw)
+        n['attachment_texts'][url]='archived proposal form text'
+        before=copy.deepcopy(n)
+        with patch.object(boards,'extract_attachment',return_value={'format':'hwp','text':n['attachment_texts'][url]}):
+            self.assertEqual(boards.validate_notice(n,STAMP,config),before)
+        self.assertEqual(n,before)
+
     def test_kfinco_closed_rows_never_requested_or_retained_as_fresh_evidence(self):
         import json
         from services.lp.tests.test_lp_board_adapter_kfinco import row,listing,detail,public
@@ -110,7 +136,7 @@ class InstitutionCollectionTests(unittest.TestCase):
         from services.lp.tests.test_lp_board_adapter_kamco import L, H
         config = boards.load_configs()['kamco']
         titles = ['소규모 구조조정 펀드 운용사 선정계획 공고',
-                  '지역 재도약 펀드 운용사 선정계획 공고']
+                  '기업지원펀드 제안서 요청 공고']
         ids = ['765432', '765433']
         calls = []
         def fetch(url, referer=None):

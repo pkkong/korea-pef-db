@@ -37,6 +37,21 @@ class CandidateSourceTests(unittest.TestCase):
                      '투자대상 : 일본 상장 주식 및 경영참여형 PEF']:
             self.assertEqual(audit.official_scope(dict(title=cases[1][0],body=body)), ('scope_unconfirmed', None))
 
+    def test_verified_administration_contract_and_project_fund_are_not_blind_contests(self):
+        title='위탁운용펀드 일반사무관리회사 선정'
+        bodies=['용역명: '+title+' 용역내용: 제안요청서 참조. 제254조에 의거 등록된 자',
+                '제안서 평가결과. 입찰명: '+title+' 입찰공고 제2026-53호']
+        for body in bodies:
+            self.assertEqual(audit.official_scope(dict(title=title,body=body)),
+                             ('outside_policy','fund_administration_procurement'))
+        self.assertEqual(audit.official_scope(dict(title='프로젝트펀드 수시모집 공고',
+            body='프로젝트펀드 투자 제안을 모집합니다.')),('outside_policy','project_fund'))
+        for body in ('펀드 운용사를 모집합니다.', bodies[0]+' 기관전용 사모펀드 모집도 포함',
+                     '일반사무관리회사 소개문입니다.'):
+            self.assertEqual(audit.official_scope(dict(title=title,body=body))[0],'scope_unconfirmed')
+        self.assertEqual(audit.official_scope(dict(title='프로젝트펀드·블라인드 모집',
+            body='프로젝트펀드와 블라인드 모집.'))[0],'scope_unconfirmed')
+
     def test_inventory_unknowns_are_resolved_without_manual_notice_selection(self):
         from services.lp.tests.test_lp_board_adapters_banks import IBK_LIST,IBK_HTML,IBK_URL
         config=audit.load_configs()['ibk'];url=audit.inventory.page_url('ibk',config,'펀드',1,'2025-10-26','2026-10-25')

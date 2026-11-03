@@ -5,9 +5,11 @@ from datetime import datetime
 from urllib.parse import urlsplit
 
 try:
+    from .lp_attachment_policy import is_submission_attachment
     from .lp_board_adapter_pck import canonical_notice
     from .lp_notice_triage import notice_stage
 except ImportError:
+    from lp_attachment_policy import is_submission_attachment
     from lp_board_adapter_pck import canonical_notice
     from lp_notice_triage import notice_stage
 
@@ -27,6 +29,8 @@ def offering_sources(n):
         return []
     found = []
     for url, text in n.get('attachment_texts', {}).items():
+        if is_submission_attachment(n, url):
+            continue
         if (urlsplit(url).hostname != 'www.pension.or.kr'
                 or not re.fullmatch('[0-9a-f]{64}', n.get('attachment_hashes', {}).get(url, ''))):
             continue

@@ -2,9 +2,11 @@
 import re
 from datetime import date, datetime
 try:
+    from .lp_attachment_policy import is_submission_attachment
     from .lp_shared_notice_terms import extract_offering_sources
     from .lp_kfcc_notice_terms import allocation as kfcc_allocation
 except ImportError:
+    from lp_attachment_policy import is_submission_attachment
     from lp_shared_notice_terms import extract_offering_sources
     from lp_kfcc_notice_terms import allocation as kfcc_allocation
 
@@ -13,7 +15,8 @@ NUM = r'(\d[\d,]*)'
 
 def extract_terms(n):
     sources = [(n['url'], n['body'], n['sha256'])]
-    sources += [(u, t, n['attachment_hashes'][u]) for u, t in n.get('attachment_texts', {}).items()]
+    sources += [(u, t, n['attachment_hashes'][u]) for u, t in n.get('attachment_texts', {}).items()
+                if not is_submission_attachment(n, u)]
     try:
         result = extract_offering_sources(n, sources)
     except ValueError:

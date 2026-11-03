@@ -16,6 +16,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 try:
+    from .lp_attachment_policy import is_submission_attachment
     from .collect_shared_lp_notices import classify_scope
     from .collect_lp_original_notices import load_channels, validate_url, validate_original
     from .lp_notice_triage import program_key, notice_stage, compact
@@ -29,6 +30,7 @@ try:
     from . import lp_kfinco_notice_terms as kfinco_terms
     from . import lp_kamco_notice_terms as kamco_terms
 except ImportError:
+    from lp_attachment_policy import is_submission_attachment
     from collect_shared_lp_notices import classify_scope
     from collect_lp_original_notices import load_channels, validate_url, validate_original
     from lp_notice_triage import program_key, notice_stage, compact
@@ -133,6 +135,8 @@ def _texts(n):
     # offered asset class. Only retained, fingerprinted offering text is usable.
     texts = [n['body']]
     for url, raw in n.get('attachment_texts', {}).items():
+        if is_submission_attachment(n, url):
+            continue
         if (urlsplit(url).hostname != urlsplit(n['url']).hostname or
                 not re.fullmatch('[0-9a-f]{64}', n.get('attachment_hashes', {}).get(url, ''))):
             continue

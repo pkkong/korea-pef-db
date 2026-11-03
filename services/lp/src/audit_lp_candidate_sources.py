@@ -44,6 +44,15 @@ def official_scope(source):
     # holdings, performance evaluation, or prior feasibility studies.
     if re.search(r'(?<![A-Za-z])PEF?(?![A-Za-z])|기관전용|경영참여형', title + ' ' + body, re.I):
         return 'scope_unconfirmed', None
+    compact_title = re.sub(r'\s+', '', title)
+    compact_body = re.sub(r'\s+', '', body)
+    if ('일반사무관리회사선정' in compact_title and '일반사무관리회사선정' in compact_body
+            and (all(term in compact_body for term in ('용역명', '용역내용', '제254조', '등록된자'))
+                 or all(term in compact_body for term in ('입찰명', '입찰공고', '제안서평가결과')))):
+        return 'outside_policy', 'fund_administration_procurement'
+    if (re.search(r'프로젝트\s*펀드', title) and re.search(r'프로젝트\s*펀드', body)
+            and not re.search(r'블라인드|blind', title + ' ' + body, re.I)):
+        return 'outside_policy', 'project_fund'
     if ('사업타당성조사' in title and '지원사업' in title
             and '사업타당성조사 지원사업' in body and '신청기업' in body):
         return 'outside_policy', 'feasibility_study_support'
