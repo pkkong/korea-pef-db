@@ -270,30 +270,40 @@ def _complete_html(raw, kind):
     return html
 
 
+def _fetch_bytes_curl(url, referer=None, *, html_kind=None):
+    if urlsplit(url).hostname not in {'www.kvca.or.kr','www.kofia.or.kr'}:
+        raise ValueError('source host is not an enabled association channel')
+    require_same_host(url, url)
+    command=['curl','--disable','--fail','--silent','--show-error',
+             '--http1.1','--user-agent','Mozilla/5.0 (LP public notice collector)',
+             '--header','Accept-Encoding: identity','--header','Connection: close',
+             '--max-time','25','--max-filesize',str(MAX_BYTES),
+             '--proto','=https,http','--proto-redir','=https,http']
+    if referer:
+        command += ['--referer',referer]
+    result=subprocess.run(command+[url],capture_output=True,timeout=30,check=True)
+    if len(result.stdout)>MAX_BYTES:
+        raise ValueError('response exceeds 12 MiB limit')
+    if html_kind:
+        _complete_html(result.stdout, html_kind)
+    return result.stdout
+
+
 def _fetch_bytes_once(url, referer=None, *, html_kind=None):
+    parsed=urlsplit(url)
+    if (html_kind=='listing' and parsed.scheme=='https'
+            and parsed.netloc=='www.kofia.or.kr' and parsed.path=='/brd/m_17/list.do'):
+        # Queued source receipts verified HTTP/1.1 identity for this board.
+        # Avoid first issuing the repeatedly truncated urllib request.
+        return _fetch_bytes_curl(url, referer, html_kind=html_kind)
     try:
         raw = _fetch_bytes_urllib(url, referer)
         if html_kind:
             _complete_html(raw, html_kind)
         return raw
     except (IncompleteRead, IncompleteHTML):
-        # KOFIA can truncate a 200 response without a transport exception, as
-        # well as send invalid chunk framing. Retry the whole document over
-        # curl HTTP/1.1; HTTP/1.0 itself truncates this server at ~32 KiB.
-        # Validate its HTML too, never accept partial rows as complete.
-        command=['curl','--fail','--silent','--show-error',
-                 '--http1.1','--user-agent','Mozilla/5.0 (LP public notice collector)',
-                 '--header','Accept-Encoding: identity','--header','Connection: close',
-                 '--max-time','25','--max-filesize',str(MAX_BYTES),
-                 '--proto','=https,http','--proto-redir','=https,http']
-        if referer:
-            command += ['--referer',referer]
-        result=subprocess.run(command+[url],capture_output=True,timeout=30,check=True)
-        if len(result.stdout)>MAX_BYTES:
-            raise ValueError('response exceeds 12 MiB limit')
-        if html_kind:
-            _complete_html(result.stdout, html_kind)
-        return result.stdout
+        # Other channels retain their established whole-response recovery.
+        return _fetch_bytes_curl(url, referer, html_kind=html_kind)
 
 
 def _transient_fetch_error(error):

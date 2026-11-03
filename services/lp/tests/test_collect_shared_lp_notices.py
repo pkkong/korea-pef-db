@@ -14,6 +14,38 @@ KVCA='https://www.kvca.or.kr/Program/invest/list.html?a_cd=8&page=1'
 KOFIA='https://www.kofia.or.kr/brd/m_212/list.do'
 
 class SharedCollectionTests(unittest.TestCase):
+    def test_kofia17_listing_prefers_identity_curl_without_urllib(self):
+        complete=b'<html><table><tr><td><a href="view.do?seq=987">verified</a></td></tr></table></html>'
+        with patch.object(shared,'_fetch_bytes_urllib') as urllib, patch.object(shared.subprocess,'run',return_value=SimpleNamespace(stdout=complete)) as curl:
+            result=collect(pages=1,aliases={},channels={'kofia_17':shared.CHANNELS['kofia_17']})
+            urllib.assert_not_called();self.assertEqual(curl.call_count,1)
+            self.assertFalse(result['holds'])
+            self.assertEqual(result['unmatched_notices'][0]['source_id'],'kofia_17:987')
+            command=curl.call_args.args[0]
+            self.assertEqual(command[:2],['curl','--disable'])
+            self.assertIn('--http1.1',command);self.assertIn('Accept-Encoding: identity',command)
+            for flag in ('--compressed','--insecure','--location','-k','-L'):self.assertNotIn(flag,command)
+
+    def test_kofia17_partial_curl_never_imports_and_is_bounded(self):
+        partial=b'<html><table><tr><td><a href="view.do?seq=999">partial</a></td></tr>'
+        with patch.object(shared,'_fetch_bytes_urllib') as urllib, patch.object(shared.subprocess,'run',return_value=SimpleNamespace(stdout=partial)) as curl, patch.object(shared.time,'sleep'):
+            result=collect(pages=1,aliases={},channels={'kofia_17':shared.CHANNELS['kofia_17']})
+            urllib.assert_not_called();self.assertEqual(curl.call_count,3)
+            self.assertFalse(result['notices']);self.assertFalse(result['unmatched_notices'])
+            self.assertEqual(len(result['holds']),1)
+
+    def test_kofia17_curl_tls_http_and_size_failures_are_fatal(self):
+        for code in (22,60,63):
+            with patch.object(shared,'_fetch_bytes_urllib') as urllib, patch.object(shared.subprocess,'run',side_effect=subprocess.CalledProcessError(code,['curl'])) as curl, patch.object(shared.time,'sleep') as sleep:
+                with self.assertRaises(subprocess.CalledProcessError):shared.fetch_bytes(shared.CHANNELS['kofia_17'],html_kind='listing')
+                urllib.assert_not_called();self.assertEqual(curl.call_count,1);sleep.assert_not_called()
+
+    def test_curl_preference_does_not_change_other_boards_or_detail_assets(self):
+        for url,kind in ((KOFIA,'listing'),(shared.CHANNELS['kofia_17'],'detail'),(shared.CHANNELS['kofia_17'],None)):
+            with patch.object(shared,'_fetch_bytes_urllib',return_value=b'<html>complete</html>') as urllib, patch.object(shared.subprocess,'run') as curl:
+                self.assertEqual(shared.fetch_bytes(url,html_kind=kind),b'<html>complete</html>')
+                urllib.assert_called_once();curl.assert_not_called()
+
     def test_multibyte_truncation_recovers_complete_listing_over_http11(self):
         complete = '<html><table><tr><td><a href="view.do?seq=777">한글 공고</a></td></tr></table></html>'.encode()
         partial = complete[:complete.index('글'.encode()) + 2]
@@ -93,7 +125,7 @@ class SharedCollectionTests(unittest.TestCase):
     def test_collection_shares_four_extra_attempts_and_still_writes_holds(self):
         # Three failing boards get seven calls, not nine; each new run resets.
         for _ in range(2):
-            with patch.object(shared, '_fetch_bytes_urllib', side_effect=TimeoutError('offline')) as fetch, \
+            with patch.object(shared, '_fetch_bytes_once', side_effect=TimeoutError('offline')) as fetch, \
                  patch.object(shared.time, 'sleep'):
                 result = collect(pages=1, aliases={})
                 self.assertEqual(fetch.call_count, 7)
@@ -133,8 +165,8 @@ class SharedCollectionTests(unittest.TestCase):
              patch.object(shared.time, 'sleep'):
             result = collect(pages=1, aliases={}, channels={'kofia_212': KOFIA, 'kofia_17': shared.CHANNELS['kofia_17'], 'kvca': KVCA})
         # Same run-wide four-extra-attempt budget as transport failures, with at
-        # most one urllib plus one HTTP/1.0 recovery request per attempt.
-        self.assertEqual(urllib.call_count, 7)
+        # one curl for m17, with urllib plus curl recovery on other boards.
+        self.assertEqual(urllib.call_count, 4)
         self.assertEqual(curl.call_count, 7)
         self.assertEqual(len(result['holds']), 3)
         self.assertTrue(all(h['error'] == 'incomplete listing HTML' for h in result['holds']))
