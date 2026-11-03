@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       retry_failed_institutions:
-        description: Retry at most two failed LP sources before publication
+        description: Retry at most two failed issuers and one failed association stream
         required: false
         type: boolean
         default: false
@@ -55,7 +55,7 @@ jobs:
           python-version: '3.12'
       - name: Install publication readers
         run: python3 -m pip install 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47' 'truststore==0.10.5'
-      - name: Retry at most two failed sources and retain both attempts
+      - name: Retry bounded failed sources and retain both attempts
         if: inputs.retry_failed_institutions
         env:
           LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
@@ -146,6 +146,8 @@ jobs:
           name: lp-publication-recovery
           path: |
             /tmp/lp-recovery/lp-institution-collection.json
+            /tmp/lp-recovery/lp-priority-collection.json
+            /tmp/lp-recovery/lp-shared-collection.json
             /tmp/lp-recovery/preflight.json
             /tmp/lp-recovery/publication.json
             /tmp/lp-recovery/remaining-failures.json

@@ -386,11 +386,17 @@ def _official_fetch(url: str, cookies: dict[str, str] | None = None) -> bytes:
                     raise
                 redirect_error = exc
                 break
-            except (URLError, TimeoutError) as exc:
+            except (URLError, TimeoutError, ConnectionError) as exc:
                 dns_failure = transient_dns(exc)
+                # Unwrap only typed transport errors; text is never a retry signal.
+                reason = exc
+                seen = set()
+                while isinstance(reason, URLError) and id(reason) not in seen:
+                    seen.add(id(reason))
+                    reason = reason.reason
+                connection_failure = isinstance(reason, (TimeoutError, ConnectionError))
                 # Certificate, HTTP and content failures must never select DNS recovery.
-                timeout_failure = isinstance(exc, TimeoutError) or (isinstance(exc, URLError) and isinstance(exc.reason, TimeoutError))
-                if attempt == 2 or not (dns_failure or timeout_failure):
+                if attempt == 2 or not (dns_failure or connection_failure):
                     raise
                 if dns_failure and recovery_opener is None:
                     recovery_opener = build_opener(ProxyHandler({}),

@@ -112,6 +112,24 @@ class KeximCollectorTests(unittest.TestCase):
                 with self.assertRaises(type(error)):kexim._official_fetch(kexim.BOARD)
                 self.assertEqual(build.call_count,1);self.assertEqual(opener.open.call_count,1);sleep.assert_not_called()
 
+    def test_typed_connection_reset_retries_same_opener_without_dns(self):
+        class Response(BytesIO):
+            def geturl(self):return kexim.BOARD
+        for error in (ConnectionResetError(54,'reset'),URLError(ConnectionResetError(54,'reset')),URLError(URLError(ConnectionResetError(54,'reset')))):
+            opener=Mock();opener.open.side_effect=[error,Response(b'official')]
+            with patch.object(kexim,'build_opener',return_value=opener) as build,patch.object(kexim,'resolve_kexim_ipv4') as dns,patch.object(kexim.time,'sleep') as sleep:
+                self.assertEqual(kexim._official_fetch(kexim.BOARD),b'official')
+                self.assertEqual(opener.open.call_count,2);self.assertEqual(build.call_count,1)
+                sleep.assert_called_once_with(1);dns.assert_not_called()
+
+    def test_repeated_reset_stops_after_three_attempts_without_dns(self):
+        opener=Mock();opener.open.side_effect=URLError(ConnectionResetError(54,'reset'))
+        with patch.object(kexim,'build_opener',return_value=opener) as build,patch.object(kexim,'resolve_kexim_ipv4') as dns,patch.object(kexim.time,'sleep') as sleep:
+            with self.assertRaises(URLError):kexim._official_fetch(kexim.BOARD)
+            self.assertEqual(opener.open.call_count,3);self.assertEqual(build.call_count,1)
+            self.assertEqual([call.args for call in sleep.call_args_list],[(1,),(2,)])
+            dns.assert_not_called()
+
     def test_dns_recovery_exhaustion_is_three_attempts_without_silent_empty(self):
         opener=Mock();opener.open.side_effect=URLError(socket.gaierror(socket.EAI_NONAME,'DNS'))
         with patch.object(kexim,'build_opener',return_value=opener) as build,patch.object(kexim.time,'sleep'):

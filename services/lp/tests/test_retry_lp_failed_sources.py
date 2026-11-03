@@ -15,6 +15,42 @@ def priorities(failed=True):
 
 
 class RetryFailedSourcesTests(unittest.TestCase):
+    def test_one_association_retry_preserves_other_streams_and_verified_originals(self):
+        report={'checked_at':STAMP,'notices':[{'source_id':'kofia_17:1','sha256':'same','original_notices':['verified original']},
+                    {'source_id':'kvca:9','sha256':'retained'}],
+                'holds':[{'stage':'listing','source_channel':'kofia_17','error':'truncated'},
+                         {'stage':'listing','source_channel':'kofia_212','error':'other failure'}],
+                'coverage':{'channel_pages':{'kvca':{'healthy':True},'kofia_17':{'old_error':True}}}}
+        fresh={'notices':[{'source_id':'kofia_17:1','sha256':'same','original_notices':[]}],
+               'holds':[],'coverage':{'channel_pages':{'kofia_17':{'pages':['fresh']}}}}
+        before=copy.deepcopy(report)
+        with patch.object(r.shared,'collect',return_value=fresh) as collect,patch.object(r,'enrich',side_effect=lambda value,**kw:value):
+            result,channels=r.retry_association(report,checked_at=STAMP)
+        self.assertEqual(channels,['kofia_17'])
+        self.assertEqual(collect.call_args.kwargs['channels'],{'kofia_17':r.shared.CHANNELS['kofia_17']})
+        self.assertEqual(collect.call_args.kwargs['pages'],3)
+        self.assertEqual(result['notices'][0]['original_notices'],['verified original'])
+        self.assertEqual(result['notices'][1],report['notices'][1])
+        self.assertEqual(result['holds'],[report['holds'][1]])
+        self.assertEqual(result['retry_history'][0]['previous_holds'],[report['holds'][0]])
+        self.assertEqual(result['coverage']['channel_pages']['kvca'],{'healthy':True})
+        self.assertEqual(report,before)
+
+    def test_repeated_association_failure_remains_visible(self):
+        report={'notices':[{'source_id':'kofia_17:1'}],'holds':[{'stage':'detail','source_id':'kofia_17:9','error':'first'}]}
+        fresh={'notices':[],'holds':[{'stage':'detail','source_id':'kofia_17:9','error':'again'}],
+               'coverage':{'channel_pages':{'kofia_17':{}}}}
+        with patch.object(r.shared,'collect',return_value=fresh),patch.object(r,'enrich',side_effect=lambda value,**kw:value):
+            result,channels=r.retry_association(report,checked_at=STAMP)
+        self.assertEqual(result['holds'][0]['error'],'again');self.assertEqual(result['notices'],report['notices'])
+        self.assertEqual(result['retry_history'][0]['previous_holds'][0]['error'],'first')
+
+    def test_healthy_or_unknown_association_is_not_requested(self):
+        for report in ({'holds':[]},{'holds':[{'stage':'listing','source_channel':'foreign'}]}):
+            with patch.object(r.shared,'collect') as collect:
+                result,channels=r.retry_association(report)
+            collect.assert_not_called();self.assertEqual(channels,[]);self.assertEqual(result,report)
+
     def test_global_two_issuer_budget_keeps_healthy_and_unselected_sources(self):
         d=direct(['nps','tp']);p=priorities();before=copy.deepcopy((d,p));configs={iid:{'institution_id':iid} for iid in ('nps','tp')}
         with patch.object(r.boards,'retry_failed_sources',side_effect=lambda report,*args,**kwargs:report) as native:

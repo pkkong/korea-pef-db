@@ -24,6 +24,8 @@ class PendingBoardTests(unittest.TestCase):
         html='<a href="/deposit">예금자보호기금공지사항</a><a href="/asset">Sh수협자산운용</a><a href="/general">공지사항(입찰공고)</a>'
         links=pending_links(html,PENDING_ROOTS['suhyup'],'suhyup')
         self.assertEqual(links['menus'][0]['url'],'https://www.suhyup.co.kr/general')
+        html+='<a href="/bbs/suhyup/23/99999/artclView.do?layout=unknown">입찰 공고 본문</a>'
+        self.assertFalse(any('artclView' in item['url'] for item in pending_links(html,PENDING_ROOTS['suhyup'],'suhyup')['menus']))
 
     def test_full_pages_click_handlers_are_not_landing_redirects(self):
         html='<html>'+('navigation '*1000)+"<script>function go(){location.href='/first';} function back(){location.href='/second';}</script></html>"

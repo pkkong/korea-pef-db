@@ -45,7 +45,7 @@ def pending_links(html, url, institution):
         if (not href or not target or target == url or not re.search('공지|선정|입찰|자산운용', label)
                 or set(params) & {'pstid','boardno','nttid','bbstseq','seq','no'}
                 or any('view' in params.get(k,[]) for k in ('action','type','schm'))
-                or re.search(r'(?i)/(?:view|detail)(?:[/.]|$)|/[0-9]{4,}/?$', urlsplit(target).path)
+                or re.search(r'(?i)/(?:view|detail|artclView)(?:[/.]|$)|/[0-9]{4,}/?$', urlsplit(target).path)
                 or re.search(r'(?i)(?:download|filedown)|\.(?:pdf|hwp|zip|xlsx?)$', urlsplit(target).path)):
             continue
         menus.setdefault(target, label)
