@@ -8,6 +8,7 @@ import math
 import os
 from pathlib import Path
 import platform
+import re
 import stat
 import subprocess
 import tempfile
@@ -23,6 +24,11 @@ CACHE_LIMIT = 16 * 1024 * 1024
 _CACHE = OrderedDict()
 _CACHE_BYTES = 0
 HELPER = Path(__file__).resolve().parents[1] / 'tools' / 'ocr_pdf.swift'
+
+
+def _apple_developer_path(path):
+    # Hosted macOS runners select versioned Xcode application bundles.
+    return bool(re.match(r'^/(?:Library/Developer/CommandLineTools/|Applications/Xcode(?:_[0-9]+(?:\.[0-9]+)*)?\.app/Contents/Developer/)', str(path)))
 
 
 def _run(args, output, timeout):
@@ -50,8 +56,7 @@ def _compiler():
     if len(result.stdout)>4096:raise ValueError('invalid compiler locator')
     locator = Path(result.stdout.decode('utf-8').strip())
     path = locator.resolve()
-    approved = ('/Library/Developer/CommandLineTools/', '/Applications/Xcode.app/Contents/Developer/')
-    if not any(str(path).startswith(prefix) for prefix in approved) or path.name not in {'swiftc','swift-frontend','swift-driver'} or not path.is_file():
+    if not _apple_developer_path(path) or path.name not in {'swiftc','swift-frontend','swift-driver'} or not path.is_file():
         raise ValueError('unapproved Apple compiler path')
     try:
         result = subprocess.run(['/usr/bin/xcrun','--show-sdk-path'],stdout=subprocess.PIPE,
@@ -59,7 +64,7 @@ def _compiler():
     except (OSError,subprocess.SubprocessError):raise ValueError('Apple macOS SDK unavailable') from None
     if len(result.stdout)>4096:raise ValueError('invalid SDK locator')
     sdk=Path(result.stdout.decode('utf-8').strip()).resolve()
-    if not any(str(sdk).startswith(prefix) for prefix in approved) or not sdk.is_dir() or not sdk.name.endswith('.sdk'):
+    if not _apple_developer_path(sdk) or not sdk.is_dir() or not sdk.name.endswith('.sdk'):
         raise ValueError('unapproved macOS SDK path')
     return str(locator),str(sdk)
 

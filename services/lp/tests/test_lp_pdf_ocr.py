@@ -22,6 +22,15 @@ class PdfOcrTests(unittest.TestCase):
     def setUp(self):o._CACHE.clear();o._CACHE_BYTES=0
     def tearDown(self):o._CACHE.clear();o._CACHE_BYTES=0
 
+    def test_apple_toolchain_locations_include_hosted_versioned_xcode(self):
+        for path in ('/Library/Developer/CommandLineTools/usr/bin/swiftc',
+                     '/Applications/Xcode.app/Contents/Developer/usr/bin/swiftc',
+                     '/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk'):
+            self.assertTrue(o._apple_developer_path(path))
+        for path in ('/tmp/Xcode.app/Contents/Developer/swiftc', '/Applications/Xcode_evil.app/Contents/Developer/swiftc',
+                     '/Applications/Xcode.app/Contents/DeveloperEvil/swiftc'):
+            self.assertFalse(o._apple_developer_path(path))
+
     def test_valid_result_preserves_page_lines_and_identity(self):
         value=o.validate_result(result(),RAW,'a'*64)
         self.assertEqual(value['pages'][0]['text'],'국내 PE\n벤처 VC')
