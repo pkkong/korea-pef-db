@@ -10,7 +10,14 @@ def is_submission_form(name):
     return bool(re.search(r'양식|서식|제안서|제출서류|체크리스트|\.xlsx?$', title, re.I))
 
 
+def is_submission_text(text):
+    # A proposal template can be labelled RFP; its title still identifies it.
+    first=next((line.strip() for line in text.splitlines() if line.strip()), '')
+    return bool(re.fullmatch(r'.{0,80}(?:제안서|신청서)\s*(?:양식|서식)', first))
+
+
 def is_submission_attachment(notice, url):
     names = [a.get('name', '') for a in notice.get('attachments', [])
              if isinstance(a, dict) and a.get('url') == url]
-    return any(is_submission_form(name) for name in names)
+    return (any(is_submission_form(name) for name in names)
+            or is_submission_text(notice.get('attachment_texts', {}).get(url, '')))

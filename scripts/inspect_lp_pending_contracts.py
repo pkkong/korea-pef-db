@@ -11,6 +11,7 @@ from urllib.request import Request
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from services.lp.src.collect_lp_institution_boards import Session, is_form
+from services.lp.src import lp_board_adapter_cwma as cwma
 from services.lp.src.collect_shared_lp_notices import Document, decode_html
 from scripts.inspect_lp_remaining_boards import PENDING_ROOTS
 
@@ -202,7 +203,7 @@ def inspect(output, fetch=None):
             sha=hashlib.sha256(raw).hexdigest();name=f'{iid}-{kind}-{sha[:16]}.bin'
             (output/name).write_bytes(raw);row.update(file=name,sha256=sha,bytes=len(raw))
             if status!=200:raise ValueError('official HTTP failure')
-            return decode_html(raw),final,row
+            return ('' if kind=='attachment' else decode_html(raw)),final,row
         except Exception as e:
             row['error_type']=type(e).__name__
             report['holds'].append({'institution_id':iid,'kind':kind,'url':url,'error_type':type(e).__name__})
@@ -230,8 +231,12 @@ def inspect(output, fetch=None):
                 if iid=='nps':
                     public_url=req['url']+'?'+urlencode({key:req['fields'][key] for key in ('pstId','hmpgBbsCd')})
                     capture(iid,'detail_get',public_url,parent=url)
+                else:
+                    public_url=req['url']+'?'+urlencode({key:req['fields'][key] for key in (*cwma.BOARD,'action','boardNo')})
+                    capture(iid,'detail_get',public_url,parent=url)
                 selection=attachment_controls(result[0],result[1],iid)
-                downloads=nps_downloads(result[0],result[1],script[0]) if iid=='nps' else ([selection['attachment']] if selection['attachment'] else [])
+                downloads=(nps_downloads(result[0],result[1],script[0]) if iid=='nps' else
+                           [a for a in cwma.parse_detail(result[0],public_url,{'institution_id':'cwma','listing_url':PENDING_ROOTS['cwma']})['attachments'] if not is_form(a['name'])][:1])
                 result[2]['observed_downloads']=dict(selection,downloads=downloads)
                 for download in downloads:
                     capture(iid,'attachment',download['url'],parent=result[1])

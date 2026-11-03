@@ -1,4 +1,7 @@
 import copy
+import io
+import zipfile
+from unittest.mock import patch
 import unittest
 
 from services.lp.src.lp_attachment_policy import is_submission_form
@@ -14,6 +17,22 @@ class AttachmentPolicyTests(unittest.TestCase):
         for name in ('(공고)상생펀드_공고안.hwp', '공고문 및 제출서류 안내.pdf',
                      '(공고)제안서 요청서.pdf', '기업지원펀드 제안서 요청 공고.hwp'):
             self.assertFalse(is_submission_form(name), name)
+
+    def test_rfp_title_does_not_override_actual_template_heading(self):
+        from services.lp.src import collect_lp_institution_boards as boards
+        out=io.BytesIO()
+        with zipfile.ZipFile(out,'w') as z:
+            z.writestr('제안요청서(RFP).hwp',b'form')
+            z.writestr('별도 엑셀 양식.xlsx',b'xlsx')
+        raw=out.getvalue()
+        def extract(value):
+            return {'format':'zip','text':''} if value==raw else {'format':'hwp','text':'국민연금 펀드 제안서 양식\n[벤처]\n기관전용 PEF 9,000억원 예시'}
+        with patch.object(boards,'extract_attachment',side_effect=extract):
+            self.assertEqual(boards.attachment_text(raw,'공식 RFP.zip',extraction_version=2),'')
+            with self.assertRaisesRegex(ValueError,'no readable labelled'):
+                boards.attachment_text(raw,'공식 RFP.zip')
+        for version in (True,3):
+            with self.assertRaises(ValueError):boards.attachment_text(raw,'RFP.zip',extraction_version=version)
 
     def test_archived_forms_cannot_supply_scope_amount_or_deadline(self):
         url='https://www.ibk.co.kr/common/download.ibk?file=form'

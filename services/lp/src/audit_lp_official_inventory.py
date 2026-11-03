@@ -37,7 +37,7 @@ CORE = {
     'kexim': 'https://www.koreaexim.go.kr/HPHKBI039M01',
 }
 HOSTS = {'kgrowth':'kgrowth.or.kr','ktcu':'ktcu.or.kr','koreapost':'kpasset.go.kr',
-         'kexim':'koreaexim.go.kr','poba':'poba.or.kr','pmaa':'pmaa.or.kr',
+         'kexim':'koreaexim.go.kr','nps':'fund.nps.or.kr','cwma':'cw.or.kr','poba':'poba.or.kr','pmaa':'pmaa.or.kr',
          'tp':'tp.or.kr','cu':'cu.co.kr','kfcc':'kfcc.co.kr','kdb':'kdb.co.kr','ibk':'ibk.co.kr', 'pck_pension':'pension.or.kr', 'sema':'sema.or.kr', 'geps':'geps.or.kr', 'kamco':'kamco.or.kr', 'kbiz':'kbiz.or.kr', 'mmaa':'mmaa.or.kr', 'kfinco':'kfinco.co.kr', 'moel_eif':'moel.go.kr', 'moel_iaci':'moel.go.kr'}
 
 
@@ -53,6 +53,12 @@ def notice_key(institution, url):
             or p.username or p.password or p.port not in {None,443}):
         raise ValueError('official notice identity host mismatch')
     q = parse_qs(p.query, keep_blank_values=True)
+    if institution == 'cwma':
+        query = boards.cwma.validate(url,{'institution_id':'cwma','listing_url':boards.cwma.BASE+'/board.do'},True)
+        return 'cwma:'+query['boardNo']
+    if institution == 'nps':
+        query = boards.nps.validate(url,{'institution_id':'nps','listing_url':boards.nps.BASE+boards.nps.LIST},True)
+        return 'nps:'+query['hmpgBbsCd']+':'+query['pstId']
     if institution == 'pck_pension':
         canonical = boards.pck.canonical_notice(url)
         return institution + ':' + parse_qs(urlsplit(canonical).query)['seq'][0]
@@ -182,7 +188,7 @@ def query_plan(institution, config, start, end, *, independent=False, max_pages=
     if not independent:
         return [{'term':term,'kind':'configured','limit':max_pages}
                 for term in streams(institution,config,start,end)]
-    if institution in CORE or institution in {'moel_eif','moel_iaci'}:
+    if institution in CORE or institution in {'moel_eif','moel_iaci','nps','cwma'}:
         return [{'term':'','kind':'board_listing','limit':max_pages}]
     if institution == 'kfinco':
         # This public transport has only one observed, allowlisted API query.
@@ -246,7 +252,7 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
         config=configs.get(institution) or ({'institution_id':institution,'listing_url':CORE[institution]} if institution in CORE else None)
         query_scope=('restricted_public_api' if independent and institution=='kfinco' else
                      'independent_title_queries' if independent and institution in {'kdb','ibk','kfcc'} else
-                     'independent_title_queries_with_latest_probe' if independent and institution not in CORE and institution not in {'moel_eif','moel_iaci'} else
+                     'independent_title_queries_with_latest_probe' if independent and institution not in CORE and institution not in {'moel_eif','moel_iaci','nps','cwma'} else
                      'board_listing' if institution in {'kgrowth','koreapost','kexim'} or independent else 'configured_title_queries')
         entry={'institution_id':institution,'name':names.get(institution,institution),'role':'confirmed' if institution in scope['confirmed_institution_ids'] else 'verification',
                'status':'inventory_not_connected','query_scope':query_scope,

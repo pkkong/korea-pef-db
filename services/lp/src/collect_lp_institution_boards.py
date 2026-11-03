@@ -24,7 +24,10 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 try:
-    from .lp_attachment_policy import is_submission_form
+    from . import lp_board_adapter_cwma as cwma
+    from .lp_pdf_ocr import recognize_pdf
+    from . import lp_board_adapter_nps as nps
+    from .lp_attachment_policy import is_submission_form, is_submission_text
     from .lp_ipv4_transport import IPv4HTTPSHandler
     from .lp_kdb_dns import resolve_kdb_ipv4
     from .lp_cu_transport import CuDnsError, fetch_cu_ipv4
@@ -44,7 +47,10 @@ try:
     from . import lp_board_adapter_geps as geps
     from . import lp_board_adapter_kamco as kamco
 except ImportError:
-    from lp_attachment_policy import is_submission_form
+    import lp_board_adapter_cwma as cwma
+    from lp_pdf_ocr import recognize_pdf
+    import lp_board_adapter_nps as nps
+    from lp_attachment_policy import is_submission_form, is_submission_text
     from lp_ipv4_transport import IPv4HTTPSHandler
     from lp_kdb_dns import resolve_kdb_ipv4
     from lp_cu_transport import CuDnsError, fetch_cu_ipv4
@@ -84,11 +90,16 @@ def load_configs():
             raise ValueError('institution discovery budget outside supported limits')
         if c.get('lookback_days') is not None and not 1 <= c['lookback_days'] <= 1461:
             raise ValueError('institution lookback period outside supported limits')
+        _extraction_version(c)
     return configs
 
 
 def adapter(config):
     institution = config['institution_id']
+    if institution == 'cwma':
+        return cwma
+    if institution == 'nps':
+        return nps
     if institution in {'kdb', 'ibk'}:
         return banks
     if institution == 'kfcc':
@@ -188,6 +199,18 @@ class Session:
                    'Accept-Encoding': 'identity', 'Connection': 'close'}
         if referer:
             headers['Referer'] = referer
+        request_url, request_data = url, None
+        planner = (nps if self.config['institution_id']=='nps' and urlsplit(url).path in {nps.LIST,nps.DETAIL}
+                   else cwma if self.config['institution_id']=='cwma' and urlsplit(url).path=='/board.do' else None)
+        if planner:
+            plan = planner.request_plan(url,self.config)
+            request_url = plan['url']
+            if plan['fields'] is not None:
+                request_data = (json.dumps(plan['fields'],ensure_ascii=False) if plan['encoding']=='json'
+                                else urlencode(plan['fields'])).encode('utf-8')
+                headers['Content-Type'] = ('application/json;' if plan['encoding']=='json'
+                                           else 'application/x-www-form-urlencoded; charset=UTF-8')
+                headers['Origin'] = planner.BASE
         native_ipv4 = False
         dns_ipv4 = False
         for attempt in range(2):
@@ -207,7 +230,7 @@ class Session:
                 return raw
             try:
                 opener = self.ipv4_opener if dns_ipv4 else self.opener
-                with opener.open(Request(url, headers=headers), timeout=20) as response:
+                with opener.open(Request(request_url, data=request_data, headers=headers), timeout=20) as response:
                     raw = response.read(MAX_BYTES + 1)
                     if len(raw) > MAX_BYTES:
                         raise ValueError('official response exceeds 12 MiB')
@@ -236,19 +259,48 @@ class Session:
                 time.sleep(1)
 
 
-def attachment_text(raw, name):
+def _extraction_version(record):
+    version = record.get('attachment_extraction_version', 1)
+    if type(version) is not int or version not in {1, 2}:
+        raise ValueError('unsupported attachment extraction version')
+    return version
+
+
+def _document_text(raw, version):
+    try:
+        result = extract_attachment(raw)
+    except ValueError as exc:
+        if (version != 2 or not raw.startswith(b'%PDF-')
+                or str(exc) != 'Attachment has no readable body or exceeds text limit'):
+            raise
+        result = {'format': 'pdf', 'text': ''}
+    text = result['text']
+    if version == 2 and result['format'] == 'pdf':
+        # Scans can carry a repeated text watermark without a readable body.
+        # Deduplicate lines before deciding whether the text layer is usable.
+        unique = '\n'.join(dict.fromkeys(line.strip() for line in text.splitlines() if line.strip()))
+        if len(unique) < 160:
+            text = '\n'.join(page['text'] for page in recognize_pdf(raw)['pages'])
+            if len(text.strip()) < 160:
+                raise ValueError('scanned offering PDF has insufficient readable text')
+    return result['format'], text
+
+
+def attachment_text(raw, name, *, extraction_version=1):
     """Offering ZIPs keep only actual documents, never auxiliary form text."""
-    if is_form(name):
+    if type(extraction_version) is not int or extraction_version not in {1,2}:
+        raise ValueError('unsupported attachment extraction version')
+    if (is_form(name) if extraction_version==1 else is_submission_form(name)):
         return ''
-    result = extract_attachment(raw)
-    if result['format'] != 'zip':
-        return result['text']
+    kind, text = _document_text(raw, extraction_version)
+    if kind != 'zip':
+        return '' if extraction_version==2 and is_submission_text(text) else text
     with zipfile.ZipFile(io.BytesIO(raw)) as archive:
         files = archive.infolist()
         if (len(files) > 20 or sum(f.file_size for f in files) > 32 * 1024 * 1024
                 or len({f.filename for f in files}) != len(files)):
             raise ValueError('offering ZIP exceeds bounded extraction limits')
-        texts = []
+        texts = []; template_only = False
         for item in files:
             member_name = item.filename
             if not item.flag_bits & 0x800:
@@ -258,17 +310,23 @@ def attachment_text(raw, name):
                     pass
             if item.flag_bits & 1 or item.file_size > MAX_BYTES:
                 raise ValueError('encrypted or oversized ZIP document')
-            if (is_form(member_name) or item.is_dir()
+            form = is_form(member_name) if extraction_version==1 else is_submission_form(member_name)
+            if (form or item.is_dir()
                     or not re.search(r'\.(pdf|hwp|hwpx|docx)$', member_name, re.I)):
                 continue
             # Archives can include useful historical references; only a labelled
             # offering document is evidence about this recruitment.
-            if not re.search(r'공고|선정계획|모집', member_name):
+            offering = r'공고|선정계획|모집' if extraction_version==1 else r'공고|선정계획|모집|제안요청서|제안서\s*요청서|(?i:rfp)'
+            if not re.search(offering, member_name):
                 continue
-            text = extract_attachment(archive.read(item))['text']
+            text = _document_text(archive.read(item), extraction_version)[1]
+            if extraction_version==2 and is_submission_text(text):
+                template_only=True
+                continue
             if text:
                 texts.append(text)
         if not texts:
+            if template_only:return ''
             raise ValueError('offering ZIP has no readable labelled offering document')
         return '\n'.join(texts)
 
@@ -326,7 +384,8 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                     raw = fetch(url, config['listing_url'])
                     if institution in {'moel_eif', 'moel_iaci'}:
                         shared_listings[url] = raw
-                html = raw.decode('utf-8') if institution == 'kdb' or config.get('response_format') == 'json' else _html(raw)
+                html = (raw.decode('utf-8') if institution == 'kdb' or config.get('response_format') == 'json' else
+                        decode_html(raw) if institution == 'nps' else _html(raw))
                 rows = adapter(config).parse_listing(html, url, config)
                 receipt_html = html
                 listing_coverage = {'url': url, 'count': len(rows)}
@@ -437,6 +496,8 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                      'attachment_hashes': {}, 'attachment_texts': {}, 'attachment_bytes': {}}
                 if resolution is not None:
                     n['discovery_provenance']['attachment_resolution'] = resolution
+                if config.get('attachment_extraction_version')==2:
+                    n['attachment_extraction_version']=2
                 n['sha256'] = original_body_hash(n)
                 coverage['detail_count'] += 1
                 # Unrelated investment boards remain discoverable, but their
@@ -448,7 +509,8 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                             continue
                         try:
                             raw = fetch(item['url'], n['url'])
-                            text = attachment_text(raw, item['name'])
+                            text = (attachment_text(raw,item['name'],extraction_version=2) if n.get('attachment_extraction_version')==2
+                                    else attachment_text(raw,item['name']))
                             n['attachment_bytes'][item['url']] = base64.b64encode(raw).decode('ascii')
                             n['attachment_hashes'][item['url']] = digest(raw)
                             if text:
@@ -502,6 +564,7 @@ def retry_failed_sources(report, configs=None, fetch_factory=Session, checked_at
 
 def validate_notice(raw, checked_at, config=None):
     n = copy.deepcopy(raw)
+    version = _extraction_version(n)
     config = config or load_configs()[n['institution_id']]
     if n['institution_id'] != config['institution_id'] or n['source_channel'] != 'institution_board':
         raise ValueError('institution collection identity mismatch')
@@ -540,7 +603,9 @@ def validate_notice(raw, checked_at, config=None):
         content = base64.b64decode(encoded, validate=True)
         if digest(content) != n['attachment_hashes'][url]:
             raise ValueError('institution attachment fingerprint mismatch')
-        if attachment_text(content, observed_attachments[url]) != n['attachment_texts'].get(url, ''):
+        text=(attachment_text(content,observed_attachments[url],extraction_version=2) if version==2
+              else attachment_text(content,observed_attachments[url]))
+        if text != n['attachment_texts'].get(url, ''):
             raise ValueError('institution attachment text does not match source bytes')
     return n
 

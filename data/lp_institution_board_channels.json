@@ -198,6 +198,33 @@
       "response_format": "json",
       "history_years": 2,
       "lookback_days": 365
+    },
+    {
+      "institution_id": "nps",
+      "listing_url": "https://fund.nps.or.kr/impa/dlnginstslctnpbanclist/getOHEF0017M0.do",
+      "search_param": "searchText",
+      "searches": [
+        ""
+      ],
+      "page_param": "pageIndex",
+      "pages": 20,
+      "history_years": 2,
+      "lookback_days": 365,
+      "max_details": 30,
+      "attachment_extraction_version": 2
+    },
+    {
+      "institution_id": "cwma",
+      "listing_url": "https://www.cw.or.kr/board.do?boardConfigNo=29&menuNo=248&boardCategoryNo=66",
+      "search_param": "searchValue",
+      "searches": [
+        ""
+      ],
+      "page_param": "page",
+      "pages": 20,
+      "history_years": 2,
+      "lookback_days": 365,
+      "max_details": 30
     }
   ],
   "history_years": 4

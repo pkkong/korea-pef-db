@@ -20,7 +20,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
-    runs-on: ${{ inputs.retry_failed_institutions && 'macos-15-intel' || 'ubuntu-latest' }}
+    # Must replay scanned-PDF evidence with the same bounded Vision reader.
+    runs-on: macos-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6

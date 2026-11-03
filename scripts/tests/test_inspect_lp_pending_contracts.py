@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from services.lp.tests.test_lp_board_adapter_cwma import detail as cwma_detail
 from unittest.mock import patch
 
 SPEC=importlib.util.spec_from_file_location('pending_contracts',Path(__file__).resolve().parents[1]/'inspect_lp_pending_contracts.py')
@@ -64,15 +65,15 @@ class PendingContractsTests(unittest.TestCase):
             if url==m.PENDING_ROOTS['nps']:raw=nps().encode()
             elif url==m.PENDING_ROOTS['cwma']:raw=cwma().encode()
             elif url.endswith('common_utils.js'):raw=CONTROLLER.encode()
-            elif 'files/' in url or 'fileDown.do?' in url:raw=b'%PDF-1.7 public sample'
-            elif 'getOHEF0018M0.do?' in url or (fields or {}).get('action')=='view' or (fields or {}).get('pstId'):raw=(NPS_DETAIL.encode() if 'fund.nps' in url else b'<html><a href="/files/offer.pdf">offer.pdf</a></html>')
+            elif 'files/' in url or 'fileDown.do?' in url or '/upload/boardAdmin/' in url:raw=b'%PDF-1.7 public sample'
+            elif 'getOHEF0018M0.do?' in url or 'action=view' in url or (fields or {}).get('action')=='view' or (fields or {}).get('pstId'):raw=(NPS_DETAIL.encode() if 'fund.nps' in url else cwma_detail().encode())
             else:raw=b'<html>page two observed</html>'
             return 200,url,raw
         with tempfile.TemporaryDirectory() as directory:
             report=m.inspect(directory,fetch)
-            self.assertEqual(report['requests'],10)
+            self.assertEqual(report['requests'],11)
             self.assertEqual(report['holds'],[])
-            self.assertEqual(len(list(Path(directory).glob('*.bin'))),10)
+            self.assertEqual(len(list(Path(directory).glob('*.bin'))),11)
             saved=json.loads((Path(directory)/'index.json').read_text())
             self.assertEqual(saved,report)
             self.assertTrue(all(call[4]<=3*1024*1024 for call in calls))
