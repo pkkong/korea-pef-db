@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
+import scripts.inspect_lp_remaining_boards as module
 from scripts.inspect_lp_remaining_boards import pending_links, pending_redirect, inspect_pending, PENDING_ROOTS
 
 
@@ -20,7 +22,8 @@ class PendingBoardTests(unittest.TestCase):
 
     def test_literal_landing_redirects_are_same_origin_and_unambiguous(self):
         for html in ('<meta http-equiv="refresh" content="0;url=./index.jsp">',
-                     "<script>document.location.href = '/index.jsp';</script>"):
+                     "<script>document.location.href = '/index.jsp';</script>",
+                     "<script>location.href = '/index.jsp';</script>"):
             self.assertEqual(pending_redirect(html,PENDING_ROOTS['nh_central'],'nh_central'),
                              'https://www.nonghyup.com/index.jsp')
         for target in ('https://evil.example/index.jsp','http://www.nonghyup.com/index.jsp'):
@@ -30,6 +33,22 @@ class PendingBoardTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             pending_redirect("<script>document.location.href='/first'; document.location.href='/second';</script>",
                              PENDING_ROOTS['nh_central'],'nh_central')
+
+    def test_two_literal_landing_hops_reach_the_real_homepage(self):
+        calls=[];root=PENDING_ROOTS['nh_central']
+        def fetch(url,limit):
+            calls.append(url)
+            pages={root:'<meta http-equiv="refresh" content="0;url=/index.jsp">',
+                   root+'index.jsp':"<script>location.href='/main/home.do';</script>",
+                   root+'main/home.do':'<html><a href="/notice/list.do">공지</a></html>',
+                   root+'notice/list.do':'<html>공식 목록</html>'}
+            return 200,url,pages[url].encode()
+        with tempfile.TemporaryDirectory() as folder, patch.dict(module.PENDING_ROOTS,{'nh_central':root},clear=True):
+            report=inspect_pending(Path(folder),fetch)
+            self.assertEqual(report['holds'],[])
+            self.assertEqual(len(calls),4)
+            self.assertEqual(calls[-1],root+'notice/list.do')
+            self.assertEqual([r['kind'] for r in report['responses']],['root','landing1','landing2','menu'])
 
     def test_nps_scripts_first_party_and_bounded(self):
         html=''.join('<script src="'+url+'"></script>' for url in

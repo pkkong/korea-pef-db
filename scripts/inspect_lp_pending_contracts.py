@@ -14,7 +14,7 @@ from services.lp.src.collect_lp_institution_boards import Session, is_form
 from services.lp.src.collect_shared_lp_notices import Document, decode_html
 from scripts.inspect_lp_remaining_boards import PENDING_ROOTS
 
-MAX_REQUESTS = 10
+MAX_REQUESTS = 12
 MAX_RESPONSE = 3 * 1024 * 1024
 MAX_TOTAL = 20 * 1024 * 1024
 
@@ -91,6 +91,14 @@ def contracts(html, url, institution):
     for snippet in ('document.menuForm.method = "POST"','document.menuForm.page.value = pageNo','document.menuForm.submit()'):
         if snippet not in html:raise ValueError('missing observed CWMA paging implementation')
     page_fields = dict(fields,boardConfigNo=board,menuNo=menu,page='2',boardCategoryNo=category)
+    target=safe_url(urljoin(url,'/board.do'),institution)
+    return {'page':{'url':target,'fields':page_fields,'encoding':'form'},
+            'detail':cwma_detail(html,url,board,menu,category),
+            'board_context':[board,menu,category]}
+
+
+def cwma_detail(html,url,board,menu,category):
+    root=Document(html).root
     view, vf = form_fields(root,'boardViewForm', {'boardConfigNo','menuNo','action','boardNo','pageNo','menuLayout','searchCategory','searchValue','boardCategoryNo'})
     if view.attrs.get('action') != '/board.do' or 'document.boardViewForm.submit()' not in html:
         raise ValueError('unexpected CWMA detail action')
@@ -99,13 +107,31 @@ def contracts(html, url, institution):
     for a in table.nodes('a'):
         match=re.fullmatch(r"javascript:goView\('([0-9]+)','([0-9]+)','(view)','([0-9]+)'\)",a.attrs.get('href',''))
         if match and re.search(r'국내.*(?:사모|PEF)',a.clean(),re.I):rows.append((a.clean(),match.groups()))
-    if not rows:raise ValueError('no domestic private-fund detail sample')
+    if not rows:return None
     title,(db,dm,action,identifier)=rows[0]
     if (db,dm)!=(board,menu) or vf['boardCategoryNo']!=category:raise ValueError('CWMA board mismatch')
     detail_fields=dict(vf,boardConfigNo=db,menuNo=dm,action=action,boardNo=identifier,pageNo='1')
-    target=safe_url(urljoin(url,'/board.do'),institution)
-    return {'page':{'url':target,'fields':page_fields,'encoding':'form'},
-            'detail':{'url':target,'fields':detail_fields,'encoding':'form','title':title}}
+    return {'url':safe_url(urljoin(url,'/board.do'),'cwma'),'fields':detail_fields,'encoding':'form','title':title}
+
+
+def nps_downloads(html,url,controller):
+    # Entire literal function body is verified, never evaluated.
+    formula=r'function\s+fncAtchFileDownload\(atchFileId,\s*atchFileSn\)\s*\{\s*let\s+url\s*=\s*"/fileDown.do\?atchFileId="\s*\+\s*atchFileId\s*\+\s*"&atchFileSn="\s*\+\s*atchFileSn\s*;\s*window.open\(url,\s*"_blank"\);\s*\}'
+    if not re.search(formula,controller):raise ValueError('unverified NPS download controller')
+    root=Document(html).root
+    if not any(urlsplit(n.attrs.get('src','')).path=='/js/common_utils.js' for n in root.nodes('script')):
+        raise ValueError('missing observed NPS controller script')
+    downloads=[]
+    for item in root.nodes('div'):
+        if 'file-item' not in item.attrs.get('class','').split():continue
+        name=one(n.clean() for n in item.nodes('p') if 'a-file' in n.attrs.get('class','').split())
+        match=one(re.fullmatch(r"javascript:fncAtchFileDownload\('([A-Z0-9]+)',\s*'([0-9]+)'\);?",a.attrs.get('href','')) for a in item.nodes('a') if 'btn-file-down' in a.attrs.get('class','').split())
+        if not match:raise ValueError('malformed NPS file control')
+        # RFP bundles may contain forms, but diagnostic stores bytes only.
+        if not re.search(r'공고|제안요청|RFP',name,re.I):continue
+        target=safe_url(urljoin(url,'/fileDown.do?'+urlencode(dict(zip(('atchFileId','atchFileSn'),match.groups())))),'nps')
+        downloads.append({'url':target,'name':name})
+    return downloads[:2]
 
 
 def attachment_controls(html, url, institution):
@@ -191,15 +217,27 @@ def inspect(output, fetch=None):
                 script=capture(iid,'controller',plan['script'],parent=url)
                 if not script or not all(s in script[0] for s in ('type        : "POST"','JSON.stringify(data)','application/json;')):
                     raise ValueError('NPS JSON POST controller not confirmed')
-            for kind in ('page','detail'):
-                req=plan[kind]
-                result=capture(iid,kind,req['url'],req['fields'],req['encoding'],url)
-                if kind=='detail' and result:
-                    selection=attachment_controls(result[0],result[1],iid);result[2]['observed_downloads']=selection
-                    if selection['attachment']:
-                        capture(iid,'attachment',selection['attachment']['url'],parent=result[1])
-                    else:
-                        report['holds'].append({'institution_id':iid,'kind':'attachment','reason':'no_unambiguous_literal_offering_link','unresolved_controls':selection['unresolved_controls']})
+            page=plan['page']
+            page_result=capture(iid,'page',page['url'],page['fields'],page['encoding'],url)
+            if not plan['detail'] and iid=='cwma' and page_result:
+                plan['detail']=cwma_detail(page_result[0],page_result[1],*plan['board_context'])
+            if not plan['detail']:
+                report['holds'].append({'institution_id':iid,'kind':'detail','reason':'no_domestic_private_fund_sample_in_two_pages'})
+                continue
+            req=plan['detail']
+            result=capture(iid,'detail',req['url'],req['fields'],req['encoding'],url)
+            if result:
+                if iid=='nps':
+                    public_url=req['url']+'?'+urlencode({key:req['fields'][key] for key in ('pstId','hmpgBbsCd')})
+                    capture(iid,'detail_get',public_url,parent=url)
+                selection=attachment_controls(result[0],result[1],iid)
+                downloads=nps_downloads(result[0],result[1],script[0]) if iid=='nps' else ([selection['attachment']] if selection['attachment'] else [])
+                result[2]['observed_downloads']=dict(selection,downloads=downloads)
+                for download in downloads:
+                    capture(iid,'attachment',download['url'],parent=result[1])
+                if not downloads:
+                    report['holds'].append({'institution_id':iid,'kind':'attachment','reason':'no_unambiguous_literal_offering_link','unresolved_controls':selection['unresolved_controls']})
+
         except Exception as e:
             report['holds'].append({'institution_id':iid,'kind':'contract','error_type':type(e).__name__})
     report.update(requests=requests,bytes=total)

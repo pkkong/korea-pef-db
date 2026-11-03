@@ -69,7 +69,7 @@ def pending_redirect(html, url, institution):
         if node.attrs.get('http-equiv','').lower()=='refresh':
             match=re.fullmatch(r'0\s*;\s*url\s*=\s*([^;]+)',node.attrs.get('content',''),re.I)
             if match:targets.append(match[1].strip())
-    targets += re.findall(r"document\.location\.href\s*=\s*['\"]([^'\"]+)['\"]\s*;",html)
+    targets += re.findall(r"(?:document\.)?location\.href\s*=\s*['\"]([^'\"]+)['\"]\s*;",html)
     targets=set(urljoin(url,value) for value in targets)
     if not targets:return None
     if len(targets)!=1:raise ValueError('ambiguous official landing redirect')
@@ -146,16 +146,26 @@ def inspect_pending(output, fetch=None):
             result = get(iid, url, 'root')
             if result:
                 html, final, row = result
-                try:
-                    target=pending_redirect(html, final, iid)
-                except ValueError as error:
-                    report['holds'].append({'institution_id':iid,'url':final,'kind':'landing','error_type':type(error).__name__})
-                    continue
-                if target:
+                landing_seen={final}
+                for hop in range(3):
+                    try:
+                        target=pending_redirect(html, final, iid)
+                        if target in landing_seen:
+                            raise ValueError('official landing redirect loop')
+                    except ValueError as error:
+                        report['holds'].append({'institution_id':iid,'url':final,'kind':'landing','error_type':type(error).__name__})
+                        result=None
+                        break
+                    if not target:break
                     row['observed_landing_redirect']=target
-                    result=get(iid,target,'landing',final)
-                    if not result:continue
+                    result=get(iid,target,'landing'+str(hop+1),final)
+                    if not result:break
                     html,final,row=result
+                    landing_seen.add(final)
+                if not result:continue
+                if pending_redirect(html,final,iid):
+                    report['holds'].append({'institution_id':iid,'url':final,'kind':'landing','error_type':'RedirectLimit'})
+                    continue
                 selected = pending_links(html, final, iid); row['observed_links'] = selected
                 for link in selected['menus']:
                     get(iid, link['url'], 'menu', final)

@@ -28,6 +28,10 @@ def cwma(identifier='987654'):
     return '''<html><script>document.menuForm.method = "POST";document.menuForm.page.value = pageNo;document.menuForm.submit();document.boardViewForm.submit();</script>'''+hidden_form('menuForm',fields)+hidden_form('boardViewForm',vf,'/board.do')+f'''<table class="board-list"><tr><td><a href="javascript:goView('29','248','view','{identifier}')">2098년도 국내 사모투자펀드 및 벤처펀드 선정 공고</a></td></tr></table><div id="paging"><a href="javascript:goCategory('/board.do?boardConfigNo=29','248',2, '66')">2</a></div></html>'''
 
 
+CONTROLLER='type        : "POST" JSON.stringify(data) application/json; function fncAtchFileDownload(atchFileId, atchFileSn) {let url = "/fileDown.do?atchFileId=" + atchFileId + "&atchFileSn=" + atchFileSn;window.open(url,"_blank");}'
+NPS_DETAIL='''<html><script src="/js/common_utils.js"></script><div class="file-item"><p class="a-file">공고문.pdf</p><a class="btn-file-down" href="javascript:fncAtchFileDownload('FL99999999', '1');">다운로드</a></div></html>'''
+
+
 class PendingContractsTests(unittest.TestCase):
     def test_observed_ids_forms_and_post_encoding(self):
         a=m.contracts(nps(),m.PENDING_ROOTS['nps'],'nps')
@@ -59,16 +63,16 @@ class PendingContractsTests(unittest.TestCase):
             calls.append((method,url,fields,encoding,limit))
             if url==m.PENDING_ROOTS['nps']:raw=nps().encode()
             elif url==m.PENDING_ROOTS['cwma']:raw=cwma().encode()
-            elif url.endswith('common_utils.js'):raw=b'type        : "POST" JSON.stringify(data) application/json;'
-            elif 'files/' in url:raw=b'%PDF-1.7 public sample'
-            elif (fields or {}).get('action')=='view' or (fields or {}).get('pstId'):raw=b'<html><a href="/files/offer.pdf">offer.pdf</a></html>'
+            elif url.endswith('common_utils.js'):raw=CONTROLLER.encode()
+            elif 'files/' in url or 'fileDown.do?' in url:raw=b'%PDF-1.7 public sample'
+            elif 'getOHEF0018M0.do?' in url or (fields or {}).get('action')=='view' or (fields or {}).get('pstId'):raw=(NPS_DETAIL.encode() if 'fund.nps' in url else b'<html><a href="/files/offer.pdf">offer.pdf</a></html>')
             else:raw=b'<html>page two observed</html>'
             return 200,url,raw
         with tempfile.TemporaryDirectory() as directory:
             report=m.inspect(directory,fetch)
-            self.assertEqual(report['requests'],9)
+            self.assertEqual(report['requests'],10)
             self.assertEqual(report['holds'],[])
-            self.assertEqual(len(list(Path(directory).glob('*.bin'))),9)
+            self.assertEqual(len(list(Path(directory).glob('*.bin'))),10)
             saved=json.loads((Path(directory)/'index.json').read_text())
             self.assertEqual(saved,report)
             self.assertTrue(all(call[4]<=3*1024*1024 for call in calls))
@@ -85,6 +89,24 @@ class PendingContractsTests(unittest.TestCase):
             self.assertTrue(report['responses'][0]['file'])
             self.assertTrue(any(r['kind']=='detail' and r['institution_id']=='cwma' for r in report['responses']))
             self.assertTrue(report['holds'])
+
+    def test_cwma_missing_sample_moves_to_page_two(self):
+        first=cwma().replace('국내 사모투자펀드 및 벤처펀드','국내 부동산')
+        self.assertIsNone(m.contracts(first,m.PENDING_ROOTS['cwma'],'cwma')['detail'])
+        def fetch(method,url,fields,encoding,limit):
+            if 'fund.nps' in url:return 503,url,b'unavailable'
+            if method=='GET':return 200,url,first.encode()
+            if (fields or {}).get('page')=='2':return 200,url,cwma('765432').encode()
+            return 200,url,b'<html>detail</html>'
+        with tempfile.TemporaryDirectory() as directory:
+            report=m.inspect(directory,fetch)
+            detail=next(r for r in report['responses'] if r['kind']=='detail')
+            self.assertEqual(detail['request_fields']['boardNo'],'765432')
+
+    def test_nps_download_formula_and_ids(self):
+        result=m.nps_downloads(NPS_DETAIL,m.PENDING_ROOTS['nps'],CONTROLLER)
+        self.assertIn('atchFileId=FL99999999&atchFileSn=1',result[0]['url'])
+        with self.assertRaises(ValueError):m.nps_downloads(NPS_DETAIL,m.PENDING_ROOTS['nps'],CONTROLLER.replace('/fileDown.do','https://evil.invalid/'))
 
     def test_request_cap_never_exceeded(self):
         calls=[]
