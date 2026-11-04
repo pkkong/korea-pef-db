@@ -210,6 +210,27 @@ class SharedCollectionTests(unittest.TestCase):
         for _ in range(3):self.assertTrue(budget.consume('detail'))
         self.assertFalse(budget.consume('detail'))
 
+    def test_kofia17_partial_transfer_uses_verified_framing_within_existing_budget(self):
+        root=shared.CHANNELS['kofia_17'];budget=shared._FetchRetryBudget(('kofia_17',));budget.channel='kofia_17'
+        complete=b'<html><table><tr><td><a href="view.do?seq=888">verified row</a></td></tr></table></html>'
+        with patch.object(shared.subprocess,'run',side_effect=[subprocess.CalledProcessError(18,['curl']),SimpleNamespace(stdout=complete),SimpleNamespace(stdout=complete)]) as curl,patch.object(shared.time,'sleep'):
+            self.assertEqual(shared.fetch_bytes(root,html_kind='listing',retry_budget=budget),complete)
+            self.assertEqual(shared.fetch_bytes(root+'?page=2',html_kind='listing',retry_budget=budget),complete)
+        commands=[c.args[0] for c in curl.call_args_list]
+        self.assertIn('--http1.1',commands[0]);self.assertIn('--http1.0',commands[1]);self.assertIn('--http1.0',commands[2])
+        self.assertEqual(budget.remaining,3)
+        self.assertEqual([e['framing_recovery'] for e in budget.events],[False,True,True])
+        self.assertTrue(all('--insecure' not in c and '--location' not in c for c in commands))
+
+    def test_timeout_does_not_select_framing_recovery_and_partial_fallback_never_imports(self):
+        root=shared.CHANNELS['kofia_17']
+        with patch.object(shared.subprocess,'run',side_effect=[subprocess.CalledProcessError(28,['curl']),SimpleNamespace(stdout=b'<html>complete</html>')]) as curl,patch.object(shared.time,'sleep'):
+            shared.fetch_bytes(root,html_kind='listing')
+        self.assertTrue(all('--http1.1' in c.args[0] for c in curl.call_args_list))
+        with patch.object(shared.subprocess,'run',side_effect=[subprocess.CalledProcessError(18,['curl']),SimpleNamespace(stdout=b'<html>partial'),SimpleNamespace(stdout=b'<html>partial')]) as curl,patch.object(shared.time,'sleep'):
+            with self.assertRaises(shared.IncompleteHTML):shared.fetch_bytes(root,html_kind='listing')
+        self.assertEqual(curl.call_count,3)
+
     def test_complete_empty_board_is_valid_and_does_not_follow_pagination(self):
         empty = '<html><table><thead><tr><th>번호</th><th>제목</th><th>작성일</th></tr></thead><tbody><tr><td colspan="5">등록된 게시물이 없습니다.</td></tr></tbody></table><a href="?page=2">2</a></html>'
         calls = []

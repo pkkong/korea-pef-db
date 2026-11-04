@@ -270,12 +270,14 @@ def _complete_html(raw, kind):
     return html
 
 
-def _fetch_bytes_curl(url, referer=None, *, html_kind=None):
+def _fetch_bytes_curl(url, referer=None, *, html_kind=None, http_version='1.1'):
+    if http_version not in {'1.1','1.0'}:
+        raise ValueError('unsupported association HTTP framing')
     if urlsplit(url).hostname not in {'www.kvca.or.kr','www.kofia.or.kr'}:
         raise ValueError('source host is not an enabled association channel')
     require_same_host(url, url)
     command=['curl','--disable','--fail','--silent','--show-error',
-             '--http1.1','--user-agent','Mozilla/5.0 (LP public notice collector)',
+             '--http'+http_version,'--user-agent','Mozilla/5.0 (LP public notice collector)',
              '--header','Accept-Encoding: identity','--header','Connection: close',
              '--max-time','25','--max-filesize',str(MAX_BYTES),
              '--proto','=https,http','--proto-redir','=https,http']
@@ -331,6 +333,7 @@ class _FetchRetryBudget:
             raise ValueError('too many association retry streams')
         self.channel = None
         self.events = []
+        self.kofia17_http10 = False
 
     def consume(self, kind=None):
         if self.remaining == 0:
@@ -345,11 +348,11 @@ class _FetchRetryBudget:
     def finish(self, channel):
         self.reserved.pop(channel, None)
 
-    def record(self, url, kind, attempt, *, error=None, retry=False, reason=None):
+    def record(self, url, kind, attempt, *, error=None, retry=False, reason=None, http10=False):
         event = dict(source_channel=self.channel, url=url, kind=kind or 'attachment',
                      attempt=attempt + 1, outcome='error' if error else 'ok',
                      retry=retry, remaining=self.remaining,
-                     reserved=dict(self.reserved))
+                     reserved=dict(self.reserved), framing_recovery=http10)
         if error is not None:
             event['error_type'] = type(error).__name__
             if isinstance(error, subprocess.CalledProcessError):event['curl_exit'] = error.returncode
@@ -361,19 +364,31 @@ class _FetchRetryBudget:
 def fetch_bytes(url, referer=None, *, retry_budget=None, html_kind=None):
     # Retry the whole read, never merge bytes from an incomplete response.
     # At most three attempts, with short backoff; exhausted failures still hold.
+    parsed=urlsplit(url)
+    kofia17=(html_kind=='listing' and parsed.scheme=='https' and parsed.netloc=='www.kofia.or.kr'
+             and parsed.path=='/brd/m_17/list.do')
+    # Queued receipts on observed pages2/3 verified identical full HTML under
+    # HTTPS HTTP/1.0, which omits the failing chunked transfer framing.
+    http10=bool(kofia17 and retry_budget is not None and retry_budget.kofia17_http10)
     for attempt in range(3):
         try:
-            raw = _fetch_bytes_once(url, referer, html_kind=html_kind)
-            if retry_budget is not None:retry_budget.record(url, html_kind, attempt)
+            raw = (_fetch_bytes_curl(url,referer,html_kind=html_kind,http_version='1.0') if http10
+                   else _fetch_bytes_once(url, referer, html_kind=html_kind))
+            if retry_budget is not None:
+                retry_budget.record(url, html_kind, attempt, http10=http10)
+                if http10:retry_budget.kofia17_http10=True
             return raw
         except Exception as error:
             reason = ('per_request_limit' if attempt == 2 else
                       'non_transient' if not _transient_fetch_error(error) else
                       'reserved_or_exhausted_budget' if retry_budget is not None and not retry_budget.consume(html_kind) else None)
             if retry_budget is not None:
-                retry_budget.record(url, html_kind, attempt, error=error, retry=reason is None, reason=reason)
+                retry_budget.record(url, html_kind, attempt, error=error, retry=reason is None, reason=reason,http10=http10)
             if reason:
                 raise
+            if kofia17 and (isinstance(error,(IncompleteRead,IncompleteHTML))
+                            or isinstance(error,subprocess.CalledProcessError) and error.returncode==18):
+                http10=True
             print(f'Retrying association request ({attempt + 2}/3): {url}', file=sys.stderr)
             time.sleep(attempt + 1)
 

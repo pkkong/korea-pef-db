@@ -4,7 +4,7 @@ on:
     inputs:
       profile:
         type: choice
-        options: [initial, followup, mmaa_files, geps_pck_recovery, pck_kamco_recovery, pending_institutions, pending_contracts, central_contracts, kofia_transfer, publication_waits]
+        options: [initial, followup, mmaa_files, geps_pck_recovery, pck_kamco_recovery, pending_institutions, pending_contracts, central_contracts, kofia_transfer, association_collection, publication_waits]
         default: initial
       connection_mode:
         description: Read-only publication diagnostic connection mode
@@ -32,18 +32,37 @@ jobs:
         if: inputs.profile == 'pending_institutions'
         run: python3 -m unittest scripts.tests.test_inspect_lp_pending_boards
       - name: Capture bounded official lists and observed detail links without DB writes
-        if: inputs.profile != 'publication_waits' && inputs.profile != 'pending_contracts' && inputs.profile != 'kofia_transfer' && inputs.profile != 'central_contracts'
+        if: inputs.profile != 'publication_waits' && inputs.profile != 'pending_contracts' && inputs.profile != 'kofia_transfer' && inputs.profile != 'central_contracts' && inputs.profile != 'association_collection'
         run: python3 scripts/inspect_lp_remaining_boards.py /tmp/lp-remaining-board-receipts "$LP_INSPECTION_PROFILE"
       - name: Test and inspect observed NPS and CWMA request contracts
         if: inputs.profile == 'pending_contracts'
         run: |
           python3 -m unittest scripts.tests.test_inspect_lp_pending_contracts
           python3 scripts/inspect_lp_pending_contracts.py --output /tmp/lp-remaining-board-receipts
-      - name: Inspect three bounded KOFIA transfer cases without publication
+      - name: Inspect bounded KOFIA transfer and observed pagination without publication
         if: inputs.profile == 'kofia_transfer'
         run: |
           python3 -m unittest scripts.tests.test_inspect_lp_kofia_transfer
           python3 scripts/inspect_lp_kofia_transfer.py --output /tmp/lp-remaining-board-receipts
+      - name: Collect association boards and retain retry allocation without publication
+        if: inputs.profile == 'association_collection'
+        run: |
+          python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
+          python3 -m unittest services.lp.tests.test_collect_shared_lp_notices
+          python3 - <<'PYCODE'
+          import json
+          from pathlib import Path
+          from services.lp.src.collect_shared_lp_notices import collect
+          report=collect(pages=3)
+          root=Path('/tmp/lp-remaining-board-receipts');root.mkdir(exist_ok=True)
+          (root/'association-collection.json').write_text(json.dumps(report,ensure_ascii=False))
+          coverage=report['coverage'];transport=coverage['transport']
+          failures=[h for h in report['holds'] if h['stage'] in {'listing','detail'}]
+          print(json.dumps({'pages':coverage['channel_pages'],'extra_attempts_used':transport['extra_attempts_used'],
+                            'source_errors':failures,'other_holds':len(report['holds'])-len(failures)},ensure_ascii=False))
+          assert transport['extra_attempts_used']<=4
+          assert not failures,'Official association list/detail errors remain; retained proof is partial'
+          PYCODE
       - name: Inspect observed NH and Suhyup public search forms
         if: inputs.profile == 'central_contracts'
         run: |
