@@ -11,6 +11,10 @@ on:
         type: choice
         options: [transaction, session]
         default: transaction
+      verify_framing_recovery:
+        description: Association collection only; inject one short-read before real KOFIA17 recovery
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -23,6 +27,7 @@ jobs:
     env:
       LP_INSPECTION_PROFILE: ${{ inputs.profile || 'initial' }}
       LP_DIAGNOSTIC_CONNECTION_MODE: ${{ inputs.connection_mode || 'transaction' }}
+      LP_VERIFY_FRAMING_RECOVERY: ${{ inputs.verify_framing_recovery && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -50,10 +55,26 @@ jobs:
           python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
           python3 -m unittest services.lp.tests.test_collect_shared_lp_notices
           python3 - <<'PYCODE'
-          import json
+          import json,os
           from pathlib import Path
-          from services.lp.src.collect_shared_lp_notices import collect
-          report=collect(pages=3)
+          from unittest.mock import patch
+          from services.lp.src import collect_shared_lp_notices as shared
+          if os.environ['LP_VERIFY_FRAMING_RECOVERY']=='true':
+              original=shared._fetch_bytes_once;injected=[]
+              def short_read(url,referer=None,**options):
+                  if url==shared.CHANNELS['kofia_17'] and not injected:
+                      injected.append(url)
+                      raise shared.IncompleteHTML('controlled diagnostic short-read')
+                  return original(url,referer,**options)
+              with patch.object(shared,'_fetch_bytes_once',side_effect=short_read):
+                  report=shared.collect(pages=3,channels={'kofia_17':shared.CHANNELS['kofia_17']},aliases={})
+              report['diagnostic_fault']={'kind':'controlled_short_read','count':len(injected)}
+              events=report['coverage']['transport']['events']
+              assert len(injected)==1 and len(events)==4
+              assert events[0]['retry'] and all(e['framing_recovery'] and e['outcome']=='ok' for e in events[1:])
+              assert len(report['coverage']['channel_pages']['kofia_17']['pages'])==3
+          else:
+              report=shared.collect(pages=3)
           root=Path('/tmp/lp-remaining-board-receipts');root.mkdir(exist_ok=True)
           (root/'association-collection.json').write_text(json.dumps(report,ensure_ascii=False))
           coverage=report['coverage'];transport=coverage['transport']
