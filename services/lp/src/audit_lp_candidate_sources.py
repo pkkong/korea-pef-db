@@ -95,16 +95,21 @@ def sema_configs():
     return list(result.values())
 
 
-def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, sema_channels=None,
-            candidate_limit=20):
-    if type(candidate_limit) is not int or not 1 <= candidate_limit <= 20:
-        raise ValueError('Candidate limit must be an integer between 1 and 20')
-    report = {'checked_at': datetime.now(timezone.utc).isoformat(), 'mode': 'read_only_official_source_verification',
-              'sources': [], 'receipts': [], 'holds': [], 'complete': False, 'remaining_count': 0}
-    if discovery.get('status') != 'ok':
-        report['holds'].append({'stage': 'discovery', 'reason': 'Discovery comparison unavailable'})
-        return report
-    candidates = [n for n in discovery['items'] if n['status'] in {'official_link_to_verify', 'official_source_needed'}]
+class EvidenceError(ValueError):
+    """Retained official evidence is inconsistent or cannot be replayed."""
+
+
+class SourceBudgetError(ValueError):
+    """The execution-wide network budget has been exhausted."""
+
+
+BODY_BUDGET = 20 * 1024 * 1024
+
+
+def candidates_for(discovery, official_inventory):
+    """Build one stable queue, retaining each original discovery connection."""
+    candidates = [copy.deepcopy(n) for n in discovery.get('items', [])
+                  if n['status'] in {'official_link_to_verify', 'official_source_needed'}]
     seen = {(n['institution_id'], n.get('official_url')) for n in candidates}
     for entry in official_inventory.get('institutions', []):
         for row in entry['rows']:
@@ -114,28 +119,46 @@ def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, se
                 candidates.append({'id': 'inventory:' + row['source_id'], 'institution_id': entry['institution_id'],
                                    'title': row['title'], 'official_url': row['url']})
                 seen.add((entry['institution_id'], row['url']))
-    candidates = sorted(candidates, key=lambda n: (n['institution_id'], n['id'],
-                                                    n.get('official_url') or '', n['title']))
+    return sorted(candidates, key=lambda n: (n['institution_id'], n['id'],
+                                            n.get('official_url') or '', n['title']))
+
+
+def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, sema_channels=None,
+            candidate_limit=20, _context=None):
+    if type(candidate_limit) is not int or not 1 <= candidate_limit <= 20:
+        raise ValueError('Candidate limit must be an integer between 1 and 20')
+    report = {'checked_at': datetime.now(timezone.utc).isoformat(), 'mode': 'read_only_official_source_verification',
+              'sources': [], 'receipts': [], 'holds': [], 'complete': False, 'remaining_count': 0}
+    if discovery.get('status') != 'ok':
+        report['holds'].append({'stage': 'discovery', 'reason': 'Discovery comparison unavailable'})
+        return report
+    candidates = candidates_for(discovery, official_inventory)
     aliases = load_aliases()
     configs = load_configs(include_pending=True)
-    cache = {}; sessions = {}; total_bytes = 0
+    context = {} if _context is None else _context
+    cache = context.setdefault('cache', {})
+    sessions = context.setdefault('sessions', {})
+    context.setdefault('network_bytes', 0)
+    receipt_keys = set()
     def get(institution, url, config, kind):
-        nonlocal total_bytes
-        if url in cache:
-            return cache[url]
-        if total_bytes >= 20 * 1024 * 1024:
-            raise ValueError('Official verification body budget exhausted')
-        if institution not in sessions:
-            sessions[institution] = (fetch_factory(institution, config) if fetch_factory else
-                                      inventory.kexim_fetcher() if institution == 'kexim' else Session(config))
-        raw = sessions[institution](url)
-        total_bytes += len(raw)
-        if total_bytes > 20 * 1024 * 1024:
-            raise ValueError('Official verification body budget exceeded')
+        key = (institution, kind, url)
+        if key not in cache:
+            if context['network_bytes'] >= BODY_BUDGET:
+                raise SourceBudgetError('Official verification body budget exhausted')
+            if institution not in sessions:
+                sessions[institution] = (fetch_factory(institution, config) if fetch_factory else
+                                          inventory.kexim_fetcher() if institution == 'kexim' else Session(config))
+            raw = sessions[institution](url)
+            context['network_bytes'] += len(raw)
+            if context['network_bytes'] > BODY_BUDGET:
+                raise SourceBudgetError('Official verification body budget exceeded')
+            cache[key] = raw
+        raw = cache[key]
         html = decode_html(raw)
-        report['receipts'].append({'institution_id': institution, 'kind': kind, 'url': url,
-                                  'html': html, 'sha256': hashlib.sha256(html.encode()).hexdigest()})
-        cache[url] = raw
+        if key not in receipt_keys:
+            report['receipts'].append({'institution_id': institution, 'kind': kind, 'url': url,
+                                      'html': html, 'sha256': hashlib.sha256(html.encode()).hexdigest()})
+            receipt_keys.add(key)
         return raw
     for position, candidate in enumerate(candidates):
         institution = candidate['institution_id']
@@ -163,7 +186,7 @@ def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, se
                         if p.scheme != 'https' or p.hostname != 'www.koreaexim.go.kr' or p.path != '/HPHKBI039M01':
                             raise ValueError('KEXIM official listing receipt route mismatch')
                     if hashlib.sha256(receipt['html'].encode()).hexdigest() != receipt['sha256']:
-                        raise ValueError('Official inventory receipt fingerprint mismatch')
+                        raise EvidenceError('Official inventory receipt fingerprint mismatch')
                     rows = (inventory.core_rows(institution, receipt['html'], receipt['url']) if institution == 'kexim'
                             else adapter(config).parse_listing(receipt['html'], receipt['url'], config))
                     for row in rows:
@@ -178,7 +201,7 @@ def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, se
                 source = (parse_kexim(wanted.split(':')[1], raw) if institution == 'kexim' else
                           dict(adapter(config).parse_detail(decode_html(raw), row['url'], config), url=row['url']))
                 if source['date'] != row['date'] or key_title(source['title'], names) != key_title(row['title'], names):
-                    raise ValueError('Official listing/detail metadata differs')
+                    raise EvidenceError('Official listing/detail metadata differs')
             elif institution == 'sema':
                 matches = {}
                 # A bounded asset/title search, never an attachment URL or ID
@@ -208,12 +231,15 @@ def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, se
             # Never substitute detection/receive time for the official date.
             end = as_of or datetime.now(ZoneInfo('Asia/Seoul')).date().isoformat()
             if source['date'] > end:
-                raise ValueError('Official candidate has a future publication date')
+                raise EvidenceError('Official candidate has a future publication date')
             source.update(institution_id=institution, checked_at=report['checked_at'], sha256=original_body_hash(source))
             scope, reason = official_scope(source)
             item.update(status='official_source_verified', official_notice=source, classification=scope, scope_reason=reason)
         except (ValueError, KeyError, TypeError, OSError) as error:
             item['reason'] = str(error)
+            item['failure_kind'] = ('source_error' if isinstance(error, OSError) else
+                                    'budget_error' if isinstance(error, SourceBudgetError) else
+                                    'evidence_error' if isinstance(error, EvidenceError) else 'unconfirmed')
             report['holds'].append({'institution_id': institution, 'stage': 'official_candidate', 'reason': str(error)})
     report['complete'] = all(n['status'] == 'official_source_verified' for n in report['sources'])
     report['summary'] = {'candidates': len(candidates), 'verified': sum(n['status'] == 'official_source_verified' for n in report['sources']),

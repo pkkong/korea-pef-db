@@ -9,6 +9,11 @@ on:
         description: Optional recent inventory run to replay saved lists and verify only unresolved original notices
         required: false
         type: string
+      candidate_batch_size:
+        description: Notices per automatic verification batch (5 for bounded operating verification)
+        type: choice
+        options: ['20', '5']
+        default: '20'
 permissions:
   contents: read
   actions: read
@@ -21,6 +26,7 @@ jobs:
     timeout-minutes: 15
     env:
       LP_INVENTORY_RUN: ${{ inputs.inventory_run || '' }}
+      LP_CANDIDATE_BATCH_SIZE: ${{ inputs.candidate_batch_size || '20' }}
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
     steps:
@@ -56,7 +62,7 @@ jobs:
       - name: Install read-only catalog and attachment dependencies
         run: python3 -m pip install 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47' 'truststore==0.10.5'
       - name: Test official inventory boundaries and period filters
-        run: python3 -m unittest services.lp.tests.test_audit_lp_official_inventory services.lp.tests.test_audit_lp_candidate_sources services.lp.tests.test_lp_board_adapters_banks services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_priority_lp_programs
+        run: python3 -m unittest services.lp.tests.test_audit_lp_official_inventory services.lp.tests.test_audit_lp_candidate_sources services.lp.tests.test_audit_lp_candidate_batches services.lp.tests.test_lp_board_adapters_banks services.lp.tests.test_collect_koreapost_program services.lp.tests.test_collect_priority_lp_programs
       - name: Read current catalog without publication
         if: inputs.inventory_run == ''
         env:
@@ -100,7 +106,17 @@ jobs:
           p.write_text(json.dumps(report,ensure_ascii=False))
           Path('/tmp/lp-official-inventory.md').write_text(markdown(report))
           PYCODE
-          python3 services/lp/src/audit_lp_candidate_sources.py --inventory /tmp/lp-official-inventory.json --discovery /tmp/lp-discovery-audit.json --output /tmp/lp-official-candidate-sources.json
+          resume_args=()
+          if [ -n "$LP_INVENTORY_RUN" ] && python3 - <<'PYCODE'
+          import json
+          from pathlib import Path
+          path=Path('/tmp/lp-official-candidate-sources.json')
+          raise SystemExit(0 if path.exists() and json.loads(path.read_text()).get('batch_version')==1 else 1)
+          PYCODE
+          then
+            resume_args=(--resume /tmp/lp-official-candidate-sources.json)
+          fi
+          python3 services/lp/src/audit_lp_candidate_batches.py --inventory /tmp/lp-official-inventory.json --discovery /tmp/lp-discovery-audit.json --batch-size "$LP_CANDIDATE_BATCH_SIZE" "${resume_args[@]}" --output /tmp/lp-official-candidate-sources.json
       - name: Report inventory boundaries and verification failures
         run: |
           python3 - <<'PY'
@@ -112,6 +128,8 @@ jobs:
               summary.write('Read-only official candidate sources: '+json.dumps(candidates.get('summary',{}))+'\n')
           if candidates['holds']: print('::warning::Some discovery clues remain unresolved; see retained official source evidence')
           assert not report['holds'], 'Official listing audit has source errors; no data was published'
+          assert candidates['summary']['remaining_count']==0, 'Candidate batches remain unfinished; resume from saved artifact'
+          assert candidates['summary']['source_errors']==0, 'Candidate source, evidence or execution budget errors remain'
           PY
       - uses: actions/upload-artifact@v4
         if: always()
