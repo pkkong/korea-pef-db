@@ -324,14 +324,38 @@ def _transient_fetch_error(error):
 
 
 class _FetchRetryBudget:
-    def __init__(self):
+    def __init__(self, channels=()):
         self.remaining = 4
+        self.reserved = dict.fromkeys(channels, 1)
+        if len(self.reserved) > self.remaining:
+            raise ValueError('too many association retry streams')
+        self.channel = None
+        self.events = []
 
-    def consume(self):
+    def consume(self, kind=None):
         if self.remaining == 0:
             return False
+        if kind == 'listing' and self.reserved.get(self.channel, 0):
+            self.reserved[self.channel] -= 1
+        elif self.remaining <= sum(self.reserved.values()):
+            return False  # Keep a listing retry for streams not yet visited.
         self.remaining -= 1
         return True
+
+    def finish(self, channel):
+        self.reserved.pop(channel, None)
+
+    def record(self, url, kind, attempt, *, error=None, retry=False, reason=None):
+        event = dict(source_channel=self.channel, url=url, kind=kind or 'attachment',
+                     attempt=attempt + 1, outcome='error' if error else 'ok',
+                     retry=retry, remaining=self.remaining,
+                     reserved=dict(self.reserved))
+        if error is not None:
+            event['error_type'] = type(error).__name__
+            if isinstance(error, subprocess.CalledProcessError):event['curl_exit'] = error.returncode
+            if isinstance(error, HTTPError):event['http_status'] = error.code
+        if reason:event['stop_reason'] = reason
+        self.events.append(event)
 
 
 def fetch_bytes(url, referer=None, *, retry_budget=None, html_kind=None):
@@ -339,10 +363,16 @@ def fetch_bytes(url, referer=None, *, retry_budget=None, html_kind=None):
     # At most three attempts, with short backoff; exhausted failures still hold.
     for attempt in range(3):
         try:
-            return _fetch_bytes_once(url, referer, html_kind=html_kind)
+            raw = _fetch_bytes_once(url, referer, html_kind=html_kind)
+            if retry_budget is not None:retry_budget.record(url, html_kind, attempt)
+            return raw
         except Exception as error:
-            if (attempt == 2 or not _transient_fetch_error(error)
-                    or (retry_budget is not None and not retry_budget.consume())):
+            reason = ('per_request_limit' if attempt == 2 else
+                      'non_transient' if not _transient_fetch_error(error) else
+                      'reserved_or_exhausted_budget' if retry_budget is not None and not retry_budget.consume(html_kind) else None)
+            if retry_budget is not None:
+                retry_budget.record(url, html_kind, attempt, error=error, retry=reason is None, reason=reason)
+            if reason:
                 raise
             print(f'Retrying association request ({attempt + 2}/3): {url}', file=sys.stderr)
             time.sleep(attempt + 1)
@@ -377,17 +407,19 @@ def collect(pages=3, fetch=None, aliases=None, channels=None, checked_at=None):
     # Share four extra attempts across the whole run, so widespread outages do
     # not multiply three retries across every sequential listing/detail read.
     builtin_fetch = fetch is None
+    channels = CHANNELS if channels is None else channels
+    budget = _FetchRetryBudget(channels) if builtin_fetch else None
     if builtin_fetch:
-        fetch = partial(fetch_bytes, retry_budget=_FetchRetryBudget())
+        fetch = partial(fetch_bytes, retry_budget=budget)
 
     def read_html(url, kind):
         raw = fetch(url, html_kind=kind) if builtin_fetch else fetch(url)
         return _complete_html(raw, kind)
     aliases = load_aliases() if aliases is None else aliases
-    channels = CHANNELS if channels is None else channels
     checked_at = checked_at or datetime.now(timezone.utc).isoformat()
     notices, holds, coverage, seen, unmatched = [],[],{},set(),[]
     for channel,base in channels.items():
+        if budget is not None:budget.channel = channel
         pending={1:base}; done=set(); stats={'pages':[],'discovered':0,'collected':0,'unmatched':0}
         coverage[channel]=stats
         while pending and len(done)<pages:
@@ -456,7 +488,12 @@ def collect(pages=3, fetch=None, aliases=None, channels=None, checked_at=None):
                     stats['collected']+=1
                 except Exception as exc:
                     holds.append(dict(stage='detail',source_id=candidate['source_id'],institution_id=institution,url=candidate['url'],error=str(exc)))
-    return dict(checked_at=checked_at,notices=notices,holds=holds,unmatched_notices=unmatched,coverage={'channel_pages':coverage,'notice_count':len(notices),'hold_count':len(holds)},update_policy='upsert_successes_preserve_existing_on_holds')
+        if budget is not None:budget.finish(channel)
+    counts={'channel_pages':coverage,'notice_count':len(notices),'hold_count':len(holds)}
+    if budget is not None:
+        counts['transport']={'extra_attempt_limit':4,'extra_attempts_used':4-budget.remaining,
+                             'remaining':budget.remaining,'events':budget.events}
+    return dict(checked_at=checked_at,notices=notices,holds=holds,unmatched_notices=unmatched,coverage=counts,update_policy='upsert_successes_preserve_existing_on_holds')
 
 
 def main():

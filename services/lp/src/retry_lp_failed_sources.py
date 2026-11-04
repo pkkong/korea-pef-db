@@ -68,7 +68,8 @@ def retry_association(report, *, checked_at=None):
     replaced=[h for h in report.get('holds',[]) if channel_of(h)==channel and h.get('stage') in {'listing','detail'}]
     result.setdefault('retry_history',[]).append({'source_channel':channel,'retried_at':stamp,
         'previous_checked_at':report.get('checked_at'),'previous_holds':replaced,
-        'previous_coverage':copy.deepcopy(report.get('coverage',{}).get('channel_pages',{}).get(channel))})
+        'previous_coverage':copy.deepcopy(report.get('coverage',{}).get('channel_pages',{}).get(channel)),
+        'transport':copy.deepcopy(fresh['coverage'].get('transport'))})
     result['notices']=list(old.values())
     result['holds']=[h for h in result.get('holds',[]) if h not in replaced]+fresh['holds']
     coverage=result.setdefault('coverage',{})

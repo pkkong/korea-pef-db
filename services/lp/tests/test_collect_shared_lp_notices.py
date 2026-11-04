@@ -166,7 +166,7 @@ class SharedCollectionTests(unittest.TestCase):
             result = collect(pages=1, aliases={}, channels={'kofia_212': KOFIA, 'kofia_17': shared.CHANNELS['kofia_17'], 'kvca': KVCA})
         # Same run-wide four-extra-attempt budget as transport failures, with at
         # one curl for m17, with urllib plus curl recovery on other boards.
-        self.assertEqual(urllib.call_count, 4)
+        self.assertEqual(urllib.call_count, 5)
         self.assertEqual(curl.call_count, 7)
         self.assertEqual(len(result['holds']), 3)
         self.assertTrue(all(h['error'] == 'incomplete listing HTML' for h in result['holds']))
@@ -174,6 +174,41 @@ class SharedCollectionTests(unittest.TestCase):
         self.assertFalse(result['unmatched_notices'])
         self.assertEqual(result['update_policy'], 'upsert_successes_preserve_existing_on_holds')
         self.assertTrue(all(c['pages'][0]['status'] == 'error' for c in result['coverage']['channel_pages'].values()))
+
+    def test_later_listing_keeps_one_retry_after_earlier_detail_exhausts_shared_pool(self):
+        budget=shared._FetchRetryBudget(('early','later'))
+        budget.channel='early'
+        self.assertTrue(budget.consume('listing'))
+        self.assertTrue(budget.consume('detail'))
+        self.assertTrue(budget.consume('detail'))
+        self.assertFalse(budget.consume('detail'))
+        budget.finish('early');budget.channel='later'
+        self.assertTrue(budget.consume('listing'))
+        self.assertEqual(budget.remaining,0)
+        self.assertFalse(budget.consume('listing'))
+
+    def test_retry_allocation_and_failures_are_retained_without_response_or_error_text(self):
+        with patch.object(shared,'_fetch_bytes_once',side_effect=TimeoutError('PRIVATE')),patch.object(shared.time,'sleep'):
+            report=collect(pages=1,aliases={})
+        transport=report['coverage']['transport']
+        self.assertEqual(transport['extra_attempts_used'],4)
+        self.assertEqual(transport['remaining'],0)
+        events=transport['events']
+        for channel in shared.CHANNELS:
+            rows=[e for e in events if e['source_channel']==channel]
+            self.assertGreaterEqual(len(rows),2)
+            self.assertEqual(rows[0]['attempt'],1)
+            self.assertTrue(rows[0]['retry'])
+        self.assertEqual(sum(e['retry'] for e in events),4)
+        self.assertNotIn('PRIVATE',str(transport))
+        self.assertTrue(all(e['error_type']=='TimeoutError' for e in events))
+
+    def test_unused_reservation_can_be_shared_after_its_channel_finishes(self):
+        budget=shared._FetchRetryBudget(('healthy','later'))
+        budget.finish('healthy');budget.channel='later'
+        self.assertTrue(budget.consume('listing'))
+        for _ in range(3):self.assertTrue(budget.consume('detail'))
+        self.assertFalse(budget.consume('detail'))
 
     def test_complete_empty_board_is_valid_and_does_not_follow_pagination(self):
         empty = '<html><table><thead><tr><th>번호</th><th>제목</th><th>작성일</th></tr></thead><tbody><tr><td colspan="5">등록된 게시물이 없습니다.</td></tr></tbody></table><a href="?page=2">2</a></html>'
