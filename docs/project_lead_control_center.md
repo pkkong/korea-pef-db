@@ -712,3 +712,9 @@ Lead는 운영 복구·통합·문서와 커밋을, 재사용 Worker는 상태 �
 - 아침예약은11/5 10:31KST까지생성미관측/workflowactive다. 0c1162e/1a40dd2/15a572f에독립LP경량감시를등록했다. 평일매시05분에90분유예가지난수집창만판정하고기존main실행/활성LP작업/이전시작전실패/비활성설정/API실패를존중한다. 최근100실행+필요시이전실패job의시작근거를읽으며최대13GET/1POST·응답4MiB/30초한도다. 형제서비스/관리Pages메타데이터는LP상태판정에서제외하고공유출처목록누락을검사한다.
 - 실제41947886679/0c1162e는10:20:57KST dry-run/no_due_window로성공했으며새수집은요청하지않았다. 실제보조자동발동/새코드전체정기성공은미관측이다. 기본수동은dry-runtrue,자동schedule은false이고정확collect-kgrowth-programs.yml@main만dispatch한다. 최상위contentsread·신뢰된mainjob만actionswrite이며PR/다른ref/저장소는제외한다. 기본GITHUB_TOKEN의workflow_dispatch허용은[GitHub공식안내](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)를확인했다. PAT/다른계정/요금/한도변경은없다. GitHub자체예약장애와API-dispatch경쟁구간의완전격리를주장하지않는다.
 - 재현: scripts/run_regression_tests.py; scripts/check_architecture_contracts.py; python3 -m unittest services.lp.tests.test_lp_attachment_policy services.lp.tests.test_collect_lp_institution_boards scripts.tests.test_lp_collection_watchdog; verify-pck-board.yml(institution=kdb); lp-collection-watchdog.yml(dry_run=true기본). 최신기관별관측/보조발동/공개자료는lp_collection_status.md만기준으로보고한다. 현재public36fb30904ef29491435f7360/30사업72페이지·healthok/stalefalse·앱2840e0c다.
+
+## 현재 채팅 LP 자동 재개 예약 — 2026-11-06
+
+- 사용자 요청으로 앱 heartbeat `lp-db`를 현재 채팅 `01a0723f-e8d9-7de0-9e85-18cb46f006a3`에 ACTIVE/60분으로 연결했다. 독립 작업/새 채팅은 생성하지 않았다. 최초 앱 실행예정은11/6 09:50 KST이며 첫 실제 발동은 확인 전이다.
+- 재개 진입점은 [LP 체크포인트](lp_resume_checkpoint.md)다. 소스31530df의 검증 완료와 KOFIA 서울 경로3파일의 미검증 초안, 운영/미완료/검사/사용자 변경 경계를 기록했다. 사용량 제한은 다음 예약에서 재평가하며 완료로 처리하지 않는다.
+- 이 예약은 실제 작업용이다. 완료 또는 필수 사용자 판단 때 보고하며, 합의된 구축·출시 조건을 실제 검증한 뒤 예약을 중지한다. 로컬 앱/컴퓨터/프로젝트가 이용 가능해야 한다.
