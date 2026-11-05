@@ -43,15 +43,25 @@ def due_window(now):
                  if now >= w + dt.timedelta(minutes=90)), None)
 
 
+def workflow_name(run):
+    if not isinstance(run,dict):
+        raise WatchdogError('invalid run identity')
+    path=run.get('path','')
+    if isinstance(path,str) and path.startswith('dynamic/'):
+        return path  # GitHub-managed Pages jobs do not use the LP source queue.
+    if (not isinstance(path,str) or not path.startswith('.github/workflows/')
+            or '/' in path[len('.github/workflows/'):] or not path.endswith(('.yml','.yaml'))):
+        raise WatchdogError('invalid workflow path')
+    return path.rsplit('/',1)[1]
+
+
 def validate_run(run, now):
     if not isinstance(run, dict) or type(run.get('id')) is not int or run['id'] <= 0:
         raise WatchdogError('invalid run identity')
     repository=run.get('repository')
     if not isinstance(repository,dict) or repository.get('full_name') != REPOSITORY:
         raise WatchdogError('unexpected run repository')
-    path = run.get('path', '')
-    if not isinstance(path, str) or not path.startswith('.github/workflows/') or '/' in path[len('.github/workflows/'):]:
-        raise WatchdogError('invalid workflow path')
+    name=workflow_name(run)
     if not isinstance(run.get('head_branch'), str) or not run['head_branch']:
         raise WatchdogError('invalid run ref')
     if run.get('status') not in (*ACTIVE, 'completed'):
@@ -61,7 +71,7 @@ def validate_run(run, now):
     # Reject implausible future data, not a legitimate concurrent start.
     if created > now + dt.timedelta(minutes=10):
         raise WatchdogError('future run timestamp')
-    return path.rsplit('/', 1)[1], created
+    return name, created
 
 
 def decide(now, collection_runs, active_runs):
@@ -81,6 +91,8 @@ def decide(now, collection_runs, active_runs):
                 and created >= due - dt.timedelta(minutes=30)):
             covered = True
     for run in active_runs:
+        if workflow_name(run) not in SOURCE_WORKFLOWS:
+            continue  # Sibling services do not participate in LP source health.
         name, _ = validate_run(run, now)
         if run['status'] not in ACTIVE:
             raise WatchdogError('non-active run in active response')

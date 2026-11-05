@@ -71,7 +71,7 @@ class WatchdogTests(unittest.TestCase):
 
     def test_shared_source_workflows_cannot_be_silently_omitted_from_guard(self):
         root=Path(__file__).resolve().parents[2]/'.github/workflows'
-        observed={p.name for p in root.glob('*.yml')
+        observed={p.name for p in root.iterdir() if p.suffix in {'.yml','.yaml'}
                   if re.search(r'^\s*group:.*\blp-program-collection\b',p.read_text(),re.M)}
         self.assertIn(w.WORKFLOW,observed)
         self.assertFalse(observed-w.SOURCE_WORKFLOWS)
@@ -83,8 +83,12 @@ class WatchdogTests(unittest.TestCase):
             self.assertFalse(any(kw for _, kw in api.calls))
 
     def test_sibling_workflow_does_not_block_lp_and_disabled_collection_is_respected(self):
-        api=FakeAPI(active=[run(status='in_progress',name='deploy-newsletter-vercel.yml')])
+        sibling=run(status='in_progress',name='deploy-newsletter-vercel.yml')
+        sibling.update(head_branch=None,created_at='unrelated invalid metadata')
+        api=FakeAPI(active=[sibling])
         self.assertEqual(self.invoke(api)['decision'],'dispatched')
+        sibling['path']='dynamic/pages/pages-build-deployment'
+        self.assertEqual(self.invoke(FakeAPI(active=[sibling]))['decision'],'dispatched')
         original=FakeAPI()
         def inactive(endpoint,**kw):
             if endpoint.endswith('/workflows/'+w.WORKFLOW):
