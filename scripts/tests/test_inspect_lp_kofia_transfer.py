@@ -6,6 +6,21 @@ from scripts import inspect_lp_kofia_transfer as m
 
 
 class KofiaTransferTests(unittest.TestCase):
+    def test_compressed_pagination_keeps_observed_urls_and_request_cap(self):
+        root=b'<html><table><tr><td><a href="view.do?seq=987654">Synthetic notice</a></td></tr></table><a href="list.do?page=2">2</a><a href="list.do?page=3">3</a></html>'
+        calls=[]
+        def run(command,**kwargs):
+            calls.append(command)
+            Path(command[command.index('--output')+1]).write_bytes(root)
+            return subprocess.CompletedProcess(command,0,b'200',b'')
+        with tempfile.TemporaryDirectory() as folder:
+            result=m.inspect(folder,run,page_encoding='compressed')
+        self.assertEqual(len(calls),7)
+        self.assertTrue(all('--compressed' in c and 'Accept-Encoding: identity' not in c for c in calls[3:]))
+        self.assertTrue(all(r['encoding']=='compressed' and r['usable_listing'] for r in result['responses'][3:]))
+        with tempfile.TemporaryDirectory() as folder, self.assertRaises(ValueError):
+            m.inspect(folder,run,page_encoding='other')
+
     def test_observed_pages_compare_two_framings_with_seven_request_cap(self):
         calls=[]
         root=b'<html><table><tr><td><a href="view.do?seq=987654">Synthetic notice</a></td></tr></table><a href="list.do?page=2&srchWord=observed">2</a><a href="list.do?page=3&srchWord=observed">3</a><a href="list.do?page=4">4</a></html>'

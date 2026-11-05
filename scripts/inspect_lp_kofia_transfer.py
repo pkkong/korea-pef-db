@@ -27,7 +27,9 @@ def safe_listing(url, channel, page=None):
     return url
 
 
-def inspect(output,run=subprocess.run):
+def inspect(output,run=subprocess.run,*,page_encoding='identity'):
+    if page_encoding not in {'identity','compressed'}:
+        raise ValueError('unsupported diagnostic page encoding')
     output=Path(output);output.mkdir(parents=True,exist_ok=True);rows=[];observed_pages=None;parent=None
     def capture(channel,encoding,url,name,http='1.1',observed_on=None):
         safe_listing(url,channel)
@@ -93,7 +95,7 @@ def inspect(output,run=subprocess.run):
                 except ValueError:row.setdefault('pagination_holds',[]).append({'page':number,'reason':'unsafe_or_ambiguous_observed_link'})
     for number,url in sorted((observed_pages or {}).items()):
         for http in ('1.1','1.0'):
-            capture('kofia_17','identity',url,f'kofia_17-page{number}-identity-http{http}',http, parent)
+            capture('kofia_17',page_encoding,url,f'kofia_17-page{number}-{page_encoding}-http{http}',http, parent)
     report={'mode':'kofia_transfer_read_only','requests':len(rows),'max_requests':MAX_REQUESTS,'responses':rows}
     (output/'index.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
     return report
@@ -101,5 +103,7 @@ def inspect(output,run=subprocess.run):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True)
-    report=inspect(parser.parse_args().output)
+    parser.add_argument('--page-encoding',choices=('identity','compressed'),default='identity')
+    args=parser.parse_args()
+    report=inspect(args.output,page_encoding=args.page_encoding)
     print(json.dumps(report,ensure_ascii=False))

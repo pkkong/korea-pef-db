@@ -7,6 +7,7 @@ import os
 import tempfile
 import sys
 import time
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from lp_program_service import build, validate
@@ -395,6 +396,7 @@ def main():
     run_id = publish_prepared(report, data, pages, revision,
                              'multi_lp' if args.priority_collection else 'kgrowth')
     print(json.dumps({'run_id':run_id,'programs':len(data['programs']),'program_ids':[p['id'] for p in data['programs']],
+                      'programs_by_institution':dict(sorted(Counter(p['institution_id'] for p in data['programs']).items())),
                       'notices':len(report['notices']),'review':len(report.get('review',[])),
                       'institution_notices':len(data.get('institution_notices',[])),
                       'institution_validation_errors':sum(h.get('stage')=='institution_validation' for h in data.get('institution_collection_holds',[])),

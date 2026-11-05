@@ -34,3 +34,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           WATCHDOG_DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || (inputs.dry_run && 'true' || 'false') }}
         run: python3 scripts/lp_collection_watchdog.py --dry-run "$WATCHDOG_DRY_RUN"
+      - name: Record recent automatic operation separately from manual recovery
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -m unittest scripts.tests.test_lp_collection_reliability
+          python3 scripts/lp_collection_reliability.py --output /tmp/lp-reliability.json --markdown /tmp/lp-reliability.md
+          cat /tmp/lp-reliability.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain automatic operation counts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lp-automatic-operation
+          path: |
+            /tmp/lp-reliability.json
+            /tmp/lp-reliability.md
+          retention-days: 7
+          if-no-files-found: warn

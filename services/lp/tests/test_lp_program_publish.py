@@ -11,6 +11,32 @@ sys.path.insert(0,str(SRC))
 from publish_lp_programs import prepare, document_hash, clean_database_text, source_index, store_documents, store_public_state, store_collection_report
 
 class PublishContracts(unittest.TestCase):
+    def test_publication_counts_only_final_public_programs_per_institution(self):
+        import contextlib
+        import io
+        import tempfile
+        from publish_lp_programs import main
+        programs = [{'id': 'a', 'institution_id': 'ktcu'},
+                    {'id': 'b', 'institution_id': 'ktcu'},
+                    {'id': 'c', 'institution_id': 'kamco'}]
+        # A collected but unverified institution must not become a public count.
+        report = {'checked_at': '2026-11-05T01:00:00+00:00', 'notices': [],
+                  'review': [{'institution_id': 'kdb'}]}
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)/'collection.json'
+            source.write_text(json.dumps(report))
+            output = io.StringIO()
+            with patch.object(sys, 'argv', ['publish', '--collection', str(source)]), \
+                 patch('publish_lp_programs.prepare_publication', return_value=({'programs': programs}, {}, 'revision')), \
+                 patch('publish_lp_programs.publish_prepared', return_value='published-run'), \
+                 contextlib.redirect_stdout(output):
+                main()
+        summary = json.loads(output.getvalue())
+        self.assertEqual(summary['programs_by_institution'], {'kamco': 1, 'ktcu': 2})
+        self.assertEqual(sum(summary['programs_by_institution'].values()), summary['programs'])
+        self.assertEqual(summary['program_ids'], ['a', 'b', 'c'])
+        self.assertEqual(summary['run_id'], 'published-run')
+
     def test_complete_report_uses_bounded_utf8_parts_in_same_transaction(self):
         from unittest.mock import Mock
         conn = Mock()

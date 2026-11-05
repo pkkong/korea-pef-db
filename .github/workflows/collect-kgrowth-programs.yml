@@ -271,6 +271,14 @@ jobs:
           assert publication['institution_validation_errors'] == 0, 'Direct institution receipt validation failed; archive retained'
           print('Published LP page matches this collection run')
           PY
+      - name: Record institution counts and separate publication from collection health
+        if: always()
+        env:
+          LP_PUBLICATION_VERIFIED: ${{ steps.lp_publication_verify.outcome == 'success' && 'true' || 'false' }}
+        run: |
+          python3 -m unittest services.lp.tests.test_build_lp_collection_health
+          python3 services/lp/src/build_lp_collection_health.py --growth /tmp/kgrowth-collection.json --priority /tmp/lp-priority-collection.json --institution /tmp/lp-institution-collection.json --shared /tmp/lp-shared-collection.json --publication /tmp/kgrowth-publication.json --publication-verified "$LP_PUBLICATION_VERIFIED" --output /tmp/lp-collection-health.json --markdown /tmp/lp-collection-health.md
+          cat /tmp/lp-collection-health.md >> "$GITHUB_STEP_SUMMARY"
       - name: Report official source outages
         run: |
           python3 - <<'PY'
@@ -312,5 +320,7 @@ jobs:
             /tmp/kgrowth-publication.json
             /tmp/lp-discovery-audit.json
             /tmp/lp-discovery-audit.md
+            /tmp/lp-collection-health.json
+            /tmp/lp-collection-health.md
           if-no-files-found: ignore
           retention-days: 30

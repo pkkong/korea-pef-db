@@ -15,6 +15,11 @@ on:
         description: Association collection only; inject one short-read before real KOFIA17 recovery
         type: boolean
         default: false
+      transfer_page_encoding:
+        description: KOFIA read-only transfer diagnostic pagination encoding
+        type: choice
+        options: [identity, compressed]
+        default: identity
 permissions:
   contents: read
 concurrency:
@@ -28,6 +33,7 @@ jobs:
       LP_INSPECTION_PROFILE: ${{ inputs.profile || 'initial' }}
       LP_DIAGNOSTIC_CONNECTION_MODE: ${{ inputs.connection_mode || 'transaction' }}
       LP_VERIFY_FRAMING_RECOVERY: ${{ inputs.verify_framing_recovery && 'true' || 'false' }}
+      LP_TRANSFER_PAGE_ENCODING: ${{ inputs.transfer_page_encoding || 'identity' }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -48,7 +54,7 @@ jobs:
         if: inputs.profile == 'kofia_transfer'
         run: |
           python3 -m unittest scripts.tests.test_inspect_lp_kofia_transfer
-          python3 scripts/inspect_lp_kofia_transfer.py --output /tmp/lp-remaining-board-receipts
+          python3 scripts/inspect_lp_kofia_transfer.py --output /tmp/lp-remaining-board-receipts --page-encoding "$LP_TRANSFER_PAGE_ENCODING"
       - name: Collect association boards and retain retry allocation without publication
         if: inputs.profile == 'association_collection'
         run: |
