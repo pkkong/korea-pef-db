@@ -309,7 +309,7 @@ def _document_text(raw, version):
 
 
 def attachment_text(raw, name, *, extraction_version=1):
-    """Offering ZIPs keep only actual documents, never auxiliary form text."""
+    """Replay versioned byte proofs; fresh file selection uses current policy."""
     if type(extraction_version) is not int or extraction_version not in {1,2}:
         raise ValueError('unsupported attachment extraction version')
     if (is_form(name) if extraction_version==1 else is_submission_form_v2(name)):

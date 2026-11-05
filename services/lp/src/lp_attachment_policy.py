@@ -3,6 +3,7 @@ import re
 
 
 def is_submission_form_v2(name):
+    """Frozen filename policy for archived v2 byte-extraction receipts."""
     # Some issuers label every file '(공고)', including blank proposal forms.
     title = re.sub(r'^\s*[\[(]\s*공고\s*[\])]\s*', '', name)
     if re.search(r'제안(?:서)?\s*요청서|공고|모집|선정계획', title):

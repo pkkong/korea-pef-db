@@ -1,0 +1,36 @@
+name: Watch LP collection starts
+
+on:
+  schedule:
+    - cron: '5 * * * 1-5'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Report only; do not start collection'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lp-collection-watchdog
+  cancel-in-progress: false
+
+jobs:
+  check-start:
+    if: github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check missed collection start
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WATCHDOG_DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || (inputs.dry_run && 'true' || 'false') }}
+        run: python3 scripts/lp_collection_watchdog.py --dry-run "$WATCHDOG_DRY_RUN"
