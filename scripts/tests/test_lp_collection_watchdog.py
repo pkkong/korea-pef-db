@@ -17,10 +17,11 @@ def run(created='2026-11-05T06:20:00Z', status='completed', name=w.WORKFLOW):
 
 
 class FakeAPI:
-    def __init__(self, collection=None, active=None):
+    def __init__(self, collection=None, active=None, jobs=None):
         self.collection = collection or []
         self.active = active or []
         self.calls = []
+        self.jobs=jobs if jobs is not None else [{'conclusion':'failure','steps':[{'name':'Collect official sources'}]}]
 
     def __call__(self, endpoint, **kwargs):
         self.calls.append((endpoint, kwargs))
@@ -28,6 +29,8 @@ class FakeAPI:
             return None
         if endpoint.endswith('/workflows/'+w.WORKFLOW):
             return {'id':77,'path':'.github/workflows/'+w.WORKFLOW,'state':'active'}
+        if '/jobs?' in endpoint:
+            return {'total_count':len(self.jobs),'jobs':copy.deepcopy(self.jobs)}
         rows = self.collection if '/workflows/' in endpoint else [
             r for r in self.active if 'status=' + r['status'] + '&' in endpoint]
         return {'total_count': len(rows), 'workflow_runs': copy.deepcopy(rows)}
@@ -102,6 +105,15 @@ class WatchdogTests(unittest.TestCase):
         self.assertEqual(self.invoke(api)['reason'], 'window_covered')
         self.assertFalse(any(kw for _, kw in api.calls))
 
+    def test_prior_provider_start_failure_is_not_repeated_in_a_new_window(self):
+        old=run(created='2026-10-30T06:20:00Z')
+        for jobs in ([],[{'conclusion':'failure','steps':[]}]):
+            api=FakeAPI(collection=[old],jobs=jobs)
+            self.assertEqual(self.invoke(api)['reason'],'prior_run_did_not_start')
+            self.assertFalse(any(kw for _,kw in api.calls))
+        api=FakeAPI(collection=[old])
+        self.assertEqual(self.invoke(api)['decision'],'dispatched')
+
     def test_untrusted_context_no_execution(self):
         for change in ({'repository': 'someone/fork'}, {'ref': 'refs/heads/dev'},
                        {'event': 'pull_request'}, {'event': 'pull_request_target'},
@@ -133,7 +145,7 @@ class WatchdogTests(unittest.TestCase):
                 return payload
             with self.assertRaises(w.WatchdogError):
                 self.invoke(api)
-            self.assertLessEqual(len(calls), 2)
+            self.assertLessEqual(len(calls), 3)
             self.assertFalse(any(calls))
         with patch.object(w.subprocess, 'run', side_effect=OSError('secret detail')):
             with self.assertRaisesRegex(w.WatchdogError, '^GitHub API unavailable$'):

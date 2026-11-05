@@ -125,19 +125,55 @@ def read_runs(endpoint, api):
     raise WatchdogError('run listing page limit')
 
 
+def recent_collection_runs(endpoint, api, now):
+    # The most recent page is enough to establish whether this window has
+    # started and to inspect the latest prior failure, even after a weekend.
+    data=api(endpoint+'&per_page=100')
+    if not isinstance(data,dict) or type(data.get('total_count')) is not int:
+        raise WatchdogError('invalid collection listing')
+    rows=data.get('workflow_runs')
+    if (not isinstance(rows,list) or data['total_count']<0
+            or len(rows)!=min(data['total_count'],100)):
+        raise WatchdogError('incomplete collection listing')
+    dates=[validate_run(r,now)[1] for r in rows]
+    if dates!=sorted(dates,reverse=True):
+        raise WatchdogError('unordered collection listing')
+    return rows
+
+
+def prior_start_failed(base, rows, api):
+    trusted=[r for r in rows if r['head_branch']=='main' and r.get('event') in ('schedule','workflow_dispatch')]
+    if not trusted or trusted[0].get('conclusion')!='failure':
+        return False
+    jobs=api(f"{base}/runs/{trusted[0]['id']}/jobs?filter=latest&per_page=100")
+    if (not isinstance(jobs,dict) or type(jobs.get('total_count')) is not int
+            or not isinstance(jobs.get('jobs'),list) or jobs['total_count']!=len(jobs['jobs'])
+            or jobs['total_count']>100):
+        raise WatchdogError('invalid prior job evidence')
+    if not jobs['jobs']:
+        return True
+    for job in jobs['jobs']:
+        if not isinstance(job,dict) or not isinstance(job.get('steps'),list):
+            raise WatchdogError('invalid prior job evidence')
+        if job.get('conclusion')=='failure' and not job['steps']:
+            return True  # Provider/start failures require investigation, not repeated dispatches.
+    return False
+
+
 def run_watchdog(*, now, repository, ref, event, dry_run=True, api=gh_api):
     if repository != REPOSITORY or ref != 'refs/heads/main' or event not in ('schedule', 'workflow_dispatch'):
         return {'decision': 'skip', 'reason': 'untrusted_context'}
     if due_window(now) is None:
         return {'decision': 'skip', 'reason': 'no_due_window'}
     base = f'repos/{REPOSITORY}/actions'
-    day = now.astimezone(UTC).date().isoformat()
-    collection = read_runs(f'{base}/workflows/{WORKFLOW}/runs?branch=main&created=%3E%3D{day}', api)
+    collection = recent_collection_runs(f'{base}/workflows/{WORKFLOW}/runs?branch=main',api,now)
     active = []
     for status in ACTIVE:
         active.extend(read_runs(f'{base}/runs?status={status}', api))
     decision = decide(now, collection, active)
     if decision['decision'] == 'dispatch':
+        if prior_start_failed(base,collection,api):
+            return {'decision':'skip','reason':'prior_run_did_not_start','due':decision['due']}
         workflow=api(f'{base}/workflows/{WORKFLOW}')
         if (not isinstance(workflow,dict) or type(workflow.get('id')) is not int
                 or workflow['id']<=0 or workflow.get('path')!='.github/workflows/'+WORKFLOW
