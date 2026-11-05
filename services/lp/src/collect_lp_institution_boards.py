@@ -30,7 +30,7 @@ try:
     from . import lp_board_adapter_cwma as cwma
     from .lp_pdf_ocr import recognize_pdf
     from . import lp_board_adapter_nps as nps
-    from .lp_attachment_policy import is_submission_form, is_submission_text
+    from .lp_attachment_policy import is_submission_form, is_submission_form_v2, is_submission_text
     from .lp_ipv4_transport import IPv4HTTPSHandler
     from .lp_kdb_dns import resolve_kdb_ipv4
     from .lp_cu_transport import CuDnsError, fetch_cu_ipv4
@@ -56,7 +56,7 @@ except ImportError:
     import lp_board_adapter_cwma as cwma
     from lp_pdf_ocr import recognize_pdf
     import lp_board_adapter_nps as nps
-    from lp_attachment_policy import is_submission_form, is_submission_text
+    from lp_attachment_policy import is_submission_form, is_submission_form_v2, is_submission_text
     from lp_ipv4_transport import IPv4HTTPSHandler
     from lp_kdb_dns import resolve_kdb_ipv4
     from lp_cu_transport import CuDnsError, fetch_cu_ipv4
@@ -312,7 +312,7 @@ def attachment_text(raw, name, *, extraction_version=1):
     """Offering ZIPs keep only actual documents, never auxiliary form text."""
     if type(extraction_version) is not int or extraction_version not in {1,2}:
         raise ValueError('unsupported attachment extraction version')
-    if (is_form(name) if extraction_version==1 else is_submission_form(name)):
+    if (is_form(name) if extraction_version==1 else is_submission_form_v2(name)):
         return ''
     kind, text = _document_text(raw, extraction_version)
     if kind != 'zip':
@@ -332,7 +332,7 @@ def attachment_text(raw, name, *, extraction_version=1):
                     pass
             if item.flag_bits & 1 or item.file_size > MAX_BYTES:
                 raise ValueError('encrypted or oversized ZIP document')
-            form = is_form(member_name) if extraction_version==1 else is_submission_form(member_name)
+            form = is_form(member_name) if extraction_version==1 else is_submission_form_v2(member_name)
             if (form or item.is_dir()
                     or not re.search(r'\.(pdf|hwp|hwpx|docx)$', member_name, re.I)):
                 continue

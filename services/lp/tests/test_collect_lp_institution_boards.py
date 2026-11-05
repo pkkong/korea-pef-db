@@ -14,6 +14,34 @@ STAMP = '2026-10-20T06:00:00+00:00'
 
 
 class InstitutionCollectionTests(unittest.TestCase):
+    def test_terminal_templates_with_reused_notice_titles_skip_fetch_but_preserve_both_archive_versions(self):
+        from services.lp.tests.test_lp_board_adapters_banks import IBK_LIST,IBK_HTML
+        from services.lp.src.lp_notice_publication import _texts
+        name='붙임2. 펀드 운용사 선정(재공고) 제출서류 및 서식(한글양식).hwp'
+        archived='선정 공고 제출자료 작성 예시\n국내 PE 블라인드 펀드 9,000억원, 9개사, 2026.10.30 제출'
+        for version in (1,2):
+            with self.subTest(version=version):
+                config={**boards.load_configs()['ibk'],'pages':1,'search_terms':['펀드']}
+                if version==2:config['attachment_extraction_version']=2
+                detail=IBK_HTML.replace('선정 공고.pdf',name)
+                calls=[]
+                def fetch(url,referer=None):
+                    calls.append(url)
+                    self.assertNotIn('/common/download.ibk',url)
+                    return ('<html>'+(detail if 'noticeDetailCyber' in url else IBK_LIST)+'</html>').encode()
+                report=boards.collect({'ibk':config},lambda c:fetch,checked_at=STAMP)
+                self.assertEqual(report['holds'],[]);self.assertEqual(len(calls),2)
+                n=report['notices'][0];self.assertEqual(n['attachment_bytes'],{})
+                url=n['attachments'][0]['url'];raw=b'previously archived submission template'
+                n['attachment_bytes'][url]=base64.b64encode(raw).decode()
+                n['attachment_hashes'][url]=boards.digest(raw)
+                n['attachment_texts'][url]=archived
+                previous=copy.deepcopy(n)
+                with patch.object(boards,'extract_attachment',return_value={'format':'hwp','text':archived}):
+                    self.assertEqual(boards.validate_notice(n,STAMP,config),previous)
+                self.assertEqual(_texts(n),[n['body']])
+                self.assertEqual(n,previous)
+
     def collect(self, title=None):
         config = boards.load_configs()['tp']
         detail = TP_DETAIL.replace('선정 공고.zip', '제안서 양식.zip')

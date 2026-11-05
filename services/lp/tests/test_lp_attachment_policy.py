@@ -4,7 +4,7 @@ import zipfile
 from unittest.mock import patch
 import unittest
 
-from services.lp.src.lp_attachment_policy import is_submission_form
+from services.lp.src.lp_attachment_policy import is_submission_form, is_submission_form_v2
 from services.lp.src.lp_institution_notice_terms import extract_terms
 from services.lp.src.lp_notice_publication import _scope, _texts
 
@@ -17,6 +17,25 @@ class AttachmentPolicyTests(unittest.TestCase):
         for name in ('(공고)상생펀드_공고안.hwp', '공고문 및 제출서류 안내.pdf',
                      '(공고)제안서 요청서.pdf', '기업지원펀드 제안서 요청 공고.hwp'):
             self.assertFalse(is_submission_form(name), name)
+
+    def test_terminal_templates_override_reused_business_title_only(self):
+        prefix = '붙임2-2. 『2026 회수시장 지원 세컨더리 펀드』 위탁운용사 선정(재공고) '
+        for suffix in ('제출서류 및 서식(엑셀양식).xlsx',
+                       '제출서류 및 서식(한글양식).hwp',
+                       '제안서류 및 양식(Word).docx'):
+            name = prefix + suffix
+            self.assertFalse(is_submission_form_v2(name), name)
+            self.assertTrue(is_submission_form(name), name)
+        for name in ('선정계획 공고 제출서류 및 서식(엑셀양식).xlsx',):
+            self.assertTrue(is_submission_form(name))
+            self.assertFalse(is_submission_form_v2(name))
+        for name in ('공고문 및 제출서류 안내.pdf', '모집요강 및 제출서류.pdf',
+                     '공고문 및 제출서류 및 서식.pdf', '모집 공고 및 양식.zip',
+                     '선정계획 공고 제안요청서(RFP).hwp',
+                     prefix + '제출서류 및 서식 안내.hwp',
+                     prefix + '운용자료.xlsx'):
+            self.assertFalse(is_submission_form(name), name)
+            self.assertEqual(is_submission_form(name), is_submission_form_v2(name))
 
     def test_rfp_title_does_not_override_actual_template_heading(self):
         from services.lp.src import collect_lp_institution_boards as boards
@@ -39,7 +58,7 @@ class AttachmentPolicyTests(unittest.TestCase):
         n={'institution_id':'ibk','source_channel':'institution_board',
            'url':'https://www.ibk.co.kr/cyber/noticeDetailCyber.ibk?srno=900001',
            'title':'출자사업 공고','date':'2026-10-01','body':'사업 계획을 공고합니다.',
-           'sha256':'a'*64,'attachments':[{'url':url,'name':'(공고)출자 제안서류 및 서식.hwp'}],
+           'sha256':'a'*64,'attachments':[{'url':url,'name':'위탁운용사 선정(재공고) 제출서류 및 서식(한글양식).hwp'}],
            'attachment_hashes':{url:'b'*64},
            'attachment_texts':{url:'국내 PE 블라인드 펀드. 위탁운용금액: 총 9,000억원. 선정 운용사 수: 9개사. 제출기한: 2026.10.30 15:00'}}
         before=copy.deepcopy(n)
