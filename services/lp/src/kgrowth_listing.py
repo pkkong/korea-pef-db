@@ -59,7 +59,13 @@ def parse_listing(html, url):
         row = {'source_id': ident, 'title': title, 'date': _date(cells[2].clean()),
                'url': target, 'pinned': not cells[0].clean().isdigit()}
         if ident in rows and rows[ident] != row:
-            raise ValueError('Conflicting Korea Growth listing metadata')
+            previous = rows[ident]
+            if any(previous[key] != row[key] for key in ('title', 'date', 'url')):
+                raise ValueError('Conflicting Korea Growth listing metadata')
+            if not previous['pinned']:
+                continue  # The dated stream is authoritative over a repeated pin.
+            # Preserve the ordinary row's actual position for date-order checks.
+            del rows[ident]
         rows[ident] = row
     if not rows:
         tables = [n for n in root.nodes('table')
@@ -97,8 +103,10 @@ def discover_window(fetch, *, days=365, as_of=None, max_pages=20):
             break
         for row in rows:
             ident = row['source_id']
-            if ident in observed and any(observed[ident][key] != row[key] for key in ('title', 'date', 'pinned')):
+            if ident in observed and any(observed[ident][key] != row[key] for key in ('title', 'date')):
                 raise ValueError('Conflicting Korea Growth metadata across pages')
+            if ident in observed and not observed[ident]['pinned'] and row['pinned']:
+                continue
             observed[ident] = row
         for row in regular:
             stamp = row['date']

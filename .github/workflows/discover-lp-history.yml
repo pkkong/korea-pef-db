@@ -11,7 +11,7 @@ on:
         type: string
         required: false
       resume_run:
-        description: Successful main Discover LP historical listings run to continue
+        description: Completed main historical listings run with a resumable cursor
         type: string
         required: false
       batch_pages:
@@ -49,13 +49,14 @@ jobs:
           assert (bool(resume) and not seed and not index) or (seed and index and not resume), 'Choose seed plus index, or a saved cursor'
           assert os.environ['BATCH_PAGES'] in {'1','2','3','4'},'Bounded batch required'
           for value,workflow,require_success,recent in ((seed,'collect-kgrowth-programs.yml',False,True),
-              (index,'inspect-lp-history.yml',True,False),(resume,'discover-lp-history.yml',True,False)):
+              (index,'inspect-lp-history.yml',True,False),(resume,'discover-lp-history.yml',False,False)):
               if not value: continue
               assert value.isascii() and value.isdecimal() and int(value)>0,'Numeric Actions run required'
               run=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{value}"]))
               assert run['repository']['full_name']==os.environ['GH_REPO'] and run['head_branch']=='main'
               assert run['path']=='.github/workflows/'+workflow and run['event'] in {'schedule','workflow_dispatch'}
               assert run['status']=='completed','Wait for the preceding run'
+              assert run['conclusion'] in {'success','failure'},'Do not resume cancellation, timeout, or provider-start failure'
               if require_success: assert run['conclusion']=='success','Inspect a failed run instead of retrying it blindly'
               if recent:
                   created=datetime.datetime.fromisoformat(run['created_at'].replace('Z','+00:00'))

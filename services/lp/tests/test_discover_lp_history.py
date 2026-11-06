@@ -120,6 +120,25 @@ class HistoricalListingTests(unittest.TestCase):
         self.assertEqual(calls,[1,2,3]); self.assertEqual(h.summary(result)['next_page'],3)
         self.assertEqual(result['batches'][-1]['new_pages'],1); self.assertTrue(result['holds'])
 
+    def test_corrected_parser_replays_saved_duplicate_without_http_and_keeps_failure(self):
+        state=h.bootstrap(*seed());failed=raw([('공지','900','안내','2024-01-01'),
+            ('2','802','다른 공고','2024-02-01'),('1','900','안내','2024-01-01')])
+        state['holds']=[{'page':2,'error':'ValueError: Conflicting Korea Growth listing metadata'}]
+        state['failed_response']={'page':2,'url':h.page_url(2),'sha256':hashlib.sha256(failed).hexdigest(),
+                                  'raw_base64':base64.b64encode(failed).decode()}
+        repaired=h.recover_saved_duplicate(state)
+        self.assertEqual(len(repaired['receipts']),2);self.assertEqual(repaired['holds'],[])
+        self.assertEqual(repaired['recovered_failures'][0]['holds'],state['holds'])
+        result,calls=self.run_pages(repaired,{2:failed,3:raw([('1','803','이전','2022-01-01')])},batch_pages=1)
+        self.assertEqual(calls,[2,3]);self.assertTrue(h.summary(result)['listing_window_complete'])
+        for change in ('sha','page','error'):
+            bad=copy.deepcopy(state)
+            if change=='sha':bad['failed_response']['sha256']='c'*64
+            if change=='page':bad['failed_response']['page']=1
+            if change=='error':bad['holds'][0]['error']='TimeoutError: timeout'
+            with self.subTest(change=change),self.assertRaises(ValueError):
+                h.run_batch(bad,lambda u:self.fail('unexpected HTTP'))
+
     def test_tampered_fingerprint_start_and_cursor_identity_fail_before_http(self):
         state = h.bootstrap(*seed())
         for field in ('hash', 'start', 'institution', 'url'):

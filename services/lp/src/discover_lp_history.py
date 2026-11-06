@@ -72,8 +72,10 @@ def replay(state):
             raise ValueError('Repeated or pinned-only historical page')
         for row in rows:
             ident = row['source_id']
-            if ident in observed and any(observed[ident][k] != row[k] for k in ('title', 'date', 'pinned')):
+            if ident in observed and any(observed[ident][k] != row[k] for k in ('title', 'date')):
                 raise ValueError('Historical listing metadata conflict')
+            if ident in observed and not observed[ident]['pinned'] and row['pinned']:
+                continue
             observed[ident] = row
         for row in regular:
             if prior is not None and row['date'] > prior:
@@ -140,7 +142,39 @@ def summary(state):
             'retained_body_observed': sum(r['retained_body_observed'] for r in result['rows']),
             'pending_body_verification': sum(not r['retained_body_observed'] for r in result['rows']),
             'source_history_complete': False, 'pe_business_count': None,
+            'replayed_failure_responses': len(state.get('recovered_failures', [])),
             'holds': state['holds'], 'last_batch': state['batches'][-1] if state['batches'] else None}
+
+
+def recover_saved_duplicate(previous):
+    """Replay only a saved parser-conflict response, never retry source HTTP.
+
+    Other failures require diagnosis. The original failure and exact response
+    remain in the cursor even after a corrected parser accepts the next page.
+    """
+    state = copy.deepcopy(previous)
+    replay(state)
+    holds = state.get('holds', [])
+    if not holds:
+        return state
+    response = state.get('failed_response', {})
+    page = len(state['receipts']) + 1
+    if (len(holds) != 1 or holds[0].get('error') != 'ValueError: Conflicting Korea Growth listing metadata'
+            or holds[0].get('page') != page or response.get('page') != page
+            or response.get('url') != page_url(page)):
+        raise ValueError('Resolve saved historical failure before resuming')
+    raw = base64.b64decode(response['raw_base64'], validate=True)
+    if len(raw) > 12 * 1024 * 1024 or hashlib.sha256(raw).hexdigest() != response.get('sha256'):
+        raise ValueError('Invalid saved historical failure response')
+    item = receipt(page, raw)
+    candidate = {**state, 'receipts': state['receipts'] + [item]}
+    replay(candidate)
+    state['receipts'].append(item)
+    state.setdefault('recovered_failures', []).append({'holds': state['holds'], 'response': response,
+                                                       'resolution': 'saved_response_parser_replay'})
+    state['holds'] = []
+    del state['failed_response']
+    return state
 
 
 def run_batch(previous, fetch, *, batch_pages=4, checked_at=None):
@@ -149,9 +183,9 @@ def run_batch(previous, fetch, *, batch_pages=4, checked_at=None):
     state = copy.deepcopy(previous)
     if len(json.dumps(state, ensure_ascii=False).encode()) > MAX_STATE_BYTES:
         raise ValueError('Historical state size limit exceeded')
-    result = replay(state)
     if state.get('holds'):
-        raise ValueError('Resolve saved historical failure before resuming')
+        state = recover_saved_duplicate(state)
+    result = replay(state)
     if result['listing_window_complete']:
         return state
     stats = {'checked_at': checked_at or datetime.now(timezone.utc).isoformat(),

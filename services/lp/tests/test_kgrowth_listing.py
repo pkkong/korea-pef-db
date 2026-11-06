@@ -92,6 +92,21 @@ class GrowthListingTests(unittest.TestCase):
             self.discover({1: page([('공지', '90', '안내', '2020-01-01'), ('2', '2', '공고', '2026-10-24')]),
                            2: page([('공지', '90', '변경 안내', '2020-01-01'), ('1', '1', '이전 공고', '2025-01-01')])})
 
+    def test_pinned_notice_reappearing_in_dated_stream_uses_regular_position(self):
+        pin=('공지','90','안내','2026-01-01')
+        rows=listing.parse_listing(page([pin,('3','3','다른 공고','2026-02-01'),
+                                         ('2','90','안내','2026-01-01')]),listing.LIST_URL)
+        self.assertEqual([r['source_id'] for r in rows],['3','90'])
+        self.assertFalse(rows[-1]['pinned'])
+        report,_=self.discover({1:page([pin,('4','4','최근','2026-10-01')]),
+                                2:page([pin,('3','3','다른 공고','2026-02-01'),('2','90','안내','2026-01-01')]),
+                                3:page([pin,('1','1','과거','2025-01-01')])})
+        self.assertTrue(report['complete'])
+        self.assertFalse(next(r for r in report['rows'] if r['source_id']=='90')['pinned'])
+        for other in [('2','90','변경 안내','2026-01-01'),('2','90','안내','2026-01-02')]:
+            with self.assertRaisesRegex(ValueError,'metadata'):
+                listing.parse_listing(page([pin,other]),listing.LIST_URL)
+
     def test_other_board_or_conflicting_identifier_cannot_match(self):
         url = listing.BASE + 'notice_view.asp?idx=123&str_type=1&tab=1'
         self.assertEqual(listing.source_id(url + '&page=2'), '123')
