@@ -111,6 +111,7 @@ jobs:
           from datetime import datetime,timezone
           from pathlib import Path
           from publish_lp_programs import connect,baseline,prepare
+          from lp_program_service import validate,assert_selected_gp_history
           root=Path('/tmp/lp-recovery')
           report=json.loads((root/'kgrowth-collection.json').read_text())
           report['priority_sources']=json.loads((root/'lp-priority-collection.json').read_text())['sources']
@@ -123,11 +124,12 @@ jobs:
               old=baseline(conn)
           (root/'baseline.json').write_text(json.dumps(old,ensure_ascii=False))
           data,pages=prepare(copy.deepcopy(old),report)
+          validate(data)
+          assert_selected_gp_history(old['programs'],data['programs'])
           after={p['id']:p for p in data['programs']}
           for previous in old['programs']:
               assert previous['id'] in after, 'Previously published program missing'
               current=after[previous['id']]
-              assert current.get('selected_gps')==previous.get('selected_gps'), 'Existing GP identity changed'
               assert {e['url'] for e in previous['events']} <= {e['url'] for e in current['events']}, 'Existing source URL missing'
               if previous['institution_id'] in {'sema','mmaa','kfinco'}:
                   for field in ('commitment_amount_krw','manager_count','deadline'):
@@ -138,7 +140,11 @@ jobs:
           for p in new:
               if p['institution_id']=='kbiz':
                   assert not any(p.get(k) for k in ('commitment_amount_krw','manager_count','per_fund_amount_krw')), 'Common PE/VC budget cannot become PE facts'
-          summary={'programs':len(after),'pages':len(pages),'new_programs':new,'institution_holds':errors}
+          old_selections={p['id']:p.get('selected_gps',[]) for p in old['programs']}
+          added_gps=[{'program_id':p['id'],'name':gp['name'],'source_url':gp['source_url']}
+                     for p in data['programs'] for gp in p.get('selected_gps',[])
+                     if not any(all(gp.get(k)==v for k,v in prior.items()) for prior in old_selections.get(p['id'],[]))]
+          summary={'programs':len(after),'pages':len(pages),'new_programs':new,'institution_holds':errors,'added_selected_gps':added_gps}
           (root/'preflight.json').write_text(json.dumps(summary,ensure_ascii=False))
           print(json.dumps({'programs':len(after),'pages':len(pages),'new_program_ids':[p['id'] for p in new],'institution_holds':len(errors)}))
           PY

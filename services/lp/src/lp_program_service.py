@@ -36,6 +36,22 @@ def validate(data):
 def h(value):
     return escape(str(value or ''), quote=True)
 
+
+def assert_selected_gp_history(before, after):
+    """Preserve existing GP facts; separately validated additions may be appended.
+
+    This guard does not approve sources. Callers must replay source evidence
+    and validate complete projected programs before using it.
+    """
+    current = {p['id']: p for p in after}
+    for previous in before:
+        if previous['id'] not in current:
+            raise ValueError('Existing program missing')
+        selections = current[previous['id']].get('selected_gps', [])
+        for gp in previous.get('selected_gps', []):
+            if not any(all(candidate.get(key) == value for key, value in gp.items()) for candidate in selections):
+                raise ValueError('Existing selected GP evidence changed or disappeared')
+
 def deadline_label(value):
     return str(value).replace('T', ' ').replace('+09:00', '') if value else '원문 확인 필요'
 

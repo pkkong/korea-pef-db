@@ -85,7 +85,7 @@ class Page(HTMLParser):
 
 def event_type(title, body):
     text = compact(title)
-    if any(word in text for word in ("취소", "정정", "수정", "연장", "재공고")):
+    if any(word in text for word in ("취소", "정정", "수정", "연장")):
         return None
     if "서류심사" in text and "통과" in body:
         return "서류심사 결과"

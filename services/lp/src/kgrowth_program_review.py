@@ -8,6 +8,10 @@ import json
 import re
 from pathlib import Path
 from datetime import datetime
+try:
+    from .kgrowth_followup import recognize_followup
+except ImportError:
+    from kgrowth_followup import recognize_followup
 
 REGISTRY = Path(__file__).resolve().parents[3] / 'data/kgrowth_program_reviews.json'
 
@@ -32,7 +36,8 @@ def notice_classification(notice):
 def matching_recipe_title(recipe, title):
     compact = re.sub(r'\s+', '', title).casefold()
     terms = recipe.get('match_terms') or [recipe['source_title']]
-    return all(re.sub(r'\s+', '', term).casefold() in compact for term in terms)
+    same_fund = all(re.sub(r'\s+', '', term).casefold() in compact for term in terms)
+    return same_fund and ('재공고' in title) == ('재공고' in recipe.get('title', ''))
 
 
 def link_suggestions(notices):
@@ -141,12 +146,15 @@ def project(recipe, notices, checked_at=None):
         sources.append((approved, n))
     source_ids = {str(s['source_id']) for s in recipe['sources']}
     exclusions = {str(e['source_id']):e for e in recipe.get('related_exclusions', [])}
+    unknown = []
     for n in notices:
         excluded = exclusions.get(str(n['source_id']))
-        if excluded and fingerprint(n) == excluded['sha256'] and n.get('attachment_hashes', {}) == excluded.get('attachment_hashes', {}):
+        if excluded:
+            if fingerprint(n) != excluded['sha256'] or n.get('attachment_hashes', {}) != excluded.get('attachment_hashes', {}):
+                raise ValueError('Related excluded source changed')
             continue
-        if n['source_id'] not in source_ids and matching_recipe_title(recipe, n['title']) and '【제출서식】' not in n['title']:
-            raise ValueError('New related notice requires review')
+        if str(n['source_id']) not in source_ids and matching_recipe_title(recipe, n['title']) and '【제출서식】' not in n['title']:
+            unknown.append(n)
     # Every reviewed offering field has an exact excerpt from a fetched body
     # or a separately retained, hash-bound attachment text.
     facts = {}
@@ -164,6 +172,34 @@ def project(recipe, notices, checked_at=None):
             if not evidence.get('quote') or evidence['quote'] not in text:
                 raise ValueError(f'Field evidence no longer matches: {field}')
         facts[field] = evidence['value']
+    followup = None
+    if unknown:
+        # Additional stages cannot change reviewed offering facts or an already
+        # recorded final selection. Recognize only a strict, one-track result.
+        if any(s['event'] == '최종 선정' for s, _ in sources):
+            raise ValueError('New related notice requires review')
+        recruitment = next(n for s, n in sources if s['event'] == '모집 공고')
+        preceding = {}
+        for s, n in sorted(sources, key=lambda pair: pair[1]['date']):
+            if s['event'] in ('접수 현황', '서류심사 결과'):
+                preceding = team_sections(n['body'], s.get('manager_layout'))
+        segments = facts.get('segments', [])
+        expected = (segments[0].get('manager_count') if len(segments) == 1 else facts.get('manager_count'))
+        followup = recognize_followup(recipe, recruitment, preceding, expected, unknown, source_ids,
+                                      as_of=str(checked_at)[:10])
+        if followup['hold']:
+            raise ValueError('New related notice requires review: ' + followup['hold'])
+        used = {str(followup['match']['source_id'])}
+        if followup.get('preceding_match'):
+            used.add(str(followup['preceding_match']['source_id']))
+        if used != {str(n['source_id']) for n in unknown}:
+            raise ValueError('Other related notices require review')
+        for field, layout, event in (('preceding_match', 'preceding_layout', '접수 현황'),
+                                      ('match', 'layout', '최종 선정')):
+            if followup.get(field):
+                n = followup[field]
+                sources.append(({'source_id':n['source_id'], 'event':event,
+                                 'manager_layout':followup[layout]}, n))
     p = {'id':recipe['id'], 'institution_id':'kgrowth', 'institution_name':'한국성장금융',
          'title':recipe['title'], 'display_title':recipe['title'], 'asset_scope':recipe['asset_scope'],
          'status':'모집 공고', 'events':[], 'schedule_stages':[], 'selected_gps':[],
@@ -195,7 +231,7 @@ def project(recipe, notices, checked_at=None):
                 final_url = n['url']
     for track,names in shortlist.items():
         aliases = recipe.get('name_aliases', {})
-        if applicants and not {aliases.get(n,n) for n in names} <= {aliases.get(n,n) for n in applicants[track]}:
+        if applicants and not {re.sub(r'\s+', '', aliases.get(n,n)) for n in names} <= {re.sub(r'\s+', '', aliases.get(n,n)) for n in applicants[track]}:
             raise ValueError('Shortlisted manager not found among applicants in this track')
         p['shortlisted_gps'].extend(names)
         for name in names:
@@ -203,7 +239,7 @@ def project(recipe, notices, checked_at=None):
     for track,names in final.items():
         prior = shortlist or applicants
         aliases = recipe.get('name_aliases', {})
-        if prior and not {aliases.get(n,n) for n in names} <= {aliases.get(n,n) for n in prior[track]}:
+        if prior and not {re.sub(r'\s+', '', aliases.get(n,n)) for n in names} <= {re.sub(r'\s+', '', aliases.get(n,n)) for n in prior[track]}:
             raise ValueError('Final manager not found in preceding stage')
         for name in names:
             # A source-derived identity is not a match to an existing GP master.
@@ -226,6 +262,8 @@ def project(recipe, notices, checked_at=None):
         if datetime.fromisoformat(checked_at) >= datetime.fromisoformat(p['deadline']):
             p['status'] = '접수 마감'
     p['review_evidence'] = recipe['facts']
+    if followup:
+        p['automatic_followup_evidence'] = followup['evidence']
     return p
 
 

@@ -15,7 +15,7 @@ class PreviewTests(unittest.TestCase):
   old=dict(n,body='old amount')
   html=render_review({'as_of':'2026-09-29','programs':[]},{'notices':[n]},{'tracked_notices':[old]})
   self.assertIn('원문 변경',html);self.assertIn('-old amount',html);self.assertIn('+new amount',html)
- def test_new_result_shows_both_rounds_for_review_without_approving_gp(self):
+ def test_original_result_review_does_not_offer_reopened_round_or_approve_gp(self):
   notice={'source_id':'9999','title':'【선정결과】「부산 미래산업 전환펀드 2호」 위탁운용사 선정 결과',
           'body':'운용사명\n새운용사','date':'2026-10-02','url':'https://www.kgrowth.or.kr/notice_view.asp?idx=9999',
           'attachment_hashes':{}}
@@ -23,9 +23,9 @@ class PreviewTests(unittest.TestCase):
             {'id':'kgrowth-2026-busan-2-reopen','title':'부산 재공고','events':[], 'selected_gps':[]}]
   html=render_review({'as_of':'2026-10-02','programs':programs},{'notices':[notice]},{'tracked_notices':[]})
   self.assertIn('새 단계 연결 후보',html)
-  self.assertIn('차수 확인 필요',html)
+  self.assertNotIn('차수 확인 필요',html)
   self.assertIn('program-kgrowth-2026-busan-2.html',html)
-  self.assertIn('program-kgrowth-2026-busan-2-reopen.html',html)
+  self.assertNotIn('program-kgrowth-2026-busan-2-reopen.html',html)
   self.assertIn('기존 사업 연결 후보',html)
   self.assertNotIn('선정 GP</th>',html)
  def test_priority_institution_result_is_shown_as_candidate_only(self):

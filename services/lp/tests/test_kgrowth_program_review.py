@@ -115,7 +115,7 @@ class AdditionalReviewTests(unittest.TestCase):
         self.assertIsNone(notice_classification(n))
 
 
-    def test_new_busan_result_is_ambiguous_review_candidate(self):
+    def test_original_result_does_not_hold_reopened_program(self):
         new={'source_id':'9999','title':'【선정결과】「부산 미래산업 전환펀드 2호」 위탁운용사 선정 결과',
              'date':'2026-10-02','body':'운용사명\n새운용사','url':'https://www.kgrowth.or.kr/notice_view.asp?idx=9999',
              'attachment_hashes':{}}
@@ -124,11 +124,12 @@ class AdditionalReviewTests(unittest.TestCase):
         self.assertEqual(len(suggestions),1)
         self.assertEqual(suggestions[0]['stage'],'최종 선정')
         self.assertEqual({p['id'] for p in suggestions[0]['programs']},
-                         {'kgrowth-2026-busan-2','kgrowth-2026-busan-2-reopen'})
+                         {'kgrowth-2026-busan-2'})
         self.assertEqual(suggestions[0]['sha256'],fingerprint(new))
-        for key in ('kgrowth-2026-busan-2','kgrowth-2026-busan-2-reopen'):
-            with self.assertRaisesRegex(ValueError,'requires review'):
-                project(self.recipes[key],notices)
+        with self.assertRaisesRegex(ValueError,'requires review'):
+            project(self.recipes['kgrowth-2026-busan-2'],notices)
+        reopened=project(self.recipes['kgrowth-2026-busan-2-reopen'],notices)
+        self.assertEqual(reopened['selected_gps'],[])
 
     def test_candidate_does_not_publish_unreviewed_gp(self):
         seed=json.loads((SRC.parents[2]/'data/lp_programs_pilot.json').read_text())
@@ -136,7 +137,7 @@ class AdditionalReviewTests(unittest.TestCase):
                 'programs':[next(p for p in seed['programs'] if p['id']=='kgrowth-2026-bank-valueup-3')]}
         current,_=prepare(seed,report)
         old=next(p for p in current['programs'] if p['id']=='kgrowth-2026-busan-2-reopen')
-        report['notices'].append({'source_id':'9999','title':'【선정결과】「부산 미래산업 전환펀드 2호」 위탁운용사 선정 결과',
+        report['notices'].append({'source_id':'9999','title':'【선정결과】[재공고]「부산 미래산업 전환펀드 2호」 위탁운용사 선정 결과',
                                   'date':'2026-10-02','body':'운용사명\n새운용사',
                                   'url':'https://www.kgrowth.or.kr/notice_view.asp?idx=9999','attachment_hashes':{}})
         updated,_=prepare(current,report)
@@ -145,7 +146,7 @@ class AdditionalReviewTests(unittest.TestCase):
         self.assertEqual(new['selected_gps'],[])
         self.assertIn(old['id'],[h['program_id'] for h in updated['program_holds']])
         self.assertEqual(len(updated['link_suggestions']),1)
-        self.assertEqual(len(updated['link_suggestions'][0]['programs']),2)
+        self.assertEqual([p['id'] for p in updated['link_suggestions'][0]['programs']],[old['id']])
 
     def test_new_max_result_suggested_but_regional_result_not_merged(self):
         new={'source_id':'9999','title':'【선정결과】「기술혁신전문펀드 7호」 M.AX 산업대전환 혁신 서류심사 결과',

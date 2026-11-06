@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from html.parser import HTMLParser
-from services.lp.src.lp_program_service import validate, build
+from services.lp.src.lp_program_service import validate, build, assert_selected_gp_history
 
 class Links(HTMLParser):
     def __init__(self):
@@ -31,5 +31,23 @@ class ProgramContracts(unittest.TestCase):
                 parser=Links();parser.feed(page.read_text())
                 for href in parser.links:self.assertTrue((out/href).is_file(),f'{page.name}: {href}')
             self.assertIn('program-fund-2026.html',(out/'selected-gp-240.html').read_text())
+
+    def test_preservation_allows_validated_additions_without_replacing_history(self):
+        old=copy.deepcopy(self.data['programs']);new=copy.deepcopy(old)
+        new[0]['selected_gps'].append({'id':'source-derived','name':'New sourced GP','asset_scope':'PE',
+                                     'source_url':old[0]['events'][0]['url']})
+        validate({'as_of':self.data['as_of'],'programs':new})
+        assert_selected_gp_history(old,new)
+        old[0]['selected_gps']=[]
+        assert_selected_gp_history(old,new)
+
+    def test_preservation_rejects_changed_or_removed_name_source_and_scope(self):
+        old=copy.deepcopy(self.data['programs'])
+        for key in ('name','source_url','asset_scope','master_id'):
+            new=copy.deepcopy(old);new[0]['selected_gps'][0][key]='changed'
+            with self.subTest(key=key),self.assertRaises(ValueError):assert_selected_gp_history(old,new)
+        new=copy.deepcopy(old);new[0]['selected_gps']=[]
+        with self.assertRaises(ValueError):assert_selected_gp_history(old,new)
+        with self.assertRaises(ValueError):assert_selected_gp_history(old,[])
 
 if __name__=='__main__': unittest.main()
