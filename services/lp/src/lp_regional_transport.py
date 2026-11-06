@@ -1,6 +1,7 @@
 """Authenticated LP-only byte transport for observed official-source runner blocks.
 
-The service runs in Seoul and allows only fixed official KFCC/KFINCO/CU routes.
+The service runs in Seoul and allows only fixed official KFCC/KFINCO/CU routes
+and public KOFIA17 listing pages.
 Its response is still reparsed and validated by the ordinary issuer collector.
 """
 import hashlib
@@ -158,3 +159,36 @@ def fetch_cu(url, referer, token):
         raise
     except Exception:
         raise ValueError('regional CU transport unavailable') from None
+
+
+def kofia_listing_url(url):
+    if (not isinstance(url, str) or len(url) > 4096 or re.search(r'[\x00-\x20\x7f\\#]', url)):
+        raise ValueError('invalid KOFIA listing URL')
+    p = urlsplit(url)
+    if (p.scheme != 'https' or p.hostname != 'www.kofia.or.kr' or p.username or p.password
+            or p.port not in {None, 443} or p.fragment or p.path != '/brd/m_17/list.do'):
+        raise ValueError('unsupported KOFIA listing route')
+    pairs = parse_qsl(p.query, keep_blank_values=True, strict_parsing=True)
+    if not pairs:
+        return url
+    q = dict(pairs)
+    expected = dict(srchFr='', srchTo='', srchWord='', srchTp='', multi_itm_seq='0',
+                    itm_seq_1='0', itm_seq_2='0', company_cd='', company_nm='')
+    if (len(q) != len(pairs) or set(q) != set(expected) | {'page'} or q['page'] not in {'1', '2', '3'}
+            or any(q[k] != v for k, v in expected.items())):
+        raise ValueError('unsupported KOFIA listing query')
+    return url
+
+
+def fetch_kofia_listing(url, referer, token):
+    kofia_listing_url(url)
+    if referer:
+        kofia_listing_url(referer)
+    if isinstance(token, str) and re.search(r'[\x00-\x20\x7f]', token):
+        raise ValueError('invalid regional token')
+    try:
+        return _fetch(url, referer, token, 'KOFIA17')
+    except ValueError:
+        raise
+    except Exception:
+        raise ValueError('regional KOFIA17 transport unavailable') from None

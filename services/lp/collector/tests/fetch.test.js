@@ -251,3 +251,81 @@ test('CU upstream TLS failure, non-200 response and oversize data retain failure
   global.fetch=async()=>new Response(Buffer.alloc(handler.SOURCE_LIMIT+1));
   res=await invoke({url:CU_FILE});assert.equal(res.statusCode,413);assert.equal(res.headers['X-LP-Upstream-SHA256'],undefined);
 });
+
+const KOFIA_ROOT='https://www.kofia.or.kr/brd/m_17/list.do';
+const kofiaPage=page=>KOFIA_ROOT+`?page=${page}&srchFr=&srchTo=&srchWord=&srchTp=&multi_itm_seq=0&itm_seq_1=0&itm_seq_2=0&company_cd=&company_nm=`;
+
+test('KOFIA17 permits only root and observed first three unfiltered pages with verified bytes',async()=>{
+  const bytes=Buffer.from('<html><body>공식 목록</body></html>');
+  global.fetch=async(...args)=>{calls.push(args);return new Response(bytes);};
+  for(const url of [KOFIA_ROOT,...[1,2,3].map(kofiaPage)]){
+    const res=await invoke({url,referer:KOFIA_ROOT});
+    assert.equal(res.statusCode,200);assert.deepEqual(res.body,bytes);
+    assert.equal(res.headers['X-LP-Upstream-SHA256'],crypto.createHash('sha256').update(bytes).digest('hex'));
+  }
+  assert.equal(calls.length,4);
+  for(const [url,options] of calls){
+    assert.equal(new URL(url).hostname,'www.kofia.or.kr');
+    assert.equal(options.method,'GET');assert.equal(options.redirect,'error');
+    assert.deepEqual(options.headers,{'User-Agent':'Mozilla/5.0','Accept-Encoding':'identity',Referer:KOFIA_ROOT});
+    assert.equal(JSON.stringify(options.headers).includes(process.env.LP_SOURCE_WORKER_TOKEN),false);
+    assert.equal(options.agent,undefined);assert.equal(options.dispatcher,undefined);
+  }
+});
+
+test('KOFIA17 rejects other routes, every unexpected search field and unsafe URL before network',async()=>{
+  const page=kofiaPage(2);
+  const invalid=[KOFIA_ROOT.replace('https:','http:'),KOFIA_ROOT.replace('www.kofia.or.kr','127.0.0.1'),
+    KOFIA_ROOT.replace('www.kofia.or.kr','www.kofia.or.kr.evil.example'),
+    KOFIA_ROOT.replace('www.kofia.or.kr','u:p@www.kofia.or.kr'),
+    KOFIA_ROOT.replace('www.kofia.or.kr','www.kofia.or.kr:444'),KOFIA_ROOT+'#fragment',
+    KOFIA_ROOT.replace('m_17','m_212'),KOFIA_ROOT.replace('list.do','view.do?seq=123'),
+    KOFIA_ROOT.replace('list.do','download.do?file=1'),
+    KOFIA_ROOT.replace('/brd/','/brd/../brd/'),KOFIA_ROOT.replace('/brd/','/%62rd/'),
+    KOFIA_ROOT.replace('/brd/','/brd/%2e%2e/brd/'),KOFIA_ROOT.replace('/brd/','/brd/%252e%252e/brd/'),
+    KOFIA_ROOT+'?page=1',page+'&page=1',page+'&%70age=1',page+'&extra=',
+    ...['0','4','-1','02','2.0','2%00'].map(p=>kofiaPage(p))];
+  for(const key of ['srchFr','srchTo','srchWord','srchTp','company_cd','company_nm'])
+    invalid.push(page.replace(key+'=',key+'=arbitrary'));
+  for(const key of ['multi_itm_seq','itm_seq_1','itm_seq_2'])invalid.push(page.replace(key+'=0',key+'=1'));
+  for(const url of invalid)assert.equal((await invoke({url})).statusCode,400,url);
+  for(const referer of [LIST,CU_BASE,'https://evil.example/',KOFIA_ROOT.replace('list.do','view.do?seq=1')])
+    assert.equal((await invoke({url:page,referer})).statusCode,400);
+  assert.equal(calls.length,0);
+});
+
+test('KOFIA17 authentication, partial HTTP and stream failures never return a valid hash',async()=>{
+  assert.equal((await invoke({url:KOFIA_ROOT},{headers:{authorization:'Bearer wrong'}})).statusCode,401);
+  assert.equal(calls.length,0);
+  for(const status of [206,302,403,500]){
+    global.fetch=async()=>new Response('private upstream error',{status});
+    const res=await invoke({url:KOFIA_ROOT});assert.equal(res.statusCode,502);
+    assert.equal(res.headers['X-LP-Upstream-SHA256'],undefined);
+    assert.equal(res.body.includes('private'),false);
+  }
+  global.fetch=async()=>new Response(new ReadableStream({start(controller){
+    controller.enqueue(new TextEncoder().encode('<html>partial'));
+    controller.error(Error('private stream failure'));
+  }}));
+  const res=await invoke({url:KOFIA_ROOT});assert.equal(res.statusCode,502);
+  assert.equal(res.headers['X-LP-Upstream-SHA256'],undefined);
+  assert.deepEqual(JSON.parse(res.body),{error:'source_fetch_failed'});
+});
+
+test('KOFIA17 keeps decoded 3MiB limit and the 20 second abort',async()=>{
+  global.fetch=async()=>new Response(Buffer.alloc(handler.SOURCE_LIMIT+1));
+  let res=await invoke({url:kofiaPage(3)});assert.equal(res.statusCode,413);
+  assert.equal(res.headers['X-LP-Upstream-SHA256'],undefined);
+  const originalSet=global.setTimeout,originalClear=global.clearTimeout;
+  let delay,cleared=false;
+  global.setTimeout=(fn,ms)=>{delay=ms;queueMicrotask(fn);return 1;};
+  global.clearTimeout=()=>{cleared=true;};
+  global.fetch=async(url,options)=>new Promise((resolve,reject)=>{
+    options.signal.addEventListener('abort',()=>reject(Error('timeout private detail')));
+  });
+  try{
+    res=await invoke({url:KOFIA_ROOT});assert.equal(res.statusCode,502);
+    assert.equal(delay,20000);assert.equal(cleared,true);
+    assert.equal(res.headers['X-LP-Upstream-SHA256'],undefined);
+  }finally{global.setTimeout=originalSet;global.clearTimeout=originalClear;}
+});

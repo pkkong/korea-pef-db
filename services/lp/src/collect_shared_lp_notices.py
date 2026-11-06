@@ -9,6 +9,7 @@ import argparse
 import csv
 import hashlib
 import json
+import os
 import re
 from datetime import date, datetime, timezone
 from html.parser import HTMLParser
@@ -25,8 +26,10 @@ from urllib.request import Request, HTTPRedirectHandler, build_opener
 
 try:
     from .lp_transport_errors import transient_dns
+    from .lp_regional_transport import fetch_kofia_listing
 except ImportError:
     from lp_transport_errors import transient_dns
+    from lp_regional_transport import fetch_kofia_listing
 
 ROOT = Path(__file__).resolve().parents[3]
 CHANNELS = {
@@ -334,6 +337,7 @@ class _FetchRetryBudget:
         self.channel = None
         self.events = []
         self.kofia17_http10 = False
+        self.kofia17_regional = False
 
     def consume(self, kind=None):
         if self.remaining == 0:
@@ -348,11 +352,11 @@ class _FetchRetryBudget:
     def finish(self, channel):
         self.reserved.pop(channel, None)
 
-    def record(self, url, kind, attempt, *, error=None, retry=False, reason=None, http10=False):
+    def record(self, url, kind, attempt, *, error=None, retry=False, reason=None, http10=False, regional=False):
         event = dict(source_channel=self.channel, url=url, kind=kind or 'attachment',
                      attempt=attempt + 1, outcome='error' if error else 'ok',
                      retry=retry, remaining=self.remaining,
-                     reserved=dict(self.reserved), framing_recovery=http10)
+                     reserved=dict(self.reserved), framing_recovery=http10, regional_recovery=regional)
         if error is not None:
             event['error_type'] = type(error).__name__
             if isinstance(error, subprocess.CalledProcessError):event['curl_exit'] = error.returncode
@@ -370,25 +374,36 @@ def fetch_bytes(url, referer=None, *, retry_budget=None, html_kind=None):
     # Queued receipts on observed pages2/3 verified identical full HTML under
     # HTTPS HTTP/1.0, which omits the failing chunked transfer framing.
     http10=bool(kofia17 and retry_budget is not None and retry_budget.kofia17_http10)
+    token=os.environ.get('LP_SOURCE_WORKER_TOKEN','')
+    regional=bool(kofia17 and token and retry_budget is not None and retry_budget.kofia17_regional)
     for attempt in range(3):
         try:
-            raw = (_fetch_bytes_curl(url,referer,html_kind=html_kind,http_version='1.0') if http10
-                   else _fetch_bytes_once(url, referer, html_kind=html_kind))
+            if regional:
+                raw=fetch_kofia_listing(url,referer,token)
+                _complete_html(raw,html_kind)
+            else:
+                raw = (_fetch_bytes_curl(url,referer,html_kind=html_kind,http_version='1.0') if http10
+                       else _fetch_bytes_once(url, referer, html_kind=html_kind))
             if retry_budget is not None:
-                retry_budget.record(url, html_kind, attempt, http10=http10)
-                if http10:retry_budget.kofia17_http10=True
+                retry_budget.record(url, html_kind, attempt, http10=http10 and not regional, regional=regional)
+                if regional:retry_budget.kofia17_regional=True
+                elif http10:retry_budget.kofia17_http10=True
             return raw
         except Exception as error:
-            reason = ('per_request_limit' if attempt == 2 else
+            reason = ('regional_failed' if regional else 'per_request_limit' if attempt == 2 else
                       'non_transient' if not _transient_fetch_error(error) else
                       'reserved_or_exhausted_budget' if retry_budget is not None and not retry_budget.consume(html_kind) else None)
             if retry_budget is not None:
-                retry_budget.record(url, html_kind, attempt, error=error, retry=reason is None, reason=reason,http10=http10)
+                retry_budget.record(url, html_kind, attempt, error=error, retry=reason is None, reason=reason,
+                                    http10=http10 and not regional, regional=regional)
             if reason:
                 raise
             if kofia17 and (isinstance(error,(IncompleteRead,IncompleteHTML))
                             or isinstance(error,subprocess.CalledProcessError) and error.returncode==18):
-                http10=True
+                if http10 and token and retry_budget is not None:
+                    regional=True
+                else:
+                    http10=True
             print(f'Retrying association request ({attempt + 2}/3): {url}', file=sys.stderr)
             time.sleep(attempt + 1)
 

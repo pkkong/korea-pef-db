@@ -14,6 +14,73 @@ KVCA='https://www.kvca.or.kr/Program/invest/list.html?a_cd=8&page=1'
 KOFIA='https://www.kofia.or.kr/brd/m_212/list.do'
 
 class SharedCollectionTests(unittest.TestCase):
+    def setUp(self):
+        # Workflow tests must remain offline even when the retry step has a token.
+        token = patch.dict(shared.os.environ, {'LP_SOURCE_WORKER_TOKEN': ''})
+        token.start(); self.addCleanup(token.stop)
+
+    def test_second_typed_short_read_recovers_in_seoul_inside_existing_budget(self):
+        root=shared.CHANNELS['kofia_17'];complete=b'<html>verified listing</html>'
+        budget=shared._FetchRetryBudget(('kofia_17',));budget.channel='kofia_17'
+        with patch.dict(shared.os.environ, {'LP_SOURCE_WORKER_TOKEN':'test-token'}), \
+             patch.object(shared,'_fetch_bytes_once',side_effect=shared.IncompleteHTML('short')) as initial, \
+             patch.object(shared,'_fetch_bytes_curl',side_effect=shared.IncompleteHTML('short')) as http10, \
+             patch.object(shared,'fetch_kofia_listing',return_value=complete) as seoul, patch.object(shared.time,'sleep'):
+            page2=root+'?page=2&srchFr=&srchTo=&srchWord=&srchTp=&multi_itm_seq=0&itm_seq_1=0&itm_seq_2=0&company_cd=&company_nm='
+            self.assertEqual(shared.fetch_bytes(root,html_kind='listing',retry_budget=budget),complete)
+            self.assertEqual(shared.fetch_bytes(page2,html_kind='listing',retry_budget=budget),complete)
+        self.assertEqual((initial.call_count,http10.call_count,seoul.call_count),(1,1,2))
+        self.assertEqual(budget.remaining,2)
+        self.assertEqual([e['regional_recovery'] for e in budget.events],[False,False,True,True])
+        self.assertTrue(budget.events[1]['framing_recovery'])
+        self.assertFalse(budget.events[2]['framing_recovery'])
+        self.assertEqual(budget.events[2]['attempt'],3)
+        self.assertNotIn('test-token',str(budget.events))
+
+    def test_healthy_and_non_short_read_failures_do_not_select_seoul(self):
+        root=shared.CHANNELS['kofia_17']
+        for error in (None,TimeoutError('offline'),ssl.SSLError('TLS'),subprocess.CalledProcessError(22,['curl'])):
+            budget=shared._FetchRetryBudget(('kofia_17',));budget.channel='kofia_17'
+            with self.subTest(error=error), patch.dict(shared.os.environ,{'LP_SOURCE_WORKER_TOKEN':'test-token'}), \
+                 patch.object(shared,'fetch_kofia_listing') as seoul, \
+                 patch.object(shared,'_fetch_bytes_once',side_effect=error,return_value=b'<html>complete</html>'), \
+                 patch.object(shared.time,'sleep'):
+                if error:
+                    with self.assertRaises(type(error)):shared.fetch_bytes(root,html_kind='listing',retry_budget=budget)
+                else:shared.fetch_bytes(root,html_kind='listing',retry_budget=budget)
+                seoul.assert_not_called()
+
+    def test_seoul_never_bypasses_exhausted_budget_or_http10_tls_failure(self):
+        root=shared.CHANNELS['kofia_17']
+        for remaining,error in [(0,shared.IncompleteHTML('short')),(1,shared.IncompleteHTML('short')),(4,ssl.SSLError('TLS'))]:
+            budget=shared._FetchRetryBudget(('kofia_17',));budget.channel='kofia_17';budget.remaining=remaining
+            with self.subTest(remaining=remaining), patch.dict(shared.os.environ,{'LP_SOURCE_WORKER_TOKEN':'test-token'}), \
+                 patch.object(shared,'_fetch_bytes_once',side_effect=shared.IncompleteHTML('short')), \
+                 patch.object(shared,'_fetch_bytes_curl',side_effect=error), \
+                 patch.object(shared,'fetch_kofia_listing') as seoul,patch.object(shared.time,'sleep'):
+                with self.assertRaises(Exception):shared.fetch_bytes(root,html_kind='listing',retry_budget=budget)
+                seoul.assert_not_called()
+                self.assertGreaterEqual(budget.remaining,0)
+
+    def test_partial_regional_html_is_held_without_repeated_regional_attempt(self):
+        root=shared.CHANNELS['kofia_17'];budget=shared._FetchRetryBudget(('kofia_17',));budget.channel='kofia_17'
+        with patch.dict(shared.os.environ,{'LP_SOURCE_WORKER_TOKEN':'test-token'}), \
+             patch.object(shared,'_fetch_bytes_once',side_effect=shared.IncompleteHTML('short')), \
+             patch.object(shared,'_fetch_bytes_curl',side_effect=shared.IncompleteHTML('short')), \
+             patch.object(shared,'fetch_kofia_listing',return_value=b'<html>partial') as seoul,patch.object(shared.time,'sleep'):
+            with self.assertRaises(shared.IncompleteHTML):shared.fetch_bytes(root,html_kind='listing',retry_budget=budget)
+        self.assertEqual(seoul.call_count,1)
+        self.assertEqual(budget.events[-1]['stop_reason'],'regional_failed')
+        self.assertFalse(budget.kofia17_regional)
+
+    def test_other_board_short_read_never_selects_seoul(self):
+        budget=shared._FetchRetryBudget(('kofia_212',));budget.channel='kofia_212'
+        with patch.dict(shared.os.environ,{'LP_SOURCE_WORKER_TOKEN':'test-token'}), \
+             patch.object(shared,'_fetch_bytes_once',side_effect=shared.IncompleteHTML('short')), \
+             patch.object(shared,'fetch_kofia_listing') as seoul,patch.object(shared.time,'sleep'):
+            with self.assertRaises(shared.IncompleteHTML):shared.fetch_bytes(KOFIA,html_kind='listing',retry_budget=budget)
+        seoul.assert_not_called()
+
     def test_kofia17_listing_prefers_identity_curl_without_urllib(self):
         complete=b'<html><table><tr><td><a href="view.do?seq=987">verified</a></td></tr></table></html>'
         with patch.object(shared,'_fetch_bytes_urllib') as urllib, patch.object(shared.subprocess,'run',return_value=SimpleNamespace(stdout=complete)) as curl:

@@ -75,7 +75,8 @@ def main():
             if attempt==7:raise RuntimeError('Source worker health verification failed') from None
             time.sleep(3)
     sys.path.insert(0,str(ROOT))
-    from services.lp.src.lp_regional_transport import fetch_kfcc, fetch_kfinco, fetch_cu
+    from services.lp.src.lp_regional_transport import fetch_kfcc, fetch_kfinco, fetch_cu, fetch_kofia_listing
+    from services.lp.src.collect_shared_lp_notices import CHANNELS, _complete_html, parse_listing as association_rows
     from services.lp.src.discover_kfinco_originals import LIST_URL, listing
     from services.lp.src.collect_lp_institution_boards import load_configs,listing_urls
     from services.lp.src.lp_board_adapter_kfcc import parse_listing
@@ -94,7 +95,27 @@ def main():
         body = fetch_cu(url,cu_config['listing_url'],token)
         observed = lp_board_adapters_pensions.parse_listing(body.decode('utf-8'),url,cu_config)
         cu_audit_rows[term or 'latest_first_page'] = len(observed)
+    # Verify the actual issuer bytes in Seoul. Pagination is authorized by the
+    # successfully parsed root response, never by constructed page numbers.
+    kofia_root=CHANNELS['kofia_17']
+    kofia_raw=fetch_kofia_listing(kofia_root,None,token)
+    kofia_rows,kofia_pages=association_rows(_complete_html(kofia_raw,'listing'),kofia_root,'kofia_17')
+    if not kofia_rows:
+        raise RuntimeError('KOFIA listing verification returned no rows')
+    kofia_receipts=[{'page':1,'rows':len(kofia_rows),'bytes':len(kofia_raw),
+                     'sha256':hashlib.sha256(kofia_raw).hexdigest()}]
+    for number in (2,3):
+        if number not in kofia_pages:
+            raise RuntimeError('Required KOFIA pagination was not observed')
+        url=kofia_pages[number]
+        body=fetch_kofia_listing(url,kofia_root,token)
+        kofia_observed,_=association_rows(_complete_html(body,'listing'),url,'kofia_17')
+        if not kofia_observed:
+            raise RuntimeError('KOFIA observed page verification returned no rows')
+        kofia_receipts.append({'page':number,'rows':len(kofia_observed),'bytes':len(body),
+                                'sha256':hashlib.sha256(body).hexdigest()})
     print(json.dumps({'cu_audit_listing_rows':cu_audit_rows,'service':'lp-source-worker','region':health['region'],'release':release,
+        'kofia_listing_pages':kofia_receipts,
         'url':BASE,'verified_cu_listing_rows':len(cu_rows),'cu_bytes':len(cu_raw),
         'verified_kfinco_listing_rows':len(kfinco_rows),'kfinco_bytes':len(kfinco_raw),
         'verified_listing_rows':len(rows),'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}))

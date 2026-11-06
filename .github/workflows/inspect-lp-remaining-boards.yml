@@ -15,6 +15,10 @@ on:
         description: Association collection only; inject one short-read before real KOFIA17 recovery
         type: boolean
         default: false
+      verify_regional_recovery:
+        description: Association collection only; inject two native short-reads before actual Seoul recovery
+        type: boolean
+        default: false
       transfer_page_encoding:
         description: KOFIA read-only transfer diagnostic pagination encoding
         type: choice
@@ -33,6 +37,7 @@ jobs:
       LP_INSPECTION_PROFILE: ${{ inputs.profile || 'initial' }}
       LP_DIAGNOSTIC_CONNECTION_MODE: ${{ inputs.connection_mode || 'transaction' }}
       LP_VERIFY_FRAMING_RECOVERY: ${{ inputs.verify_framing_recovery && 'true' || 'false' }}
+      LP_VERIFY_REGIONAL_RECOVERY: ${{ inputs.verify_regional_recovery && 'true' || 'false' }}
       LP_TRANSFER_PAGE_ENCODING: ${{ inputs.transfer_page_encoding || 'identity' }}
     steps:
       - uses: actions/checkout@v6
@@ -57,6 +62,8 @@ jobs:
           python3 scripts/inspect_lp_kofia_transfer.py --output /tmp/lp-remaining-board-receipts --page-encoding "$LP_TRANSFER_PAGE_ENCODING"
       - name: Collect association boards and retain retry allocation without publication
         if: inputs.profile == 'association_collection'
+        env:
+          LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
         run: |
           python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
           python3 -m unittest services.lp.tests.test_collect_shared_lp_notices
@@ -66,7 +73,26 @@ jobs:
           from unittest.mock import patch
           from services.lp.src import collect_shared_lp_notices as shared
           controlled=os.environ['LP_VERIFY_FRAMING_RECOVERY']=='true'
-          if controlled:
+          regional_controlled=os.environ['LP_VERIFY_REGIONAL_RECOVERY']=='true'
+          assert not (controlled and regional_controlled),'Choose one recovery diagnostic'
+          if regional_controlled:
+              assert os.environ.get('LP_SOURCE_WORKER_TOKEN'),'Regional diagnostic requires configured transport'
+              original=shared._fetch_bytes_once;original_curl=shared._fetch_bytes_curl;injected=[]
+              def short_read(url,referer=None,**options):
+                  if url==shared.CHANNELS['kofia_17'] and not injected:
+                      injected.append('native')
+                      raise shared.IncompleteHTML('controlled native short-read')
+                  return original(url,referer,**options)
+              def short_http10(url,referer=None,**options):
+                  if url==shared.CHANNELS['kofia_17'] and options.get('http_version')=='1.0' and injected==['native']:
+                      injected.append('http10')
+                      raise shared.IncompleteHTML('controlled HTTP1.0 short-read')
+                  return original_curl(url,referer,**options)
+              with patch.object(shared,'_fetch_bytes_once',side_effect=short_read),patch.object(shared,'_fetch_bytes_curl',side_effect=short_http10):
+                  report=shared.collect(pages=3,channels={'kofia_17':shared.CHANNELS['kofia_17']},aliases={})
+              report['diagnostic_fault']={'kind':'controlled_native_short_reads','count':len(injected)}
+              events=report['coverage']['transport']['events']
+          elif controlled:
               original=shared._fetch_bytes_once;injected=[]
               def short_read(url,referer=None,**options):
                   if url==shared.CHANNELS['kofia_17'] and not injected:
@@ -87,9 +113,15 @@ jobs:
                             'source_errors':failures,'other_holds':len(report['holds'])-len(failures)},ensure_ascii=False))
           assert transport['extra_attempts_used']<=4
           assert not failures,'Official association list/detail errors remain; retained proof is partial'
+          if regional_controlled:
+              assert len(injected)==2 and len(events)==5
+              assert all(e['retry'] and not e.get('regional_recovery') for e in events[:2])
+              assert all(e.get('regional_recovery') and e['outcome']=='ok' for e in events[2:])
+              assert transport['extra_attempts_used']==2
+              assert len(report['coverage']['channel_pages']['kofia_17']['pages'])==3
           if controlled:
               assert len(injected)==1 and len(events)>=4
-              assert events[0]['retry'] and all(e['framing_recovery'] for e in events[1:])
+              assert events[0]['retry'] and all(e['framing_recovery'] or e.get('regional_recovery') for e in events[1:])
               assert sum(e['outcome']=='ok' for e in events)==3
               assert len(report['coverage']['channel_pages']['kofia_17']['pages'])==3
           PYCODE
