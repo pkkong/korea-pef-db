@@ -75,9 +75,13 @@ def render_detail_body(p):
             body += f'<tr><td class="league-name">{h(segment["name"])}</td><td data-label="출자 예정액">{amount}</td><td data-label="선정 예정">{h(segment.get("manager_count") or "미확인")}</td>{extra}</tr>'
         body += '</tbody></table></div>'
     body += '</section>'
-    if p.get('basic_publication') and not any(p.get(k) for k in ('applicants_gps', 'shortlisted_gps', 'selected_gps')):
+    has_names = any(p.get(k) for k in ('applicants_gps', 'shortlisted_gps', 'selected_gps'))
+    result_events = [e for e in p['events'] if e['type'] in ('최종 선정', '선정 결과', '우선협상대상자')]
+    awaiting_result = p['status'].startswith('접수 마감') or bool(result_events)
+    if p.get('basic_publication') and not has_names and not awaiting_result:
         return body
-    body += '<section id="selection"><h2>' + ('단계별 GP' if p.get('schedule_stages') else '선정 GP') + '</h2>'
+    heading = ('단계별 GP' if p.get('schedule_stages') else '선정 GP') if has_names else '선정 결과'
+    body += '<section id="selection"><h2>' + heading + '</h2>'
     applicants = p.get('applicants_gps', [])
     if applicants:
         body += f'<details class="applicant-list"><summary>접수 {len(applicants)}개 팀</summary><ul>' + ''.join(f'<li>{h(name)}</li>' for name in applicants) + '</ul>' + link(p.get('manager_list_sources', {}).get('applicants_gps'), '접수 원문') + '</details>'
@@ -106,5 +110,9 @@ def render_detail_body(p):
         body += '</tbody></table></div>'
     else:
         body += f'<p class="muted">{h(p.get("gp_stage_note"))}</p>' if p.get('gp_stage_note') else '<p class="muted">선정 결과 미확인</p>'
+        if result_events:
+            result = max(result_events, key=lambda event: event['date'])
+            label = '우선협상 결과 원문' if result['type'] == '우선협상대상자' else '선정 결과 원문'
+            body += f'<p>{link(result["url"], label)}</p>'
     body += '</section>'
     return body

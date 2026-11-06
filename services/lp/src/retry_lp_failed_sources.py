@@ -46,6 +46,55 @@ def retry_reports(direct, priorities, *, checked_at=None, configs=None, fetch_fa
     return direct,priorities,retried
 
 
+def reuse_institution_evidence(original, recovered):
+    """Reuse a trusted completed recovery without fetching an issuer again.
+
+    The workflow checks repository/run provenance before calling this function.
+    Only originally failed issuers may differ; healthy receipts and error history
+    must remain intact. The normal publisher still replays source proofs.
+    """
+    failed = {h.get('institution_id') for h in original.get('holds', [])
+              if h.get('stage') in {'institution_listing', 'institution_detail'}
+              and h.get('failure_kind') != 'official_maintenance'}
+    if not failed or None in failed or len(failed) > 2:
+        raise ValueError('retained recovery requires one or two originally failed issuers')
+    start = original.get('initial_checked_at', original.get('checked_at'))
+    if not start or recovered.get('initial_checked_at') != start:
+        raise ValueError('retained recovery belongs to another collection')
+    old_coverage, new_coverage = original.get('coverage', {}), recovered.get('coverage', {})
+    if set(old_coverage) != set(new_coverage) or not failed <= set(old_coverage):
+        raise ValueError('retained recovery institution scope differs')
+    healthy = set(old_coverage) - failed
+    if any(old_coverage[i] != new_coverage[i] for i in healthy):
+        raise ValueError('retained recovery changed healthy coverage')
+    def healthy_records(report, field):
+        return [n for n in report.get(field, []) if n.get('institution_id') not in failed]
+    if any(healthy_records(original, field) != healthy_records(recovered, field)
+           for field in ('notices', 'holds')):
+        raise ValueError('retained recovery changed healthy evidence')
+    if any(n.get('institution_id') not in old_coverage for n in recovered.get('notices', [])):
+        raise ValueError('retained recovery contains an unexpected issuer')
+    history = original.get('retry_history', [])
+    new_history = recovered.get('retry_history', [])
+    added = new_history[len(history):]
+    if (new_history[:len(history)] != history or len(added) != len(failed)
+            or {h.get('institution_id') for h in added} != failed):
+        raise ValueError('retained recovery error history differs')
+    for previous in added:
+        iid = previous['institution_id']
+        if (previous.get('previous_checked_at') != original.get('checked_at')
+                or previous.get('previous_coverage') != old_coverage[iid]
+                or previous.get('previous_holds') != [h for h in original['holds'] if h.get('institution_id') == iid]):
+            raise ValueError('retained recovery did not preserve the original failure')
+    if any(h.get('stage') in {'institution_listing', 'institution_detail', 'institution_depth'}
+           and h.get('institution_id') in failed for h in recovered.get('holds', [])):
+        raise ValueError('retained recovery still has failed source reads')
+    previous_urls = {n['url'] for n in original.get('notices', [])}
+    if not previous_urls <= {n['url'] for n in recovered.get('notices', [])}:
+        raise ValueError('retained recovery removed existing notice URLs')
+    return copy.deepcopy(recovered)
+
+
 def retry_association(report, *, checked_at=None):
     """Refresh one failed association stream; healthy streams remain untouched."""
     result=copy.deepcopy(report)

@@ -58,6 +58,35 @@ class BasicNoticePublicationTests(unittest.TestCase):
         self.assertNotIn('선정 결과 미확인', html)
         self.assertNotIn('주목적</strong>', html)
 
+    def test_closed_basic_detail_keeps_result_gap_visible_without_fabricated_winner(self):
+        program = publish([notice()])[0][0]
+        program['status'] = '접수 마감'
+        html = render_detail_body(program)
+        self.assertIn('id="selection"', html)
+        self.assertIn('<h2>선정 결과</h2>', html)
+        self.assertIn('선정 결과 미확인', html)
+        self.assertNotIn('selected-gp-', html)
+        self.assertEqual(program['selected_gps'], [])
+
+    def test_result_without_parsed_names_links_its_actual_result_not_recruitment(self):
+        program = publish([notice()])[0][0]
+        program['status'] = '선정 결과 발표'
+        result = {'type': '선정 결과', 'date': '2026-10-20', 'title': '선정 결과',
+                  'url': 'https://official.example/results'}
+        program['events'].append(result)
+        html = render_detail_body(program)
+        self.assertIn('id="selection"', html)
+        self.assertIn('href="https://official.example/results"', html)
+        self.assertIn('선정 결과 원문', html)
+        self.assertNotIn('selected-gp-', html)
+
+    def test_cancelled_basic_recruitment_does_not_imply_selection(self):
+        program = publish([notice()])[0][0]
+        program['status'] = '취소'
+        html = render_detail_body(program)
+        self.assertNotIn('id="selection"', html)
+        self.assertNotIn('선정 결과 미확인', html)
+
     def test_explicit_deadline_status_before_and_after_actual_time(self):
         original = notice(body='국내 블라인드 PEF 공개모집. 접수 마감 일시: 2026년 10월 19일 16시 00분')
         for now, expected in [('2026-10-19T15:59:00+09:00', '접수 중'), ('2026-10-19T16:01:00+09:00', '접수 마감')]:
