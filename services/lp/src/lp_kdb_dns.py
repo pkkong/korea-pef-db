@@ -11,7 +11,10 @@ HOST = 'www.kdb.co.kr'
 DNS_URL = 'https://dns.google/resolve?name=www.kdb.co.kr&type=A&cd=0&edns_client_subnet=0.0.0.0%2F0'
 KEXIM_HOST = 'www.koreaexim.go.kr'
 KEXIM_DNS_URL = 'https://dns.google/resolve?name=www.koreaexim.go.kr&type=A&cd=0&edns_client_subnet=0.0.0.0%2F0'
-ALLOWED_HOSTS = {HOST, KEXIM_HOST}
+GEPS_HOST = 'www.geps.or.kr'
+GEPS_DNS_URL = 'https://dns.google/resolve?name=www.geps.or.kr&type=A&cd=0&edns_client_subnet=0.0.0.0%2F0'
+DNS_URLS = {HOST: DNS_URL, KEXIM_HOST: KEXIM_DNS_URL, GEPS_HOST: GEPS_DNS_URL}
+ALLOWED_HOSTS = set(DNS_URLS)
 MAX_BYTES = 16 * 1024
 
 
@@ -109,7 +112,7 @@ def _resolve_ipv4(host, port, timeout, expected_host):
                        '--retry', '0', '--max-time', str(timeout), '--max-filesize', str(MAX_BYTES),
                        '--proto', '=https', '--proto-redir', '=https',
                        '--header', 'Accept: application/dns-json', '--header', 'Accept-Encoding: identity',
-                       '--output', str(body), '--write-out', '%{http_code}', DNS_URL if host == HOST else KEXIM_DNS_URL]
+                       '--output', str(body), '--write-out', '%{http_code}', DNS_URLS[host]]
             result = subprocess.run(command, capture_output=True, timeout=timeout)
             if result.returncode != 0 or result.stdout != b'200':
                 raise _fail()
@@ -132,3 +135,8 @@ def resolve_kdb_ipv4(host, port, timeout=5):
 def resolve_kexim_ipv4(host, port, timeout=5):
     """KEXIM-only DNS metadata; the origin session still performs verified TLS."""
     return _resolve_ipv4(host, port, timeout, KEXIM_HOST)
+
+
+def resolve_geps_ipv4(host, port, timeout=5):
+    """GEPS-only DNS metadata; original HTTPS hostname verification is unchanged."""
+    return _resolve_ipv4(host, port, timeout, GEPS_HOST)

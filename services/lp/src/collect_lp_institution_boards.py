@@ -32,7 +32,7 @@ try:
     from . import lp_board_adapter_nps as nps
     from .lp_attachment_policy import is_submission_form, is_submission_form_v2, is_submission_text
     from .lp_ipv4_transport import IPv4HTTPSHandler
-    from .lp_kdb_dns import resolve_kdb_ipv4
+    from .lp_kdb_dns import resolve_kdb_ipv4, resolve_geps_ipv4
     from .lp_cu_transport import CuDnsError, fetch_cu_ipv4
     from .lp_regional_transport import fetch_kfcc, fetch_cu
     from .lp_transport_errors import transient_dns
@@ -58,7 +58,7 @@ except ImportError:
     import lp_board_adapter_nps as nps
     from lp_attachment_policy import is_submission_form, is_submission_form_v2, is_submission_text
     from lp_ipv4_transport import IPv4HTTPSHandler
-    from lp_kdb_dns import resolve_kdb_ipv4
+    from lp_kdb_dns import resolve_kdb_ipv4, resolve_geps_ipv4
     from lp_cu_transport import CuDnsError, fetch_cu_ipv4
     from lp_regional_transport import fetch_kfcc, fetch_cu
     from lp_transport_errors import transient_dns
@@ -188,12 +188,18 @@ class Session:
         cookies = CookieJar()
         self.opener = build_opener(OfficialRedirect({safe_host(config['listing_url'])}),
                                    HTTPCookieProcessor(cookies))
+        fallback = {'kdb': self._resolve_kdb_dns, 'geps': self._resolve_geps_dns}.get(config['institution_id'])
         self.ipv4_opener = build_opener(OfficialRedirect({safe_host(config['listing_url'])}),
                                         HTTPCookieProcessor(cookies), IPv4HTTPSHandler(
-                                            fallback_resolver=self._resolve_kdb_dns if config['institution_id'] == 'kdb' else None))
+                                            fallback_resolver=fallback))
 
     def _resolve_kdb_dns(self, host, port, timeout):
         rows = resolve_kdb_ipv4(host, port, timeout)
+        self.alternate_dns_lookups += 1
+        return rows
+
+    def _resolve_geps_dns(self, host, port, timeout):
+        rows = resolve_geps_ipv4(host, port, timeout)
         self.alternate_dns_lookups += 1
         return rows
 

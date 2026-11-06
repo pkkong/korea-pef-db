@@ -20,7 +20,7 @@ def create_ipv4_connection(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
     try:
         rows = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
     except socket.gaierror as error:
-        if (fallback_resolver is None or host not in {'www.kdb.co.kr', 'www.koreaexim.go.kr'} or port != 443
+        if (fallback_resolver is None or host not in {'www.kdb.co.kr', 'www.koreaexim.go.kr', 'www.geps.or.kr'} or port != 443
                 or not transient_dns(error)):
             raise
         remaining = timeout - (time.monotonic() - started) if isinstance(timeout, (int, float)) else 20

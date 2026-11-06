@@ -5,8 +5,12 @@ on:
       institution:
         description: Official board to collect and replay without publication
         type: choice
-        options: [pck_pension, sema, ibk, kdb, remaining, nh_central, suhyup, central_screening]
+        options: [pck_pension, sema, ibk, kdb, geps, remaining, nh_central, suhyup, central_screening]
         default: pck_pension
+      geps_dns_probe:
+        description: GEPS only; force local DNS failure and verify one real listing without DB access
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -27,7 +31,41 @@ jobs:
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47' 'psycopg[binary]==3.2.10' 'truststore==0.10.5'
       - name: Test observed board and bounded attachment contracts
         run: python3 -m unittest services.lp.tests.test_lp_board_adapter_pck services.lp.tests.test_lp_board_adapter_sema services.lp.tests.test_lp_board_adapter_mmaa services.lp.tests.test_lp_board_adapter_kbiz services.lp.tests.test_lp_board_adapter_geps services.lp.tests.test_lp_board_adapter_kamco services.lp.tests.test_lp_board_adapter_moel services.lp.tests.test_lp_board_adapter_kfinco services.lp.tests.test_lp_kbiz_notice_terms services.lp.tests.test_lp_kfinco_notice_terms services.lp.tests.test_lp_attachment_text services.lp.tests.test_lp_attachment_policy services.lp.tests.test_collect_lp_institution_boards services.lp.tests.test_lp_pck_programs
+      - name: Verify GEPS alternate DNS with one controlled official request
+        if: inputs.geps_dns_probe
+        run: |
+          mkdir -p /tmp/lp-board-inspection
+          python3 - <<'PY'
+          import hashlib,json,os,socket
+          from pathlib import Path
+          from unittest.mock import patch
+          from services.lp.src.collect_lp_institution_boards import Session,load_configs,listing_urls,adapter,_html
+          assert os.environ['LP_INSTITUTION']=='geps','DNS probe is GEPS only'
+          config=load_configs()['geps']
+          url=next(iter(listing_urls(config)))
+          original=socket.getaddrinfo
+          forced=[]
+          def resolve(host,*args,**kwargs):
+              if host=='www.geps.or.kr':
+                  forced.append(host)
+                  raise socket.gaierror(socket.EAI_NONAME,'controlled GEPS local DNS failure')
+              return original(host,*args,**kwargs)
+          session=Session(config)
+          with patch.object(socket,'getaddrinfo',side_effect=resolve):
+              raw=session(url)
+          html=_html(raw)
+          rows=adapter(config).parse_listing(html,url,config)
+          assert len(forced)==2 and session.dns_ipv4_fetches==1 and session.alternate_dns_lookups==1,'Expected bounded alternate DNS path'
+          result={'controlled_local_dns_failures':len(forced),'official_url':url,'bytes':len(raw),
+                  'sha256':hashlib.sha256(raw).hexdigest(),'verified_rows':len(rows),
+                  'dns_ipv4_fetches':session.dns_ipv4_fetches,'alternate_dns_lookups':session.alternate_dns_lookups,
+                  'publication':False}
+          Path('/tmp/lp-board-inspection/geps-dns-probe.json').write_text(json.dumps(result))
+          Path('/tmp/lp-board-inspection/geps-dns-listing.html').write_text(html)
+          print(json.dumps(result))
+          PY
       - name: Collect and replay configured official bodies and offering attachments
+        if: ${{ !inputs.geps_dns_probe }}
         env:
           LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
         run: |
@@ -57,7 +95,7 @@ jobs:
           print('Validated official bodies:',len(report['notices']))
           PY
       - name: Validate existing selection links and generate complete pages without DB writes
-        if: inputs.institution != 'nh_central' && inputs.institution != 'suhyup' && inputs.institution != 'central_screening'
+        if: ${{ !inputs.geps_dns_probe && inputs.institution != 'nh_central' && inputs.institution != 'suhyup' && inputs.institution != 'central_screening' }}
         env:
           PYTHONPATH: services/lp/src
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}

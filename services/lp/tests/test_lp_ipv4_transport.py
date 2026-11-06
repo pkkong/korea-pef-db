@@ -2,7 +2,7 @@ import socket
 import ssl
 import unittest
 from unittest.mock import MagicMock, Mock, patch
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 from services.lp.src import lp_ipv4_transport as transport
 from services.lp.src import collect_lp_institution_boards as boards
@@ -123,11 +123,11 @@ class KdbAlternateDnsTests(unittest.TestCase):
             self.assertEqual(created.host,'www.kdb.co.kr')
             self.assertIs(created._create_connection.keywords['fallback_resolver'],fallback)
 
-    def test_only_kdb_session_enables_alternate_dns_and_cookie_policy_is_shared(self):
-        for issuer in ['kdb','ibk','tp','cu']:
+    def test_only_configured_sessions_enable_alternate_dns_and_cookie_policy_is_shared(self):
+        for issuer in ['kdb','geps','ibk','tp','cu']:
             session=boards.Session(boards.load_configs()[issuer])
             handler=next(h for h in session.ipv4_opener.handlers if isinstance(h,transport.IPv4HTTPSHandler))
-            self.assertEqual(hasattr(handler._connection_factory,'keywords'),issuer=='kdb')
+            self.assertEqual(hasattr(handler._connection_factory,'keywords'),issuer in {'kdb','geps'})
             jars=[[h.cookiejar for h in opener.handlers if hasattr(h,'cookiejar')][0] for opener in (session.opener,session.ipv4_opener)]
             self.assertIs(jars[0],jars[1])
         session=boards.Session(boards.load_configs()['kdb'])
@@ -135,3 +135,64 @@ class KdbAlternateDnsTests(unittest.TestCase):
             self.assertEqual(session._resolve_kdb_dns('www.kdb.co.kr',443,5),self.rows())
             resolve.assert_called_once_with('www.kdb.co.kr',443,5)
             self.assertEqual(session.alternate_dns_lookups,1)
+
+
+class GepsAlternateDnsTests(unittest.TestCase):
+    url='https://www.geps.or.kr/notiCommunication_notice_center'
+
+    def test_failed_system_dns_uses_geps_resolver_within_second_attempt(self):
+        session=boards.Session(boards.load_configs()['geps'])
+        rows=[(socket.AF_INET,socket.SOCK_STREAM,socket.IPPROTO_TCP,'',('8.8.8.8',443))]
+        handler=next(h for h in session.ipv4_opener.handlers if isinstance(h,transport.IPv4HTTPSHandler))
+        context=ssl.create_default_context()
+        connection=handler._connection_factory('www.geps.or.kr',timeout=20,context=context)
+        self.assertEqual(connection.host,'www.geps.or.kr')
+        self.assertIs(connection._context,context)
+        self.assertTrue(context.check_hostname)
+        self.assertEqual(context.verify_mode,ssl.CERT_REQUIRED)
+        with patch.object(transport.socket,'getaddrinfo',side_effect=socket.gaierror(8,'unavailable')),patch.object(transport.socket,'socket') as factory,patch.object(boards,'resolve_geps_ipv4',return_value=rows) as resolver:
+            self.assertIs(connection._create_connection(('www.geps.or.kr',443),20),factory.return_value)
+            self.assertEqual(resolver.call_args.args[:2],('www.geps.or.kr',443))
+            self.assertLessEqual(resolver.call_args.args[2],5)
+        self.assertEqual(session.alternate_dns_lookups,1)
+        session.opener=Mock();session.opener.open.side_effect=URLError(socket.gaierror(8,'unavailable'))
+        session.ipv4_opener=Mock()
+        response=MagicMock();response.__enter__.return_value.read.return_value=b'official bytes'
+        session.ipv4_opener.open.return_value=response
+        with patch.object(boards.time,'sleep'):
+            self.assertEqual(session(self.url),b'official bytes')
+        self.assertEqual(session.opener.open.call_count,1)
+        self.assertEqual(session.ipv4_opener.open.call_count,1)
+        self.assertEqual(session.dns_ipv4_fetches,1)
+
+    def test_dns_failure_keeps_two_attempt_limit_and_failed_metadata_is_not_success(self):
+        session=boards.Session(boards.load_configs()['geps'])
+        session.opener=Mock();session.opener.open.side_effect=URLError(socket.gaierror(8,'unavailable'))
+        session.ipv4_opener=Mock();session.ipv4_opener.open.side_effect=ValueError('invalid DNS metadata')
+        with patch.object(boards.time,'sleep'):
+            with self.assertRaises(ValueError):session(self.url)
+        self.assertEqual(session.opener.open.call_count+session.ipv4_opener.open.call_count,2)
+        self.assertEqual(session.dns_ipv4_fetches,0)
+        self.assertEqual(session.alternate_dns_lookups,0)
+
+    def test_http_tls_timeout_and_permanent_dns_cannot_select_geps_alternate(self):
+        errors=[HTTPError(self.url,503,'unavailable',{},None),URLError(ssl.SSLCertVerificationError('bad certificate')),
+                URLError(TimeoutError('timeout')),URLError(socket.gaierror(socket.EAI_FAIL,'permanent'))]
+        for error in errors:
+            session=boards.Session(boards.load_configs()['geps'])
+            session.opener=Mock();session.opener.open.side_effect=error
+            session.ipv4_opener=Mock()
+            with patch.object(boards.time,'sleep'):
+                with self.assertRaises(URLError):session(self.url)
+            session.ipv4_opener.open.assert_not_called()
+            self.assertLessEqual(session.opener.open.call_count,2)
+
+    def test_normal_dns_and_wrong_host_or_port_do_not_use_geps_alternate(self):
+        fallback=Mock()
+        rows=[(socket.AF_INET,socket.SOCK_STREAM,socket.IPPROTO_TCP,'',('8.8.8.8',443))]
+        with patch.object(transport.socket,'getaddrinfo',return_value=rows),patch.object(transport.socket,'socket'):
+            transport.create_ipv4_connection(('www.geps.or.kr',443),20,fallback_resolver=fallback)
+        for address in [('www.geps.or.kr.evil.example',443),('www.geps.or.kr',444)]:
+            with patch.object(transport.socket,'getaddrinfo',side_effect=socket.gaierror(8,'unavailable')):
+                with self.assertRaises(socket.gaierror):transport.create_ipv4_connection(address,20,fallback_resolver=fallback)
+        fallback.assert_not_called()

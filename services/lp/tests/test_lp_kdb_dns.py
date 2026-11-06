@@ -39,6 +39,42 @@ class KdbDnsTests(unittest.TestCase):
             data['Answer'][0]['data']=address
             with self.assertRaises(ValueError):dns._addresses(json.dumps(data),dns.KEXIM_HOST)
 
+    def test_geps_exact_dns_url_and_public_chain(self):
+        data=response([answer(dns.GEPS_HOST+'.',5,'edge.example.'),answer('edge.example.',data='8.8.8.8')])
+        data['Question'][0]['name']=dns.GEPS_HOST+'.'
+        with patch.object(dns.subprocess,'run',side_effect=self.runner(json.dumps(data).encode())) as run:
+            rows=dns.resolve_geps_ipv4(dns.GEPS_HOST,443,2)
+            self.assertEqual(rows[0][-1],('8.8.8.8',443))
+            args=run.call_args.args[0]
+            self.assertEqual(args[-1],'https://dns.google/resolve?name=www.geps.or.kr&type=A&cd=0&edns_client_subnet=0.0.0.0%2F0')
+            self.assertEqual(args[args.index('--proxy')+1],'')
+            self.assertEqual(args[args.index('--retry')+1],'0')
+            self.assertEqual(args[args.index('--max-filesize')+1],str(16*1024))
+            self.assertEqual(run.call_args.kwargs['timeout'],2)
+            for forbidden in ('--insecure','--location','--resolve','Authorization','Cookie'):
+                self.assertNotIn(forbidden,' '.join(args))
+            self.assertEqual(run.call_count,1)
+
+    def test_geps_wrong_host_question_private_unrelated_and_loop_rejected(self):
+        with patch.object(dns.subprocess,'run') as run:
+            for host in (dns.HOST,dns.KEXIM_HOST,'evil.example','www.geps.or.kr.evil.example'):
+                with self.assertRaises(ValueError):dns.resolve_geps_ipv4(host,443)
+            for timeout in (0,6,True,float('nan')):
+                with self.assertRaises(ValueError):dns.resolve_geps_ipv4(dns.GEPS_HOST,443,timeout)
+            run.assert_not_called()
+        with self.assertRaises(ValueError):dns._addresses(json.dumps(response()),dns.GEPS_HOST)
+        cases=[[answer(dns.GEPS_HOST+'.',data='127.0.0.1')],
+               [answer(dns.GEPS_HOST+'.',data='10.0.0.1')],
+               [answer(dns.GEPS_HOST+'.'),answer('unrelated.example.')],
+               [answer(dns.GEPS_HOST+'.',5,'edge.example.'),answer('edge.example.',5,dns.GEPS_HOST+'.')]]
+        for records in cases:
+            data=response(records);data['Question'][0]['name']=dns.GEPS_HOST+'.'
+            with self.assertRaises(ValueError):dns._addresses(json.dumps(data),dns.GEPS_HOST)
+        with patch.object(dns.subprocess,'run',side_effect=subprocess.TimeoutExpired('SECRET',5)) as run:
+            with self.assertRaises(ValueError) as caught:dns.resolve_geps_ipv4(dns.GEPS_HOST,443)
+            self.assertNotIn('SECRET',str(caught.exception))
+            self.assertEqual(run.call_count,1)
+
     def test_command_keeps_tls_fixed_dns_url_no_proxy_and_hard_deadline(self):
         with patch.object(dns.subprocess, 'run', side_effect=self.runner()) as run:
             rows=dns.resolve_kdb_ipv4(dns.HOST,443,2.5)
