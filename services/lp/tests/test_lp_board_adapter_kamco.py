@@ -9,6 +9,29 @@ class Tests(unittest.TestCase):
  def test_observed_controls_arbitrary_id_and_dynamic_hold(self):
   row=a.parse_listing(L,U,C)[0];self.assertEqual(row['url'],D);self.assertEqual(row['source_id'],'kamco:987654');self.assertEqual(a.last_page(L,U,C),2)
   d=a.parse_detail(H,D,C);self.assertIn('Private Debt',d['body']);self.assertTrue(d['dynamic_attachments']);self.assertEqual(len(d['attachment_holds']),1);self.assertEqual(d['attachments'],[])
+ def test_new_badge_subtree_excluded_without_mutating_source(self):
+  badge='<span class="ico_new"><span class="blind">새 글</span></span>'
+  html=L.replace('펀드 모집</a>','<strong>펀드</strong> 모집'+badge+'</a>')
+  before=html
+  row=a.parse_listing(html,U,C)[0]
+  self.assertEqual(row['title'],'펀드 모집')
+  self.assertEqual(row['listing_title'],'펀드 모집새 글')
+  self.assertEqual(row['source_id'],'kamco:987654')
+  self.assertEqual(html,before)
+  self.assertEqual(a.parse_listing(L,U,C)[0]['title'],'펀드 모집')
+  self.assertNotIn('listing_title',a.parse_listing(L,U,C)[0])
+ def test_genuine_new_words_and_nested_title_retained(self):
+  html=L.replace('펀드 모집</a>','새 글 <span class="title"><em>펀드</em> 모집</span></a>')
+  row=a.parse_listing(html,U,C)[0]
+  self.assertEqual(row['title'],'새 글 펀드 모집')
+  self.assertNotIn('listing_title',row)
+  self.assertEqual(a.parse_listing(html.replace('class="title"','class="blind"'),U,C)[0]['title'],row['title'])
+ def test_status_badge_alone_cannot_supply_title(self):
+  html=L.replace('펀드 모집</a>','<span class="ico_new"><span class="blind">새 글</span></span></a>')
+  with self.assertRaisesRegex(ValueError,'missing title'):a.parse_listing(html,U,C)
+ def test_legitimate_image_title_text_outside_new_badge_is_retained(self):
+  html=L.replace('펀드 모집</a>','<img alt="펀드"> 모집<span class="ico_new"><img alt="새 글"></span></a>')
+  self.assertEqual(a.parse_listing(html,U,C)[0]['title'],'펀드 모집')
  def test_board_query_page_and_control_mismatches(self):
   for html,url in [(L.replace('value="PEF"','value="VC"'),U),(L,U.replace('page=1','page=2')),(L.replace("'380'","'381'"),U),(L,U.replace('www.kamco.or.kr','evil.test'))]:
    with self.assertRaises(ValueError):a.parse_listing(html,url,C)

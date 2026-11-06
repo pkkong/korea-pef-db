@@ -23,6 +23,29 @@ def receipt():
 
 
 class CandidateSourceTests(unittest.TestCase):
+    def test_saved_new_badge_title_replays_without_relaxing_detail_metadata(self):
+        from services.lp.tests.test_lp_board_adapter_kamco import L,H,U,D
+        html=L.replace('펀드 모집</a>','펀드 모집<span class="ico_new"><span class="blind">새 글</span></span></a>')
+        listing={'institution_id':'kamco','url':U,'html':html,'sha256':hashlib.sha256(html.encode()).hexdigest()}
+        config=audit.load_configs()['kamco']
+        row=audit.adapter(config).parse_listing(html,U,config)[0]
+        for title in ('펀드 모집','펀드 모집 새 글'):
+            saved={**row,'title':title,'relevant':True,'disposition':'not_in_archive','title_scope':'scope_unconfirmed'}
+            inventory={'receipts':[listing],'institutions':[{'institution_id':'kamco','rows':[saved]}]}
+            calls=[]
+            def fetch(url):calls.append(url);return H.replace('기업지원 PDF 모집','펀드 모집').encode()
+            report=audit.resolve({'status':'ok','items':[]},inventory,fetch_factory=lambda *_:fetch,as_of='2026-11-06')
+            self.assertEqual(report['summary']['verified'],1)
+            self.assertFalse(report['holds'])
+            self.assertEqual(report['sources'][0]['official_notice']['title'],'펀드 모집')
+            self.assertEqual(calls,[D])
+            for detail in (H.replace('기업지원 PDF 모집','펀드 모집 수정'),
+                           H.replace('기업지원 PDF 모집','펀드 모집').replace('2026-09-10','2026-09-11')):
+                result=audit.resolve({'status':'ok','items':[]},inventory,
+                    fetch_factory=lambda *_:lambda url:detail.encode(),as_of='2026-11-06')
+                self.assertEqual(result['summary']['verified'],0)
+                self.assertEqual(result['sources'][0]['failure_kind'],'evidence_error')
+
     def test_official_scope_requires_body_confirmation_and_preserves_pe(self):
         cases = [
             ('사업타당성조사 지원사업 결과', '사업타당성조사 지원사업 선정 결과는 신청기업 앞 통보', 'feasibility_study_support'),

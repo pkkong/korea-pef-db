@@ -16,6 +16,17 @@ def validate(url,config,detail=False):
     if not detail and ('bIdx' in q or not q.get('page','1').isdigit()):raise ValueError('wrong KAMCO page')
     return q
 
+def _listing_title(node):
+    # Exclude only the observed status badge subtree; genuine title words and
+    # nested formatting remain intact. Never mutate the parsed source tree.
+    def text(n):
+        if isinstance(n,str):return n
+        if n.tag in {'script','style'} or n.tag=='span' and cls(n,'ico_new'):return ''
+        if n.tag=='img':return n.attrs.get('alt','')
+        value=''.join(text(child) for child in n.children)
+        return (' '+value+' ') if n.tag in {'p','div','br','td','th','tr','li'} else value
+    return re.sub(r'\s+',' ',text(node)).strip()
+
 def parse_listing(html,url,config):
     q=validate(url,config);root=tree(html);search(root,q,config,('searchType','searchTxt'))
     result=[];seen=set()
@@ -26,9 +37,10 @@ def parse_listing(html,url,config):
         if not m:raise ValueError('unknown KAMCO detail control')
         ident=m[1]
         if ident in seen:raise ValueError('duplicate KAMCO notice')
-        seen.add(ident);title=a.clean()
+        seen.add(ident);original_title=a.clean();title=_listing_title(a)
         if not title:raise ValueError('missing title')
         result.append({'source_id':'kamco:'+ident,'url':BASE+'/portal/bbs/view.do?'+urlencode({'bIdx':ident,'ptIdx':'380','mId':'0701010000'}),'title':title,'date':date(one(n.clean() for n in tr.nodes('td') if cls(n,'list_date')))})
+        if original_title!=title:result[-1]['listing_title']=original_title
     tables=[n for n in root.nodes('table') if cls(n,'board-table')]
     empty=any(n.clean()=='등록된 게시물이 없습니다.' for t in tables for n in t.nodes('td'))
     if empty and result:raise ValueError('conflicting KAMCO empty marker')

@@ -191,7 +191,14 @@ def resolve(discovery, official_inventory, *, fetch_factory=None, as_of=None, se
                             else adapter(config).parse_listing(receipt['html'], receipt['url'], config))
                     for row in rows:
                         identity = inventory.notice_key(institution, row['url'])
-                        if (wanted is None or identity == wanted) and key_title(row['title'], names) == key_title(candidate['title'], names):
+                        titles = {key_title(row['title'], names)}
+                        # Older saved KAMCO discovery rows included ico_new's
+                        # accessible label. The current parser keeps that exact
+                        # observed UI text separately; only candidate selection
+                        # may use it. Detail metadata still matches the clean title.
+                        if institution == 'kamco' and row.get('listing_title'):
+                            titles.add(key_title(row['listing_title'], names))
+                        if (wanted is None or identity == wanted) and key_title(candidate['title'], names) in titles:
                             matches[identity] = (row, receipt)
                 if len(matches) != 1:
                     raise ValueError('Candidate not uniquely observed on official institution listing')
