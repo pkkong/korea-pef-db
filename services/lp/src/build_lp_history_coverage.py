@@ -2,7 +2,7 @@
 import argparse
 import csv
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 import hashlib
 import json
 from pathlib import Path
@@ -35,6 +35,36 @@ def digest(value):
     return isinstance(value, str) and bool(re.fullmatch('[0-9a-f]{64}', value))
 
 
+INDEX_FIELDS = {'institution_id','url','date','title','source_id','content_hash',
+                'source_sha256','body_present','attachment_hashes','event_type'}
+
+
+def validate_index(report):
+    if (report.get('kind') != 'lp_document_index_v1'
+            or type(report.get('database_index_complete')) is not bool
+            or type(report.get('row_limit')) is not int or report['row_limit'] < 1
+            or type(report.get('database_rows')) is not int or report['database_rows'] < 0
+            or not isinstance(report.get('records'),list)
+            or report['database_rows'] != len(report['records'])
+            or report['database_rows'] > report['row_limit']):
+        raise ValueError('invalid database index contract')
+    try:
+        stamp=datetime.fromisoformat(report['checked_at'].replace('Z','+00:00'))
+        if stamp.tzinfo is None:raise ValueError()
+    except (KeyError,ValueError,AttributeError,TypeError):
+        raise ValueError('invalid database index checked_at') from None
+
+
+def valid_index_record(n):
+    return (not set(n)-INDEX_FIELDS and 'institution_id' in n
+            and (n['institution_id'] is None or isinstance(n['institution_id'],str))
+            and type(n.get('body_present')) is bool and digest(n.get('content_hash'))
+            and 'source_sha256' in n and (n['source_sha256'] is None or digest(n['source_sha256']))
+            and isinstance(n.get('attachment_hashes'),dict)
+            and (n.get('source_id') is None or isinstance(n['source_id'],str))
+            and (n.get('event_type') is None or isinstance(n['event_type'],str)))
+
+
 def build(inputs, *, as_of, start='2023-01-01', scope=None, names=None):
     """inputs: [{kind, report, path?, sha256?}]; never mutate reports."""
     first, last = day(start), day(as_of)
@@ -48,18 +78,23 @@ def build(inputs, *, as_of, start='2023-01-01', scope=None, names=None):
         for path in sorted((ROOT/'data').glob('lp_blind_contest_screening_*.json')):
             names.update({r['institution_id']: r['name'] for r in json.loads(path.read_text()).get('institutions', [])})
     seen_issuers, identities, issues, provenance = set(), defaultdict(list), [], []
+    unknown_issuer_records=[]
 
     def issue(kind, index, issuer=None):
         issues.append({'kind':kind, 'input_index':index, 'institution_id':issuer})
 
     for index, item in enumerate(inputs):
         kind, report = item['kind'], item['report']
-        if kind not in {'growth','priority','institution'} or not isinstance(report, dict):
+        if kind not in {'growth','priority','institution','database_index'} or not isinstance(report, dict):
             raise ValueError('invalid input report')
         provenance.append({'kind':kind, 'path':item.get('path'), 'sha256':item.get('sha256'),
                            'checked_at':report.get('checked_at')})
         streams = []
-        if kind == 'growth':
+        if kind == 'database_index':
+            validate_index(report)
+            provenance[-1].update({k:report[k] for k in ('database_index_complete','database_rows','row_limit')})
+            streams.append((None,{'notices':report['records']}))
+        elif kind == 'growth':
             streams.append(('kgrowth', report))
         elif kind == 'priority':
             sources = report.get('sources')
@@ -86,6 +121,11 @@ def build(inputs, *, as_of, start='2023-01-01', scope=None, names=None):
             records=[(n,False) for n in notices]+[(n,True) for n in supporting]
             for n,is_supporting in records:
                 if not isinstance(n,dict):issue('invalid_record',index,inherited);continue
+                if kind=='database_index' and not valid_index_record(n):
+                    issue('invalid_index_record',index);continue
+                if kind=='database_index' and n['institution_id'] is None:
+                    unknown_issuer_records.append({'input_index':index, **{k:n.get(k) for k in
+                        ('url','date','source_id','content_hash')}})
                 iid=n.get('institution_id') if is_supporting else inherited or n.get('institution_id')
                 if iid not in ids or (not is_supporting and inherited and n.get('institution_id',inherited)!=inherited):
                     issue('invalid_issuer',index,inherited);continue
@@ -93,8 +133,9 @@ def build(inputs, *, as_of, start='2023-01-01', scope=None, names=None):
                 if not valid_url(n.get('url')):issue('invalid_url',index,iid);continue
                 try:published=day(n.get('date'))
                 except ValueError:issue('invalid_date',index,iid);continue
-                valid=(isinstance(n.get('body'),str) and bool(n['body'].strip()) and digest(n.get('sha256'))
-                       and isinstance(n.get('title'),str) and bool(n['title'].strip()))
+                body_valid=(n['body_present'] if kind=='database_index' else
+                            isinstance(n.get('body'),str) and bool(n['body'].strip()) and digest(n.get('sha256')))
+                valid=bool(body_valid and isinstance(n.get('title'),str) and n['title'].strip())
                 if not valid:issue('unverified_record',index,iid)
                 attachments=set()
                 raw=n.get('attachment_hashes',{})
@@ -132,7 +173,7 @@ def build(inputs, *, as_of, start='2023-01-01', scope=None, names=None):
                          'observed_min_date':min(dates) if dates else None,'observed_max_date':max(dates) if dates else None,
                          'history_completeness':'UNVERIFIED'})
     return {'version':1,'window':{'start':start,'end':as_of},'disclaimer':DISCLAIMER,
-            'input_provenance':provenance,'rows':rows,'issues':issues,
+            'input_provenance':provenance,'rows':rows,'issues':issues,'unknown_issuer_records':unknown_issuer_records,
             'institution_exclusions':[{ 'institution_id':iid,'date_conflicts':conflict[iid],
                 'unverified_identities':held[iid],'out_of_window':outside[iid]} for iid in ids],
             'validation':'structural_only_no_source_replay','history_completeness':'UNVERIFIED'}
@@ -153,11 +194,11 @@ def markdown(report):
 
 def main():
     p=argparse.ArgumentParser()
-    for kind in ('growth','priority','institution'):p.add_argument('--'+kind,type=Path,action='append',default=[])
+    for kind in ('growth','priority','institution','database_index'):p.add_argument('--'+kind.replace('_','-'),type=Path,action='append',default=[])
     p.add_argument('--start',default='2023-01-01');p.add_argument('--as-of',required=True)
     p.add_argument('--output-dir',type=Path,required=True)
     args=p.parse_args();inputs=[]
-    for kind in ('growth','priority','institution'):
+    for kind in ('growth','priority','institution','database_index'):
         for path in getattr(args,kind):
             raw=path.read_bytes()
             inputs.append({'kind':kind,'path':str(path),'sha256':hashlib.sha256(raw).hexdigest(),'report':json.loads(raw)})

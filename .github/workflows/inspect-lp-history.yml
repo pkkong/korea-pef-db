@@ -1,0 +1,35 @@
+name: Inspect LP retained historical evidence
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install LP read-only database driver
+        run: python3 -m pip install 'psycopg[binary]==3.2.10'
+      - name: Test bounded metadata and historical inventory contracts
+        run: python3 -m unittest services.lp.tests.test_lp_history_index services.lp.tests.test_lp_history_coverage
+      - name: Export LP-owned metadata without official source HTTP or database writes
+        env:
+          SUPABASE_DB_URL: ${{ secrets.LP_SUPABASE_DB_URL || secrets.SUPABASE_DB_URL }}
+        run: python3 services/lp/src/export_lp_history_index.py --output /tmp/lp-history-index/database-index.json
+      - name: Count retained records by institution and year without completeness claims
+        run: |
+          python3 services/lp/src/build_lp_history_coverage.py --database-index /tmp/lp-history-index/database-index.json --as-of "$(TZ=Asia/Seoul date +%F)" --output-dir /tmp/lp-history-index
+          cat /tmp/lp-history-index/lp-history-coverage.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lp-retained-history-index
+          path: /tmp/lp-history-index/
+          retention-days: 7
+          if-no-files-found: error

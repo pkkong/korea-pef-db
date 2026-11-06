@@ -37,6 +37,54 @@ class HistoryCoverageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'invalid coverage map'):
             build([source([],coverage=[])],as_of='2026-11-06')
 
+    def database_input(self, records=None, complete=False):
+        n=notice();n.pop('body');n.pop('sha256')
+        n.update(content_hash='c'*64,source_sha256=None,body_present=True)
+        records=[n] if records is None else records
+        return {'kind':'database_index','report':{'kind':'lp_document_index_v1',
+            'checked_at':'2026-11-06T00:00:00Z','database_index_complete':complete,
+            'row_limit':100,'database_rows':len(records),'records':records}}
+
+    def test_database_metadata_counts_without_fabricating_source_hash(self):
+        item=self.database_input();before=copy.deepcopy(item)
+        r=build([item,source([notice()])],as_of='2026-11-06')
+        self.assertEqual(row(r)['evidence_record_count'],1)
+        self.assertIsNone(item['report']['records'][0]['source_sha256'])
+        self.assertEqual(item,before)
+        self.assertFalse(r['input_provenance'][0]['database_index_complete'])
+        complete=build([self.database_input(complete=True)],as_of='2026-11-06')
+        self.assertTrue(complete['input_provenance'][0]['database_index_complete'])
+        self.assertEqual(complete['history_completeness'],'UNVERIFIED')
+        self.assertNotIn('body_present',json.dumps(r))
+        self.assertNotIn('공식 본문',json.dumps(r,ensure_ascii=False))
+
+    def test_database_invalid_contract_and_record_types_do_not_count(self):
+        for field,value in [('kind','unknown'),('database_index_complete',1),('row_limit',True),
+                            ('database_rows',0),('checked_at','2026-11-06')]:
+            item=self.database_input();item['report'][field]=value
+            with self.assertRaises(ValueError):build([item],as_of='2026-11-06')
+        for field,value in [('body_present',1),('body_present',False),('content_hash','invalid'),
+                            ('source_sha256','bad'),('body','raw HTML'),('attachment_bytes','base64')]:
+            item=self.database_input();item['report']['records'][0][field]=value
+            r=build([item],as_of='2026-11-06')
+            self.assertIn(row(r)['evidence_record_count'],(None,0))
+            self.assertTrue(r['issues'])
+            self.assertNotIn('raw HTML',json.dumps(r))
+        # Metadata flags never replace body evidence in ordinary reports.
+        n=notice(body='');n['body_present']=True
+        self.assertEqual(row(build([source([n])],as_of='2026-11-06'))['evidence_record_count'],0)
+
+    def test_database_unknown_issuer_and_cross_input_date_conflict_retained(self):
+        item=self.database_input();item['report']['records'][0]['institution_id']=None
+        r=build([item],as_of='2026-11-06')
+        self.assertEqual(len(r['unknown_issuer_records']),1)
+        self.assertEqual(r['issues'][0]['kind'],'invalid_issuer')
+        item=self.database_input();item['report']['records'][0]['date']='2024-01-01'
+        r=build([item,source([notice()])],as_of='2026-11-06')
+        self.assertEqual(row(r)['evidence_record_count'],0)
+        self.assertEqual(row(r,year=2024)['evidence_record_count'],0)
+        self.assertTrue(any(i['kind']=='publication_date_conflict' for i in r['issues']))
+
     def test_24_year_grid_no_supabase_or_market_claim(self):
         r=build([],as_of='2026-11-06')
         self.assertEqual(len(r['rows']),24*4)
