@@ -1,0 +1,94 @@
+name: Retain LP historical bodies
+on:
+  workflow_dispatch:
+    inputs:
+      listing_run:
+        description: Completed main historical listing run with verified date boundary
+        type: string
+        required: true
+      resume_run:
+        description: Optional successful main historical body run to continue
+        type: string
+        required: false
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  retain:
+    if: github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify listing and body artifact provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          LISTING_RUN: ${{ inputs.listing_run }}
+          RESUME_RUN: ${{ inputs.resume_run }}
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess
+          for value,workflow in ((os.environ['LISTING_RUN'],'discover-lp-history.yml'),
+                                 (os.environ['RESUME_RUN'],'collect-lp-history-bodies.yml')):
+              if not value: continue
+              assert value.isascii() and value.isdecimal() and int(value)>0,'Numeric Actions run required'
+              run=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{value}"]))
+              assert run['repository']['full_name']==os.environ['GH_REPO'] and run['head_branch']=='main'
+              assert run['path']=='.github/workflows/'+workflow and run['event']=='workflow_dispatch'
+              assert run['status']=='completed' and run['conclusion']=='success','Inspect failed or active evidence before resuming'
+              print(json.dumps({k:run[k] for k in ('id','path','head_sha','conclusion')}))
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: lp-history-listings
+          run-id: ${{ inputs.listing_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-listing
+      - uses: actions/download-artifact@v4
+        if: inputs.resume_run != ''
+        with:
+          name: lp-history-bodies
+          run-id: ${{ inputs.resume_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-parent
+      - name: Install private LP evidence database driver
+        run: python3 -m pip install 'psycopg[binary]==3.2.10'
+      - name: Test bounded queue, raw proof, reuse and publication preservation
+        run: python3 -m unittest services.lp.tests.test_lp_history_body_queue services.lp.tests.test_collect_lp_history_bodies
+      - name: Reuse matching retained bodies before any official HTTP
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          RESUME_RUN: ${{ inputs.resume_run }}
+        run: |
+          args=(--mode lookup --listing-state /tmp/lp-history-listing/history-state.json --output-dir /tmp/lp-history-result)
+          if [ -n "$RESUME_RUN" ]; then args+=(--body-state /tmp/lp-history-parent/body-state.json); fi
+          python3 services/lp/src/collect_lp_history_bodies.py "${args[@]}"
+      - name: Collect at most four source-discovered historical bodies
+        env:
+          RESUME_RUN: ${{ inputs.resume_run }}
+        run: |
+          args=(--mode collect --listing-state /tmp/lp-history-listing/history-state.json --cached-documents /tmp/lp-history-result/cached-bodies.json --output-dir /tmp/lp-history-result)
+          if [ -n "$RESUME_RUN" ]; then args+=(--body-state /tmp/lp-history-parent/body-state.json); fi
+          python3 services/lp/src/collect_lp_history_bodies.py "${args[@]}"
+      - name: Retain verified private documents without changing publication
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python3 services/lp/src/collect_lp_history_bodies.py --mode persist --listing-state /tmp/lp-history-listing/history-state.json --body-state /tmp/lp-history-result/body-state.json --output-dir /tmp/lp-history-result
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-history-bodies
+          path: |
+            /tmp/lp-history-result/body-state.json
+            /tmp/lp-history-result/body-summary.json
+            /tmp/lp-history-result/persistence.json
+          retention-days: 30
+          if-no-files-found: warn
