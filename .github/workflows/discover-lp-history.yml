@@ -1,0 +1,106 @@
+name: Discover LP historical listings
+on:
+  workflow_dispatch:
+    inputs:
+      seed_collection_run:
+        description: Initial retained main Collect LP programs run; omit when resuming
+        type: string
+        required: false
+      retained_index_run:
+        description: Initial successful Inspect LP retained historical evidence run
+        type: string
+        required: false
+      resume_run:
+        description: Successful main Discover LP historical listings run to continue
+        type: string
+        required: false
+      batch_pages:
+        description: New historical listing pages per batch (1 to 4)
+        type: string
+        default: '4'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  discover:
+    if: github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify retained cursor and seed provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SEED_RUN: ${{ inputs.seed_collection_run }}
+          INDEX_RUN: ${{ inputs.retained_index_run }}
+          RESUME_RUN: ${{ inputs.resume_run }}
+          BATCH_PAGES: ${{ inputs.batch_pages }}
+        run: |
+          python3 - <<'PY'
+          import datetime,json,os,subprocess
+          seed,index,resume=(os.environ[k] for k in ('SEED_RUN','INDEX_RUN','RESUME_RUN'))
+          assert (bool(resume) and not seed and not index) or (seed and index and not resume), 'Choose seed plus index, or a saved cursor'
+          assert os.environ['BATCH_PAGES'] in {'1','2','3','4'},'Bounded batch required'
+          for value,workflow,require_success,recent in ((seed,'collect-kgrowth-programs.yml',False,True),
+              (index,'inspect-lp-history.yml',True,False),(resume,'discover-lp-history.yml',True,False)):
+              if not value: continue
+              assert value.isascii() and value.isdecimal() and int(value)>0,'Numeric Actions run required'
+              run=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{value}"]))
+              assert run['repository']['full_name']==os.environ['GH_REPO'] and run['head_branch']=='main'
+              assert run['path']=='.github/workflows/'+workflow and run['event'] in {'schedule','workflow_dispatch'}
+              assert run['status']=='completed','Wait for the preceding run'
+              if require_success: assert run['conclusion']=='success','Inspect a failed run instead of retrying it blindly'
+              if recent:
+                  created=datetime.datetime.fromisoformat(run['created_at'].replace('Z','+00:00'))
+                  assert datetime.timedelta(0)<=datetime.datetime.now(datetime.timezone.utc)-created<=datetime.timedelta(hours=48),'Use recent seed receipts'
+              print(json.dumps({k:run[k] for k in ('id','path','head_sha','conclusion')}))
+          PY
+      - uses: actions/download-artifact@v4
+        if: inputs.resume_run != ''
+        with:
+          name: lp-history-listings
+          run-id: ${{ inputs.resume_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-parent
+      - uses: actions/download-artifact@v4
+        if: inputs.seed_collection_run != ''
+        with:
+          name: kgrowth-collection
+          run-id: ${{ inputs.seed_collection_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-seed
+      - uses: actions/download-artifact@v4
+        if: inputs.retained_index_run != ''
+        with:
+          name: lp-retained-history-index
+          run-id: ${{ inputs.retained_index_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-index
+      - name: Test historical fixed boundary, overlap, and failure preservation
+        run: python3 -m unittest services.lp.tests.test_discover_lp_history services.lp.tests.test_kgrowth_listing
+      - name: Discover a bounded batch without detail fetching or database access
+        env:
+          RESUME_RUN: ${{ inputs.resume_run }}
+          BATCH_PAGES: ${{ inputs.batch_pages }}
+        run: |
+          args=(--batch-pages "$BATCH_PAGES" --output-dir /tmp/lp-history-result)
+          if [ -n "$RESUME_RUN" ]; then
+            args+=(--state /tmp/lp-history-parent/history-state.json)
+          else
+            args+=(--seed-collection /tmp/lp-history-seed/kgrowth-collection.json --database-index /tmp/lp-history-index/database-index.json)
+          fi
+          python3 services/lp/src/discover_lp_history.py "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-history-listings
+          path: /tmp/lp-history-result/
+          retention-days: 30
+          if-no-files-found: warn
