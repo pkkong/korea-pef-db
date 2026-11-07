@@ -5,15 +5,9 @@ import json
 import re
 
 try:
-    from .discover_lp_history import summary
+    from .lp_history_sources import listing_summary,canonical_url,institution
 except ImportError:
-    from discover_lp_history import summary
-
-
-def canonical_url(ident):
-    if not isinstance(ident,str) or not re.fullmatch(r'[1-9][0-9]*',ident):
-        raise ValueError('Invalid historical body source ID')
-    return f'https://www.kgrowth.or.kr/notice_view.asp?idx={ident}&str_type=1&tab=1'
+    from lp_history_sources import listing_summary,canonical_url,institution
 
 
 def fingerprint(document):
@@ -25,7 +19,8 @@ def plan(state, completed_documents=(), *, limit=4):
     if type(limit) is not int or not 1 <= limit <= 4:
         raise ValueError('Body queue limit must be between 1 and 4')
     # Summary reparses original listing receipts rather than trusting saved counts.
-    report=summary(copy.deepcopy(state))
+    report=listing_summary(copy.deepcopy(state))
+    iid=institution(state)
     if not report['listing_window_complete'] or report.get('holds'):
         raise ValueError('Complete unblocked historical listing required')
     listing={r['source_id']:r for r in report['rows']}
@@ -34,8 +29,8 @@ def plan(state, completed_documents=(), *, limit=4):
     for document in completed_documents:
         if not isinstance(document,dict):raise ValueError('Invalid completed document')
         ident=document.get('source_id')
-        url=canonical_url(ident)
-        if (document.get('url')!=url or document.get('institution_id','kgrowth')!='kgrowth'
+        url=canonical_url(ident,iid)
+        if (document.get('url')!=url or document.get('institution_id','kgrowth')!=iid
                 or ident not in listing):
             raise ValueError('Completed body identity does not match listing')
         if (document.get('restricted') or document.get('owner_closed') or document.get('closed')
@@ -61,8 +56,8 @@ def plan(state, completed_documents=(), *, limit=4):
                    key=lambda r:(r['date'],int(r['source_id'])))
     rows=[]
     for row in pending[:limit]:
-        rows.append({'institution_id':'kgrowth','source_id':row['source_id'],
-                     'url':canonical_url(row['source_id']),'listing_url':row['url'],
+        rows.append({'institution_id':iid,'source_id':row['source_id'],
+                     'url':canonical_url(row['source_id'],iid),'listing_url':row['url'],
                      'title':row['title'],'date':row['date']})
     return {'window':copy.deepcopy(report['window']), 'retained_body_observed':len(retained),
             'retained_body_in_scope':len(retained-forms),

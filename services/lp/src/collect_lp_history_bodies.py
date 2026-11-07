@@ -15,27 +15,21 @@ from pathlib import Path
 
 try:
     from .lp_history_body_queue import plan
+    from .lp_history_sources import institution,listing_digest,effective_history,parse_detail,transport
 except ImportError:
     from lp_history_body_queue import plan
+    from lp_history_sources import institution,listing_digest,effective_history,parse_detail,transport
 
 KIND = 'lp_history_bodies_v1'
 MAX_BYTES = 32 * 1024 * 1024
 
 
-def listing_digest(history):
-    return hashlib.sha256(json.dumps([r['sha256'] for r in history['receipts']]).encode()).hexdigest()
-
-
-def read_body(ident, raw):
-    try:
-        from .collect_kgrowth_programs import parse_notice
-    except ImportError:
-        from collect_kgrowth_programs import parse_notice
+def read_body(ident, raw, iid='kgrowth'):
     if not isinstance(raw, bytes) or len(raw) > 12 * 1024 * 1024:
         raise ValueError('Historical body response size/type invalid')
-    if not re.search(r'</body>\s*</html>',raw.decode('cp949'),re.I):
+    if not re.search(r'</body>\s*</html>',raw.decode('cp949' if iid=='kgrowth' else 'utf-8'),re.I):
         raise ValueError('Historical detail response is incomplete')
-    notice = parse_notice(ident,raw)
+    notice = parse_detail(ident,raw,iid)
     if (any('\x00' in notice[k] for k in ('title','body','date','url'))
             or re.search(r'접근\s*권한이\s*없|열람\s*권한이\s*없|비공개\s*게시물|로그인이\s*필요|접근이\s*제한',notice['body'])):
         raise ValueError('Historical body unavailable or unsupported')
@@ -43,19 +37,21 @@ def read_body(ident, raw):
 
 
 def validate_report(history, report):
+    iid=institution(history)
     if (report.get('kind') != KIND or report.get('window') != history['window']
-            or report.get('listing_digest') != listing_digest(history)):
+            or report.get('listing_digest') != listing_digest(history)
+            or report.get('institution_id','kgrowth')!=iid):
         raise ValueError('Historical body cursor/listing mismatch')
     ids = []
     for document in report['documents']:
         proof = document.get('discovery_provenance', {})
-        if (document.get('institution_id') != 'kgrowth' or proof.get('kind') != 'lp_history_body'
+        if (document.get('institution_id') != iid or proof.get('kind') != 'lp_history_body'
                 or proof.get('window') != report['window'] or proof.get('listing_digest') != report['listing_digest']):
             raise ValueError('Historical body retrieval proof missing')
         raw = base64.b64decode(proof['detail_response_base64'],validate=True)
         if len(raw) > 12*1024*1024 or hashlib.sha256(raw).hexdigest() != proof.get('detail_response_sha256'):
             raise ValueError('Historical body response fingerprint mismatch')
-        parsed = read_body(document['source_id'],raw)
+        parsed = read_body(document['source_id'],raw,iid)
         allowed = set(parsed) | {'institution_id','checked_at','attachment_hashes',
                                  'attachment_collection_status','discovery_provenance'}
         if (set(document) != allowed or any(parsed[k] != document.get(k) for k in parsed)
@@ -65,13 +61,16 @@ def validate_report(history, report):
         ids.append(document['source_id'])
     if len(ids) != len(set(ids)):
         raise ValueError('Duplicate historical body cursor entry')
-    return plan(history, report['documents'])
+    return plan(effective_history(history,report), report['documents'])
 
 
 def collect(history, previous, fetch, *, cached_documents=(), limit=4, checked_at=None):
+    history=effective_history(history,previous)
+    iid=institution(history)
     report = copy.deepcopy(previous) if previous else {
-        'kind': KIND, 'window': copy.deepcopy(history['window']), 'listing_digest': listing_digest(history),
+        'kind': KIND, 'institution_id':iid,'window': copy.deepcopy(history['window']), 'listing_digest': listing_digest(history),
         'documents': [], 'batches': [], 'holds': []}
+    if previous is None and iid=='ktcu':report['retained_records']=copy.deepcopy(history['retained_records'])
     validate_report(history, report)
     if report['holds']:
         raise ValueError('Saved body failure requires diagnosis before resumption')
@@ -98,8 +97,8 @@ def collect(history, previous, fetch, *, cached_documents=(), limit=4, checked_a
                 continue
             batch['detail_requests'] += 1
             raw = fetch(row['url'])
-            notice = read_body(row['source_id'], raw)
-            notice.update(institution_id='kgrowth', checked_at=batch['checked_at'], attachment_hashes={},
+            notice = read_body(row['source_id'], raw,iid)
+            notice.update(institution_id=iid, checked_at=batch['checked_at'], attachment_hashes={},
                           attachment_collection_status='pending' if notice['attachments'] else 'not_applicable')
             notice['discovery_provenance'] = {
                 'kind': 'lp_history_body', 'window': report['window'], 'listing_digest': report['listing_digest'],
@@ -122,6 +121,7 @@ def collect(history, previous, fetch, *, cached_documents=(), limit=4, checked_a
 
 
 def lookup(conn, history, previous):
+    history=effective_history(history,previous)
     documents = previous['documents'] if previous else []
     if previous:
         validate_report(history,previous)
@@ -160,6 +160,7 @@ def persist(conn, history, report, *, wrap_json=None):
     except ImportError:
         from publish_lp_programs import document_hash, store_documents
     validate_report(history, report)
+    history=effective_history(history,report)
     if report['holds'] or not report['batches']:
         raise ValueError('Unblocked completed body batch required before retention')
     batch = report['batches'][-1]
@@ -209,6 +210,7 @@ def main():
     parser.add_argument('--listing-state',type=Path,required=True)
     parser.add_argument('--body-state',type=Path)
     parser.add_argument('--cached-documents',type=Path)
+    parser.add_argument('--database-index',type=Path)
     parser.add_argument('--output-dir',type=Path,required=True)
     args = parser.parse_args()
     def load(path):
@@ -221,10 +223,11 @@ def main():
         temporary.write_text(json.dumps(data,ensure_ascii=False))
         temporary.replace(target)
     history = load(args.listing_state)
+    previous=load(args.body_state) if args.body_state else None
+    history=effective_history(history,previous,load(args.database_index) if args.database_index else None)
     args.output_dir.mkdir(parents=True,exist_ok=True)
     if args.mode == 'collect':
-        from collect_kgrowth_programs import official_fetcher
-        report = collect(history,load(args.body_state) if args.body_state else None,official_fetcher(),
+        report = collect(history,previous,transport(history),
                          cached_documents=load(args.cached_documents) if args.cached_documents else ())
         queue = validate_report(history,report)
         result = {k:v for k,v in queue.items() if k!='rows'}
@@ -239,11 +242,11 @@ def main():
     with psycopg.connect(os.environ.get('LP_SUPABASE_DB_URL') or os.environ['SUPABASE_DB_URL'],
                           connect_timeout=20,prepare_threshold=None,application_name='lp-history-bodies') as conn:
         if args.mode=='lookup':
-            cached = lookup(conn,history,load(args.body_state) if args.body_state else None)
+            cached = lookup(conn,history,previous)
             save('cached-bodies.json',cached)
             print(json.dumps({'bounded_retained_versions':len(cached),'official_http_requests':0}))
             return 0
-        result = persist(conn,history,load(args.body_state))
+        result = persist(conn,history,previous)
     save('persistence.json',result)
     print(json.dumps(result,ensure_ascii=False))
     return 0

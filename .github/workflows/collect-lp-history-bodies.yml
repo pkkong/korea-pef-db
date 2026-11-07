@@ -2,6 +2,15 @@ name: Retain LP historical bodies
 on:
   workflow_dispatch:
     inputs:
+      institution:
+        description: Historical source adapter
+        type: choice
+        options: [kgrowth, ktcu]
+        default: kgrowth
+      retained_index_run:
+        description: Required only for initial KTCU body queue; successful retained metadata inspection
+        type: string
+        required: false
       listing_run:
         description: Completed main historical listing run with verified date boundary
         type: string
@@ -32,11 +41,18 @@ jobs:
           GH_REPO: ${{ github.repository }}
           LISTING_RUN: ${{ inputs.listing_run }}
           RESUME_RUN: ${{ inputs.resume_run }}
+          INSTITUTION: ${{ inputs.institution }}
+          INDEX_RUN: ${{ inputs.retained_index_run }}
         run: |
           python3 - <<'PY'
           import json,os,subprocess
-          for value,workflow in ((os.environ['LISTING_RUN'],'discover-lp-history.yml'),
-                                 (os.environ['RESUME_RUN'],'collect-lp-history-bodies.yml')):
+          iid=os.environ['INSTITUTION'];index=os.environ['INDEX_RUN'];resume=os.environ['RESUME_RUN']
+          assert iid in {'kgrowth','ktcu'}
+          assert not(resume and index),'Preserve the retained metadata snapshot on resumption'
+          assert (iid=='kgrowth' and not index) or (iid=='ktcu' and (resume or index)),'KTCU initial queue requires retained metadata'
+          listing='discover-lp-history.yml' if iid=='kgrowth' else 'discover-ktcu-history.yml'
+          for value,workflow in ((os.environ['LISTING_RUN'],listing),
+                                 (resume,'collect-lp-history-bodies.yml'),(index,'inspect-lp-history.yml')):
               if not value: continue
               assert value.isascii() and value.isdecimal() and int(value)>0,'Numeric Actions run required'
               run=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{value}"]))
@@ -52,6 +68,13 @@ jobs:
           github-token: ${{ github.token }}
           path: /tmp/lp-history-listing
       - uses: actions/download-artifact@v4
+        if: inputs.retained_index_run != ''
+        with:
+          name: lp-retained-history-index
+          run-id: ${{ inputs.retained_index_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-index
+      - uses: actions/download-artifact@v4
         if: inputs.resume_run != ''
         with:
           name: lp-history-bodies
@@ -61,21 +84,25 @@ jobs:
       - name: Install private LP evidence database driver
         run: python3 -m pip install 'psycopg[binary]==3.2.10'
       - name: Test bounded queue, raw proof, reuse and publication preservation
-        run: python3 -m unittest services.lp.tests.test_lp_history_body_queue services.lp.tests.test_collect_lp_history_bodies
+        run: python3 -m unittest services.lp.tests.test_lp_history_body_queue services.lp.tests.test_collect_lp_history_bodies services.lp.tests.test_lp_history_sources
       - name: Reuse matching retained bodies before any official HTTP
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           RESUME_RUN: ${{ inputs.resume_run }}
+          INDEX_RUN: ${{ inputs.retained_index_run }}
         run: |
           args=(--mode lookup --listing-state /tmp/lp-history-listing/history-state.json --output-dir /tmp/lp-history-result)
           if [ -n "$RESUME_RUN" ]; then args+=(--body-state /tmp/lp-history-parent/body-state.json); fi
+          if [ -n "$INDEX_RUN" ]; then args+=(--database-index /tmp/lp-history-index/database-index.json); fi
           python3 services/lp/src/collect_lp_history_bodies.py "${args[@]}"
       - name: Collect at most four source-discovered historical bodies
         env:
           RESUME_RUN: ${{ inputs.resume_run }}
+          INDEX_RUN: ${{ inputs.retained_index_run }}
         run: |
           args=(--mode collect --listing-state /tmp/lp-history-listing/history-state.json --cached-documents /tmp/lp-history-result/cached-bodies.json --output-dir /tmp/lp-history-result)
           if [ -n "$RESUME_RUN" ]; then args+=(--body-state /tmp/lp-history-parent/body-state.json); fi
+          if [ -n "$INDEX_RUN" ]; then args+=(--database-index /tmp/lp-history-index/database-index.json); fi
           python3 services/lp/src/collect_lp_history_bodies.py "${args[@]}"
       - name: Retain verified private documents without changing publication
         env:
