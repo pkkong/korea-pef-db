@@ -13,6 +13,13 @@ def institution(history):
     return iid
 
 
+def listing_source(iid):
+    sources={'kgrowth':{'workflow':'discover-lp-history.yml','artifact':'lp-history-listings'},
+             'ktcu':{'workflow':'discover-ktcu-history.yml','artifact':'ktcu-history-listings'}}
+    if iid not in sources:raise ValueError('Unsupported historical listing source')
+    return dict(sources[iid])
+
+
 def canonical_url(ident, iid='kgrowth'):
     if not isinstance(ident,str) or not re.fullmatch(r'[1-9][0-9]*',ident):
         raise ValueError('Invalid historical body source ID')

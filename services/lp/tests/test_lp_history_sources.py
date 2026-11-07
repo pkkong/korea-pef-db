@@ -1,6 +1,8 @@
 import copy
 import json
+import re
 import unittest
+from pathlib import Path
 from services.lp.src import lp_history_sources as sources
 from services.lp.src import discover_ktcu_history as ktcu
 from services.lp.src import collect_lp_history_bodies as bodies
@@ -29,6 +31,18 @@ def detail(row):
 
 
 class HistorySourceTests(unittest.TestCase):
+    def test_body_consumer_matches_each_listing_producers_actual_artifact(self):
+        root=Path(__file__).resolve().parents[3]/'.github/workflows'
+        for iid in ('kgrowth','ktcu'):
+            info=sources.listing_source(iid);text=(root/info['workflow']).read_text()
+            blocks=re.findall(r'^      - uses: actions/upload-artifact@v4\n(?:(?!^      - ).)*',text,re.M|re.S)
+            declared=[re.search(r'^          name: (.+)$',block,re.M)[1] for block in blocks]
+            self.assertIn(info['artifact'],declared)
+        consumer=(root/'collect-lp-history-bodies.yml').read_text()
+        self.assertIn('name: ${{ steps.provenance.outputs.listing_artifact }}',consumer)
+        self.assertIn("source_info=listing_source(iid)",consumer)
+        with self.assertRaises(ValueError):sources.listing_source('unknown')
+
     def test_typed_ktcu_metadata_queue_raw_replay_and_private_retention(self):
         h,index=fixture();enriched=sources.effective_history(h,index=index);q=plan(enriched)
         self.assertEqual(q['retained_body_in_scope'],1);self.assertEqual(q['pending_count'],4)

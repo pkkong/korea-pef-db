@@ -36,6 +36,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Verify listing and body artifact provenance
+        id: provenance
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -46,11 +47,12 @@ jobs:
         run: |
           python3 - <<'PY'
           import json,os,subprocess
+          from services.lp.src.lp_history_sources import listing_source
           iid=os.environ['INSTITUTION'];index=os.environ['INDEX_RUN'];resume=os.environ['RESUME_RUN']
           assert iid in {'kgrowth','ktcu'}
           assert not(resume and index),'Preserve the retained metadata snapshot on resumption'
           assert (iid=='kgrowth' and not index) or (iid=='ktcu' and (resume or index)),'KTCU initial queue requires retained metadata'
-          listing='discover-lp-history.yml' if iid=='kgrowth' else 'discover-ktcu-history.yml'
+          source_info=listing_source(iid);listing=source_info['workflow']
           for value,workflow in ((os.environ['LISTING_RUN'],listing),
                                  (resume,'collect-lp-history-bodies.yml'),(index,'inspect-lp-history.yml')):
               if not value: continue
@@ -60,10 +62,12 @@ jobs:
               assert run['path']=='.github/workflows/'+workflow and run['event']=='workflow_dispatch'
               assert run['status']=='completed' and run['conclusion']=='success','Inspect failed or active evidence before resuming'
               print(json.dumps({k:run[k] for k in ('id','path','head_sha','conclusion')}))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('listing_artifact='+source_info['artifact']+'\n')
           PY
       - uses: actions/download-artifact@v4
         with:
-          name: lp-history-listings
+          name: ${{ steps.provenance.outputs.listing_artifact }}
           run-id: ${{ inputs.listing_run }}
           github-token: ${{ github.token }}
           path: /tmp/lp-history-listing
