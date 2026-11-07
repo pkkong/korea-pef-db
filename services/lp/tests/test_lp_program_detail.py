@@ -62,6 +62,7 @@ class ProgramDetailTests(unittest.TestCase):
         html=render_detail_body(p,'2026-11-07')
         self.assertIn('우선협상대상자</h3>',html);self.assertIn('루키리그',html)
         self.assertIn('우선협상 결과 원문',html);self.assertEqual(p['selected_gps'],[])
+        self.assertEqual(html.split('<section id="selection">')[1].count('우선협상 결과 원문'),1)
         self.assertIn('최종 선정 명단은 아직 확인되지 않았습니다',html)
         with self.assertRaises(ValueError):
             bad=copy.deepcopy(p);bad['manager_list_sources']['preferred_gps']='https://official.example/unrelated'

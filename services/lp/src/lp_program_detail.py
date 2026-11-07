@@ -66,6 +66,8 @@ def standardized_schedule(stages, as_of=None, *, selection_recorded=False):
         badge = (('<span class="planned-label">공고상 예정</span>' if selection_recorded else planned_badge(e, as_of))
                  if e['status']=='planned' else ('<span class="planned-label">공고상 마감</span>' if e['status']=='announced_deadline' else ''))
         note = e.get('detail') or (e['original_label'] if e['stage'] in ('screening', 'due_diligence') else '')
+        if note == e['label']:
+            note = ''
         evidence = link(e['source_url'], '원문') if e.get('show_source') else ''
         body += f'<li class="event"><time>{h(stamp)}</time><div><strong>{h(e["label"])}</strong> {badge}<small>{h(note)} {evidence}</small></div></li>'
     return body + '</ol></section>'
@@ -179,6 +181,7 @@ def render_detail_body(p, as_of=None):
         if result_events:
             result = max(result_events, key=lambda event: event['date'])
             label = '우선협상 결과 원문' if result['type'] == '우선협상대상자' else '선정 결과 원문'
-            body += f'<p>{link(result["url"], label)}</p>'
+            if not p.get('preferred_gps') or result['url'] != p.get('manager_list_sources', {}).get('preferred_gps'):
+                body += f'<p>{link(result["url"], label)}</p>'
     body += '</section>'
     return body + PLAN_SCRIPT
