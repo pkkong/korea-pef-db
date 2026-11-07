@@ -1,5 +1,52 @@
 """One schedule-first detail template for every LP program."""
 from html import escape
+import calendar
+import re
+from datetime import date, datetime, timedelta, timezone
+
+
+def planned_until(event):
+    """Conservative upper boundary for display, never a claimed event date.
+
+    A vague early/mid/late-month plan is only certainly past once its whole
+    month has passed. Unknown/relative dates receive no invented boundary.
+    """
+    value = str(event.get('date') or '')
+    try:
+        if (re.fullmatch(r'20\d{2}-\d{2}-\d{2}(?:T.*)?', value)
+                and event.get('precision') in (None, 'date', 'day', 'datetime')):
+            return date.fromisoformat(value[:10]).isoformat()
+        year = month = None
+        for match in re.finditer(r'(?:(20\d{2})\s*년\s*)?(\d{1,2})\s*월', event.get('date_label') or ''):
+            explicit_year, next_month = match[1], int(match[2])
+            if explicit_year:
+                year = int(explicit_year)
+            elif year is None or (month is not None and next_month < month):
+                return None
+            month = next_month
+            date(year, month, 1)
+        if year and month:
+            return date(year, month, calendar.monthrange(year, month)[1]).isoformat()
+        if re.fullmatch(r'20\d{2}-\d{2}(?:-\d{2})?', value):
+            year, month = map(int, value[:7].split('-'))
+            return date(year, month, calendar.monthrange(year, month)[1]).isoformat()
+    except ValueError:
+        pass
+    return None
+
+
+def _today():
+    return datetime.now(timezone(timedelta(hours=9))).date().isoformat()
+
+
+def planned_badge(event, as_of):
+    until = planned_until(event)
+    label = '예정일 경과' if until and until < as_of else '예정'
+    attrs = f' data-lp-plan-until="{h(until)}"' if until else ''
+    return f'<span class="planned-label"{attrs}>{label}</span>'
+
+
+PLAN_SCRIPT = '''<script>(function(){const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const part=t=>parts.find(p=>p.type===t).value;const today=part('year')+'-'+part('month')+'-'+part('day');document.querySelectorAll('[data-lp-plan-until]').forEach(e=>{e.textContent=e.dataset.lpPlanUntil<today?'예정일 경과':'예정'});document.querySelectorAll('[data-lp-note-until]').forEach(e=>{if(e.dataset.lpNoteUntil<today)e.textContent=e.dataset.lpPastNote})})();</script>'''
 
 def h(value):
     return escape(str(value or ''), quote=True)
@@ -9,23 +56,27 @@ def link(url, label='원문'):
         return ''
     return f'<a href="{h(url)}" target="_blank" rel="noopener">{h(label)} ↗</a>'
 
-def standardized_schedule(stages):
+def standardized_schedule(stages, as_of=None, *, selection_recorded=False):
+    as_of = as_of or _today()
     body = '<section id="schedule"><h2>진행 일정</h2><ol class="stage-flow" aria-label="출자사업 단계"><li>공고</li><li>접수</li><li>심사</li><li>선정</li></ol><ol class="event-list">'
     for e in stages:
         stamp = e.get('date_label') or str(e.get('date') or '').replace('T', ' ').replace('+09:00', '')
         if e['precision'] == 'datetime':
             stamp = stamp[:16]
-        badge = '예정' if e['status']=='planned' else ('공고상 마감' if e['status']=='announced_deadline' else '')
+        badge = (('<span class="planned-label">공고상 예정</span>' if selection_recorded else planned_badge(e, as_of))
+                 if e['status']=='planned' else ('<span class="planned-label">공고상 마감</span>' if e['status']=='announced_deadline' else ''))
         note = e.get('detail') or (e['original_label'] if e['stage'] in ('screening', 'due_diligence') else '')
         evidence = link(e['source_url'], '원문') if e.get('show_source') else ''
-        body += f'<li class="event"><time>{h(stamp)}</time><div><strong>{h(e["label"])}</strong> <span class="planned-label">{h(badge)}</span><small>{h(note)} {evidence}</small></div></li>'
+        body += f'<li class="event"><time>{h(stamp)}</time><div><strong>{h(e["label"])}</strong> {badge}<small>{h(note)} {evidence}</small></div></li>'
     return body + '</ol></section>'
 
-def render_detail_body(p):
+def render_detail_body(p, as_of=None):
+    as_of = as_of or _today()
+    selection_recorded = bool(p.get('selected_gps')) or any(e['type'] in ('최종 선정', '선정 결과') for e in p['events'])
     original = next((e['url'] for e in p['events'] if e['type']=='모집 공고'), p['events'][0]['url'])
     body = f'<a class="back" href="index.html">← 출자사업</a><header class="detail-header"><a class="institution" href="institution-{h(p["institution_id"])}.html">{h(p["institution_name"])}</a><h1>{h(p["title"])}</h1><div class="detail-meta"><span class="badge">{h(p["status"])}</span>{link(original,"출자 공고 원문")}</div></header>'
     if p.get('schedule_stages'):
-        body += standardized_schedule(p['schedule_stages'])
+        body += standardized_schedule(p['schedule_stages'], as_of, selection_recorded=selection_recorded)
     else:
         body += '<section id="schedule"><h2>진행 일정</h2><ol class="event-list">'
         events = [(e,False) for e in sorted(p['events'],key=lambda e:e['date'])]
@@ -37,7 +88,8 @@ def render_detail_body(p):
             if planned and label.endswith(' 예정'):
                 label = label[:-3]
             note = '' if label == title else f'<small>{h(title)}</small>'
-            body += f'<li class="event {"planned" if planned else "recorded"}"><time>{h(stamp)}</time><div><strong>{h(label)}</strong>{" <span class=planned-label>예정</span>" if planned else ""}{note}</div>{link(event.get("url"))}</li>'
+            badge = (' <span class="planned-label">공고상 예정</span>' if selection_recorded else ' ' + planned_badge(event, as_of)) if planned else ''
+            body += f'<li class="event {"planned" if planned else "recorded"}"><time>{h(stamp)}</time><div><strong>{h(label)}</strong>{badge}{note}</div>{link(event.get("url"))}</li>'
         body += '</ol></section>'
     if p.get('linkage_note'):
         body += f'<p class="notice">{h(p["linkage_note"])}</p>'
@@ -75,16 +127,21 @@ def render_detail_body(p):
             body += f'<tr><td class="league-name">{h(segment["name"])}</td><td data-label="출자 예정액">{amount}</td><td data-label="선정 예정">{h(segment.get("manager_count") or "미확인")}</td>{extra}</tr>'
         body += '</tbody></table></div>'
     body += '</section>'
-    has_names = any(p.get(k) for k in ('applicants_gps', 'shortlisted_gps', 'selected_gps'))
+    has_names = any(p.get(k) for k in ('applicants_gps', 'shortlisted_gps', 'preferred_gps', 'selected_gps'))
     result_events = [e for e in p['events'] if e['type'] in ('최종 선정', '선정 결과', '우선협상대상자')]
     awaiting_result = p['status'].startswith('접수 마감') or bool(result_events)
     if p.get('basic_publication') and not has_names and not awaiting_result:
-        return body
-    heading = ('단계별 GP' if p.get('schedule_stages') else '선정 GP') if has_names else '선정 결과'
+        return body + PLAN_SCRIPT
+    heading = ('단계별 GP' if p.get('schedule_stages') or p.get('preferred_gps') else '선정 GP') if has_names else '선정 결과'
     body += '<section id="selection"><h2>' + heading + '</h2>'
     applicants = p.get('applicants_gps', [])
     if applicants:
         body += f'<details class="applicant-list"><summary>접수 {len(applicants)}개 팀</summary><ul>' + ''.join(f'<li>{h(name)}</li>' for name in applicants) + '</ul>' + link(p.get('manager_list_sources', {}).get('applicants_gps'), '접수 원문') + '</details>'
+    if p.get('preferred_gps'):
+        body += '<h3>우선협상대상자</h3><div class="scroll"><table><thead><tr><th>운용사</th><th>리그</th></tr></thead><tbody>'
+        for name in p['preferred_gps']:
+            body += f'<tr><td>{h(name)}</td><td>{h(p.get("gp_tracks", {}).get(name) or "—")}</td></tr>'
+        body += '</tbody></table></div><p>' + link(p.get('manager_list_sources', {}).get('preferred_gps'), '우선협상 결과 원문') + '</p>'
     if p.get('shortlisted_gps'):
         selected = {gp['name']: gp for gp in p['selected_gps']}
         shortlist_url = next((e['url'] for e in p['events'] if e['type']=='서류심사 결과'), '')
@@ -109,10 +166,19 @@ def render_detail_body(p):
             body += f'<tr><td><a href="selected-gp-{h(gp["page_key"])}.html">{h(gp["name"])}</a>{amount}</td><td>{link(gp["source_url"],"선정 결과")}</td></tr>'
         body += '</tbody></table></div>'
     else:
-        body += f'<p class="muted">{h(p.get("gp_stage_note"))}</p>' if p.get('gp_stage_note') else '<p class="muted">선정 결과 미확인</p>'
+        note = ('최종 선정 명단은 아직 확인되지 않았습니다.' if p.get('preferred_gps') else p.get('gp_stage_note'))
+        planned_selection = [e for e in p.get('schedule_stages', []) if e.get('stage') == 'selection' and e.get('status') == 'planned']
+        until = max((u for u in (planned_until(e) for e in planned_selection) if u), default=None)
+        attrs = ''
+        if note and '개별 통보' in note and until:
+            past_note = '공고에는 개별 통보로 안내되어 있습니다. 선정 명단은 아직 확인되지 않았습니다.'
+            attrs = f' data-lp-note-until="{h(until)}" data-lp-past-note="{h(past_note)}"'
+            if until < as_of:
+                note = past_note
+        body += f'<p class="muted"{attrs}>{h(note)}</p>' if note else '<p class="muted">선정 결과 미확인</p>'
         if result_events:
             result = max(result_events, key=lambda event: event['date'])
             label = '우선협상 결과 원문' if result['type'] == '우선협상대상자' else '선정 결과 원문'
             body += f'<p>{link(result["url"], label)}</p>'
     body += '</section>'
-    return body
+    return body + PLAN_SCRIPT

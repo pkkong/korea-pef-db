@@ -103,6 +103,7 @@ Every non-trivial subagent task should state:
 
 ## Automation Cost and Execution Failures
 
+- Unless the user explicitly pauses or cancels, continue authorized unfinished project work to the agreed completion criteria. A usage limit, temporary model/provider capacity error, or interrupted turn is not completion. Save the last verified step and remaining work, and resume without asking the user to repeat the instruction. For work that outlasts the active turn, use the existing hourly automation attached to this same chat; update its scope rather than creating duplicate schedules or independent chats. This standing preference does not authorize new paid plans, higher budgets, account/model circumvention, or unrelated work.
 - GitHub Actions billing/usage errors are separate from ChatGPT/Codex limits. The generic failed-payment-or-spending-limit annotation is not evidence that additional payment is required.
 - On an execution-provider block, inspect concrete job annotations, available usage evidence, and free operating alternatives before sending the user to billing settings. Never raise budgets, enroll in paid plans, or repeatedly dispatch blocked workflows without authorization.
 - The user authorized making `pkkong/korea-pef-db` public on 2026-10-16 to restore free standard GitHub-hosted execution. Keep credentials in Actions secrets, retain read-only default workflow permissions, and never add secret-dependent publishing to untrusted pull-request events.

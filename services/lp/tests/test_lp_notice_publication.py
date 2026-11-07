@@ -28,6 +28,28 @@ def publish(documents, *, existing=None, now=NOW):
 
 
 class BasicNoticePublicationTests(unittest.TestCase):
+    def test_preferred_names_attach_to_their_own_stage_without_final_promotion(self):
+        from services.lp.tests.test_collect_koreapost_program import KoreaPostReviewTests
+        import services.lp.src.collect_koreapost_program as post
+        fixture = KoreaPostReviewTests();fixture.setUp()
+        original = {**fixture.notice, 'institution_id':'koreapost'}
+        preferred = {**fixture.preferred(), 'institution_id':'koreapost'}
+        old = copy.deepcopy(__import__('json').loads(post.REGISTRY.read_text())['program'])
+        old['id'] = 'preserved-old-program'
+        old['selected_gps'] = []
+        programs, holds = publish([original,preferred],existing=[old],now='2026-11-07T00:00:00+09:00')
+        p = next(p for p in programs if p['id']==old['id'])
+        self.assertEqual(p['preferred_gps'],['가람PE','나래파트너스','다온PE'])
+        self.assertEqual(p['status'],'우선협상대상자');self.assertEqual(p['selected_gps'],[])
+        self.assertEqual(p['manager_list_sources']['preferred_gps'],preferred['url'])
+        self.assertEqual(p['commitment_amount_krw'],old['commitment_amount_krw'])
+        self.assertFalse([h for h in holds if h['stage']=='preferred_roster'])
+        bad = copy.deepcopy(preferred);bad['body'] += '\n최종 선정 완료';bad['sha256']=post._fingerprint(bad)
+        # Changed source must never overwrite an already attached roster.
+        result, errors = publish([original,bad],existing=[p],now='2026-11-07T00:00:00+09:00')
+        self.assertEqual(next(x for x in result if x['id']==old['id'])['preferred_gps'],p['preferred_gps'])
+        self.assertTrue([h for h in errors if h['stage']=='preferred_roster'])
+
     def test_single_track_per_fund_limit_is_visible_without_invented_total(self):
         program = publish([notice()])[0][0]
         program.update(per_fund_amount_krw=50_000_000_000, per_fund_qualifier='이내')

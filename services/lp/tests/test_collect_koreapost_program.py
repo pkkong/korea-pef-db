@@ -35,6 +35,51 @@ class KoreaPostReviewTests(unittest.TestCase):
         before, _ = project([self.notice], "2026-09-28T15:59:00+09:00")
         self.assertEqual(before[0]["status"], "모집 공고")
 
+    def preferred(self):
+        n={"source_id":"0041:98765", "url":post.BASE+"/board.es?mid=a10510000000&bid=0041&act=view&list_no=98765",
+           "title":"우체국금융 국내 블라인드 PEF 위탁운용사 선정 우선협상대상자 안내",
+           "date":"2026-10-23", "body":"2026년도 우체국금융 국내 블라인드 PEF 위탁운용사 우선협상대상자 선정 결과\n- 일반리그 : 가람PE, 나래파트너스(가나다 순)\n- 루키리그 : 다온PE (가나다 순)\n- 운용사 실사 및 투자심의회를 거쳐 최종 선정 예정",
+           "attachments":[],"attachment_hashes":{},"attachment_texts":{}}
+        n['sha256']=post._fingerprint(n)
+        return n
+
+    def test_automatic_preferred_roster_is_not_final_selection(self):
+        n=self.preferred(); before=copy.deepcopy(n)
+        p=post.extract_preferred(self.notice,n,checked_at="2026-11-07T00:00:00+09:00")
+        self.assertEqual(p['preferred_gps'],['가람PE','나래파트너스','다온PE'])
+        self.assertNotIn('selected_gps',p)
+        self.assertEqual(p['event']['type'],'우선협상대상자')
+        self.assertEqual(p['source_url'],n['url'])
+        self.assertEqual([r['league'] for r in p['rosters']],['일반리그','루키리그'])
+        programs,holds=project([self.notice,n],"2026-11-07T00:00:00+09:00")
+        self.assertEqual(programs,[])
+        self.assertTrue(holds)
+        self.assertEqual(n,before)
+
+    def test_preferred_rejects_changed_proof_business_date_and_roster(self):
+        mutations=[{'sha256':'0'*64},{'url':'https://evil.test/'},{'institution_id':'other'},
+                   {'date':'2026-09-01'},{'date':'2027-01-01'},
+                   {'attachments':['unread.pdf']},{'attachment_hashes':{'x':'a'*64}},
+                   {'title':'우체국금융 해외 블라인드 PEF 위탁운용사 선정 우선협상대상자 안내'}]
+        original=self.preferred()
+        for body in (original['body'].replace('2026','2025'),original['body'].replace('다온PE','가람PE'),
+                     original['body'].replace('루키리그','별도리그'),original['body'].replace('최종 선정 예정','최종 선정 완료')):
+            mutations.append({'body':body})
+        for change in mutations:
+            n={**original,**change}
+            if 'sha256' not in change:n['sha256']=post._fingerprint(n)
+            with self.subTest(change=change),self.assertRaises(ValueError):
+                post._automatic_followups(self.notice,[n],'2026-11-07T00:00:00+09:00')
+        with self.assertRaises(ValueError):post._automatic_followups(self.notice,[original,original],'2026-11-07T00:00:00+09:00')
+        with self.assertRaises(ValueError):post._automatic_followups(self.notice,[original],'2026-10-01T00:00:00+09:00')
+
+    def test_preferred_rechecks_recruitment_proof(self):
+        for field,value in [('sha256','0'*64),('url','https://evil.test/'),('date','2025-09-10')]:
+            source={**self.notice,field:value}
+            if field!='sha256':source['sha256']=post._fingerprint(source)
+            with self.subTest(field=field),self.assertRaises(ValueError):
+                post.extract_preferred(source,self.preferred(),checked_at='2026-11-07T00:00:00+09:00')
+
     def test_changed_source_attachment_or_quote_is_held(self):
         for change in ("body", "attachment", "quote"):
             changed = copy.deepcopy(self.notice)

@@ -305,6 +305,91 @@ def _deadline_passed(checked_at, deadline):
     return checked >= ending
 
 
+def extract_preferred(recruitment_notice, preferred_notice, *, checked_at=None):
+    """Pure independently checked pre-final roster; no registry or GP-ID mutation."""
+    for n in (recruitment_notice, preferred_notice):
+        if (any(n.get(k) in (True, 1, 'true', '1') for k in ('restricted', 'closed', 'owner_closed'))
+                or n.get('status') in ('restricted', 'closed', 'owner_closed')):
+            raise ValueError('Restricted preferred roster evidence')
+    source = recruitment_notice
+    ident = re.fullmatch(r"0041:([1-9][0-9]*)", source.get("source_id", ""))
+    if (not ident or source.get("institution_id", "koreapost") != "koreapost"
+            or source.get("url") != f"{BASE}/board.es?mid=a10510000000&bid=0041&act=view&list_no={ident[1]}"
+            or source.get("sha256") != _fingerprint(source)
+            or not source.get("body", "").strip()
+            or not re.search(r"위탁운용사\s*선정\s*공고", source.get("title", ""))
+            or re.search(r"재공고|정정|변경|취소", source["title"])):
+        raise ValueError("Unverified recruitment source")
+    datetime.strptime(source["date"], "%Y-%m-%d")
+    if set(re.findall(r"20\d{2}", source["title"])) != {source["date"][:4]}:
+        raise ValueError("Recruitment year mismatch")
+    items = _automatic_followups(source, [preferred_notice], checked_at or datetime.now(timezone.utc).isoformat())
+    item = items[0]
+    n = item["notice"]
+    return {"event": {"type": item["event"], "date": n["date"], "title": n["title"], "url": n["url"]},
+            "rosters": [{"league": league, "names": names, "source_url": n["url"], "source_sha256": n["sha256"]}
+                        for league, names in item["rosters"].items()],
+            "preferred_gps": item["names"], "source_url": n["url"]}
+
+
+def _automatic_followups(source, notices, checked_at):
+    """Recognize only plain same-business interim notices, never final winners."""
+    compact = lambda value: re.sub(r"\s+", "", value)
+    year = source["date"][:4]
+    stem = re.sub(r"^20\d{2}년(?:도)?", "", compact(source["title"]))
+    stem = stem.split("위탁운용사선정공고", 1)[0]
+    if not re.fullmatch(r"(?:우체국금융|우체국예금|우정사업본부)국내블라인드PEF", stem):
+        raise ValueError("Unsupported recruitment identity")
+    ceiling = datetime.fromisoformat(checked_at.replace("Z", "+00:00")).date()
+    results = []
+    seen = set()
+    for n in notices:
+        ident = n.get("source_id", "")
+        match = re.fullmatch(r"0041:([1-9][0-9]*)", ident)
+        expected = f"{BASE}/board.es?mid=a10510000000&bid=0041&act=view&list_no={match[1]}" if match else None
+        if (not match or n.get("url") != expected or n.get("institution_id", "koreapost") != "koreapost"
+                or n.get("sha256") != _fingerprint(n)
+                or any(n.get(k) for k in ("attachments", "attachment_hashes", "attachment_texts"))):
+            raise ValueError("Unverified followup source")
+        day = datetime.strptime(n["date"], "%Y-%m-%d").date()
+        if n["date"][:4] != year or n["date"] <= source["date"] or day > ceiling:
+            raise ValueError("Followup date outside recruitment sequence")
+        title = compact(n["title"])
+        years = re.findall(r"20\d{2}", n["title"] + " " + n["body"])
+        if not years or set(years) != {year}:
+            raise ValueError("Followup year unclear")
+        title = re.sub(r"^20\d{2}년(?:도)?", "", title)
+        body = compact(n["body"])
+        if stem not in body or re.search(r"취소|정정|변경|재공고|해외|공동투자|VC|벤처", n["title"] + n["body"], re.I):
+            raise ValueError("Different or changed followup business")
+        if title == stem + "위탁운용사선정우선협상대상자안내":
+            event = "우선협상대상자"
+            if ("우선협상대상자" not in body or "최종선정예정" not in body
+                    or re.search(r'최종선정(?:완료|결과|확정)|조건부|예비대상', body)):
+                raise ValueError("Pre-final status unclear")
+            rosters = {}
+            for line in n["body"].splitlines():
+                m = re.fullmatch(r"\s*[-•ㅇ]?\s*(일반리그|루키리그)\s*[:：]\s*(.+?)\s*", line)
+                if not m:
+                    if "리그" in line: raise ValueError("Unrecognized league row")
+                    continue
+                if m[1] in rosters: raise ValueError("Duplicate league")
+                value = re.sub(r"\s*\(가나다\s*순\)\s*$", "", m[2])
+                names = [name.strip() for name in value.split(",")]
+                if not names or any(not re.fullmatch(r"[가-힣A-Za-z0-9][가-힣A-Za-z0-9 .&·-]{0,79}", name) for name in names):
+                    raise ValueError("Ambiguous manager names")
+                rosters[m[1]] = names
+            if set(rosters) != {"일반리그", "루키리그"}: raise ValueError("Missing league roster")
+            names = rosters["일반리그"] + rosters["루키리그"]
+            if len({compact(name).casefold() for name in names}) != len(names): raise ValueError("Duplicate preferred manager")
+        else:
+            raise ValueError("Unrecognized automatic followup stage")
+        if event in seen: raise ValueError("Conflicting followup notices")
+        seen.add(event)
+        results.append({"notice": n, "event": event, "names": names, "rosters": rosters})
+    return sorted(results, key=lambda item: item["notice"]["date"])
+
+
 def project(notices: list[dict], checked_at: str) -> tuple[list[dict], list[dict]]:
     """Recheck live evidence against the reviewed source, never trust a payload."""
     recipe = json.loads(REGISTRY.read_text())

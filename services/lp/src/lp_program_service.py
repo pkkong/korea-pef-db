@@ -27,6 +27,13 @@ def validate(data):
                 raise ValueError('GP selections require source and asset scope')
             if gp['source_url'] not in {e['url'] for e in p['events'] if e['type'] == '최종 선정'}:
                 raise ValueError('Selected GP must link to this program final result event')
+        if p.get('preferred_gps'):
+            names = p['preferred_gps']
+            origin = p.get('manager_list_sources', {}).get('preferred_gps')
+            if (not isinstance(names, list) or not all(isinstance(n, str) and n.strip() for n in names)
+                    or len(names) != len(set(names)) or origin not in {
+                        e['url'] for e in p['events'] if e['type'] == '우선협상대상자'}):
+                raise ValueError('Preferred bidders require a distinct sourced preferred stage')
         for e in p['events']:
             date.fromisoformat(e['date'])
             if e['date'] > data['as_of']:
@@ -51,6 +58,12 @@ def assert_selected_gp_history(before, after):
         for gp in previous.get('selected_gps', []):
             if not any(all(candidate.get(key) == value for key, value in gp.items()) for candidate in selections):
                 raise ValueError('Existing selected GP evidence changed or disappeared')
+        if previous.get('preferred_gps'):
+            updated = current[previous['id']]
+            if (not set(previous['preferred_gps']) <= set(updated.get('preferred_gps', []))
+                    or previous.get('manager_list_sources', {}).get('preferred_gps') !=
+                    updated.get('manager_list_sources', {}).get('preferred_gps')):
+                raise ValueError('Existing preferred bidder evidence changed or disappeared')
 
 def deadline_label(value):
     return str(value).replace('T', ' ').replace('+09:00', '') if value else '원문 확인 필요'
@@ -112,7 +125,7 @@ def build(data, out):
     except ImportError:
         from lp_program_detail import render_detail_body
     for p in programs:
-        (out/f'program-{p["id"]}.html').write_text(shell(p['title'], render_detail_body(p), as_of))
+        (out/f'program-{p["id"]}.html').write_text(shell(p['title'], render_detail_body(p, as_of), as_of))
     for key,group in institutions.items():
         title=group[0]['institution_name']
         body=f'<a href="index.html">← 출자사업</a><header><div class="eyebrow">출자기관</div><h1>{h(title)}</h1><p>연결된 출자사업 {len(group)}건</p></header>'+''.join(row(p) for p in group)
