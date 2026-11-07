@@ -155,10 +155,6 @@ def public_guard(conn):
 
 
 def persist(conn, history, report, *, wrap_json=None):
-    try:
-        from .publish_lp_programs import document_hash, store_documents
-    except ImportError:
-        from publish_lp_programs import document_hash, store_documents
     validate_report(history, report)
     history=effective_history(history,report)
     if report['holds'] or not report['batches']:
@@ -177,6 +173,23 @@ def persist(conn, history, report, *, wrap_json=None):
     preceding = [n for n in report['documents'] if n['source_id'] not in produced]
     if batch['planned_ids'] != [r['source_id'] for r in plan(history,preceding)['rows']]:
         raise ValueError('Historical body batch does not follow the automatic queue')
+    result = retain_documents(conn, documents, verified, wrap_json=wrap_json)
+    return {**result, 'reused_database_documents':len(reused),
+            'attachment_completion':'pending', 'source_history_complete':False,'published':False}
+
+
+def retain_documents(conn, documents, verified, *, wrap_json=None):
+    """Append independently validated evidence; never change reviews/publication.
+
+    Callers must replay their source-specific raw proof and automatic queue
+    before entering this shared transaction. Existing versions are immutable.
+    """
+    try:
+        from .publish_lp_programs import document_hash, store_documents
+    except ImportError:
+        from publish_lp_programs import document_hash, store_documents
+    if not 0 <= len(documents) <= len(verified) <= 4:
+        raise ValueError('Unbounded historical evidence retention')
     if wrap_json is None:
         from psycopg.types.json import Jsonb
         wrap_json = Jsonb
@@ -198,10 +211,9 @@ def persist(conn, history, report, *, wrap_json=None):
         raise ValueError('Public state/review or document count changed unexpectedly')
     return {'documents_before':before_count,'documents_after':after_count,
             'new_document_versions':after_count-before_count,'verified_batch_documents':len(verified),
-            'submitted_documents':stored,'reused_database_documents':len(reused),
+            'submitted_documents':stored,
             'before':before,'after':after,'public_state_preserved':True,
-            'source_urls':[n['url'] for n in documents], 'attachment_completion':'pending',
-            'source_history_complete':False,'published':False}
+            'source_urls':[n['url'] for n in documents]}
 
 
 def main():
