@@ -1,0 +1,73 @@
+name: Discover KTCU historical listings
+on:
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: Initial fixed window end (YYYY-MM-DD); omit when resuming
+        type: string
+        required: false
+      resume_run:
+        description: Successful main KTCU historical listing run to continue
+        type: string
+        required: false
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  discover:
+    if: github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify saved KTCU cursor provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESUME_RUN: ${{ inputs.resume_run }}
+          AS_OF: ${{ inputs.as_of }}
+        run: |
+          python3 - <<'PY'
+          import datetime,json,os,subprocess
+          run=os.environ['RESUME_RUN'];end=os.environ['AS_OF']
+          assert not(run and end),'Do not change a resumed historical window'
+          if end: assert datetime.date.fromisoformat(end).isoformat()==end and end>='2023-01-01'
+          if run:
+              assert run.isascii() and run.isdecimal() and int(run)>0,'Numeric Actions run required'
+              source=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{run}"]))
+              assert source['repository']['full_name']==os.environ['GH_REPO'] and source['head_branch']=='main'
+              assert source['path']=='.github/workflows/discover-ktcu-history.yml' and source['event']=='workflow_dispatch'
+              assert source['status']=='completed' and source['conclusion']=='success','Inspect active/failed source before resuming'
+              print(json.dumps({k:source[k] for k in ('id','head_sha','conclusion')}))
+          PY
+      - uses: actions/download-artifact@v4
+        if: inputs.resume_run != ''
+        with:
+          name: ktcu-history-listings
+          run-id: ${{ inputs.resume_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/ktcu-history-parent
+      - name: Test fixed dates, all searches, overlap and failure evidence
+        run: python3 -m unittest services.lp.tests.test_discover_ktcu_history
+      - name: Discover at most four official listing requests without DB or detail access
+        env:
+          RESUME_RUN: ${{ inputs.resume_run }}
+          AS_OF: ${{ inputs.as_of }}
+        run: |
+          args=(--output-dir /tmp/ktcu-history-result)
+          if [ -n "$RESUME_RUN" ]; then args+=(--state /tmp/ktcu-history-parent/history-state.json);
+          elif [ -n "$AS_OF" ]; then args+=(--as-of "$AS_OF"); fi
+          python3 services/lp/src/discover_ktcu_history.py "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ktcu-history-listings
+          path: /tmp/ktcu-history-result/
+          retention-days: 30
+          if-no-files-found: warn
