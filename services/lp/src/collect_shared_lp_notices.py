@@ -211,7 +211,22 @@ def classify_scope(title,body):
     offered = ' '.join(offer_windows)
     pe = title_pe or bool(re.search(pe_pattern,offered,re.I))
     blind = title_blind or bool(re.search(r'(?:운용방식|선정유형|선정대상|펀드유형)[\s:：·ㆍ-]{0,15}(?:국내\s*)?블라인드|블라인드\s*(?:PEF?|펀드).{0,35}(?:선정|모집|공고)',offered,re.I))
-    domestic = '국내' in title or '국내' in offered
+    # Manager location/registration describes eligibility, not investment geography.
+    geography = re.sub(
+        r'(?:사무소|본점|본사|소재지)[^\n•▪]{0,60}국내[^\n•▪]{0,40}'
+        r'|국내\s*(?:에\s*)?(?:소재|설립|등록)[^\n•▪]{0,40}(?:운용사|법인|사무소)',
+        '', offered)
+    # Outside offer windows accept only an explicit current investment mandate,
+    # never an isolated domestic word or a manager's domicile definition.
+    mandate = False
+    for line in body.splitlines():
+        if re.search(r'과거|기존|선행|직전|경력|이력|제외|금지|불가|아니|않', line):
+            continue
+        if re.search(r'(?:펀드\s*규모|약정\s*총액|출자\s*약정액)[^\n]{0,40}'
+                     r'\d+(?:\.\d+)?\s*%\s*이상[^\n]{0,20}'
+                     r'국내\s*(?:소재\s*)?기업에\s*투자', line):
+            mandate = True
+    domestic = '국내' in title or '국내' in geography or mandate
     mixed_fields=[]
     for m in re.finditer(r'PE\s*부문.{0,100}VC\s*부문',body,re.I):
         window=body[max(0,m.start()-40):m.end()+40]

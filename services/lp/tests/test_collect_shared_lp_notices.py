@@ -347,6 +347,17 @@ class SharedCollectionTests(unittest.TestCase):
         self.assertEqual(classify_scope('해외 PE 블라인드 선정',''),'outside')
         self.assertEqual(classify_scope('국내 PE 블라인드 선정',''),'pe_blind')
 
+    def test_manager_office_is_not_domestic_investment(self):
+        title='PEF 블라인드 펀드 위탁운용사 선정'
+        office='선정대상\n • 사무소의 소재지가 국내인 운용사'
+        self.assertEqual(classify_scope(title, office),'needs_confirmation')
+        mandate='\n'+'별도 조건\n'*40+'• 펀드 규모의 67% 이상을 국내 소재 기업에 투자'
+        self.assertEqual(classify_scope(title, office+mandate),'pe_blind')
+        self.assertEqual(classify_scope('PE·VC 블라인드 선정', office+mandate),'mixed_pe_blind')
+        self.assertEqual(classify_scope('해외 PE 블라인드 선정', office+mandate),'outside')
+        self.assertEqual(classify_scope(title, office+mandate+'하지 않음'),'needs_confirmation')
+        self.assertEqual(classify_scope(title, office+'\n'+'별도 조건\n'*40+'국내 소재 기업 정의'),'needs_confirmation')
+
     def test_prior_fund_blind_requirement_is_not_offered_scope(self):
         self.assertEqual(classify_scope('국내 PEF 모집', '기존 블라인드펀드 소진율 60% 이상인 운용사'), 'needs_confirmation')
         self.assertEqual(classify_scope('국내 PEF 모집', '최근 블라인드펀드 GP 모집 이력 보유자만 지원 가능'), 'needs_confirmation')
