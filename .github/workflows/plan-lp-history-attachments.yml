@@ -1,0 +1,75 @@
+name: Plan LP historical attachments
+on:
+  workflow_dispatch:
+    inputs:
+      listing_run:
+        description: Successful completed KGrowth historical listing run
+        type: string
+        required: true
+      body_run:
+        description: Successful historical body run, including a partial body cursor
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  plan:
+    if: github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify retained historical artifact provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          LISTING_RUN: ${{ inputs.listing_run }}
+          BODY_RUN: ${{ inputs.body_run }}
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess
+          from pathlib import Path
+          sources={}
+          for key,workflow in (('LISTING_RUN','discover-lp-history.yml'),('BODY_RUN','collect-lp-history-bodies.yml')):
+              ident=os.environ[key]
+              assert ident.isascii() and ident.isdecimal() and int(ident)>0,'Numeric Actions run required'
+              run=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{ident}"]))
+              assert run['repository']['full_name']==os.environ['GH_REPO'] and run['head_branch']=='main'
+              assert run['path']=='.github/workflows/'+workflow and run['event']=='workflow_dispatch'
+              assert run['status']=='completed' and run['conclusion']=='success','Use successful completed source evidence'
+              sources[key]={k:run[k] for k in ('id','path','head_sha','conclusion')}
+          out=Path('/tmp/lp-history-file-plan');out.mkdir()
+          (out/'provenance.json').write_text(json.dumps(sources))
+          print(json.dumps(sources))
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: lp-history-listings
+          run-id: ${{ inputs.listing_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-listing
+      - uses: actions/download-artifact@v4
+        with:
+          name: lp-history-bodies
+          run-id: ${{ inputs.body_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-bodies
+      - name: Test partial body proof, original labels and file identity
+        run: python3 -m unittest services.lp.tests.test_lp_kgrowth_history_attachment_queue
+      - name: Replay source bytes and plan at most four files without official HTTP
+        run: |
+          python3 services/lp/src/lp_kgrowth_history_attachment_queue.py --listing-state /tmp/lp-history-listing/history-state.json --body-state /tmp/lp-history-bodies/body-state.json --output /tmp/lp-history-file-plan/plan.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-history-attachment-plan
+          path: /tmp/lp-history-file-plan
+          retention-days: 30
+          if-no-files-found: warn
