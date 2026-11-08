@@ -22,6 +22,16 @@ def saved():
             'status': 'source_error', 'queries': queries}], 'holds': holds}
 
 
+def empty_response(url):
+    term = parse_qs(urlsplit(url).query, keep_blank_values=True)['searchWrd'][0]
+    html = small(0, True)
+    if '/bid/' in url:
+        html = html.replace('/notice/notice', '/bid/bid').replace('000000000012', '000000000019')
+    html = html.replace('name="searchWrd" value=""', 'name="searchWrd" value="'+term+'"')
+    if term: html = html.replace('<option value="1">', '<option value="1" selected>')
+    return html.encode()
+
+
 class FailedInventoryDiagnosticTests(unittest.TestCase):
     def test_only_two_failed_queries_are_selected_healthy_query_untouched(self):
         report = saved(); before = copy.deepcopy(report)
@@ -51,6 +61,40 @@ class FailedInventoryDiagnosticTests(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertEqual(result['attempted_queries'], 1)
         self.assertEqual(result['unprobed_queries'], 6)
+
+    def test_resume_reuses_verified_bytes_and_finishes_without_duplicate_requests(self):
+        report = saved(); calls = []
+        def fetch(url):
+            self.assertNotIn(url, calls); calls.append(url)
+            return empty_response(url)
+        first = probe.diagnose(report, fetch=fetch)
+        second = probe.diagnose(report, fetch=fetch, resume=first)
+        self.assertEqual(second['reused_queries'], 2)
+        self.assertEqual(second['new_queries'], 2)
+        self.assertEqual(second['unprobed_queries'], 3)
+        third = probe.diagnose(report, fetch=fetch, resume=second)
+        final = probe.diagnose(report, fetch=fetch, resume=third)
+        no_network = Mock(side_effect=AssertionError('completed requests must not repeat'))
+        repeated = probe.diagnose(report, fetch=no_network, resume=final)
+        self.assertEqual(len(calls), 7)
+        self.assertEqual(final['new_queries'], 1)
+        self.assertEqual(repeated['new_queries'], 0)
+        self.assertEqual(repeated['unprobed_queries'], 0)
+        self.assertEqual(repeated['results'], final['results'])
+        self.assertFalse(repeated['audit_recovered'])
+        no_network.assert_not_called()
+
+    def test_changed_response_or_failed_progress_cannot_be_retried_via_resume(self):
+        report = saved(); prior = probe.diagnose(report, fetch=empty_response)
+        for mutate in [lambda p: p.update(status='error'),
+                       lambda p: p['results'][0].update(sha256='0'*64),
+                       lambda p: p['results'].reverse(),
+                       lambda p: p.update(inventory_sha256='0'*64),
+                       lambda p: p['results'][0].update(row_count=10)]:
+            bad = copy.deepcopy(prior); mutate(bad); fetch = Mock()
+            with self.subTest(mutation=mutate), self.assertRaises(ValueError):
+                probe.diagnose(report, fetch=fetch, resume=bad)
+            fetch.assert_not_called()
 
     def test_invalid_or_unobserved_targets_fail_before_http(self):
         mutations = [lambda r: r['holds'][0].update(url='https://evil.invalid/'),

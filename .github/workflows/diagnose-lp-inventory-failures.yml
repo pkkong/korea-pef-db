@@ -6,6 +6,10 @@ on:
         description: Completed failed weekly inventory from main within 48 hours; at most two failed NH lists
         required: true
         type: string
+      diagnostic_run:
+        description: Optional successful diagnostic for the same inventory; reuse verified responses
+        required: false
+        type: string
 permissions:
   contents: read
   actions: read
@@ -24,6 +28,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           LP_INVENTORY_RUN: ${{ inputs.inventory_run }}
+          LP_DIAGNOSTIC_RUN: ${{ inputs.diagnostic_run }}
         run: |
           python3 - <<'PY'
           import datetime,json,os,subprocess
@@ -39,6 +44,17 @@ jobs:
           assert datetime.timedelta(0)<=datetime.datetime.now(datetime.timezone.utc)-created<=datetime.timedelta(hours=48)
           Path('/tmp/lp-inventory-diagnostic').mkdir(exist_ok=True)
           Path('/tmp/lp-inventory-diagnostic/provenance.json').write_text(json.dumps({k:run[k] for k in ('id','head_sha','conclusion','created_at')}))
+          previous=os.environ.get('LP_DIAGNOSTIC_RUN','')
+          if previous:
+              assert previous.isascii() and previous.isdecimal(), 'Numeric diagnostic run required'
+              prior=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{previous}"]))
+              assert prior['repository']['full_name']==os.environ['GH_REPO']
+              assert prior['path']=='.github/workflows/diagnose-lp-inventory-failures.yml'
+              assert prior['head_branch']=='main' and prior['event']=='workflow_dispatch'
+              assert prior['status']=='completed' and prior['conclusion']=='success'
+              stamp=datetime.datetime.fromisoformat(prior['created_at'].replace('Z','+00:00'))
+              assert created<=stamp<=datetime.datetime.now(datetime.timezone.utc)
+              Path('/tmp/lp-inventory-diagnostic/resume-provenance.json').write_text(json.dumps({k:prior[k] for k in ('id','head_sha','conclusion','created_at')}))
           PY
       - uses: actions/download-artifact@v4
         with:
@@ -46,16 +62,41 @@ jobs:
           run-id: ${{ inputs.inventory_run }}
           github-token: ${{ github.token }}
           path: /tmp/lp-inventory-source
+      - uses: actions/download-artifact@v4
+        if: inputs.diagnostic_run != ''
+        with:
+          name: lp-inventory-failure-diagnostic
+          run-id: ${{ inputs.diagnostic_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-inventory-resume
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Verify bounded planner without source HTTP
+        env:
+          LP_INVENTORY_RUN: ${{ inputs.inventory_run }}
+          LP_DIAGNOSTIC_RUN: ${{ inputs.diagnostic_run }}
         run: |
           python3 -m unittest services.lp.tests.test_diagnose_lp_inventory_failures
-          python3 services/lp/src/diagnose_lp_inventory_failures.py --inventory /tmp/lp-inventory-source/lp-official-inventory.json --plan-only --output /tmp/lp-inventory-diagnostic/plan.json
+          resume_args=()
+          if [ -n "$LP_DIAGNOSTIC_RUN" ]; then
+            python3 - <<'PY'
+          import json,os
+          prior=json.load(open('/tmp/lp-inventory-resume/provenance.json'))
+          assert str(prior['id'])==os.environ['LP_INVENTORY_RUN'], 'Diagnostic belongs to another inventory'
+          PY
+            resume_args=(--resume /tmp/lp-inventory-resume/result.json)
+          fi
+          python3 services/lp/src/diagnose_lp_inventory_failures.py --inventory /tmp/lp-inventory-source/lp-official-inventory.json "${resume_args[@]}" --plan-only --output /tmp/lp-inventory-diagnostic/plan.json
       - name: Diagnose only observed failed lists without publication
+        env:
+          LP_DIAGNOSTIC_RUN: ${{ inputs.diagnostic_run }}
         run: |
-          python3 services/lp/src/diagnose_lp_inventory_failures.py --inventory /tmp/lp-inventory-source/lp-official-inventory.json --output /tmp/lp-inventory-diagnostic/result.json
+          resume_args=()
+          if [ -n "$LP_DIAGNOSTIC_RUN" ]; then
+            resume_args=(--resume /tmp/lp-inventory-resume/result.json)
+          fi
+          python3 services/lp/src/diagnose_lp_inventory_failures.py --inventory /tmp/lp-inventory-source/lp-official-inventory.json "${resume_args[@]}" --output /tmp/lp-inventory-diagnostic/result.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

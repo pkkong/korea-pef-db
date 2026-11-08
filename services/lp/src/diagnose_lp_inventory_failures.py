@@ -1,6 +1,7 @@
 """Probe at most two saved failed NH listing requests; never repair an audit."""
 import argparse
 import base64
+import copy
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -12,7 +13,7 @@ except ImportError:
     import audit_lp_official_inventory as inventory
 
 
-def failure_plan(report, *, limit=2):
+def failure_plan(report, *, limit=2, resume=None):
     """Accept only the observed first-page NH failures, not arbitrary URLs."""
     if type(limit) is not int or not 1 <= limit <= 2:
         raise ValueError('diagnostic request limit must be one or two')
@@ -50,17 +51,47 @@ def failure_plan(report, *, limit=2):
                          'original_error': failed[url]['error']})
     if not requests or {r['url'] for r in requests} != set(failed):
         raise ValueError('unmatched saved NH failures')
+    reused = []
+    if resume is not None:
+        if (resume.get('kind') != 'lp_failed_listing_diagnostic_v1' or resume.get('status') != 'ok'
+                or resume.get('original_audit_holds') != report['holds']
+                or resume.get('audit_recovered') is not False or resume.get('publication') is not False):
+            raise ValueError('only successful diagnostics of the same failures may resume')
+        digest = hashlib.sha256(json.dumps(report, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        if resume.get('inventory_sha256', digest) != digest:
+            raise ValueError('diagnostic inventory changed')
+        reused = resume.get('results')
+        if (not isinstance(reused, list) or not reused or len(reused) > len(requests)
+                or resume.get('attempted_queries') != len(reused)):
+            raise ValueError('invalid diagnostic progress')
+        for expected, observed in zip(requests, reused):
+            if (any(observed.get(k) != value for k, value in expected.items())
+                    or observed.get('status') != 'ok'):
+                raise ValueError('diagnostic query order or status changed')
+            raw = base64.b64decode(observed['raw_base64'], validate=True)
+            if (len(raw) > inventory.boards.MAX_BYTES or len(raw) != observed['bytes']
+                    or hashlib.sha256(raw).hexdigest() != observed['sha256']):
+                raise ValueError('diagnostic response proof changed')
+            rows = inventory.boards.nh.parse_listing(inventory.boards.decode_html(raw), expected['url'], config)
+            if len(rows) != observed['row_count']:
+                raise ValueError('diagnostic row count changed')
+        reused = copy.deepcopy(reused)
+    pending = requests[len(reused):]
     return {'institution_id': 'nh_central', 'failed_queries': len(requests),
-            'requests': requests[:limit], 'unprobed_queries': len(requests)-min(limit, len(requests))}
+            'requests': pending[:limit], 'reused_results': reused,
+            'unprobed_queries': len(pending)-min(limit, len(pending))}
 
 
-def diagnose(report, *, fetch=None, limit=2):
-    plan = failure_plan(report, limit=limit)
+def diagnose(report, *, fetch=None, limit=2, resume=None):
+    plan = failure_plan(report, limit=limit, resume=resume)
+    reused = plan.pop('reused_results')
     config = inventory.boards.load_configs(include_pending=True)['nh_central']
     fetch = fetch or inventory.boards.Session(config)
     result = {**plan, 'kind': 'lp_failed_listing_diagnostic_v1',
               'checked_at': datetime.now(timezone.utc).isoformat(),
-              'original_audit_holds': report['holds'], 'results': [],
+              'inventory_sha256': hashlib.sha256(json.dumps(report, sort_keys=True, ensure_ascii=False).encode()).hexdigest(),
+              'original_audit_holds': report['holds'], 'results': reused,
+              'reused_queries': len(reused),
               'audit_recovered': False, 'publication': False}
     for request in plan['requests']:
         observed = dict(request)
@@ -81,6 +112,7 @@ def diagnose(report, *, fetch=None, limit=2):
         if observed['status'] == 'error':
             break
     result['attempted_queries'] = len(result['results'])
+    result['new_queries'] = result['attempted_queries']-result['reused_queries']
     result['unprobed_queries'] = plan['failed_queries']-result['attempted_queries']
     result['status'] = 'ok' if all(r['status'] == 'ok' for r in result['results']) else 'error'
     return result
@@ -91,13 +123,15 @@ def main():
     parser.add_argument('--inventory', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--plan-only', action='store_true')
+    parser.add_argument('--resume', type=Path)
     args = parser.parse_args()
     report = json.loads(args.inventory.read_text())
-    result = failure_plan(report) if args.plan_only else diagnose(report)
+    resume = json.loads(args.resume.read_text()) if args.resume else None
+    result = failure_plan(report, resume=resume) if args.plan_only else diagnose(report, resume=resume)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2)+'\n')
     print(json.dumps({k: v for k, v in result.items()
-                      if k not in {'requests', 'results', 'original_audit_holds'}}, ensure_ascii=False))
+                      if k not in {'requests', 'results', 'reused_results', 'original_audit_holds'}}, ensure_ascii=False))
     if result.get('status') == 'error':
         raise SystemExit('Failed listing diagnosis still has a source error; original audit unchanged')
 
