@@ -6,7 +6,7 @@ from unittest.mock import Mock
 from urllib.parse import parse_qs, urlsplit
 
 from services.lp.src import diagnose_lp_inventory_failures as probe
-from services.lp.tests.test_lp_board_adapter_nh import small
+from services.lp.tests.test_lp_board_adapter_nh import small, fixture
 
 
 def saved():
@@ -30,6 +30,25 @@ def empty_response(url):
     html = html.replace('name="searchWrd" value=""', 'name="searchWrd" value="'+term+'"')
     if term: html = html.replace('<option value="1">', '<option value="1" selected>')
     return html.encode()
+
+
+def paginated_saved():
+    report = saved()
+    config = probe.inventory.boards.load_configs(include_pending=True)['nh_central']
+    first = report['institutions'][0]['queries'][0]
+    url = probe.inventory.page_url('nh_central', config, '', 1, report['window']['start'],
+                                    report['window']['end'], listing_url=first['listing_url'])
+    html = empty_response(url).decode()
+    report['receipts'] = [{'institution_id': 'nh_central', 'url': url, 'html': html,
+        'sha256': hashlib.sha256(html.encode()).hexdigest(), 'page': 1, 'row_count': 0}]
+    def first_page(url):
+        term = parse_qs(urlsplit(url).query, keep_blank_values=True)['searchWrd'][0]
+        if '/bid/' in url and term == '펀드':
+            return fixture('bid', total=11, term=term).replace('2099.03.04', '2026.10.12').encode()
+        return empty_response(url)
+    progress = None
+    for _ in range(4): progress = probe.diagnose(report, fetch=first_page, resume=progress)
+    return report, progress
 
 
 class FailedInventoryDiagnosticTests(unittest.TestCase):
@@ -116,6 +135,44 @@ class FailedInventoryDiagnosticTests(unittest.TestCase):
         self.assertNotIn('row_count', result['results'][0])
         self.assertEqual(hashlib.sha256(base64.b64decode(result['results'][0]['raw_base64'])).hexdigest(),
                          result['results'][0]['sha256'])
+
+    def test_followup_is_discovered_from_cached_pager_and_complete_replay_is_zero_http(self):
+        report, diagnostic = paginated_saved(); calls = []
+        def fetch(url):
+            calls.append(url)
+            self.assertEqual(parse_qs(urlsplit(url).query)['pageIndex'], ['2'])
+            self.assertIn('/bid/', url)
+            return fixture('bid', page=2, total=11, term='펀드').replace('2099.03.04', '2026.10.12').encode()
+        plan = probe.recover_boundaries(report, diagnostic, fetch=Mock(), plan_only=True)
+        self.assertEqual(len(plan['pending_urls']), 1)
+        self.assertEqual(plan['new_queries'], 0)
+        result = probe.recover_boundaries(report, diagnostic, fetch=fetch)
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(result['nh_listing_boundaries_complete'])
+        self.assertFalse(result['audit_recovered']); self.assertFalse(result['archive_comparison_performed'])
+        never = Mock(side_effect=AssertionError('no repeated source HTTP'))
+        repeated = probe.recover_boundaries(report, result, fetch=never)
+        never.assert_not_called()
+        self.assertEqual(repeated['new_queries'], 0)
+        self.assertEqual(repeated['followups'], result['followups'])
+
+    def test_followup_changed_pagination_and_source_outage_remain_failures(self):
+        report, diagnostic = paginated_saved()
+        for fetch in [Mock(side_effect=OSError('still unavailable')),
+                      lambda _: fixture('bid', page=2, total=12, term='펀드').replace('2099.03.04', '2026.10.12').encode()]:
+            failed = probe.recover_boundaries(report, diagnostic, fetch=fetch)
+            self.assertEqual(failed['status'], 'error')
+            self.assertEqual(failed['new_queries'], 1)
+            self.assertFalse(failed['nh_listing_boundaries_complete'])
+            never = Mock()
+            with self.assertRaises(ValueError): probe.recover_boundaries(report, failed, fetch=never)
+            never.assert_not_called()
+
+    def test_followup_does_not_fetch_when_healthy_receipt_or_diagnostic_is_changed(self):
+        report, diagnostic = paginated_saved(); report['receipts'][0]['sha256'] = '0'*64
+        never = Mock()
+        with self.assertRaises(ValueError): probe.recover_boundaries(report, diagnostic, fetch=never)
+        never.assert_not_called()
 
 
 if __name__ == '__main__':

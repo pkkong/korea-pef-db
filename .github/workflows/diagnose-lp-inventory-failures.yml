@@ -10,6 +10,10 @@ on:
         description: Optional successful diagnostic for the same inventory; reuse verified responses
         required: false
         type: string
+      followup_boundaries:
+        description: Replay completed diagnostics and fetch only observed missing next pages (maximum two)
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -29,6 +33,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           LP_INVENTORY_RUN: ${{ inputs.inventory_run }}
           LP_DIAGNOSTIC_RUN: ${{ inputs.diagnostic_run }}
+          LP_FOLLOWUP_BOUNDARIES: ${{ inputs.followup_boundaries || 'false' }}
         run: |
           python3 - <<'PY'
           import datetime,json,os,subprocess
@@ -45,6 +50,7 @@ jobs:
           Path('/tmp/lp-inventory-diagnostic').mkdir(exist_ok=True)
           Path('/tmp/lp-inventory-diagnostic/provenance.json').write_text(json.dumps({k:run[k] for k in ('id','head_sha','conclusion','created_at')}))
           previous=os.environ.get('LP_DIAGNOSTIC_RUN','')
+          assert os.environ['LP_FOLLOWUP_BOUNDARIES']!='true' or previous, 'Followup requires a completed diagnostic'
           if previous:
               assert previous.isascii() and previous.isdecimal(), 'Numeric diagnostic run required'
               prior=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{previous}"]))
@@ -76,6 +82,7 @@ jobs:
         env:
           LP_INVENTORY_RUN: ${{ inputs.inventory_run }}
           LP_DIAGNOSTIC_RUN: ${{ inputs.diagnostic_run }}
+          LP_FOLLOWUP_BOUNDARIES: ${{ inputs.followup_boundaries || 'false' }}
         run: |
           python3 -m unittest services.lp.tests.test_diagnose_lp_inventory_failures
           resume_args=()
@@ -87,16 +94,21 @@ jobs:
           PY
             resume_args=(--resume /tmp/lp-inventory-resume/result.json)
           fi
-          python3 services/lp/src/diagnose_lp_inventory_failures.py --inventory /tmp/lp-inventory-source/lp-official-inventory.json "${resume_args[@]}" --plan-only --output /tmp/lp-inventory-diagnostic/plan.json
+          mode_args=()
+          if [ "$LP_FOLLOWUP_BOUNDARIES" = 'true' ]; then mode_args=(--followup-boundaries); fi
+          python3 services/lp/src/diagnose_lp_inventory_failures.py --inventory /tmp/lp-inventory-source/lp-official-inventory.json "${resume_args[@]}" "${mode_args[@]}" --plan-only --output /tmp/lp-inventory-diagnostic/plan.json
       - name: Diagnose only observed failed lists without publication
         env:
           LP_DIAGNOSTIC_RUN: ${{ inputs.diagnostic_run }}
+          LP_FOLLOWUP_BOUNDARIES: ${{ inputs.followup_boundaries || 'false' }}
         run: |
           resume_args=()
           if [ -n "$LP_DIAGNOSTIC_RUN" ]; then
             resume_args=(--resume /tmp/lp-inventory-resume/result.json)
           fi
-          python3 services/lp/src/diagnose_lp_inventory_failures.py --inventory /tmp/lp-inventory-source/lp-official-inventory.json "${resume_args[@]}" --output /tmp/lp-inventory-diagnostic/result.json
+          mode_args=()
+          if [ "$LP_FOLLOWUP_BOUNDARIES" = 'true' ]; then mode_args=(--followup-boundaries); fi
+          python3 services/lp/src/diagnose_lp_inventory_failures.py --inventory /tmp/lp-inventory-source/lp-official-inventory.json "${resume_args[@]}" "${mode_args[@]}" --output /tmp/lp-inventory-diagnostic/result.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
