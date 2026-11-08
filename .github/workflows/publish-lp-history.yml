@@ -78,7 +78,7 @@ jobs:
       - name: Install source decoders and database driver
         run: python3 -m pip install 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47'
       - name: Verify historical proof and preservation rules
-        run: python3 -m unittest services.lp.tests.test_prepare_lp_history_publication services.lp.tests.test_publish_lp_history
+        run: python3 -m unittest services.lp.tests.test_prepare_lp_history_publication services.lp.tests.test_publish_lp_history services.lp.tests.test_verify_lp_history_publication
       - name: Revalidate retained history and publish additions atomically
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -87,51 +87,7 @@ jobs:
           python3 services/lp/src/publish_lp_history.py --listing-state /tmp/lp-history-listing/history-state.json --body-state /tmp/lp-history-bodies/body-state.json --attachment-state /tmp/lp-history-attachments/attachment-state.json --provenance /tmp/lp-history-publication/provenance.json --output-dir /tmp/lp-history-publication
       - name: Verify public details, historical terms and access boundaries
         run: |
-          python3 - <<'PY'
-          import json,time,urllib.request
-          from pathlib import Path
-          root=Path('/tmp/lp-history-publication')
-          published=json.loads((root/'publication.json').read_text())
-          if not published['published']:
-              print('No new verified program; existing publication preserved')
-              raise SystemExit(0)
-          def read(path):
-              for attempt in range(3):
-                  try:
-                      with urllib.request.urlopen('https://kpef-lp.vercel.app/'+path,timeout=30) as response:
-                          text=response.read().decode()
-                          assert response.headers.get('X-LP-Data-Source')=='supabase'
-                          assert response.headers.get('X-LP-Run')==published['run_id']
-                          return text,dict(response.headers)
-                  except Exception:
-                      if attempt==2:raise
-                      time.sleep(5)
-          for ident in published['program_ids']:
-              page,_=read('program-'+ident+'.html?refresh=1')
-              assert '진행 일정' in page
-          for program in published['new_programs']:
-              page,_=read('program-'+program['id']+'.html')
-              assert not program['selected_gps']
-              for field in ('commitment_label','manager_count_label'):
-                  if program.get(field):assert program[field] in page
-              assert program['deadline'].replace('T',' ').replace('+09:00','') in page
-              planned=sum(s.get('status')=='planned' for s in program.get('schedule_stages',[]))
-              assert page.count('>예정일 경과<')==planned
-          index,headers=read('index.html?refresh=1')
-          assert headers.get('X-Robots-Tag')=='index, follow'
-          assert all('program-'+p+'.html' in index for p in published['new_program_ids'])
-          _,headers=read('review.html?refresh=1')
-          assert headers.get('X-Robots-Tag')=='noindex, nofollow'
-          assert headers.get('Cache-Control')=='no-store' and headers.get('X-Frame-Options')=='DENY'
-          with urllib.request.urlopen('https://kpef-lp.vercel.app/health.json?refresh=1',timeout=30) as response:
-              health=json.load(response)
-          assert health['status']=='ok' and health['data_source']=='supabase' and health['stale'] is False
-          assert health['run_id']==published['run_id']
-          (root/'public-verification.json').write_text(json.dumps({'run_id':published['run_id'],
-              'verified_programs':len(published['program_ids']),'new_program_ids':published['new_program_ids'],
-              'access_boundaries_verified':True,'health':health},ensure_ascii=False))
-          print('Verified historical publication and all public details:',published['run_id'])
-          PY
+          python3 services/lp/src/verify_lp_history_publication.py --publication /tmp/lp-history-publication/publication.json --output /tmp/lp-history-publication/public-verification.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
