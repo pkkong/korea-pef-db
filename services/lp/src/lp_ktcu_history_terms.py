@@ -74,7 +74,9 @@ def parse_offering(notice, raw, source_url, digest):
     amount, amount_limit = match(r'본회출자규모[•▪·:：-]*총(\d+(?:,\d{3})*)억원(이내)?', 'amount')
     count, count_limit = match(r'선정운용사수[•▪·:：-]*총(\d+)개사(이내)?', 'manager_count')
     amount, count = int(amount.replace(',', ''))*100_000_000, int(count)
-    match(r'(펀드규모의\d+(?:\.\d+)?%이상을국내소재기업에투자)', 'purpose')
+    percentage, = match(r'펀드규모의(\d+(?:\.\d+)?)%이상을국내소재기업에투자', 'purpose')
+    if not 0 < float(percentage) <= 100:
+        raise ValueError('KTCU domestic investment percentage invalid')
     timeline, = match(r'선정일정(.*?)※상기일정', 'timeline')
     announcement = match(r'(\d{1,2})월(\d{1,2})일블라인드pef위탁운용사선정공고', 'announcement', timeline)
     if date(year, *map(int, announcement)).isoformat() != notice['date']:

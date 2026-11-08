@@ -58,6 +58,8 @@ class KtcuHistoricalTermsTests(unittest.TestCase):
         for text in [TEXT+'선정 운용사 수 총 8개 사 이내',
                      TEXT.replace('접수 마감 : 4월 4일', '접수 마감 : 4월 5일'),
                      TEXT.replace('4월 초 ~ 4월 중', '4월 말 ~ 4월 초'),
+                     TEXT.replace('70%', '170%'),
+                     TEXT.replace('70%', '0%'),
                      TEXT.replace('펀드 규모의 70% 이상을 국내 소재 기업에 투자', '사무소 소재지가 국내인 운용사'),
                      TEXT.replace('7,000억원', '7,00억원')]:
             with self.subTest(text=text), self.assertRaises(ValueError):
