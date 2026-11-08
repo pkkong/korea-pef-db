@@ -47,6 +47,12 @@ def _readable(value):
 
 def extract_terms(notice):
     institution = notice["institution_id"]
+    if institution == 'ktcu' and notice.get('discovery_provenance', {}).get('kind') == 'lp_history_attachment':
+        try:
+            from .lp_ktcu_history_terms import extract_offering
+        except ImportError:
+            from lp_ktcu_history_terms import extract_offering
+        return extract_offering(notice)
     if institution == "kgrowth":
         try:
             from .kgrowth_notice_terms import extract_offering
