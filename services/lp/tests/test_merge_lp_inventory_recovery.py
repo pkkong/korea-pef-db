@@ -69,11 +69,15 @@ class InventoryMergeTests(unittest.TestCase):
             def fetchone(self): return ({'programs': []}, 'current-run')
             def fetchall(self): return [(u,) for u in self.urls]
         valid = 'https://www.nonghyup.com/ecenter/bid/bidView.do?intgBsnBlbdGrpC=BBSMSTR_000000000019&blbdSqno=123'
-        conn = Connection([valid]); index = merger.read_identity_index(conn)
+        association = 'https://www.kofia.or.kr/brd/m_212/view.do?seq=42&srchWord='
+        conn = Connection([valid, association]); index = merger.read_identity_index(conn)
         self.assertEqual(index['retained_keys'], ['nh_central:bid:123'])
+        self.assertEqual(index['supporting_source_keys'], ['kofia_212:42'])
+        self.assertEqual(index['retained_source_urls'], 2)
         self.assertTrue(conn.statements[0].endswith('REPEATABLE READ READ ONLY'))
         self.assertTrue(all(s.startswith(('SET ', 'SELECT ')) for s in conn.statements))
         with self.assertRaises(ValueError): merger.read_identity_index(Connection(['https://evil.invalid/']))
+        with self.assertRaises(ValueError): merger.read_identity_index(Connection([association+'&seq=43']))
 
 
 if __name__ == '__main__': unittest.main()

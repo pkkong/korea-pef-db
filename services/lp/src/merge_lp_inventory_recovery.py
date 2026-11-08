@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+from urllib.parse import parse_qs, urlsplit
 
 try:
     from . import audit_lp_official_inventory as inventory
@@ -33,12 +34,25 @@ def read_identity_index(conn):
         ('nh_central', 'https://www.nonghyup.com/%')).fetchall()
     if len(rows) > 10000:
         raise ValueError('retained NH identity index exceeded its bound')
-    retained = set()
+    retained, supporting = set(), set()
     for item in rows:
+        # The issuer field also labels association reposts. Those are retained
+        # supporting sources, never native NH board identities.
+        parsed = urlsplit(item[0])
+        board = re.fullmatch(r'/brd/m_(212|17)/view.do', parsed.path)
+        if (parsed.scheme == 'https' and parsed.hostname == 'www.kofia.or.kr' and board
+                and not parsed.username and not parsed.password and parsed.port in {None, 443}
+                and not parsed.fragment):
+            identifiers = parse_qs(parsed.query).get('seq', [])
+            if len(identifiers) != 1 or not identifiers[0].isdigit():
+                raise ValueError('invalid retained association notice identity')
+            supporting.add('kofia_'+board[1]+':'+identifiers[0])
+            continue
         retained.add(inventory.notice_key('nh_central', item[0]))
     return {'kind': 'lp_nh_retained_identity_index_v1', 'complete': True, 'read_only': True,
             'checked_at': datetime.now(timezone.utc).isoformat(), 'public_run': row[1],
-            'retained_source_urls': len(rows), 'retained_keys': sorted(retained), 'public_keys': sorted(public)}
+            'retained_source_urls': len(rows), 'retained_keys': sorted(retained),
+            'supporting_source_keys': sorted(supporting), 'public_keys': sorted(public)}
 
 
 def merge(report, recovery, identities):
