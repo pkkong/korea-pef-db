@@ -1,0 +1,65 @@
+name: Diagnose saved LP inventory failures
+on:
+  workflow_dispatch:
+    inputs:
+      inventory_run:
+        description: Completed failed weekly inventory from main within 48 hours; at most two failed NH lists
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    if: github.ref == 'refs/heads/main' && github.repository == 'pkkong/korea-pef-db'
+    runs-on: macos-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify saved failed inventory provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          LP_INVENTORY_RUN: ${{ inputs.inventory_run }}
+        run: |
+          python3 - <<'PY'
+          import datetime,json,os,subprocess
+          from pathlib import Path
+          ident=os.environ['LP_INVENTORY_RUN']
+          assert ident.isascii() and ident.isdecimal(), 'Numeric inventory run required'
+          run=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{ident}"]))
+          assert run['repository']['full_name']==os.environ['GH_REPO']
+          assert run['path']=='.github/workflows/audit-lp-official-inventory.yml'
+          assert run['head_branch']=='main' and run['event'] in {'schedule','workflow_dispatch'}
+          assert run['status']=='completed' and run['conclusion']=='failure'
+          created=datetime.datetime.fromisoformat(run['created_at'].replace('Z','+00:00'))
+          assert datetime.timedelta(0)<=datetime.datetime.now(datetime.timezone.utc)-created<=datetime.timedelta(hours=48)
+          Path('/tmp/lp-inventory-diagnostic').mkdir(exist_ok=True)
+          Path('/tmp/lp-inventory-diagnostic/provenance.json').write_text(json.dumps({k:run[k] for k in ('id','head_sha','conclusion','created_at')}))
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: lp-official-inventory
+          run-id: ${{ inputs.inventory_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-inventory-source
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify bounded planner without source HTTP
+        run: |
+          python3 -m unittest services.lp.tests.test_diagnose_lp_inventory_failures
+          python3 services/lp/src/diagnose_lp_inventory_failures.py --inventory /tmp/lp-inventory-source/lp-official-inventory.json --plan-only --output /tmp/lp-inventory-diagnostic/plan.json
+      - name: Diagnose only observed failed lists without publication
+        run: |
+          python3 services/lp/src/diagnose_lp_inventory_failures.py --inventory /tmp/lp-inventory-source/lp-official-inventory.json --output /tmp/lp-inventory-diagnostic/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-inventory-failure-diagnostic
+          path: /tmp/lp-inventory-diagnostic/
+          retention-days: 7
+          if-no-files-found: error
