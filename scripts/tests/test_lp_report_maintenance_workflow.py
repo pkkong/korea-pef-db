@@ -8,11 +8,11 @@ ROOT = Path(__file__).resolve().parents[2] / '.github/workflows'
 class MaintenanceWorkflowTests(unittest.TestCase):
     def test_completed_trigger_is_narrow_and_uses_trusted_source(self):
         text = (ROOT / 'maintain-lp-report-storage.yml').read_text()
-        self.assertIn('workflows: [Collect LP programs, Recover LP publication]', text)
+        self.assertIn('workflows: [Collect LP programs, Recover LP publication, Publish LP historical evidence]', text)
         self.assertIn('types: [completed]', text)
         for guard in ["github.event_name == 'workflow_run'", 'head_repository.full_name == github.repository',
                       "head_branch == 'main'", "fromJSON('[\"schedule\",\"workflow_dispatch\"]')",
-                      "fromJSON('[\"Collect LP programs\",\"Recover LP publication\"]')"]:
+                      "fromJSON('[\"Collect LP programs\",\"Recover LP publication\",\"Publish LP historical evidence\"]')"]:
             self.assertIn(guard, text)
         self.assertNotIn('workflow_run.conclusion', text)
         self.assertIn('actions/checkout@v6\n        with:\n          ref: main', text)

@@ -1,0 +1,141 @@
+name: Publish LP historical evidence
+on:
+  workflow_dispatch:
+    inputs:
+      listing_run:
+        description: Successful completed KTCU historical listing run
+        type: string
+        required: true
+      body_run:
+        description: Successful completed KTCU historical body run
+        type: string
+        required: true
+      attachment_run:
+        description: Successful completed historical announcement attachment run
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify successful historical artifact origins
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          LISTING_RUN: ${{ inputs.listing_run }}
+          BODY_RUN: ${{ inputs.body_run }}
+          ATTACHMENT_RUN: ${{ inputs.attachment_run }}
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess
+          from pathlib import Path
+          sources={}
+          pairs=(('LISTING_RUN','discover-ktcu-history.yml'),
+                 ('BODY_RUN','collect-lp-history-bodies.yml'),
+                 ('ATTACHMENT_RUN','collect-lp-history-attachments.yml'))
+          for key,workflow in pairs:
+              value=os.environ[key]
+              assert value.isascii() and value.isdecimal() and int(value)>0,'Numeric Actions run required'
+              run=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{value}"]))
+              assert run['repository']['full_name']==os.environ['GH_REPO'] and run['head_branch']=='main'
+              assert run['path']=='.github/workflows/'+workflow and run['event']=='workflow_dispatch'
+              assert run['status']=='completed' and run['conclusion']=='success','Use successful completed evidence only'
+              sources[key]={k:run[k] for k in ('id','path','head_sha','created_at','conclusion')}
+          out=Path('/tmp/lp-history-publication');out.mkdir()
+          (out/'provenance.json').write_text(json.dumps(sources))
+          print(json.dumps(sources))
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: ktcu-history-listings
+          run-id: ${{ inputs.listing_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-listing
+      - uses: actions/download-artifact@v4
+        with:
+          name: lp-history-bodies
+          run-id: ${{ inputs.body_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-bodies
+      - uses: actions/download-artifact@v4
+        with:
+          name: lp-history-attachments
+          run-id: ${{ inputs.attachment_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-attachments
+      - name: Install source decoders and database driver
+        run: python3 -m pip install 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47'
+      - name: Verify historical proof and preservation rules
+        run: python3 -m unittest services.lp.tests.test_prepare_lp_history_publication services.lp.tests.test_publish_lp_history
+      - name: Revalidate retained history and publish additions atomically
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS: '1'
+        run: |
+          python3 services/lp/src/publish_lp_history.py --listing-state /tmp/lp-history-listing/history-state.json --body-state /tmp/lp-history-bodies/body-state.json --attachment-state /tmp/lp-history-attachments/attachment-state.json --provenance /tmp/lp-history-publication/provenance.json --output-dir /tmp/lp-history-publication
+      - name: Verify public details, historical terms and access boundaries
+        run: |
+          python3 - <<'PY'
+          import json,time,urllib.request
+          from pathlib import Path
+          root=Path('/tmp/lp-history-publication')
+          published=json.loads((root/'publication.json').read_text())
+          if not published['published']:
+              print('No new verified program; existing publication preserved')
+              raise SystemExit(0)
+          def read(path):
+              for attempt in range(3):
+                  try:
+                      with urllib.request.urlopen('https://kpef-lp.vercel.app/'+path,timeout=30) as response:
+                          text=response.read().decode()
+                          assert response.headers.get('X-LP-Data-Source')=='supabase'
+                          assert response.headers.get('X-LP-Run')==published['run_id']
+                          return text,dict(response.headers)
+                  except Exception:
+                      if attempt==2:raise
+                      time.sleep(5)
+          for ident in published['program_ids']:
+              page,_=read('program-'+ident+'.html?refresh=1')
+              assert '진행 일정' in page
+          for program in published['new_programs']:
+              page,_=read('program-'+program['id']+'.html')
+              assert not program['selected_gps']
+              for field in ('commitment_label','manager_count_label'):
+                  if program.get(field):assert program[field] in page
+              assert program['deadline'].replace('T',' ').replace('+09:00','') in page
+              planned=sum(s.get('status')=='planned' for s in program.get('schedule_stages',[]))
+              assert page.count('>예정일 경과<')==planned
+          index,headers=read('index.html?refresh=1')
+          assert headers.get('X-Robots-Tag')=='index, follow'
+          assert all('program-'+p+'.html' in index for p in published['new_program_ids'])
+          _,headers=read('review.html?refresh=1')
+          assert headers.get('X-Robots-Tag')=='noindex, nofollow'
+          assert headers.get('Cache-Control')=='no-store' and headers.get('X-Frame-Options')=='DENY'
+          with urllib.request.urlopen('https://kpef-lp.vercel.app/health.json?refresh=1',timeout=30) as response:
+              health=json.load(response)
+          assert health['status']=='ok' and health['data_source']=='supabase' and health['stale'] is False
+          assert health['run_id']==published['run_id']
+          (root/'public-verification.json').write_text(json.dumps({'run_id':published['run_id'],
+              'verified_programs':len(published['program_ids']),'new_program_ids':published['new_program_ids'],
+              'access_boundaries_verified':True,'health':health},ensure_ascii=False))
+          print('Verified historical publication and all public details:',published['run_id'])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-history-publication
+          path: /tmp/lp-history-publication
+          retention-days: 30
+          if-no-files-found: warn
