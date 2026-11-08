@@ -14,6 +14,10 @@ on:
         description: Replay completed diagnostics and fetch only observed missing next pages (maximum two)
         type: boolean
         default: false
+      compare_saved_inventory:
+        description: Zero-source-HTTP comparison with read-only retained identities; requires completed boundaries
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -34,6 +38,7 @@ jobs:
           LP_INVENTORY_RUN: ${{ inputs.inventory_run }}
           LP_DIAGNOSTIC_RUN: ${{ inputs.diagnostic_run }}
           LP_FOLLOWUP_BOUNDARIES: ${{ inputs.followup_boundaries || 'false' }}
+          LP_COMPARE_SAVED: ${{ inputs.compare_saved_inventory || 'false' }}
         run: |
           python3 - <<'PY'
           import datetime,json,os,subprocess
@@ -51,6 +56,7 @@ jobs:
           Path('/tmp/lp-inventory-diagnostic/provenance.json').write_text(json.dumps({k:run[k] for k in ('id','head_sha','conclusion','created_at')}))
           previous=os.environ.get('LP_DIAGNOSTIC_RUN','')
           assert os.environ['LP_FOLLOWUP_BOUNDARIES']!='true' or previous, 'Followup requires a completed diagnostic'
+          assert os.environ['LP_COMPARE_SAVED']!='true' or (previous and os.environ['LP_FOLLOWUP_BOUNDARIES']=='true'), 'Comparison requires saved boundary recovery'
           if previous:
               assert previous.isascii() and previous.isdecimal(), 'Numeric diagnostic run required'
               prior=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{previous}"]))
@@ -84,7 +90,7 @@ jobs:
           LP_DIAGNOSTIC_RUN: ${{ inputs.diagnostic_run }}
           LP_FOLLOWUP_BOUNDARIES: ${{ inputs.followup_boundaries || 'false' }}
         run: |
-          python3 -m unittest services.lp.tests.test_diagnose_lp_inventory_failures
+          python3 -m unittest services.lp.tests.test_diagnose_lp_inventory_failures services.lp.tests.test_merge_lp_inventory_recovery
           resume_args=()
           if [ -n "$LP_DIAGNOSTIC_RUN" ]; then
             python3 - <<'PY'
@@ -101,6 +107,7 @@ jobs:
         env:
           LP_DIAGNOSTIC_RUN: ${{ inputs.diagnostic_run }}
           LP_FOLLOWUP_BOUNDARIES: ${{ inputs.followup_boundaries || 'false' }}
+          LP_COMPARE_SAVED: ${{ inputs.compare_saved_inventory || 'false' }}
         run: |
           resume_args=()
           if [ -n "$LP_DIAGNOSTIC_RUN" ]; then
@@ -108,7 +115,19 @@ jobs:
           fi
           mode_args=()
           if [ "$LP_FOLLOWUP_BOUNDARIES" = 'true' ]; then mode_args=(--followup-boundaries); fi
+          if [ "$LP_COMPARE_SAVED" = 'true' ]; then mode_args+=(--plan-only); fi
           python3 services/lp/src/diagnose_lp_inventory_failures.py --inventory /tmp/lp-inventory-source/lp-official-inventory.json "${resume_args[@]}" "${mode_args[@]}" --output /tmp/lp-inventory-diagnostic/result.json
+      - name: Install read-only DB comparison driver
+        if: inputs.compare_saved_inventory
+        run: python3 -m pip install 'psycopg[binary]==3.2.10'
+      - name: Compare retained identities and preserve unaffected inventory
+        if: inputs.compare_saved_inventory
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python3 services/lp/src/merge_lp_inventory_recovery.py --inventory /tmp/lp-inventory-source/lp-official-inventory.json --recovery /tmp/lp-inventory-diagnostic/result.json --output /tmp/lp-inventory-diagnostic/comparison/lp-official-inventory.json
+          cp /tmp/lp-inventory-source/lp-official-candidate-sources.json /tmp/lp-inventory-diagnostic/comparison/lp-official-candidate-sources.json
+          cp /tmp/lp-inventory-source/lp-discovery-audit.json /tmp/lp-inventory-diagnostic/comparison/lp-discovery-audit.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
