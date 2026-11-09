@@ -9,7 +9,7 @@ on:
       institution:
         type: choice
         default: cu
-        options: [cu, kfcc, kfinco, tp, all]
+        options: [cu, kfcc, kfinco, tp, kexim, all]
       verify_kdb_dns_recovery:
         type: boolean
         default: false
@@ -35,6 +35,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   diagnose:
+    if: inputs.institution != 'kexim'
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     steps:
@@ -345,3 +346,59 @@ jobs:
               'validated_notices':len(report['notices'])},ensure_ascii=False),flush=True)
           assert not outages, 'Official institution DNS recovery failed'
           PY
+
+  kexim-current-listing:
+    if: inputs.institution == 'kexim' && github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Capture only the current first KEXIM listing before parsing
+        run: |
+          python3 - <<'PYCODE'
+          import hashlib,json,re,sys
+          from datetime import datetime,timezone
+          from pathlib import Path
+          from urllib.parse import urlsplit
+          sys.path.insert(0,str(Path('services/lp/src').resolve()))
+          import collect_kexim_programs as k
+          out=Path('/tmp/kexim-current-listing');out.mkdir()
+          url=k.BOARD+'?curPage=1';limit=12*1024*1024
+          result={'checked_at':datetime.now(timezone.utc).isoformat(),'url':url,'success':False,
+                  'logical_listing_requests':1,'transport_attempts':'not_measured',
+                  'detail_requests':0,'attachment_requests':0,'database_writes':0,'published':False,
+                  'scope':'current_first_listing_only_not_complete_board_or_market','rows':[],'errors':[]}
+          try:
+              raw=k._official_fetch(url)
+              prefix=raw[:limit]
+              (out/'listing-response.bin').write_bytes(prefix)
+              result['response']={'bytes':len(prefix),'sha256':hashlib.sha256(prefix).hexdigest(),'truncated':len(raw)>limit}
+              (out/'listing.json').write_text(json.dumps(result,ensure_ascii=False))
+              assert 0<len(raw)<=limit,'Listing size limit'
+              html=k._decode(raw)
+              assert '</html>' in html.lower() and 'notice-list-item' in html,'Incomplete official listing'
+              rows=k.extract_kexim_notice_rows(html,url,['펀드'])
+              for row in rows:
+                  parsed=urlsplit(row['link'])
+                  assert parsed.scheme=='https' and parsed.netloc==urlsplit(k.BASE).netloc
+                  assert re.fullmatch(r'/HPHKBI039M01/[0-9]+',parsed.path)
+                  assert re.fullmatch(r'20[0-9]{2}-[0-9]{2}-[0-9]{2}',row['announced_date'])
+                  row['stage']=k._stage(row['title'])
+              result['rows']=rows;result['success']=True
+          except Exception as error:
+              result['errors'].append({'type':type(error).__name__,'code':'current_listing_capture_or_parse_failed'})
+          finally:
+              (out/'listing.json').write_text(json.dumps(result,ensure_ascii=False))
+          print(json.dumps({key:result[key] for key in ('success','logical_listing_requests','detail_requests','attachment_requests','rows','errors')},ensure_ascii=False))
+          if not result['success']:raise SystemExit('Current first KEXIM listing unavailable; retained evidence preserved')
+          PYCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kexim-current-listing
+          path: /tmp/kexim-current-listing
+          retention-days: 30
+          if-no-files-found: warn
