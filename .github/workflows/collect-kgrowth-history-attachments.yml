@@ -1,0 +1,111 @@
+name: Retain KGrowth historical files
+on:
+  workflow_dispatch:
+    inputs:
+      listing_run:
+        description: Successful completed KGrowth historical listing run
+        type: string
+        required: true
+      body_run:
+        description: Successful KGrowth historical body run with raw proof
+        type: string
+        required: true
+      resume_run:
+        description: Optional successful KGrowth file run; replay completed original bytes
+        type: string
+        required: false
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  retain:
+    if: github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify retained source provenance before any official HTTP
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          LISTING_RUN: ${{ inputs.listing_run }}
+          BODY_RUN: ${{ inputs.body_run }}
+          RESUME_RUN: ${{ inputs.resume_run }}
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess
+          from services.lp.src.lp_history_sources import listing_source
+          pairs=((os.environ['LISTING_RUN'],listing_source('kgrowth')['workflow']),
+                 (os.environ['BODY_RUN'],'collect-lp-history-bodies.yml'),
+                 (os.environ['RESUME_RUN'],'collect-kgrowth-history-attachments.yml'))
+          for value,workflow in pairs:
+              if not value: continue
+              assert value.isascii() and value.isdecimal() and int(value)>0,'Numeric Actions run required'
+              run=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{value}"]))
+              assert run['repository']['full_name']==os.environ['GH_REPO'] and run['head_branch']=='main'
+              assert run['path']=='.github/workflows/'+workflow and run['event']=='workflow_dispatch'
+              assert run['status']=='completed' and run['conclusion']=='success','Inspect failed or active evidence before resuming'
+              print(json.dumps({k:run[k] for k in ('id','path','head_sha','conclusion')}))
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: lp-history-listings
+          run-id: ${{ inputs.listing_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-listing
+      - uses: actions/download-artifact@v4
+        with:
+          name: lp-history-bodies
+          run-id: ${{ inputs.body_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-bodies
+      - uses: actions/download-artifact@v4
+        if: inputs.resume_run != ''
+        with:
+          name: kgrowth-history-attachments
+          run-id: ${{ inputs.resume_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-parent
+      - name: Install bounded file decoders and private evidence driver
+        run: python3 -m pip install 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47'
+      - name: Verify queue, raw decoding, reuse and publication protection
+        run: python3 -m unittest services.lp.tests.test_lp_kgrowth_history_attachment_queue services.lp.tests.test_collect_kgrowth_history_attachments
+      - name: Read retained file evidence before any official request
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          RESUME_RUN: ${{ inputs.resume_run }}
+        run: |
+          args=(--mode lookup --listing-state /tmp/lp-history-listing/history-state.json --body-state /tmp/lp-history-bodies/body-state.json --output-dir /tmp/lp-history-result)
+          if [ -n "$RESUME_RUN" ]; then args+=(--attachment-state /tmp/lp-history-parent/attachment-state.json); fi
+          python3 services/lp/src/collect_kgrowth_history_attachments.py "${args[@]}"
+      - name: Collect at most four source-discovered historical files
+        env:
+          RESUME_RUN: ${{ inputs.resume_run }}
+        run: |
+          args=(--mode collect --cached-documents /tmp/lp-history-result/cached-attachments.json --listing-state /tmp/lp-history-listing/history-state.json --body-state /tmp/lp-history-bodies/body-state.json --output-dir /tmp/lp-history-result)
+          if [ -n "$RESUME_RUN" ]; then args+=(--attachment-state /tmp/lp-history-parent/attachment-state.json); fi
+          python3 services/lp/src/collect_kgrowth_history_attachments.py "${args[@]}"
+      - name: Replay original file bytes independently before private retention
+        run: |
+          python3 services/lp/src/collect_kgrowth_history_attachments.py --mode verify --listing-state /tmp/lp-history-listing/history-state.json --body-state /tmp/lp-history-bodies/body-state.json --attachment-state /tmp/lp-history-result/attachment-state.json --output-dir /tmp/lp-history-result
+      - name: Append private source evidence without changing publication or reviews
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python3 services/lp/src/collect_kgrowth_history_attachments.py --mode persist --listing-state /tmp/lp-history-listing/history-state.json --body-state /tmp/lp-history-bodies/body-state.json --attachment-state /tmp/lp-history-result/attachment-state.json --output-dir /tmp/lp-history-result
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kgrowth-history-attachments
+          path: |
+            /tmp/lp-history-result/attachment-state.json
+            /tmp/lp-history-result/attachment-summary.json
+            /tmp/lp-history-result/persistence.json
+          retention-days: 30
+          if-no-files-found: warn
