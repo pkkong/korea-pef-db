@@ -1,0 +1,116 @@
+name: Retain KGrowth session file
+on:
+  workflow_dispatch:
+    inputs:
+      listing_run:
+        description: Successful KGrowth historical listing run used by the session control
+        type: string
+        required: true
+      body_run:
+        description: Successful KGrowth body run used by the session control
+        type: string
+        required: true
+      failure_run:
+        description: Original completed failed file run retained by the session control
+        type: string
+        required: true
+      control_run:
+        description: Successful public-session control whose existing bytes are adopted
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  retain:
+    if: github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify completed source and control artifact lineage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          LISTING_RUN: ${{ inputs.listing_run }}
+          BODY_RUN: ${{ inputs.body_run }}
+          FAILURE_RUN: ${{ inputs.failure_run }}
+          CONTROL_RUN: ${{ inputs.control_run }}
+        run: |
+          python3 - <<'PYCODE'
+          import json,os,subprocess
+          from pathlib import Path
+          sources={}
+          for key,workflow in (('LISTING_RUN','discover-lp-history.yml'),('BODY_RUN','collect-lp-history-bodies.yml'),('FAILURE_RUN','collect-kgrowth-history-attachments.yml'),('CONTROL_RUN','diagnose-kgrowth-history-session.yml')):
+              ident=os.environ[key]
+              assert ident.isascii() and ident.isdecimal() and int(ident)>0,'Numeric Actions run required'
+              run=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{ident}"]))
+              assert run['repository']['full_name']==os.environ['GH_REPO'] and run['head_branch']=='main'
+              assert run['path']=='.github/workflows/'+workflow and run['event']=='workflow_dispatch'
+              expected='failure' if key=='FAILURE_RUN' else 'success'
+              assert run['status']=='completed' and run['conclusion']==expected,'Inspect the exact completed source result'
+              sources[key]={k:run[k] for k in ('id','path','head_sha','conclusion')}
+          out=Path('/tmp/lp-growth-session-adoption');out.mkdir()
+          (out/'provenance.json').write_text(json.dumps(sources))
+          print(json.dumps(sources))
+          PYCODE
+      - uses: actions/download-artifact@v4
+        with:
+          name: lp-history-listings
+          run-id: ${{ inputs.listing_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-listing
+      - uses: actions/download-artifact@v4
+        with:
+          name: lp-history-bodies
+          run-id: ${{ inputs.body_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-bodies
+      - uses: actions/download-artifact@v4
+        with:
+          name: kgrowth-history-attachments
+          run-id: ${{ inputs.failure_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-failure
+      - uses: actions/download-artifact@v4
+        with:
+          name: kgrowth-history-session-control
+          run-id: ${{ inputs.control_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-history-control
+      - name: Check the control references these exact source runs
+        run: |
+          python3 - <<'PYCODE'
+          import json
+          from pathlib import Path
+          source=json.loads(Path('/tmp/lp-growth-session-adoption/provenance.json').read_text())
+          control=json.loads(Path('/tmp/lp-history-control/provenance.json').read_text())
+          assert control=={k:v for k,v in source.items() if k!='CONTROL_RUN'},'Control source lineage differs'
+          PYCODE
+      - name: Install the original pinned decoders and evidence driver
+        run: python3 -m pip install 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47'
+      - name: Test raw adoption and the locked pre-store evidence guard
+        run: python3 -m unittest services.lp.tests.test_adopt_kgrowth_session_file services.lp.tests.test_collect_lp_history_bodies
+      - name: Replay retained body and file bytes without official HTTP
+        run: |
+          args=(--listing-state /tmp/lp-history-listing/history-state.json --body-state /tmp/lp-history-bodies/body-state.json --failed-state /tmp/lp-history-failure/attachment-state.json --session-control /tmp/lp-history-control/session-control.json --output-dir /tmp/lp-growth-session-adoption)
+          python3 services/lp/src/adopt_kgrowth_session_file.py --mode plan "${args[@]}"
+          python3 services/lp/src/adopt_kgrowth_session_file.py --mode verify --adoption-state /tmp/lp-growth-session-adoption/adoption-state.json "${args[@]}"
+      - name: Recheck current private versions and append exactly one existing file proof
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python3 services/lp/src/adopt_kgrowth_session_file.py --mode persist --listing-state /tmp/lp-history-listing/history-state.json --body-state /tmp/lp-history-bodies/body-state.json --failed-state /tmp/lp-history-failure/attachment-state.json --session-control /tmp/lp-history-control/session-control.json --adoption-state /tmp/lp-growth-session-adoption/adoption-state.json --output-dir /tmp/lp-growth-session-adoption
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kgrowth-session-file-adoption
+          path: /tmp/lp-growth-session-adoption
+          retention-days: 30
+          if-no-files-found: warn

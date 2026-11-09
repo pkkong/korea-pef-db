@@ -178,11 +178,12 @@ def persist(conn, history, report, *, wrap_json=None):
             'attachment_completion':'pending', 'source_history_complete':False,'published':False}
 
 
-def retain_documents(conn, documents, verified, *, wrap_json=None):
+def retain_documents(conn, documents, verified, *, wrap_json=None, verify_retained=None):
     """Append independently validated evidence; never change reviews/publication.
 
     Callers must replay their source-specific raw proof and automatic queue
     before entering this shared transaction. Existing versions are immutable.
+    An optional source guard runs under the publication lock before any store.
     """
     try:
         from .publish_lp_programs import document_hash, store_documents
@@ -190,6 +191,8 @@ def retain_documents(conn, documents, verified, *, wrap_json=None):
         from publish_lp_programs import document_hash, store_documents
     if not 0 <= len(documents) <= len(verified) <= 4:
         raise ValueError('Unbounded historical evidence retention')
+    if verify_retained is not None and not callable(verify_retained):
+        raise ValueError('Historical evidence guard must be callable')
     if wrap_json is None:
         from psycopg.types.json import Jsonb
         wrap_json = Jsonb
@@ -199,6 +202,8 @@ def retain_documents(conn, documents, verified, *, wrap_json=None):
     conn.execute('SELECT pg_advisory_xact_lock(728160921)')
     before = public_guard(conn)
     before_count = conn.execute('SELECT count(*) FROM lp_program_private.documents').fetchone()[0]
+    if verify_retained is not None:
+        verify_retained(conn)
     stored = store_documents(conn, {'notices':documents}, {}, wrap_json)
     expected = {(n['url'],document_hash(n)) for n in verified}
     rows = conn.execute('SELECT source_url,content_hash FROM lp_program_private.documents '

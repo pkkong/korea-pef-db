@@ -109,4 +109,40 @@ class HistoricalBodyTests(unittest.TestCase):
         with self.assertRaises(ValueError):h.persist(Connection(),s,bad,wrap_json=lambda x:x)
 
 
+    def test_source_guard_runs_under_lock_before_store_and_preserves_default_contract(self):
+        source,fetch,_=self.prepare();report=h.collect(source,None,fetch)
+        conn=Connection();events=[];execute=conn.execute
+        def traced(sql,args=None):
+            events.append(sql)
+            return execute(sql,args)
+        conn.execute=traced
+        def guard(received):
+            self.assertIs(received,conn)
+            self.assertIn('SELECT pg_advisory_xact_lock(728160921)',events)
+            self.assertEqual(conn.documents,{})
+            self.assertEqual(conn.guards,1)
+            events.append('verified retained source')
+        result=h.retain_documents(conn,report['documents'],report['documents'],
+                                  wrap_json=lambda x:x,verify_retained=guard)
+        self.assertEqual(result['new_document_versions'],4)
+        self.assertEqual(result['before'],result['after'])
+        self.assertEqual(events.count('verified retained source'),1)
+
+    def test_rejected_or_invalid_source_guard_never_stores_a_document(self):
+        source,fetch,_=self.prepare();report=h.collect(source,None,fetch)
+        conn=Connection()
+        def reject(received):
+            raise ValueError('Protected retained source')
+        with self.assertRaisesRegex(ValueError,'Protected retained source'):
+            h.retain_documents(conn,report['documents'],report['documents'],
+                               wrap_json=lambda x:x,verify_retained=reject)
+        self.assertEqual(conn.documents,{})
+        untouched=Connection()
+        with self.assertRaisesRegex(ValueError,'guard must be callable'):
+            h.retain_documents(untouched,report['documents'],report['documents'],
+                               wrap_json=lambda x:x,verify_retained=True)
+        self.assertEqual(untouched.guards,0)
+        self.assertEqual(untouched.documents,{})
+
+
 if __name__=='__main__':unittest.main()
