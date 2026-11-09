@@ -257,7 +257,7 @@ jobs:
               previous=before[receipt['program_id']];current=after[receipt['program_id']]
               assert not previous.get('preferred_gps'),'Existing preferred roster already present; do not republish'
               assert current['status']=='우선협상대상자'
-              assert len(current['preferred_gps'])==receipt['preferred_count']==1
+              assert len(current.get('preferred_gps',[]))==receipt['preferred_count']==1, 'Verified preferred roster did not reach the public model'
               assert current.get('selected_gps',[])==previous.get('selected_gps',[]),'Preferred is not final selection'
               for field in ('id','title','institution_id','asset_scope',*OFFERING_FIELDS):
                   assert current.get(field)==previous.get(field),'Existing offering changed: '+field

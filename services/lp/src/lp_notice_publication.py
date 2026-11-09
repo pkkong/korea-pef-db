@@ -389,8 +389,15 @@ def publish_basic_notices(data, growth_notices, checked_at):
                 continue
             if matches:
                 p = matches[0]
+                # An already linked preferred event may gain a raw-verified
+                # roster later. Revalidate it even when no new URL appeared;
+                # reviewed offering terms and curator locks still stay intact.
+                missing_preferred = (original['institution_id'] == 'koreapost'
+                                     and not p.get('preferred_gps')
+                                     and any(_event(n)['type'] == '우선협상대상자' for n in members))
                 if (not p.get('basic_publication') and not p.get('publication_version')
                         and not (urls - {e['url'] for e in p['events']})
+                        and not missing_preferred
                         and original['institution_id'] != 'pck_pension'):
                     continue
                 # Complete reviewed programs retain their validated offering

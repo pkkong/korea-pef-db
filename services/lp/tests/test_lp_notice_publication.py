@@ -50,6 +50,39 @@ class BasicNoticePublicationTests(unittest.TestCase):
         self.assertEqual(next(x for x in result if x['id']==old['id'])['preferred_gps'],p['preferred_gps'])
         self.assertTrue([h for h in errors if h['stage']=='preferred_roster'])
 
+    def test_retained_preferred_event_can_gain_verified_names_without_new_url(self):
+        from services.lp.tests.test_koreapost_coinvestment_preferred import evidence
+        from services.lp.src.lp_notice_publication import OFFERING_FIELDS
+        original, preferred = evidence()
+        documents = [{**n, 'institution_id': 'koreapost'} for n in (original, preferred)]
+        old = {'id': 'existing-coinvestment', 'institution_id': 'koreapost',
+               'institution_name': '우정사업본부', 'title': original['title'],
+               'asset_scope': 'PE', 'status': '우선협상대상자', 'selected_gps': [],
+               'commitment_amount_krw': 200_000_000_000, 'manager_count': 1,
+               'contribution_note': '기존 검증된 출자 조건',
+               'events': [{'type': kind, 'url': n['url'], 'title': n['title'], 'date': n['date']}
+                          for kind, n in [('모집 공고', original), ('우선협상대상자', preferred)]]}
+        programs, holds = publish(documents, existing=[old], now='2026-05-01T00:00:00+09:00')
+        self.assertEqual(len(programs), 1)
+        current = programs[0]
+        self.assertEqual(current['preferred_gps'], ['가나다프라이빗에쿼티'])
+        self.assertEqual(current['manager_list_sources']['preferred_gps'], preferred['url'])
+        self.assertEqual(current['status'], '우선협상대상자')
+        self.assertEqual(current['selected_gps'], [])
+        self.assertEqual(current['events'], old['events'])
+        for field in ('id', 'title', 'institution_id', 'asset_scope', *OFFERING_FIELDS):
+            self.assertEqual(current.get(field), old.get(field), field)
+        self.assertFalse([h for h in holds if h['stage'] == 'preferred_roster'])
+        # A retained event alone cannot authorize names without the raw proof.
+        broken = copy.deepcopy(documents); del broken[1]['detail_proof']
+        result, errors = publish(broken, existing=[old], now='2026-05-01T00:00:00+09:00')
+        self.assertFalse(result[0].get('preferred_gps'))
+        self.assertEqual(result[0]['selected_gps'], [])
+        self.assertTrue([h for h in errors if h['stage'] == 'preferred_roster'])
+        # A curator's explicit lock still prevents automatic refresh.
+        locked = {**old, 'manual_review_id': 'explicit-review'}
+        self.assertEqual(publish(documents, existing=[locked], now='2026-05-01T00:00:00+09:00')[0], [locked])
+
     def test_single_track_per_fund_limit_is_visible_without_invented_total(self):
         program = publish([notice()])[0][0]
         program.update(per_fund_amount_krw=50_000_000_000, per_fund_qualifier='이내')
