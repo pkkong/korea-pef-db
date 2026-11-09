@@ -12,8 +12,10 @@ class MaintenanceWorkflowTests(unittest.TestCase):
         self.assertIn('types: [completed]', text)
         for guard in ["github.event_name == 'workflow_run'", 'head_repository.full_name == github.repository',
                       "head_branch == 'main'", "fromJSON('[\"schedule\",\"workflow_dispatch\"]')",
-                      "fromJSON('[\"Collect LP programs\",\"Recover LP publication\",\"Publish LP historical evidence\"]')"]:
+                      "fromJSON('[\".github/workflows/collect-kgrowth-programs.yml\",\".github/workflows/recover-lp-publication.yml\",\".github/workflows/publish-lp-history.yml\"]')"]:
             self.assertIn(guard, text)
+        self.assertIn('github.event.workflow_run.path)', text)
+        self.assertNotIn('github.event.workflow_run.name)', text)
         self.assertNotIn('workflow_run.conclusion', text)
         self.assertIn('actions/checkout@v6\n        with:\n          ref: main', text)
         self.assertNotIn('ref: ${{', text)

@@ -35,7 +35,7 @@ jobs:
        github.event.workflow_run.head_repository.full_name == github.repository &&
        github.event.workflow_run.head_branch == 'main' &&
        contains(fromJSON('["schedule","workflow_dispatch"]'), github.event.workflow_run.event) &&
-       contains(fromJSON('["Collect LP programs","Recover LP publication","Publish LP historical evidence"]'), github.event.workflow_run.name))
+       contains(fromJSON('[".github/workflows/collect-kgrowth-programs.yml",".github/workflows/recover-lp-publication.yml",".github/workflows/publish-lp-history.yml"]'), github.event.workflow_run.path))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
