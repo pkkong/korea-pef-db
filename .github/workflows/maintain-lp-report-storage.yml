@@ -1,7 +1,7 @@
 name: Maintain LP report storage
 on:
   workflow_run:
-    workflows: [Collect LP programs, Recover LP publication, Publish LP historical evidence]
+    workflows: [Collect LP programs, LP manual_watchdog, LP scheduled_watchdog, Recover LP publication, Publish LP historical evidence]
     types: [completed]
   workflow_dispatch:
     inputs:
