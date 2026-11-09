@@ -9,7 +9,11 @@ on:
       institution:
         type: choice
         default: cu
-        options: [cu, kfcc, kfinco, tp, kexim, all]
+        options: [cu, kfcc, kfinco, tp, kexim, koreapost, all]
+      koreapost_collection_run:
+        description: Completed current collection for automatic preferred-stage raw reuse/capture
+        type: string
+        required: false
       verify_kexim_result:
         type: boolean
         default: false
@@ -49,7 +53,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   diagnose:
-    if: inputs.institution != 'kexim'
+    if: inputs.institution != 'kexim' && inputs.institution != 'koreapost'
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     steps:
@@ -539,5 +543,58 @@ jobs:
         with:
           name: kexim-result-proof
           path: /tmp/kexim-result-proof
+          retention-days: 30
+          if-no-files-found: warn
+
+  koreapost-preferred:
+    if: inputs.institution == 'koreapost' && github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify retained collection provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          COLLECTION_RUN: ${{ inputs.koreapost_collection_run }}
+        run: |
+          python3 - <<'PY'
+          import datetime,json,os,subprocess
+          from pathlib import Path
+          ident=os.environ['COLLECTION_RUN'];assert ident.isascii() and ident.isdecimal() and int(ident)>0
+          run=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{ident}"]))
+          assert run['repository']['full_name']==os.environ['GH_REPO'] and run['head_branch']=='main'
+          assert run['path']=='.github/workflows/collect-kgrowth-programs.yml'
+          assert run['event'] in {'schedule','workflow_dispatch'} and run['status']=='completed'
+          assert run['conclusion'] in {'success','failure'}
+          created=datetime.datetime.fromisoformat(run['created_at'].replace('Z','+00:00'))
+          assert datetime.timedelta(0)<=datetime.datetime.now(datetime.timezone.utc)-created<=datetime.timedelta(hours=48)
+          root=Path('/tmp/koreapost-preferred');root.mkdir()
+          (root/'provenance.json').write_text(json.dumps({k:run[k] for k in ('id','path','head_sha','event','conclusion')}))
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: kgrowth-collection
+          run-id: ${{ inputs.koreapost_collection_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/koreapost-source
+      - name: Install bounded readers and read-only evidence driver
+        run: python3 -m pip install 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47'
+      - name: Test raw identity, automatic pairing and preferred-only projection
+        run: python3 -m unittest services.lp.tests.test_capture_koreapost_preferred services.lp.tests.test_koreapost_coinvestment_preferred services.lp.tests.test_collect_koreapost_program
+      - name: Read same-source database raw proofs before any official HTTP
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: python3 services/lp/src/capture_koreapost_preferred.py --mode lookup --collection /tmp/koreapost-source/lp-priority-collection.json --output /tmp/koreapost-preferred/lookup.json
+      - name: Capture only missing public bodies and first recruitment PDF
+        run: python3 services/lp/src/capture_koreapost_preferred.py --mode capture --collection /tmp/koreapost-source/lp-priority-collection.json --retained /tmp/koreapost-preferred/lookup.json --output /tmp/koreapost-preferred/capture.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: koreapost-preferred-proof
+          path: /tmp/koreapost-preferred
           retention-days: 30
           if-no-files-found: warn

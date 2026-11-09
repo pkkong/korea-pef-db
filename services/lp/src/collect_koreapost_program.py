@@ -7,6 +7,7 @@ are connection candidates until their exact source and GP evidence is reviewed.
 from __future__ import annotations
 
 import argparse
+import base64
 import copy
 import hashlib
 import io
@@ -73,7 +74,10 @@ def _get(url):
         try:
             with urlopen(request, timeout=25) as response:
                 _official_url(response.geturl())
-                return response.read()
+                raw = response.read(25 * 1024 * 1024 + 1)
+                if not raw or len(raw) > 25 * 1024 * 1024:
+                    raise ValueError('Korea Post response exceeds bounded evidence limit')
+                return raw
         except HTTPError as error:
             if error.code in (404, 410) or attempt == 2:
                 raise
@@ -311,6 +315,13 @@ def extract_preferred(recruitment_notice, preferred_notice, *, checked_at=None):
         if (any(n.get(k) in (True, 1, 'true', '1') for k in ('restricted', 'closed', 'owner_closed'))
                 or n.get('status') in ('restricted', 'closed', 'owner_closed')):
             raise ValueError('Restricted preferred roster evidence')
+    if re.search(r'국내\s*공동\s*투자', recruitment_notice.get('title', '')):
+        try:
+            from .koreapost_coinvestment_preferred import extract_preferred as extract_coinvestment
+        except ImportError:
+            from koreapost_coinvestment_preferred import extract_preferred as extract_coinvestment
+        return extract_coinvestment(recruitment_notice, preferred_notice,
+                                    checked_at=checked_at or datetime.now(timezone.utc).isoformat())
     source = recruitment_notice
     ident = re.fullmatch(r"0041:([1-9][0-9]*)", source.get("source_id", ""))
     if (not ident or source.get("institution_id", "koreapost") != "koreapost"
@@ -390,7 +401,7 @@ def _automatic_followups(source, notices, checked_at):
     return sorted(results, key=lambda item: item["notice"]["date"])
 
 
-def project(notices: list[dict], checked_at: str) -> tuple[list[dict], list[dict]]:
+def _reviewed_project(notices: list[dict], checked_at: str) -> tuple[list[dict], list[dict]]:
     """Recheck live evidence against the reviewed source, never trust a payload."""
     recipe = json.loads(REGISTRY.read_text())
     by_id = {n["source_id"]: n for n in notices}
@@ -466,6 +477,27 @@ def project(notices: list[dict], checked_at: str) -> tuple[list[dict], list[dict
     return [program], []
 
 
+def project(notices: list[dict], checked_at: str) -> tuple[list[dict], list[dict]]:
+    programs, holds = _reviewed_project(notices, checked_at)
+    try:
+        from .koreapost_coinvestment_preferred import validate_detail_proof, validate_attachment_proof
+    except ImportError:
+        from koreapost_coinvestment_preferred import validate_detail_proof, validate_attachment_proof
+    for notice in notices:
+        if not re.search(r'국내\s*공동\s*투자', notice.get('title', '')):
+            continue
+        try:
+            if 'detail_proof' in notice:
+                validate_detail_proof(notice)
+            if 'attachment_proofs' in notice:
+                validate_attachment_proof(notice)
+        except (ValueError, KeyError, TypeError):
+            holds.append({'stage':'institution_attachment_text','institution_id':'koreapost',
+                          'source_id':notice.get('source_id'),'url':notice.get('url'),
+                          'reason':'coinvestment_raw_proof_invalid','error':'coinvestment_raw_proof_invalid'})
+    return programs, holds
+
+
 def _suggestions(notices):
     candidates = []
     approved_ids = {SOURCE_ID} | {s["source_id"] for s in json.loads(REGISTRY.read_text()).get("stages", [])}
@@ -534,7 +566,15 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
     reviewed_ids = {SOURCE_ID} | {s["source_id"] for s in recipe.get("stages", [])}
     for number in sorted(discovered, key=int):
         url = f"{BASE}/board.es?mid=a10510000000&bid=0041&act=view&list_no={number}"
-        notice = _detail(number, fetch(url))
+        raw_detail = fetch(url)
+        notice = _detail(number, raw_detail)
+        coinvestment = bool(re.search(r'국내\s*공동\s*투자',notice['title']))
+        if coinvestment:
+            try:
+                from .capture_koreapost_preferred import detail_proof, attachment_proof
+            except ImportError:
+                from capture_koreapost_preferred import detail_proof, attachment_proof
+            notice['detail_proof'] = detail_proof(notice,raw_detail)
         if not _pe_discovery_title(notice["title"]):
             if number == "400":
                 raise ValueError("Reviewed Korea Post notice no longer matches program")
@@ -552,6 +592,14 @@ def collect(seed_program: dict, checked_at: str, fetch=None) -> dict:
             if not raw.startswith((b"%PDF", b"PK", bytes.fromhex("d0cf11e0"))):
                 raise ValueError("Official Korea Post attachment is invalid")
             notice["attachment_hashes"][attachment_url] = hashlib.sha256(raw).hexdigest()
+            if coinvestment and attachment_url == notice['attachments'][0]:
+                try:
+                    proof = attachment_proof(notice,raw)
+                except Exception as error:
+                    proof = {'kind':'koreapost_attachment_body_v1','raw_base64':base64.b64encode(raw).decode('ascii'),
+                             'sha256':hashlib.sha256(raw).hexdigest(),'byte_length':len(raw),
+                             'pdf_reader_version':'6.10.0','read_error':type(error).__name__}
+                notice['attachment_proofs'] = {attachment_url:proof}
             if raw.startswith(b"%PDF"):
                 try:
                     notice["attachment_texts"][attachment_url] = _pdf_text(raw)
