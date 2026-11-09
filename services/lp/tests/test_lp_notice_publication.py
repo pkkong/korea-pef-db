@@ -76,9 +76,12 @@ class BasicNoticePublicationTests(unittest.TestCase):
         # A retained event alone cannot authorize names without the raw proof.
         broken = copy.deepcopy(documents); del broken[1]['detail_proof']
         result, errors = publish(broken, existing=[old], now='2026-05-01T00:00:00+09:00')
-        self.assertFalse(result[0].get('preferred_gps'))
-        self.assertEqual(result[0]['selected_gps'], [])
+        self.assertEqual(result[0], old)
         self.assertTrue([h for h in errors if h['stage'] == 'preferred_roster'])
+        changed = {k for k in current if current.get(k) != old.get(k)}
+        self.assertEqual(changed, {'preferred_gps', 'manager_list_sources', 'gp_tracks'})
+        final = {**old, 'status': '선정 완료', 'selected_gps': [{'name': '검증된최종운용사'}]}
+        self.assertEqual(publish(documents, existing=[final], now='2026-05-01T00:00:00+09:00')[0], [final])
         # A curator's explicit lock still prevents automatic refresh.
         locked = {**old, 'manual_review_id': 'explicit-review'}
         self.assertEqual(publish(documents, existing=[locked], now='2026-05-01T00:00:00+09:00')[0], [locked])

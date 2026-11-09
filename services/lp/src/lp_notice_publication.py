@@ -333,6 +333,31 @@ def _refresh(p, members, checked_at):
     p['checked_at'] = checked_at
 
 
+def _attach_preferred_roster(p, original, members, checked_at, holds):
+    if original['institution_id'] != 'koreapost':
+        return
+    preferred = [n for n in members if _event(n)['type'] == '우선협상대상자']
+    if preferred:
+        try:
+            if len(preferred) != 1:
+                raise ValueError('Conflicting preferred-bidder notices')
+            roster = extract_preferred(original, preferred[0], checked_at=checked_at)
+            if roster['source_url'] not in {e['url'] for e in p['events'] if e['type'] == '우선협상대상자'}:
+                raise ValueError('Preferred roster lacks matching program stage')
+            prior = p.get('preferred_gps', [])
+            if prior and (prior != roster['preferred_gps'] or
+                          p.get('manager_list_sources', {}).get('preferred_gps') != roster['source_url']):
+                raise ValueError('Existing preferred roster changed')
+            tracks = {name: r['league'] for r in roster['rosters'] for name in r['names']}
+            if any(name in p.get('gp_tracks', {}) and p['gp_tracks'][name] != track for name, track in tracks.items()):
+                raise ValueError('Preferred roster league conflicts with prior evidence')
+            p['preferred_gps'] = copy.deepcopy(roster['preferred_gps'])
+            p.setdefault('manager_list_sources', {})['preferred_gps'] = roster['source_url']
+            p.setdefault('gp_tracks', {}).update(tracks)
+        except (KeyError, TypeError, ValueError) as exc:
+            holds.append({'stage': 'preferred_roster', 'url': preferred[0]['url'], 'reason': str(exc)})
+
+
 def publish_basic_notices(data, growth_notices, checked_at):
     """Extend validated public programs; never consume a prepared candidate fact."""
     names = _names()
@@ -389,16 +414,13 @@ def publish_basic_notices(data, growth_notices, checked_at):
                 continue
             if matches:
                 p = matches[0]
-                # An already linked preferred event may gain a raw-verified
-                # roster later. Revalidate it even when no new URL appeared;
-                # reviewed offering terms and curator locks still stay intact.
-                missing_preferred = (original['institution_id'] == 'koreapost'
-                                     and not p.get('preferred_gps')
-                                     and any(_event(n)['type'] == '우선협상대상자' for n in members))
                 if (not p.get('basic_publication') and not p.get('publication_version')
                         and not (urls - {e['url'] for e in p['events']})
-                        and not missing_preferred
                         and original['institution_id'] != 'pck_pension'):
+                    # A retained preferred event may gain its verified roster
+                    # without refreshing reviewed terms, dates or schedules.
+                    if p.get('status') == '우선협상대상자' and not p.get('preferred_gps'):
+                        _attach_preferred_roster(p, original, members, checked_at, holds)
                     continue
                 # Complete reviewed programs retain their validated offering
                 # facts. Lifecycle links can advance without guessing GP names.
@@ -443,27 +465,7 @@ def publish_basic_notices(data, growth_notices, checked_at):
                     if revised:
                         p.update(deadline=revised[0], deadline_precision=revised[1], deadline_source_url=latest['url'])
             _refresh(p, members, checked_at)
-            if original['institution_id'] == 'koreapost':
-                preferred = [n for n in members if _event(n)['type'] == '우선협상대상자']
-                if preferred:
-                    try:
-                        if len(preferred) != 1:
-                            raise ValueError('Conflicting preferred-bidder notices')
-                        roster = extract_preferred(original, preferred[0], checked_at=checked_at)
-                        if roster['source_url'] not in {e['url'] for e in p['events'] if e['type'] == '우선협상대상자'}:
-                            raise ValueError('Preferred roster lacks matching program stage')
-                        prior = p.get('preferred_gps', [])
-                        if prior and (prior != roster['preferred_gps'] or
-                                      p.get('manager_list_sources', {}).get('preferred_gps') != roster['source_url']):
-                            raise ValueError('Existing preferred roster changed')
-                        tracks = {name: r['league'] for r in roster['rosters'] for name in r['names']}
-                        if any(name in p.get('gp_tracks', {}) and p['gp_tracks'][name] != track for name, track in tracks.items()):
-                            raise ValueError('Preferred roster league conflicts with prior evidence')
-                        p['preferred_gps'] = copy.deepcopy(roster['preferred_gps'])
-                        p.setdefault('manager_list_sources', {})['preferred_gps'] = roster['source_url']
-                        p.setdefault('gp_tracks', {}).update(tracks)
-                    except (KeyError, TypeError, ValueError) as exc:
-                        holds.append({'stage': 'preferred_roster', 'url': preferred[0]['url'], 'reason': str(exc)})
+            _attach_preferred_roster(p, original, members, checked_at, holds)
             p['publication_version'] = 1
             p['source_program_key'] = key
             programs[p['id']] = p
