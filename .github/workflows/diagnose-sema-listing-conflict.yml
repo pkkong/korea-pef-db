@@ -1,0 +1,62 @@
+name: Diagnose SEMA listing conflict
+on:
+  workflow_dispatch:
+    inputs:
+      collection_run:
+        description: Completed failed daily LP collection with a retained SEMA listing conflict
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    if: github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify failed collection artifact provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          COLLECTION_RUN: ${{ inputs.collection_run }}
+        run: |
+          python3 - <<'PYCODE'
+          import json,os,subprocess
+          from pathlib import Path
+          ident=os.environ['COLLECTION_RUN']
+          assert ident.isascii() and ident.isdecimal() and int(ident)>0,'Numeric Actions run required'
+          run=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{ident}"]))
+          assert run['repository']['full_name']==os.environ['GH_REPO'] and run['head_branch']=='main'
+          assert run['path']=='.github/workflows/collect-kgrowth-programs.yml'
+          assert run['event'] in ('schedule','workflow_dispatch')
+          assert run['status']=='completed' and run['conclusion']=='failure','Inspect the original completed failure'
+          out=Path('/tmp/lp-sema-conflict');out.mkdir()
+          provenance={k:run[k] for k in ('id','path','head_sha','conclusion','event')}
+          (out/'provenance.json').write_text(json.dumps(provenance))
+          print(json.dumps(provenance))
+          PYCODE
+      - uses: actions/download-artifact@v4
+        with:
+          name: kgrowth-collection
+          run-id: ${{ inputs.collection_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-failed-collection
+      - name: Test bounded SEMA failure evidence and replay
+        run: python3 -m unittest services.lp.tests.test_diagnose_sema_listing_conflict
+      - name: Retain at most one source-derived SEMA listing response before parsing
+        run: python3 services/lp/src/diagnose_sema_listing_conflict.py --collection /tmp/lp-failed-collection/lp-institution-collection.json --output-dir /tmp/lp-sema-conflict
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-sema-listing-conflict
+          path: /tmp/lp-sema-conflict
+          retention-days: 30
+          if-no-files-found: warn
