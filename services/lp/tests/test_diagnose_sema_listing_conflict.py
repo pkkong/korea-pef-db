@@ -36,7 +36,7 @@ def duplicate_html(url, *, title=None, stamp=None, second_id=True):
 
 class SemaConflictDiagnosticTests(unittest.TestCase):
     def test_raw_receipt_is_checkpointed_before_unchanged_parser_failure(self):
-        source = parent(); url = source['holds'][0]['url']; raw = duplicate_html(url).encode()
+        source = parent(); url = source['holds'][0]['url']; raw = duplicate_html(url, title=TITLE + ' 변경').encode()
         before = copy.deepcopy(source); calls = []; checkpoints = []
         real_parser = d.sema.parse_listing
         def parse(*args, **kwargs):
@@ -58,7 +58,7 @@ class SemaConflictDiagnosticTests(unittest.TestCase):
 
     def test_occurrences_keep_other_id_and_actual_pin_url_title_date_differences(self):
         source = parent(); url = source['holds'][0]['url']
-        for changes, fields in (({}, ['pinned']), ({'title': TITLE + ' 변경'}, ['title', 'pinned']),
+        for changes, fields in (({'title': TITLE + ' 변경'}, ['title', 'pinned']),
                                 ({'stamp': '2026-08-15'}, ['date', 'pinned'])):
             raw = duplicate_html(url, **changes).encode()
             result = d.diagnose(source, lambda u: raw)
@@ -71,6 +71,16 @@ class SemaConflictDiagnosticTests(unittest.TestCase):
                 self.assertEqual(len(analysis['duplicates'][0]['occurrences']), 2)
                 self.assertFalse(result['success'])
                 d.verify(result, source)
+
+    def test_pin_only_duplicate_now_parses_once_without_repairing_original_parent(self):
+        source = parent(); url = source['holds'][0]['url']
+        result = d.diagnose(source, lambda u: duplicate_html(url).encode())
+        self.assertTrue(result['success'])
+        rows = result['parser']['rows']
+        self.assertEqual([r['source_id'] for r in rows], ['sema:990001', 'sema:990002'])
+        self.assertTrue(rows[0]['pinned']); self.assertFalse(rows[1]['pinned'])
+        self.assertFalse(result['previous_failure_resolved'])
+        self.assertEqual(d.verify(result, source), result['parser'])
 
     def test_invalid_or_multiple_failures_and_unregistered_queries_never_fetch(self):
         source = parent(); url = source['holds'][0]['url']
@@ -113,7 +123,7 @@ class SemaConflictDiagnosticTests(unittest.TestCase):
 
     def test_raw_hash_parent_parser_and_approval_tamper_are_detected_offline(self):
         source = parent(); url = source['holds'][0]['url']
-        result = d.diagnose(source, lambda u: duplicate_html(url).encode())
+        result = d.diagnose(source, lambda u: duplicate_html(url, title=TITLE + ' 변경').encode())
         for key in ('hash', 'raw', 'parent', 'parser', 'claim', 'requests', 'response_url'):
             bad = copy.deepcopy(result)
             if key == 'hash': bad['response']['sha256'] = '0' * 64
@@ -168,7 +178,7 @@ class SemaConflictDiagnosticTests(unittest.TestCase):
         self.assertEqual(d.verify(result, source), result['parser'])
 
     def test_cli_saves_receipt_then_failure_result_and_exit_code_without_network(self):
-        source = parent(); raw = duplicate_html(source['holds'][0]['url']).encode()
+        source = parent(); raw = duplicate_html(source['holds'][0]['url'], title=TITLE + ' 변경').encode()
         real = d.diagnose
         with tempfile.TemporaryDirectory() as folder:
             collection = Path(folder) / 'collection.json'; collection.write_text(json.dumps(source))

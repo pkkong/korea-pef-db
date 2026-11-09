@@ -79,8 +79,14 @@ def parse_listing(html, url, config):
         row['pinned'] = pinned
         if not pinned and re.sub(r'\s+', '', query['searchWrd'][0]) not in re.sub(r'\s+', '', row['title']):
             raise ValueError('SEMA title search returned an unrelated regular row')
-        if ident in seen and seen[ident] != row:
-            raise ValueError('SEMA conflicting duplicate notice')
+        if ident in seen:
+            previous = seen[ident]
+            if any(previous[key] != row[key] for key in ('source_id', 'url', 'title', 'date')):
+                raise ValueError('SEMA conflicting duplicate notice')
+            # The official board can show the same immutable notice once as
+            # a pinned announcement and again in its ordinary chronological row.
+            # Only that presentation flag is combined; source facts stay exact.
+            row['pinned'] = previous['pinned'] or row['pinned']
         seen[ident] = row
         rows.append(row)
     if not rows or (None in rows and len(rows) != 1):

@@ -1,5 +1,6 @@
 """SEMA official routes, page boundaries and independently replayed discovery."""
 import copy
+import re
 import unittest
 from urllib.parse import parse_qs, urlencode, urlsplit
 from services.lp.src import lp_board_adapter_sema as sema
@@ -64,6 +65,61 @@ class SemaBoardTests(unittest.TestCase):
         with self.assertRaises(ValueError):sema.parse_listing(html.replace('nttId=990001','nttId=990001&nttId=2'),self.url,self.config)
         with self.assertRaises(ValueError):sema.parse_listing(html.replace(TITLE,'다른 게시글'),self.url,self.config)
         with self.assertRaises(ValueError):sema.last_page(html.replace('title="마지막 목록"','title="변경"'),self.url,self.config)
+
+    def test_identical_pinned_and_regular_notice_merge_in_either_order_without_losing_other_ids(self):
+        html = listing(self.url)
+        regular = re.search(r'<tr><td>1</td>.*?</tr>', html).group()
+        pinned = regular.replace('<td>1</td>', '<td>공지</td>', 1)
+        other = regular.replace('990001', '990002').replace('2026-08-14', '2026-08-13')
+        original = sema.parse_listing(html, self.url, self.config)[0]
+        other_row = sema.parse_listing(html.replace(regular, other), self.url, self.config)[0]
+        for first, second in ((pinned, regular), (regular, pinned)):
+            rows = sema.parse_listing(html.replace(regular, first + second + other), self.url, self.config)
+            with self.subTest(first_pinned=first == pinned):
+                self.assertEqual(rows, [{**original, 'pinned': True}, other_row])
+                self.assertEqual(sema.last_page(html.replace(regular, first + second + other), self.url, self.config), 1)
+
+    def test_duplicate_source_url_title_or_date_conflicts_are_still_rejected(self):
+        html = listing(self.url)
+        regular = re.search(r'<tr><td>1</td>.*?</tr>', html).group()
+        pinned = regular.replace('<td>1</td>', '<td>공지</td>', 1)
+        variants = {'title': pinned.replace(TITLE, TITLE + ' 변경'),
+                    'date': pinned.replace('2026-08-14', '2026-08-15'),
+                    'url': pinned.replace('pageIndex=1', 'pageIndex=2')}
+        for field, changed in variants.items():
+            for first, second in ((changed, regular), (regular, changed)):
+                with self.subTest(field=field, first_changed=first == changed), self.assertRaisesRegex(ValueError, 'conflicting duplicate'):
+                    sema.parse_listing(html.replace(regular, first + second), self.url, self.config)
+
+    def test_pinned_copy_does_not_relax_unrelated_regular_search_validation(self):
+        html = listing(self.url)
+        regular = re.search(r'<tr><td>1</td>.*?</tr>', html).group().replace(TITLE, '관련 없는 게시글')
+        pinned = regular.replace('<td>1</td>', '<td>공지</td>', 1)
+        original = re.search(r'<tr><td>1</td>.*?</tr>', html).group()
+        for rows in (pinned + regular, regular + pinned):
+            with self.assertRaisesRegex(ValueError, 'unrelated regular row'):
+                sema.parse_listing(html.replace(original, rows), self.url, self.config)
+
+    def test_old_pinned_duplicate_does_not_hide_recent_regular_row_or_end_history_early(self):
+        config = {**self.config, 'searches': ['위탁운용사'], 'pages': 2}
+        calls = []
+        def fetch(url, referer=None):
+            calls.append(url)
+            if 'list.do?' not in url:
+                return detail().encode()
+            html = listing(url, stamp='2024-08-14', last=2)
+            if parse_qs(urlsplit(url).query)['pageIndex'] == ['2']:
+                return html.replace('990001', '990003').encode()
+            old = re.search(r'<tr><td>1</td>.*?</tr>', html).group()
+            pinned = old.replace('<td>1</td>', '<td>공지</td>', 1)
+            recent = old.replace('990001', '990002').replace('2024-08-14', '2026-08-14')
+            return html.replace(old, pinned + old + recent).encode()
+        report = boards.collect({'sema': config}, lambda c: fetch, STAMP)
+        self.assertFalse(report['holds'])
+        self.assertEqual(sum('list.do?' in url for url in calls), 2)
+        boundary = report['coverage']['sema']['listing_boundaries']
+        self.assertEqual([r['page'] for r in boundary], [2])
+        self.assertEqual(report['coverage']['sema']['candidate_count'], 1)
 
     def test_detail_metadata_body_and_attachment_host_are_strict(self):
         url=sema.parse_listing(listing(self.url),self.url,self.config)[0]['url']
