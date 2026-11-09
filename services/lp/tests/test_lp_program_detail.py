@@ -52,6 +52,16 @@ class ProgramDetailTests(unittest.TestCase):
         self.assertIn('공고상 예정',html)
         self.assertNotIn('data-lp-plan-until=',html)
 
+    def test_screening_roster_does_not_imply_final_selection_or_nonpublication(self):
+        p=program();p.update(status='서류심사 결과',shortlisted_gps=['운용사A','운용사B'])
+        p['events'].append({'type':'서류심사 결과','date':'2026-10-13','title':'서류심사','url':'https://official.example/screening'})
+        html=render_detail_body(p,'2026-11-09')
+        self.assertIn('서류심사 통과 2개 팀입니다.',html)
+        self.assertIn('최종 선정 명단은 아직 확인되지 않았습니다.',html)
+        self.assertNotIn('미공개',html)
+        self.assertEqual(html.count('>통과</a>'),2)
+        self.assertEqual(p['selected_gps'],[])
+
     def test_preferred_roster_is_separate_sourced_and_preserved(self):
         p=program();p['status']='우선협상대상자'
         url='https://official.example/preferred'

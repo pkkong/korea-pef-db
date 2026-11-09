@@ -161,6 +161,8 @@ def render_detail_body(p, as_of=None):
             final = link(gp['source_url'], '발표' if result_pending else '선정') if gp else '—'
             body += f'<tr><td>{name_html}</td><td>{first}</td><td>{final}</td></tr>'
         body += '</tbody></table></div>'
+        if not selected:
+            body += f'<p class="muted">서류심사 통과 {len(set(p["shortlisted_gps"]))}개 팀입니다. 최종 선정 명단은 아직 확인되지 않았습니다.</p>'
     elif p['selected_gps']:
         body += '<div class="scroll"><table><thead><tr><th>운용사</th><th>선정 결과</th></tr></thead><tbody>'
         for gp in p['selected_gps']:
