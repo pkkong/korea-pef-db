@@ -51,7 +51,8 @@ def assess(now, runs, *, history_complete=True):
         if not isinstance(actor, dict) or not isinstance(actor.get('login'), str):
             raise WatchdogError('invalid run actor')
         automatic = (attempt == 1 and (run.get('event') == 'schedule' or
-            (run.get('event') == 'workflow_dispatch' and actor['login'] == 'github-actions[bot]')))
+            (run.get('event') == 'workflow_dispatch' and actor['login'] == 'github-actions[bot]'
+             and run.get('display_title') == 'LP scheduled_watchdog')))
         if run['status'] == 'completed' and run.get('conclusion') not in {
                 'success', 'failure', 'cancelled', 'timed_out', 'action_required',
                 'neutral', 'skipped', 'stale', 'startup_failure'}:

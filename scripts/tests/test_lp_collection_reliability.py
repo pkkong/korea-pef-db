@@ -47,7 +47,13 @@ class ReliabilityTests(unittest.TestCase):
         self.assertEqual(last['state'], 'manual_only')
         self.assertEqual(last['manual_or_rerun_ids'], [1, 2])
         bot = run(3, due, event='workflow_dispatch', actor={'login': 'github-actions[bot]'})
+        self.assertEqual(m.assess(NOW, [bot])['windows'][-1]['state'], 'manual_only')
+        bot['display_title'] = 'LP manual_watchdog'
+        self.assertEqual(m.assess(NOW, [bot])['windows'][-1]['state'], 'manual_only')
+        bot['display_title'] = 'LP scheduled_watchdog'
         self.assertEqual(m.assess(NOW, [bot])['windows'][-1]['state'], 'ok')
+        forged = run(4, due, event='workflow_dispatch', display_title='LP scheduled_watchdog')
+        self.assertEqual(m.assess(NOW, [forged])['windows'][-1]['state'], 'manual_only')
 
     def test_failed_cancelled_and_running_keep_failure_signals(self):
         due = m.expected_windows(NOW)[-1]

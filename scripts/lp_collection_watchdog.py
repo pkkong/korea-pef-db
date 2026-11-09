@@ -109,7 +109,8 @@ def decide(now, collection_runs, active_runs):
 def gh_api(endpoint, *, dispatch=False):
     command = ['gh', 'api', '--method', 'POST' if dispatch else 'GET', endpoint]
     if dispatch:
-        command += ['-f', 'ref=main']
+        origin = 'scheduled_watchdog' if os.environ.get('GITHUB_EVENT_NAME') == 'schedule' else 'manual_watchdog'
+        command += ['-f', 'inputs[watchdog_origin]='+origin, '-f', 'ref=main']
     try:
         result = subprocess.run(command, capture_output=True, timeout=30, check=False)
     except (OSError, subprocess.TimeoutExpired):

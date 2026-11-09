@@ -1,7 +1,13 @@
 name: Collect LP programs
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.watchdog_origin != '' && format('LP {0}', inputs.watchdog_origin) || 'Collect LP programs' }}
 
 on:
   workflow_dispatch:
+    inputs:
+      watchdog_origin:
+        description: Internal watchdog provenance; manual recovery never counts as an unattended schedule
+        type: string
+        required: false
   schedule:
     - cron: '20 0,6 * * 1-5'
 

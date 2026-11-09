@@ -167,6 +167,16 @@ class WatchdogTests(unittest.TestCase):
             with self.assertRaisesRegex(w.WatchdogError, '^GitHub API failed$'):
                 w.gh_api('test')
 
+    def test_watchdog_dispatch_records_parent_trigger_without_changing_ref_or_guards(self):
+        for event, expected in (('schedule', 'scheduled_watchdog'), ('workflow_dispatch', 'manual_watchdog')):
+            with self.subTest(event=event), patch.dict(w.os.environ, {'GITHUB_EVENT_NAME': event}), \
+                 patch.object(w.subprocess, 'run') as execute:
+                execute.return_value.returncode = 0
+                execute.return_value.stdout = b''
+                w.gh_api('dispatch', dispatch=True)
+                self.assertIn('inputs[watchdog_origin]='+expected, execute.call_args.args[0])
+                self.assertEqual(execute.call_args.args[0][-2:], ['-f', 'ref=main'])
+
 
 if __name__ == '__main__':
     unittest.main()
