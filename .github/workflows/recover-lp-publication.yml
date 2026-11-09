@@ -261,8 +261,13 @@ jobs:
               assert current.get('selected_gps',[])==previous.get('selected_gps',[]),'Preferred is not final selection'
               for field in ('id','title','institution_id','asset_scope',*OFFERING_FIELDS):
                   assert current.get(field)==previous.get(field),'Existing offering changed: '+field
-              roster_fields={'preferred_gps','manager_list_sources','gp_tracks'}
-              assert {k:v for k,v in current.items() if k not in roster_fields}=={k:v for k,v in previous.items() if k not in roster_fields}, 'Preferred replay changed a non-roster field'
+              # The ordinary automatic projector stamps this replay's check
+              # time; it must not change any other non-roster program field.
+              replay_fields={'preferred_gps','manager_list_sources','gp_tracks','checked_at'}
+              changed={k for k in set(current)|set(previous) if current.get(k)!=previous.get(k)}
+              assert changed<=replay_fields, 'Preferred replay changed unexpected fields: '+','.join(sorted(changed-replay_fields))
+              if 'checked_at' in changed:
+                  assert current['checked_at']==report['checked_at'], 'Unexpected replay observation time'
               assert current['manager_list_sources']['preferred_gps']==receipt['source_url']
               assert receipt['source_url'] in {e['url'] for e in current['events'] if e['type']=='우선협상대상자'}
           errors=data.get('institution_collection_holds',[])

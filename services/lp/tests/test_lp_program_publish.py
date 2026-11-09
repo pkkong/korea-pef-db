@@ -385,6 +385,35 @@ class PublishContracts(unittest.TestCase):
         self.assertEqual(automatic,next(p for p in revised['programs'] if p['id']==automatic['id']))
         self.assertTrue(any(h['program_id']==automatic['id'] for h in revised['program_holds']))
 
+    def test_full_prepare_fills_retained_preferred_names_and_only_refreshes_check_time(self):
+        from services.lp.tests.test_koreapost_coinvestment_preferred import evidence, FAMILY
+        from services.lp.tests.test_lp_notice_terms import BODY
+        original, preferred = evidence(body='2026년도 ' + FAMILY + '\n' + BODY + '\n출자대상 블라인드형 기관전용 사모집합투자기구')
+        source = {'notices': [original, preferred], 'holds': []}
+        old_source = copy.deepcopy(source)
+        for notice in old_source['notices']:
+            notice.pop('detail_proof', None)
+            notice.pop('attachment_proofs', None)
+        self.report.update(checked_at='2026-11-09T00:00:00+09:00',
+                           priority_sources={'koreapost': old_source})
+        baseline, _ = prepare(self.data, self.report)
+        old = next(p for p in baseline['programs'] if p['id'] == 'koreapost-2026-domestic-coinvestment')
+        self.assertTrue(old['auto_extracted'])
+        self.assertFalse(old.get('preferred_gps'))
+        self.report.update(checked_at='2026-11-10T00:00:00+09:00',
+                           priority_sources={'koreapost': source})
+        data, pages = prepare(baseline, self.report)
+        current = next(p for p in data['programs'] if p['id'] == old['id'])
+        self.assertEqual(current['preferred_gps'], ['가나다프라이빗에쿼티'])
+        self.assertEqual(current['status'], old['status'])
+        self.assertEqual(current['selected_gps'], [])
+        self.assertEqual(current['checked_at'], self.report['checked_at'])
+        self.assertEqual({k for k in set(old) | set(current) if old.get(k) != current.get(k)},
+                         {'preferred_gps', 'manager_list_sources', 'gp_tracks', 'checked_at'})
+        self.assertIn('가나다프라이빗에쿼티', pages['program-' + old['id'] + '.html'])
+        repeated, _ = prepare(data, self.report)
+        self.assertEqual(current, next(p for p in repeated['programs'] if p['id'] == old['id']))
+
     def test_growth_repeated_collection_revalidates_and_preserves_last_good(self):
         from services.lp.tests.test_kgrowth_notice_terms import notice, DOCUMENT
         n=notice()
