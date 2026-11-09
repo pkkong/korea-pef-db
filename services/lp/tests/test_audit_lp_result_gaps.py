@@ -42,6 +42,14 @@ class ResultGapAuditTests(unittest.TestCase):
         p['events'][-1]['url']='https://official.example/other'
         self.assertEqual(self.run_audit([p])['rows'][0]['gap'],'result_source_not_in_retained_index')
 
+    def test_sourced_stage_status_without_names_is_not_hidden_in_deadline_bucket(self):
+        for status,expected in [('우선협상대상자','preferred_status_roster_unconfirmed'),
+                                ('1차 심사 결과','screening_status_roster_unconfirmed'),
+                                ('선정 완료','result_status_without_source_or_roster')]:
+            p=program();p['status']=status
+            row=self.run_audit([p])['rows'][0]
+            self.assertEqual(row['gap'],expected);self.assertFalse(row['unpublished_claim'])
+
     def test_model_names_are_not_claimed_browser_verified_or_exported(self):
         p=program();p['events'].append({'type':'최종 선정','url':'https://official.example/result'})
         p['selected_gps']=[{'name':'Official Manager','source_url':'https://official.example/result'}]

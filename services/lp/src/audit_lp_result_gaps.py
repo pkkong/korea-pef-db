@@ -73,6 +73,12 @@ def audit(programs, index, *, run_id, as_of):
             gap = 'preferred_only_final_unconfirmed'
         elif rosters['shortlisted_gps']:
             gap = 'screening_only_final_unconfirmed'
+        elif '우선협상' in p['status']:
+            gap = 'preferred_status_roster_unconfirmed'
+        elif '심사' in p['status']:
+            gap = 'screening_status_roster_unconfirmed'
+        elif p['status'] in ('선정 완료', '선정 결과 발표', '선정 결과', '최종 선정'):
+            gap = 'result_status_without_source_or_roster'
         elif deadline_passed:
             gap = 'deadline_passed_result_unconfirmed'
         else:
