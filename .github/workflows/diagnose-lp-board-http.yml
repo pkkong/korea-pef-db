@@ -13,6 +13,11 @@ on:
       verify_kexim_result:
         type: boolean
         default: false
+      kexim_result_stage:
+        description: Automatically choose a retained final result or a matching pending screening stage
+        type: choice
+        default: final
+        options: [final, screening]
       kexim_listing_run:
         type: string
         required: false
@@ -459,10 +464,12 @@ jobs:
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
       - name: Replay proof boundaries before official requests
         run: python3 -m unittest services.lp.tests.test_collect_kexim_programs services.lp.tests.test_lp_attachment_text
-      - name: Capture at most one automatically discovered final-result body and first file
+      - name: Capture at most one automatically discovered result body and first file
+        env:
+          RESULT_STAGE: ${{ inputs.kexim_result_stage }}
         run: |
           python3 - <<'PYCODE'
-          import base64,hashlib,json,re,sys
+          import base64,hashlib,json,os,re,sys
           from datetime import datetime,timezone
           from pathlib import Path
           from urllib.parse import urlsplit
@@ -483,8 +490,12 @@ jobs:
               baseline=json.loads(Path('/tmp/kexim-result-baseline/lp-priority-collection.json').read_text())['sources']['kexim']
               assert baseline['notices'] and not baseline.get('error')
               by_id={str(n['source_id']):n for n in baseline['notices']}
-              targets=[r for r in rows if r['stage']=='최종 선정']
-              assert targets,'No final result in this retained page; do not infer absence elsewhere'
+              stage=os.environ['RESULT_STAGE'];assert stage in {'final','screening'}
+              targets=[r for r in rows if r['stage']==('최종 선정' if stage=='final' else '서류심사 결과')]
+              if stage=='screening':
+                  targets=[r for r in targets if any(k._title_matches(recipe,r['title']) for recipe in k._recipes())
+                           and re.fullmatch(r'/HPHKBI039M01/([0-9]+)',urlsplit(r['link']).path)[1] not in k._approved_source_ids()]
+              assert targets,'No matching result in this retained page; do not infer absence elsewhere'
               target=sorted(targets,key=lambda r:(r['announced_date'],r['link']),reverse=True)[0]
               ident=re.fullmatch(r'/HPHKBI039M01/([0-9]+)',urlsplit(target['link']).path)[1]
               assert ident in by_id,'Inspect a newly discovered result before using an older baseline'
@@ -499,6 +510,8 @@ jobs:
               notice=k.parse_detail(ident,raw_body)
               assert notice['title']==target['title'] and notice['date']==target['announced_date']
               assert notice['sha256']==previous['sha256'],'Result body changed; retained response requires review'
+              notice['detail_proof']={'kind':'kexim_detail_body_v1','raw_base64':base64.b64encode(raw_body).decode('ascii'),
+                                      'sha256':hashlib.sha256(raw_body).hexdigest(),'byte_length':len(raw_body)}
               notice['checked_at']=datetime.now(timezone.utc).isoformat();notice['attachment_hashes']={};notice['attachment_texts']={}
               file=notice['attachments'][0]
               k._attachment_identity(notice,file['url'])
