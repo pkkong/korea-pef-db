@@ -249,6 +249,19 @@ def parse_detail(source_id: str, raw: bytes | str) -> dict:
     return record
 
 
+def retain_detail_proof(notice: dict, raw: bytes) -> None:
+    """Retain actual detail bytes for automatic followup identity replay."""
+    if not isinstance(raw, bytes) or not raw or len(raw) > 12 * 1024 * 1024:
+        raise ValueError("Invalid KEXIM detail proof size")
+    parsed = parse_detail(str(notice["source_id"]), raw)
+    if any(notice.get(key) != value for key, value in parsed.items()):
+        raise ValueError("KEXIM detail bytes differ from parsed notice")
+    notice["detail_proof"] = {"kind": "kexim_detail_body_v1",
+                              "raw_base64": base64.b64encode(raw).decode("ascii"),
+                              "sha256": hashlib.sha256(raw).hexdigest(),
+                              "byte_length": len(raw)}
+
+
 def fingerprint(notice: dict) -> str:
     value = [notice["title"], notice["date"], notice["body"]]
     return hashlib.sha256(json.dumps(value, ensure_ascii=False).encode()).hexdigest()
@@ -305,9 +318,27 @@ def _approved_source_ids() -> set[str]:
     return {str(source["source_id"]) for recipe in _recipes() for source in recipe["sources"]}
 
 
+def _automatically_linked_source_ids(notices: list[dict]) -> set[str]:
+    """An accepted raw-proven phase is no longer an unresolved suggestion."""
+    try:
+        from .kexim_followup import augment_recipe
+    except ImportError:
+        from kexim_followup import augment_recipe
+    checked_at = max((str(n.get("checked_at", "")) for n in notices), default="")
+    linked = set()
+    for recipe in _recipes():
+        try:
+            augmented = augment_recipe(recipe, notices, checked_at)
+        except (ValueError, KeyError, StopIteration, TypeError):
+            continue
+        old = {str(s["source_id"]) for s in recipe["sources"]}
+        linked.update(str(s["source_id"]) for s in augmented["sources"] if str(s["source_id"]) not in old)
+    return linked
+
+
 def link_suggestions(notices: list[dict]) -> list[dict]:
     """New official stages are review candidates, never approved GP updates."""
-    approved = _approved_source_ids()
+    approved = _approved_source_ids() | _automatically_linked_source_ids(notices)
     result = []
     for notice in notices:
         if str(notice["source_id"]) in approved:
@@ -328,7 +359,7 @@ def link_suggestions(notices: list[dict]) -> list[dict]:
 
 def discovery_candidates(notices: list[dict]) -> list[dict]:
     """Unmatched fund notices need PE-scope review before becoming programs."""
-    approved = _approved_source_ids()
+    approved = _approved_source_ids() | _automatically_linked_source_ids(notices)
     linked = {item["source_id"] for item in link_suggestions(notices)}
     return [{"institution_id": "kexim", "source_id": str(n["source_id"]),
              "title": n["title"], "date": n["date"], "url": n["url"]}
@@ -367,6 +398,11 @@ def _verified_facts(recipe: dict, notices: dict[str, dict]) -> dict:
 
 
 def _project_one(recipe: dict, by_id: dict[str, dict], notices: list[dict], checked_at: str) -> dict:
+    try:
+        from .kexim_followup import augment_recipe
+    except ImportError:
+        from kexim_followup import augment_recipe
+    recipe = augment_recipe(recipe, notices, checked_at)
     sources = _reviewed_source(recipe, by_id)
     approved_ids = {str(source["source_id"]) for source in recipe["sources"]}
     for notice in notices:
@@ -436,6 +472,10 @@ def _project_one(recipe: dict, by_id: dict[str, dict], notices: list[dict], chec
         app_source = next(n for a,n in sources if a["event"] == "접수 현황")
         p["manager_list_sources"] = {"applicants_gps": app_source["url"]}
         p["status"] = "접수 마감"
+    if shortlist:
+        screening_source = next(n for a, n in sources if a["event"] == "서류심사 결과")
+        p.setdefault("manager_list_sources", {})["shortlisted_gps"] = screening_source["url"]
+        p["status"] = "서류심사 결과"
     for stage_teams in (applicants, shortlist, selected):
         for track, names in stage_teams.items():
             for name in names:
@@ -595,7 +635,10 @@ def collect(checked_at: str, fetch=None) -> dict:
     discovered.update(_approved_source_ids())
     notices = []
     for source_id in sorted(discovered, key=int):
-        notice = parse_detail(source_id, fetch(f"{BOARD}/{source_id}"))
+        raw_detail = fetch(f"{BOARD}/{source_id}")
+        notice = parse_detail(source_id, raw_detail)
+        if source_id not in _approved_source_ids():
+            retain_detail_proof(notice, raw_detail)
         notice["checked_at"] = checked_at
         notice["attachment_hashes"] = {}
         notice["attachment_texts"] = {}

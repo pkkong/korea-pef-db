@@ -7,6 +7,10 @@ on:
         description: Completed main-branch Collect LP programs run with retained evidence
         required: true
         type: string
+      kexim_stage_evidence_run:
+        description: Optional successful bounded KEXIM screening proof capture for this collection
+        required: false
+        type: string
       retry_failed_institutions:
         description: Retry at most two failed issuers and one failed association stream
         required: false
@@ -35,6 +39,7 @@ jobs:
           COLLECTION_RUN: ${{ inputs.collection_run }}
           INSTITUTION_EVIDENCE_RUN: ${{ inputs.institution_evidence_run }}
           GH_REPO: ${{ github.repository }}
+          KEXIM_STAGE_RUN: ${{ inputs.kexim_stage_evidence_run }}
         run: |
           python3 - <<'PY'
           import datetime,json,os,subprocess
@@ -59,6 +64,17 @@ jobs:
               saved_at=datetime.datetime.fromisoformat(previous['created_at'].replace('Z','+00:00'))
               assert created<=saved_at<=datetime.datetime.now(datetime.timezone.utc),'Recovery predates source collection'
               print(json.dumps({'reused_institution_evidence_run':previous['id'],'head_sha':previous['head_sha']}))
+          stage_run=os.environ.get('KEXIM_STAGE_RUN','')
+          if stage_run:
+              assert stage_run.isascii() and stage_run.isdecimal() and int(stage_run)>0
+              stage=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{stage_run}"]))
+              assert stage['repository']['full_name']==os.environ['GH_REPO']
+              assert stage['path']=='.github/workflows/diagnose-lp-board-http.yml'
+              assert stage['head_branch']=='main' and stage['event']=='workflow_dispatch'
+              assert stage['status']=='completed' and stage['conclusion']=='success'
+              stage_at=datetime.datetime.fromisoformat(stage['created_at'].replace('Z','+00:00'))
+              assert created<=stage_at<=datetime.datetime.now(datetime.timezone.utc)
+              print(json.dumps({'kexim_stage_evidence_run':stage['id'],'head_sha':stage['head_sha']}))
           PY
       - uses: actions/download-artifact@v4
         with:
@@ -73,6 +89,13 @@ jobs:
           run-id: ${{ inputs.institution_evidence_run }}
           github-token: ${{ github.token }}
           path: /tmp/lp-retained-institution
+      - uses: actions/download-artifact@v4
+        if: inputs.kexim_stage_evidence_run != ''
+        with:
+          name: kexim-result-proof
+          run-id: ${{ inputs.kexim_stage_evidence_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-kexim-stage
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -100,14 +123,44 @@ jobs:
         run: |
           python3 -m unittest services.lp.tests.test_retry_lp_failed_sources
           python3 services/lp/src/retry_lp_failed_sources.py --directory /tmp/lp-recovery
+      - name: Reuse one raw-verified automatic KEXIM screening stage without HTTP
+        if: inputs.kexim_stage_evidence_run != ''
+        env:
+          COLLECTION_RUN: ${{ inputs.collection_run }}
+        run: |
+          python3 -m unittest services.lp.tests.test_kexim_followup services.lp.tests.test_reuse_kexim_stage_evidence
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          from services.lp.src.reuse_kexim_stage_evidence import reuse_stage_evidence
+          root=Path('/tmp/lp-kexim-stage')
+          result=json.loads((root/'result.json').read_text())
+          provenance=json.loads((root/'provenance.json').read_text())
+          assert str(provenance['COLLECTION_RUN']['id'])==os.environ['COLLECTION_RUN']
+          assert result['success'] is True and result['published'] is False
+          assert result['listing_requests']==0 and result['detail_requests']==1 and result['attachment_requests']==1
+          assert result['database_writes']==0 and result['previous_attachment_hash_equal'] is True
+          path=Path('/tmp/lp-recovery/lp-priority-collection.json')
+          priority=json.loads(path.read_text())
+          notice=json.loads((root/'notice.json').read_text())
+          assert result['source_id']==notice['source_id']
+          upgraded,receipt=reuse_stage_evidence(priority['sources']['kexim'],notice,
+                                               (root/'detail-response.bin').read_bytes(),
+                                               (root/'attachment-response.bin').read_bytes())
+          priority['sources']['kexim']=upgraded
+          path.write_text(json.dumps(priority,ensure_ascii=False))
+          Path('/tmp/lp-recovery/kexim-stage-reuse.json').write_text(json.dumps(receipt,ensure_ascii=False))
+          print(json.dumps(receipt,ensure_ascii=False))
+          PY
       - name: Replay source proofs and preserve existing public programs
         env:
           PYTHONPATH: services/lp/src
           NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS: '1'
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          KEXIM_STAGE_RUN: ${{ inputs.kexim_stage_evidence_run }}
         run: |
           python3 - <<'PY'
-          import copy,json,tempfile
+          import copy,json,os,tempfile
           from datetime import datetime,timezone
           from pathlib import Path
           from publish_lp_programs import connect,baseline,prepare
@@ -134,6 +187,17 @@ jobs:
               if previous['institution_id'] in {'sema','mmaa','kfinco'}:
                   for field in ('commitment_amount_krw','manager_count','deadline'):
                       if field in previous: assert current.get(field)==previous[field], 'Existing public field changed: '+field
+          if os.environ.get('KEXIM_STAGE_RUN'):
+              receipt=json.loads((root/'kexim-stage-reuse.json').read_text())
+              before={p['id']:p for p in old['programs']}
+              assert set(before)==set(after),'Screening replay cannot introduce/remove public businesses'
+              previous=before[receipt['program_id']];current=after[receipt['program_id']]
+              assert current['status']=='서류심사 결과' and len(current['shortlisted_gps'])==receipt['screening_count']
+              assert current.get('selected_gps',[])==previous.get('selected_gps',[]),'Screening is not final selection'
+              for field in ('id','title','institution_id','asset_scope','commitment_amount_krw','manager_count','per_fund_amount_krw','deadline','applicants_gps','review_evidence'):
+                  assert current.get(field)==previous.get(field),'Existing PE terms changed: '+field
+              assert receipt['source_url'] in {e['url'] for e in current['events'] if e['type']=='서류심사 결과'}
+              assert set(current['shortlisted_gps'])<=set(previous['applicants_gps'])
           errors=data.get('institution_collection_holds',[])
           assert not any(h.get('stage')=='institution_validation' for h in errors), 'Invalid official receipt'
           new=[p for p in data['programs'] if p['id'] not in {old['id'] for old in old['programs']}]
@@ -193,6 +257,7 @@ jobs:
             /tmp/lp-recovery/lp-priority-collection.json
             /tmp/lp-recovery/lp-shared-collection.json
             /tmp/lp-recovery/preflight.json
+            /tmp/lp-recovery/kexim-stage-reuse.json
             /tmp/lp-recovery/publication.json
             /tmp/lp-recovery/remaining-failures.json
           retention-days: 7
