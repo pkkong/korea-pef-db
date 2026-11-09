@@ -18,7 +18,7 @@ jobs:
       - name: Install LP read-only database driver
         run: python3 -m pip install 'psycopg[binary]==3.2.10'
       - name: Test bounded metadata and historical inventory contracts
-        run: python3 -m unittest services.lp.tests.test_lp_history_index services.lp.tests.test_lp_history_coverage
+        run: python3 -m unittest services.lp.tests.test_lp_history_index services.lp.tests.test_lp_history_coverage services.lp.tests.test_audit_lp_result_gaps
       - name: Export LP-owned metadata without official source HTTP or database writes
         env:
           SUPABASE_DB_URL: ${{ secrets.LP_SUPABASE_DB_URL || secrets.SUPABASE_DB_URL }}
@@ -27,6 +27,10 @@ jobs:
         run: |
           python3 services/lp/src/build_lp_history_coverage.py --database-index /tmp/lp-history-index/database-index.json --as-of "$(TZ=Asia/Seoul date +%F)" --output-dir /tmp/lp-history-index
           cat /tmp/lp-history-index/lp-history-coverage.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Audit published result sources and manager gaps without claiming nonpublication
+        env:
+          SUPABASE_DB_URL: ${{ secrets.LP_SUPABASE_DB_URL || secrets.SUPABASE_DB_URL }}
+        run: python3 services/lp/src/audit_lp_result_gaps.py --database-index /tmp/lp-history-index/database-index.json --as-of "$(TZ=Asia/Seoul date +%F)" --output /tmp/lp-history-index/lp-result-gaps.json
       - uses: actions/upload-artifact@v4
         with:
           name: lp-retained-history-index
