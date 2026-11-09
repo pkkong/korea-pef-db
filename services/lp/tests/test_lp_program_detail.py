@@ -59,7 +59,7 @@ class ProgramDetailTests(unittest.TestCase):
         self.assertIn('서류심사 통과 2개 팀입니다.',html)
         self.assertIn('최종 선정 명단은 아직 확인되지 않았습니다.',html)
         self.assertNotIn('미공개',html)
-        self.assertEqual(html.count('>통과</a>'),2)
+        self.assertEqual(html.count('href="https://official.example/screening"'),2)
         self.assertEqual(p['selected_gps'],[])
 
     def test_preferred_roster_is_separate_sourced_and_preserved(self):
