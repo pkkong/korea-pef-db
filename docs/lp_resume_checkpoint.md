@@ -1,6 +1,13 @@
 # LP 구축 자동 재개 체크포인트
 
-갱신: 2026-11-10 08:10 KST. 현재 채팅의 미완료 작업을 이어가기 위한 기록이다. 운영 결과는 관측일을 붙이고, 미완료 초안을 배포 완료로 해석하지 않는다.
+갱신: 2026-11-10 08:20 KST. 현재 채팅의 미완료 작업을 이어가기 위한 기록이다. 운영 결과는 관측일을 붙이고, 미완료 초안을 배포 완료로 해석하지 않는다.
+
+## 현재 재개 지점 — 2026-11-10 08:12 KST
+
+- 마지막 정상 운영 확인은 읽기전용42717633253/2135086(08:06)이다. 보고서119/문서654버전·이전 전체메타654행 동일·공개run0022341a03f707dab4d32190/LP publisher0으로 새 발행commit과 미완료 연결이 없음을 확인했다. 05:03 health503 뒤08:03 정상 복구, 이후 기존31상세/index/health/검토 접근경계도 통과했다. 새 우본1사 화면 반영 완료는 아니다.
+- 현재 작은 단위는 **91MB 전체보고서 최종저장의 임시 PostgreSQL 재생**이다. 기존 Verifier 역할을 Worker로 재사용해 probe 모듈/검사/workflow3파일만 준비하며 Lead는 큐 등록/문서/통합/실행을 맡는다. 운영DB/원기관HTTP/추가secret은 쓰지 않는다. 임시 localhost 전용DB에서 기존 SQL을 비교하고 원문 전체 동등성과 실패 유형·단계만 기록한다. 실제 공급자/메모리/디스크 원인은 아직 미확정이므로 생산 발행을 반복하지 않는다.
+- 다음 publisher 상태 확인은 기존 `inspect-lp-remaining-boards.yml`의 `profile=publication_waits`/기본 연결을 재사용한다. 이미 있던 진단과 기능을 중복 보유하지 않도록, 2135086에서 한시 추가한 history 진단step은42717633253의 실제 결과를 보존한 뒤 제거한다. 이력 메타/결과공백 기능과 실패 증거는 유지한다. 관리 토큰은 연결돼 있지 않았고 Mac 잠금으로 관리화면을 읽지 못했으므로 프로젝트 DB 로그/자원 원인은 여전히 미확인이다. 이를 로그인 개발이나 임의 유료 전환으로 우회하지 않는다.
+- 실제 실패42685051799와 후속42689108208·두 사전검증실패는 보존한다. 최신3전체JSONB·현재공개run·문서/검토 계약은 그대로다. 마지막 CI2135086/42717593851 성공. 전체 과거/비교/공식결과/무인6회·첫 일요일감사는 미완료이며 기존1시간 예약은 활성이다.
 
 ## 발행 저장 취소·DB 연결 실패 후 공개 복구 확인 — 2026-11-10 08:10 KST
 
@@ -370,3 +377,6 @@
 - DB구조·공식원문/PE·VC 판단·서비스독립성을 유지한다.2023-01-01~현재 역사 DB는11/6 사용자 승인 범위다. GP 프로필 개발·로그인·2023년 이전 전체 과거를 새 선행조건으로 추가하지 않는다. 공식 선정 명단은 이번 LP 범위이며 비공개 KFINCO에는 접근하지 않는다.
 - 사용자 기존 변경은 briefs/data/product/control center 문서와 `services/lp/src/build_lp_service_pages.py`, 옛 디렉터리 파일들이다. task 밖 변경은 stage/revert하지 않는다. git status와 이전 대화로 구분한다. 생성물·원문·DB·비밀은 커밋하지 않는다.
 - Python: `/Users/pkkong/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3`, 의존 경로 `PYTHONPATH=/tmp/lp-remaining-test-deps-20261103`. 검사: `scripts/run_regression_tests.py`, `scripts/check_architecture_contracts.py`, `/Users/pkkong/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node --test services/lp/collector/tests/*.test.js` (현재 셸의 일반 node는 없음).
+
+- 격리검사 준비: 새 probe3파일과 공유큐 등록을 통합했다. 운영DB 주소/환경변수는 거절하고 localhost 전용 PostgreSQL17/512MiB만 사용한다. 원래 수집42575785880와 실패42685051799의 공유/기관 파일 바이트·priority30원문 core/지문을 대조하며, 수은 legacy preview 삭제1건은 같은 첨부 URL·해시/raw SHA·canonical 판독 존재 조건으로만 허용한다. 재검증시각 외 동일 보고서를 구성하고 현행 저장 함수를 그대로1transaction 재생한다. SQL120초·클라이언트420초·job10분 상한과 전체 JSON 동등성/readback·메타 전용/OOM카운터 artifact를 준비했다. 운영 원인 추정/PE·GP승인·원기관HTTP·운영 DB쓰기는0이다.
+- 로컬1350검사 실패/오류/skip0·구조계약·변경YAML/bash/Python 검사 통과. 실제 임시PG 실행은 아직이며, 원격CI와 활성LP 공유큐 확인 후1회만 요청한다. source 원문/생성물/비밀/사용자 기존 변경은 커밋에서 제외한다.

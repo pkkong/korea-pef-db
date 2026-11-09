@@ -19,7 +19,8 @@ SOURCE_WORKFLOWS = frozenset((WORKFLOW, 'recover-lp-publication.yml',
     'diagnose-lp-inventory-failures.yml', 'prepare-lp-history-publication.yml',
     'publish-lp-history.yml', 'plan-lp-history-attachments.yml',
     'collect-kgrowth-history-attachments.yml', 'diagnose-kgrowth-history-session.yml',
-    'diagnose-sema-listing-conflict.yml', 'adopt-kgrowth-session-file.yml'))
+    'diagnose-sema-listing-conflict.yml', 'adopt-kgrowth-session-file.yml',
+    'probe-lp-report-storage.yml'))
 UTC = dt.timezone.utc
 
 
