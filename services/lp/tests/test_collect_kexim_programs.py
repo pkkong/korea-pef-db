@@ -1,5 +1,7 @@
 """KEXIM board parsing and reviewed-publication safety checks."""
 import hashlib
+import base64
+import copy
 import json
 import re
 import ssl
@@ -13,6 +15,7 @@ from unittest.mock import patch, Mock
 from urllib.error import HTTPError, URLError
 
 from services.lp.src import collect_kexim_programs as kexim
+from services.lp.tests.test_lp_attachment_text import compound, record, hwpx, section, para, cell
 
 
 def detail(source_id, title, date, body, attachment_url):
@@ -259,6 +262,271 @@ class KeximRollingWindowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'timezone'):
             kexim.collect('2026-10-31T00:00:00',fetch=fetch)
         fetch.assert_not_called()
+
+
+class KeximAttachmentProofTests(unittest.TestCase):
+    def notice(self, raw):
+        n = detail('9', '공식 펀드 선정 결과', '2026.11.01', '공식 본문',
+                   '/comm/getFile?srvcId=BBSTY1&upperNo=9&fileTy=ATTACH&fileNo=1')
+        n['checked_at'] = '2026-11-09T06:53:02+00:00'
+        n['attachment_texts'] = {}
+        n['attachment_hashes'] = {n['attachments'][0]['url']: hashlib.sha256(raw).hexdigest()}
+        return n
+
+    def collect_one(self, raw, approved=False):
+        n = self.notice(raw)
+        file_url = n['attachments'][0]['url']
+        calls = []
+        def fetch(url):
+            calls.append(url)
+            if '?curPage=' in url:
+                return b'listing'
+            if url == n['url']:
+                return b'detail'
+            if url == file_url:
+                return raw
+            raise AssertionError('Unexpected request')
+        row = {'link': n['url'], 'announced_date': n['date'], 'title': n['title']}
+        original = {k: copy.deepcopy(v) for k, v in n.items() if k not in ('attachment_hashes', 'attachment_texts', 'checked_at')}
+        with patch.object(kexim, 'extract_kexim_notice_rows', return_value=[row]), \
+             patch.object(kexim, '_approved_source_ids', return_value={'9'} if approved else set()), \
+             patch.object(kexim, 'parse_detail', return_value=original), \
+             patch.object(kexim, 'project', return_value=([], [])), \
+             patch.object(kexim, 'discovery_candidates', return_value=[]), \
+             patch.object(kexim, 'link_suggestions', return_value=[]), \
+             patch.object(kexim, '_official_fetch', side_effect=AssertionError('No network')), \
+             patch('services.lp.src.collect_kdb_related.collect_related', return_value=([], [])):
+            report = kexim.collect(n['checked_at'], fetch=fetch)
+        self.assertEqual(calls.count(file_url), 1)
+        self.assertEqual(len(calls), kexim.PAGES + 2)
+        self.assertEqual(report['programs'], [])
+        return report['notices'][0]
+
+    def test_unapproved_full_hwp_body_not_preview_is_retained_and_replayed(self):
+        raw = compound([record('중형 공식 운용사\r'), record('소형 공식 운용사\r')],
+                       preview='가짜 선정자 미리보기')
+        n = self.collect_one(raw)
+        decoded = kexim.validate_attachment_proof(n)
+        self.assertEqual(decoded, {'format': 'hwp', 'text': '중형 공식 운용사\n소형 공식 운용사', 'tables': []})
+        url = n['attachments'][0]['url']
+        proof = n['attachment_proofs'][url]
+        self.assertEqual(base64.b64decode(proof['raw_base64'], validate=True), raw)
+        self.assertEqual(n['attachment_texts'][url], decoded['text'])
+        self.assertNotIn('가짜', decoded['text'])
+        self.assertNotIn('selected_gps', n)
+
+    def test_hwpx_complete_sections_and_original_table_are_retained(self):
+        table = '<hp:tbl rowCnt="1" colCnt="2"><hp:tr>' + cell('중형', 0, 0) + cell('공식 명단', 0, 1) + '</hp:tr></hp:tbl>'
+        raw = hwpx([section(para('공식 결과') + table), section(para('후속 유의사항'))],
+                   {'Preview/PrvText.txt': '가짜 결과'})
+        n = self.collect_one(raw)
+        value = kexim.validate_attachment_proof(n)
+        self.assertEqual(value['format'], 'hwpx')
+        self.assertEqual(value['tables'], [[['중형', '공식 명단']]])
+        self.assertEqual(value['text'], '공식 결과\n중형\t공식 명단\n후속 유의사항')
+
+    def test_raw_hash_extraction_source_membership_and_failure_tamper_rejected(self):
+        n = self.collect_one(hwpx([section(para('공식 본문'))]))
+        url = n['attachments'][0]['url']
+        def raw_bad(x): x['attachment_proofs'][url]['raw_base64'] = base64.b64encode(b'changed').decode()
+        def hash_bad(x): x['attachment_hashes'][url] = '0' * 64
+        def text_bad(x): x['attachment_proofs'][url]['extracted']['text'] = '가짜'
+        def table_bad(x): x['attachment_proofs'][url]['extracted']['tables'] = [[['가짜']]]
+        def source_bad(x): x['source_id'] = '10'
+        def notice_url_bad(x): x['url'] = kexim.BOARD + '/10'
+        def title_bad(x): x['title'] = '다른 제목'
+        def body_bad(x): x['body'] += 'changed'
+        def name_bad(x): x['attachments'][0]['name'] = 'other.hwp'
+        def consumer_bad(x): x['attachment_texts'][url] = '가짜'
+        def identity_bad(x): x['attachment_proofs'][url]['notice_url'] = kexim.BOARD + '/10'
+        for mutate in (raw_bad, hash_bad, text_bad, table_bad, source_bad, notice_url_bad, title_bad, body_bad, name_bad, consumer_bad, identity_bad):
+            value = copy.deepcopy(n); mutate(value)
+            with self.subTest(mutate=mutate.__name__), self.assertRaises(ValueError):
+                kexim.validate_attachment_proof(value)
+        legacy = copy.deepcopy(n); del legacy['attachment_proofs']
+        with self.assertRaisesRegex(ValueError, 'missing'):
+            kexim.validate_attachment_proof(legacy)
+
+    def test_failed_unsupported_protected_empty_files_keep_raw_and_replay_failure(self):
+        cases = [b'<script>alert("restricted")</script>', b'',
+                 compound([record('Protected')], flags=2),
+                 compound([record('Preview only')], body=False),
+                 hwpx([section(para(''))])]
+        for raw in cases:
+            with self.subTest(size=len(raw)):
+                n = self.collect_one(raw)
+                url = n['attachments'][0]['url']
+                proof = n['attachment_proofs'][url]
+                self.assertIsNone(kexim.validate_attachment_proof(n))
+                self.assertEqual(base64.b64decode(proof['raw_base64'], validate=True), raw)
+                self.assertEqual(proof['sha256'], hashlib.sha256(raw).hexdigest())
+                self.assertFalse(n['attachment_texts'])
+                self.assertTrue(n['attachment_read_error'])
+                value = copy.deepcopy(n); value['attachment_proofs'][url]['error_code'] = None
+                with self.assertRaises(ValueError): kexim.validate_attachment_proof(value)
+
+    def test_raw_size_and_encoded_size_limits_fail_before_decoding(self):
+        n = self.notice(b'12345')
+        with patch.object(kexim, 'MAX_FILE_BYTES', 4), patch.object(kexim, 'extract_attachment') as decoder:
+            with self.assertRaisesRegex(ValueError, 'size limit'):
+                kexim.retain_attachment_proof(n, b'12345')
+            decoder.assert_not_called()
+        n = self.collect_one(hwpx([section(para('Body'))]))
+        with patch.object(kexim, 'MAX_FILE_BYTES', 4), patch.object(kexim, 'extract_attachment') as decoder:
+            with self.assertRaisesRegex(ValueError, 'size limit'): kexim.validate_attachment_proof(n)
+            decoder.assert_not_called()
+
+    def test_only_exact_first_official_same_notice_file_can_have_proof(self):
+        raw = hwpx([section(para('Body'))])
+        for bad in ['http://www.koreaexim.go.kr/comm/getFile?upperNo=9&fileNo=1',
+                    'https://www.koreaexim.go.kr:443/comm/getFile?upperNo=9&fileNo=1',
+                    'https://evil.example/comm/getFile?upperNo=9&fileNo=1',
+                    'https://www.koreaexim.go.kr/comm/getFile?upperNo=10&fileNo=1',
+                    'https://www.koreaexim.go.kr/comm/getFile?upperNo=9&upperNo=9&fileNo=1',
+                    'https://www.koreaexim.go.kr/comm/getFile?upperNo=9&fileNo=1&fileNo=1',
+                    'https://www.koreaexim.go.kr/comm/getFile?upperNo=9&fileNo=1&srvcId=BBSTY1&srvcId=BBSTY1',
+                    'https://www.koreaexim.go.kr/comm/getFile?upperNo=9&fileNo=1&srvcId=OTHER',
+                    'https://www.koreaexim.go.kr/comm/getFile?upperNo=9&fileNo=1&fileTy=OTHER',
+                    'https://www.koreaexim.go.kr/comm/getFile?upperNo=9&fileNo=1&unknown=1',
+                    'https://www.koreaexim.go.kr/comm/getFile?upperNo=9&fileNo=1\r\n',
+                    'https://www.koreaexim.go.kr/comm/getFile?upperNo=9&fileNo= 1']:
+            n = self.notice(raw); n['attachments'][0]['url'] = bad
+            n['attachment_hashes'] = {bad: hashlib.sha256(raw).hexdigest()}
+            with self.subTest(url=bad), self.assertRaises(ValueError): kexim.retain_attachment_proof(n, raw)
+        minimal = self.notice(raw)
+        minimal_url = kexim.BASE + '/comm/getFile?upperNo=9&fileNo=1'
+        minimal['attachments'][0]['url'] = minimal_url
+        minimal['attachment_hashes'] = {minimal_url: hashlib.sha256(raw).hexdigest()}
+        kexim.retain_attachment_proof(minimal, raw)
+        self.assertEqual(kexim.validate_attachment_proof(minimal)['format'], 'hwpx')
+        n = self.notice(raw); first = n['attachments'][0]['url']
+        n['attachments'].append({'url': first.replace('fileNo=1', 'fileNo=2'), 'name': 'second.hwp'})
+        kexim.retain_attachment_proof(n, raw)
+        with self.assertRaises(ValueError): kexim.validate_attachment_proof(n, n['attachments'][1]['url'])
+
+    def test_pdf_canonical_body_is_separate_from_legacy_layout_or_ocr(self):
+        # A real simple PDF: reader parsing and raw replay use the pinned
+        # canonical extractor; the existing platform-dependent view stays separate.
+        from pypdf import PdfWriter
+        from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+        writer = PdfWriter(); page = writer.add_blank_page(width=300, height=300)
+        font = DictionaryObject({NameObject('/Type'): NameObject('/Font'), NameObject('/Subtype'): NameObject('/Type1'), NameObject('/BaseFont'): NameObject('/Helvetica')})
+        page[NameObject('/Resources')] = DictionaryObject({NameObject('/Font'): DictionaryObject({NameObject('/F1'): font})})
+        stream = DecodedStreamObject(); stream.set_data(b'BT /F1 12 Tf 10 100 Td (Official result body) Tj ET')
+        page[NameObject('/Contents')] = writer._add_object(stream)
+        output = BytesIO(); writer.write(output); raw = output.getvalue()
+        with patch.object(kexim, '_pdf_text', return_value='legacy layout/OCR text') as legacy:
+            n = self.collect_one(raw)
+        legacy.assert_called_once_with(raw)
+        decoded = kexim.validate_attachment_proof(n)
+        self.assertEqual(decoded['text'], 'Official result body')
+        self.assertEqual(n['attachment_texts'][n['attachments'][0]['url']], 'legacy layout/OCR text')
+        self.assertEqual(n['attachment_proofs'][n['attachments'][0]['url']]['pdf_reader_version'], '6.10.0')
+
+    def test_approved_hash_review_path_is_unchanged(self):
+        with patch.object(kexim, 'extract_attachment', side_effect=AssertionError('Approved source must stay unchanged')), \
+             patch.object(kexim, '_pdf_text', side_effect=AssertionError('Approved PDF has curated facts')):
+            n = self.collect_one(b'%PDFreviewed-source', approved=True)
+        self.assertNotIn('attachment_proofs', n)
+        self.assertFalse(n['attachment_texts'])
+        self.assertEqual(next(iter(n['attachment_hashes'].values())), hashlib.sha256(b'%PDFreviewed-source').hexdigest())
+
+    def test_failed_canonical_pdf_keeps_legacy_preview_without_promoting_proof(self):
+        from pypdf import PdfWriter
+        writer = PdfWriter(); writer.add_blank_page(width=100, height=100)
+        empty = BytesIO(); writer.write(empty)
+        writer.encrypt('private-password')
+        protected = BytesIO(); writer.write(protected)
+        for raw, expected_error in [(empty.getvalue(), 'attachment_body_unreadable'),
+                                    (protected.getvalue(), 'protected_attachment')]:
+            with self.subTest(error=expected_error), patch.object(kexim, '_pdf_text', return_value='legacy preview preserved') as legacy:
+                n = self.collect_one(raw)
+            legacy.assert_called_once_with(raw)
+            self.assertEqual(n['attachment_texts'][n['attachments'][0]['url']], 'legacy preview preserved')
+            self.assertEqual(n['attachment_read_error'], expected_error)
+            self.assertIsNone(kexim.validate_attachment_proof(n))
+        with patch.object(kexim, '_pdf_text', side_effect=RuntimeError('legacy failure')):
+            n = self.collect_one(empty.getvalue())
+        self.assertEqual(n['attachment_read_error'], 'attachment_body_unreadable')
+        self.assertIsNone(kexim.validate_attachment_proof(n))
+
+    def test_pdf_reader_version_is_explicit_and_mismatch_retains_failed_raw(self):
+        import pypdf
+        writer = pypdf.PdfWriter(); writer.add_blank_page(width=100, height=100)
+        output = BytesIO(); writer.write(output); raw = output.getvalue()
+        with patch.object(pypdf, '__version__', 'unexpected-version'), \
+             patch.object(kexim, '_pdf_text', return_value='legacy preview'), \
+             patch.object(kexim, 'extract_attachment', side_effect=AssertionError('Wrong reader must not decode')):
+            n = self.collect_one(raw)
+            self.assertEqual(n['attachment_read_error'], 'pdf_reader_version_mismatch')
+            self.assertIsNone(kexim.validate_attachment_proof(n))
+        # Replaying with a different decoder/version never certifies the old
+        # observation as successful or silently rewrites its failure.
+        with self.assertRaisesRegex(ValueError, 'decoded body mismatch'):
+            kexim.validate_attachment_proof(n)
+
+    def test_failed_proof_hold_is_rederived_by_priority_load_and_health(self):
+        from services.lp.src.collect_priority_lp_programs import load_kexim_collection
+        from services.lp.src.build_lp_collection_health import hold_counts
+        failed = self.collect_one(compound([record('Protected')], flags=2))
+        reviewed, recipe = fixture()
+        timestamp = failed['checked_at']
+        with patch.object(kexim, '_recipes', return_value=[recipe]):
+            baseline, baseline_holds = kexim.project(reviewed, timestamp)
+            programs, holds = kexim.project(reviewed + [failed], timestamp)
+            self.assertEqual(programs, baseline)
+            self.assertEqual(baseline_holds, [])
+            self.assertEqual(len(holds), 1)
+            expected = {'stage': 'institution_attachment_text', 'institution_id': 'kexim',
+                        'source_id': '9', 'url': failed['url'],
+                        'attachment_url': failed['attachments'][0]['url'],
+                        'reason': 'protected_attachment', 'error': 'protected_attachment'}
+            self.assertEqual(holds[0], expected)
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / 'kexim.json'
+                # Explicitly omit collector holds: loading must reproduce them
+                # from raw proof instead of losing the operational failure.
+                path.write_text(json.dumps({'checked_at': timestamp, 'notices': reviewed + [failed], 'holds': []}))
+                loaded = load_kexim_collection(path, timestamp)
+            self.assertEqual(loaded['programs'], baseline)
+            self.assertEqual(loaded['holds'], holds)
+        counts = hold_counts(loaded['holds'])
+        self.assertEqual(counts['attachment_holds'], 1)
+        self.assertEqual(counts['review_holds'], 0)
+        self.assertEqual(counts['source_errors'], 0)
+
+    def test_invalid_proof_is_a_hold_and_hash_only_legacy_is_not(self):
+        good = self.collect_one(hwpx([section(para('Official body'))]))
+        reviewed, recipe = fixture()
+        url = good['attachments'][0]['url']
+        for invalid in (None, {}, {'raw_base64': 'forged'}):
+            bad = copy.deepcopy(good); bad['attachment_proofs'] = invalid
+            with self.subTest(invalid=invalid), patch.object(kexim, '_recipes', return_value=[recipe]):
+                programs, holds = kexim.project(reviewed + [bad], good['checked_at'])
+                self.assertEqual(len(programs), 1)
+                self.assertEqual(holds[0]['error'], 'attachment_proof_invalid')
+        bad = copy.deepcopy(good); bad['attachment_proofs'][url]['extracted']['text'] = 'forged'
+        with patch.object(kexim, '_recipes', return_value=[recipe]):
+            self.assertEqual(kexim.project(reviewed + [bad], good['checked_at'])[1][0]['error'], 'attachment_proof_invalid')
+            for field in ('source_id', 'attachments', 'attachment_hashes'):
+                bad = copy.deepcopy(good); del bad[field]
+                with self.subTest(field=field):
+                    programs, holds = kexim.project(reviewed + [bad], good['checked_at'])
+                    self.assertEqual(len(programs), 1)
+                    self.assertEqual(holds[0]['error'], 'attachment_proof_invalid')
+            self.assertEqual(kexim.project(reviewed + [good], good['checked_at'])[1], [])
+            legacy = copy.deepcopy(good); del legacy['attachment_proofs']
+            self.assertEqual(kexim.project(reviewed + [legacy], good['checked_at'])[1], [])
+
+    def test_transport_read_is_bounded_without_retrying_content_failure(self):
+        class Response(BytesIO):
+            def geturl(self): return kexim.BOARD
+        opener = Mock(); response = Response(b'12345'); opener.open.return_value = response
+        with patch.object(kexim, 'MAX_FILE_BYTES', 4), patch.object(kexim, 'build_opener', return_value=opener), \
+             patch.object(kexim.time, 'sleep') as sleep:
+            with self.assertRaisesRegex(ValueError, 'size limit'): kexim._official_fetch(kexim.BOARD)
+        self.assertEqual(opener.open.call_count, 1)
+        sleep.assert_not_called()
 
 if __name__ == '__main__':
     unittest.main()

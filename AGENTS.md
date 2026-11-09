@@ -129,6 +129,7 @@ Every non-trivial subagent task should state:
 - LP 공고 수집은 공식 게시판의 발견·원공고 역탐색·PE/VC 범위 판단·사업별 단계 묶기를 반복 실행 가능한 코드와 검사로 처리한다. 담당자가 공고 ID를 골라 넣는 방식으로 확장하지 않는다. 공식 근거가 부족한 건은 범위 미확인으로 보존하며 공개 사업이나 GP 결과를 추정해 만들지 않는다.
 - LP 목록/본문 판독 실패는 오류 문자열만 남긴 채 추정 수정하지 않는다. 크기/보호/출처 제한 아래 원응답·SHA·요청URL·관측시각을 파싱 전에 보존하는 제한 진단을 우선하고, 저장 근거를 재생해 실제 차이를 확인한다. 같은 공고의 고정글/일반글 표시 차이를 합칠 때도 원문ID·URL·제목·날짜가 같다는 실제 근거와 순서 독립 회귀검사를 요구하며, 실제 제목/날짜/URL 충돌은 계속 실패로 남긴다.
 - LP basic publication is authorized once official domestic PE blind recruitment is verified, even when amount, purpose, deadline, or GP names are missing. Missing fields stay absent. Mixed PE/VC sources require an independently isolated PE track; unverified scope stays held. Match later notices by sourced institution/year/business/round identity, retain existing URLs, and never let missing GP identities block a verified notice or stage update. Amendments/cancellations must not keep superseded deadlines or planned schedules as current facts.
+- LP 기관의 HTTP 수집 정상과 개별 사업의 후속 단계/선정명단 공개 반영을 따로 검증한다. 공식 후속 공고가 link_suggestions·program hold·범위 보류에 남아 있으면 수집 성공만으로 결과 반영 완료라고 보고하지 않는다. 사용자가 누락을 지적하면 미발견/첨부 미판독/사업 연결 보류/화면 누락과 개별통지 여부를 저장 원문부터 구분하고, 보류된 새 단계가 오래 방치되지 않도록 현황과 다음 작업에 명시한다.
 - Local secrets are not committed. Newsletter operating secrets live in GitHub Actions repository secrets; `config/daily_news.env` is not an operating path.
 - Product and role-specific operating briefs are in `docs/agent_operating_briefs.md`.
 - Product/service responsibility boundaries are in `docs/product_operating_model.md`.

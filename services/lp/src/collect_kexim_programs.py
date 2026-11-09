@@ -6,6 +6,7 @@ therefore never turns a new notice into a public GP result by itself.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import html
 import io
@@ -22,7 +23,7 @@ from http.cookies import SimpleCookie
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin
+from urllib.parse import parse_qs, urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
 
 try:
@@ -30,11 +31,13 @@ try:
     from .lp_kdb_dns import resolve_kexim_ipv4
     from .lp_ipv4_transport import IPv4HTTPSHandler
     from .lp_transport_errors import transient_dns
+    from .lp_attachment_text import extract_attachment, MAX_FILE_BYTES
 except ImportError:
     from build_lp_commitment_monitor import extract_kexim_notice_rows
     from lp_kdb_dns import resolve_kexim_ipv4
     from lp_ipv4_transport import IPv4HTTPSHandler
     from lp_transport_errors import transient_dns
+    from lp_attachment_text import extract_attachment, MAX_FILE_BYTES
 
 ROOT = Path(__file__).resolve().parents[3]
 REGISTRY = ROOT / "data/kexim_program_reviews.json"
@@ -42,6 +45,128 @@ BASE = "https://www.koreaexim.go.kr"
 BOARD = BASE + "/HPHKBI039M01"
 PAGES = 8
 CA_CHAIN = ROOT / "services/lp/certs/kexim_ca_chain.pem"
+ATTACHMENT_PROOF_KIND = "kexim_attachment_body_v1"
+PDF_READER_VERSION = "6.10.0"
+
+
+def _attachment_identity(notice: dict, url: str) -> dict:
+    """Bind proof to the first attachment actually supplied by this notice."""
+    if not isinstance(url, str) or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in url):
+        raise ValueError("KEXIM attachment URL contains whitespace/control characters")
+    source_id = notice.get("source_id")
+    if (not isinstance(source_id, str) or not re.fullmatch(r"[1-9][0-9]*", source_id)
+            or notice.get("url") != f"{BOARD}/{source_id}"
+            or notice.get("sha256") != fingerprint(notice)):
+        raise ValueError("KEXIM attachment notice identity mismatch")
+    attachments = notice.get("attachments")
+    if (not isinstance(attachments, list) or not attachments or not isinstance(attachments[0], dict)
+            or attachments[0].get("url") != url or not isinstance(attachments[0].get("name"), str)):
+        raise ValueError("KEXIM proof is not the original first attachment")
+    parsed = urlsplit(url)
+    query = parse_qs(parsed.query, strict_parsing=True, keep_blank_values=True)
+    if (parsed.scheme != "https" or parsed.netloc != "www.koreaexim.go.kr"
+            or parsed.path != "/comm/getFile" or parsed.fragment
+            or set(query) - {"upperNo", "fileNo", "srvcId", "fileTy"}
+            or any(len(values) != 1 for values in query.values())
+            or ("srvcId" in query and query["srvcId"] != ["BBSTY1"])
+            or ("fileTy" in query and query["fileTy"] != ["ATTACH"])
+            or query.get("upperNo") != [source_id]
+            or len(query.get("fileNo", [])) != 1 or not re.fullmatch(r"[0-9]+", query["fileNo"][0])):
+        raise ValueError("KEXIM attachment URL/source mismatch")
+    checked_at = notice.get("checked_at")
+    if (not isinstance(checked_at, str)
+            or datetime.fromisoformat(checked_at.replace("Z", "+00:00")).tzinfo is None):
+        raise ValueError("KEXIM attachment proof requires observation timestamp")
+    return {"source_id": source_id, "notice_url": notice["url"], "notice_sha256": notice["sha256"],
+            "attachment_url": url, "attachment_name": attachments[0]["name"], "checked_at": checked_at}
+
+
+def _canonical_attachment(raw: bytes) -> dict:
+    """Canonical complete-body decoding; separate from platform PDF previews."""
+    format_hint = ("pdf" if raw.startswith(b"%PDF") else "hwp" if raw.startswith(bytes.fromhex("d0cf11e0a1b11ae1"))
+                   else "zip" if raw.startswith(b"PK") else "unknown")
+    version = None
+    try:
+        if format_hint == "pdf":
+            import pypdf
+            version = pypdf.__version__
+            if version != PDF_READER_VERSION:
+                return {"format": format_hint, "pdf_reader_version": version, "extracted": None,
+                        "error_code": "pdf_reader_version_mismatch"}
+        result = extract_attachment(raw)
+        if result["format"] not in ("hwp", "hwpx", "pdf"):
+            return {"format": format_hint, "pdf_reader_version": version, "extracted": None,
+                    "error_code": "unsupported_attachment_format"}
+        return {"format": result["format"], "pdf_reader_version": version,
+                "extracted": result, "error_code": None}
+    except Exception as error:
+        # Preserve a replayable failure without source text, cookies, or decoder
+        # exception messages in an operational error field. Never use PrvText.
+        protected = any(word in str(error).lower() for word in ("encrypted", "drm", "distribution"))
+        return {"format": format_hint, "pdf_reader_version": version, "extracted": None,
+                "error_code": "protected_attachment" if protected else "attachment_body_unreadable"}
+
+
+def retain_attachment_proof(notice: dict, raw: bytes) -> dict:
+    """Retain one already-fetched unreviewed file; perform no HTTP or approval."""
+    if not isinstance(raw, bytes) or len(raw) > MAX_FILE_BYTES:
+        raise ValueError("KEXIM attachment exceeds raw evidence size limit")
+    url = notice["attachments"][0]["url"]
+    identity = _attachment_identity(notice, url)
+    digest = hashlib.sha256(raw).hexdigest()
+    if notice.get("attachment_hashes", {}).get(url) != digest:
+        raise ValueError("KEXIM attachment hash mismatch")
+    proof = {"kind": ATTACHMENT_PROOF_KIND, **identity, "sha256": digest,
+             "byte_length": len(raw), "raw_base64": base64.b64encode(raw).decode("ascii"),
+             **_canonical_attachment(raw)}
+    notice["attachment_proofs"] = {url: proof}
+    if proof["error_code"]:
+        notice["attachment_read_error"] = proof["error_code"]
+    elif proof["format"] != "pdf":
+        notice["attachment_texts"][url] = proof["extracted"]["text"]
+    return proof
+
+
+def validate_attachment_proof(notice: dict, url: str | None = None) -> dict | None:
+    """Replay retained bytes independently; hash-only legacy records are rejected.
+
+    Returns the canonical complete-body extraction, or None for a faithfully
+    replayed failed decoding. PDF attachment_texts remains the legacy layout/OCR
+    view and is deliberately not treated as canonical extraction evidence.
+    """
+    proofs = notice.get("attachment_proofs")
+    if not isinstance(proofs, dict) or len(proofs) != 1:
+        raise ValueError("KEXIM raw attachment proof missing or ambiguous")
+    url = url or next(iter(proofs))
+    identity = _attachment_identity(notice, url)
+    proof = proofs.get(url)
+    expected = {"kind", *identity, "sha256", "byte_length", "raw_base64", "format",
+                "pdf_reader_version", "extracted", "error_code"}
+    if (not isinstance(proof, dict) or set(proof) != expected or proof.get("kind") != ATTACHMENT_PROOF_KIND
+            or any(proof.get(k) != v for k, v in identity.items())):
+        raise ValueError("KEXIM attachment proof identity/fields mismatch")
+    encoded = proof["raw_base64"]
+    if not isinstance(encoded, str) or len(encoded) > ((MAX_FILE_BYTES + 2) // 3) * 4:
+        raise ValueError("KEXIM attachment proof exceeds size limit")
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (ValueError, TypeError) as error:
+        raise ValueError("KEXIM attachment proof has invalid raw encoding") from error
+    digest = hashlib.sha256(raw).hexdigest()
+    if (len(raw) > MAX_FILE_BYTES or type(proof["byte_length"]) is not int or len(raw) != proof["byte_length"]
+            or base64.b64encode(raw).decode("ascii") != encoded or digest != proof["sha256"]
+            or notice.get("attachment_hashes", {}).get(url) != digest):
+        raise ValueError("KEXIM attachment raw/hash/size mismatch")
+    decoded = _canonical_attachment(raw)
+    if any(proof[k] != value for k, value in decoded.items()):
+        raise ValueError("KEXIM attachment decoded body mismatch")
+    if decoded["error_code"]:
+        if notice.get("attachment_read_error") != decoded["error_code"]:
+            raise ValueError("KEXIM attachment failure marker mismatch")
+    elif (decoded["format"] != "pdf"
+            and notice.get("attachment_texts", {}).get(url) != decoded["extracted"]["text"]):
+        raise ValueError("KEXIM attachment text mismatch")
+    return decoded["extracted"]
 
 
 def _clean(markup: str) -> str:
@@ -245,7 +370,7 @@ def _project_one(recipe: dict, by_id: dict[str, dict], notices: list[dict], chec
     sources = _reviewed_source(recipe, by_id)
     approved_ids = {str(source["source_id"]) for source in recipe["sources"]}
     for notice in notices:
-        if str(notice["source_id"]) not in approved_ids and _title_matches(recipe, notice["title"]):
+        if str(notice.get("source_id", "")) not in approved_ids and _title_matches(recipe, notice["title"]):
             if _stage(notice["title"]):
                 raise ValueError(f"새 단계 공고 {notice['source_id']} 연결 검토 필요")
     facts = _verified_facts(recipe, by_id)
@@ -340,13 +465,33 @@ def _project_one(recipe: dict, by_id: dict[str, dict], notices: list[dict], chec
 
 
 def project(notices: list[dict], checked_at: str) -> tuple[list[dict], list[dict]]:
-    by_id = {str(notice["source_id"]): notice for notice in notices}
+    by_id = {str(notice.get("source_id", "")): notice for notice in notices}
     programs, holds = [], []
     for recipe in _recipes():
         try:
             programs.append(_project_one(recipe, by_id, notices, checked_at))
         except (ValueError, KeyError, StopIteration) as error:
             holds.append({"program_id": recipe["id"], "reason": str(error)})
+    # Derive these signals from retained proof on every projection. Priority
+    # artifact loading re-projects rather than trusting collector-supplied holds.
+    # A new attachment failure must not erase unrelated reviewed programs.
+    approved = _approved_source_ids()
+    for notice in notices:
+        if str(notice.get("source_id")) in approved or "attachment_proofs" not in notice:
+            continue
+        error_code = None
+        try:
+            if validate_attachment_proof(notice) is None:
+                error_code = next(iter(notice["attachment_proofs"].values()))["error_code"]
+        except (ValueError, KeyError, TypeError, IndexError, AttributeError):
+            error_code = "attachment_proof_invalid"
+        if error_code:
+            attachments = notice.get("attachments")
+            first = attachments[0] if isinstance(attachments, list) and attachments else {}
+            holds.append({"stage": "institution_attachment_text", "institution_id": "kexim",
+                          "source_id": str(notice.get("source_id", "")), "url": notice.get("url"),
+                          "attachment_url": first.get("url") if isinstance(first, dict) else None,
+                          "reason": error_code, "error": error_code})
     return programs, holds
 
 
@@ -406,7 +551,10 @@ def _official_fetch(url: str, cookies: dict[str, str] | None = None) -> bytes:
             with response:
                 if not response.geturl().startswith(BASE + "/"):
                     raise ValueError("KEXIM redirected outside official domain")
-                return response.read()
+                raw = response.read(MAX_FILE_BYTES + 1)
+                if len(raw) > MAX_FILE_BYTES:
+                    raise ValueError("KEXIM response exceeds raw evidence size limit")
+                return raw
         if redirect_error is None:
             raise ValueError("Official KEXIM response missing")
         stored = SimpleCookie()
@@ -453,17 +601,26 @@ def collect(checked_at: str, fetch=None) -> dict:
         notice["attachment_texts"] = {}
         if notice["attachments"]:
             attachment = notice["attachments"][0]
+            approved = source_id in _approved_source_ids()
+            if not approved:
+                _attachment_identity(notice, attachment["url"])
             raw = fetch(attachment["url"])
-            if not raw.startswith((b"%PDF", b"PK", bytes.fromhex("d0cf11e0"))):
+            if not isinstance(raw, bytes) or len(raw) > MAX_FILE_BYTES:
+                raise ValueError("KEXIM attachment exceeds raw evidence size limit")
+            if approved and not raw.startswith((b"%PDF", b"PK", bytes.fromhex("d0cf11e0"))):
                 raise ValueError(f"KEXIM attachment {source_id} has unexpected format")
             notice["attachment_hashes"][attachment["url"]] = hashlib.sha256(raw).hexdigest()
-            if raw.startswith(b"%PDF") and source_id not in _approved_source_ids():
+            if not approved:
+                retain_attachment_proof(notice, raw)
+            if raw.startswith(b"%PDF") and not approved:
                 # Unreviewed notices need the legal fund form from the official
                 # plan, not a guess from the headline or an attachment name.
+                # Preserve this legacy layout/OCR view even when the separate
+                # canonical proof failed; it cannot clear that failure marker.
                 try:
                     notice["attachment_texts"][attachment["url"]] = _pdf_text(raw)
                 except Exception as error:
-                    notice["attachment_read_error"] = type(error).__name__
+                    notice.setdefault("attachment_read_error", type(error).__name__)
         notices.append(notice)
     programs, holds = project(notices, checked_at)
     try:

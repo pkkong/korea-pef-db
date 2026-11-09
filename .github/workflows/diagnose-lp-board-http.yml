@@ -10,6 +10,15 @@ on:
         type: choice
         default: cu
         options: [cu, kfcc, kfinco, tp, kexim, all]
+      verify_kexim_result:
+        type: boolean
+        default: false
+      kexim_listing_run:
+        type: string
+        required: false
+      kexim_collection_run:
+        type: string
+        required: false
       verify_kdb_dns_recovery:
         type: boolean
         default: false
@@ -348,7 +357,7 @@ jobs:
           PY
 
   kexim-current-listing:
-    if: inputs.institution == 'kexim' && github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    if: inputs.institution == 'kexim' && !inputs.verify_kexim_result && github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
     runs-on: macos-latest
     timeout-minutes: 8
     steps:
@@ -400,5 +409,122 @@ jobs:
         with:
           name: kexim-current-listing
           path: /tmp/kexim-current-listing
+          retention-days: 30
+          if-no-files-found: warn
+
+  kexim-result-file:
+    if: inputs.institution == 'kexim' && inputs.verify_kexim_result && github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify the exact retained listing and collection sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          LISTING_RUN: ${{ inputs.kexim_listing_run }}
+          COLLECTION_RUN: ${{ inputs.kexim_collection_run }}
+        run: |
+          python3 - <<'PYCODE'
+          import json,os,subprocess
+          from pathlib import Path
+          provenance={}
+          for key,path in (('LISTING_RUN','diagnose-lp-board-http.yml'),('COLLECTION_RUN','collect-kgrowth-programs.yml')):
+              ident=os.environ[key];assert ident.isascii() and ident.isdecimal() and int(ident)>0
+              run=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{ident}"]))
+              assert run['repository']['full_name']==os.environ['GH_REPO'] and run['head_branch']=='main'
+              assert run['path']=='.github/workflows/'+path and run['status']=='completed'
+              assert run['event'] in ('schedule','workflow_dispatch')
+              assert run['conclusion']=='success' if key=='LISTING_RUN' else run['conclusion'] in ('success','failure')
+              provenance[key]={k:run[k] for k in ('id','path','head_sha','conclusion')}
+          out=Path('/tmp/kexim-result-proof');out.mkdir()
+          (out/'provenance.json').write_text(json.dumps(provenance))
+          PYCODE
+      - uses: actions/download-artifact@v4
+        with:
+          name: kexim-current-listing
+          run-id: ${{ inputs.kexim_listing_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/kexim-result-listing
+      - uses: actions/download-artifact@v4
+        with:
+          name: kgrowth-collection
+          run-id: ${{ inputs.kexim_collection_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/kexim-result-baseline
+      - name: Install the pinned complete-body decoders
+        run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
+      - name: Replay proof boundaries before official requests
+        run: python3 -m unittest services.lp.tests.test_collect_kexim_programs services.lp.tests.test_lp_attachment_text
+      - name: Capture at most one automatically discovered final-result body and first file
+        run: |
+          python3 - <<'PYCODE'
+          import base64,hashlib,json,re,sys
+          from datetime import datetime,timezone
+          from pathlib import Path
+          from urllib.parse import urlsplit
+          sys.path.insert(0,str(Path('services/lp/src').resolve()))
+          import collect_kexim_programs as k
+          out=Path('/tmp/kexim-result-proof')
+          result={'success':False,'listing_requests':0,'detail_requests':0,'attachment_requests':0,
+                  'transport_attempts':'not_measured','database_writes':0,'published':False,
+                  'pe_approval':False,'selected_gp_approval':False,'errors':[]}
+          try:
+              listing=json.loads(Path('/tmp/kexim-result-listing/listing.json').read_text())
+              raw_listing=Path('/tmp/kexim-result-listing/listing-response.bin').read_bytes()
+              assert listing['success'] is True and listing['scope']=='current_first_listing_only_not_complete_board_or_market'
+              assert len(raw_listing)==listing['response']['bytes'] and hashlib.sha256(raw_listing).hexdigest()==listing['response']['sha256']
+              rows=k.extract_kexim_notice_rows(k._decode(raw_listing),listing['url'],['펀드'])
+              for row in rows:row['stage']=k._stage(row['title'])
+              assert rows==listing['rows'],'Retained listing differs from raw bytes'
+              baseline=json.loads(Path('/tmp/kexim-result-baseline/lp-priority-collection.json').read_text())['sources']['kexim']
+              assert baseline['notices'] and not baseline.get('error')
+              by_id={str(n['source_id']):n for n in baseline['notices']}
+              targets=[r for r in rows if r['stage']=='최종 선정']
+              assert targets,'No final result in this retained page; do not infer absence elsewhere'
+              target=sorted(targets,key=lambda r:(r['announced_date'],r['link']),reverse=True)[0]
+              ident=re.fullmatch(r'/HPHKBI039M01/([0-9]+)',urlsplit(target['link']).path)[1]
+              assert ident in by_id,'Inspect a newly discovered result before using an older baseline'
+              previous=by_id[ident]
+              assert previous['sha256']==k.fingerprint(previous)
+              assert previous['title']==target['title'] and previous['date']==target['announced_date']
+              result['source_id']=ident;result['source_url']=k.BOARD+'/'+ident
+              cookies={};result['detail_requests']=1
+              raw_body=k._official_fetch(result['source_url'],cookies)
+              (out/'detail-response.bin').write_bytes(raw_body)
+              result['detail_sha256']=hashlib.sha256(raw_body).hexdigest()
+              notice=k.parse_detail(ident,raw_body)
+              assert notice['title']==target['title'] and notice['date']==target['announced_date']
+              assert notice['sha256']==previous['sha256'],'Result body changed; retained response requires review'
+              notice['checked_at']=datetime.now(timezone.utc).isoformat();notice['attachment_hashes']={};notice['attachment_texts']={}
+              file=notice['attachments'][0]
+              k._attachment_identity(notice,file['url'])
+              result['attachment_requests']=1
+              raw_file=k._official_fetch(file['url'],cookies)
+              (out/'attachment-response.bin').write_bytes(raw_file)
+              notice['attachment_hashes'][file['url']]=hashlib.sha256(raw_file).hexdigest()
+              k.retain_attachment_proof(notice,raw_file)
+              (out/'notice.json').write_text(json.dumps(notice,ensure_ascii=False))
+              decoded=k.validate_attachment_proof(notice)
+              assert decoded is not None,'Canonical result file unreadable; raw evidence retained'
+              result.update(success=True,title=notice['title'],date=notice['date'],format=decoded['format'],
+                            text_chars=len(decoded['text']),file_bytes=len(raw_file),
+                            file_sha256=notice['attachment_hashes'][file['url']],
+                            previous_attachment_hash_equal=notice['attachment_hashes']==previous.get('attachment_hashes'))
+          except Exception as error:
+              result['errors'].append({'type':type(error).__name__,'code':'bounded_result_capture_or_replay_failed'})
+          finally:
+              (out/'result.json').write_text(json.dumps(result,ensure_ascii=False))
+          print(json.dumps(result,ensure_ascii=False))
+          if not result['success']:raise SystemExit('Result evidence held; original response preserved')
+          PYCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kexim-result-proof
+          path: /tmp/kexim-result-proof
           retention-days: 30
           if-no-files-found: warn
