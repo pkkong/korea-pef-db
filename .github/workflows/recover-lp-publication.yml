@@ -7,6 +7,10 @@ on:
         description: Completed main-branch Collect LP programs run with retained evidence
         required: true
         type: string
+      koreapost_preferred_evidence_run:
+        description: Optional successful same-business raw preferred proof for this collection
+        required: false
+        type: string
       kexim_stage_evidence_run:
         description: Optional successful bounded KEXIM screening proof capture for this collection
         required: false
@@ -40,6 +44,7 @@ jobs:
           INSTITUTION_EVIDENCE_RUN: ${{ inputs.institution_evidence_run }}
           GH_REPO: ${{ github.repository }}
           KEXIM_STAGE_RUN: ${{ inputs.kexim_stage_evidence_run }}
+          KOREAPOST_STAGE_RUN: ${{ inputs.koreapost_preferred_evidence_run }}
         run: |
           python3 - <<'PY'
           import datetime,json,os,subprocess
@@ -75,6 +80,17 @@ jobs:
               stage_at=datetime.datetime.fromisoformat(stage['created_at'].replace('Z','+00:00'))
               assert created<=stage_at<=datetime.datetime.now(datetime.timezone.utc)
               print(json.dumps({'kexim_stage_evidence_run':stage['id'],'head_sha':stage['head_sha']}))
+          post_run=os.environ.get('KOREAPOST_STAGE_RUN','')
+          if post_run:
+              assert post_run.isascii() and post_run.isdecimal() and int(post_run)>0
+              post=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GH_REPO']}/actions/runs/{post_run}"]))
+              assert post['repository']['full_name']==os.environ['GH_REPO']
+              assert post['path']=='.github/workflows/diagnose-lp-board-http.yml'
+              assert post['head_branch']=='main' and post['event']=='workflow_dispatch'
+              assert post['status']=='completed' and post['conclusion']=='success'
+              post_at=datetime.datetime.fromisoformat(post['created_at'].replace('Z','+00:00'))
+              assert created<=post_at<=datetime.datetime.now(datetime.timezone.utc)
+              print(json.dumps({'koreapost_preferred_evidence_run':post['id'],'head_sha':post['head_sha']}))
           PY
       - uses: actions/download-artifact@v4
         with:
@@ -96,6 +112,13 @@ jobs:
           run-id: ${{ inputs.kexim_stage_evidence_run }}
           github-token: ${{ github.token }}
           path: /tmp/lp-kexim-stage
+      - uses: actions/download-artifact@v4
+        if: inputs.koreapost_preferred_evidence_run != ''
+        with:
+          name: koreapost-preferred-proof
+          run-id: ${{ inputs.koreapost_preferred_evidence_run }}
+          github-token: ${{ github.token }}
+          path: /tmp/lp-koreapost-preferred
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -152,12 +175,38 @@ jobs:
           Path('/tmp/lp-recovery/kexim-stage-reuse.json').write_text(json.dumps(receipt,ensure_ascii=False))
           print(json.dumps(receipt,ensure_ascii=False))
           PY
+      - name: Reuse raw-verified KoreaPost preferred evidence without official HTTP
+        if: inputs.koreapost_preferred_evidence_run != ''
+        env:
+          COLLECTION_RUN: ${{ inputs.collection_run }}
+        run: |
+          python3 -m unittest services.lp.tests.test_capture_koreapost_preferred services.lp.tests.test_koreapost_coinvestment_preferred
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from services.lp.src.capture_koreapost_preferred import reuse
+          root=Path('/tmp/lp-koreapost-preferred')
+          provenance=json.loads((root/'provenance.json').read_text())
+          assert str(provenance['id'])==os.environ['COLLECTION_RUN']
+          report=json.loads((root/'capture.json').read_text())
+          assert report['success'] is True and report['database_writes']==0 and report['published'] is False
+          assert report['detail_requests']<=2 and report['attachment_requests']<=1
+          path=Path('/tmp/lp-recovery/lp-priority-collection.json')
+          priority=json.loads(path.read_text())
+          upgraded,receipt=reuse(priority['sources']['koreapost'],report)
+          priority['sources']['koreapost']=upgraded
+          path.write_text(json.dumps(priority,ensure_ascii=False))
+          Path('/tmp/lp-recovery/koreapost-preferred-reuse.json').write_text(json.dumps(receipt,ensure_ascii=False))
+          print(json.dumps(receipt,ensure_ascii=False))
+          PY
       - name: Replay source proofs and preserve existing public programs
         env:
           PYTHONPATH: services/lp/src
           NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS: '1'
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           KEXIM_STAGE_RUN: ${{ inputs.kexim_stage_evidence_run }}
+          KOREAPOST_STAGE_RUN: ${{ inputs.koreapost_preferred_evidence_run }}
         run: |
           python3 - <<'PY'
           import copy,json,os,tempfile
@@ -173,8 +222,9 @@ jobs:
           report['collection_checked_at']=report['checked_at']
           report['checked_at']=datetime.now(timezone.utc).isoformat()
           with connect() as conn:
-              conn.execute('SET TRANSACTION READ ONLY')
+              conn.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
               old=baseline(conn)
+              current_run=conn.execute('SELECT run_id FROM lp_program_private.program_state WHERE id=1').fetchone()[0]
           (root/'baseline.json').write_text(json.dumps(old,ensure_ascii=False))
           data,pages=prepare(copy.deepcopy(old),report)
           validate(data)
@@ -198,6 +248,21 @@ jobs:
                   assert current.get(field)==previous.get(field),'Existing PE terms changed: '+field
               assert receipt['source_url'] in {e['url'] for e in current['events'] if e['type']=='서류심사 결과'}
               assert set(current['shortlisted_gps'])<=set(previous['applicants_gps'])
+          if os.environ.get('KOREAPOST_STAGE_RUN'):
+              from lp_notice_publication import OFFERING_FIELDS
+              receipt=json.loads((root/'koreapost-preferred-reuse.json').read_text())
+              assert current_run==receipt['baseline_public_run'],'Public model changed since bounded source lookup'
+              before={p['id']:p for p in old['programs']}
+              assert set(before)==set(after),'Preferred replay cannot introduce/remove public businesses'
+              previous=before[receipt['program_id']];current=after[receipt['program_id']]
+              assert not previous.get('preferred_gps'),'Existing preferred roster already present; do not republish'
+              assert current['status']=='우선협상대상자'
+              assert len(current['preferred_gps'])==receipt['preferred_count']==1
+              assert current.get('selected_gps',[])==previous.get('selected_gps',[]),'Preferred is not final selection'
+              for field in ('id','title','institution_id','asset_scope',*OFFERING_FIELDS):
+                  assert current.get(field)==previous.get(field),'Existing offering changed: '+field
+              assert current['manager_list_sources']['preferred_gps']==receipt['source_url']
+              assert receipt['source_url'] in {e['url'] for e in current['events'] if e['type']=='우선협상대상자'}
           errors=data.get('institution_collection_holds',[])
           assert not any(h.get('stage')=='institution_validation' for h in errors), 'Invalid official receipt'
           new=[p for p in data['programs'] if p['id'] not in {old['id'] for old in old['programs']}]
@@ -258,6 +323,7 @@ jobs:
             /tmp/lp-recovery/lp-shared-collection.json
             /tmp/lp-recovery/preflight.json
             /tmp/lp-recovery/kexim-stage-reuse.json
+            /tmp/lp-recovery/koreapost-preferred-reuse.json
             /tmp/lp-recovery/publication.json
             /tmp/lp-recovery/remaining-failures.json
           retention-days: 7

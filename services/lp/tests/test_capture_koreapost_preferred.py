@@ -17,7 +17,8 @@ def fixture():
 
 def retained(source,p):
     return {'kind':c.KIND,'stage':'lookup','success':True,'target':c.plan(source,[p],'old-public'),
-            'versions_examined':2,'official_http_requests':0,'database_writes':0,'published':False}
+            'versions_examined':2,'official_http_requests':0,'database_writes':0,'published':False,
+            'pe_approval':False,'selected_gp_approval':False}
 
 
 class CapturePreferredTests(unittest.TestCase):
@@ -102,6 +103,12 @@ class CapturePreferredTests(unittest.TestCase):
             n.pop('detail_proof');n.pop('attachment_proofs',None)
         with patch.object(collector,'_reviewed_project',return_value=([p],[])):
             self.assertEqual(collector.project(source['notices'],'2026-11-10T03:00:00+09:00'),([p],[]))
+
+    def test_success_counts_and_approval_flags_cannot_be_forged(self):
+        source,p=fixture();result=c.capture(retained(source,p),fetch=lambda *_:self.fail('No HTTP'))
+        for key,value in [('detail_requests',3),('official_http_requests',1),('pe_approval',True),('selected_gp_approval',True)]:
+            bad=copy.deepcopy(result);bad[key]=value
+            with self.subTest(key=key),self.assertRaises(ValueError):c.reuse(source,bad)
 
     def test_reuse_cannot_change_existing_conditions_or_notice_fields(self):
         source,p=fixture();result=c.capture(retained(source,p),fetch=lambda *_:self.fail('No HTTP'))

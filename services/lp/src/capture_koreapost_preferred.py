@@ -172,7 +172,9 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def capture(retained, fetch=None):
-    if retained.get('kind')!=KIND or retained.get('stage')!='lookup' or retained.get('success') is not True:
+    if (retained.get('kind')!=KIND or retained.get('stage')!='lookup' or retained.get('success') is not True
+            or retained.get('published') is not False or retained.get('database_writes')!=0
+            or retained.get('pe_approval') is not False or retained.get('selected_gp_approval') is not False):
         raise ValueError('Successful bounded retained-source lookup required')
     result=copy.deepcopy(retained);result.update(stage='capture',success=False,
         checked_at=datetime.now(timezone.utc).isoformat(),responses=[],detail_requests=0,
@@ -224,9 +226,29 @@ def capture(retained, fetch=None):
 
 def reuse(source, result):
     if (result.get('kind')!=KIND or result.get('stage')!='capture' or result.get('success') is not True
-            or result.get('published') is not False or result.get('database_writes')!=0):
+            or result.get('published') is not False or result.get('database_writes')!=0
+            or result.get('pe_approval') is not False or result.get('selected_gp_approval') is not False):
         raise ValueError('Successful no-publication raw capture required')
-    validate_target(result['target'])
+    notices=validate_target(result['target'])
+    body_count,file_count=result.get('detail_requests'),result.get('attachment_requests')
+    if (type(body_count) is not int or not 0<=body_count<=2 or type(file_count) is not int or not 0<=file_count<=1
+            or result.get('official_http_requests')!=body_count+file_count
+            or type(result.get('transport_attempts')) is not int or not 0<=result['transport_attempts']<=body_count+file_count
+            or not isinstance(result.get('responses'),list) or len(result['responses'])!=body_count+file_count):
+        raise ValueError('Capture request/response counts differ')
+    expected={n['url']:('detail',n['detail_proof']) for n in notices}
+    a=notices[0];url=a['attachments'][0];expected[url]=('attachment',a['attachment_proofs'][url])
+    seen=set();counts={'detail':0,'attachment':0}
+    for response in result['responses']:
+        if not isinstance(response,dict) or set(response)!={'url','phase','raw_base64','sha256','byte_length','truncated','http_status'}:
+            raise ValueError('Capture response fields differ')
+        url=response['url'];phase,proof=expected.get(url,(None,None))
+        if (phase not in counts or url in seen or phase!=response['phase'] or response['truncated'] is not False
+                or response['http_status']!=200 or any(response[key]!=proof[key] for key in ('raw_base64','sha256','byte_length'))):
+            raise ValueError('Capture response differs from raw source proof')
+        seen.add(url);counts[phase]+=1
+    if counts!={'detail':body_count,'attachment':file_count}:
+        raise ValueError('Capture phase counts differ')
     upgraded=copy.deepcopy(source);by_id={n['source_id']:n for n in upgraded['notices']}
     for verified in result['target']['notices']:
         old=by_id.get(verified['source_id'])

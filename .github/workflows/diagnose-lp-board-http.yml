@@ -547,6 +547,9 @@ jobs:
           if-no-files-found: warn
 
   koreapost-preferred:
+    permissions:
+      contents: read
+      actions: read
     if: inputs.institution == 'koreapost' && github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
