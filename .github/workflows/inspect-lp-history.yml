@@ -19,6 +19,32 @@ jobs:
         run: python3 -m pip install 'psycopg[binary]==3.2.10'
       - name: Test bounded metadata and historical inventory contracts
         run: python3 -m unittest services.lp.tests.test_lp_history_index services.lp.tests.test_lp_history_coverage services.lp.tests.test_audit_lp_result_gaps
+      - name: Inspect LP publisher connections without reading SQL or document bodies
+        env:
+          SUPABASE_DB_URL: ${{ secrets.LP_SUPABASE_DB_URL || secrets.SUPABASE_DB_URL }}
+        run: |
+          python3 - <<'PYCODE'
+          import json,os
+          from pathlib import Path
+          import psycopg
+          output=Path('/tmp/lp-history-index');output.mkdir(exist_ok=True)
+          with psycopg.connect(os.environ['SUPABASE_DB_URL'],connect_timeout=15,
+                                prepare_threshold=None,application_name='lp-publisher-readonly-diagnostic') as conn:
+              conn.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+              conn.execute("SET LOCAL statement_timeout='10s'")
+              conn.execute("SET LOCAL lock_timeout='3s'")
+              state=conn.execute('SELECT run_id FROM lp_program_private.program_state WHERE id=1').fetchone()
+              count,latest=conn.execute('SELECT count(*),max(collected_at) FROM lp_program_private.collection_runs').fetchone()
+              rows=conn.execute("SELECT state,wait_event_type,wait_event,extract(epoch FROM clock_timestamp()-query_start)::bigint,position('lp_collection_report_parts' in query)>0 FROM pg_stat_activity WHERE datname=current_database() AND usename=current_user AND (application_name='lp-program-publisher' OR query LIKE 'INSERT INTO lp_program_private.collection_runs%') AND pid<>pg_backend_pid() ORDER BY query_start LIMIT 11").fetchall()
+              assert len(rows)<=10,'Publisher diagnostic row bound exceeded'
+              report={'kind':'lp_publisher_readonly_diagnostic_v1','public_run':state[0],
+                      'collection_reports':count,'latest_report_at':latest.isoformat() if latest else None,
+                      'publisher_connections':[{'state':r[0],'wait_event_type':r[1],'wait_event':r[2],
+                                                'query_seconds':r[3],'report_parts_query':r[4]} for r in rows],
+                      'official_http_requests':0,'database_writes':0,'cancel_requests':0}
+          (output/'publisher-diagnostic.json').write_text(json.dumps(report,ensure_ascii=False))
+          print(json.dumps(report,ensure_ascii=False))
+          PYCODE
       - name: Export LP-owned metadata without official source HTTP or database writes
         env:
           SUPABASE_DB_URL: ${{ secrets.LP_SUPABASE_DB_URL || secrets.SUPABASE_DB_URL }}
