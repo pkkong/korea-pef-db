@@ -6,7 +6,8 @@
 
 - 사용자가 Codex 1시간 automation을 끄고 Claude로 작업을 넘겼다. 이후 두 에이전트가 번갈아 작업하므로 `AGENTS.md`에 `Codex ↔ Claude Alternation` 절을 추가하고, `CLAUDE.md`는 `AGENTS.md`를 가리키는 얇은 안내로만 만들었다.
 - 인계 시점 미커밋 변경(11/09~10 Codex 작성)을 확인했다: `lp_publication_runner.py`(발행 process 480초 상한·TERM/KILL·단계 영수증)와 검사, 일일 수집/복구 workflow 연결, publisher 상태 진단 workflow의 서버 메타 조회, `build_lp_service_pages.py --programs` 옵션, 운영문서 갱신.
-- **로컬 검증만 완료:** Python 3.12 환경에서 `run_regression_tests.py` 1362검사/137파일 실패0, `check_architecture_contracts.py` OK, 변경 workflow3개 YAML 파싱 OK. 운영 발행 재요청·GitHub Actions 실행은 하지 않았다. 아직 commit 전이다.
+- **로컬 검증만 완료:** Python 3.12 환경에서 `run_regression_tests.py` 1362검사/137파일 실패0, `check_architecture_contracts.py` OK, 변경 workflow3개 YAML 파싱 OK. 운영 발행 재요청은 하지 않았다. 2026-11-12 21:05 KST 세 commit(d0b80b2/64fe426/9d318c3)을 push했고 Test regressions 43214623992 성공. 480초 상한은 다음 정기 LP 수집부터 실제 적용된다.
+- 관측(작성: Claude): 11/10 이후 `Collect LP programs`는 11/10 dispatch·schedule 성공, 11/11 schedule 실패, 11/12 dispatch 43165796245·schedule 43175155925 성공이며 두 성공 run의 `Store evidence and publish verified pages`/`Verify published page` 단계가 성공했다. 91MB 저장 정지가 반복되지 않은 것은 확인했지만, 우본 우선협상1사 화면 반영 여부와 11/11 실패 원인은 아직 확인하지 않았다.
 - 다음 작은 단위: 이 변경을 commit/push한 뒤, 91MB 수집 보고서를 DB JSONB로 통째 저장하는 구조가 발행 정지의 원인인지 판단하고 저장 방식 변경(대용량 본문은 Storage, DB에는 요약/해시) 여부를 사용자와 정한다. 우본 공동투자 우선협상 1사 화면 반영은 여전히 미완료다.
 
 ## 91MB 보고서 격리 재생 성공·응답 상한 보강 준비 — 2026-11-10 08:27 KST
