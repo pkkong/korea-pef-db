@@ -153,3 +153,16 @@ def test_gp_legacy_asset_links_are_served_by_own_runtime() -> None:
     assert 'href="/assets/service.css?v=3"' in rewritten
     assert 'src="/assets/service.js?v=3"' in rewritten
     assert 'href="https://external.example/assets/service.css"' in rewritten
+
+
+def test_missing_profile_is_404_while_outage_stays_503() -> None:
+    def fetch(name):
+        if name == "gp-999999.html":
+            raise gp_public_data.GPPageNotFound("Published GP snapshot is missing gp-999999.html")
+        raise gp_public_data.GPPublicDataError("No published GP snapshot is available")
+    with patch.dict(web_app._GP_PAGE_CACHE, {"snapshot_id": "", "pages": {}}, clear=True), patch.object(web_app, "fetch_active_gp_page", side_effect=fetch):
+        client = web_app.app.test_client()
+        missing = client.get("/gp-999999.html")
+        assert missing.status_code == 404
+        assert "no-store" not in missing.headers.get("Cache-Control", "")
+        assert client.get("/gp-2.html").status_code == 503

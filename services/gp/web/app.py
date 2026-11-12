@@ -11,10 +11,10 @@ from threading import RLock
 from flask import Flask, Response, jsonify, request, send_file
 
 if __package__:
-    from .gp_public_data import GPPublicDataError, fetch_active_gp_page
+    from .gp_public_data import GPPageNotFound, GPPublicDataError, fetch_active_gp_page
     from .navigation import rewrite_gp_navigation
 else:
-    from gp_public_data import GPPublicDataError, fetch_active_gp_page
+    from gp_public_data import GPPageNotFound, GPPublicDataError, fetch_active_gp_page
     from navigation import rewrite_gp_navigation
 
 try:
@@ -62,6 +62,10 @@ def _load_gp_page(page_name: str, force_refresh: bool) -> dict[str, str]:
     try:
         page = dict(fetch_active_gp_page(page_name))
         page["page_html"] = rewrite_gp_navigation(page["page_html"])
+    except GPPageNotFound:
+        # A page absent from the published snapshot is not an outage.
+        cached_pages.pop(page_name, None)
+        raise
     except (GPPublicDataError, OSError, TimeoutError, UnicodeDecodeError, ValueError):
         stale_seconds = max(0, int(os.environ.get("GP_PAGE_STALE_IF_ERROR_SECONDS", str(DEFAULT_GP_STALE_IF_ERROR_SECONDS))))
         if isinstance(cached, dict) and time.time() < float(entry.get("expires_at") or 0) + stale_seconds:
@@ -83,6 +87,8 @@ def _load_gp_page(page_name: str, force_refresh: bool) -> dict[str, str]:
 def gp_public_page(page_name: str):
     try:
         page = load_gp_page(page_name, force_refresh=request.args.get("refresh") == "1")
+    except GPPageNotFound:
+        return Response("GP 정보를 찾을 수 없습니다.", status=404, content_type="text/plain; charset=utf-8", headers={"Cache-Control": "public, max-age=300"})
     except (GPPublicDataError, OSError, TimeoutError, UnicodeDecodeError, ValueError):
         return Response("GP 정보를 잠시 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.", status=503, content_type="text/plain; charset=utf-8", headers={"Retry-After": "60", "Cache-Control": "no-store"})
     headers = _cache_headers("text/html; charset=utf-8")

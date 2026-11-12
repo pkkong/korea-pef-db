@@ -297,3 +297,33 @@ class KoreaPostReviewTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KoreaPostTlsFallbackTests(unittest.TestCase):
+    def test_handshake_refusal_retries_once_with_verifying_compat_context(self):
+        import ssl
+        from unittest.mock import patch, MagicMock
+        from urllib.error import URLError
+        import services.lp.src.collect_koreapost_program as post
+        response = MagicMock(); response.__enter__.return_value = response
+        response.geturl.return_value = post.LIST_URL; response.read.return_value = b'<html></html>'
+        calls = []
+        def fake(request, timeout, context=None):
+            calls.append(context)
+            if context is None:
+                raise URLError(ssl.SSLError(1, '[SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] sslv3 alert handshake failure'))
+            return response
+        with patch.object(post, 'urlopen', side_effect=fake), patch.object(post.time, 'sleep') as sleep:
+            self.assertEqual(post._get(post.LIST_URL), b'<html></html>')
+        self.assertIsNone(calls[0]); self.assertIsInstance(calls[1], ssl.SSLContext)
+        self.assertEqual(calls[1].verify_mode, ssl.CERT_REQUIRED); self.assertTrue(calls[1].check_hostname)
+        sleep.assert_not_called()
+
+    def test_other_failures_keep_bounded_retries(self):
+        from unittest.mock import patch
+        from urllib.error import URLError
+        import services.lp.src.collect_koreapost_program as post
+        with patch.object(post, 'urlopen', side_effect=URLError('timed out')) as opener, \
+             patch.object(post.time, 'sleep'), self.assertRaises(URLError):
+            post._get(post.LIST_URL)
+        self.assertEqual(opener.call_count, 4)

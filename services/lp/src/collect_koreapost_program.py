@@ -10,6 +10,7 @@ import argparse
 import base64
 import copy
 import hashlib
+import ssl
 import io
 import json
 import re
@@ -68,24 +69,46 @@ def _official_url(url):
     return url
 
 
+def _compat_context():
+    """Certificate-verifying context that also offers older server ciphers.
+
+    Used only after a TLS handshake refusal from the official host (observed
+    2026-11-12 22:00 KST while browsers still connected). Verification of the
+    certificate chain and host name is unchanged.
+    """
+    context = ssl.create_default_context()
+    context.set_ciphers("DEFAULT:@SECLEVEL=1")
+    context.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0)
+    return context
+
+
+def _handshake_refused(error):
+    reason = getattr(error, "reason", error)
+    return isinstance(reason, ssl.SSLError) and "HANDSHAKE_FAILURE" in str(reason).upper()
+
+
 def _get(url):
     request = Request(_official_url(url), headers={"User-Agent": "Mozilla/5.0", "Referer": LIST_URL})
-    for attempt in range(3):
+    context = None
+    for attempt in range(4):
         try:
-            with urlopen(request, timeout=25) as response:
+            with urlopen(request, timeout=25, context=context) as response:
                 _official_url(response.geturl())
                 raw = response.read(25 * 1024 * 1024 + 1)
                 if not raw or len(raw) > 25 * 1024 * 1024:
                     raise ValueError('Korea Post response exceeds bounded evidence limit')
                 return raw
         except HTTPError as error:
-            if error.code in (404, 410) or attempt == 2:
+            if error.code in (404, 410) or attempt == 3:
                 raise
             time.sleep(attempt + 1)
-        except (URLError, TimeoutError):
-            if attempt == 2:
+        except (URLError, TimeoutError, ssl.SSLError) as error:
+            if attempt == 3:
                 raise
-            time.sleep(attempt + 1)
+            if context is None and _handshake_refused(error):
+                context = _compat_context()
+                continue
+            time.sleep(2 * (attempt + 1))
 
 
 def _listing(html_bytes):

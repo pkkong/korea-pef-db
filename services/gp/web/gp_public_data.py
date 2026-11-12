@@ -20,6 +20,10 @@ class GPPublicDataError(RuntimeError):
     pass
 
 
+class GPPageNotFound(GPPublicDataError):
+    """The published snapshot is available but has no such page."""
+
+
 def _supabase_config() -> tuple[str, str]:
     base_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     key = os.environ.get("SUPABASE_PUBLISHABLE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
@@ -75,7 +79,7 @@ def fetch_active_gp_page(page_name: str) -> dict[str, str]:
     )
     pages = _request_json(f"{base_url}/rest/v1/gp_public_pages?{page_query}", key)
     if not isinstance(pages, list) or not pages or not isinstance(pages[0], dict):
-        raise GPPublicDataError(f"Published GP snapshot is missing {page_name}")
+        raise GPPageNotFound(f"Published GP snapshot is missing {page_name}")
     page = pages[0]
     page_html = str(page.get("page_html") or "")
     content_sha256 = str(page.get("content_sha256") or "")
