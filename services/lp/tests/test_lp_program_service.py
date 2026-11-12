@@ -100,3 +100,51 @@ class ProgramListPresentation(unittest.TestCase):
         self.assertNotIn('대한예수교장로회', pages['program-y.html'])
         self.assertNotIn('PE 배정 미확인', index)
         self.assertIn('<h1>총회연금재단</h1>', pages['institution-pck.html'])
+
+    def selected(self, pid, inst, name, gp_name, key, master=None, event='2026-09-01'):
+        p = self.program(pid, '선정 완료', inst, name, '2026-08-01', event=event)
+        url = 'https://official.example/result-' + pid
+        p['events'].append({'date': event, 'type': '최종 선정', 'title': 'result', 'url': url})
+        p['selected_gps'] = [{'name': gp_name, 'id': key, 'master_id': master, 'source_url': url, 'asset_scope': 'PE'}]
+        return p
+
+    def test_source_titles_cleaned_and_identical_names_told_apart(self):
+        pages = self.render([
+            {**self.program('a', '접수 마감', 'k', 'K', '2026-07-01', event='2026-06-10'), 'title': '같은 공고'},
+            {**self.program('b', '접수 마감', 'k', 'K', '2026-10-12', event='2026-09-20'), 'title': '같은 공고'},
+            {**self.program('c', '접수 마감', 'm', 'M', '2026-08-14'), 'title': '[사업공고] ’26년 군인공제회 「PE」 선정 공고(우정사업본부 공고 2026-33호)'},
+        ])
+        index = pages['index.html']
+        self.assertIn('>같은 공고 · 6월 공고<', index); self.assertIn('>같은 공고 · 9월 공고<', index)
+        self.assertIn('>2026년 군인공제회 PE 선정 공고<', index)
+        self.assertIn('<h1>2026년 군인공제회 PE 선정 공고</h1><p class="source-title">공고명 [사업공고]', pages['program-c.html'])
+        self.assertIn('<title>2026년 군인공제회 PE 선정 공고 · LP</title>', pages['program-c.html'])
+
+    def test_institution_directory_and_merged_manager_history(self):
+        pages = self.render([
+            self.selected('g1', 'kgrowth', '한국성장금융', '에스지프라이빗에쿼티', '138', master='138'),
+            self.selected('x1', 'kexim', '한국수출입은행', '에스지 프라이빗에쿼티', 'kexim-1', event='2026-10-01'),
+            self.selected('x2', 'kexim', '한국수출입은행', '다른운용사', 'kexim-2'),
+        ])
+        self.assertIn('href="institution-directory.html">출자기관 2곳</a>', pages['index.html'])
+        directory = pages['institution-directory.html']
+        self.assertLess(directory.index('institution-kexim.html'), directory.index('institution-kgrowth.html'))
+        self.assertIn('출자사업 2건 · 선정 운용사 2곳', pages['institution-kexim.html'])
+        for key in ('138', 'kexim-1'):
+            page = pages[f'selected-gp-{key}.html']
+            self.assertIn('선정 이력 2건', page)
+            self.assertIn('program-g1.html', page); self.assertIn('program-x1.html', page)
+        self.assertIn('선정 이력 1건', pages['selected-gp-kexim-2.html'])
+
+    def test_detail_marks_current_step_hides_placeholders_and_has_meta(self):
+        p = self.program('s', '접수 마감', 'k', 'K', '2026-10-01')
+        p['primary_investment'] = {'text': '별도 투자대상·의무비율 미확인'}
+        p['schedule_stages'] = [
+            {'stage': 'announcement', 'label': '모집 공고', 'date': '2026-09-01', 'precision': 'date', 'status': 'confirmed', 'source_url': 'https://official.example/s'},
+            {'stage': 'application', 'label': '접수 마감', 'date': '2026-10-01', 'precision': 'date', 'status': 'announced_deadline', 'source_url': 'https://official.example/s'},
+            {'stage': 'selection', 'label': '최종 선정', 'date': '2026-12-01', 'precision': 'date', 'status': 'planned', 'source_url': 'https://official.example/s'}]
+        page = self.render([p])['program-s.html']
+        self.assertIn('<li class="done">공고</li><li class="current" aria-current="step">접수</li><li>심사</li><li>선정</li>', page)
+        self.assertNotIn('주목적', page); self.assertNotIn('선정 결과 미확인', page)
+        self.assertIn('<meta name="description" content="K · s · 접수 마감.', page)
+        self.assertIn('<link rel="canonical" href="https://kpef-lp.vercel.app/program-s.html">', page)

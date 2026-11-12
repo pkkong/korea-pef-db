@@ -122,7 +122,7 @@ class BasicNoticePublicationTests(unittest.TestCase):
         html = render_detail_body(program)
         self.assertIn('id="selection"', html)
         self.assertIn('<h2>선정 결과</h2>', html)
-        self.assertIn('선정 결과 미확인', html)
+        self.assertIn('선정 결과는 아직 확인되지 않았습니다.', html)
         self.assertNotIn('selected-gp-', html)
         self.assertEqual(program['selected_gps'], [])
 

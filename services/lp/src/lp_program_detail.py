@@ -58,6 +58,22 @@ def display_status(status):
     return STATUS_DISPLAY.get(status, status)
 
 
+_TITLE_PREFIX = re.compile(r'^\s*(?:\[[^\]]{1,30}\]\s*)+')
+_NOTICE_NUMBER = re.compile(r'\s*\([^()]*공고\s*(?:제\s*)?\d{4}\s*-\s*\d+\s*호?\)\s*$')
+_SHORT_YEAR = re.compile(r"^[’'‘]\s*(\d{2})\s*년")
+
+
+def clean_title(title):
+    """Reader-facing program name; the source title stays in the stored evidence."""
+    text = str(title or '').strip()
+    text = _TITLE_PREFIX.sub('', text)
+    text = _NOTICE_NUMBER.sub('', text)
+    text = _SHORT_YEAR.sub(lambda m: f'20{m[1]}년', text)
+    text = text.replace('「', '').replace('」', '')
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text or str(title or '').strip()
+
+
 def h(value):
     return escape(str(value or ''), quote=True)
 
@@ -66,9 +82,31 @@ def link(url, label='원문'):
         return ''
     return f'<a href="{h(url)}" target="_blank" rel="noopener">{h(label)} ↗</a>'
 
+_FLOW_STAGE = {'announcement': 0, 'application': 1, 'screening': 2, 'due_diligence': 2,
+               'interview': 2, 'preferred': 2, 'preferred_roster': 2, 'selection': 3}
+
+
+def _flow_step(stage):
+    """Map a sourced schedule stage to the four-step reader flow, or None."""
+    if stage.get('stage') in _FLOW_STAGE:
+        return _FLOW_STAGE[stage['stage']]
+    label = str(stage.get('label') or '')
+    for pattern, step in (('선정', 3), ('심사|평가|실사|협상', 2), ('접수|마감', 1), ('공고', 0)):
+        if re.search(pattern, label):
+            return step
+    return None
+
+
 def standardized_schedule(stages, as_of=None, *, selection_recorded=False):
     as_of = as_of or _today()
-    body = '<section id="schedule"><h2>진행 일정</h2><ol class="stage-flow" aria-label="출자사업 단계"><li>공고</li><li>접수</li><li>심사</li><li>선정</li></ol><ol class="event-list">'
+    reached = [_flow_step(e) for e in stages
+               if e.get('status') != 'planned' and str(e.get('date') or '')[:10] <= as_of]
+    current = max((step for step in reached if step is not None), default=None)
+    flow = ''
+    for index, name in enumerate(('공고', '접수', '심사', '선정')):
+        state = ' class="current" aria-current="step"' if index == current else (' class="done"' if current is not None and index < current else '')
+        flow += f'<li{state}>{name}</li>'
+    body = f'<section id="schedule"><h2>진행 일정</h2><ol class="stage-flow" aria-label="출자사업 단계">{flow}</ol><ol class="event-list">'
     for e in stages:
         stamp = e.get('date_label') or str(e.get('date') or '').replace('T', ' ').replace('+09:00', '')
         if e['precision'] == 'datetime':
@@ -86,7 +124,8 @@ def render_detail_body(p, as_of=None):
     as_of = as_of or _today()
     selection_recorded = bool(p.get('selected_gps')) or any(e['type'] in ('최종 선정', '선정 결과') for e in p['events'])
     original = next((e['url'] for e in p['events'] if e['type']=='모집 공고'), p['events'][0]['url'])
-    body = f'<a class="back" href="index.html">← 출자사업</a><header class="detail-header"><a class="institution" href="institution-{h(p["institution_id"])}.html">{h(p["institution_name"])}</a><h1>{h(p["title"])}</h1><div class="detail-meta"><span class="badge">{h(display_status(p["status"]))}</span>{link(original,"출자 공고 원문")}</div></header>'
+    original_title = f'<p class="source-title">공고명 {h(p["title"])}</p>' if clean_title(p['title']) != str(p['title']).strip() else ''
+    body = f'<a class="back" href="index.html">← 출자사업</a><header class="detail-header"><a class="institution" href="institution-{h(p["institution_id"])}.html">{h(p["institution_name"])}</a><h1>{h(p.get("public_title") or clean_title(p["title"]))}</h1>{original_title}<div class="detail-meta"><span class="badge">{h(display_status(p["status"]))}</span>{link(original,"출자 공고 원문")}</div></header>'
     if p.get('schedule_stages'):
         body += standardized_schedule(p['schedule_stages'], as_of, selection_recorded=selection_recorded)
     else:
@@ -122,6 +161,9 @@ def render_detail_body(p, as_of=None):
     if p.get('commitment_detail'):
         body += f'<p class="muted contribution-detail">{h(p["commitment_detail"])}<br>{h(p.get("contribution_note"))}</p>'
     objective = p.get('primary_investment')
+    items = objective.get('items', [objective.get('text')]) if objective else []
+    if objective and all(re.search(r'미확인\s*$', str(item or '')) for item in items):
+        objective = None  # A placeholder is not an investment purpose.
     if objective:
         paragraphs = "".join(f"<p>{h(item)}</p>" for item in objective.get("items", [objective["text"]]))
         body += f'<div class="investment-purpose"><strong>주목적</strong>{paragraphs}</div>'
@@ -131,12 +173,12 @@ def render_detail_body(p, as_of=None):
         extra = '<th>펀드당 출자액</th>' if per_fund else ''
         body += f'<div class="scroll"><table class="league-table"><thead><tr><th>리그</th><th>출자 예정액</th><th>선정 예정</th>{extra}</tr></thead><tbody>'
         for segment in segments:
-            amount = f'{segment["amount_krw"]/100000000:,.0f}억원' if segment.get('amount_krw') is not None else '미확인'
+            amount = f'{segment["amount_krw"]/100000000:,.0f}억원' if segment.get('amount_krw') is not None else '—'
             per_amount = segment.get('per_fund_max_krw') or segment.get('per_fund_amount_krw')
             minimum = segment.get('per_fund_min_krw')
             per_label = (f'{minimum/100000000:,.0f}~{per_amount/100000000:,.0f}억원' if minimum and per_amount else f'{per_amount/100000000:,.0f}억원' if per_amount else '')
-            extra = (f'<td data-label="펀드당 출자액">{per_label}' + (' 이내' if segment.get('per_fund_max_krw') and not minimum else '') + '</td>') if per_fund and per_amount else ('<td data-label="펀드당 출자액">미확인</td>' if per_fund else '')
-            body += f'<tr><td class="league-name">{h(segment["name"])}</td><td data-label="출자 예정액">{amount}</td><td data-label="선정 예정">{h(segment.get("manager_count") or "미확인")}</td>{extra}</tr>'
+            extra = (f'<td data-label="펀드당 출자액">{per_label}' + (' 이내' if segment.get('per_fund_max_krw') and not minimum else '') + '</td>') if per_fund and per_amount else ('<td data-label="펀드당 출자액">—</td>' if per_fund else '')
+            body += f'<tr><td class="league-name">{h(segment["name"])}</td><td data-label="출자 예정액">{amount}</td><td data-label="선정 예정">{h(segment.get("manager_count") or "—")}</td>{extra}</tr>'
         body += '</tbody></table></div>'
     body += '</section>'
     has_names = any(p.get(k) for k in ('applicants_gps', 'shortlisted_gps', 'preferred_gps', 'selected_gps'))
@@ -189,7 +231,7 @@ def render_detail_body(p, as_of=None):
             attrs = f' data-lp-note-until="{h(until)}" data-lp-past-note="{h(past_note)}"'
             if until < as_of:
                 note = past_note
-        body += f'<p class="muted"{attrs}>{h(note)}</p>' if note else '<p class="muted">선정 결과 미확인</p>'
+        body += f'<p class="muted"{attrs}>{h(note)}</p>' if note else '<p class="muted">선정 결과는 아직 확인되지 않았습니다.</p>'
         if result_events:
             result = max(result_events, key=lambda event: event['date'])
             label = '우선협상 결과 원문' if result['type'] == '우선협상대상자' else '선정 결과 원문'

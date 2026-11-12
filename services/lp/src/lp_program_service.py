@@ -65,9 +65,6 @@ def assert_selected_gp_history(before, after):
                     updated.get('manager_list_sources', {}).get('preferred_gps')):
                 raise ValueError('Existing preferred bidder evidence changed or disappeared')
 
-def deadline_label(value):
-    return str(value).replace('T', ' ').replace('+09:00', '') if value else '원문 확인 필요'
-
 def source(url, label='공식 원문'):
     if not url.startswith('https://'):
         return h(label)
@@ -79,20 +76,25 @@ CSS += """.investment-purpose{padding:16px 0;border-bottom:1px solid #e3e8ee}.in
 
 CSS += """.stage-flow{display:flex;list-style:none;padding:12px 0;gap:20px;color:#53677f;font-size:14px}.stage-flow li+li:before{content:"→";margin-right:20px;color:#aaa}.planned-label:empty{display:none}#offering .facts:has(>div:nth-child(3)){grid-template-columns:1fr 1fr 1fr}"""
 
-def shell(title, body, as_of):
+def shell(title, body, as_of, description='', path=None):
     sample_css = (Path(__file__).with_name('lp_sample.css')).read_text()
     newsletter_url = h(os.environ.get('NEWSLETTER_PUBLIC_URL', 'https://kpef-newsletter.vercel.app').rstrip('/'))
     gp_url = h(os.environ.get('GP_PUBLIC_URL', 'https://kpef-gp.vercel.app').rstrip('/'))
-    return f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{h(title)} · LP</title><link rel="stylesheet" href="/assets/service.css"><style>{CSS}\n{sample_css}</style></head><body class="lp-sample"><main><div class="sample-brand"><a href="{newsletter_url}/">Korea PEF</a><span>LP</span></div>{body}</main><nav class="bottom-nav" aria-label="하단 메뉴"><a href="{newsletter_url}/"><span aria-hidden="true" class="nav-dot nav-icon-brief"></span><strong>브리프</strong></a><a class="active" aria-current="page" href="index.html"><span aria-hidden="true" class="nav-dot nav-icon-lp"></span><strong>LP</strong></a><a href="{gp_url}/"><span aria-hidden="true" class="nav-dot nav-icon-gp"></span><strong>GP</strong></a></nav></body></html>'
+    lp_url = os.environ.get('LP_PUBLIC_URL', 'https://kpef-lp.vercel.app').rstrip('/')
+    description = description or '국내 기관전용 사모펀드 출자사업 공고·일정·선정 운용사를 공식 원문 기준으로 정리합니다.'
+    meta = (f'<meta name="description" content="{h(description)}"><meta property="og:type" content="website">'
+            f'<meta property="og:title" content="{h(title)} · LP"><meta property="og:description" content="{h(description)}">'
+            + (f'<link rel="canonical" href="{h(lp_url)}/{h(path)}"><meta property="og:url" content="{h(lp_url)}/{h(path)}">' if path is not None else ''))
+    return f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{h(title)} · LP</title>{meta}<link rel="stylesheet" href="/assets/service.css"><style>{CSS}\n{sample_css}</style></head><body class="lp-sample"><main><div class="sample-brand"><a href="{newsletter_url}/">Korea PEF</a><span>LP</span></div>{body}</main><nav class="bottom-nav" aria-label="하단 메뉴"><a href="{newsletter_url}/"><span aria-hidden="true" class="nav-dot nav-icon-brief"></span><strong>브리프</strong></a><a class="active" aria-current="page" href="index.html"><span aria-hidden="true" class="nav-dot nav-icon-lp"></span><strong>LP</strong></a><a href="{gp_url}/"><span aria-hidden="true" class="nav-dot nav-icon-gp"></span><strong>GP</strong></a></nav></body></html>'
 
 def build(data, out):
     validate(data)
     out.mkdir(parents=True, exist_ok=True)
     as_of = data['as_of']
     try:
-        from .lp_program_detail import render_detail_body, display_status, STATUS_ORDER
+        from .lp_program_detail import render_detail_body, display_status, STATUS_ORDER, clean_title
     except ImportError:
-        from lp_program_detail import render_detail_body, display_status, STATUS_ORDER
+        from lp_program_detail import render_detail_body, display_status, STATUS_ORDER, clean_title
     # One public name per institution: the most used stored name, then the shortest.
     names = defaultdict(list)
     for p in data['programs']:
@@ -102,6 +104,21 @@ def build(data, out):
     latest = lambda p: max(e['date'] for e in p['events'])
     programs = sorted(({**p, 'institution_name': canonical[p['institution_id']]} for p in data['programs']),
                       key=latest, reverse=True)
+    # Reader-facing names: curated short names win; otherwise the cleaned source title.
+    # Identical names within one institution are told apart by the notice month.
+    for p in programs:
+        p['public_title'] = clean_title(p['title'])
+        p['list_title'] = p.get('display_title') or p['public_title']
+    seen = defaultdict(list)
+    for p in programs:
+        seen[(p['institution_id'], p['list_title'])].append(p)
+    for group in seen.values():
+        if len(group) > 1:
+            for p in group:
+                first = min(e['date'] for e in p['events'])
+                when = f"{int(first[5:7])}월 공고" if first[:4] == str(as_of)[:4] else f"{first[:4]}년 {int(first[5:7])}월 공고"
+                p['list_title'] += f' · {when}'
+                p['public_title'] += f' · {when}'
     # Open recruitments first, nearest deadline first; the rest by latest sourced event.
     open_now = sorted((p for p in programs if p['status'] == '접수 중'), key=lambda p: (p.get('deadline') or '9999'))
     programs = open_now + [p for p in programs if p['status'] != '접수 중']
@@ -136,25 +153,69 @@ def build(data, out):
         if '미확인' in amount:
             # A total that is not this PE track's allocation is not a list amount.
             amount = ''
-        return f'<article class="program" data-status="{h(status)}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}</span><span class="program-status{' open' if status == '접수 중' else ''}">{h(status)}</span></div><h2 class="program-title">{h(p.get("display_title",p["title"]))}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}{dday}</span></div></a></article>'
+        return f'<article class="program" data-status="{h(status)}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"] + " " + p["list_title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}</span><span class="program-status{' open' if status == '접수 중' else ''}">{h(status)}</span></div><h2 class="program-title">{h(p["list_title"])}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}{dday}</span></div></a></article>'
     options = ''.join(f'<option value="{h(k)}">{h(v[0]["institution_name"])}</option>' for k,v in institutions.items())
     shown = {display_status(p['status']) for p in programs}
     statuses = ''.join(f'<option>{h(s)}</option>' for s in [*[s for s in STATUS_ORDER if s in shown], *sorted(shown - set(STATUS_ORDER))])
-    body = f'<header class="list-header"><h1>출자사업</h1><span id="count">{len(programs)}개 사업</span></header><div class="controls"><input aria-label="사업 검색" placeholder="기관·사업명 검색"><select aria-label="진행 상태"><option value="">모든 상태</option>{statuses}</select><select aria-label="출자기관"><option value="">모든 기관</option>{options}</select></div>'+''.join(row(p) for p in programs)+'<p id="empty" hidden>조건에 맞는 사업이 없습니다.</p>'
+    body = f'<header class="list-header"><h1>출자사업</h1><span><a class="list-link" href="institution-directory.html">출자기관 {len(institutions)}곳</a> · <span id="count">{len(programs)}개 사업</span></span></header><div class="controls"><input aria-label="사업 검색" placeholder="기관·사업명 검색"><select aria-label="진행 상태"><option value="">모든 상태</option>{statuses}</select><select aria-label="출자기관"><option value="">모든 기관</option>{options}</select></div>'+''.join(row(p) for p in programs)+'<p id="empty" hidden>조건에 맞는 사업이 없습니다.</p>'
     body += '''<script>const q=document.querySelector('input'),s=document.querySelectorAll('select');function filter(){let n=0;document.querySelectorAll('.program').forEach(r=>{r.hidden=!((r.textContent+" "+r.dataset.search).toLowerCase().includes(q.value.toLowerCase())&&(!s[0].value||r.dataset.status===s[0].value)&&(!s[1].value||r.dataset.institution===s[1].value));if(!r.hidden)n++});document.querySelector('#count').textContent=n+'개 사업';document.querySelector('#empty').hidden=n!==0}q.addEventListener('input',filter);s.forEach(e=>e.addEventListener('change',filter));(function(){const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());const today=Date.parse(p+'T00:00:00Z');document.querySelectorAll('[data-lp-dday]').forEach(e=>{const n=Math.round((Date.parse(e.dataset.lpDday+'T00:00:00Z')-today)/86400000);e.textContent=n>0?' · D-'+n:(n===0?' · 오늘 마감':'')})})();</script>'''
-    (out/'index.html').write_text(shell('출자사업',body,as_of))
+    (out/'index.html').write_text(shell('출자사업',body,as_of,path=''))
     for p in programs:
-        (out/f'program-{p["id"]}.html').write_text(shell(p['title'], render_detail_body(p, as_of), as_of))
+        (out/f'program-{p["id"]}.html').write_text(shell(p['public_title'], render_detail_body(p, as_of), as_of,
+            description=f"{p['institution_name']} · {p['public_title']} · {display_status(p['status'])}. 모집 일정과 선정 운용사를 공식 원문과 함께 정리합니다.",
+            path=f'program-{p["id"]}.html'))
+    # The same manager selected by different LPs: one history on every existing page.
+    # Grouped by reviewed GP master ID or by the exact name ignoring spaces; spelling
+    # variants stay separate until a reviewed identity links them.
+    parent = {}
+    def find(x):
+        while parent.setdefault(x, x) != x:
+            x = parent[x]
+        return x
+    for key, entries in gp_programs.items():
+        for _, gp in entries:
+            ids = [f'k:{key}', 'n:' + re.sub(r'\s+', '', gp['name'])]
+            if gp.get('master_id'):
+                ids.append(f"m:{gp['master_id']}")
+            for other in ids[1:]:
+                parent[find(other)] = find(ids[0])
+    histories = defaultdict(list)
+    for key, entries in gp_programs.items():
+        histories[find(f'k:{key}')].extend(entries)
+    def selection_count(group):
+        return len({g['name'] for p in group for g in p['selected_gps']})
+    def gp_links(group):
+        names = {}
+        for p in group:
+            for g in p['selected_gps']:
+                names.setdefault(re.sub(r'\s+', '', g['name']), g)
+        return ''.join(f'<li><a href="selected-gp-{h(g["page_key"])}.html">{h(g["name"])}</a></li>' for g in names.values())
+    directory = sorted(institutions.items(), key=lambda kv: max(max(e['date'] for e in p['events']) for p in kv[1]), reverse=True)
     for key,group in institutions.items():
         title=group[0]['institution_name']
-        body=f'<a href="index.html">← 출자사업</a><header><div class="eyebrow">출자기관</div><h1>{h(title)}</h1><p>연결된 출자사업 {len(group)}건</p></header>'+''.join(row(p) for p in group)
-        (out/f'institution-{key}.html').write_text(shell(title,body,as_of))
+        selected = selection_count(group)
+        summary = f'출자사업 {len(group)}건' + (f' · 선정 운용사 {selected}곳' if selected else '')
+        body=f'<a class="back" href="institution-directory.html">← 출자기관</a><header><h1>{h(title)}</h1><p>{summary}</p></header>'
+        if selected:
+            body += f'<section class="institution-gps"><h2>선정 운용사</h2><ul class="gp-names">{gp_links(group)}</ul></section>'
+        body += '<h2>출자사업</h2>' + ''.join(row(p) for p in group)
+        (out/f'institution-{key}.html').write_text(shell(title,body,as_of,description=f'{title}의 기관전용 사모펀드 출자사업 {summary}.',path=f'institution-{key}.html'))
+    rows = ''
+    for key, group in directory:
+        selected = selection_count(group)
+        last = max(max(e['date'] for e in p['events']) for p in group)
+        meta = f'출자사업 {len(group)}건' + (f' · 선정 운용사 {selected}곳' if selected else '')
+        rows += (f'<article class="program"><a class="program-link" href="institution-{h(key)}.html"><h2 class="program-title">{h(group[0]["institution_name"])}</h2>'
+                 f'<div class="program-bottom"><span>{h(meta)}</span><span>{h(short_date(last))} 최근 공고·결과</span></div></a></article>')
+    body = f'<a class="back" href="index.html">← 출자사업</a><header class="list-header"><h1>출자기관</h1><span>{len(directory)}곳</span></header>{rows}'
+    (out/'institution-directory.html').write_text(shell('출자기관', body, as_of, description='기관전용 사모펀드 출자사업을 공고한 출자기관 목록입니다.', path='institution-directory.html'))
     for key,group in gp_programs.items():
         gp=gp_index[key]
-        body=f'<a href="index.html">← 출자사업</a><header><div class="eyebrow">GP / 출자사업 선정 이력</div><h1>{h(gp["name"])}</h1><p>선정 이력 {len(group)}건</p></header><h2>선정된 사업</h2>'
-        for p,g in group: body+=row(p)+f'<p>{source(g["source_url"],"공식 선정 근거")}</p>'
+        merged = list({p['id']: (p, g) for p, g in sorted(histories[find(f'k:{key}')], key=lambda pg: max(e['date'] for e in pg[0]['events']), reverse=True)}.values())
+        body=f'<a href="index.html">← 출자사업</a><header><div class="eyebrow">GP / 출자사업 선정 이력</div><h1>{h(gp["name"])}</h1><p>선정 이력 {len(merged)}건</p></header><h2>선정된 사업</h2>'
+        for p,g in merged: body+=row(p)+f'<p>{source(g["source_url"],"공식 선정 근거")}</p>'
         body+='<p class="muted">수록된 출자사업의 선정 이력입니다.</p>'
-        (out/f'selected-gp-{key}.html').write_text(shell(gp['name'],body,as_of))
+        (out/f'selected-gp-{key}.html').write_text(shell(gp['name'],body,as_of,description=f"{gp['name']}의 출자사업 선정 이력 {len(merged)}건.",path=f'selected-gp-{key}.html'))
     return {'programs':len(programs),'institutions':len(institutions),'gps':len(gp_programs),'as_of':as_of}
 
 if __name__=='__main__':

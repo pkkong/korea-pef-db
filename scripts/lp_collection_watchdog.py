@@ -9,17 +9,16 @@ REPOSITORY = 'pkkong/korea-pef-db'
 WORKFLOW = 'collect-kgrowth-programs.yml'
 ACTIVE = ('queued', 'in_progress', 'waiting', 'pending', 'requested')
 SOURCE_WORKFLOWS = frozenset((WORKFLOW, 'recover-lp-publication.yml',
-    'inspect-lp-remaining-boards.yml', 'verify-kgrowth-window.yml',
-    'verify-pck-board.yml', 'audit-lp-official-inventory.yml',
+    'inspect-lp-remaining-boards.yml',
+    'audit-lp-official-inventory.yml',
     'audit-lp-discovery.yml', 'diagnose-lp-board-http.yml',
-    'probe-lp-source-region.yml', 'deploy-lp-source-worker.yml',
+    'deploy-lp-source-worker.yml',
     'maintain-lp-report-storage.yml', 'inspect-lp-history.yml',
     'discover-lp-history.yml', 'collect-lp-history-bodies.yml',
     'discover-ktcu-history.yml', 'collect-lp-history-attachments.yml',
     'diagnose-lp-inventory-failures.yml', 'prepare-lp-history-publication.yml',
     'publish-lp-history.yml', 'plan-lp-history-attachments.yml',
     'collect-kgrowth-history-attachments.yml', 'diagnose-kgrowth-history-session.yml',
-    'diagnose-sema-listing-conflict.yml', 'adopt-kgrowth-session-file.yml',
     'probe-lp-report-storage.yml'))
 UTC = dt.timezone.utc
 
