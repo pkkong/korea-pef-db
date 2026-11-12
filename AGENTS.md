@@ -3,8 +3,8 @@
 ## Operating Mode
 
 - Work as a small, fixed-role agent team only when the task has real parallel work.
-- The main Codex agent acts as Project Lead / PM / Tech Lead.
-- The main Codex agent owns goal framing, planning, task breakdown, sequencing, integration, final judgment, and user communication.
+- The main agent (Codex or Claude, whichever is currently working) acts as Project Lead / PM / Tech Lead.
+- The main agent owns goal framing, planning, task breakdown, sequencing, integration, final judgment, and user communication.
 - Delegate independent work to subagents when the task can be split without blocking the main path.
 - Keep urgent, tightly coupled, or risky edits in the main agent unless a subagent has a clearly bounded file scope.
 - Tell the user briefly which role is handling which part when delegation is used.
@@ -103,7 +103,7 @@ Every non-trivial subagent task should state:
 
 ## Automation Cost and Execution Failures
 
-- Unless the user explicitly pauses or cancels, continue authorized unfinished project work to the agreed completion criteria. A usage limit, temporary model/provider capacity error, or interrupted turn is not completion. Save the last verified step and remaining work, and resume without asking the user to repeat the instruction. For work that outlasts the active turn, use the existing hourly automation attached to this same chat; update its scope rather than creating duplicate schedules or independent chats. This standing preference does not authorize new paid plans, higher budgets, account/model circumvention, or unrelated work.
+- Unless the user explicitly pauses or cancels, continue authorized unfinished project work to the agreed completion criteria. A usage limit, temporary model/provider capacity error, or interrupted turn is not completion. Save the last verified step and remaining work, and resume without asking the user to repeat the instruction. For work that outlasts the active turn, use the single recurring automation of the agent that currently owns the work (see `Codex ↔ Claude Alternation`); update its scope rather than creating duplicate schedules or independent chats. This standing preference does not authorize new paid plans, higher budgets, account/model circumvention, or unrelated work.
 - GitHub Actions billing/usage errors are separate from ChatGPT/Codex limits. The generic failed-payment-or-spending-limit annotation is not evidence that additional payment is required.
 - On an execution-provider block, inspect concrete job annotations, available usage evidence, and free operating alternatives before sending the user to billing settings. Never raise budgets, enroll in paid plans, or repeatedly dispatch blocked workflows without authorization.
 - The user authorized making `pkkong/korea-pef-db` public on 2026-10-16 to restore free standard GitHub-hosted execution. Keep credentials in Actions secrets, retain read-only default workflow permissions, and never add secret-dependent publishing to untrusted pull-request events.
@@ -139,6 +139,19 @@ Every non-trivial subagent task should state:
 - Newsletter HTML source is singular in `services/newsletter/web/newsletter_ui.py` for Vercel and the Pages mirror. Shared CSS/JS/icon functions live once in `services/shared/web/service_assets.py` and are re-exported there. Do not create Vercel-only templates, duplicate style sources, or runtime asset dependencies on sibling services.
 - Newsletter Vercel archive data must preserve both `newsletter_issues` and `newsletter_public_issue_articles`: issue rows own date navigation, article rows own article content/order. Do not treat numeric `0` values such as `section_order=0` as missing values; doing so changes Vercel ordering while Pages remains correct.
 - Wiki is not an active routine public-build target until the user re-plans it. Preserve explicit Wiki builder support, but do not include Wiki in default active public builds or navigation.
+
+## Codex ↔ Claude Alternation (2026-11-12 사용자 지정)
+
+이 저장소는 GPT(Codex)와 Claude(Claude Code)가 번갈아 작업한다. 어느 쪽이 다음 작업을 맡아도 사용자에게 다시 설명을 요구하지 않고 이어갈 수 있어야 한다.
+
+- 공통 운영 규칙의 단일 원본은 이 `AGENTS.md`다. `CLAUDE.md`는 이 파일을 가리키는 얇은 안내와 Claude 전용 차이만 둔다. 같은 규칙을 에이전트별로 복제하지 않는다.
+- 결정·진행상태·다음 작업은 저장소 문서와 commit에만 남긴다. ChatGPT 채팅 기록, Codex automation 메모, Claude Project/메모리는 보조일 뿐 유일한 기록이 될 수 없다.
+- 작업 시작 시: `git status`/`git log -10`, `docs/lp_resume_checkpoint.md`·`docs/project_lead_control_center.md` 최신 항목을 먼저 확인한다. 소유가 불분명한 미커밋 변경은 상대 에이전트의 미완료 작업일 수 있으므로 되돌리거나 덮어쓰지 않고, 검증 후 이어받거나 상태를 기록한다.
+- 작업 단위 종료 시: 체크포인트 문서에 `작성: Claude` 또는 `작성: Codex`, 로컬 완료와 운영 반영의 구분, 검증 결과, 다음 작은 단위를 남긴다. 가능하면 commit까지 마쳐 미커밋 WIP를 남기지 않으며, 남길 경우 그 파일과 이유를 체크포인트에 적는다.
+- 반복 예약(automation/scheduled task)은 두 에이전트 중 한쪽만 켠다. 교대 시 사용자가 이전 쪽을 끄고, 새 담당 에이전트는 켜기 전에 사용자에게 확인한다. GitHub Actions 정기 수집·발행은 에이전트와 무관한 공통 실행 경로이므로 유지한다.
+- 운영 경로는 두 에이전트가 모두 실행할 수 있는 코드·GitHub Actions·문서로만 만든다. 한쪽 도구에만 있는 기능(Codex 전용 automation, Claude 전용 skill 등)에 운영 절차를 의존시키지 않는다.
+- commit에는 작성 에이전트 표시(trailer 등)를 남겨 이력에서 누가 했는지 구분되게 한다.
+- 로컬 검증 기준 환경은 CI와 같은 Python 3.12 + `services/newsletter/web/requirements.txt` + `olefile==0.47` + `pypdf==6.10.0`이며, `python3 scripts/run_regression_tests.py`와 `python3 scripts/check_architecture_contracts.py`를 공통 검사로 쓴다.
 
 ## Cross-Chat / Handoff Discipline
 

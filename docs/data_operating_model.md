@@ -318,6 +318,22 @@ python3 scripts/build_site_bundle.py --services wiki --date YYYY-MM-DD
 - LP Notice는 계속 `사업 1개 = 공개 카드 1개`를 기준으로 삼고, 후보 source와 stale deadline은 public view/export 단계에서 제거한다.
 
 
+## 2026-09-10 LP 기본 명단 우선 원칙
+
+사용자 결정으로 공고 복원에 앞서 법적 유형별 LP 명단을 정리한다. 이전의 공고이력 0건 제외 및
+OCIO 기본명단 제외 규칙은 새 기본 명단에 적용하지 않는다. 운영 공개 화면 설정은 별도 전환 전까지 유지한다.
+참여 자격·실제 출자활동·기금관리/운용 역할·공개 상태를 분리한다. 기관과 자금은 별개 주체로 관리하며,
+공고 운영기관을 실제 출자자로 자동 치환하지 않는다. 검토본과 현재 운영 입력을 혼동하지 않는다.
+상세 기준은 `docs/lp_directory_basis_2026-09-10.md`, 검토 데이터는 `data/lp_directory_review.json`이다.
+
+
+## 한국성장금융 출자사업 자동 수집 (2026-09-28)
+
+한국성장금융 수집은 `collect-kgrowth-programs.yml`에서 공식 게시판과 검토된 밸류업 3차의 단계별 공고를 확인한다. 원문과 실행 보고서는 Supabase `lp_program_private`에 저장하고, 검증된 사업 데이터와 렌더링 페이지는 하나의 트랜잭션으로 발행한다. Vercel `/samples/lp/`는 `lp_program_page`를 통해 공개 HTML을 읽으므로 수집 결과 반영에 앱 재배포가 필요하지 않다.
+
+현재 자동 반영 대상은 밸류업 3차 한 사업이다. 신규 공고와 기존 원문·첨부 변경은 검토 대상으로 보존한다. 다른 네 사업은 기존 샘플 자료이며 자동 수집 대상으로 간주하지 않는다. 수집 실패 시 기존 발행본을 유지하고, 공개 DB 조회 실패 시 오래된 배포 파일로 대체하지 않는다. 상세 운영 범위는 `services/lp/docs/kgrowth_automation.md`를 따른다.
+
+
 ## 독립 웹서비스 읽기 계약
 
 뉴스레터 앱은 newsletter_issues/newsletter_public_issue_articles와 자기 아카이브 fallback만 읽는다. LP 앱은 lp_program_page RPC와 자기 캐시만 읽는다. GP 앱은 gp_public_snapshots/gp_public_pages의 지문 검증된 공개본과 자기 캐시만 읽는다. 한 서비스의 조회·캐시·앱 상태 검사가 다른 서비스의 필수 데이터 의존성이 되면 안 된다. LP 공고 및 GP snapshot 원자료/식별자는 이번 앱 분리에서 변경하거나 재발행하지 않는다.
