@@ -360,3 +360,40 @@ class BasicNoticePublicationTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class LargeLpPeTrackTests(unittest.TestCase):
+    """User decision 2026-11-12: large LPs' PE tracks are published, joint scope labelled."""
+    BODY = ('투자기구: 기관전용 사모집합투자기구, 벤처투자조합, 신기술사업투자조합\n'
+            '총 출자금액 1,000억원 이내\n접수마감: 2026.10.20(화) 16:00')
+
+    def kdb(self, number, title, body=None, day='2026-10-01'):
+        return notice(number, title=title, body=body or self.BODY, day=day, institution_id='kdb',
+                      url=f'https://www.kdb.co.kr/notice/{number}')
+
+    def test_policy_fund_pe_track_published_as_joint_scope(self):
+        from services.lp.src.lp_notice_publication import _scope
+        n = self.kdb(1, '『2026 남부권 지역성장지원펀드』위탁운용사 선정계획 공고')
+        self.assertEqual(_scope(n), 'mixed_pe_blind')
+        programs, holds = publish([n])
+        p = next(p for p in programs if p['institution_id'] == 'kdb')
+        self.assertEqual(p['asset_scope'], 'PE·VC 공동 모집')
+        if p.get('commitment_label'):
+            self.assertIn('PE·VC 합계', p['commitment_label'])
+
+    def test_same_rule_does_not_open_other_institutions_or_fund_of_funds(self):
+        from services.lp.src.lp_notice_publication import _scope
+        other = notice(2, title='2026년 대체투자 위탁운용사 선정 공고', body=self.BODY)
+        self.assertEqual(_scope(other), 'needs_confirmation')
+        fof = self.kdb(3, '『지역활성화 투자 펀드』 2026년 모펀드 위탁운용사 선정계획 공고')
+        self.assertNotIn(_scope(fof), ('pe_blind', 'mixed_pe_blind'))
+        venture = self.kdb(4, '『2026 벤처 펀드』 위탁운용사 선정계획 공고', body='투자기구: 벤처투자조합')
+        self.assertNotIn(_scope(venture), ('pe_blind', 'mixed_pe_blind'))
+
+    def test_joint_or_already_published_fund_is_not_duplicated(self):
+        existing = {'id': 'kgrowth-2026-kculture-valueup', 'institution_id': 'kgrowth', 'institution_name': '한국성장금융',
+                    'title': '「2026 K-컬처 밸류업 펀드」 위탁운용사 선정계획', 'asset_scope': 'PE', 'status': '선정 완료',
+                    'selected_gps': [], 'events': [{'date': '2026-07-22', 'type': '모집 공고', 'title': 't', 'url': 'https://www.kgrowth.or.kr/1'}]}
+        programs, holds = publish([self.kdb(5, '『K-컬처 밸류업 펀드』 위탁운용사 선정계획 공고')], existing=[existing])
+        self.assertFalse([p for p in programs if p['institution_id'] == 'kdb'])
+        self.assertTrue([h for h in holds if '이미 공개' in h.get('reason', '')])

@@ -97,6 +97,25 @@ def _flow_step(stage):
     return None
 
 
+def reported_block(result):
+    """Press-reported result: always labelled and sourced; never an official fact."""
+    scope = f" ({result['scope_note']})" if result.get('scope_note') else ''
+    out = (f'<div class="reported-result"><p><span class="badge">보도 기준</span> '
+           f'공식 결과 공고가 확인되지 않아 언론 보도를 기준으로 정리했습니다{h(scope)}.</p>')
+    if result['managers']:
+        out += '<ul class="gp-names">' + ''.join(f'<li>{h(m)}</li>' for m in result['managers']) + '</ul>'
+        if not result['complete']:
+            out += '<p class="muted">보도로 확인된 일부 운용사입니다.</p>'
+    else:
+        out += f'<p><strong>{h(result["stage"])}</strong></p>'
+    if result.get('note'):
+        out += f'<p class="muted">{h(result["note"])}</p>'
+    out += '<p class="reported-sources">출처 ' + ' · '.join(
+        f'<a href="{h(s["url"])}" target="_blank" rel="noopener">{h(s["publisher"])} {h(s["date"].replace("-", "."))} 「{h(s["title"])}」 ↗</a>'
+        for s in result['sources']) + '</p></div>'
+    return out
+
+
 def standardized_schedule(stages, as_of=None, *, selection_recorded=False):
     as_of = as_of or _today()
     reached = [_flow_step(e) for e in stages
@@ -125,7 +144,7 @@ def render_detail_body(p, as_of=None):
     selection_recorded = bool(p.get('selected_gps')) or any(e['type'] in ('최종 선정', '선정 결과') for e in p['events'])
     original = next((e['url'] for e in p['events'] if e['type']=='모집 공고'), p['events'][0]['url'])
     original_title = f'<p class="source-title">공고명 {h(p["title"])}</p>' if clean_title(p['title']) != str(p['title']).strip() else ''
-    body = f'<a class="back" href="index.html">← 출자사업</a><header class="detail-header"><a class="institution" href="institution-{h(p["institution_id"])}.html">{h(p["institution_name"])}</a><h1>{h(p.get("public_title") or clean_title(p["title"]))}</h1>{original_title}<div class="detail-meta"><span class="badge">{h(display_status(p["status"]))}</span>{link(original,"출자 공고 원문")}</div></header>'
+    body = f'<a class="back" href="index.html">← 출자사업</a><header class="detail-header"><a class="institution" href="institution-{h(p["institution_id"])}.html">{h(p["institution_name"])}</a><h1>{h(p.get("public_title") or clean_title(p["title"]))}</h1>{original_title}<div class="detail-meta"><span class="badge">{h(display_status(p["status"]))}</span>{"<span class=\"badge\">PE·VC 공동 모집</span>" if p.get("mixed_scope") else ""}{link(original,"출자 공고 원문")}</div></header>'
     if p.get('schedule_stages'):
         body += standardized_schedule(p['schedule_stages'], as_of, selection_recorded=selection_recorded)
     else:
@@ -231,11 +250,16 @@ def render_detail_body(p, as_of=None):
             attrs = f' data-lp-note-until="{h(until)}" data-lp-past-note="{h(past_note)}"'
             if until < as_of:
                 note = past_note
-        body += f'<p class="muted"{attrs}>{h(note)}</p>' if note else '<p class="muted">선정 결과는 아직 확인되지 않았습니다.</p>'
+        if p.get('reported_result'):
+            body += reported_block(p['reported_result'])
+        else:
+            body += f'<p class="muted"{attrs}>{h(note)}</p>' if note else '<p class="muted">선정 결과는 아직 확인되지 않았습니다.</p>'
         if result_events:
             result = max(result_events, key=lambda event: event['date'])
             label = '우선협상 결과 원문' if result['type'] == '우선협상대상자' else '선정 결과 원문'
             if not p.get('preferred_gps') or result['url'] != p.get('manager_list_sources', {}).get('preferred_gps'):
                 body += f'<p>{link(result["url"], label)}</p>'
+    if p.get('mixed_scope') and (p.get('selected_gps') or p.get('preferred_gps') or p.get('shortlisted_gps')):
+        body += '<p class="muted">PE·VC 공동 모집 사업이라 선정 운용사에 벤처캐피탈이 포함될 수 있습니다.</p>'
     body += '</section>'
     return body + PLAN_SCRIPT

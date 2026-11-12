@@ -148,3 +148,58 @@ class ProgramListPresentation(unittest.TestCase):
         self.assertNotIn('주목적', page); self.assertNotIn('선정 결과 미확인', page)
         self.assertIn('<meta name="description" content="K · s · 접수 마감.', page)
         self.assertIn('<link rel="canonical" href="https://kpef-lp.vercel.app/program-s.html">', page)
+
+    def reported(self, pid, managers=('가PE', '나PE'), complete=True, stage='최종 선정'):
+        return {'program_id': pid, 'stage': stage, 'reported_at': '2026-10-15', 'complete': complete,
+                'managers': list(managers), 'note': '보도 메모',
+                'sources': [{'publisher': '딜사이트', 'title': '기사', 'date': '2026-10-15', 'url': 'https://news.example/1'}]}
+
+    def test_reported_result_labelled_sourced_and_never_over_official(self):
+        closed = self.program('r', '접수 마감', 'k', 'K', '2026-09-01')
+        official = self.selected('o', 'm', 'M', '공식운용사', 'm-1')
+        data_programs = [closed, official]
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder)
+            build({'as_of': '2026-11-12', 'programs': data_programs,
+                   'reported_results': {'r': self.reported('r', complete=False), 'o': self.reported('o')}}, out)
+            index = (out / 'index.html').read_text(); detail = (out / 'program-r.html').read_text()
+            official_page = (out / 'program-o.html').read_text()
+        self.assertIn('10.15 보도 · 확인 2개사', index)
+        self.assertIn('<span class="badge">보도 기준</span>', detail)
+        self.assertIn('<li>가PE</li>', detail); self.assertIn('보도로 확인된 일부 운용사입니다.', detail)
+        self.assertIn('href="https://news.example/1"', detail); self.assertIn('딜사이트 2026.10.15', detail)
+        self.assertNotIn('보도 기준', official_page); self.assertNotIn('가PE', official_page)
+        self.assertNotIn('selected-gp-', detail)
+
+    def test_mixed_scope_marked_in_list_and_detail(self):
+        p = self.selected('v', 'kgrowth', '한국성장금융', '어떤벤처투자', 'kg-1')
+        p['asset_scope'] = '기관전용 사모펀드·벤처·신기술조합'
+        pages = self.render([p, self.program('pe', '접수 마감', 'k', 'K', '2026-09-01')])
+        self.assertIn('한국성장금융 · PE·VC 공동', pages['index.html'])
+        self.assertNotIn('K · PE·VC', pages['index.html'])
+        self.assertIn('PE·VC 공동 모집</span>', pages['program-v.html'])
+        self.assertIn('벤처캐피탈이 포함될 수 있습니다', pages['program-v.html'])
+
+
+class ReportedResultFile(unittest.TestCase):
+    def test_repository_file_is_valid_and_sourced(self):
+        import json
+        from services.lp.src.lp_reported_results import validate_result, DEFAULT_PATH
+        data = json.loads(DEFAULT_PATH.read_text())
+        ids = [validate_result(r)['program_id'] for r in data['results']]
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_loader_skips_unknown_invalid_and_official(self):
+        import json
+        from services.lp.src.lp_reported_results import load_reported_results
+        good = {'program_id': 'a', 'stage': '최종 선정', 'reported_at': '2026-10-15', 'complete': True, 'managers': ['X'],
+                'sources': [{'publisher': 'P', 'title': 'T', 'date': '2026-10-15', 'url': 'https://n.example/'}]}
+        entries = [good, {**good, 'program_id': 'b'}, {**good, 'program_id': 'zz'},
+                   {**good, 'program_id': 'c', 'sources': [{**good['sources'][0], 'url': 'http://insecure'}]},
+                   {**good, 'program_id': 'd', 'stage': '선정 없음'}]
+        programs = [{'id': 'a'}, {'id': 'b', 'selected_gps': [{'name': 'Y'}]}, {'id': 'c'}, {'id': 'd'}]
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'r.json'; path.write_text(json.dumps({'results': entries}))
+            results, holds = load_reported_results(programs, path)
+        self.assertEqual(list(results), ['a'])
+        self.assertEqual({h['program_id'] for h in holds}, {'b', 'zz', 'c', 'd'})

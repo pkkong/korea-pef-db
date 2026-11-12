@@ -193,13 +193,18 @@ def match_issuer(title, issuer, body, aliases):
 
 
 def classify_scope(title,body):
+    return scope_signals(title,body)['scope']
+
+
+def scope_signals(title,body):
+    """Scope decision plus the offered PE/VC/blind/domestic evidence behind it."""
     pe_pattern = r'(?<![A-Za-z])PEF?(?![A-Za-z])|기관전용\s*사모집합투자기구|경영참여형\s*사모'
     vc_pattern = r'(?<![A-Za-z])VC(?![A-Za-z])|벤처투자조합|신기술사업투자조합'
     if re.search(r'채용|전문위원|국내주식|인덱스|해외채권|해외주식|해외부동산|해외 부동산|OCIO',title,re.I):
-        return 'outside'
+        return {'scope':'outside','pe':False,'vc':False,'blind':False,'domestic':False}
     # A global-branded business does not establish its investment geography.
     if re.search(r'해외',title) and not re.search(r'국내|중소|중견|수출',title):
-        return 'outside'
+        return {'scope':'outside','pe':False,'vc':False,'blind':False,'domestic':False}
     title_pe = bool(re.search(pe_pattern,title,re.I))
     title_blind = bool(re.search(r'블라인드|blind',title,re.I))
     # Prior-fund eligibility/AUM is not evidence about the offered fund.
@@ -234,10 +239,10 @@ def classify_scope(title,body):
             mixed_fields.append(m[0])
     vc = bool(re.search(vc_pattern,title+' '+offered+' '+' '.join(mixed_fields),re.I))
     if pe and blind and domestic:
-        return 'mixed_pe_blind' if vc else 'pe_blind'
+        return {'scope':'mixed_pe_blind' if vc else 'pe_blind','pe':pe,'vc':vc,'blind':blind,'domestic':domestic}
     if vc and not pe:
-        return 'vc_only'
-    return 'needs_confirmation'
+        return {'scope':'vc_only','pe':pe,'vc':vc,'blind':blind,'domestic':domestic}
+    return {'scope':'needs_confirmation','pe':pe,'vc':vc,'blind':blind,'domestic':domestic}
 
 
 def require_same_host(url, source):

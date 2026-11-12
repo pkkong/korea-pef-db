@@ -104,6 +104,12 @@ def build(data, out):
     latest = lambda p: max(e['date'] for e in p['events'])
     programs = sorted(({**p, 'institution_name': canonical[p['institution_id']]} for p in data['programs']),
                       key=latest, reverse=True)
+    # Press-reported results (labelled) and joint PE·VC recruitment, on render copies only.
+    reported = data.get('reported_results') or {}
+    for p in programs:
+        if not (p.get('selected_gps') or p.get('preferred_gps')) and p['id'] in reported:
+            p['reported_result'] = reported[p['id']]
+        p['mixed_scope'] = bool(re.search(r'벤처|신기술|VC', str(p.get('asset_scope') or '')))
     # Reader-facing names: curated short names win; otherwise the cleaned source title.
     # Identical names within one institution are told apart by the notice month.
     for p in programs:
@@ -140,8 +146,13 @@ def build(data, out):
         status = display_status(p['status'])
         last = max(p['events'], key=lambda e:e['date'])
         dday = ''
+        reported = p.get('reported_result')
         if p['selected_gps']:
             timing = f"{short_date(last['date'])} 선정 · {len(p['selected_gps'])}개사"
+        elif reported:
+            count = len(reported['managers'])
+            outcome = '선정 없음' if not count else (f'{count}개사' if reported['complete'] else f'확인 {count}개사')
+            timing = f"{short_date(reported['reported_at'])} 보도 · {outcome}"
         elif p.get('deadline'):
             timing = f"{short_date(p['deadline'])} 마감"
             if p['status'] == '접수 중':
@@ -153,7 +164,7 @@ def build(data, out):
         if '미확인' in amount:
             # A total that is not this PE track's allocation is not a list amount.
             amount = ''
-        return f'<article class="program" data-status="{h(status)}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"] + " " + p["list_title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}</span><span class="program-status{' open' if status == '접수 중' else ''}">{h(status)}</span></div><h2 class="program-title">{h(p["list_title"])}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}{dday}</span></div></a></article>'
+        return f'<article class="program" data-status="{h(status)}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"] + " " + p["list_title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}{" · PE·VC 공동" if p.get("mixed_scope") else ""}</span><span class="program-status{' open' if status == '접수 중' else ''}">{h(status)}</span></div><h2 class="program-title">{h(p["list_title"])}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}{dday}</span></div></a></article>'
     options = ''.join(f'<option value="{h(k)}">{h(v[0]["institution_name"])}</option>' for k,v in institutions.items())
     shown = {display_status(p['status']) for p in programs}
     statuses = ''.join(f'<option>{h(s)}</option>' for s in [*[s for s in STATUS_ORDER if s in shown], *sorted(shown - set(STATUS_ORDER))])

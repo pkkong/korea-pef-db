@@ -1,0 +1,244 @@
+{
+  "version": 1,
+  "reviewed_at": "2026-11-12",
+  "policy": "공식 결과 공고가 없는 사업에만 언론 보도 기준 결과를 표시한다. 공식 선정·우선협상 명단이 생기면 보도 기준 결과는 표시하지 않는다. 출처 기사 링크를 반드시 함께 표시하며, 보도에 이름이 나온 운용사만 넣고 추정하지 않는다. 일부만 보도된 경우 complete=false로 표시한다. PE·VC 공동 사업은 PE 부문만 넣는다. reported_at은 결과가 처음 보도된 날짜다.",
+  "results": [
+    {
+      "program_id": "tp-2023-e1d544d8f0817e5c",
+      "stage": "최종 선정",
+      "complete": true,
+      "managers": [
+        "한앤컴퍼니",
+        "VIG파트너스",
+        "IMM인베스트먼트"
+      ],
+      "note": "당초 4곳·4,000억원 계획에서 3곳·각 500억원으로 축소됐다고 보도됐습니다.",
+      "sources": [
+        {
+          "publisher": "딜사이트",
+          "title": "한앤코·VIG·IMM인베, 사학연금서 500억씩 받는다",
+          "date": "2023-09-25",
+          "url": "https://dealsite.co.kr/articles/110536"
+        }
+      ],
+      "reported_at": "2023-09-25"
+    },
+    {
+      "program_id": "ktcu-2025-9719d6dd529ebc79",
+      "stage": "최종 선정",
+      "complete": true,
+      "managers": [
+        "JKL파트너스",
+        "IMM크레딧앤솔루션",
+        "프랙시스캐피탈",
+        "KCGI",
+        "H&Q코리아",
+        "프리미어파트너스",
+        "제네시스PE",
+        "이음프라이빗에쿼티",
+        "LB인베스트먼트",
+        "다올PE"
+      ],
+      "sources": [
+        {
+          "publisher": "아시아경제",
+          "title": "교직원공제회 7000억 출자 운용사에 JKL·ICS·프랙시스 등 선정",
+          "date": "2025-05-13",
+          "url": "https://www.asiae.co.kr/article/2025051315533920855"
+        },
+        {
+          "publisher": "이투데이",
+          "title": "교직원공제회, 3000억 규모 블라인드 PEF 출자사업 공고",
+          "date": "2026-09-04",
+          "url": "https://www.etoday.co.kr/news/view/2621981"
+        }
+      ],
+      "reported_at": "2025-05-13"
+    },
+    {
+      "program_id": "cu-2025-98ac9c223928649b",
+      "stage": "최종 선정",
+      "complete": true,
+      "managers": [
+        "KCGI",
+        "이음프라이빗에쿼티",
+        "헬리오스프라이빗에쿼티"
+      ],
+      "note": "우선협상대상자 5곳 중 3곳이 여신투자심의위원회를 거쳐 최종 선정됐다고 보도됐습니다.",
+      "sources": [
+        {
+          "publisher": "딜사이트",
+          "title": "신협 소형PE 출자사업 GP에 KCGI·이음·헬리오스",
+          "date": "2025-08-08",
+          "url": "https://dealsite.co.kr/articles/146164"
+        }
+      ],
+      "reported_at": "2025-08-08"
+    },
+    {
+      "program_id": "cu-2025-45f4b475658fdf26",
+      "stage": "최종 선정",
+      "complete": true,
+      "managers": [
+        "케이스톤파트너스",
+        "제네시스프라이빗에쿼티"
+      ],
+      "note": "펀드당 출자액이 공고의 500억원에서 400억원으로 줄었다고 보도됐습니다.",
+      "sources": [
+        {
+          "publisher": "딜사이트",
+          "title": "신협 중형PE GP에…케이스톤·제네시스",
+          "date": "2025-09-16",
+          "url": "https://dealsite.co.kr/articles/148260"
+        }
+      ],
+      "reported_at": "2025-09-16"
+    },
+    {
+      "program_id": "poba-2025-a690510e51bca314",
+      "stage": "최종 선정",
+      "complete": false,
+      "managers": [
+        "케이스톤파트너스",
+        "제네시스프라이빗에쿼티",
+        "KCGI"
+      ],
+      "note": "운용사별 다른 기사에서 행정공제회 선정 사실이 확인된 곳만 표시했습니다. 선정 예정 4곳 중 나머지는 확인되지 않았습니다.",
+      "sources": [
+        {
+          "publisher": "이데일리",
+          "title": "경찰공제회 PE 출자 케이스톤·제네시스·BNW인베 낙점",
+          "date": "2026-03-19",
+          "url": "https://v.daum.net/v/20260319134701728"
+        },
+        {
+          "publisher": "IB토마토",
+          "title": "KCGI, 기관 GP 잇단 선정…펀드 클로징 '카운트다운'",
+          "date": "2025-11-12",
+          "url": "https://newstomato.com/ReadNews.aspx?no=1280928"
+        }
+      ],
+      "reported_at": "2025-11-12"
+    },
+    {
+      "program_id": "kfcc-2025-cdf0424918597361",
+      "stage": "최종 선정",
+      "complete": false,
+      "managers": [
+        "KY프라이빗에쿼티",
+        "NH투자증권-우리PE",
+        "KCGI",
+        "헬리오스PE",
+        "이상파트너스"
+      ],
+      "note": "PE 부문 10곳 중 기사에 이름이 나온 5곳입니다. 보도 당시 현장 실사를 거쳐 명단을 확정할 예정이라고 했습니다.",
+      "sources": [
+        {
+          "publisher": "딜사이트",
+          "title": "새마을금고 '비리 구속' 사태 딛고…4400억 뿌린다",
+          "date": "2025-06-30",
+          "url": "https://dealsite.co.kr/articles/143723"
+        }
+      ],
+      "reported_at": "2025-06-30"
+    },
+    {
+      "program_id": "pmaa-2026-b36311a2f26b4f53",
+      "stage": "최종 선정",
+      "complete": true,
+      "scope_note": "PE 부문",
+      "managers": [
+        "제네시스프라이빗에쿼티",
+        "케이스톤파트너스",
+        "BNW인베스트먼트"
+      ],
+      "note": "PE 부문 3곳에 각 400억원을 출자한다고 보도됐습니다.",
+      "sources": [
+        {
+          "publisher": "서울경제",
+          "title": "경찰공제회, 연말 PEF 추가 출자 검토…PEF 펀딩 '기지개'",
+          "date": "2026-10-01",
+          "url": "https://m.sedaily.com/article/20097160"
+        },
+        {
+          "publisher": "이데일리",
+          "title": "경찰공제회 PE 출자 케이스톤·제네시스·BNW인베 낙점",
+          "date": "2026-03-19",
+          "url": "https://v.daum.net/v/20260319134701728"
+        }
+      ],
+      "reported_at": "2026-03-19"
+    },
+    {
+      "program_id": "mmaa-2026-6117be97685a1c82",
+      "stage": "최종 선정",
+      "complete": true,
+      "scope_note": "PE 부문",
+      "managers": [
+        "VIG파트너스",
+        "아크앤파트너스",
+        "어펄마캐피탈",
+        "우리PE자산운용",
+        "이니어스프라이빗에쿼티",
+        "제이앤프라이빗에쿼티",
+        "케이엘앤파트너스",
+        "키스톤프라이빗에쿼티"
+      ],
+      "note": "PE 부문 8곳(운용사별 200억~300억원)입니다. VC 부문 10곳은 이 서비스 범위가 아니어서 표시하지 않습니다.",
+      "sources": [
+        {
+          "publisher": "머니투데이방송",
+          "title": "군인공제회, 3000억 국내 블라인드펀드 운용사 18곳 선정",
+          "date": "2026-10-15",
+          "url": "https://news.mtn.co.kr/article/2026101514242352111"
+        },
+        {
+          "publisher": "딜사이트",
+          "title": "군공, 3000억 블라인드펀드 GP 18곳 선정",
+          "date": "2026-10-15",
+          "url": "https://dealsite.co.kr/articles/170778"
+        }
+      ],
+      "reported_at": "2026-10-15"
+    },
+    {
+      "program_id": "sema-2026-b9d11f3a1eb1f6b4",
+      "stage": "최종 선정",
+      "complete": false,
+      "scope_note": "PE 중형 이하 리그",
+      "managers": [
+        "BNW인베스트먼트",
+        "노앤파트너스",
+        "VL인베스트먼트",
+        "어펄마캐피탈매니저스코리아",
+        "아크앤파트너스"
+      ],
+      "note": "PE 중형 이하 리그 5곳(각 400억원)입니다. 대형·루키 리그 결과는 확인되지 않았습니다.",
+      "sources": [
+        {
+          "publisher": "딜사이트",
+          "title": "bnw 과기공까지 6개 뷰티콘 싹쓸이…4호 8000억 타깃",
+          "date": "2026-11-06",
+          "url": "https://dealsite.co.kr/articles/172173"
+        }
+      ],
+      "reported_at": "2026-11-06"
+    },
+    {
+      "program_id": "kfinco-2026-547fa724a1485c84",
+      "stage": "선정 없음",
+      "complete": true,
+      "managers": [],
+      "note": "지원 요건을 충족한 운용사가 부족해 선정하지 못하고 재공모에 나섰다고 보도됐습니다.",
+      "sources": [
+        {
+          "publisher": "IB토마토",
+          "title": "정책펀드에 운용사 몰리는데…전문건설공제조합 300억 출자 난항",
+          "date": "2026-10-13",
+          "url": "https://www.ibtomato.com/mobile/mView.aspx?no=19780&type=1"
+        }
+      ],
+      "reported_at": "2026-10-13"
+    }
+  ]
+}

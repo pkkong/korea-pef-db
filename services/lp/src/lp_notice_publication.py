@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 try:
     from .lp_offering_policy import procurement_reason,central_not_investing
     from .lp_attachment_policy import is_submission_attachment
-    from .collect_shared_lp_notices import classify_scope
+    from .collect_shared_lp_notices import classify_scope, scope_signals
     from .collect_lp_original_notices import load_channels, validate_url, validate_original
     from .lp_notice_triage import program_key, notice_stage, compact
     from .lp_notice_terms import INSTITUTIONS, extract_terms
@@ -34,7 +34,7 @@ try:
 except ImportError:
     from lp_offering_policy import procurement_reason,central_not_investing
     from lp_attachment_policy import is_submission_attachment
-    from collect_shared_lp_notices import classify_scope
+    from collect_shared_lp_notices import classify_scope, scope_signals
     from collect_lp_original_notices import load_channels, validate_url, validate_original
     from lp_notice_triage import program_key, notice_stage, compact
     from lp_notice_terms import INSTITUTIONS, extract_terms
@@ -49,6 +49,20 @@ except ImportError:
     import lp_kamco_notice_terms as kamco_terms
 
 ROOT = Path(__file__).resolve().parents[3]
+# Large LPs whose policy/pension notices mix PE and VC (user decision 2026-11-12).
+PE_TRACK_INSTITUTIONS = frozenset({'kdb', 'ibk', 'moel_eif', 'nps', 'geps', 'cwma', 'kic'})
+MIXED_SCOPE_LABEL = 'PE·VC 공동 모집'
+
+
+def _fund_key(value):
+    return re.sub(r'[\s·ㆍ\-_()（）「」『』\[\]]', '', str(value or '')).lower()
+
+
+def _fund_name(title):
+    match = re.search(r'[「『]([^」』]{2,60})[」』]', str(title or ''))
+    return _fund_key(match[1]) if match else ''
+
+
 OFFERING_FIELDS = (
     'deadline', 'deadline_precision', 'commitment_amount_krw', 'commitment_label',
     'list_commitment_label', 'manager_count', 'manager_count_label', 'primary_investment',
@@ -183,7 +197,16 @@ def _scope(n):
     # Co-investments, project funds and private debt are distinct product scope.
     if re.search(r'공동투자|프로젝트|사모대출|대출형|크레딧|부동산|인프라|헤지펀드|private\s*debt|평가\s*기관\s*선정', n['title'], re.I):
         return 'outside'
-    return classify_scope(n['title'], text)
+    result = classify_scope(n['title'], text)
+    # User decision 2026-11-12: for the large policy/pension LPs, an explicitly
+    # offered PE fund is published even when blind/domestic wording is absent.
+    # Fund-of-funds manager selections are not GP recruitments.
+    if (result == 'needs_confirmation' and n.get('institution_id') in PE_TRACK_INSTITUTIONS
+            and not re.search(r'모펀드', n['title'])):
+        signals = scope_signals(n['title'], text)
+        if signals['pe']:
+            return 'mixed_pe_blind' if signals['vc'] else 'pe_blind'
+    return result
 
 
 def _deadline(n):
@@ -407,8 +430,15 @@ def publish_basic_notices(data, growth_notices, checked_at):
             terms, raw_terms = _terms(original, shared.get(original['url']), checked_at)
             if raw_terms.get('deadline_error'):
                 holds.append({'stage': 'basic_deadline', 'url': original['url'], 'reason': raw_terms['deadline_error']})
+            mixed_open = False
             if not reviewed and _scope(original) == 'mixed_pe_blind' and not ((raw_terms.get('amount_scope') == 'pe_only' and raw_terms.get('commitment_amount_krw')) or kbiz_terms.pe_track(original)):
-                continue
+                if original['institution_id'] not in PE_TRACK_INSTITUTIONS:
+                    continue
+                # Published as one joint PE·VC program; a combined amount says so.
+                mixed_open = True
+                for field in ('commitment_label', 'list_commitment_label'):
+                    if terms.get(field) and raw_terms.get('amount_scope') != 'pe_only':
+                        terms[field] = f"{terms[field]} (PE·VC 합계)"
             if (not reviewed and original.get('source_channel') == 'institution_board'
                     and '공동투자' in original['body'] and not raw_terms.get('extraction_evidence', {}).get('blind_allocation')):
                 continue
@@ -435,11 +465,20 @@ def publish_basic_notices(data, growth_notices, checked_at):
                         if field in terms:
                             p[field] = copy.deepcopy(terms[field])
             else:
+                fund = _fund_name(original['title'])
+                if original['institution_id'] in PE_TRACK_INSTITUTIONS and fund and any(
+                        fund in _fund_key(q.get('title')) or fund in _fund_key(q.get('display_title'))
+                        for q in programs.values()):
+                    # Joint notices (several LPs) and funds already published by another LP.
+                    holds.append({'stage': 'basic_publication', 'program_key': key, 'reason': '같은 펀드가 다른 기관 사업으로 이미 공개됨'})
+                    continue
                 identity = original['institution_id'] + '-' + original['date'][:4] + '-' + hashlib.sha256(original['url'].encode()).hexdigest()[:16]
                 p = {'id': identity, 'institution_id': original['institution_id'],
                      'institution_name': names[original['institution_id']], 'title': original['title'],
                      'asset_scope': 'PE', 'status': '모집 공고', 'selected_gps': [], 'events': [],
                      'basic_publication': True, 'source_program_key': key, **terms}
+            if mixed_open:
+                p['asset_scope'] = MIXED_SCOPE_LABEL
             if p.get('basic_publication'):
                 planned = raw_terms.get('planned_schedule', raw_terms.get('schedule_stages', []))
                 p['schedule_stages'] = [{**s, 'original_label': s.get('original_label', s['label']),

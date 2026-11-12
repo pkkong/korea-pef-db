@@ -354,6 +354,9 @@ def prepare(current, report):
     data['basic_publication_holds'] = basic_holds
     data['as_of'] = str(report['checked_at'])[:10]
     validate(data)
+    # Press-reported results only where no official roster exists (labelled, sourced).
+    from lp_reported_results import load_reported_results
+    data['reported_results'], data['reported_result_holds'] = load_reported_results(data['programs'])
     with tempfile.TemporaryDirectory() as folder:
         out = Path(folder)
         build(data, out)
