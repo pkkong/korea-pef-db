@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -21,6 +22,7 @@ def build_lp_service_pages(
     site_dir: Path,
     report_date: str | None = None,
     monitor_path: Path = DEFAULT_LP_COMMITMENT_MONITOR,
+    programs_path: Path | None = None,
 ) -> dict[str, int]:
     """Write LP directory, notice, profile, and notice detail pages while preserving current public URLs."""
     from services.lp.src.lp_legacy_service_pages import (
@@ -55,7 +57,12 @@ def build_lp_service_pages(
             if path.name not in lp_service_pages and not path.name.startswith("lp-notice-")
         ]
     )
+    program_count = 0
+    if programs_path is not None:
+        from services.lp.src.lp_program_service import build
+        program_count = build(json.loads(programs_path.read_text()), site_dir / 'lp-programs')['programs']
     return {
+        "lp_program_count": program_count,
         "lp_monitor_count": notice_count,
         "lp_profile_fact_count": profile_fact_count,
         "lp_profile_page_count": profile_page_count,
@@ -69,9 +76,10 @@ def main() -> int:
     parser.add_argument("--site-dir", type=Path, required=True)
     parser.add_argument("--date", default=today_seoul())
     parser.add_argument("--monitor", type=Path, default=DEFAULT_LP_COMMITMENT_MONITOR)
+    parser.add_argument("--programs", type=Path, help="Verified LP program data; builds linked program pages")
     args = parser.parse_args()
 
-    result = build_lp_service_pages(args.site_dir, args.date, args.monitor)
+    result = build_lp_service_pages(args.site_dir, args.date, args.monitor, args.programs)
     for key, value in result.items():
         print(f"{key}={value}")
     return 0
