@@ -397,3 +397,38 @@ class LargeLpPeTrackTests(unittest.TestCase):
         programs, holds = publish([self.kdb(5, '『K-컬처 밸류업 펀드』 위탁운용사 선정계획 공고')], existing=[existing])
         self.assertFalse([p for p in programs if p['institution_id'] == 'kdb'])
         self.assertTrue([h for h in holds if '이미 공개' in h.get('reason', '')])
+
+
+class IbkResultRosterTests(unittest.TestCase):
+    BODY = ('「글로벌 협력펀드」 위탁운용사 선정 결과를 아래와 같이 공지합니다. □ 대 형 ㅇ 운용사명(가나다순) '
+            '- 가나인베스트먼트-다라크레딧 □ 중 형 ㅇ 운용사명(가나다순) - 마바인베스트먼트 - 사아파트너스 '
+            '문의 : 중소기업은행 정책출자팀(innovest@ibk.co.kr/02-729-7112)')
+
+    def program(self):
+        return {'id': 'ibk-2026-x', 'institution_id': 'ibk', 'institution_name': 'IBK기업은행', 'title': 't',
+                'asset_scope': 'PE', 'status': '선정 결과 발표', 'selected_gps': [],
+                'events': [{'date': '2026-09-07', 'type': '모집 공고', 'title': 'a', 'url': 'https://www.ibk.co.kr/a'},
+                           {'date': '2026-11-04', 'type': '선정 결과', 'title': 'b', 'url': 'https://www.ibk.co.kr/b'}]}
+
+    def test_official_body_roster_becomes_selected_managers_with_leagues(self):
+        from services.lp.src.lp_notice_publication import _attach_result_roster
+        from services.lp.src.lp_program_service import validate
+        p, holds = self.program(), []
+        result = {'institution_id': 'ibk', 'title': '「글로벌 협력펀드」 위탁운용사 선정 결과', 'date': '2026-11-04',
+                  'url': 'https://www.ibk.co.kr/b', 'body': self.BODY}
+        _attach_result_roster(p, [result], holds)
+        self.assertEqual([g['name'] for g in p['selected_gps']], ['가나인베스트먼트-다라크레딧', '마바인베스트먼트', '사아파트너스'])
+        self.assertEqual(p['gp_tracks']['마바인베스트먼트'], '중형')
+        self.assertEqual(p['status'], '선정 완료')
+        validate({'as_of': '2026-11-12', 'programs': [p]})
+
+    def test_unstructured_or_other_institution_body_adds_nothing(self):
+        from services.lp.src.lp_notice_publication import _attach_result_roster
+        p, holds = self.program(), []
+        _attach_result_roster(p, [{'institution_id': 'ibk', 'title': '위탁운용사 선정 결과', 'date': '2026-11-04',
+                                   'url': 'https://www.ibk.co.kr/b', 'body': '선정 결과를 첨부파일과 같이 공고합니다.'}], holds)
+        self.assertEqual(p['selected_gps'], []); self.assertEqual(p['status'], '선정 결과 발표')
+        other = {**self.program(), 'institution_id': 'kdb'}
+        _attach_result_roster(other, [{'institution_id': 'kdb', 'title': '위탁운용사 선정 결과', 'date': '2026-11-04',
+                                       'url': 'https://www.ibk.co.kr/b', 'body': self.BODY}], holds)
+        self.assertEqual(other['selected_gps'], [])

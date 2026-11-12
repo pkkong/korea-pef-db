@@ -356,6 +356,46 @@ def _refresh(p, members, checked_at):
     p['checked_at'] = checked_at
 
 
+def ibk_result_roster(text):
+    """IBK posts results in the body as '□ league ㅇ 운용사명(가나다순) - A - B'.
+
+    Returns [(league, [names])]. Co-GP names joined by '-' without spaces stay
+    one manager. Anything outside that exact shape returns no roster.
+    """
+    rosters = []
+    for match in re.finditer(r'□\s*([^□ㅇ]{1,40}?)\s*ㅇ\s*운용사명\s*\(가나다순\)\s*(.*?)(?=□|문의|$)', text, re.S):
+        league = re.sub(r'\s+', '', match[1])
+        names = [re.sub(r'\s+', ' ', n).strip() for n in re.split(r'(?:^|\s)-\s', match[2].strip()) if n.strip()]
+        if not league or not names or any(len(n) > 60 or re.search(r'[:：@()\d]{3,}', n) for n in names):
+            return []
+        rosters.append((league, names))
+    return rosters
+
+
+def _attach_result_roster(p, members, holds):
+    """Official result names posted in the result notice body (IBK only)."""
+    if p.get('institution_id') != 'ibk' or p.get('selected_gps'):
+        return
+    results = [n for n in members if _event(n)['type'] in ('선정 결과', '최종 선정')]
+    if len(results) != 1:
+        return
+    result = results[0]
+    rosters = ibk_result_roster(result['body'])
+    names = [name for _, names in rosters for name in names]
+    if not names:
+        return
+    if len(set(names)) != len(names):
+        holds.append({'stage': 'result_roster', 'url': result['url'], 'reason': '선정 명단 중복'})
+        return
+    p['selected_gps'] = [{'name': name, 'id': 'ibk-' + hashlib.sha256(name.encode()).hexdigest()[:16],
+                          'source_url': result['url'], 'asset_scope': p.get('asset_scope', 'PE'),
+                          'identity_match': 'official_result_body'} for name in names]
+    p.setdefault('gp_tracks', {}).update({name: league for league, names in rosters for name in names})
+    p.setdefault('manager_list_sources', {})['selected_gps'] = result['url']
+    if p.get('status') == '선정 결과 발표':
+        p['status'] = '선정 완료'
+
+
 def _attach_preferred_roster(p, original, members, checked_at, holds):
     if original['institution_id'] != 'koreapost':
         return
@@ -505,6 +545,7 @@ def publish_basic_notices(data, growth_notices, checked_at):
                         p.update(deadline=revised[0], deadline_precision=revised[1], deadline_source_url=latest['url'])
             _refresh(p, members, checked_at)
             _attach_preferred_roster(p, original, members, checked_at, holds)
+            _attach_result_roster(p, members, holds)
             p['publication_version'] = 1
             p['source_program_key'] = key
             programs[p['id']] = p

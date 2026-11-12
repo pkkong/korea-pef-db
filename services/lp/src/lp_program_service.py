@@ -25,7 +25,7 @@ def validate(data):
         for gp in p['selected_gps']:
             if not gp.get('source_url') or not gp.get('asset_scope'):
                 raise ValueError('GP selections require source and asset scope')
-            if gp['source_url'] not in {e['url'] for e in p['events'] if e['type'] == '최종 선정'}:
+            if gp['source_url'] not in {e['url'] for e in p['events'] if e['type'] in ('최종 선정', '선정 결과')}:
                 raise ValueError('Selected GP must link to this program final result event')
         if p.get('preferred_gps'):
             names = p['preferred_gps']
