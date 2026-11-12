@@ -168,7 +168,7 @@ class PublicationRunnerTests(unittest.TestCase):
         self.assertEqual(status['returncode'], 0)
 
     def test_invalid_timeout_never_starts_child_and_environment_is_inherited_privately(self):
-        for timeout in (0, -1, 481, float('nan'), True):
+        for timeout in (0, -1, a.MAX_TIMEOUT_SECONDS + 1, float('nan'), True):
             with tempfile.TemporaryDirectory() as directory, patch.object(a.subprocess, 'Popen') as child:
                 status, output = a._supervise(['never'], status_file=Path(directory) / 'status.json', timeout_seconds=timeout)
             self.assertFalse(status['success']); child.assert_not_called()

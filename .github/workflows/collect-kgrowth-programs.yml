@@ -236,9 +236,14 @@ jobs:
             python3 services/lp/src/discover_growth_originals.py --input /tmp/lp-shared-collection.json --native-input /tmp/kgrowth-collection.json --output /tmp/lp-shared-collection.json
           fi
       - name: Store evidence and publish verified pages
+        # Storage keys only for the full private report archive in this step.
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           set -o pipefail
-          python3 services/lp/src/lp_publication_runner.py --status-file /tmp/lp-publication-status.json --timeout-seconds 480 -- --collection /tmp/kgrowth-collection.json --priority-collection /tmp/lp-priority-collection.json --shared-collection /tmp/lp-shared-collection.json --institution-collection /tmp/lp-institution-collection.json | tee /tmp/kgrowth-publication.json
+          python3 services/lp/src/lp_publication_runner.py --status-file /tmp/lp-publication-status.json --timeout-seconds 840 -- --collection /tmp/kgrowth-collection.json --priority-collection /tmp/lp-priority-collection.json --shared-collection /tmp/lp-shared-collection.json --institution-collection /tmp/lp-institution-collection.json | tee /tmp/kgrowth-publication.json
       - name: Compare independent discovery without approving public facts
         if: always()
         run: |

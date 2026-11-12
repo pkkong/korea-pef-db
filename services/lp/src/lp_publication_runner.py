@@ -18,13 +18,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 PUBLISHER = Path(__file__).resolve().with_name('publish_lp_programs.py')
-MAX_TIMEOUT_SECONDS = 480
+MAX_TIMEOUT_SECONDS = 900
 MAX_GRACE_SECONDS = 10
 MAX_OUTPUT_BYTES = 64 * 1024
 KIND = 'lp_publication_process_status_v1'
 PHASE_COUNTS = {
     'source_validation_and_pages': {'programs'},
     'collection_report_serialization': {'report_bytes'},
+    'collection_report_archive': {'report_bytes', 'manifest_bytes'},
+    'collection_report_archive_fallback': set(),
     'publication_lock': set(),
     'collection_report_parts': {'report_bytes', 'parts'},
     'collection_report_storage': set(),
@@ -240,7 +242,7 @@ def _supervise(command, *, status_file, timeout_seconds, termination_grace_secon
     return status, receipt
 
 
-def run_publisher(arguments, *, status_file, timeout_seconds=480, termination_grace_seconds=5):
+def run_publisher(arguments, *, status_file, timeout_seconds=840, termination_grace_seconds=5):
     return _supervise(publisher_command(arguments), status_file=status_file, timeout_seconds=timeout_seconds,
                       termination_grace_seconds=termination_grace_seconds)
 
@@ -248,7 +250,7 @@ def run_publisher(arguments, *, status_file, timeout_seconds=480, termination_gr
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--status-file', type=Path, required=True)
-    parser.add_argument('--timeout-seconds', type=float, default=480)
+    parser.add_argument('--timeout-seconds', type=float, default=840)
     options, arguments = parser.parse_known_args(argv)
     if arguments[:1] == ['--']: arguments = arguments[1:]
     try:

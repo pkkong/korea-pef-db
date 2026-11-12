@@ -127,6 +127,61 @@ def store_collection_report(conn, report_json, run_id, institution):
     publication_phase('collection_report_storage', started)
 
 
+# Same ceiling as scheduled report maintenance; leaves room below the free plan.
+REPORT_ARCHIVE_BUDGET = 900_000_000
+REPORT_ARCHIVE_CACHE_BYTES = 64 * 1024 * 1024
+_STORAGE_USED_SQL = ("SELECT COALESCE(sum(CASE WHEN metadata->>'size' ~ '^[0-9]+$' "
+                     "THEN (metadata->>'size')::bigint ELSE 0 END),0) FROM storage.objects")
+
+
+def archive_collection_report(report, report_json, run_id):
+    """Keep the full report in private Storage before any database write lock.
+
+    Returns a verified archive locator for a small database row. Any missing
+    credential, budget, upload, readback, privacy or checksum failure returns
+    None so the caller keeps the previous full-JSONB database path instead of
+    losing the report. No database connection is held while uploading.
+    """
+    started = time.monotonic()
+    names = ('SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_PUBLISHABLE_KEY')
+    url, key, public_key = (os.environ.get(name, '') for name in names)
+    if not (url and key and public_key):
+        publication_phase('collection_report_archive_fallback', started)
+        return None
+    raw = report_json.encode('utf-8')
+    try:
+        from lp_report_archive import ArchiveStore, estimate_report, validate_locator
+        with connect() as conn:
+            conn.execute('SET TRANSACTION READ ONLY')
+            conn.execute("SET LOCAL statement_timeout='30s'")
+            used = conn.execute(_STORAGE_USED_SQL).fetchone()[0]
+        if int(used) + int(estimate_report(report)) > REPORT_ARCHIVE_BUDGET:
+            raise ValueError('report archive budget')
+        store = ArchiveStore(url, key, cache_bytes=REPORT_ARCHIVE_CACHE_BYTES)
+        stub = store.put_verified(run_id, report)
+        descriptor = validate_locator(stub, run_id)
+        store.assert_private(stub, public_key)
+        if descriptor['raw_sha256'] != hashlib.sha256(raw).hexdigest() or descriptor['raw_bytes'] != len(raw):
+            raise ValueError('report archive checksum')
+    except Exception:
+        # Sanitized: storage responses and keys never reach logs.
+        publication_phase('collection_report_archive_fallback', started)
+        return None
+    publication_phase('collection_report_archive', started, report_bytes=len(raw),
+                      manifest_bytes=descriptor['gzip_bytes'])
+    return stub
+
+
+def store_report_locator(conn, stub, run_id, institution):
+    """Record the verified Storage locator in the publication transaction."""
+    started = time.monotonic()
+    conn.execute('INSERT INTO lp_program_private.collection_runs(run_id,institution,report) '
+                 'VALUES (%s,%s,%s::jsonb)',
+                 (run_id, institution, json.dumps(stub, ensure_ascii=False, sort_keys=True,
+                                                  separators=(',', ':'), allow_nan=False)))
+    publication_phase('collection_report_storage', started)
+
+
 def store_public_state(conn, data, pages, run_id):
     started = time.monotonic()
     publication_phase('public_payload_serialization_started', started)
@@ -340,6 +395,7 @@ def publish_prepared(report, data, pages, revision, institution, wrap_json=None)
     stamp = datetime.now(timezone.utc).isoformat()
     run_id = hashlib.sha256((stamp+report_json).encode()).hexdigest()[:24]
     publication_phase('collection_report_serialization', started, report_bytes=len(report_json.encode('utf-8')))
+    stub = archive_collection_report(report, report_json, run_id)
     with connect() as conn:
         # READ COMMITTED sees changes made while this lock was waiting.
         conn.execute('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
@@ -352,7 +408,10 @@ def publish_prepared(report, data, pages, revision, institution, wrap_json=None)
         if publication_revision(conn) != revision:
             raise RuntimeError('LP publication or review changed during source validation; keep existing publication')
         started = time.monotonic()
-        store_collection_report(conn, report_json, run_id, institution)
+        if stub is not None:
+            store_report_locator(conn, stub, run_id, institution)
+        else:
+            store_collection_report(conn, report_json, run_id, institution)
         documents = store_documents(conn, report, data, wrap_json)
         publication_phase('evidence_storage', started, documents=documents)
         started = time.monotonic()

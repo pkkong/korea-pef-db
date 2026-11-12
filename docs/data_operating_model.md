@@ -412,7 +412,7 @@ LP 실행 이력의 행·식별자·문서 근거·공개 상태는 유지한다
 
 ## LP 전체 실행 보고서 전송 계약 — 2026-10-30
 
-`collection_runs.report`의 전체 JSONB 내용과 최신3회/현재 보고서의 직접 읽기 계약은 유지한다. 큰 클라이언트 bind 하나 대신 compact UTF8 JSON을1MiB 이하 텍스트 조각으로 보내고, 같은 트랜잭션의 `pg_temp.lp_collection_report_parts`에서 `seq`순으로 합쳐 JSONB로 저장한다. UTF8 코드포인트 경계를 끊지 않는다. 임시 테이블은 `ON COMMIT DROP`이고 오류 rollback 때도 제거된다. 문서/페이지/공개 실행을 별도로 commit하지 않으며 이후 오류는 보고서까지 함께 원복한다. JSON 유효성·직렬화는 쓰기 연결을 열기 전에 확인한다. 비공개 report의 형식·권한·보관/복원 계약과 발행 잠금/검토 버전 검사는 유지한다.
+`collection_runs.report`는 2026-11-12부터 새 발행에서 비공개 Storage 보관 위치 기록으로 저장한다(보관 실패 시 기존 전체 JSONB). 상세는 [보관 운영](lp_report_storage_operations.md)을 따른다. 이전 계약: 큰 클라이언트 bind 하나 대신 compact UTF8 JSON을1MiB 이하 텍스트 조각으로 보내고, 같은 트랜잭션의 `pg_temp.lp_collection_report_parts`에서 `seq`순으로 합쳐 JSONB로 저장한다. UTF8 코드포인트 경계를 끊지 않는다. 임시 테이블은 `ON COMMIT DROP`이고 오류 rollback 때도 제거된다. 문서/페이지/공개 실행을 별도로 commit하지 않으며 이후 오류는 보고서까지 함께 원복한다. JSON 유효성·직렬화는 쓰기 연결을 열기 전에 확인한다. 비공개 report의 형식·권한·보관/복원 계약과 발행 잠금/검토 버전 검사는 유지한다.
 
 ### LP 역사 범위·결과 통계 입력 — 2026-11-06
 

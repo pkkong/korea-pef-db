@@ -288,9 +288,12 @@ jobs:
         env:
           NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS: '1'
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           set -o pipefail
-          python3 services/lp/src/lp_publication_runner.py --status-file /tmp/lp-recovery/publication-status.json --timeout-seconds 480 -- --collection /tmp/lp-recovery/kgrowth-collection.json --priority-collection /tmp/lp-recovery/lp-priority-collection.json --shared-collection /tmp/lp-recovery/lp-shared-collection.json --institution-collection /tmp/lp-recovery/lp-institution-collection.json | tee /tmp/lp-recovery/publication.json
+          python3 services/lp/src/lp_publication_runner.py --status-file /tmp/lp-recovery/publication-status.json --timeout-seconds 840 -- --collection /tmp/lp-recovery/kgrowth-collection.json --priority-collection /tmp/lp-recovery/lp-priority-collection.json --shared-collection /tmp/lp-recovery/lp-shared-collection.json --institution-collection /tmp/lp-recovery/lp-institution-collection.json | tee /tmp/lp-recovery/publication.json
       - name: Verify all published details and report remaining source failures
         run: |
           python3 - <<'PY'

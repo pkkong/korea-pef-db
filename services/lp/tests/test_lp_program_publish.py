@@ -508,3 +508,115 @@ class PublishContracts(unittest.TestCase):
         self.assertIn('program-' + basic['id'] + '.html', pages)
 
 if __name__=='__main__':unittest.main()
+
+
+class ReportArchiveContracts(unittest.TestCase):
+    """Full reports go to private Storage first; the database keeps a locator."""
+    ENV = {'SUPABASE_URL': 'https://example.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'service',
+           'SUPABASE_PUBLISHABLE_KEY': 'public'}
+
+    def _conn(self, active=None):
+        from unittest.mock import MagicMock
+        conn = MagicMock()
+        if active is None:
+            conn.__enter__.return_value = conn
+        else:
+            conn.__enter__.side_effect = lambda: active.append(True) or conn
+            conn.__exit__.side_effect = lambda *args: active.pop() and None
+        conn.execute.return_value.fetchone.return_value = (0,)
+        return conn
+
+    def _store(self, *, active=None, wrong=False, fail=False):
+        from unittest.mock import MagicMock
+        import lp_report_archive
+        store = MagicMock(unsafe=True)  # ArchiveStore.assert_private is a real method name
+        def put(run_id, report):
+            if active is not None:
+                self.assertFalse(active, 'Storage upload must not hold a database connection')
+            if fail:
+                raise lp_report_archive.ArchiveError('archive storage request failed')
+            _, metadata, _ = lp_report_archive._prepare_chunks({**report, 'changed': True} if wrong else report)
+            return lp_report_archive.make_stub(run_id, metadata)
+        store.put_verified.side_effect = put
+        return store
+
+    def _publish(self, report, store, conn, env=None, state=None):
+        from publish_lp_programs import publish_prepared
+        with patch.dict('os.environ', env if env is not None else self.ENV, clear=False), \
+             patch('lp_report_archive.ArchiveStore', return_value=store), \
+             patch('publish_lp_programs.connect', return_value=conn), \
+             patch('publish_lp_programs.publication_revision', return_value='same'), \
+             patch('publish_lp_programs.store_documents', return_value=1), \
+             patch('publish_lp_programs.store_public_state', side_effect=state), \
+             patch('publish_lp_programs.publication_phase') as phases:
+            run_id = publish_prepared(report, {}, {}, 'same', 'multi_lp', wrap_json=lambda x: x)
+        return run_id, [c.args[0] for c in phases.call_args_list]
+
+    def test_verified_archive_replaces_full_jsonb_with_small_locator(self):
+        import lp_report_archive
+        active = []
+        conn, store = self._conn(active), self._store(active=active)
+        report = {'notices': [{'body': '한글' * 200000, 'zero': 0}], 'checked_at': '2026-11-12'}
+        run_id, phases = self._publish(report, store, conn)
+        queries = [c.args[0] for c in conn.execute.call_args_list]
+        self.assertFalse(any('lp_collection_report_parts' in q for q in queries))
+        insert = [c for c in conn.execute.call_args_list if c.args[0].startswith('INSERT INTO lp_program_private.collection_runs')]
+        self.assertEqual(len(insert), 1)
+        stub = json.loads(insert[0].args[1][2])
+        self.assertTrue(lp_report_archive.is_archive_stub(stub))
+        self.assertEqual(lp_report_archive.validate_locator(stub, run_id)['raw_bytes'],
+                         len(json.dumps(report, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()))
+        self.assertLess(len(insert[0].args[1][2]), 4096)
+        store.assert_private.assert_called_once_with(stub, 'public')
+        self.assertIn('collection_report_archive', phases)
+        self.assertNotIn('collection_report_archive_fallback', phases)
+
+    def test_archive_failures_keep_complete_database_report(self):
+        cases = {'upload': dict(fail=True), 'checksum': dict(wrong=True)}
+        for name, options in cases.items():
+            with self.subTest(case=name):
+                conn, store = self._conn(), self._store(**options)
+                report = {'notices': [{'body': 'x' * 2000000}]}
+                _, phases = self._publish(report, store, conn)
+                parts = [c.args[1][1] for c in conn.execute.call_args_list if 'INSERT INTO pg_temp.lp_collection_report_parts' in c.args[0]]
+                self.assertEqual(json.loads(''.join(parts)), report)
+                self.assertIn('collection_report_archive_fallback', phases)
+
+    def test_privacy_probe_failure_keeps_complete_database_report(self):
+        import lp_report_archive
+        conn, store = self._conn(), self._store()
+        store.assert_private.side_effect = lp_report_archive.ArchiveError('archive is not proven inaccessible to public readers')
+        _, phases = self._publish({'notices': []}, store, conn)
+        self.assertTrue(any('lp_collection_report_parts' in c.args[0] for c in conn.execute.call_args_list))
+        self.assertIn('collection_report_archive_fallback', phases)
+
+    def test_storage_budget_or_missing_keys_skip_upload(self):
+        conn, store = self._conn(), self._store()
+        conn.execute.return_value.fetchone.return_value = (899_999_999,)
+        self._publish({'notices': [{'body': 'y' * 300000}]}, store, conn)
+        store.put_verified.assert_not_called()
+        conn, store = self._conn(), self._store()
+        with patch.dict('os.environ', {}, clear=True):
+            _, phases = self._publish({'notices': []}, store, conn, env={})
+        store.put_verified.assert_not_called()
+        self.assertIn('collection_report_archive_fallback', phases)
+        self.assertIn('READ COMMITTED', conn.execute.call_args_list[0].args[0])
+
+    def test_later_publication_failure_rolls_back_locator_with_public_state(self):
+        conn, store = self._conn(), self._store()
+        with self.assertRaisesRegex(RuntimeError, 'state write failed'):
+            self._publish({'notices': []}, store, conn, state=RuntimeError('state write failed'))
+        self.assertIs(conn.__exit__.call_args.args[0], RuntimeError)
+        conn.commit.assert_not_called()
+
+
+class PublicationRunnerArchivePhases(unittest.TestCase):
+    def test_runner_keeps_archive_phase_counts(self):
+        sys.path.insert(0, str(SRC.parents[2]))
+        from services.lp.src import lp_publication_runner as runner
+        line = json.dumps({'lp_phase': 'collection_report_archive', 'seconds': 12.5,
+                           'report_bytes': 106609197, 'manifest_bytes': 6797712}).encode()
+        self.assertEqual(runner._phase(line)['manifest_bytes'], 6797712)
+        self.assertEqual(runner._phase(b'{"lp_phase":"collection_report_archive_fallback","seconds":1}')['lp_phase'],
+                         'collection_report_archive_fallback')
+        self.assertLessEqual(runner.MAX_TIMEOUT_SECONDS, 900)
