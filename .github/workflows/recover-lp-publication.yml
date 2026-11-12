@@ -290,7 +290,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -o pipefail
-          python3 services/lp/src/publish_lp_programs.py --collection /tmp/lp-recovery/kgrowth-collection.json --priority-collection /tmp/lp-recovery/lp-priority-collection.json --shared-collection /tmp/lp-recovery/lp-shared-collection.json --institution-collection /tmp/lp-recovery/lp-institution-collection.json | tee /tmp/lp-recovery/publication.json
+          python3 services/lp/src/lp_publication_runner.py --status-file /tmp/lp-recovery/publication-status.json --timeout-seconds 480 -- --collection /tmp/lp-recovery/kgrowth-collection.json --priority-collection /tmp/lp-recovery/lp-priority-collection.json --shared-collection /tmp/lp-recovery/lp-shared-collection.json --institution-collection /tmp/lp-recovery/lp-institution-collection.json | tee /tmp/lp-recovery/publication.json
       - name: Verify all published details and report remaining source failures
         run: |
           python3 - <<'PY'
@@ -332,6 +332,7 @@ jobs:
             /tmp/lp-recovery/kexim-stage-reuse.json
             /tmp/lp-recovery/koreapost-preferred-reuse.json
             /tmp/lp-recovery/publication.json
+            /tmp/lp-recovery/publication-status.json
             /tmp/lp-recovery/remaining-failures.json
           retention-days: 7
           if-no-files-found: warn

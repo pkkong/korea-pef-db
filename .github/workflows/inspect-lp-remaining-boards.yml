@@ -167,7 +167,18 @@ jobs:
                     AND (application_name='lp-program-publisher' OR query LIKE '%%lp_program_private%%' OR query LIKE 'SELECT pg_advisory_xact_lock(728160921)%%')
                   ORDER BY pid
               """).fetchall()
+              server=conn.execute("""
+                  SELECT clock_timestamp() AS checked_at,
+                    pg_postmaster_start_time() AS postmaster_started_at,
+                    extract(epoch FROM clock_timestamp()-pg_postmaster_start_time())::bigint AS uptime_seconds,
+                    pg_database_size(current_database()) AS database_bytes,
+                    pg_total_relation_size('lp_program_private.collection_runs') AS lp_report_table_bytes
+              """).fetchone()
+              settings=conn.execute("SELECT name,setting,unit FROM pg_settings WHERE name IN ('server_version','server_version_num','shared_buffers','work_mem','max_connections','default_toast_compression') ORDER BY name").fetchall()
+              server['settings']=settings
+              server.update(official_http_requests=0,database_writes=0,cancel_requests=0)
           root=Path('/tmp/lp-remaining-board-receipts');root.mkdir(exist_ok=True)
+          (root/'publication-server.json').write_text(json.dumps(server,default=str))
           (root/'publication-waits.json').write_text(json.dumps(rows,default=str))
           print(json.dumps(rows,default=str))
           PYCODE

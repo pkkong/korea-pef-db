@@ -238,7 +238,7 @@ jobs:
       - name: Store evidence and publish verified pages
         run: |
           set -o pipefail
-          python3 services/lp/src/publish_lp_programs.py --collection /tmp/kgrowth-collection.json --priority-collection /tmp/lp-priority-collection.json --shared-collection /tmp/lp-shared-collection.json --institution-collection /tmp/lp-institution-collection.json | tee /tmp/kgrowth-publication.json
+          python3 services/lp/src/lp_publication_runner.py --status-file /tmp/lp-publication-status.json --timeout-seconds 480 -- --collection /tmp/kgrowth-collection.json --priority-collection /tmp/lp-priority-collection.json --shared-collection /tmp/lp-shared-collection.json --institution-collection /tmp/lp-institution-collection.json | tee /tmp/kgrowth-publication.json
       - name: Compare independent discovery without approving public facts
         if: always()
         run: |
@@ -326,6 +326,7 @@ jobs:
             /tmp/lp-shared-collection.json
             /tmp/lp-institution-collection.json
             /tmp/kgrowth-publication.json
+            /tmp/lp-publication-status.json
             /tmp/lp-discovery-audit.json
             /tmp/lp-discovery-audit.md
             /tmp/lp-collection-health.json
