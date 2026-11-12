@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from html import escape
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -110,6 +110,13 @@ def build(data, out):
         if not (p.get('selected_gps') or p.get('preferred_gps')) and p['id'] in reported:
             p['reported_result'] = reported[p['id']]
         p['mixed_scope'] = bool(re.search(r'벤처|신기술|VC', str(p.get('asset_scope') or '')))
+    # A recruitment notice with no parsed deadline is not shown as current after 30 days.
+    stale_before = (date.fromisoformat(str(as_of)[:10]) - timedelta(days=30)).isoformat()
+    for p in programs:
+        status = display_status(p['status'])
+        if status == '모집 공고' and max(e['date'] for e in p['events']) < stale_before:
+            status = '공고'
+        p['display_status'] = status
     # Reader-facing names: curated short names win; otherwise the cleaned source title.
     # Identical names within one institution are told apart by the notice month.
     for p in programs:
@@ -143,7 +150,7 @@ def build(data, out):
             gp_index[str(key)] = gp
             gp_programs[str(key)].append((p, gp))
     def row(p):
-        status = display_status(p['status'])
+        status = p['display_status']
         last = max(p['events'], key=lambda e:e['date'])
         dday = ''
         reported = p.get('reported_result')
@@ -157,6 +164,8 @@ def build(data, out):
             timing = f"{short_date(p['deadline'])} 마감"
             if p['status'] == '접수 중':
                 dday = f'<span class="program-dday" data-lp-dday="{h(str(p["deadline"])[:10])}"></span>'
+        elif p['status'] in ('선정 결과 발표', '선정 완료'):
+            timing = f"{short_date(last['date'])} 결과 발표"
         else:
             timing = f"{short_date(last['date'])} 공고"
         amount = f"{p['commitment_amount_krw']/100000000:,.0f}억원" if p.get('commitment_amount_krw') else ''
@@ -166,7 +175,7 @@ def build(data, out):
             amount = ''
         return f'<article class="program" data-status="{h(status)}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"] + " " + p["list_title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}{" · PE·VC 공동" if p.get("mixed_scope") else ""}</span><span class="program-status{' open' if status == '접수 중' else ''}">{h(status)}</span></div><h2 class="program-title">{h(p["list_title"])}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}{dday}</span></div></a></article>'
     options = ''.join(f'<option value="{h(k)}">{h(v[0]["institution_name"])}</option>' for k,v in institutions.items())
-    shown = {display_status(p['status']) for p in programs}
+    shown = {p['display_status'] for p in programs}
     statuses = ''.join(f'<option>{h(s)}</option>' for s in [*[s for s in STATUS_ORDER if s in shown], *sorted(shown - set(STATUS_ORDER))])
     body = f'<header class="list-header"><h1>출자사업</h1><span><a class="list-link" href="institution-directory.html">출자기관 {len(institutions)}곳</a> · <span id="count">{len(programs)}개 사업</span></span></header><div class="controls"><input aria-label="사업 검색" placeholder="기관·사업명 검색"><select aria-label="진행 상태"><option value="">모든 상태</option>{statuses}</select><select aria-label="출자기관"><option value="">모든 기관</option>{options}</select></div>'+''.join(row(p) for p in programs)+'<p id="empty" hidden>조건에 맞는 사업이 없습니다.</p>'
     body += '''<script>const q=document.querySelector('input'),s=document.querySelectorAll('select');function filter(){let n=0;document.querySelectorAll('.program').forEach(r=>{r.hidden=!((r.textContent+" "+r.dataset.search).toLowerCase().includes(q.value.toLowerCase())&&(!s[0].value||r.dataset.status===s[0].value)&&(!s[1].value||r.dataset.institution===s[1].value));if(!r.hidden)n++});document.querySelector('#count').textContent=n+'개 사업';document.querySelector('#empty').hidden=n!==0}q.addEventListener('input',filter);s.forEach(e=>e.addEventListener('change',filter));(function(){const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());const today=Date.parse(p+'T00:00:00Z');document.querySelectorAll('[data-lp-dday]').forEach(e=>{const n=Math.round((Date.parse(e.dataset.lpDday+'T00:00:00Z')-today)/86400000);e.textContent=n>0?' · D-'+n:(n===0?' · 오늘 마감':'')})})();</script>'''

@@ -83,3 +83,15 @@ class ProgramDetailTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class AnnouncedResultWithoutNames(unittest.TestCase):
+    def test_announced_result_points_to_source_instead_of_unconfirmed(self):
+        p = {'id': 'x', 'institution_id': 'kdb', 'institution_name': 'KDB', 'title': 't', 'asset_scope': 'PE',
+             'status': '선정 결과 발표', 'selected_gps': [], 'basic_publication': True,
+             'events': [{'date': '2026-05-07', 'type': '모집 공고', 'title': 'a', 'url': 'https://o.example/a'},
+                        {'date': '2026-07-29', 'type': '선정 결과', 'title': 'b', 'url': 'https://o.example/b'}]}
+        html = render_detail_body(p, '2026-11-12')
+        self.assertIn('선정 결과가 발표됐습니다', html)
+        self.assertNotIn('아직 확인되지 않았습니다', html)
+        self.assertIn('https://o.example/b', html)

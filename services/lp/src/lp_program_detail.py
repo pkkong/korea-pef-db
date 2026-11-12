@@ -50,7 +50,7 @@ PLAN_SCRIPT = '''<script>(function(){const parts=new Intl.DateTimeFormat('en-CA'
 
 # Public wording only: stored statuses keep their source-specific meaning.
 STATUS_DISPLAY = {'선정 결과 발표': '선정 완료', '서류심사 결과': '1차 심사 결과'}
-STATUS_ORDER = ('접수 중', '접수 마감', '1차 심사 결과', '우선협상대상자', '선정 완료')
+STATUS_ORDER = ('접수 중', '모집 공고', '접수 마감', '접수 결과', '1차 심사 결과', '우선협상대상자', '선정 완료', '공고')
 
 
 def display_status(status):
@@ -69,7 +69,7 @@ def clean_title(title):
     text = _TITLE_PREFIX.sub('', text)
     text = _NOTICE_NUMBER.sub('', text)
     text = _SHORT_YEAR.sub(lambda m: f'20{m[1]}년', text)
-    text = text.replace('「', '').replace('」', '')
+    text = re.sub(r'[「」『』]', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text or str(title or '').strip()
 
@@ -144,7 +144,7 @@ def render_detail_body(p, as_of=None):
     selection_recorded = bool(p.get('selected_gps')) or any(e['type'] in ('최종 선정', '선정 결과') for e in p['events'])
     original = next((e['url'] for e in p['events'] if e['type']=='모집 공고'), p['events'][0]['url'])
     original_title = f'<p class="source-title">공고명 {h(p["title"])}</p>' if clean_title(p['title']) != str(p['title']).strip() else ''
-    body = f'<a class="back" href="index.html">← 출자사업</a><header class="detail-header"><a class="institution" href="institution-{h(p["institution_id"])}.html">{h(p["institution_name"])}</a><h1>{h(p.get("public_title") or clean_title(p["title"]))}</h1>{original_title}<div class="detail-meta"><span class="badge">{h(display_status(p["status"]))}</span>{"<span class=\"badge\">PE·VC 공동 모집</span>" if p.get("mixed_scope") else ""}{link(original,"출자 공고 원문")}</div></header>'
+    body = f'<a class="back" href="index.html">← 출자사업</a><header class="detail-header"><a class="institution" href="institution-{h(p["institution_id"])}.html">{h(p["institution_name"])}</a><h1>{h(p.get("public_title") or clean_title(p["title"]))}</h1>{original_title}<div class="detail-meta"><span class="badge">{h(p.get("display_status") or display_status(p["status"]))}</span>{"<span class=\"badge\">PE·VC 공동 모집</span>" if p.get("mixed_scope") else ""}{link(original,"출자 공고 원문")}</div></header>'
     if p.get('schedule_stages'):
         body += standardized_schedule(p['schedule_stages'], as_of, selection_recorded=selection_recorded)
     else:
@@ -253,7 +253,10 @@ def render_detail_body(p, as_of=None):
         if p.get('reported_result'):
             body += reported_block(p['reported_result'])
         else:
-            body += f'<p class="muted"{attrs}>{h(note)}</p>' if note else '<p class="muted">선정 결과는 아직 확인되지 않았습니다.</p>'
+            announced = any(e['type'] in ('최종 선정', '선정 결과') for e in p['events'])
+            fallback = ('선정 결과가 발표됐습니다. 운용사 명단은 결과 원문에서 확인할 수 있습니다.' if announced
+                        else '선정 결과는 아직 확인되지 않았습니다.')
+            body += f'<p class="muted"{attrs}>{h(note)}</p>' if note else f'<p class="muted">{fallback}</p>'
         if result_events:
             result = max(result_events, key=lambda event: event['date'])
             label = '우선협상 결과 원문' if result['type'] == '우선협상대상자' else '선정 결과 원문'

@@ -180,6 +180,21 @@ class ProgramListPresentation(unittest.TestCase):
         self.assertIn('PE·VC 공동 모집</span>', pages['program-v.html'])
         self.assertIn('벤처캐피탈이 포함될 수 있습니다', pages['program-v.html'])
 
+    def test_old_notice_without_deadline_not_current_and_brackets_spaced(self):
+        from services.lp.src.lp_program_detail import clean_title
+        self.assertEqual(clean_title('「정책금융기관 글로벌 스케일업 협력펀드」출자사업 위탁운용사 선정계획 공고'),
+                         '정책금융기관 글로벌 스케일업 협력펀드 출자사업 위탁운용사 선정계획 공고')
+        self.assertEqual(clean_title('『2026 남부권 지역성장지원펀드』위탁운용사 선정계획 공고'),
+                         '2026 남부권 지역성장지원펀드 위탁운용사 선정계획 공고')
+        old = self.program('old', '모집 공고', 'i', 'I', None, event='2024-12-20')
+        fresh = self.program('fresh', '모집 공고', 'i', 'I', None, event='2026-11-01')
+        result = self.program('res', '선정 결과 발표', 'i', 'I', None, event='2026-11-04')
+        pages = self.render([old, fresh, result])
+        index = pages['index.html']
+        self.assertIn('data-status="공고"', index); self.assertIn('data-status="모집 공고"', index)
+        self.assertIn('class="badge">공고<', pages['program-old.html'])
+        self.assertIn('11.04 결과 발표', index)
+
 
 class ReportedResultFile(unittest.TestCase):
     def test_repository_file_is_valid_and_sourced(self):
@@ -203,3 +218,4 @@ class ReportedResultFile(unittest.TestCase):
             results, holds = load_reported_results(programs, path)
         self.assertEqual(list(results), ['a'])
         self.assertEqual({h['program_id'] for h in holds}, {'b', 'zz', 'c', 'd'})
+
