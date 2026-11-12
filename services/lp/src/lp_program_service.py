@@ -89,7 +89,25 @@ def build(data, out):
     validate(data)
     out.mkdir(parents=True, exist_ok=True)
     as_of = data['as_of']
-    programs = sorted(data['programs'], key=lambda p: max(e['date'] for e in p['events']), reverse=True)
+    try:
+        from .lp_program_detail import render_detail_body, display_status, STATUS_ORDER
+    except ImportError:
+        from lp_program_detail import render_detail_body, display_status, STATUS_ORDER
+    # One public name per institution: the most used stored name, then the shortest.
+    names = defaultdict(list)
+    for p in data['programs']:
+        names[p['institution_id']].append(p['institution_name'])
+    canonical = {k: min(set(v), key=lambda n: (-v.count(n), len(n), n)) for k, v in names.items()}
+    # Render from shallow copies so stored evidence keeps its source wording.
+    latest = lambda p: max(e['date'] for e in p['events'])
+    programs = sorted(({**p, 'institution_name': canonical[p['institution_id']]} for p in data['programs']),
+                      key=latest, reverse=True)
+    # Open recruitments first, nearest deadline first; the rest by latest sourced event.
+    open_now = sorted((p for p in programs if p['status'] == '접수 중'), key=lambda p: (p.get('deadline') or '9999'))
+    programs = open_now + [p for p in programs if p['status'] != '접수 중']
+    def short_date(value):
+        y, m, d = str(value)[:10].split('-')
+        return f'{m}.{d}' if y == str(as_of)[:4] else f'{y}.{m}.{d}'
     gp_programs, institutions = defaultdict(list), defaultdict(list)
     gp_index = {}
     for p in programs:
@@ -102,28 +120,29 @@ def build(data, out):
             gp_index[str(key)] = gp
             gp_programs[str(key)].append((p, gp))
     def row(p):
-        status = '접수 마감' if p['status'].startswith('접수 마감') else p['status']
-        latest = max(p['events'], key=lambda e:e['date'])
+        status = display_status(p['status'])
+        last = max(p['events'], key=lambda e:e['date'])
+        dday = ''
         if p['selected_gps']:
-            timing = f"{latest['date'][5:].replace('-', '.')} 선정 · {len(p['selected_gps'])}개사"
+            timing = f"{short_date(last['date'])} 선정 · {len(p['selected_gps'])}개사"
         elif p.get('deadline'):
-            timing = f"{p['deadline'][5:10].replace('-', '.')} 마감"
+            timing = f"{short_date(p['deadline'])} 마감"
+            if p['status'] == '접수 중':
+                dday = f'<span class="program-dday" data-lp-dday="{h(str(p["deadline"])[:10])}"></span>'
         else:
-            timing = f"{latest['date'][5:].replace('-', '.')} 공고"
+            timing = f"{short_date(last['date'])} 공고"
         amount = f"{p['commitment_amount_krw']/100000000:,.0f}억원" if p.get('commitment_amount_krw') else ''
         amount = p.get('list_commitment_label') or p.get('commitment_label') or amount
-        if p['id'] == 'pck-pension-2026-h2-pe':
+        if '미확인' in amount:
+            # A total that is not this PE track's allocation is not a list amount.
             amount = ''
-        return f'<article class="program" data-status="{h(p["status"])}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}</span><span class="program-status">{h(status)}</span></div><h2 class="program-title">{h(p.get("display_title",p["title"]))}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}</span></div></a></article>'
+        return f'<article class="program" data-status="{h(status)}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}</span><span class="program-status{' open' if status == '접수 중' else ''}">{h(status)}</span></div><h2 class="program-title">{h(p.get("display_title",p["title"]))}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}{dday}</span></div></a></article>'
     options = ''.join(f'<option value="{h(k)}">{h(v[0]["institution_name"])}</option>' for k,v in institutions.items())
-    statuses = ''.join(f'<option>{h(s)}</option>' for s in sorted({p['status'] for p in programs}))
+    shown = {display_status(p['status']) for p in programs}
+    statuses = ''.join(f'<option>{h(s)}</option>' for s in [*[s for s in STATUS_ORDER if s in shown], *sorted(shown - set(STATUS_ORDER))])
     body = f'<header class="list-header"><h1>출자사업</h1><span id="count">{len(programs)}개 사업</span></header><div class="controls"><input aria-label="사업 검색" placeholder="기관·사업명 검색"><select aria-label="진행 상태"><option value="">모든 상태</option>{statuses}</select><select aria-label="출자기관"><option value="">모든 기관</option>{options}</select></div>'+''.join(row(p) for p in programs)+'<p id="empty" hidden>조건에 맞는 사업이 없습니다.</p>'
-    body += '''<script>const q=document.querySelector('input'),s=document.querySelectorAll('select');function filter(){let n=0;document.querySelectorAll('.program').forEach(r=>{r.hidden=!((r.textContent+" "+r.dataset.search).toLowerCase().includes(q.value.toLowerCase())&&(!s[0].value||r.dataset.status===s[0].value)&&(!s[1].value||r.dataset.institution===s[1].value));if(!r.hidden)n++});document.querySelector('#count').textContent=n+'개 사업';document.querySelector('#empty').hidden=n!==0}q.addEventListener('input',filter);s.forEach(e=>e.addEventListener('change',filter));</script>'''
+    body += '''<script>const q=document.querySelector('input'),s=document.querySelectorAll('select');function filter(){let n=0;document.querySelectorAll('.program').forEach(r=>{r.hidden=!((r.textContent+" "+r.dataset.search).toLowerCase().includes(q.value.toLowerCase())&&(!s[0].value||r.dataset.status===s[0].value)&&(!s[1].value||r.dataset.institution===s[1].value));if(!r.hidden)n++});document.querySelector('#count').textContent=n+'개 사업';document.querySelector('#empty').hidden=n!==0}q.addEventListener('input',filter);s.forEach(e=>e.addEventListener('change',filter));(function(){const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());const today=Date.parse(p+'T00:00:00Z');document.querySelectorAll('[data-lp-dday]').forEach(e=>{const n=Math.round((Date.parse(e.dataset.lpDday+'T00:00:00Z')-today)/86400000);e.textContent=n>0?' · D-'+n:(n===0?' · 오늘 마감':'')})})();</script>'''
     (out/'index.html').write_text(shell('출자사업',body,as_of))
-    try:
-        from .lp_program_detail import render_detail_body
-    except ImportError:
-        from lp_program_detail import render_detail_body
     for p in programs:
         (out/f'program-{p["id"]}.html').write_text(shell(p['title'], render_detail_body(p, as_of), as_of))
     for key,group in institutions.items():

@@ -51,3 +51,52 @@ class ProgramContracts(unittest.TestCase):
         with self.assertRaises(ValueError):assert_selected_gp_history(old,[])
 
 if __name__=='__main__': unittest.main()
+
+
+class ProgramListPresentation(unittest.TestCase):
+    """List wording and order shown to readers; stored statuses stay unchanged."""
+    def program(self, pid, status, inst, name, deadline=None, event='2026-10-01', label=None):
+        return {'id': pid, 'institution_id': inst, 'institution_name': name, 'title': pid, 'asset_scope': 'PE',
+                'status': status, 'deadline': deadline, 'commitment_label': label, 'selected_gps': [],
+                'events': [{'date': event, 'type': '모집 공고', 'title': pid, 'url': 'https://official.example/' + pid}]}
+
+    def render(self, programs):
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder)
+            data = {'as_of': '2026-11-12', 'programs': programs}
+            before = copy.deepcopy(data)
+            build(data, out)
+            self.assertEqual([p['institution_name'] for p in data['programs']],
+                             [p['institution_name'] for p in before['programs']])
+            return {p.name: p.read_text() for p in out.glob('*.html')}
+
+    def test_open_first_year_shown_and_status_names_unified(self):
+        pages = self.render([
+            self.program('recent', '서류심사 결과', 'a', 'A', '2026-10-01', event='2026-11-10'),
+            self.program('open', '접수 중', 'b', 'B', '2026-11-16T15:00:00+09:00', event='2026-11-01'),
+            self.program('old', '접수 마감', 'c', 'C', '2023-08-14T16:00:00+09:00', event='2023-07-20'),
+            self.program('done', '선정 결과 발표', 'd', 'D', '2026-03-06', event='2026-04-10'),
+        ])
+        index = pages['index.html']
+        self.assertLess(index.index('program-open.html'), index.index('program-recent.html'))
+        self.assertIn('2023.08.14 마감', index)
+        self.assertIn('11.16 마감<span class="program-dday" data-lp-dday="2026-11-16">', index)
+        self.assertIn('<span class="program-status open">접수 중', index)
+        self.assertNotIn('서류심사 결과</', index); self.assertNotIn('선정 결과 발표', index)
+        options = index.split('aria-label="진행 상태">', 1)[1].split('</select>', 1)[0]
+        self.assertEqual(options.count('<option>'), 4)
+        self.assertLess(options.index('접수 중'), options.index('1차 심사 결과'))
+        self.assertLess(options.index('1차 심사 결과'), options.index('선정 완료'))
+        self.assertIn('class="badge">1차 심사 결과<', pages['program-recent.html'])
+
+    def test_one_institution_name_and_unallocated_total_hidden(self):
+        pages = self.render([
+            self.program('x', '접수 마감', 'pck', '총회연금재단', '2026-10-29'),
+            self.program('y', '접수 마감', 'pck', '대한예수교장로회 총회연금재단', '2026-07-16',
+                         label='전체 대체투자 최대 1,000억원 · PE 배정 미확인'),
+        ])
+        index = pages['index.html']
+        self.assertNotIn('대한예수교장로회', index)
+        self.assertNotIn('대한예수교장로회', pages['program-y.html'])
+        self.assertNotIn('PE 배정 미확인', index)
+        self.assertIn('<h1>총회연금재단</h1>', pages['institution-pck.html'])

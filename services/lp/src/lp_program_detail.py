@@ -48,6 +48,16 @@ def planned_badge(event, as_of):
 
 PLAN_SCRIPT = '''<script>(function(){const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const part=t=>parts.find(p=>p.type===t).value;const today=part('year')+'-'+part('month')+'-'+part('day');document.querySelectorAll('[data-lp-plan-until]').forEach(e=>{e.textContent=e.dataset.lpPlanUntil<today?'예정일 경과':'예정'});document.querySelectorAll('[data-lp-note-until]').forEach(e=>{if(e.dataset.lpNoteUntil<today)e.textContent=e.dataset.lpPastNote})})();</script>'''
 
+# Public wording only: stored statuses keep their source-specific meaning.
+STATUS_DISPLAY = {'선정 결과 발표': '선정 완료', '서류심사 결과': '1차 심사 결과'}
+STATUS_ORDER = ('접수 중', '접수 마감', '1차 심사 결과', '우선협상대상자', '선정 완료')
+
+
+def display_status(status):
+    status = '접수 마감' if str(status).startswith('접수 마감') else str(status)
+    return STATUS_DISPLAY.get(status, status)
+
+
 def h(value):
     return escape(str(value or ''), quote=True)
 
@@ -76,7 +86,7 @@ def render_detail_body(p, as_of=None):
     as_of = as_of or _today()
     selection_recorded = bool(p.get('selected_gps')) or any(e['type'] in ('최종 선정', '선정 결과') for e in p['events'])
     original = next((e['url'] for e in p['events'] if e['type']=='모집 공고'), p['events'][0]['url'])
-    body = f'<a class="back" href="index.html">← 출자사업</a><header class="detail-header"><a class="institution" href="institution-{h(p["institution_id"])}.html">{h(p["institution_name"])}</a><h1>{h(p["title"])}</h1><div class="detail-meta"><span class="badge">{h(p["status"])}</span>{link(original,"출자 공고 원문")}</div></header>'
+    body = f'<a class="back" href="index.html">← 출자사업</a><header class="detail-header"><a class="institution" href="institution-{h(p["institution_id"])}.html">{h(p["institution_name"])}</a><h1>{h(p["title"])}</h1><div class="detail-meta"><span class="badge">{h(display_status(p["status"]))}</span>{link(original,"출자 공고 원문")}</div></header>'
     if p.get('schedule_stages'):
         body += standardized_schedule(p['schedule_stages'], as_of, selection_recorded=selection_recorded)
     else:
