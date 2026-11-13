@@ -7,9 +7,17 @@ Codex와 Claude가 번갈아 작업을 이어받는 기록이다. 맨 위 `현�
 ## 현재 재개 지점 — 2026-11-13 (작성: Claude)
 
 - 반복 예약(automation)은 현재 없다. Codex 쪽 자동 작업은 사용자가 11/12에 껐고, Claude는 예약을 만들지 않았다. GitHub Actions 정기 수집·발행은 계속 돈다.
-- 다음 정기 수집(평일 09:20·15:20 KST)에서 확인할 것: 과학기술인공제회 목록 410 반복 여부, `collection_report_archive` 단계 정상 여부, 공개 39사업 유지.
+- 다음 정기 수집(평일 09:20·15:20 KST)에서 확인할 것: 사전 테스트 단계 통과(11/13 workflow 테스트 목록 수정), 과학기술인공제회 목록 410 반복 여부, `collection_report_archive` 단계 정상 여부, 공개 39사업 유지. 11/13 09:20 정기 실행은 기록이 없다(같은 시각 수동 실행과 겹침).
 - 남은 개선 과제는 [서비스 품질 백로그](service_quality_backlog.md)의 `열린 과제` 순서를 따른다. 사용자 승인 없이 운영 workflow를 수동 실행하거나 배포하지 않는다.
 - 사용자 컴퓨터의 작업 폴더(`korea-pef-db`)는 5c321e0에 머물러 있다. 그 폴더의 git 갱신에는 파일 삭제 권한이 필요해 이번 세션에서 갱신하지 못했다. 거기서 작업을 시작하면 먼저 `git pull`한다. `.git/stale-maintenance-lock-20261113`은 남은 잠금 파일을 옮겨 둔 것이라 지워도 된다.
+
+## D-4 구버전 LP 정적 화면 경로 삭제 — 2026-11-13 (작성: Claude)
+
+- 운영 workflow·Vercel 앱에서 닿는 코드를 import 그래프로 확인한 뒤, 닿지 않는 옛 LP 경로를 지웠다: `lp_legacy_service_pages.py`, `build_lp_service_pages.py`, `build_lp_commitment_monitor.py`(+ scripts 래퍼), `scripts/build_service_site.py`, `lp_public_views.py`, `lp_public_context.py`, `lp_notice_view.py`, `lp_notice_identity.py`, `build_lp_profile_backlog.py`, `review_lp_commitment_notices.py`(+ 래퍼)와 이 코드만 검사하던 테스트(뉴스레터 테스트 파일 안 LP 함수 13개 포함). 약 1만 8천 줄 삭제.
+- 운영 경로가 쓰던 것은 수출입은행 목록 판독 하나였다. `extract_kexim_notice_rows`와 보조 함수를 `services/lp/src/lp_kexim_listing.py`로 동작 그대로 옮겼다(옛 함수와 출력 일치 확인). 2024-01-01 이전 공고를 버리는 옛 기준도 그대로 두었고 백로그에 확인 과제로 남겼다.
+- `build_site_bundle.py`는 브리프·GP·Wiki만 만든다(`--services lp`는 안내 오류). `run_pipeline.py`·수동 갱신 셸에서 LP 모니터 단계를 뺐다. `check_public_frontend.py`의 옛 LP 정적 페이지 검사를 지웠다. 구조 계약의 LP 격리 검사는 `services.lp.web.app` 기준으로 바꿨다.
+- **발견·수정한 문제**: 863bbf7에서 `test_lp_contest_screening`을 지웠는데 `collect-kgrowth-programs.yml` 사전 테스트 목록에 그 이름이 남아 있었다. 그대로였으면 다음 정기 수집(11/13 15:20)이 테스트 단계에서 실패했다. 목록에서 빼고, 구조 계약 검사에 `workflow가 부르는 테스트 모듈·스크립트가 실제로 있는가`를 추가해 CI에서 막히게 했다. LP workflow들의 unittest 명령 10개를 로컬에서 모두 실행해 통과를 확인했다.
+- 검증: 회귀 1,284검사 실패 0(삭제한 옛 경로 테스트만큼 감소), 구조 계약 통과. 로컬 완료. 운영 화면·데이터 변경 없음. 다음 정기 수집(평일 15:20)이 사전 테스트 단계를 통과하는지 확인한다.
 
 ## 구조 점검 후 정리: 안 쓰는 코드 삭제·운영 문서 분리 — 2026-11-13 (작성: Claude)
 

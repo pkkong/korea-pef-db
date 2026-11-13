@@ -33,12 +33,13 @@
 ### 코드·운영 부담
 
 - **D-3 현황표 자동 생성**: `lp_collection_status.md`의 기관별 표를 정기 실행 결과(`build_lp_collection_health.py`)에서 생성하는 방안.
-- **D-4 구버전 통합 빌드 경로 제거**: `scripts/build_site_bundle.py` → `scripts/build_service_site.py`(4,100줄) → `services/lp/src/lp_legacy_service_pages.py`(5,500줄)·`build_lp_commitment_monitor.py`(4,200줄)는 운영 workflow가 쓰지 않는 옛 정적 사이트 경로다. 얽힌 곳: `collect_kexim_programs.py`가 `build_lp_commitment_monitor.extract_kexim_notice_rows`를 쓰고, 뉴스레터 테스트가 `lp_public_views`를 import하며, `check_public_frontend.py`·`run_pipeline.py`·`open_public_dashboard.py`가 이 경로를 부른다. 필요한 함수만 옮긴 뒤 삭제한다.
+- **D-10 남은 구버전 공개 데이터 경로**: `scripts/build_public_service_data.py`(옛 `service_data.json`의 `lp_commitment_notices`), `lp_public_visibility.py`, `check_public_frontend.py`의 `check_public_lp_json_contract`, 로컬 대시보드 스크립트(`build_dashboard_data.py`, `open_dashboard.py` 등)는 운영 workflow가 쓰지 않는다. 쓰는 사람이 없는지 확인한 뒤 정리한다.
+- **관찰: 수출입은행 목록 기간**: `lp_kexim_listing.py`는 옛 모니터의 기준을 그대로 옮겨 2024-01-01 이전 공고를 버린다. 2023년 이력 백필(B-3)에서 수출입은행을 다룰 때 이 기준을 2023-01-01로 바꿀지 확인한다.
 - **D-5 큰 파일 분할**: `gp_service_pages.py`(5,600줄), `run_daily_news_pipeline.py`(3,700줄). 해당 기능을 고칠 때 함께 나눈다. 따로 일정을 잡지 않는다.
 - **D-6 수집기 공통 틀**: 기관별 수집기·어댑터·전송 우회 파일이 기관마다 늘어난다. 다음 기관 추가 때 공통 어댑터 인터페이스로 모은다.
 - **D-7 import 경로 정리**: 파일 79개가 `sys.path`를 직접 조작한다. 패키지 import로 바꾸는 작업. 우선순위 낮음.
 - **D-8 운영 지침 문서 정리**: `docs/agent_operating_briefs.md`(114KB)에 날짜별 LP 규칙이 쌓여 있다. 주제별(전송·판독·공개 범위)로 합치고 날짜별 경과는 history로 옮긴다.
-- **D-9 로컬 야간 스크립트 확인**: `services/ops/scripts/run_data_nightly_refresh.sh`는 개인 PC 실행 전제다. 아직 쓰는지 확인하고 아니면 정리한다.
+- **D-9 로컬 수동 갱신 스크립트 확인**: `services/ops/scripts/run_data_nightly_refresh.sh`와 `scripts/run_pipeline.py`는 개인 PC에서 금감원 자료를 다시 만드는 수동 도구다(11/13 LP 단계 제거). 아직 쓰는지 확인하고 아니면 정리한다.
 
 ## 뉴스레터
 
@@ -89,4 +90,5 @@
 - C-1~C-8 목록·상세 표시 정리(연도, 접수 중 우선·D-day, 상태명, 사업명, 기관명, 미확인 문구, 진행 단계, 출자기관 목록).
 - D-1 특정 사업 하드코딩 제거, D-2 일회성 workflow 정리(40→30개)와 사용하지 않는 모듈 삭제(863bbf7).
 - GP 서비스: 없는 페이지 503→404(060524c, 11/13 배포 확인). 우정사업본부 TLS 대체 접속.
-- 운영 문서를 현재 상태 문서와 history로 분리(2026-11-13).
+- 운영 문서를 현재 상태 문서와 history로 분리(8e0d550).
+- D-4 구버전 LP 정적 화면·옛 모니터 경로 삭제(약 1만 8천 줄). 수출입은행 목록 판독만 `lp_kexim_listing.py`로 옮김. workflow가 부르는 모듈 존재 검사 추가(2026-11-13).

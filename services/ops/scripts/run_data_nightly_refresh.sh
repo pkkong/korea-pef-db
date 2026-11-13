@@ -11,8 +11,6 @@ TODAY="$(TZ=Asia/Seoul date +%F)"
 REPORT_DATE="${DATA_REFRESH_REPORT_DATE:-$TODAY}"
 SITE_DATE="${DATA_REFRESH_SITE_DATE:-}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-LP_MONITOR_DAYS="${DATA_REFRESH_LP_MONITOR_DAYS:-365}"
-LP_LIMIT_PER_SOURCE="${DATA_REFRESH_LP_LIMIT_PER_SOURCE:-80}"
 GP_PROFILE_LIMIT="${DATA_REFRESH_GP_PROFILE_LIMIT:-120}"
 ARCHIVE_LIMIT="${NEWSLETTER_ARCHIVE_LIMIT:-30}"
 LOCK_DIR="$REPO_ROOT/exports/ops/data-nightly-refresh.lock"
@@ -29,7 +27,6 @@ Options:
 
 Environment overrides:
   DATA_REFRESH_REPORT_DATE, DATA_REFRESH_SITE_DATE
-  DATA_REFRESH_LP_MONITOR_DAYS, DATA_REFRESH_LP_LIMIT_PER_SOURCE
   DATA_REFRESH_GP_PROFILE_LIMIT, NEWSLETTER_ARCHIVE_LIMIT, PYTHON_BIN
 USAGE
 }
@@ -95,16 +92,11 @@ echo "site_date=$SITE_DATE"
 echo "log_file=$LOG_FILE"
 
 "$PYTHON_BIN" scripts/run_pipeline.py \
-  --lp-monitor-days "$LP_MONITOR_DAYS" \
-  --lp-monitor-limit-per-source "$LP_LIMIT_PER_SOURCE" \
   --gp-profile-limit "$GP_PROFILE_LIMIT"
-
-"$PYTHON_BIN" services/lp/src/build_lp_profile_backlog.py \
-  --date "$REPORT_DATE"
 
 "$PYTHON_BIN" scripts/build_site_bundle.py \
   --date "$SITE_DATE" \
   --archive-limit "$ARCHIVE_LIMIT" \
-  --services newsletter,lp,gp
+  --services newsletter,gp
 
 echo "data_nightly_refresh_finish=$(date -u +%FT%TZ)"

@@ -34,8 +34,6 @@ DEFAULT_PERSON_NAME_OVERRIDES = REPO_ROOT / "data" / "person_name_overrides.csv"
 DEFAULT_SCHOOL_NAME_ALIASES = REPO_ROOT / "data" / "school_name_aliases.csv"
 DEFAULT_PEOPLE_RESEARCH_WORKLIST = REPO_ROOT / "exports" / "people_research_worklist_top50.csv"
 DEFAULT_SERVICE_INTEGRATION_OUT = REPO_ROOT / "exports"
-DEFAULT_LP_INSTITUTIONS = REPO_ROOT / "data" / "lp_institutions.csv"
-DEFAULT_LP_COMMITMENT_SOURCES = REPO_ROOT / "data" / "lp_commitment_sources.csv"
 
 
 @dataclass
@@ -351,31 +349,6 @@ def build_steps(args: argparse.Namespace) -> list[PipelineStep]:
         )
     )
 
-    steps.append(
-        PipelineStep(
-            name="build_lp_commitment_monitor",
-            description="Build LP commitment notice monitor from official sources and news clips",
-            command_factory=lambda: [
-                sys.executable,
-                str(SCRIPTS_DIR / "build_lp_commitment_monitor.py"),
-                "--db",
-                str(args.db),
-                "--lp-institutions",
-                str(args.lp_institutions),
-                "--lp-sources",
-                str(args.lp_commitment_sources),
-                "--out-dir",
-                str(args.exports),
-                "--days",
-                str(args.lp_monitor_days),
-                "--limit-per-source",
-                str(args.lp_monitor_limit_per_source),
-            ],
-            enabled=not args.skip_lp_monitor,
-            skip_reason="--skip-lp-monitor was supplied",
-        )
-    )
-
     dashboard_enabled = not args.skip_dashboard
     steps.append(
         PipelineStep(
@@ -575,10 +548,6 @@ def main() -> int:
     parser.add_argument("--news-gp-worklist-days", type=int, default=7)
     parser.add_argument("--service-integration-out", type=Path, default=DEFAULT_SERVICE_INTEGRATION_OUT)
     parser.add_argument("--service-integration-top-gp-limit", type=int, default=50)
-    parser.add_argument("--lp-institutions", type=Path, default=DEFAULT_LP_INSTITUTIONS)
-    parser.add_argument("--lp-commitment-sources", type=Path, default=DEFAULT_LP_COMMITMENT_SOURCES)
-    parser.add_argument("--lp-monitor-days", type=int, default=180)
-    parser.add_argument("--lp-monitor-limit-per-source", type=int, default=50)
     parser.add_argument("--gp-profile-limit", type=int, default=50)
     parser.add_argument("--log-dir", type=Path, default=DEFAULT_LOG_DIR)
     parser.add_argument("--with-fetch-sources", action="store_true")
@@ -590,7 +559,6 @@ def main() -> int:
     parser.add_argument("--skip-news-gp-worklist", action="store_true")
     parser.add_argument("--skip-people-worklist", action="store_true")
     parser.add_argument("--skip-service-integration-worklist", action="store_true")
-    parser.add_argument("--skip-lp-monitor", action="store_true")
     parser.add_argument("--skip-operational-status", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -625,9 +593,6 @@ def main() -> int:
         "news_gp_worklist_days": args.news_gp_worklist_days,
         "service_integration_out": str(args.service_integration_out),
         "service_integration_top_gp_limit": args.service_integration_top_gp_limit,
-        "lp_institutions": str(args.lp_institutions),
-        "lp_commitment_sources": str(args.lp_commitment_sources),
-        "lp_monitor_days": args.lp_monitor_days,
         "steps": [],
     }
 

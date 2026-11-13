@@ -76,7 +76,7 @@
 공통 검사(로컬 기준 환경: Python 3.12 + `services/newsletter/web/requirements.txt` + `olefile==0.47` + `pypdf==6.10.0`):
 
 ```bash
-python3 scripts/run_regression_tests.py          # 2026-11-13 기준 1,324검사
+python3 scripts/run_regression_tests.py          # 2026-11-13 기준 1,284검사
 python3 scripts/check_architecture_contracts.py
 npm ci --prefix scripts/tests/sql --ignore-scripts && npm test --prefix scripts/tests/sql
 ```
@@ -92,7 +92,9 @@ python3 scripts/check_fss_statistics_ready.py --db db/private_equity.db --expect
 curl -fsS "https://kpef-newsletter.vercel.app/health.json?refresh=1"
 ```
 
-`scripts/build_site_bundle.py`(통합 정적 빌드)는 구버전 LP 화면 코드(`lp_legacy_service_pages.py`)를 쓰는 로컬 경로다. 운영 workflow는 쓰지 않는다. 정리 계획은 백로그 D-4.
+`scripts/build_site_bundle.py`(로컬 통합 정적 빌드)는 브리프·GP·Wiki만 만든다. LP는 `services/lp/web` 앱이 Supabase 공개본으로 보여 주며 정적 LP 페이지 경로는 2026-11-13에 삭제했다.
+
+구조 계약 검사는 workflow가 부르는 테스트 모듈·스크립트가 실제로 있는지도 확인한다. 모듈을 지우면 그 이름을 쓰는 workflow도 같이 고친다.
 
 ## 완료 보고 전 필수 검증
 

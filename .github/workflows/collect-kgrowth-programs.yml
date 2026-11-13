@@ -32,7 +32,7 @@ jobs:
       - name: Install official attachment readers
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
       - name: Test shared official-board discovery
-        run: python3 -m unittest services.lp.tests.test_collect_shared_lp_notices services.lp.tests.test_collect_lp_original_notices services.lp.tests.test_discover_lp_original_boards services.lp.tests.test_discover_growth_originals services.lp.tests.test_discover_kfinco_originals services.lp.tests.test_lp_shared_notice_terms services.lp.tests.test_lp_shared_notice_catalog services.lp.tests.test_lp_contest_screening
+        run: python3 -m unittest services.lp.tests.test_collect_shared_lp_notices services.lp.tests.test_collect_lp_original_notices services.lp.tests.test_discover_lp_original_boards services.lp.tests.test_discover_growth_originals services.lp.tests.test_discover_kfinco_originals services.lp.tests.test_lp_shared_notice_terms services.lp.tests.test_lp_shared_notice_catalog
       - name: Discover institution notices on association boards
         env:
           LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}

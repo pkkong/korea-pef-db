@@ -139,26 +139,14 @@ bad = sorted(
 print(json.dumps(bad, ensure_ascii=False))
 raise SystemExit(1 if bad else 0)
 """,
-        "lp_builder_import": """
+        "lp_vercel_app": """
 import importlib, json, sys
-importlib.import_module("services.lp.src.build_lp_service_pages")
+importlib.import_module("services.lp.web.app")
 bad = sorted(
     name for name in sys.modules
     if name == "services.gp" or name.startswith("services.gp.")
     or name == "services.wiki" or name.startswith("services.wiki.")
-    or name in {"build_service_site", "scripts.build_service_site"}
-    or name == "services.lp.src.lp_legacy_service_pages"
-)
-print(json.dumps(bad, ensure_ascii=False))
-raise SystemExit(1 if bad else 0)
-""",
-        "lp_legacy_import": """
-import importlib, json, sys
-importlib.import_module("services.lp.src.lp_legacy_service_pages")
-bad = sorted(
-    name for name in sys.modules
-    if name == "services.gp" or name.startswith("services.gp.")
-    or name == "services.wiki" or name.startswith("services.wiki.")
+    or name == "services.newsletter" or name.startswith("services.newsletter.")
 )
 print(json.dumps(bad, ensure_ascii=False))
 raise SystemExit(1 if bad else 0)
@@ -293,6 +281,28 @@ def check_generated_outputs_untracked() -> list[str]:
     return violations
 
 
+WORKFLOW_TEST_MODULE_RE = re.compile(r"\b((?:services\.[a-z_]+(?:\.web)?\.tests|scripts\.tests)\.test_[A-Za-z0-9_]+)\b")
+WORKFLOW_SCRIPT_PATH_RE = re.compile(r"(?<![\w/.$])((?:services|scripts)/[A-Za-z0-9_/]+\.py)\b")
+
+
+def check_workflow_references_exist() -> list[str]:
+    """Every test module and script a workflow names must exist.
+
+    Deleting a module without updating the workflow that runs it breaks the
+    scheduled job (e.g. a stale unittest name fails the LP collection run).
+    """
+    errors: list[str] = []
+    for path in sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml")):
+        text = path.read_text(encoding="utf-8")
+        for module in sorted(set(WORKFLOW_TEST_MODULE_RE.findall(text))):
+            if not (REPO_ROOT / (module.replace(".", "/") + ".py")).exists():
+                errors.append(f"{path.name}: missing test module {module}")
+        for script in sorted(set(WORKFLOW_SCRIPT_PATH_RE.findall(text))):
+            if not (REPO_ROOT / script).exists():
+                errors.append(f"{path.name}: missing script {script}")
+    return errors
+
+
 # Start-of-work documents that both agents read before every task. Keep them
 # short; dated entries move to docs/history/<doc>/YYYY-MM.md.
 START_DOCS = (
@@ -333,6 +343,7 @@ def main() -> int:
         "workflow_contracts": check_workflow_contracts(),
         "generated_outputs_untracked": check_generated_outputs_untracked(),
         "start_docs_size": check_start_docs_size(),
+        "workflow_references_exist": check_workflow_references_exist(),
     }
     failures = {name: values for name, values in sections.items() if values}
     if args.json:

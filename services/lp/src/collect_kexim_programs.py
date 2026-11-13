@@ -27,13 +27,13 @@ from urllib.parse import parse_qs, urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
 
 try:
-    from .build_lp_commitment_monitor import extract_kexim_notice_rows
+    from .lp_kexim_listing import extract_kexim_notice_rows
     from .lp_kdb_dns import resolve_kexim_ipv4
     from .lp_ipv4_transport import IPv4HTTPSHandler
     from .lp_transport_errors import transient_dns
     from .lp_attachment_text import extract_attachment, MAX_FILE_BYTES
 except ImportError:
-    from build_lp_commitment_monitor import extract_kexim_notice_rows
+    from lp_kexim_listing import extract_kexim_notice_rows
     from lp_kdb_dns import resolve_kexim_ipv4
     from lp_ipv4_transport import IPv4HTTPSHandler
     from lp_transport_errors import transient_dns

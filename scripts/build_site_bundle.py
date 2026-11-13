@@ -27,13 +27,14 @@ from services.newsletter.src.newsletter_site_support import (  # noqa: E402
 from services.shared.src.daily_news_common import DEFAULT_DB, today_seoul  # noqa: E402
 
 
-DEFAULT_SERVICE_ORDER = ("newsletter", "lp", "gp")
-ALL_SERVICE_ORDER = ("newsletter", "lp", "gp", "wiki")
+# LP is served by its own Vercel app from Supabase; the legacy static LP
+# pages were removed on 2026-11-13.
+DEFAULT_SERVICE_ORDER = ("newsletter", "gp")
+ALL_SERVICE_ORDER = ("newsletter", "gp", "wiki")
 SERVICE_ALIASES = {
     "brief": "newsletter",
     "news": "newsletter",
     "newsletter": "newsletter",
-    "lp": "lp",
     "gp": "gp",
     "wiki": "wiki",
 }
@@ -65,6 +66,8 @@ def parse_services(value: str) -> list[str]:
         return list(DEFAULT_SERVICE_ORDER)
     services: list[str] = []
     for part in raw_parts:
+        if part == "lp":
+            raise ValueError("LP is no longer a static bundle service; it is served by services/lp/web")
         service = SERVICE_ALIASES.get(part)
         if service is None:
             raise ValueError(f"Unknown service: {part}")
@@ -136,10 +139,6 @@ def build_site_bundle(
                     use_archive_seed,
                 )
             )
-        elif service == "lp":
-            from services.lp.src.build_lp_service_pages import build_lp_service_pages
-
-            result.update({key: str(value) for key, value in build_lp_service_pages(site_dir, effective_date).items()})
         elif service == "gp":
             from scripts.check_fss_statistics_ready import check_fss_statistics
             from services.gp.src.build_gp_service_pages import build_gp_service_pages

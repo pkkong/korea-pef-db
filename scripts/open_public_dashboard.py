@@ -98,7 +98,7 @@ def main() -> int:
     if not PUBLIC_ROOT.exists():
         print(
             "Generated public site bundle is missing. "
-            "Run `python scripts/build_site_bundle.py --services newsletter,lp,gp` first.",
+            "Run `python scripts/build_site_bundle.py --services newsletter,gp` first.",
             flush=True,
         )
         return 1

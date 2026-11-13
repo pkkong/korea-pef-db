@@ -25,9 +25,8 @@ NEWSLETTER_PUBLIC_FILES = [
     "assets/service.css",
     "assets/service.js",
 ]
+# LP pages are served by the LP Vercel app (services/lp/web), not this bundle.
 SERVICE_PUBLIC_FILES = [
-    "lp-notices.html",
-    "lp-official-notices.html",
     "gps.html",
     "market.html",
 ]
@@ -35,7 +34,7 @@ GP_PUBLIC_FILES = ["gps.html", "market.html"]
 REQUIRED_PUBLIC_FILES = NEWSLETTER_PUBLIC_FILES + SERVICE_PUBLIC_FILES
 BOTTOM_NAV_LABELS = ["브리프", "LP", "GP"]
 PUBLIC_CORE_HTML_FILES = ["index.html", "daily-news.html"]
-PUBLIC_SERVICE_HTML_FILES = ["lp-notices.html", "lp-official-notices.html", "gps.html", "market.html"]
+PUBLIC_SERVICE_HTML_FILES = ["gps.html", "market.html"]
 PUBLIC_HTML_FILES = PUBLIC_CORE_HTML_FILES + PUBLIC_SERVICE_HTML_FILES
 FORBIDDEN_VISIBLE_TEXT = [
     "NPL_RESTRUCTURING_AND_PE_MANAGER",
@@ -468,90 +467,6 @@ def check_generated_gp_contract(require_data: bool = False) -> list[str]:
     ]
 
 
-def check_generated_lp_wiki_contract() -> list[str]:
-    lp_path = NEWSLETTER_SITE_DIR / "lp-notices.html"
-    lp_notice_path = NEWSLETTER_SITE_DIR / "lp-official-notices.html"
-    if not lp_path.exists() or not lp_notice_path.exists():
-        return ["generated_lp_contract=skipped"]
-
-    violations: list[str] = []
-    lp_html = lp_path.read_text(encoding="utf-8")
-    lp_notice_html = lp_notice_path.read_text(encoding="utf-8")
-
-    for name, html in [("lp-notices.html", lp_html), ("lp-official-notices.html", lp_notice_html)]:
-        labels = bottom_nav_labels(html)
-        if labels != BOTTOM_NAV_LABELS:
-            raise CheckFailure(f"{name} bottom nav mismatch: expected {BOTTOM_NAV_LABELS}, got {labels}")
-        if '<header class="kpef-product-header' in html:
-            violations.append(f"{name}:kpef-product-header")
-        if 'font-variant-numeric: tabular-nums' not in html:
-            violations.append(f"{name}:tabular-nums")
-
-    if '<strong class="service-title">LP</strong>' not in lp_html:
-        raise CheckFailure("LP service title missing")
-    for required_markup in ['class="lp-directory-table"', 'class="lp-directory-head"', 'class="lp-directory-grid"', 'class="lp-directory-card"']:
-        if required_markup not in lp_html:
-            violations.append(f"lp-notices.html:missing table-like directory markup {required_markup}")
-    expected_lp_tabs = ["출자기관", "출자공고", "선정결과"]
-    if gp_service_tabs(lp_html) != expected_lp_tabs:
-        raise CheckFailure(f"LP service tabs mismatch: got {gp_service_tabs(lp_html)}")
-    if gp_service_tabs(lp_notice_html) != expected_lp_tabs:
-        raise CheckFailure(f"LP notice service tabs mismatch: got {gp_service_tabs(lp_notice_html)}")
-    if 'aria-current="page">출자공고</a>' not in lp_notice_html:
-        violations.append("lp-official-notices.html:notice tab not current")
-    if "lp-notice-row" not in lp_notice_html:
-        violations.append("lp-official-notices.html:notice rows missing")
-    for needle in LP_NOTICE_FORBIDDEN_TEXT:
-        if needle in lp_notice_html:
-            violations.append(f"lp-official-notices.html:{needle}")
-    notice_articles = re.findall(r'<article class="lp-notice-row"[^>]*>.*?</article>', lp_notice_html, re.DOTALL)
-    for index, article in enumerate(notice_articles[:80], start=1):
-        article_text = strip_tags(article)
-        if "2026년 국민연금기금 벤처펀드" in article_text and any(term in article_text for term in ["부동산", "국내사모투자"]):
-            violations.append(f"lp-official-notices.html:nps_overmerged_card_{index}")
-        if re.search(r"\([^)]*$", article_text):
-            violations.append(f"lp-official-notices.html:unclosed_parenthesis_{index}")
-    if re.search(r'data-kind="[^"]*\b(public|private|mutual_aid)\b', lp_html):
-        violations.append("lp-notices.html:raw ownership token")
-    if "출자기관 프로필" in lp_html:
-        violations.append("lp-notices.html:profile label in directory")
-
-    detail_paths = sorted(NEWSLETTER_SITE_DIR.glob("lp-notice-*.html"))[:8]
-    for detail_path in detail_paths:
-        html = detail_path.read_text(encoding="utf-8")
-        labels = bottom_nav_labels(html)
-        if labels != BOTTOM_NAV_LABELS:
-            raise CheckFailure(
-                f"{detail_path.name} bottom nav mismatch: expected {BOTTOM_NAV_LABELS}, got {labels}"
-            )
-        for needle in LP_NOTICE_FORBIDDEN_TEXT:
-            if needle in html:
-                violations.append(f"{detail_path.name}:{needle}")
-
-    profile_paths = sorted(
-        path
-        for path in NEWSLETTER_SITE_DIR.glob("lp-*.html")
-        if path.name not in {"lp-notices.html", "lp-official-notices.html"} and not path.name.startswith("lp-notice-")
-    )[:3]
-    for profile_path in profile_paths:
-        html = profile_path.read_text(encoding="utf-8")
-        labels = bottom_nav_labels(html)
-        if labels != BOTTOM_NAV_LABELS:
-            raise CheckFailure(
-                f"{profile_path.name} bottom nav mismatch: expected {BOTTOM_NAV_LABELS}, got {labels}"
-            )
-        if '<header class="kpef-product-header' in html:
-            violations.append(f"{profile_path.name}:kpef-product-header")
-        if '<strong class="service-title">LP</strong>' not in html:
-            violations.append(f"{profile_path.name}:LP service title")
-        if 'font-variant-numeric: tabular-nums' not in html:
-            violations.append(f"{profile_path.name}:tabular-nums")
-
-    if violations:
-        raise CheckFailure(f"Forbidden generated LP wording/markup: {', '.join(violations)}")
-    return [f"generated_lp_contract=ok lp_profiles_checked={len(profile_paths)} lp_notice_details_checked={len(detail_paths)}"]
-
-
 def check_remote(base_url: str, services: str = "all") -> list[str]:
     if not base_url:
         return []
@@ -562,7 +477,7 @@ def check_remote(base_url: str, services: str = "all") -> list[str]:
     elif services == "gp":
         paths = ["market.html", "gps.html"]
     else:
-        paths = ["", "market.html", "gps.html", "lp-official-notices.html"]
+        paths = ["", "market.html", "gps.html"]
     for relative_path in paths:
         url = base + relative_path
         request = Request(url, headers={"User-Agent": "kpef-public-frontend-check/1.0"})
@@ -623,7 +538,6 @@ def main() -> int:
             check_newsletter_frontend_contract,
             check_public_lp_json_contract,
             check_generated_gp_contract,
-            check_generated_lp_wiki_contract,
             check_brief_initial_date_guard,
         ]
     output: list[str] = []
