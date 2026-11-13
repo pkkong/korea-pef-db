@@ -46,6 +46,7 @@ from daily_news_common import (
     is_generic_aggregator_text,
     is_truncated_news_title,
     load_gp_aliases,
+    load_published_gp_aliases,
     load_env_file,
     load_manual_overrides,
     read_csv_rows,
@@ -3300,6 +3301,18 @@ def main() -> int:
         rules = load_rules(args.rules)
         overrides = load_manual_overrides(args.overrides)
         gp_aliases = load_gp_aliases(args.db, args.gp_alias_overrides)
+        gp_alias_source = "build_db"
+        if not gp_aliases:
+            # The runtime database is restored from newsletter tables only; GP names
+            # come from the published GP directory (GP -> Brief public contract).
+            try:
+                gp_aliases = load_published_gp_aliases(args.gp_alias_overrides)
+                gp_alias_source = "published_gp_directory"
+            except Exception as exc:  # noqa: BLE001 - tagging must not stop the brief
+                gp_alias_source = f"unavailable:{type(exc).__name__}"
+        print(f"gp_alias_source={gp_alias_source} gp_aliases={len(gp_aliases)}", flush=True)
+        if not gp_aliases:
+            print("::warning::GP alias set is empty; articles will carry no GP names.", flush=True)
         run_id = start_run(conn, args.date)
 
         candidate_limit_per_source = args.candidate_limit_per_source or args.limit_per_source

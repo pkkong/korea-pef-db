@@ -57,6 +57,8 @@ from daily_news_common import (
     choose_public_news_title,
     is_truncated_news_title,
     load_gp_aliases,
+    load_published_gp_aliases,
+    parse_published_gp_directory,
     load_sources,
     load_rules,
     matches_allowed_publishers,
@@ -973,6 +975,43 @@ def test_web_renderer_maps_national_growth_fund_section() -> None:
             "section": "AI & PE",
         }
     ) == "국민성장펀드"
+
+
+def _gp_directory_card(name: str, url: str = "", active: str = "1") -> str:
+    return (f'<article class="gp-card"\n        data-url="{url}"\n        data-profile="{"detail" if url else ""}"\n'
+            f'        data-search="{name} {name}"\n        data-active="{active}"\n'
+            f'        data-period-metrics="{{&quot;2025Q4&quot;:{{&quot;funds&quot;:1}}}}"\n        data-name="{name}">\n'
+            f'        <h2>{name}</h2></article>')
+
+
+def test_published_gp_directory_restores_news_gp_names() -> None:
+    """Without GP tables in the build DB, GP names come from the published directory."""
+    html = "".join(
+        [
+            _gp_directory_card("엠비케이파트너스", "gp-2.html"),
+            _gp_directory_card("어펄마캐피탈", "gp-7361.html"),
+            _gp_directory_card("제네시스프라이빗에쿼티"),
+            _gp_directory_card("이앤에프프라이빗에퀴티"),
+            _gp_directory_card("에스케이에너지", active="0"),
+        ]
+    )
+    entries = parse_published_gp_directory(html)
+    assert (2, "엠비케이파트너스", True) in entries
+    assert "에스케이에너지" not in {name for _, name, _ in entries}
+
+    aliases = load_published_gp_aliases(page_html=html)
+    cases = {
+        ("최윤범 법원서 막혔다", "사모펀드 운용사 MBK파트너스가 사과를 요구했다."): "엠비케이파트너스",
+        ("총회연금 GP, 크레센도·어펄마 낙점", ""): "어펄마캐피탈",
+        ("제네시스PE, 크레딧 투자법인 세운다", ""): "제네시스프라이빗에쿼티",
+        ("E&F PE-IS동서 코어엔텍 매각 재개", ""): "이앤에프프라이빗에퀴티",
+    }
+    for (title, summary), expected in cases.items():
+        names = {str(m["entity_name"]) for m in match_gp_entities(title, summary, "", aliases)}
+        assert expected in names, (title, names)
+    assert not match_gp_entities("SK에너지 정제마진 개선", "에스케이에너지 실적", "", aliases)
+    ids = {alias.canonical_name: alias.gp_id for alias in aliases}
+    assert ids["어펄마캐피탈"] == 7361
 
 
 def test_review_category_accepts_national_growth_fund_aliases() -> None:
