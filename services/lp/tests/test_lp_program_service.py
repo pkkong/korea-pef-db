@@ -345,6 +345,40 @@ class DeadlineCalendarAndNewNotice(unittest.TestCase):
         self.assertEqual(index.count('data-lp-new-until="'), 1)
 
 
+class InstitutionTiles(unittest.TestCase):
+    """Institutions get the GP-style tile: symbol logo or a tinted short label, never a squeezed wordmark."""
+    program = ProgramListPresentation.program
+
+    def test_tiles(self):
+        with tempfile.TemporaryDirectory() as folder:
+            build({'as_of': '2026-11-13', 'programs': [
+                self.program('a', '접수 중', 'kdb', '한국산업은행', '2026-11-30'),
+                self.program('b', '접수 중', 'koreapost', '우정사업본부', '2026-11-30'),
+            ]}, Path(folder))
+            index = (Path(folder) / 'index.html').read_text()
+            directory = (Path(folder) / 'institution-directory.html').read_text()
+        self.assertIn('class="lp-mark has-logo" data-tone="1"', index)
+        self.assertIn('img_symbol_chbi.png', index)
+        self.assertIn('class="lp-mark" data-tone="5" data-label-length="2" aria-hidden="true"><span>우본</span>', index)
+        self.assertIn('.lp-sample .lp-mark{', index)
+        self.assertIn('<span>우본</span>', directory)
+
+    def test_institution_page_header(self):
+        with tempfile.TemporaryDirectory() as folder:
+            build({'as_of': '2026-11-13', 'programs': [
+                self.program('a', '접수 중', 'koreapost', '우정사업본부', '2026-11-30'),
+                self.program('b', '접수 중', 'unknown_lp', '어느재단', '2026-11-30'),
+            ]}, Path(folder))
+            page = (Path(folder) / 'institution-koreapost.html').read_text()
+            unknown = (Path(folder) / 'institution-unknown_lp.html').read_text()
+        self.assertIn('class="lp-mark lp-mark-large"', page)
+        self.assertIn('<span class="institution-kind">공공기금</span><h1>우정사업본부</h1>', page)
+        self.assertIn('href="https://www.koreapost.go.kr" target="_blank" rel="noopener noreferrer">공식 홈페이지 ↗</a>', page)
+        # An institution missing from the master still gets a clean header without type or links.
+        self.assertIn('<div class="institution-heading"><h1>어느재단</h1>', unknown)
+        self.assertNotIn('<div class="institution-links">', unknown)
+
+
 class ReportedResultFile(unittest.TestCase):
     def test_repository_file_is_valid_and_sourced(self):
         import json

@@ -4,12 +4,16 @@ import argparse
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from html import escape
 from collections import defaultdict
 from datetime import date, timedelta
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from services.shared.web.identity_marks import mark_css, mark_tone  # noqa: E402  (shared with GP)
 
 GP_PUBLIC_URL = os.environ.get('GP_PUBLIC_URL', 'https://kpef-gp.vercel.app').rstrip('/')
 GP_ALIAS_RULES = ROOT / 'data' / 'gp_alias_merge_rules.csv'
@@ -152,12 +156,78 @@ INSTITUTION_MARKS = {
 }
 
 
+# Official symbol marks that read at icon size (square app/bookmark icons).
+# Wide wordmarks are left out on purpose: squeezed into a 40px tile they are
+# unreadable, so those institutions get a lettered tile instead.
+INSTITUTION_SYMBOLS = {
+    'kdb': 'https://www.kdb.co.kr/wcmscontents/hmp/ch/bi/bi/rc/img_symbol_chbi.png',
+    'ibk': 'https://www.ibk.co.kr/img/common/ic_bm_ios.png',
+    'kbiz': 'https://www.kbiz.or.kr/file/resource/image/AOS_192.png',
+    'pmaa': 'https://www.pmaa.or.kr/icon.png',
+}
+
+
+# Tint close to each institution's own colour where it has a well-known one
+# (identity_marks palette: 1 blue, 2 teal, 3 green, 4 amber, 5 red, 6 violet, 7 slate, 8 cyan).
+INSTITUTION_TONES = {'koreapost': 5, 'kdb': 1, 'ibk': 1, 'kexim': 8, 'kgrowth': 2, 'nps': 1, 'kfcc': 1, 'kamco': 8}
+
+
 def institution_mark(institution_id, name):
     mark = INSTITUTION_MARKS.get(institution_id)
     if mark:
         return mark
     name = re.sub(r'^(한국|대한|주식회사)', '', str(name or '')).strip()
     return name[:2] or 'LP'
+
+
+LP_TYPE_LABELS = {
+    'Public Pension': '공적연금', 'Fund of Funds': '모태펀드 운용기관', 'Policy Fund of Funds': '정책펀드 운용기관',
+    'Policy Bank': '정책금융기관', 'Public Fund': '공공기금', 'Mutual Aid Association': '공제회',
+    'Mutual Aid/Industry Association': '공제회', 'Mutual Finance': '상호금융', 'Sovereign Wealth Fund': '국부펀드',
+    'Policy Finance Institution': '정책금융기관', 'Public Agency': '공공기관', 'Regional Public Agency': '지역 공공기관',
+    'Public Fund / OCIO Mandate': '공공기금',
+}
+
+
+def _load_institution_profiles(path=ROOT / 'data' / 'lp_institutions.csv'):
+    """Type and official links per institution code; empty when the master is unreadable."""
+    import csv
+    try:
+        with open(path, encoding='utf-8') as handle:
+            return {row['lp_code']: row for row in csv.DictReader(handle) if row.get('lp_code')}
+    except (OSError, KeyError):
+        return {}
+
+
+INSTITUTION_PROFILES = _load_institution_profiles()
+
+
+def institution_header_html(institution_id, title, summary):
+    """Institution page header: tile, name, type, counts and official links."""
+    profile = INSTITUTION_PROFILES.get(institution_id, {})
+    kind = LP_TYPE_LABELS.get(profile.get('lp_type', ''), '')
+    links = []
+    for label, key in (('공식 홈페이지', 'homepage_url'), ('출자 공고 게시판', 'notice_url')):
+        url = profile.get(key, '')
+        if url.startswith('https://') or url.startswith('http://'):
+            links.append(f'<a href="{h(url)}" target="_blank" rel="noopener noreferrer">{label} ↗</a>')
+    tile = institution_mark_html(institution_id, title).replace('class="lp-mark', 'class="lp-mark lp-mark-large', 1)
+    return (f'<header class="institution-header">{tile}<div class="institution-heading">'
+            + (f'<span class="institution-kind">{h(kind)}</span>' if kind else '')
+            + f'<h1>{h(title)}</h1><p>{summary}</p>'
+            + (f'<div class="institution-links">{"".join(links)}</div>' if links else '')
+            + '</div></header>')
+
+
+def institution_mark_html(institution_id, name):
+    """40px identity tile shared with GP: symbol logo when one reads well, else a tinted label."""
+    label = institution_mark(institution_id, name)
+    tone = INSTITUTION_TONES.get(institution_id) or mark_tone(str(institution_id or name))
+    symbol = INSTITUTION_SYMBOLS.get(institution_id, '')
+    attrs = f'class="lp-mark{" has-logo" if symbol else ""}" data-tone="{tone}" data-label-length="{len(label)}" aria-hidden="true"'
+    logo = (f'<img src="{h(symbol)}" alt="" loading="lazy" referrerpolicy="no-referrer" '
+            "onerror=\"this.parentElement.classList.add('fallback-only');this.remove()\">") if symbol else ''
+    return f'<span {attrs}>{logo}<span>{h(label)}</span></span>'
 
 
 def service_header(path=None):
@@ -180,9 +250,12 @@ def shell(title, body, as_of, description='', path=None):
     meta = (f'<meta name="description" content="{h(description)}"><meta property="og:type" content="website">'
             f'<meta property="og:title" content="{h(title)} · LP"><meta property="og:description" content="{h(description)}">'
             + (f'<link rel="canonical" href="{h(lp_url)}/{h(path)}"><meta property="og:url" content="{h(lp_url)}/{h(path)}">' if path is not None else ''))
-    return f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{h(title)} · LP</title>{meta}<link rel="stylesheet" href="/assets/service.css"><style>{CSS}\n{sample_css}</style></head><body class="lp-sample"><main>{service_header(path)}{body}</main><nav class="bottom-nav" aria-label="하단 메뉴"><a href="{newsletter_url}/"><span aria-hidden="true" class="nav-dot nav-icon-brief"></span><strong>브리프</strong></a><a class="active" aria-current="page" href="index.html"><span aria-hidden="true" class="nav-dot nav-icon-lp"></span><strong>LP</strong></a><a href="{gp_url}/"><span aria-hidden="true" class="nav-dot nav-icon-gp"></span><strong>GP</strong></a></nav></body></html>'
+    return f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{h(title)} · LP</title>{meta}<link rel="stylesheet" href="/assets/service.css"><style>{CSS}\n{sample_css}\n{MARK_CSS}</style></head><body class="lp-sample"><main>{service_header(path)}{body}</main><nav class="bottom-nav" aria-label="하단 메뉴"><a href="{newsletter_url}/"><span aria-hidden="true" class="nav-dot nav-icon-brief"></span><strong>브리프</strong></a><a class="active" aria-current="page" href="index.html"><span aria-hidden="true" class="nav-dot nav-icon-lp"></span><strong>LP</strong></a><a href="{gp_url}/"><span aria-hidden="true" class="nav-dot nav-icon-gp"></span><strong>GP</strong></a></nav></body></html>'
 
 NEW_NOTICE_DAYS = 7
+MARK_CSS = (mark_css('.lp-mark', scope='.lp-sample') + mark_css('.lp-mark-large', size=56, radius=14, scope='.lp-sample')
+            + '.lp-sample .lp-mark-large{font-size:17px}.lp-sample .lp-mark-large[data-label-length="3"],'
+            '.lp-sample .lp-mark-large[data-label-length="4"]{font-size:14px}')
 PUBLIC_NOTICE_CONTEXT_VERSION = 'lp-public-notice-context-v1'
 
 
@@ -314,7 +387,7 @@ def build(data, out, gp_profiles=None):
         if '미확인' in amount:
             # A total that is not this PE track's allocation is not a list amount.
             amount = ''
-        return f'<article class="program" data-status="{h(status)}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"] + " " + p["list_title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><span class="lp-mark" aria-hidden="true">{h(institution_mark(p["institution_id"], p["institution_name"]))}</span><div class="program-body"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}{" · PE·VC 공동" if p.get("mixed_scope") else ""}{fresh}</span><span class="program-status{' open' if status == '접수 중' else ''}">{h(status)}</span></div><h2 class="program-title">{h(p["list_title"])}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}{dday}</span></div></div></a></article>'
+        return f'<article class="program" data-status="{h(status)}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"] + " " + p["list_title"])}"><a class="program-link" href="program-{h(p["id"])}.html">{institution_mark_html(p["institution_id"], p["institution_name"])}<div class="program-body"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}{" · PE·VC 공동" if p.get("mixed_scope") else ""}{fresh}</span><span class="program-status{' open' if status == '접수 중' else ''}">{h(status)}</span></div><h2 class="program-title">{h(p["list_title"])}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}{dday}</span></div></div></a></article>'
     options = ''.join(f'<option value="{h(k)}">{h(v[0]["institution_name"])}</option>' for k,v in institutions.items())
     shown = {p['display_status'] for p in programs}
     statuses = ''.join(f'<option>{h(s)}</option>' for s in [*[s for s in STATUS_ORDER if s in shown], *sorted(shown - set(STATUS_ORDER))])
@@ -375,7 +448,7 @@ def build(data, out, gp_profiles=None):
         title=group[0]['institution_name']
         selected = selection_count(group)
         summary = f'출자사업 {len(group)}건' + (f' · 선정 운용사 {selected}곳' if selected else '')
-        body=f'<a class="back" href="institution-directory.html">← 출자기관</a><header><h1>{h(title)}</h1><p>{summary}</p></header>'
+        body=f'<a class="back" href="institution-directory.html">← 출자기관</a>{institution_header_html(key, title, summary)}'
         if selected:
             body += f'<section class="institution-gps"><h2>선정 운용사</h2><ul class="gp-names">{gp_links(group)}</ul></section>'
         body += '<h2>출자사업</h2>' + ''.join(row(p) for p in group)
@@ -386,7 +459,7 @@ def build(data, out, gp_profiles=None):
         last = max(max(e['date'] for e in p['events']) for p in group)
         meta = f'출자사업 {len(group)}건' + (f' · 선정 운용사 {selected}곳' if selected else '')
         rows += (f'<article class="program"><a class="program-link" href="institution-{h(key)}.html">'
-                 f'<span class="lp-mark" aria-hidden="true">{h(institution_mark(key, group[0]["institution_name"]))}</span><div class="program-body">'
+                 f'{institution_mark_html(key, group[0]["institution_name"])}<div class="program-body">'
                  f'<h2 class="program-title">{h(group[0]["institution_name"])}</h2>'
                  f'<div class="program-bottom"><span>{h(meta)}</span><span>{h(short_date(last))} 최근 공고·결과</span></div></div></a></article>')
     body = f'<header class="list-header"><p class="result-summary">출자기관 {len(directory)}곳</p></header>{rows}'

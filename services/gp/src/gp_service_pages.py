@@ -12,7 +12,15 @@ from collections import defaultdict
 from pathlib import Path
 from urllib.parse import urlparse
 
-from services.shared.src.brand_assets import brand_logo_url, brand_style_attr, prepare_brand_asset_cache
+from services.shared.src.brand_assets import (
+    BRAND_MARKS,
+    brand_key_for_domain,
+    brand_logo_url,
+    brand_style_attr,
+    preferred_domain,
+    prepare_brand_asset_cache,
+)
+from services.shared.web.identity_marks import logo_is_symbol, mark_css, mark_label, mark_tone
 from services.shared.src.daily_news_common import normalize_url
 
 
@@ -1362,8 +1370,9 @@ def _render_gp_profile_page(report_date: str, gp: dict[str, object]) -> str:
     """Render the shared public profile layout for every source-backed GP."""
     name = _gp_name(gp)
     homepage = _safe_url(gp.get("homepage_url"))
-    logo_url = _brand_logo_url(homepage, name)
+    logo_url = _symbol_logo(homepage, name)
     avatar_label = _avatar_label(name)
+    avatar_tone = _identity_tone(name)
     avatar_style = _brand_logo_style_attr(homepage, name) if logo_url else ""
     avatar_logo = (
         f'<img src="{logo_url}" alt="" loading="lazy" onerror="this.parentElement.classList.add(\'fallback-only\'); this.remove()">'
@@ -1402,7 +1411,7 @@ def _render_gp_profile_page(report_date: str, gp: dict[str, object]) -> str:
     </nav>
 
     <header class="gp-profile-preview-hero">
-      <span class="gp-detail-logo gp-profile-preview-logo{' has-logo' if logo_url else ''}" aria-hidden="true"{avatar_style}>{avatar_logo}<span>{_e(avatar_label)}</span></span>
+      <span class="gp-detail-logo gp-profile-preview-logo{' has-logo' if logo_url else ''}" data-tone="{avatar_tone}" data-label-length="{len(avatar_label)}" aria-hidden="true"{avatar_style}>{avatar_logo}<span>{_e(avatar_label)}</span></span>
       <div>
         <span class="gp-profile-preview-kicker">PEF 운용사</span>
         <h1>{_e(name)}</h1>
@@ -2083,21 +2092,24 @@ def _render_chip(label: str, extra_class: str = "") -> str:
 
 
 def _avatar_label(value: object, fallback: str = "GP") -> str:
-    text = re.sub(r"\s+", "", _clean(value))
-    if not text:
-        return fallback
-    korean = "".join(re.findall(r"[가-힣]", text))
-    if korean:
-        return korean[:2]
-    letters = re.findall(r"[A-Za-z0-9]", text)
-    return "".join(letters[:2]).upper() or fallback
+    """Short label shared with LP tiles: MBK, IMM, 한투, 스틱 ..."""
+    return mark_label(_clean(value)) or fallback
 
 
 def _identity_tone(value: object) -> int:
-    text = _clean(value)
-    if not text:
-        return 1
-    return (sum(ord(char) for char in text) % 6) + 1
+    return mark_tone(_clean(value))
+
+
+def _symbol_logo(homepage_url: object, label: object) -> str:
+    """Brand logo URL only when it reads at icon size; wide wordmarks return ''."""
+    logo_url = _brand_logo_url(homepage_url, label)
+    if not logo_url:
+        return ""
+    key = brand_key_for_domain(preferred_domain(_safe_url(homepage_url), label))
+    mark = BRAND_MARKS.get(key, {}) if key else {}
+    if not logo_is_symbol(logo_url, mark.get("image_width", ""), mark.get("image_height", "")):
+        return ""
+    return logo_url
 
 
 def _favicon_url(url: object) -> str:
@@ -2118,15 +2130,16 @@ def _brand_logo_style_attr(homepage_url: object, label: object) -> str:
 
 def _avatar_markup(homepage_url: object, label: str, seed: object, brand_label: object = "") -> str:
     tone = _identity_tone(seed or label)
-    logo_url = _brand_logo_url(homepage_url, brand_label)
-    style_attr = _brand_logo_style_attr(homepage_url, brand_label)
+    logo_url = _symbol_logo(homepage_url, brand_label)
+    length = f' data-label-length="{len(label)}"'
     if logo_url:
+        style_attr = _brand_logo_style_attr(homepage_url, brand_label)
         return (
-            f'<span class="gp-avatar has-logo" data-tone="{tone}" aria-hidden="true"{style_attr}>'
+            f'<span class="gp-avatar has-logo" data-tone="{tone}"{length} aria-hidden="true"{style_attr}>'
             f'<img src="{logo_url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add(\'fallback-only\'); this.remove()">'
             f'<span>{_e(label)}</span></span>'
         )
-    return f'<span class="gp-avatar" data-tone="{tone}" aria-hidden="true"><span>{_e(label)}</span></span>'
+    return f'<span class="gp-avatar" data-tone="{tone}"{length} aria-hidden="true"><span>{_e(label)}</span></span>'
 
 
 def _card_status_label(latest_rank: str, has_profile_page: bool) -> str:
@@ -5261,6 +5274,14 @@ def _base_styles() -> str:
     .gp-profile-preview,
     .person-profile { width: min(calc(100% - 28px), 900px); }
     .gp-app-header { max-width: none; }
+    /* Identity tiles shared with LP (services/shared/web/identity_marks.py). */
+    """ + mark_css(".gp-avatar") + mark_css(".gp-profile-preview-logo", size=64, radius=18, scope=".gp-profile-preview") + """
+    .gp-profile-preview .gp-profile-preview-logo { font-size: 18px; }
+    .gp-profile-preview .gp-profile-preview-logo[data-label-length="3"],
+    .gp-profile-preview .gp-profile-preview-logo[data-label-length="4"] { font-size: 15px; }
+    @media (min-width: 700px) {
+      .gp-profile-preview .gp-profile-preview-logo { width: 72px; height: 72px; }
+    }
   </style>"""
 
 
