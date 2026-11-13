@@ -156,15 +156,29 @@ INSTITUTION_MARKS = {
 }
 
 
-# Official symbol marks that read at icon size (square app/bookmark icons).
-# Wide wordmarks are left out on purpose: squeezed into a 40px tile they are
-# unreadable, so those institutions get a lettered tile instead.
-INSTITUTION_SYMBOLS = {
-    'kdb': 'https://www.kdb.co.kr/wcmscontents/hmp/ch/bi/bi/rc/img_symbol_chbi.png',
-    'ibk': 'https://www.ibk.co.kr/img/common/ic_bm_ios.png',
-    'kbiz': 'https://www.kbiz.or.kr/file/resource/image/AOS_192.png',
-    'pmaa': 'https://www.pmaa.or.kr/icon.png',
-}
+# Official symbol marks, stored in the repository (services/lp/data/logos/<code>.png,
+# 96px squares cut from each institution's own site or Wikimedia) and embedded in
+# the page, so a slow or blocking institution site never breaks the icon. Wide
+# wordmarks are not used: squeezed into a 40px tile they are unreadable.
+LOGO_DIR = Path(__file__).resolve().parents[1] / 'data' / 'logos'
+
+
+def _load_logos(folder=LOGO_DIR):
+    import base64
+    logos = {}
+    for path in sorted(folder.glob('*.png')) if folder.is_dir() else []:
+        logos[path.stem] = 'data:image/png;base64,' + base64.b64encode(path.read_bytes()).decode('ascii')
+    return logos
+
+
+INSTITUTION_LOGOS = _load_logos()
+
+
+def logo_css(html_body):
+    """Background-image rules for the institution logos a page actually shows."""
+    used = sorted(set(re.findall(r'data-logo="([a-z0-9_]+)"', html_body)))
+    return ''.join(f'.lp-sample .lp-mark.has-logo[data-logo="{code}"]{{background-image:url({INSTITUTION_LOGOS[code]})}}'
+                   for code in used if code in INSTITUTION_LOGOS)
 
 
 # Tint close to each institution's own colour where it has a well-known one
@@ -223,11 +237,10 @@ def institution_mark_html(institution_id, name):
     """40px identity tile shared with GP: symbol logo when one reads well, else a tinted label."""
     label = institution_mark(institution_id, name)
     tone = INSTITUTION_TONES.get(institution_id) or mark_tone(str(institution_id or name))
-    symbol = INSTITUTION_SYMBOLS.get(institution_id, '')
-    attrs = f'class="lp-mark{" has-logo" if symbol else ""}" data-tone="{tone}" data-label-length="{len(label)}" aria-hidden="true"'
-    logo = (f'<img src="{h(symbol)}" alt="" loading="lazy" referrerpolicy="no-referrer" '
-            "onerror=\"this.parentElement.classList.add('fallback-only');this.remove()\">") if symbol else ''
-    return f'<span {attrs}>{logo}<span>{h(label)}</span></span>'
+    if institution_id in INSTITUTION_LOGOS:
+        return (f'<span class="lp-mark has-logo" data-logo="{h(institution_id)}" data-tone="{tone}" '
+                f'data-label-length="{len(label)}" aria-hidden="true"><span>{h(label)}</span></span>')
+    return f'<span class="lp-mark" data-tone="{tone}" data-label-length="{len(label)}" aria-hidden="true"><span>{h(label)}</span></span>'
 
 
 def service_header(path=None):
@@ -250,9 +263,11 @@ def shell(title, body, as_of, description='', path=None):
     meta = (f'<meta name="description" content="{h(description)}"><meta property="og:type" content="website">'
             f'<meta property="og:title" content="{h(title)} · LP"><meta property="og:description" content="{h(description)}">'
             + (f'<link rel="canonical" href="{h(lp_url)}/{h(path)}"><meta property="og:url" content="{h(lp_url)}/{h(path)}">' if path is not None else ''))
-    return f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{h(title)} · LP</title>{meta}<link rel="stylesheet" href="/assets/service.css"><style>{CSS}\n{sample_css}\n{MARK_CSS}</style></head><body class="lp-sample"><main>{service_header(path)}{body}</main><nav class="bottom-nav" aria-label="하단 메뉴"><a href="{newsletter_url}/"><span aria-hidden="true" class="nav-dot nav-icon-brief"></span><strong>브리프</strong></a><a class="active" aria-current="page" href="index.html"><span aria-hidden="true" class="nav-dot nav-icon-lp"></span><strong>LP</strong></a><a href="{gp_url}/"><span aria-hidden="true" class="nav-dot nav-icon-gp"></span><strong>GP</strong></a></nav></body></html>'
+    return f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{h(title)} · LP</title>{meta}<link rel="stylesheet" href="/assets/service.css"><style>{CSS}\n{sample_css}\n{MARK_CSS}{LOGO_TILE_CSS}{logo_css(body)}</style></head><body class="lp-sample"><main>{service_header(path)}{body}</main><nav class="bottom-nav" aria-label="하단 메뉴"><a href="{newsletter_url}/"><span aria-hidden="true" class="nav-dot nav-icon-brief"></span><strong>브리프</strong></a><a class="active" aria-current="page" href="index.html"><span aria-hidden="true" class="nav-dot nav-icon-lp"></span><strong>LP</strong></a><a href="{gp_url}/"><span aria-hidden="true" class="nav-dot nav-icon-gp"></span><strong>GP</strong></a></nav></body></html>'
 
 NEW_NOTICE_DAYS = 7
+LOGO_TILE_CSS = ('.lp-sample .lp-mark.has-logo[data-logo]{background-color:#fff;background-repeat:no-repeat;'
+                 'background-position:center;background-size:72%}')
 MARK_CSS = (mark_css('.lp-mark', scope='.lp-sample') + mark_css('.lp-mark-large', size=56, radius=14, scope='.lp-sample')
             + '.lp-sample .lp-mark-large{font-size:17px}.lp-sample .lp-mark-large[data-label-length="3"],'
             '.lp-sample .lp-mark-large[data-label-length="4"]{font-size:14px}')

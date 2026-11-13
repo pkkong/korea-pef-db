@@ -357,11 +357,31 @@ class InstitutionTiles(unittest.TestCase):
             ]}, Path(folder))
             index = (Path(folder) / 'index.html').read_text()
             directory = (Path(folder) / 'institution-directory.html').read_text()
-        self.assertIn('class="lp-mark has-logo" data-tone="1"', index)
-        self.assertIn('img_symbol_chbi.png', index)
-        self.assertIn('class="lp-mark" data-tone="5" data-label-length="2" aria-hidden="true"><span>우본</span>', index)
+        # Logos are stored in the repository and embedded once per page as CSS (no hotlinking).
+        self.assertIn('class="lp-mark has-logo" data-logo="kdb" data-tone="1"', index)
+        self.assertIn('.lp-mark.has-logo[data-logo="kdb"]{background-image:url(data:image/png;base64,', index)
+        self.assertEqual(index.count('[data-logo="kdb"]{background-image'), 1)
+        self.assertNotIn('kdb.co.kr', index)
+        self.assertIn('class="lp-mark has-logo" data-logo="koreapost" data-tone="5" data-label-length="2" aria-hidden="true"><span>우본</span>', index)
         self.assertIn('.lp-sample .lp-mark{', index)
         self.assertIn('<span>우본</span>', directory)
+
+    def test_institution_without_a_stored_logo_gets_a_lettered_tile(self):
+        with tempfile.TemporaryDirectory() as folder:
+            build({'as_of': '2026-11-13', 'programs': [self.program('a', '접수 중', 'kexim_test', '시험기관', '2026-11-30')]}, Path(folder))
+            index = (Path(folder) / 'index.html').read_text()
+        self.assertIn('class="lp-mark" data-tone=', index)
+        self.assertNotIn('background-image:url(data:', index)
+
+    def test_every_stored_logo_is_a_small_square_png(self):
+        import struct
+        from services.lp.src.lp_program_service import LOGO_DIR
+        for path in LOGO_DIR.glob('*.png'):
+            data = path.read_bytes()
+            self.assertEqual(data[:8], b'\x89PNG\r\n\x1a\n', path.name)
+            width, height = struct.unpack('>II', data[16:24])
+            self.assertEqual((width, height), (64, 64), path.name)
+            self.assertLess(len(data), 8000, path.name)
 
     def test_institution_page_header(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -371,7 +391,7 @@ class InstitutionTiles(unittest.TestCase):
             ]}, Path(folder))
             page = (Path(folder) / 'institution-koreapost.html').read_text()
             unknown = (Path(folder) / 'institution-unknown_lp.html').read_text()
-        self.assertIn('class="lp-mark lp-mark-large"', page)
+        self.assertIn('class="lp-mark lp-mark-large has-logo" data-logo="koreapost"', page)
         self.assertIn('<span class="institution-kind">공공기금</span><h1>우정사업본부</h1>', page)
         self.assertIn('href="https://www.koreapost.go.kr" target="_blank" rel="noopener noreferrer">공식 홈페이지 ↗</a>', page)
         # An institution missing from the master still gets a clean header without type or links.

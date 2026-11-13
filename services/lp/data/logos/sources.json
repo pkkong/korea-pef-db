@@ -1,0 +1,23 @@
+{
+ "note": "Official marks from each institution site (or Wikipedia infobox), cut to 96px squares on 2026-11-13. Collected by .github/workflows/collect-lp-logo-candidates.yml.",
+ "sources": {
+  "cwma": "https://www.cw.or.kr (link rel=icon)",
+  "geps": "https://www.geps.or.kr (apple-touch-icon svg)",
+  "kamco": "https://www.kamco.or.kr (shortcut icon)",
+  "kbiz": "https://www.kbiz.or.kr/file/resource/image/AOS_192.png",
+  "kdb": "https://www.kdb.co.kr/wcmscontents/hmp/ch/bi/bi/rc/img_symbol_chbi.png",
+  "kgrowth": "https://www.kgrowth.or.kr (apple-touch-icon, symbol cropped)",
+  "koreapost": "https://www.koreapost.go.kr (shortcut icon png, symbol cropped)",
+  "ktcu": "https://www.ktcu.or.kr (shortcut icon)",
+  "kvic": "https://www.kvic.or.kr (header logo, symbol cropped)",
+  "mmaa": "https://www.mmaa.or.kr/images/common/logo.png (symbol cropped)",
+  "nps": "https://fund.nps.or.kr (apple-touch-icon)",
+  "pmaa": "https://www.pmaa.or.kr/icon.png",
+  "poba": "https://www.poba.or.kr (shortcut icon)",
+  "sba": "https://www.sba.seoul.kr (apple-touch-icon)",
+  "suhyup": "ko.wikipedia.org 수산업협동조합중앙회 infobox logo (symbol cropped)",
+  "tp": "https://www.tp.or.kr (favicon)",
+  "cu": "https://www.cu.co.kr (header logo, symbol cropped)",
+  "ibk": "https://www.ibk.co.kr (apple-touch-icon, symbol cropped)"
+ }
+}
