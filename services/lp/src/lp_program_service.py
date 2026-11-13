@@ -137,11 +137,39 @@ def source(url, label='공식 원문'):
         return h(label)
     return f'<a href="{h(url)}" target="_blank" rel="noopener">{h(label)} ↗</a>'
 
-CSS = '''*{box-sizing:border-box}body{margin:0;background:#fff;color:#171717;font:15px/1.65 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif}main{max-width:1000px;margin:auto;padding:32px 24px 110px}a{color:inherit;text-underline-offset:4px}header{border-bottom:1px solid #e8e8e8;padding-bottom:22px;margin-bottom:24px}h1{word-break:keep-all;overflow-wrap:break-word;font-size:28px;line-height:1.35;letter-spacing:-1px;margin:12px 0}h2{font-size:19px;margin:32px 0 12px}p{margin:8px 0}.muted,small{color:#737373}small{display:block}.eyebrow{font-size:12px;letter-spacing:1px;color:#666}.controls{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0}input,select{font:inherit;border:1px solid #ddd;border-radius:6px;padding:10px;background:white}input{flex:1;min-width:180px}.program{padding:22px 0;border-bottom:1px solid #e8e8e8}.program h2{font-size:18px;margin:8px 0}.program a{text-decoration:none}.program a:hover{text-decoration:underline}.badge{font-size:12px;background:#f3f5f6;border-radius:4px;padding:4px 8px;color:#414b54}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding:20px 0;border-block:1px solid #eee}.facts strong{display:block}.timeline{padding-left:20px}.timeline li{padding:0 0 22px 12px}.timeline time{font-size:13px;color:#737373}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:15px 10px;border-bottom:1px solid #eee;vertical-align:top}th{font-size:12px;color:#737373}.scroll{overflow:auto}nav{position:fixed;bottom:0;left:0;right:0;background:#fffffff5;border-top:1px solid #eee;display:flex;justify-content:center;gap:80px;padding:16px;backdrop-filter:blur(10px)}nav a{text-decoration:none;color:#777}nav .active{color:#171717;font-weight:700}.notice{font-size:13px;color:#737373;background:#f8f8f8;padding:14px 16px;margin:24px 0}[hidden]{display:none!important}@media(max-width:600px){main{padding:22px 18px 90px}h1{font-size:23px}.facts{grid-template-columns:1fr 1fr}nav{gap:65px}td{min-width:105px}}'''
+CSS = '''*{box-sizing:border-box}body{margin:0;background:#fff;color:#171717;font:15px/1.65 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif}main{max-width:1000px;margin:auto;padding:32px 24px 110px}a{color:inherit;text-underline-offset:4px}header{border-bottom:1px solid #e8e8e8;padding-bottom:22px;margin-bottom:24px}h1{word-break:keep-all;overflow-wrap:break-word;font-size:28px;line-height:1.35;letter-spacing:-1px;margin:12px 0}h2{font-size:19px;margin:32px 0 12px}p{margin:8px 0}.muted,small{color:#737373}small{display:block}.eyebrow{font-size:12px;letter-spacing:1px;color:#666}.controls{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0}input,select{font:inherit;border:1px solid #ddd;border-radius:6px;padding:10px;background:white}input{flex:1;min-width:180px}.program{padding:22px 0;border-bottom:1px solid #e8e8e8}.program h2{font-size:18px;margin:8px 0}.program a{text-decoration:none}.program a:hover{text-decoration:underline}.badge{font-size:12px;background:#f3f5f6;border-radius:4px;padding:4px 8px;color:#414b54}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding:20px 0;border-block:1px solid #eee}.facts strong{display:block}.timeline{padding-left:20px}.timeline li{padding:0 0 22px 12px}.timeline time{font-size:13px;color:#737373}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:15px 10px;border-bottom:1px solid #eee;vertical-align:top}th{font-size:12px;color:#737373}.scroll{overflow:auto}nav:where(.bottom-nav){position:fixed;bottom:0;left:0;right:0;background:#fffffff5;border-top:1px solid #eee;display:flex;justify-content:center;gap:80px;padding:16px;backdrop-filter:blur(10px)}nav:where(.bottom-nav) a{text-decoration:none;color:#777}nav:where(.bottom-nav) .active{color:#171717;font-weight:700}.notice{font-size:13px;color:#737373;background:#f8f8f8;padding:14px 16px;margin:24px 0}[hidden]{display:none!important}@media(max-width:600px){main{padding:22px 18px 90px}h1{font-size:23px}.facts{grid-template-columns:1fr 1fr}nav:where(.bottom-nav){gap:65px}td{min-width:105px}}'''
 
 CSS += """.investment-purpose{padding:16px 0;border-bottom:1px solid #e3e8ee}.investment-purpose>strong{font-size:14px;color:#66717e}.investment-purpose p{margin:6px 0;font-size:16px}.investment-purpose>a{font-size:13px;color:#456181}.back{font-size:14px;color:#6d7783;text-decoration:none}.detail-header{margin-top:22px;padding-bottom:22px}.institution{font-size:15px;color:#456181}.detail-meta{display:flex;align-items:center;justify-content:space-between;gap:16px}.detail-meta>a{font-size:14px;color:#365d87}.detail-header h1{margin:12px 0 20px}.event-list{list-style:none;padding:0;margin:0;border-top:2px solid #344c68}.event{display:grid;grid-template-columns:160px minmax(0,1fr) 55px;gap:18px;padding:14px 0;border-bottom:1px solid #e3e8ee;align-items:start}.event time{font-size:14px;color:#53677f;font-variant-numeric:tabular-nums}.event strong{font-size:16px;font-weight:600}.event>a{font-size:13px;color:#4b6786}.event small{font-size:13px;margin-top:4px}.planned{background:#f8f9fb}.planned-label{font-size:12px;color:#687d94;border:1px solid #dce3ec;border-radius:3px;padding:2px 5px;margin-left:6px}#offering .facts{grid-template-columns:1fr 2fr;border-top:1px solid #e3e8ee}section{margin-bottom:30px}#schedule h2{margin-top:0}#selection{margin-bottom:0}@media(max-width:600px){.event{grid-template-columns:minmax(0,1fr) 48px;gap:5px 10px;padding:14px 0}.event time{grid-column:1;grid-row:1}.event>div{grid-column:1/-1;grid-row:2}.event>a{grid-column:2;grid-row:1}.event time{font-size:13px}.event strong{font-size:15px}.detail-meta{align-items:start}.facts strong{font-size:15px}}"""
 
 CSS += """.stage-flow{display:flex;list-style:none;padding:12px 0;gap:20px;color:#53677f;font-size:14px}.stage-flow li+li:before{content:"→";margin-right:20px;color:#aaa}.planned-label:empty{display:none}#offering .facts:has(>div:nth-child(3)){grid-template-columns:1fr 1fr 1fr}"""
+
+# 40px monogram slot, like the publisher and GP logo circles in 브리프·GP rows.
+INSTITUTION_MARKS = {
+    'kgrowth': '성장', 'ibk': 'IBK', 'kdb': 'KDB', 'kexim': '수은', 'koreapost': '우본', 'pck_pension': '총회',
+    'ktcu': '교공', 'kfinco': '전문', 'cu': '신협', 'kamco': '캠코', 'sema': '과기', 'kbiz': '중기', 'mmaa': '군공',
+    'pmaa': '경찰', 'poba': '행공', 'tp': '사학', 'kfcc': 'MG', 'moel_iaci': '산재', 'moel_eif': '고용',
+    'geps': '공무', 'nps': 'NPS', 'cwma': '건근', 'nh_central': '농협', 'suhyup': '수협', 'kic': 'KIC',
+}
+
+
+def institution_mark(institution_id, name):
+    mark = INSTITUTION_MARKS.get(institution_id)
+    if mark:
+        return mark
+    name = re.sub(r'^(한국|대한|주식회사)', '', str(name or '')).strip()
+    return name[:2] or 'LP'
+
+
+def service_header(path=None):
+    """Same header as 브리프 and GP: service title and section tabs."""
+    on_institutions = str(path or '').startswith('institution')
+    tab = lambda label, href, active: (f'<a class="brief-section-tab{" active" if active else ""}" href="{href}"'
+                                       + (' aria-current="page"' if active else '') + f'>{label}</a>')
+    return ('<header class="app-header lp-app-header"><div class="service-bar"><strong class="service-title">LP</strong></div>'
+            '<nav class="brief-section-tabs" aria-label="LP 메뉴">'
+            + tab('출자사업', 'index.html', not on_institutions)
+            + tab('출자기관', 'institution-directory.html', on_institutions) + '</nav></header>')
+
 
 def shell(title, body, as_of, description='', path=None):
     sample_css = (Path(__file__).with_name('lp_sample.css')).read_text()
@@ -152,7 +180,7 @@ def shell(title, body, as_of, description='', path=None):
     meta = (f'<meta name="description" content="{h(description)}"><meta property="og:type" content="website">'
             f'<meta property="og:title" content="{h(title)} · LP"><meta property="og:description" content="{h(description)}">'
             + (f'<link rel="canonical" href="{h(lp_url)}/{h(path)}"><meta property="og:url" content="{h(lp_url)}/{h(path)}">' if path is not None else ''))
-    return f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{h(title)} · LP</title>{meta}<link rel="stylesheet" href="/assets/service.css"><style>{CSS}\n{sample_css}</style></head><body class="lp-sample"><main><div class="sample-brand"><a href="{newsletter_url}/">Korea PEF</a><span>LP</span></div>{body}</main><nav class="bottom-nav" aria-label="하단 메뉴"><a href="{newsletter_url}/"><span aria-hidden="true" class="nav-dot nav-icon-brief"></span><strong>브리프</strong></a><a class="active" aria-current="page" href="index.html"><span aria-hidden="true" class="nav-dot nav-icon-lp"></span><strong>LP</strong></a><a href="{gp_url}/"><span aria-hidden="true" class="nav-dot nav-icon-gp"></span><strong>GP</strong></a></nav></body></html>'
+    return f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{h(title)} · LP</title>{meta}<link rel="stylesheet" href="/assets/service.css"><style>{CSS}\n{sample_css}</style></head><body class="lp-sample"><main>{service_header(path)}{body}</main><nav class="bottom-nav" aria-label="하단 메뉴"><a href="{newsletter_url}/"><span aria-hidden="true" class="nav-dot nav-icon-brief"></span><strong>브리프</strong></a><a class="active" aria-current="page" href="index.html"><span aria-hidden="true" class="nav-dot nav-icon-lp"></span><strong>LP</strong></a><a href="{gp_url}/"><span aria-hidden="true" class="nav-dot nav-icon-gp"></span><strong>GP</strong></a></nav></body></html>'
 
 PUBLIC_NOTICE_CONTEXT_VERSION = 'lp-public-notice-context-v1'
 
@@ -270,11 +298,11 @@ def build(data, out, gp_profiles=None):
         if '미확인' in amount:
             # A total that is not this PE track's allocation is not a list amount.
             amount = ''
-        return f'<article class="program" data-status="{h(status)}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"] + " " + p["list_title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}{" · PE·VC 공동" if p.get("mixed_scope") else ""}</span><span class="program-status{' open' if status == '접수 중' else ''}">{h(status)}</span></div><h2 class="program-title">{h(p["list_title"])}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}{dday}</span></div></a></article>'
+        return f'<article class="program" data-status="{h(status)}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"] + " " + p["list_title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><span class="lp-mark" aria-hidden="true">{h(institution_mark(p["institution_id"], p["institution_name"]))}</span><div class="program-body"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}{" · PE·VC 공동" if p.get("mixed_scope") else ""}</span><span class="program-status{' open' if status == '접수 중' else ''}">{h(status)}</span></div><h2 class="program-title">{h(p["list_title"])}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}{dday}</span></div></div></a></article>'
     options = ''.join(f'<option value="{h(k)}">{h(v[0]["institution_name"])}</option>' for k,v in institutions.items())
     shown = {p['display_status'] for p in programs}
     statuses = ''.join(f'<option>{h(s)}</option>' for s in [*[s for s in STATUS_ORDER if s in shown], *sorted(shown - set(STATUS_ORDER))])
-    body = f'<header class="list-header"><h1>출자사업</h1><span><a class="list-link" href="institution-directory.html">출자기관 {len(institutions)}곳</a> · <span id="count">{len(programs)}개 사업</span></span></header><div class="controls"><input aria-label="사업 검색" placeholder="기관·사업명 검색"><select aria-label="진행 상태"><option value="">모든 상태</option>{statuses}</select><select aria-label="출자기관"><option value="">모든 기관</option>{options}</select></div>'+''.join(row(p) for p in programs)+'<p id="empty" hidden>조건에 맞는 사업이 없습니다.</p>'
+    body = f'<header class="list-header"><p class="result-summary"><span id="count">{len(programs)}개 사업</span> · <a class="list-link" href="institution-directory.html">출자기관 {len(institutions)}곳</a></p></header><div class="controls"><input aria-label="사업 검색" placeholder="기관·사업명 검색"><select aria-label="진행 상태"><option value="">모든 상태</option>{statuses}</select><select aria-label="출자기관"><option value="">모든 기관</option>{options}</select></div>'+''.join(row(p) for p in programs)+'<p id="empty" hidden>조건에 맞는 사업이 없습니다.</p>'
     body += '''<script>const q=document.querySelector('input'),s=document.querySelectorAll('select');function filter(){let n=0;document.querySelectorAll('.program').forEach(r=>{r.hidden=!((r.textContent+" "+r.dataset.search).toLowerCase().includes(q.value.toLowerCase())&&(!s[0].value||r.dataset.status===s[0].value)&&(!s[1].value||r.dataset.institution===s[1].value));if(!r.hidden)n++});document.querySelector('#count').textContent=n+'개 사업';document.querySelector('#empty').hidden=n!==0}q.addEventListener('input',filter);s.forEach(e=>e.addEventListener('change',filter));(function(){const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());const today=Date.parse(p+'T00:00:00Z');document.querySelectorAll('[data-lp-dday]').forEach(e=>{const n=Math.round((Date.parse(e.dataset.lpDday+'T00:00:00Z')-today)/86400000);e.textContent=n>0?' · D-'+n:(n===0?' · 오늘 마감':'')})})();</script>'''
     (out/'index.html').write_text(shell('출자사업',body,as_of,path=''))
     for p in programs:
@@ -334,9 +362,11 @@ def build(data, out, gp_profiles=None):
         selected = selection_count(group)
         last = max(max(e['date'] for e in p['events']) for p in group)
         meta = f'출자사업 {len(group)}건' + (f' · 선정 운용사 {selected}곳' if selected else '')
-        rows += (f'<article class="program"><a class="program-link" href="institution-{h(key)}.html"><h2 class="program-title">{h(group[0]["institution_name"])}</h2>'
-                 f'<div class="program-bottom"><span>{h(meta)}</span><span>{h(short_date(last))} 최근 공고·결과</span></div></a></article>')
-    body = f'<a class="back" href="index.html">← 출자사업</a><header class="list-header"><h1>출자기관</h1><span>{len(directory)}곳</span></header>{rows}'
+        rows += (f'<article class="program"><a class="program-link" href="institution-{h(key)}.html">'
+                 f'<span class="lp-mark" aria-hidden="true">{h(institution_mark(key, group[0]["institution_name"]))}</span><div class="program-body">'
+                 f'<h2 class="program-title">{h(group[0]["institution_name"])}</h2>'
+                 f'<div class="program-bottom"><span>{h(meta)}</span><span>{h(short_date(last))} 최근 공고·결과</span></div></div></a></article>')
+    body = f'<header class="list-header"><p class="result-summary">출자기관 {len(directory)}곳</p></header>{rows}'
     (out/'institution-directory.html').write_text(shell('출자기관', body, as_of, description='기관전용 사모펀드 출자사업을 공고한 출자기관 목록입니다.', path='institution-directory.html'))
     for key,group in gp_programs.items():
         gp=gp_index[key]
