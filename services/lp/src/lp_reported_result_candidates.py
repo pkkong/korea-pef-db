@@ -101,6 +101,22 @@ def institutions_in(text: str, aliases: dict[str, tuple[str, ...]]) -> set[str]:
     return found
 
 
+GENERIC_TITLE_WORDS = {'펀드', '위탁', '운용사', '위탁운용사', '선정', '출자', '사업', '공고', '계획', '결과', '국내', '블라인드',
+                       '모집', '대체투자', '사모투자', '블라인드펀드', '출자사업', '하반기', '상반기', '부문', '분야'}
+
+
+def title_words(text: str) -> set[str]:
+    words = set()
+    for word in re.findall(r'[가-힣A-Za-z0-9]{2,}', text or ''):
+        if word in GENERIC_TITLE_WORDS or re.fullmatch(r'20\d{2}년?|\d+', word):
+            continue
+        words.add(word)
+        # Korean compounds: also match on 2-character leading pieces like 남부권 → 남부.
+        if re.fullmatch(r'[가-힣]{3,}', word):
+            words.add(word[:2])
+    return words - GENERIC_TITLE_WORDS
+
+
 def is_result_report(title: str) -> bool:
     return bool(RESULT_WORDS.search(title) and MANAGER_WORDS.search(title) and not FUTURE_WORDS.search(title))
 
@@ -155,10 +171,19 @@ def find_candidates(programs: list[dict], articles: list[dict], reported: list[d
         }
         matched = False
         for inst in sorted(insts):
-            for program in programs_by_inst.get(inst, []):
-                program_year = _program_year(program)
-                if program_year is not None and program_year not in (year, year - 1):
-                    continue
+            pool = [p for p in programs_by_inst.get(inst, [])
+                    if _program_year(p) is None or _program_year(p) in (year, year - 1)]
+            # Prefer programs whose title shares a distinctive word with the headline
+            # (남부권, 세컨더리, 무공해차 ...). A headline without one can only be about
+            # a program that has no official roster yet.
+            words = title_words(title)
+            overlap = {p['id']: len(words & title_words(f"{p.get('title', '')} {p.get('display_title') or ''}")) for p in pool}
+            best = max(overlap.values(), default=0)
+            if best:
+                pool = [p for p in pool if overlap[p['id']] == best]
+            else:
+                pool = [p for p in pool if not _has_official_result(p)]
+            for program in pool:
                 pid = program['id']
                 existing = reported_by_program.get(pid)
                 if _has_official_result(program):
@@ -204,15 +229,23 @@ def render_markdown(result: dict, since: str) -> str:
     return '\n'.join(lines) + '\n'
 
 
-def fetch_articles(since: date) -> list[dict]:
+def fetch_articles(since: date, page_size: int = 1000) -> list[dict]:
+    """All Brief articles since `since`, page by page (PostgREST caps one response)."""
     base = os.environ['SUPABASE_URL'].rstrip('/')
     key = os.environ['SUPABASE_PUBLISHABLE_KEY']
-    query = urllib.parse.urlencode({'select': NEWSLETTER_FIELDS, 'issue_date': f'gte.{since.isoformat()}',
-                                    'order': 'issue_date.desc', 'limit': '5000'})
-    request = urllib.request.Request(f'{base}/rest/v1/{NEWSLETTER_VIEW}?{query}',
-                                     headers={'apikey': key, 'Authorization': f'Bearer {key}', 'Accept': 'application/json'})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode('utf-8'))
+    rows: list[dict] = []
+    for offset in range(0, 100_000, page_size):
+        query = urllib.parse.urlencode({'select': NEWSLETTER_FIELDS, 'issue_date': f'gte.{since.isoformat()}',
+                                        'order': 'issue_date.desc,article_id.asc', 'limit': str(page_size),
+                                        'offset': str(offset)})
+        request = urllib.request.Request(f'{base}/rest/v1/{NEWSLETTER_VIEW}?{query}',
+                                         headers={'apikey': key, 'Authorization': f'Bearer {key}', 'Accept': 'application/json'})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            page = json.loads(response.read().decode('utf-8'))
+        rows.extend(page)
+        if len(page) < page_size:
+            break
+    return rows
 
 
 def fetch_programs() -> list[dict]:

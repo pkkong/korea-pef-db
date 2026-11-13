@@ -9,8 +9,8 @@ from services.lp.src.lp_reported_result_candidates import (
 )
 
 
-def program(pid, inst, name, dates, selected=None):
-    return {'id': pid, 'institution_id': inst, 'institution_name': name, 'title': pid,
+def program(pid, inst, name, dates, selected=None, title=None):
+    return {'id': pid, 'institution_id': inst, 'institution_name': name, 'title': title or pid,
             'events': [{'date': d} for d in dates], 'selected_gps': selected or []}
 
 
@@ -56,7 +56,7 @@ class CandidateMatchingTests(unittest.TestCase):
         self.programs = [
             program('sema-2026-x', 'sema', '과학기술인공제회', ['2026-08-14']),
             program('mmaa-2026-x', 'mmaa', '군인공제회', ['2026-07-31']),
-            program('ibk-2026-x', 'ibk', 'IBK기업은행', ['2026-07-08'], selected=[{'name': 'A'}]),
+            program('ibk-2026-x', 'ibk', 'IBK기업은행', ['2026-07-08'], selected=[{'name': 'A'}], title='2026 IBK 동행펀드 출자사업'),
             program('sema-2023-x', 'sema', '과학기술인공제회', ['2023-08-01']),
         ]
         self.reported = [
@@ -94,6 +94,17 @@ class CandidateMatchingTests(unittest.TestCase):
         self.assertEqual('결과 미반영', reasons['kbiz-2026-x'])
         self.assertTrue(reasons['ibk-2026-x'].startswith('공식 명단 있음'))
         self.assertEqual('kbiz-2026-x', result['candidates'][0]['program_id'])
+
+    def test_headline_words_pick_the_program(self):
+        programs = [program('kg-zero', 'kgrowth', '한국성장금융', ['2026-09-09'], selected=[{'name': 'A'}], title='2026 무공해차 인프라펀드'),
+                    program('kg-busan', 'kgrowth', '한국성장금융', ['2026-09-11'], selected=[{'name': 'B'}], title='2026 부산 미래산업 전환펀드 2호'),
+                    program('kdb-south', 'kdb', '한국산업은행', ['2026-07-29'], title='『2026 남부권 지역성장지원펀드』위탁운용사 선정계획 공고'),
+                    program('kdb-sec', 'kdb', '한국산업은행', ['2026-06-30'], title='『2026 회수시장 지원 세컨더리 펀드』위탁운용사 선정계획 공고')]
+        result = find_candidates(programs, [
+            article('2026-09-11', 'JKL인베, 성장금융 무공해차 인프라펀드 GP 선정', 'https://example.com/zero'),
+            article('2026-07-30', '산은 남부권 지역성장펀드 GP에 더함파트너스 등 선정', 'https://example.com/south'),
+        ], [], self.aliases)
+        self.assertEqual(['kdb-south', 'kg-zero'], sorted(c['program_id'] for c in result['candidates']))
 
     def test_duplicate_urls_count_once_and_unknown_programs_are_listed_separately(self):
         result = find_candidates(self.programs, [
