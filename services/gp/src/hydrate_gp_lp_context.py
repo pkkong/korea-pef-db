@@ -9,6 +9,7 @@ import json
 import os
 import sqlite3
 import sys
+import time
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
@@ -262,6 +263,18 @@ def hydrate_context(db_path: Path, payload: dict[str, object]) -> dict[str, int]
     }
 
 
+def with_retries(fetch, attempts: int = 3, delays: tuple[float, ...] = (3.0, 10.0)):
+    """Retry a contract read on network errors; validation errors fail at once."""
+    for attempt in range(attempts):
+        try:
+            return fetch()
+        except OSError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(delays[min(attempt, len(delays) - 1)])
+    raise AssertionError("unreachable")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Hydrate a temporary GP build DB from public LP notice context")
     parser.add_argument("--db", type=Path, required=True)
@@ -271,9 +284,9 @@ def main(argv: list[str] | None = None) -> int:
     api_key = os.environ.get("SUPABASE_PUBLISHABLE_KEY") or os.environ.get("SUPABASE_ANON_KEY", "")
     try:
         if args.context_url or not (supabase_url and api_key):
-            payload = fetch_context(args.context_url or DEFAULT_LP_CONTEXT_URL)
+            payload = with_retries(lambda: fetch_context(args.context_url or DEFAULT_LP_CONTEXT_URL))
         else:
-            payload = fetch_context_rpc(supabase_url, api_key)
+            payload = with_retries(lambda: fetch_context_rpc(supabase_url, api_key))
         result = hydrate_context(args.db, payload)
     except (OSError, ValueError, sqlite3.Error, GPLPContextError) as exc:
         print(f"FAIL GP LP context: {exc}", file=sys.stderr)

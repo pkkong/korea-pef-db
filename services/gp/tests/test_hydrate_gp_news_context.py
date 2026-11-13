@@ -120,5 +120,39 @@ class GPNewsContextTests(unittest.TestCase):
         self.assertEqual(tags, 4)
 
 
+
+class ContractReadRetries(unittest.TestCase):
+    """A transient network error is retried; the GP deploy step itself is continue-on-error."""
+
+    def test_retries_network_errors_then_succeeds(self) -> None:
+        from services.gp.src.hydrate_gp_news_context import with_retries
+
+        calls = []
+
+        def flaky():
+            calls.append(1)
+            if len(calls) < 3:
+                raise OSError("reset")
+            return "ok"
+
+        self.assertEqual(with_retries(flaky, delays=(0, 0)), "ok")
+        self.assertEqual(len(calls), 3)
+
+    def test_gives_up_after_three_and_does_not_retry_bad_payloads(self) -> None:
+        from services.gp.src.hydrate_gp_news_context import with_retries
+
+        with self.assertRaises(OSError):
+            with_retries(lambda: (_ for _ in ()).throw(OSError("down")), delays=(0, 0))
+        calls = []
+
+        def invalid():
+            calls.append(1)
+            raise ValueError("bad payload")
+
+        with self.assertRaises(ValueError):
+            with_retries(invalid, delays=(0, 0))
+        self.assertEqual(len(calls), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -362,6 +362,10 @@ def prepare(current, report, gp_profiles=None):
         built = build(data, out, gp_profiles=gp_profiles)
         # LP -> GP public contract, served by lp_public_notice_context().
         data['public_notice_context'] = built['public_notice_context']
+        if gp_profiles:
+            # The GP contract this publication used; the fallback for the next
+            # publication if GP cannot be read then.
+            data['gp_profile_contract'] = {'profiles': dict(sorted(gp_profiles.items()))}
         pages = {p.name:p.read_text() for p in out.glob('*.html')}
         from lp_review_preview import render_review
         pages['review.html'] = render_review(data, report, current)
@@ -404,6 +408,22 @@ def load_gp_profiles():
     return profiles
 
 
+def gp_profiles_or_previous(profiles, current):
+    """Keep the last good GP contract when the GP read fails.
+
+    A GP outage must not strip GP profile links that LP pages already showed
+    (docs/data_operating_model.md: never replace the last good context with
+    nothing). The previous map is the one stored with the published LP data.
+    """
+    if profiles:
+        return profiles
+    started = time.monotonic()
+    kept = (current.get('gp_profile_contract') or {}).get('profiles') or {}
+    kept = {str(pid): str(name) for pid, name in kept.items() if pid and name}
+    publication_phase('gp_profile_contract_previous', started, profiles=len(kept))
+    return kept
+
+
 def prepare_publication(report):
     # Release the pooled database connection before expensive source replay.
     # A single read snapshot keeps the baseline and its revision consistent.
@@ -412,7 +432,7 @@ def prepare_publication(report):
         conn.execute("SET LOCAL statement_timeout='120s'")
         current = baseline(conn)
         revision = publication_revision(conn)
-    gp_profiles = load_gp_profiles()
+    gp_profiles = gp_profiles_or_previous(load_gp_profiles(), current)
     started = time.monotonic()
     data, pages = prepare(current, report, gp_profiles=gp_profiles)
     publication_phase('source_validation_and_pages', started, programs=len(data['programs']))

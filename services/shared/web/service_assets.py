@@ -1125,14 +1125,25 @@ button, input { font: inherit; }
   cursor: pointer;
   text-decoration: none;
 }
+/* LP(출자자)와 GP(운용사) 태그는 색과 앞 표시로 구분한다. */
 .lp-chip {
-  background: var(--surface-muted);
-  color: #5f5f63;
+  background: #eef3f9;
+  color: #3c5677;
 }
 .gp-chip {
-  background: #f2f5f4;
-  color: #4f625e;
+  background: #eef5f1;
+  color: #3e6355;
 }
+.lp-chip::before,
+.gp-chip::before {
+  margin-right: 4px;
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+.lp-chip::before { content: "LP"; }
+.gp-chip::before { content: "GP"; }
 .context-chip:active { background: #e0e0e6; }
 .tag-toggle {
   display: inline-flex;

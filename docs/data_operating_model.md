@@ -92,13 +92,29 @@ Renderer는 public read model을 HTML로 표현하는 역할만 한다.
 | --- | --- | --- | --- |
 | Brief | `archive.json` / Supabase newsletter public read model의 entity link | LP, GP | 관련 뉴스 링크와 기사 출처 표시. LP는 `newsletter_public_issue_articles`에서 선정 결과 보도 후보를 찾는 데도 쓴다(내부 검토용, 공개 화면 직접 반영 없음) |
 | LP | Supabase RPC `lp_public_notice_context()` (`lp-public-notice-context-v1`, 공식 선정 결과만. LP 발행 때 `program_state.data.public_notice_context`로 저장) | GP | GP 프로필의 LP 선정 이력 표시(`hydrate_gp_lp_context.py`). 옛 `lp-notices.json` 정적 파일은 Supabase 설정이 없을 때만 쓰는 fallback |
-| GP | Supabase GP public snapshot/page artifact. LP는 게시 스냅샷의 `gp-<id>.html` 경로와 `<h1>` 운용사명을 읽는다. Brief는 게시 스냅샷 `gps.html`의 `gp-card` `data-name`(공개 운용사명)·`data-url`(`gp-<id>.html`)·`data-active`를 읽는다 | Brief, LP | GP profile URL과 공개 프로필 정보 연결. LP는 GP master ID 또는 정규화한 이름이 하나로 맞을 때만 `GP 프로필` 링크를 단다. Brief는 build DB에 GP 표가 없을 때 이 목록(운용 중이거나 프로필이 있는 운용사)과 `news_gp_alias_overrides.csv`로 기사 GP 태그를 만든다(`load_published_gp_aliases`). 읽기 실패 시 태그만 생략한다 |
+| GP | Supabase GP public snapshot/page artifact. LP는 게시 스냅샷의 `gp-<id>.html` 경로와 `<h1>` 운용사명을 읽는다. Brief는 게시 스냅샷 `gps.html`의 `gp-card` `data-name`(공개 운용사명)·`data-url`(`gp-<id>.html`)·`data-active`를 읽는다(공개 키, 읽기 전용) | Brief, LP | GP profile URL과 공개 프로필 정보 연결. LP는 GP master ID 또는 정규화한 이름이 하나로 맞을 때만 `GP 프로필` 링크를 단다. Brief는 기사 표시용 GP 태그를 만든다(`newsletter_entity_tags.py`: 운용 중이거나 프로필이 있는 운용사 + 검토된 별칭 `news_gp_alias_overrides.csv`). 기사 선별·섹션 분류에는 쓰지 않는다 |
+| LP | 저장소의 LP 기관 마스터 `data/lp_institutions.csv`(기관 코드·이름·별칭) | Brief | Brief 기사 표시용 LP 태그(+ `news_lp_alias_overrides.csv` 언론 약칭). 네트워크 읽기가 없다. 기관 코드는 LP 기관 페이지 `institution-<code>.html`과 같은 값이다 |
 
 - contract에는 공개 가능한 값과 stable schema version만 넣는다. raw excerpt, candidate, confidence, 운영 상태는 넣지 않는다.
 - 소비 서비스는 contract를 자기 임시 build/read model에 복사해 사용할 수 있지만, 발행 서비스의 canonical DB를 직접 쓰거나 바꾸지 않는다.
 - contract fetch 장애는 소비 서비스의 enrichment만 생략하게 한다. 소비 서비스의 통계·목록·기본 발행을 실패시키거나, 마지막 정상 context를 빈 값으로 대체해서는 안 된다.
 - cross-service ID는 참조값이지 cross-service foreign key가 아니다. 각 서비스는 상대 canonical table 없이도 자기 DB를 열고 정리할 수 있어야 한다.
 - service contract의 기본 transport는 Supabase published public read model이다. GitHub Pages JSON은 mirror 검증·장애 복구용 fallback으로만 허용하며, Vercel runtime의 primary data path로 두지 않는다.
+
+### 한 서비스 장애가 다른 서비스에 주는 영향 (2026-11-13 점검, 작성: Claude)
+
+서비스끼리 읽는 것은 모두 부가 정보(enrichment)다. 상대 서비스가 멈추거나 형식이 깨져도 자기 수집·발행은 계속된다.
+
+| 읽는 쪽 ← 상대 | 읽는 것 | 상대 장애 시 동작 | 확인 테스트 |
+| --- | --- | --- | --- |
+| Brief ← GP | `gps.html` 운용사 목록(GP 태그) | GP 태그만 직전 아카이브 값을 유지하고 LP 태그·발행은 계속. 경고 출력 | `test_newsletter_entity_tags.FailureIsolation` |
+| Brief ← LP | 저장소 `data/lp_institutions.csv` | 네트워크 의존 없음. 파일이 깨지면 LP 태그만 직전 값 유지 | 같은 테스트 |
+| LP ← GP | 게시 GP 프로필 목록(`gp-<id>.html`, `<h1>`) | 직전 LP 발행에 저장한 `gp_profile_contract`로 링크 유지. 발행 계속 | `test_lp_program_publish.GpProfileContract` |
+| LP ← Brief | 주간 보도 결과 후보(별도 workflow) | 후보 workflow만 실패. LP 수집·발행과 무관(공개 반영은 사람이 검토한 `data/lp_reported_results.json`) | — |
+| GP ← LP | RPC `lp_public_notice_context()` | 네트워크 오류는 3회 재시도. 그래도 실패하면 해당 단계만 실패(continue-on-error)하고 GP 배포는 계속되지만, 그 배포의 프로필에서는 LP 선정 이력이 빠진다. GP 배포는 수동 실행이라 실행 화면에서 경고를 확인하고 다시 돌린다 | `test_hydrate_gp_lp_context.ContractReadRetries` |
+| GP ← Brief | 게시 아카이브 `archive.json` | 위와 같다(관련 뉴스가 빠진 채 배포될 수 있음) | `test_hydrate_gp_news_context.ContractReadRetries` |
+
+공통으로 막힐 수 있는 것은 공유 기반 두 가지다. ① Supabase 프로젝트 자체가 멈추면 세 서비스의 발행과 Vercel 화면이 함께 영향을 받는다(서비스 간 연결 문제가 아니라 공용 저장소 장애). ② `services/shared` 공용 코드의 오류는 여러 서비스 빌드에 같이 퍼질 수 있어 회귀 검사(`scripts/run_regression_tests.py`)가 막는다. 남은 개선: GP 배포도 LP처럼 직전 정상 context를 보관했다가 쓰는 방식.
 
 ## 뉴스레터 Supabase 데이터 모델
 

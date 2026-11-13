@@ -27,6 +27,7 @@ from services.newsletter.src.daily_news_common import (
     normalize_whitespace,
     split_news_title_badges,
 )
+from services.newsletter.src.newsletter_entity_tags import apply_display_tags
 from services.newsletter.src.news_taxonomy import (
     DEAL_FINANCING_KEYWORDS,
     DEAL_ISSUE_KEYWORDS,
@@ -1055,7 +1056,9 @@ def rewrite_newsletter_archive(
     articles = parse_brief(markdown_path)
     basis_text = parse_brief_basis(markdown_path)
     service_context = read_review_queue_context(out_dir)
+    previous_entries = archive_entries
     archive_entries = refresh_archive_entries_with_context(out_dir, archive_entries, service_context)
+    archive_entries = apply_display_tags(archive_entries, previous_entries)
     html = render_app(
         report_date,
         articles,
@@ -1086,6 +1089,7 @@ def build_newsletter_site(
     basis_text = parse_brief_basis(markdown_path)
     service_context = read_review_queue_context(out_dir)
     archive_entries = build_archive_payload(out_dir, report_date, service_context, archive_limit)
+    archive_entries = apply_display_tags(archive_entries)
 
     assets_dir = public_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)

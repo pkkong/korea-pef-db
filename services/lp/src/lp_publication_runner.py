@@ -25,6 +25,7 @@ KIND = 'lp_publication_process_status_v1'
 PHASE_COUNTS = {
     'gp_profile_contract': {'profiles'},
     'gp_profile_contract_unavailable': set(),
+    'gp_profile_contract_previous': {'profiles'},
     'source_validation_and_pages': {'programs'},
     'collection_report_serialization': {'report_bytes'},
     'collection_report_archive': {'report_bytes', 'manifest_bytes'},

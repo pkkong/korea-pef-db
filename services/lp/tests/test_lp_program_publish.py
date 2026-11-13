@@ -255,6 +255,14 @@ class PublishContracts(unittest.TestCase):
         self.assertNotIn('\\u0000', json.dumps(result))
         self.assertFalse(any('\x00' in page for page in pages.values()))
 
+    def test_publication_stores_the_gp_contract_it_used(self):
+        result, _ = prepare(self.data, self.report, gp_profiles={'138': '에스지프라이빗에쿼티'})
+        self.assertEqual(result['gp_profile_contract'], {'profiles': {'138': '에스지프라이빗에쿼티'}})
+        # Without a GP contract the stored one is left as it was.
+        self.data['gp_profile_contract'] = {'profiles': {'2': 'MBK'}}
+        result, _ = prepare(self.data, self.report)
+        self.assertEqual(result['gp_profile_contract'], {'profiles': {'2': 'MBK'}})
+
     def test_identical_document_is_not_versioned_again_for_check_time(self):
         doc = {'body':'same', 'attachment_hashes':{'file':'v1'}, 'checked_at':'first'}
         later = dict(doc, checked_at='later')
@@ -641,3 +649,13 @@ class GpProfileContract(unittest.TestCase):
              patch('publish_lp_programs.publication_phase') as phase:
             self.assertEqual({}, module.load_gp_profiles())
         self.assertEqual('gp_profile_contract_unavailable', phase.call_args.args[0])
+
+    def test_outage_keeps_the_last_good_gp_contract(self):
+        import publish_lp_programs as module
+        current = {'gp_profile_contract': {'profiles': {'138': '에스지프라이빗에쿼티'}}}
+        with patch('publish_lp_programs.publication_phase') as phase:
+            self.assertEqual({'138': '에스지프라이빗에쿼티'}, module.gp_profiles_or_previous({}, current))
+        self.assertEqual('gp_profile_contract_previous', phase.call_args.args[0])
+        self.assertEqual({'2': 'MBK'}, module.gp_profiles_or_previous({'2': 'MBK'}, current))
+        with patch('publish_lp_programs.publication_phase'):
+            self.assertEqual({}, module.gp_profiles_or_previous({}, {}))

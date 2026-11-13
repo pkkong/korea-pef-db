@@ -14,6 +14,7 @@ import hashlib
 import json
 import sqlite3
 import sys
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -340,6 +341,18 @@ def hydrate_archive(db_path: Path, archive: list[dict[str, object]], max_issues:
     }
 
 
+def with_retries(fetch, attempts: int = 3, delays: tuple[float, ...] = (3.0, 10.0)):
+    """Retry the archive read on network errors; validation errors fail at once."""
+    for attempt in range(attempts):
+        try:
+            return fetch()
+        except OSError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(delays[min(attempt, len(delays) - 1)])
+    raise AssertionError("unreachable")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Hydrate a temporary GP build DB from the published newsletter archive")
     parser.add_argument("--db", type=Path, required=True)
@@ -347,7 +360,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-issues", type=int, default=30)
     args = parser.parse_args(argv)
     try:
-        archive = fetch_archive(args.archive_url)
+        archive = with_retries(lambda: fetch_archive(args.archive_url))
         result = hydrate_archive(args.db, archive, max_issues=max(args.max_issues, 1))
     except (OSError, ValueError, sqlite3.Error, GPNewsContextError) as exc:
         print(f"FAIL GP news context: {exc}", file=sys.stderr)

@@ -202,6 +202,10 @@ jobs:
         env:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          # GP display tags read the published GP directory (read-only, publishable key).
+          # If it cannot be read, articles keep their previous GP tags and the build continues.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           echo "::group::Build site bundle"
           timeout 300 python3 scripts/build_newsletter_bundle.py \

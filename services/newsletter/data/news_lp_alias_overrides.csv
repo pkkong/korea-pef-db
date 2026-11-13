@@ -1,0 +1,18 @@
+lp_code,display_name,alias_name,notes
+pck_pension,총회연금재단,총회연금재단,LP published institution not in data/lp_institutions.csv
+pck_pension,총회연금재단,총회연금,Press shorthand
+pck_pension,총회연금재단,대한예수교장로회 총회연금재단,Full name in press
+kfinco,전문건설공제조합,전문건설공제조합,LP published institution not in data/lp_institutions.csv
+kfinco,전문건설공제조합,K-FINCO,English name
+moel_eif,,고용기금,Press shorthand
+moel_iaci,,산재기금,Press shorthand
+mmaa,,군공,Press shorthand
+poba,,행공,Press shorthand
+poba,,지방행정공제회,Press shorthand
+kbiz,,중기중앙회,Press shorthand
+kbiz,,노란우산공제,Fund run by 중소기업중앙회
+kbiz,,노란우산,Fund run by 중소기업중앙회
+koreapost,,우본,Press shorthand
+cwma,,건근공,Press shorthand
+ktcu,,교직원공제,Press shorthand
+nps,,국민연금,Press shorthand
