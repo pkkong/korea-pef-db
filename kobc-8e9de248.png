@@ -1,0 +1,94 @@
+<html lang="ko">
+
+<head>
+        <meta charset="UTF-8">
+        <meta http-equiv="Pragma" content="no-cache" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>오류가 발생하였습니다.</title>
+
+        <link rel="stylesheet" type="text/css" href="https://www.kobc.or.kr/ebz/common/css/common.css"                                                                                                                                                              >
+        <script src="https://www.kobc.or.kr/ebz/common/js/opensources/jquery/jquery-1.11.3.min.js"></scrip                                                                                                                                                             t>
+        <script src="https://www.kobc.or.kr/ebz/common/js/common/prefixfree.min.js"></script>
+        <script>
+                setTimeout(function () {
+                        window.history.back(-1);
+                }, 5000);
+        </script>
+	<style>
+		@import url('https://fonts.googleapis.com/css?family=Black+Han+Sans|Noto+Sans+KR:100,400,500&display=swap&subset=korean');
+		body {background: #e6ebfd;position: relative;min-height: 100vh;height: 100%;}
+		body:before, body:after {content: '';position: absolute;z-index: -1;}
+		body:before {width: 436px;height: 152px;background:url('https://kobc.or.kr/ebz/common/img/error/bg_shape_01.png') 0 0 no-repeat;left: 0;top: 0;}
+		body:after {width: 742px;height: 472px;background:url('https://kobc.or.kr/ebz/common//img/error/bg_shape_02.png') 100% 0 no-repeat;right: 0;bottom: 0;}
+		*{font-family:'Noto Sans KR', sans-serif;font-size:13px;}
+		div[class$=_wrap] {display: block;margin:0 auto;width: 1000px;padding:200px 0 90px;overflow: hidden;}
+		div[class$=_wrap] >h1 {position: relative;height: 155px;}
+		div[class$=_wrap] >h1:before {content: '';width: 300px;height: 180px;background:url('https://kobc.or.kr/ebz/common//img/error/ico.png') 50% 50% no-repeat;position: absolute;left: 0;top: -13px;background-size: contain;}
+		div[class$=_wrap] >h1 span {text-indent: -99999px;width: 100%;height: 155px;background-size: contain;display: inline-block;}
+		.notfound_wrap >h1 span {background: url('https://kobc.or.kr/ebz/common//img/error/tit.png') 342px 0 no-repeat;}
+		.error_wrap >h1 span {background: url('https://kobc.or.kr/ebz/common//img/error/tit_error.png') 342px 0 no-repeat;}
+		div[class$=_wrap] .tit {color: #36439c;font-family: 'Black Han Sans', sans-serif;font-size: 46px;margin: 60px 0 30px;padding: 44px 0 30px;border-top: 1px solid rgba(193,202,234,0.6);border-bottom: 1px solid rgba(193,202,234,0.6);line-height: 120%; /* text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.2); */}
+		div[class$=_wrap] .txt {color: #00a3d4;font-size: 20px;line-height: 180%;}
+		div[class$=_wrap] .tip {padding:14px 22px;border-radius: 10px;background: rgba(206, 216, 253, 0.3);margin-top:30px;}
+		div[class$=_wrap] li {color: #666;line-height: 140%;margin: 10px 0;position: relative;padding-left: 10px;font-size: 14px;}
+		div[class$=_wrap] li:before {content: '';width: 3px;height: 3px;background: #999;position: absolute;left: 0;top: 9px;}
+
+		@media screen and (max-width:1200px) {
+			body:after {background-position: 0 0;}
+		}
+		@media screen and (max-width:1024px) {
+			div[class$=_wrap] {width: 90%;}
+		}
+		@media screen and (max-width:960px) {
+			div[class$=_wrap] {padding-top: 250px;}
+			div[class$=_wrap] >h1 {height:180px}
+			div[class$=_wrap] >h1:before {width: 260px;height: 150px;left: 50%;top: -89%;-webkit-transform: translateX(-50%);-ms-transform: translateX(-50%);transform: translateX(-50%);background-position: 50% 0;}
+			div[class$=_wrap] >h1 span {width: 517px;height: 155px;background-position: 0 0;margin: 0 auto;display: block;-webkit-transform: scale(0.7);-ms-transform: scale(0.7);transform: scale(0.7);}
+			div[class$=_wrap] .tit {margin-top: -20px;}
+		}
+		@media screen and (max-width:768px) {
+			div[class$=_wrap] >h1:before {height: 120px;top: -73%;}
+			div[class$=_wrap] >h1 span {width: 427px;}
+			div[class$=_wrap] .tit {font-size: 38px;margin-top: -20px;}
+		}
+		@media screen and (max-width:640px) {
+			body:before {width: 100%;}
+			body:before {background-position: 0 -40px;}
+			body:after {display: none;}
+			div[class$=_wrap] {padding: 200px 0 20px;}
+			div[class$=_wrap] >h1 {height: 140px;}
+			div[class$=_wrap] >h1:before {height: 90px;top: -63%;}
+			div[class$=_wrap] >h1 span {width: 289px;height: 145px;}
+			div[class$=_wrap] .tit {font-size: 24px;padding: 24px 0 20px;}
+			div[class$=_wrap] .txt {font-size: 15px;}
+			div[class$=_wrap] .tip {padding: 10px 16px;}
+			div[class$=_wrap] li {font-size: 11px;margin: 5px 0;padding-left: 7px;}
+			div[class$=_wrap] li:before {top: 7px;}
+		}
+		@media screen and (max-width:375px){
+			div[class$=_wrap] >h1 {height: 120px;}
+			div[class$=_wrap] >h1:before {height: 80px;top: -74%;}
+			div[class$=_wrap] >h1 span {width: 250px;height: 75px;}
+			div[class$=_wrap] .tit {font-size: 23px;}
+			div[class$=_wrap] .txt {font-size: 15px;}
+		}
+	</style>
+</head>
+
+<body>
+        <div id="wrap" class="error_wrap">
+                <h1><span>AN EROR OCCURED</span></h1>
+                <div class="tit">
+                        <p>죄송합니다.</p>
+                        <p>페이지 호출 중 오류가 발생했습니다.</p>
+                </div>
+                <div class="txt">
+                        <p>서비스 이용에 불편을 드려 죄송합니다.</p>
+                        <p>잠시 후 이전 화면으로 이동합니다.</p>
+                </div>
+        </div>
+</body>
+
+</html>

@@ -1,0 +1,1106 @@
+[
+ {
+  "code": "cu",
+  "kind": "img:60th Story",
+  "url": "https://www.cu.co.kr/images/web/cu/layout/logo60.png",
+  "file": "cu-9003b14c.png",
+  "bytes": 3239,
+  "type": "image/png"
+ },
+ {
+  "code": "cu",
+  "kind": "img:평생 어부바 신협",
+  "url": "https://www.cu.co.kr/images/web/cu/layout/footerLogo.png",
+  "file": "cu-e59a5d6c.png",
+  "bytes": 4143,
+  "type": "image/png"
+ },
+ {
+  "code": "cu",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.cu.co.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "cu",
+  "kind": "default:favicon",
+  "url": "https://www.cu.co.kr/favicon.ico",
+  "file": "cu-1fc966e6.ico",
+  "bytes": 1150,
+  "type": "image/x-icon;charset=UTF-8"
+ },
+ {
+  "code": "cu",
+  "kind": "wikipedia",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/0/0d/%EC%8B%A0%ED%98%91%EC%A4%91%EC%95%99%ED%9A%8C-flickr.jpg?utm_source=ko.wikipedia.org&utm_campaign=api&utm_content=original",
+  "file": "cu-e5d429ed.jpg",
+  "bytes": 1030659,
+  "type": "image/jpeg"
+ },
+ {
+  "code": "cu",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/Commons-logo.svg/330px-Commons-logo.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "cu-d73cbbed.png",
+  "bytes": 18692,
+  "type": "image/png"
+ },
+ {
+  "code": "cwma",
+  "kind": "link:icon:",
+  "url": "https://www.cw.or.kr/images/favicon.ico",
+  "file": "cwma-cf6dab3b.ico",
+  "bytes": 15406,
+  "type": "image/x-icon"
+ },
+ {
+  "code": "cwma",
+  "kind": "img:건설근로자공제회",
+  "url": "https://www.cw.or.kr/images/f-logo.svg",
+  "file": "cwma-62c202d1.svg",
+  "bytes": 5982,
+  "type": "image/svg+xml"
+ },
+ {
+  "code": "cwma",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.cw.or.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "cwma",
+  "kind": "default:favicon",
+  "url": "https://www.cw.or.kr/favicon.ico",
+  "file": "cwma-19c1352d.ico",
+  "bytes": 1150,
+  "type": "image/x-icon"
+ },
+ {
+  "code": "geps",
+  "kind": "og:image",
+  "url": "https://www.geps.or.kr/favicon.svg",
+  "file": "geps-f69b207d.svg",
+  "bytes": 686,
+  "type": "text/html"
+ },
+ {
+  "code": "geps",
+  "kind": "link:shortcut icon:",
+  "url": "https://www.geps.or.kr/humanframe/theme/geps2022/assets/images/favicon.ico",
+  "file": "geps-f313fccc.ico",
+  "bytes": 41662,
+  "type": "image/vnd.microsoft.icon"
+ },
+ {
+  "code": "geps",
+  "kind": "link:apple-touch-icon-precomposed:",
+  "url": "https://www.geps.or.kr/humanframe/theme/geps2022/assets/images/favicon.svg",
+  "file": "geps-14eafa2e.svg",
+  "bytes": 6433,
+  "type": "image/svg+xml"
+ },
+ {
+  "code": "geps",
+  "kind": "img:공무원연금공단",
+  "url": "https://www.geps.or.kr/humanframe/theme/geps2022/assets/images/logo.svg",
+  "file": "geps-942979a8.svg",
+  "bytes": 11245,
+  "type": "image/svg+xml"
+ },
+ {
+  "code": "geps",
+  "kind": "img:공무원연금공단",
+  "url": "https://www.geps.or.kr/humanframe/theme/geps2022/assets/images/logo.svg?ver=2011124",
+  "file": "geps-7d1311a3.svg",
+  "bytes": 11245,
+  "type": "image/svg+xml"
+ },
+ {
+  "code": "geps",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.geps.or.kr/apple-touch-icon.png",
+  "error": "RemoteDisconnected"
+ },
+ {
+  "code": "geps",
+  "kind": "default:favicon",
+  "url": "https://www.geps.or.kr/favicon.ico",
+  "file": "geps-6fb748ea.ico",
+  "bytes": 41662,
+  "type": "image/vnd.microsoft.icon"
+ },
+ {
+  "code": "ibk",
+  "kind": "og:image",
+  "url": "https://www.ibk.co.kr/img/logo800.png",
+  "file": "ibk-ac206b61.png",
+  "bytes": 49624,
+  "type": "image/png"
+ },
+ {
+  "code": "ibk",
+  "kind": "link:apple-touch-icon-precomposed:",
+  "url": "https://www.ibk.co.kr/img/common/ic_bm_ios.png",
+  "file": "ibk-e7eedd48.png",
+  "bytes": 32884,
+  "type": "image/png"
+ },
+ {
+  "code": "ibk",
+  "kind": "link:shortcut icon:",
+  "url": "https://www.ibk.co.kr/img/common/ibk.ico",
+  "file": "ibk-8ad1a7ef.ico",
+  "bytes": 894,
+  "type": "image/x-icon"
+ },
+ {
+  "code": "ibk",
+  "kind": "img:IBK기업은행",
+  "url": "https://www.ibk.co.kr/img/navigation/h1_logo_sub.gif",
+  "file": "ibk-21874a3e.gif",
+  "bytes": 2454,
+  "type": "image/gif"
+ },
+ {
+  "code": "ibk",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.ibk.co.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "ibk",
+  "kind": "default:favicon",
+  "url": "https://www.ibk.co.kr/favicon.ico",
+  "file": "ibk-789af5ea.ico",
+  "bytes": 894,
+  "type": "image/x-icon"
+ },
+ {
+  "code": "kafi",
+  "kind": "link:shortcut icon:",
+  "url": "https://www.apfs.kr/images/common/kr.ico",
+  "file": "kafi-9bf3c94e.ico",
+  "bytes": 1150,
+  "type": "image/x-icon;charset=UTF-8"
+ },
+ {
+  "code": "kafi",
+  "kind": "img:eg(전자정부)",
+  "url": "https://www.apfs.kr/images/main/eg_logo.png",
+  "file": "kafi-72a1c4dd.png",
+  "bytes": 1567,
+  "type": "image/png;charset=UTF-8"
+ },
+ {
+  "code": "kafi",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.apfs.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "kafi",
+  "kind": "default:favicon",
+  "url": "https://www.apfs.kr/favicon.ico",
+  "error": "HTTPError"
+ },
+ {
+  "code": "kafi",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9d/Ministry_of_Agriculture%2C_Food_and_Rural_Affairs_of_the_Republic_of_Korea_Logo_%28vertical%29.svg/330px-Ministry_of_Agriculture%2C_Food_and_Rural_Affairs_of_the_Republic_of_Korea_Logo_%28vertical%29.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "kafi-7c4db67c.png",
+  "bytes": 13032,
+  "type": "image/png"
+ },
+ {
+  "code": "kamco",
+  "kind": "link:shortcut icon:",
+  "url": "https://www.kamco.or.kr/common/img/common/favicon2-128.ico",
+  "file": "kamco-77820868.ico",
+  "bytes": 111514,
+  "type": "image/vnd.microsoft.icon"
+ },
+ {
+  "code": "kamco",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.kamco.or.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "kamco",
+  "kind": "default:favicon",
+  "url": "https://www.kamco.or.kr/favicon.ico",
+  "error": "HTTPError"
+ },
+ {
+  "code": "kbiz",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.kbiz.or.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "kbiz",
+  "kind": "default:favicon",
+  "url": "https://www.kbiz.or.kr/favicon.ico",
+  "file": "kbiz-e3496065.ico",
+  "bytes": 1150,
+  "type": "image/vnd.microsoft.icon"
+ },
+ {
+  "code": "kbiz",
+  "kind": "registry",
+  "url": "https://www.kbiz.or.kr/file/resource/image/AOS_192.png",
+  "file": "kbiz-b1e81385.png",
+  "bytes": 20492,
+  "type": "image/png"
+ },
+ {
+  "code": "kdb",
+  "kind": "link:Shortcut Icon:",
+  "url": "https://www.kdb.co.kr/img/favicon.ico",
+  "file": "kdb-e98fb054.ico",
+  "bytes": 1150,
+  "type": "image/x-icon"
+ },
+ {
+  "code": "kdb",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.kdb.co.kr/apple-touch-icon.png",
+  "file": "kdb-1df40ba9.png",
+  "bytes": 4772,
+  "type": "text/html"
+ },
+ {
+  "code": "kdb",
+  "kind": "default:favicon",
+  "url": "https://www.kdb.co.kr/favicon.ico",
+  "file": "kdb-297f5326.ico",
+  "bytes": 4772,
+  "type": "text/html"
+ },
+ {
+  "code": "kdb",
+  "kind": "registry",
+  "url": "https://www.kdb.co.kr/wcmscontents/hmp/ch/bi/bi/rc/img_symbol_chbi.png",
+  "file": "kdb-42c3dc6e.png",
+  "bytes": 29655,
+  "type": "image/png"
+ },
+ {
+  "code": "kdb",
+  "kind": "wikipedia",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/c/c6/KDB%EC%82%B0%EC%97%85%EC%9D%80%ED%96%89_%EC%97%AC%EC%9D%98%EB%8F%84_%EC%A1%B0%ED%98%95%EB%AC%BC.jpg?utm_source=ko.wikipedia.org&utm_campaign=api&utm_content=original",
+  "error": "size:3000001"
+ },
+ {
+  "code": "kdb",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/Commons-logo.svg/330px-Commons-logo.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "kdb-d73cbbed.png",
+  "bytes": 18692,
+  "type": "image/png"
+ },
+ {
+  "code": "kdb",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/18/Financial_Services_Commission_of_the_Republic_of_Korea_Logo_%28vertical%29.svg/330px-Financial_Services_Commission_of_the_Republic_of_Korea_Logo_%28vertical%29.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "kdb-3b531446.png",
+  "bytes": 16079,
+  "type": "image/png"
+ },
+ {
+  "code": "kexim",
+  "kind": "homepage",
+  "url": "https://www.koreaexim.go.kr",
+  "error": "URLError"
+ },
+ {
+  "code": "kexim",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.koreaexim.go.kr/apple-touch-icon.png",
+  "error": "URLError"
+ },
+ {
+  "code": "kexim",
+  "kind": "default:favicon",
+  "url": "https://www.koreaexim.go.kr/favicon.ico",
+  "error": "URLError"
+ },
+ {
+  "code": "kexim",
+  "kind": "registry",
+  "url": "https://www.koreaexim.go.kr/humanframe/theme/resources/assets/img/main/spr_gnb_ci.svg",
+  "error": "URLError"
+ },
+ {
+  "code": "kexim",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8a/Ministry_of_Economy_and_Finance_of_the_Republic_of_Korea_Logo_%28vertical%29.svg/330px-Ministry_of_Economy_and_Finance_of_the_Republic_of_Korea_Logo_%28vertical%29.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "kexim-f3396426.png",
+  "bytes": 16075,
+  "type": "image/png"
+ },
+ {
+  "code": "kexim",
+  "kind": "wikifile:en",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9d/All-currency-symbol.svg/330px-All-currency-symbol.svg.png?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "kexim-9b1f2033.png",
+  "bytes": 4899,
+  "type": "image/png"
+ },
+ {
+  "code": "kexim",
+  "kind": "wikifile:en",
+  "url": "https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/330px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "kexim-c916d612.png",
+  "bytes": 18692,
+  "type": "image/png"
+ },
+ {
+  "code": "kexim",
+  "kind": "wikifile:en",
+  "url": "https://thumb.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/330px-Symbol_category_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "kexim-1c94121e.png",
+  "bytes": 17006,
+  "type": "image/png"
+ },
+ {
+  "code": "kexim",
+  "kind": "wikifile:en",
+  "url": "https://thumb.wikimedia.org/wikipedia/en/thumb/d/db/Symbol_list_class.svg/330px-Symbol_list_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "kexim-aaa840de.png",
+  "bytes": 19036,
+  "type": "image/png"
+ },
+ {
+  "code": "kexim",
+  "kind": "wikifile:en",
+  "url": "https://thumb.wikimedia.org/wikipedia/en/thumb/9/92/The_Export-Import_Bank_of_Korea_logo.png/330px-The_Export-Import_Bank_of_Korea_logo.png?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "kexim-7b204a52.png",
+  "bytes": 17558,
+  "type": "image/png"
+ },
+ {
+  "code": "kfcc",
+  "kind": "homepage",
+  "url": "https://www.kfcc.co.kr",
+  "error": "HTTPError"
+ },
+ {
+  "code": "kfcc",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.kfcc.co.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "kfcc",
+  "kind": "default:favicon",
+  "url": "https://www.kfcc.co.kr/favicon.ico",
+  "file": "kfcc-a53a5f87.ico",
+  "bytes": 1150,
+  "type": "image/x-icon"
+ },
+ {
+  "code": "kfcc",
+  "kind": "wikipedia",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/8/83/Saemaeul_Geumgo_Sanbon_Station_Branch_20240722_%2801%29.jpg?utm_source=ko.wikipedia.org&utm_campaign=api&utm_content=original",
+  "error": "size:3000001"
+ },
+ {
+  "code": "kfinco",
+  "kind": "homepage",
+  "url": "https://www.kfinco.co.kr",
+  "error": "URLError"
+ },
+ {
+  "code": "kfinco",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.kfinco.co.kr/apple-touch-icon.png",
+  "error": "URLError"
+ },
+ {
+  "code": "kfinco",
+  "kind": "default:favicon",
+  "url": "https://www.kfinco.co.kr/favicon.ico",
+  "error": "URLError"
+ },
+ {
+  "code": "kfinco",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fc/Ministry_of_Land%2C_Infrastructure_and_Transport_of_the_Republic_of_Korea_Logo_%28vertical%29.svg/330px-Ministry_of_Land%2C_Infrastructure_and_Transport_of_the_Republic_of_Korea_Logo_%28vertical%29.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "kfinco-35098044.png",
+  "bytes": 13490,
+  "type": "image/png"
+ },
+ {
+  "code": "kgrowth",
+  "kind": "link:apple-touch-icon:",
+  "url": "https://www.kgrowth.or.kr/favicon.ico",
+  "file": "kgrowth-5e958fc0.ico",
+  "bytes": 196608,
+  "type": "image/x-icon"
+ },
+ {
+  "code": "kgrowth",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.kgrowth.or.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "kgrowth",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/18/Financial_Services_Commission_of_the_Republic_of_Korea_Logo_%28vertical%29.svg/330px-Financial_Services_Commission_of_the_Republic_of_Korea_Logo_%28vertical%29.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "kgrowth-3b531446.png",
+  "bytes": 16079,
+  "type": "image/png"
+ },
+ {
+  "code": "kic",
+  "kind": "link:icon:",
+  "url": "https://www.kic.kr/assets/favicon.jpg",
+  "file": "kic-c98390af.jpg",
+  "bytes": 1686,
+  "type": "image/jpeg;charset=UTF-8"
+ },
+ {
+  "code": "kic",
+  "kind": "og:image",
+  "url": "https://kic.kr/assets/images/common/og_image_KR.png",
+  "file": "kic-6b9d64c9.png",
+  "bytes": 1253814,
+  "type": "image/png;charset=UTF-8"
+ },
+ {
+  "code": "kic",
+  "kind": "img:KIC 한국투자공사 로고",
+  "url": "https://www.kic.kr/assets/images/common/logo.svg",
+  "file": "kic-6c5c7f36.svg",
+  "bytes": 5122,
+  "type": "image/svg+xml;charset=UTF-8"
+ },
+ {
+  "code": "kic",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.kic.kr/apple-touch-icon.png",
+  "file": "kic-da40cebb.png",
+  "bytes": 3642,
+  "type": "text/html;charset=UTF-8"
+ },
+ {
+  "code": "kic",
+  "kind": "default:favicon",
+  "url": "https://www.kic.kr/favicon.ico",
+  "file": "kic-c6ea8616.ico",
+  "bytes": 3642,
+  "type": "text/html;charset=UTF-8"
+ },
+ {
+  "code": "kic",
+  "kind": "wikifile:ko",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/5/5f/KIC_Logo_KR.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "file": "kic-e0678304.png",
+  "bytes": 1616,
+  "type": "image/png"
+ },
+ {
+  "code": "kic",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8a/Ministry_of_Economy_and_Finance_of_the_Republic_of_Korea_Logo_%28vertical%29.svg/330px-Ministry_of_Economy_and_Finance_of_the_Republic_of_Korea_Logo_%28vertical%29.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "kic-f3396426.png",
+  "bytes": 16075,
+  "type": "image/png"
+ },
+ {
+  "code": "kic",
+  "kind": "wikifile:en",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/0/0e/KIC_Logo_EN.png?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "file": "kic-37c28f2b.png",
+  "bytes": 1683,
+  "type": "image/png"
+ },
+ {
+  "code": "kobc",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.kobc.or.kr/apple-touch-icon.png",
+  "file": "kobc-8e9de248.png",
+  "bytes": 5756,
+  "type": "text/html"
+ },
+ {
+  "code": "kobc",
+  "kind": "default:favicon",
+  "url": "https://www.kobc.or.kr/favicon.ico",
+  "file": "kobc-30a1196a.ico",
+  "bytes": 5756,
+  "type": "text/html"
+ },
+ {
+  "code": "kobc",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4c/Ministry_of_Oceans_and_Fisheries_of_the_Republic_of_Korea_Logo_%28vertical%29.svg/330px-Ministry_of_Oceans_and_Fisheries_of_the_Republic_of_Korea_Logo_%28vertical%29.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "kobc-dea68b80.png",
+  "bytes": 16484,
+  "type": "image/png"
+ },
+ {
+  "code": "koreapost",
+  "kind": "link:shortcut icon:",
+  "url": "https://www.koreapost.go.kr/img/favicon.ico",
+  "file": "koreapost-4f563956.ico",
+  "bytes": 1406,
+  "type": "image/vnd.microsoft.icon"
+ },
+ {
+  "code": "koreapost",
+  "kind": "link:shortcut icon:",
+  "url": "https://www.koreapost.go.kr/img/seed_ver3_logo-color.png",
+  "file": "koreapost-1ed93a43.png",
+  "bytes": 24563,
+  "type": "image/png"
+ },
+ {
+  "code": "koreapost",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.koreapost.go.kr/apple-touch-icon.png",
+  "file": "koreapost-b285b4e6.png",
+  "bytes": 2381,
+  "type": "text/html;charset=utf-8"
+ },
+ {
+  "code": "koreapost",
+  "kind": "default:favicon",
+  "url": "https://www.koreapost.go.kr/favicon.ico",
+  "file": "koreapost-1466cc27.ico",
+  "bytes": 2381,
+  "type": "text/html;charset=utf-8"
+ },
+ {
+  "code": "kosme",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.kosmes.or.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "kosme",
+  "kind": "default:favicon",
+  "url": "https://www.kosmes.or.kr/favicon.ico",
+  "error": "HTTPError"
+ },
+ {
+  "code": "ktcu",
+  "kind": "link:shortcut icon:",
+  "url": "https://www.ktcu.or.kr/humanframe/theme/pc/assets/images/common/favicon.ico",
+  "file": "ktcu-bce38cc3.ico",
+  "bytes": 9662,
+  "type": "image/x-icon"
+ },
+ {
+  "code": "ktcu",
+  "kind": "img:The-K 한국교직원공제회",
+  "url": "https://www.ktcu.or.kr/humanframe/theme/pc/assets/images/common/logo_thek.png",
+  "file": "ktcu-eb4e735f.png",
+  "bytes": 1050,
+  "type": "image/png"
+ },
+ {
+  "code": "ktcu",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.ktcu.or.kr/apple-touch-icon.png",
+  "file": "ktcu-48fcd37f.png",
+  "bytes": 7545,
+  "type": "text/html"
+ },
+ {
+  "code": "ktcu",
+  "kind": "default:favicon",
+  "url": "https://www.ktcu.or.kr/favicon.ico",
+  "file": "ktcu-d331052a.ico",
+  "bytes": 9662,
+  "type": "image/x-icon"
+ },
+ {
+  "code": "kvic",
+  "kind": "link:shortcut icon:",
+  "url": "https://www.kvic.or.kr/resources/favicon/favicon.ico",
+  "file": "kvic-84842810.ico",
+  "bytes": 1150,
+  "type": "image/x-icon;charset=UTF-8"
+ },
+ {
+  "code": "kvic",
+  "kind": "img:한국벤처투자 로고",
+  "url": "https://www.kvic.or.kr/resources/img/common/logo.png",
+  "file": "kvic-29d2ac0f.png",
+  "bytes": 2284,
+  "type": "image/png;charset=UTF-8"
+ },
+ {
+  "code": "kvic",
+  "kind": "img:한국벤처투자 로고 white",
+  "url": "https://www.kvic.or.kr/resources/img/common/logo-w.png",
+  "file": "kvic-28bb6863.png",
+  "bytes": 1599,
+  "type": "image/png;charset=UTF-8"
+ },
+ {
+  "code": "kvic",
+  "kind": "img:KVIC",
+  "url": "https://www.kvic.or.kr/resources/img/main/logo_txt_kvic-lg.svg",
+  "file": "kvic-16b72338.svg",
+  "bytes": 949,
+  "type": "image/svg+xml;charset=UTF-8"
+ },
+ {
+  "code": "kvic",
+  "kind": "img:한국벤처투자 로고",
+  "url": "https://www.kvic.or.kr/resources/img/common/footer-logo.png",
+  "file": "kvic-9898605f.png",
+  "bytes": 1318,
+  "type": "image/png;charset=UTF-8"
+ },
+ {
+  "code": "kvic",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.kvic.or.kr/apple-touch-icon.png",
+  "file": "kvic-50c94ab8.png",
+  "bytes": 2401,
+  "type": "text/html;charset=UTF-8"
+ },
+ {
+  "code": "kvic",
+  "kind": "default:favicon",
+  "url": "https://www.kvic.or.kr/favicon.ico",
+  "file": "kvic-fc79f391.ico",
+  "bytes": 2401,
+  "type": "text/html;charset=UTF-8"
+ },
+ {
+  "code": "kvic",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f5/Ministry_of_SMEs_and_Startups_of_the_Republic_of_Korea_Logo_%28vertical%29.svg/330px-Ministry_of_SMEs_and_Startups_of_the_Republic_of_Korea_Logo_%28vertical%29.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "kvic-ed0d0bf7.png",
+  "bytes": 13535,
+  "type": "image/png"
+ },
+ {
+  "code": "mmaa",
+  "kind": "homepage",
+  "url": "https://www.mmaa.or.kr",
+  "error": "URLError"
+ },
+ {
+  "code": "mmaa",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.mmaa.or.kr/apple-touch-icon.png",
+  "error": "URLError"
+ },
+ {
+  "code": "mmaa",
+  "kind": "default:favicon",
+  "url": "https://www.mmaa.or.kr/favicon.ico",
+  "error": "URLError"
+ },
+ {
+  "code": "mmaa",
+  "kind": "registry",
+  "url": "https://www.mmaa.or.kr/images/common/logo.png",
+  "error": "URLError"
+ },
+ {
+  "code": "moel_eif",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.moel.go.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "moel_eif",
+  "kind": "default:favicon",
+  "url": "https://www.moel.go.kr/favicon.ico",
+  "error": "HTTPError"
+ },
+ {
+  "code": "moel_eif",
+  "kind": "wikipedia",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/c/cc/Ministry_of_Employment_%26_Labor_%28South_Korea%29.JPG?utm_source=ko.wikipedia.org&utm_campaign=api&utm_content=original",
+  "error": "size:3000001"
+ },
+ {
+  "code": "moel_eif",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/Commons-logo.svg/330px-Commons-logo.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "moel_eif-d73cbbed.png",
+  "bytes": 18692,
+  "type": "image/png"
+ },
+ {
+  "code": "moel_eif",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3f/Emblem_of_the_Government_of_the_Republic_of_Korea.svg/330px-Emblem_of_the_Government_of_the_Republic_of_Korea.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "moel_eif-4f28cae7.png",
+  "bytes": 20355,
+  "type": "image/png"
+ },
+ {
+  "code": "moel_eif",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c1/Ministry_of_Employment_and_Labor_of_the_Republic_of_Korea_Logo_%28horizontal%29.svg/330px-Ministry_of_Employment_and_Labor_of_the_Republic_of_Korea_Logo_%28horizontal%29.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "moel_eif-a97493a2.png",
+  "bytes": 7558,
+  "type": "image/png"
+ },
+ {
+  "code": "moel_eif",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/01/Ministry_of_Employment_and_Labor_of_the_Republic_of_Korea_Logo_%28vertical%29.svg/330px-Ministry_of_Employment_and_Labor_of_the_Republic_of_Korea_Logo_%28vertical%29.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "moel_eif-48d55900.png",
+  "bytes": 14575,
+  "type": "image/png"
+ },
+ {
+  "code": "moel_eif",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2e/%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80_%EB%A1%9C%EA%B3%A0_%282010-2016%29.svg/330px-%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80_%EB%A1%9C%EA%B3%A0_%282010-2016%29.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "moel_eif-601dd0fa.png",
+  "bytes": 13229,
+  "type": "image/png"
+ },
+ {
+  "code": "moel_eif",
+  "kind": "wikifile:en",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3f/Emblem_of_the_Government_of_the_Republic_of_Korea.svg/330px-Emblem_of_the_Government_of_the_Republic_of_Korea.svg.png?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "moel_eif-3675c842.png",
+  "bytes": 20355,
+  "type": "image/png"
+ },
+ {
+  "code": "moel_eif",
+  "kind": "wikifile:en",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c1/Emblem_of_the_Government_of_the_Republic_of_Korea_%281949-2016%29.svg/330px-Emblem_of_the_Government_of_the_Republic_of_Korea_%281949-2016%29.svg.png?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "moel_eif-b8b4fdbd.png",
+  "bytes": 34741,
+  "type": "image/png"
+ },
+ {
+  "code": "moel_eif",
+  "kind": "wikifile:en",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e6/Ministry_of_Employment_and_Labor_of_the_Republic_of_Korea_Logo_%28English%29_%28horizontal%29.svg/330px-Ministry_of_Employment_and_Labor_of_the_Republic_of_Korea_Logo_%28English%29_%28horizontal%29.svg.png?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "moel_eif-f9621941.png",
+  "bytes": 10350,
+  "type": "image/png"
+ },
+ {
+  "code": "moel_eif",
+  "kind": "wikifile:en",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/01/Ministry_of_Employment_and_Labor_of_the_Republic_of_Korea_Logo_%28vertical%29.svg/330px-Ministry_of_Employment_and_Labor_of_the_Republic_of_Korea_Logo_%28vertical%29.svg.png?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "moel_eif-dcf6fe8a.png",
+  "bytes": 14575,
+  "type": "image/png"
+ },
+ {
+  "code": "moel_eif",
+  "kind": "wikifile:en",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2e/%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80_%EB%A1%9C%EA%B3%A0_%282010-2016%29.svg/330px-%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80_%EB%A1%9C%EA%B3%A0_%282010-2016%29.svg.png?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "moel_eif-5cebe197.png",
+  "bytes": 13229,
+  "type": "image/png"
+ },
+ {
+  "code": "moel_iaci",
+  "kind": "homepage",
+  "url": "https://www.comwel.or.kr",
+  "error": "HTTPError"
+ },
+ {
+  "code": "moel_iaci",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.comwel.or.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "moel_iaci",
+  "kind": "default:favicon",
+  "url": "https://www.comwel.or.kr/favicon.ico",
+  "error": "HTTPError"
+ },
+ {
+  "code": "moel_iaci",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/01/Ministry_of_Employment_and_Labor_of_the_Republic_of_Korea_Logo_%28vertical%29.svg/330px-Ministry_of_Employment_and_Labor_of_the_Republic_of_Korea_Logo_%28vertical%29.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "moel_iaci-48d55900.png",
+  "bytes": 14575,
+  "type": "image/png"
+ },
+ {
+  "code": "nps",
+  "kind": "link:icon:",
+  "url": "https://fund.nps.or.kr/images/common/favicon.ico",
+  "file": "nps-db816096.ico",
+  "bytes": 15406,
+  "type": "image/x-icon;charset=UTF-8"
+ },
+ {
+  "code": "nps",
+  "kind": "link:icon:",
+  "url": "https://fund.nps.or.kr/images/common/favicon_16x16.png",
+  "file": "nps-3d4e006e.png",
+  "bytes": 521,
+  "type": "image/png;charset=UTF-8"
+ },
+ {
+  "code": "nps",
+  "kind": "link:icon:",
+  "url": "https://fund.nps.or.kr/images/common/favicon_32x32.png",
+  "file": "nps-0bde3384.png",
+  "bytes": 1132,
+  "type": "image/png;charset=UTF-8"
+ },
+ {
+  "code": "nps",
+  "kind": "link:apple-touch-icon:",
+  "url": "https://fund.nps.or.kr/images/common/apple_touch_icon.png",
+  "file": "nps-2d8acb9a.png",
+  "bytes": 11233,
+  "type": "image/png;charset=UTF-8"
+ },
+ {
+  "code": "nps",
+  "kind": "img:NPS국민연금",
+  "url": "https://fund.nps.or.kr/images/common/footer_logo.png",
+  "file": "nps-d5c22d6b.png",
+  "bytes": 4489,
+  "type": "image/png;charset=UTF-8"
+ },
+ {
+  "code": "nps",
+  "kind": "default:apple-touch-icon",
+  "url": "https://fund.nps.or.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "nps",
+  "kind": "default:favicon",
+  "url": "https://fund.nps.or.kr/favicon.ico",
+  "error": "HTTPError"
+ },
+ {
+  "code": "pck_pension",
+  "kind": "homepage",
+  "url": "https://www.pckpension.or.kr",
+  "error": "URLError"
+ },
+ {
+  "code": "pck_pension",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.pckpension.or.kr/apple-touch-icon.png",
+  "error": "URLError"
+ },
+ {
+  "code": "pck_pension",
+  "kind": "default:favicon",
+  "url": "https://www.pckpension.or.kr/favicon.ico",
+  "error": "URLError"
+ },
+ {
+  "code": "pmaa",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.pmaa.or.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "pmaa",
+  "kind": "default:favicon",
+  "url": "https://www.pmaa.or.kr/favicon.ico",
+  "file": "pmaa-9b87c51b.ico",
+  "bytes": 15406,
+  "type": ""
+ },
+ {
+  "code": "pmaa",
+  "kind": "registry",
+  "url": "https://www.pmaa.or.kr/icon.png",
+  "file": "pmaa-ad3a8e40.png",
+  "bytes": 13504,
+  "type": "image/png"
+ },
+ {
+  "code": "pmaa",
+  "kind": "wikipedia",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/f/f8/Police_Mutual_Aid_Association.jpg?utm_source=ko.wikipedia.org&utm_campaign=api&utm_content=original",
+  "file": "pmaa-2b6ba801.jpg",
+  "bytes": 534336,
+  "type": "image/jpeg"
+ },
+ {
+  "code": "poba",
+  "kind": "link:shortcut icon:",
+  "url": "https://www.poba.or.kr/static/img/favicon.png",
+  "file": "poba-85cc77b8.png",
+  "bytes": 4955,
+  "type": "image/png"
+ },
+ {
+  "code": "poba",
+  "kind": "og:image",
+  "url": "https://www.poba.or.kr/static/img/poba_logo.png?ver=20250422",
+  "file": "poba-9ba32bee.png",
+  "bytes": 3918,
+  "type": "image/png"
+ },
+ {
+  "code": "poba",
+  "kind": "img:",
+  "url": "https://www.poba.or.kr/static/lib/tracer/logo3.png",
+  "file": "poba-275e5dc9.png",
+  "bytes": 3654,
+  "type": "image/png"
+ },
+ {
+  "code": "poba",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.poba.or.kr/apple-touch-icon.png",
+  "file": "poba-1c8b4ae4.png",
+  "bytes": 1507,
+  "type": "text/html;charset=utf-8"
+ },
+ {
+  "code": "poba",
+  "kind": "default:favicon",
+  "url": "https://www.poba.or.kr/favicon.ico",
+  "file": "poba-5e7277e9.ico",
+  "bytes": 1507,
+  "type": "text/html;charset=utf-8"
+ },
+ {
+  "code": "sba",
+  "kind": "link:shortcut icon:",
+  "url": "https://www.sba.seoul.kr/img/favicon.ico",
+  "file": "sba-30612b48.ico",
+  "bytes": 32038,
+  "type": "image/x-icon"
+ },
+ {
+  "code": "sba",
+  "kind": "link:apple-touch-icon-precomposed:",
+  "url": "https://www.sba.seoul.kr/img/phone_icon01.png",
+  "file": "sba-dde85636.png",
+  "bytes": 3594,
+  "type": "image/png"
+ },
+ {
+  "code": "sba",
+  "kind": "link:shortcut icon:",
+  "url": "https://www.sba.seoul.kr/img/phone_icon02.png",
+  "file": "sba-80191c4f.png",
+  "bytes": 4486,
+  "type": "image/png"
+ },
+ {
+  "code": "sba",
+  "kind": "img:SBA 서울경제진흥원",
+  "url": "https://www.sba.seoul.kr/img/common/logo_new.png",
+  "file": "sba-54c97ba5.png",
+  "bytes": 3574,
+  "type": "image/png"
+ },
+ {
+  "code": "sba",
+  "kind": "img:SBA",
+  "url": "https://www.sba.seoul.kr/img/common/logo.png",
+  "file": "sba-0ac12732.png",
+  "bytes": 2234,
+  "type": "image/png"
+ },
+ {
+  "code": "sba",
+  "kind": "img:SBA",
+  "url": "https://www.sba.seoul.kr/img/common/foot_logo.png",
+  "file": "sba-2d48e3f8.png",
+  "bytes": 2664,
+  "type": "image/png"
+ },
+ {
+  "code": "sba",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.sba.seoul.kr/apple-touch-icon.png",
+  "file": "sba-113e98b5.png",
+  "bytes": 1820,
+  "type": "text/html"
+ },
+ {
+  "code": "sba",
+  "kind": "default:favicon",
+  "url": "https://www.sba.seoul.kr/favicon.ico",
+  "file": "sba-a47f8a7a.ico",
+  "bytes": 1820,
+  "type": "text/html"
+ },
+ {
+  "code": "sema",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.sema.or.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "sema",
+  "kind": "default:favicon",
+  "url": "https://www.sema.or.kr/favicon.ico",
+  "error": "HTTPError"
+ },
+ {
+  "code": "sema",
+  "kind": "wikifile:ko",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/84/Ministry_of_Science_and_ICT_of_the_Republic_of_Korea_Logo_%28vertical%29.svg/330px-Ministry_of_Science_and_ICT_of_the_Republic_of_Korea_Logo_%28vertical%29.svg.png?utm_source=ko.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "file": "sema-aa786cf4.png",
+  "bytes": 11758,
+  "type": "image/png"
+ },
+ {
+  "code": "suhyup",
+  "kind": "og:image",
+  "url": "https://www.suhyup.co.kr/Web-home/_UI/images/suhyup.jpg",
+  "file": "suhyup-00ae6c85.jpg",
+  "bytes": 13583,
+  "type": "image/jpeg"
+ },
+ {
+  "code": "suhyup",
+  "kind": "link:shortcut icon:",
+  "url": "https://www.suhyup.co.kr/Web-home/_UI/images/favicon.ico",
+  "file": "suhyup-7dc15d67.ico",
+  "bytes": 1150,
+  "type": "image/vnd.microsoft.icon"
+ },
+ {
+  "code": "suhyup",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.suhyup.co.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "suhyup",
+  "kind": "default:favicon",
+  "url": "https://www.suhyup.co.kr/favicon.ico",
+  "error": "HTTPError"
+ },
+ {
+  "code": "suhyup",
+  "kind": "wikipedia",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/b/b5/NFFC_%28SuHyup%29_Logo.svg?utm_source=ko.wikipedia.org&utm_campaign=api&utm_content=original",
+  "file": "suhyup-448583f0.svg",
+  "bytes": 7489,
+  "type": "image/svg+xml"
+ },
+ {
+  "code": "tp",
+  "kind": "default:apple-touch-icon",
+  "url": "https://www.tp.or.kr/apple-touch-icon.png",
+  "error": "HTTPError"
+ },
+ {
+  "code": "tp",
+  "kind": "default:favicon",
+  "url": "https://www.tp.or.kr/favicon.ico",
+  "file": "tp-7361c757.ico",
+  "bytes": 15406,
+  "type": "image/x-icon;charset=UTF-8"
+ }
+]

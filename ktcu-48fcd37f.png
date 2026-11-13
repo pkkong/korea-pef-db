@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>한국교직원공제회</title>
+	<meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no">
+	<meta name="format-detection" content="telephone=no">
+	<meta content="site" name="title">
+	<meta name="keywords" content="site, site keywords">
+	<meta name="copyright" content="site copyright.">    
+    <style type="text/css">
+        html, body, div, span, applet, object, iframe,
+        h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+        a, abbr, acronym, address, big, cite, code,
+        del, dfn, em, img, ins, kbd, q, s, samp,
+        small, strike, strong, sub, sup, tt, var,
+        b, u, i, center,
+        dl, dt, dd, ol, ul, li,
+        fieldset, form, label, legend,
+        table, caption, tbody, tfoot, thead, tr, th, td,
+        article, aside, canvas, details, embed,
+        figure, figcaption, footer, header, hgroup,
+        menu, nav, output, ruby, section, summary,
+        time, mark, audio, video, button {margin:0; padding:0; border:0; vertical-align:baseline; box-sizing:border-box; background-color:#f7f8fb;}
+        .align-auto {margin:0 auto;}
+        .wrapper {position: relative; width:100%; background-color:#f7f8fb; overflow:hidden;}
+        .wrapper #content {position:relative;}
+        .wrapper section {position:relative; width:100%; padding:56px; background-color:#fff; border-radius:24px;}
+        .wrapper.page-pi {background-color:#f7f8fb;}
+        .wrapper.page-pi .wrap-pi-cont {width:1200px; padding:100px 102px 160px 102px; margin:0 auto;}
+        
+        .blind {display:inline-block; position:absolute !important; width:1px; height:1px; margin:-1px; border:0; overflow:hidden; clip:rect(1px, 1px, 1px, 1px); clip-path:inset(50%);}
+        .result-msg {position:relative; text-align:center; padding:24px 0 72px; background-color: #fff;}
+        .result-msg.bot-none {padding:24px 0;}
+        .result-msg.warn .icon {position:relative; border-radius:50%; background-color:#f6bd20;}
+        .result-msg .icon {display:inline-block; width:80px; height:80px; }
+        .result-msg.warn .icon:before,
+        .result-msg.warn .icon:after {content:''; position:absolute; left:50%; background-color:#fff; transform:translateX(-50%);}
+        .result-msg.warn .icon:before {top:27px; width:3px; height:0; border-radius:2px; animation:warnCheck1 .4s forwards ease-out;}
+        .result-msg.warn .icon:after {top:51px; width:4px; height:0; border-radius:50%; animation:.2s warnCheck2 .5s forwards ease-out;}
+                i, em {font-style:normal;}
+        @keyframes warnCheck1 {
+            0% {height:0;}
+            100% {height:21px;}
+        }
+        @keyframes warnCheck2 {
+            0% {height:0;}
+            100% {height:4px;}
+        }
+        
+        .result-msg .copy {display:block; font-size:30px; color:#111; font-weight:700; background-color: #fff;}
+        .result-msg .desc {font-size:20px; color:#555; background-color: #fff;}
+        .result-msg .copy + .desc,
+        .result-msg .copy + [class^=kbtn-] {margin-top:24px;}
+        .result-msg .icon {display:inline-block; width:80px; height:80px; /*background-color:#ccc;*/}
+        .result-msg .icon + .copy {margin-top:32px;}
+        .result-msg-call {font-size:16px; text-align:center; padding:24px; color:#111; background-color:#f7f8fb; border-radius:12px;}
+        .result-msg-call .call-num {display:block; margin-top:8px; font-size:20px; font-weight:700;}
+        .wid-588 {width:588px !important; min-width:588px !important;}
+        .result-msg + .area-box-data {margin-top:48px; font-size:16px; text-align:center;}
+        .result-msg.bot-none + .result-msg-call {margin-top:24px; margin-bottom:24px;}
+        body {min-width:1200px; min-height:100%; font-size:18px; color:#111; line-height:1.5; font-weight:400;}
+        html, body {font-family:'pretendard', 'Noto Sans kr', 'Apple SD Gothic Neo', '맑은 고딕', 'Malgun Gothic', 'Dotum', '돋움', sans-serif;}
+        
+        .area-btn {position:relative; text-align:center; margin:80px -6px 0 -6px; font-size:0;} 
+        .area-btn:after {content:''; display:block; clear:both;}
+        .area-btn [class^=kbtn-] {margin:0 6px;}
+        
+        button[disabled] {cursor:default; /* cursor:not-allowed; */}
+        button.disabled,
+        a.disabled {cursor:default;}
+        .disabled {color:#999 !important;}
+        .disabled:hover,
+        .disabled:focus {color:#999 !important; font-weight:400 !important;}
+        [class^=kbtn-] {display:inline-block; width:auto; min-width:282px; height:64px; font-size:20px; font-weight:700; line-height:normal; padding:0 40px; border:1px solid transparent; border-radius:40px; vertical-align:middle; overflow:hidden; box-sizing:border-box;}
+        a[class^=kbtn-] {text-align:center; line-height:64px;}
+        [class^=kbtn-]:focus {opacity:1;}
+        [class^=kbtn-]:hover,
+        [class^=kbtn-]:active,
+        [class^=kbtn-]:focus {box-shadow:8px 8px 16px #00000029;}
+        [class^=kbtn-][disabled] {color:#ccc; background-color:#EEF1F8;}
+        [class^=kbtn-][disabled]:hover,
+        [class^=kbtn-][disabled]:active,
+        [class^=kbtn-][disabled]:focus {box-shadow:none;}
+        
+        .kbtn-l {color:#21409A; background-color:#fff; border:1px solid #21409A !important;}
+        .kbtn-p {color:#fff; background-color:#21409A;} /* point */
+        [class^=kbtn-] {display:inline-block; width:auto; min-width:282px; height:64px; font-size:20px; text-decoration:none; font-weight:700; line-height:normal; padding:0 40px; border:1px solid transparent; border-radius:40px; vertical-align:middle; overflow:hidden; box-sizing:border-box;}
+        button {display:inline-block; border:0; background-color:transparent; font-size:inherit; text-align:center; cursor:pointer; overflow:visible; -webkit-appearance:button; font-family:'pretendard', 'Noto Sans kr', 'Apple SD Gothic Neo', '맑은 고딕', 'Malgun Gothic', 'Dotum', '돋움', sans-serif;}
+    </style>
+</head>
+    <body>
+        <div class="wrapper page-pi">
+            <div id="content">
+                <div class="wrap-pi-cont">
+                    <section>
+                        <h3 class="blind">서비스 이용에 불편을 드려 죄송합니다</h3>
+                        <div class="result-msg warn bot-none">
+                            <i class="icon"></i>
+                            <strong class="copy">서비스 이용에 불편을 드려 죄송합니다</strong>
+                            <p class="desc">원하시는 화면으로 이동하지 못했습니다.<br>페이지 주소를 확인하신 후 다시 시도해 주시기 바랍니다.</p>
+                        </div>
+                        <div class="result-msg-call wid-588 align-auto">
+                            도움이 필요하신 경우, 회원콜센터로 연락해주세요.<strong class="call-num"><u>1577-3400</u>(1번)</strong>
+                        </div>
+                    </section>
+                    <div class="area-btn half">
+                        <a href="https://www.ktcu.or.kr/" type="button" class="kbtn-l">메인</a>
+                        <a href="javascript:history.back();" type="button" class="kbtn-p">이전 페이지</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

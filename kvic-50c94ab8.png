@@ -1,0 +1,74 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>한국벤처투자</title>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<meta name="keywords" content="">
+	<meta name="description" content="">
+	<meta name="author" content="">
+	<meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1.0, maximum-scale=1">
+	<link rel="stylesheet" href="/css/reset.css" />
+
+	<script src="/js/jquery-1.11.3.min.js"></script>
+	<script src="/js/index_script.js"></script>
+	
+	<script src="js/slick.js"></script><!-- slick 로드 -->
+	<link rel="stylesheet" href="/css/slick.css" type="text/css" />
+	<link rel="stylesheet" href="/css/slick-theme.css" type="text/css" /><!-- slick css 로드-->
+	<link rel="stylesheet" href="/css/index_common.css" />
+	<link rel="stylesheet" href="/css/responsiv.css" />
+	
+	<!--[if lt IE 9]>
+		<script src="/js/html5.js"></script>
+	<![endif]-->
+	<!--[if lte IE 7]>
+		<script src="/js/IE9.js"></script>
+	<![endif]-->
+	<link rel="stylesheet" href="/css/jquery.maximage.css?v=1.2" />
+	<script src="/js/jquery.cycle.all2.js"></script>
+	<script src="/js/jquery.maximage.js"></script>
+	<script src="/js/common.js"></script>
+	<script>
+	$(function(){
+		window.location.href="/";
+	});
+	
+
+	</script>
+    <style>
+        body#intro {text-align: center; height: 100vh; margin: 0 auto;}
+        body#intro a {display: block;height: 100%;}
+        body#intro img {
+            height: 100%;
+            vertical-align: top;
+        }
+        @media screen and (max-width:767px){
+            body#intro a { height: 100%;}
+            body#intro img {
+                width: 100%;
+                height: auto;
+            }
+        }
+    </style>
+</head>
+<body id="intro">
+   <a href="/">
+       <img src="/resources/img/common/404.jpg" alt="404">
+   </a>
+		<!-- <img src="/resources/img/common/404.jpg" alt="404"  usemap="#Map">
+		<map name="Map">
+			<area shape="rect" coords="236,47,670,470" href="/"> 
+		</map> -->
+<!--
+    <div class="footer-bottom">
+        <p class="customer_number">02 - 2156 - 2000</p>
+        <address>
+            <span>서울시 서초구 서초대로 45길 16 한국벤처투자빌딩 한국벤처투자(KVIC)</span>
+            <p class="copy">COPYRIGHT (C) KVIC. ALL RIGHTS RESERVED.</p>
+        </address>
+    </div>
+-->
+</body>
+</html>

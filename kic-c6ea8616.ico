@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+  <meta name="theme-color" content="#00114D">
+  <meta name="apple-mobile-web-app-capable" content="#00114D">
+  <meta name="apple-mobile-web-app-status-bar-style" content="#00114D">
+  <meta name="naver-site-verification" content="">
+
+  <meta name="title" content="한국투자공사">
+  <meta name="description" content="한국투자공사는 국민들에게 사랑받는 세계 최고의 국부펀드로 도약하겠습니다.">
+  <meta name="keywords" content="한국투자공사, KIC, 금융산업, 해외투자, 국부펀드, 투자">
+
+  <meta name="author" content="한국투자공사 KIC">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="robots" content="index,follow">
+  <!-- BEGIN FACEBOOK Meta -->
+  <meta property="og:title" content="한국투자공사">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://kic.kr/assets/images/common/og_image_KR.png">
+  <meta property="og:url" content="https://kic.kr/error">
+  <meta property="og:description" content="한국투자공사는 대한민국 국부펀드로, 글로벌 자산 운용을 통해 국가 재정 안정성과 미래세대의 자산을 책임지는 투자 기관입니다.">
+  <!-- END FACEBOOK Meta -->
+
+  <!-- BEGIN TWITTER Meta -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="한국투자공사">
+  <meta name="twitter:description" content="한국투자공사는 대한민국 국부펀드로, 글로벌 자산 운용을 통해 국가 재정 안정성과 미래세대의 자산을 책임지는 투자 기관입니다.">
+  <meta name="twitter:image" content="https://kic.kr/assets/images/common/og_image_KR.png">
+  <!-- END TWITTER Meta -->
+
+  <title></title>
+
+  <link rel="canonical" href="">
+  <link rel="shortcut icon" href="" type="image/x-icon">
+  <link rel="icon" href="">
+  <link rel="apple-touch-icon" href="">
+
+
+  <!-- css -->
+  <link rel="stylesheet" href="/assets/css/wv.css?v=99">
+
+  <link rel="stylesheet" href="/assets/css/common.css?v=111">
+  <link rel="stylesheet" href="/assets/css/components.css?v=10">
+  <link rel="stylesheet" href="/assets/css/main.css">
+
+  <script src="/assets/plugins/jquery.min.js"></script>
+
+
+
+</head>
+<body>
+<div id="wv">
+  <main id="a11yContent">
+    <section class="sec_error">
+      <div class="inner_base h_100per dp_f fd_col jtf_center pl_150 md_pl_20">
+        <h2 class="fs_32 fw_medium lih150per fc_point1 md_fs_15">
+          죄송합니다. <br class="m_show">해당 페이지를 찾을 수 없습니다.
+        </h2>
+        <p class="fs_19 fw_regular lih170per fc_point1 mt_40 md_mt_20 md_fs_11">
+          <a href="/" class="bd_B_point1">한국투자공사 홈페이지 메인</a>으로 이동하거나, <br>
+          한국투자공사로 문의해주시기 바랍니다.
+        </p>
+        <button class="btn_arrow_circle st2 fc_point1 mt_60 hov md_mt_30 md_fs_11" onclick="goToPreviousPage();">
+          이전 페이지로 이동하기
+          <i></i>
+        </button>
+      </div>
+    </section>
+  </main>
+</div>
+<!-- #wv END -->
+
+<script>
+function goToPreviousPage() {
+    var previousPage = '';
+
+    if (previousPage && previousPage.trim() !== '') {
+        // 이전 페이지 정보가 있으면 해당 페이지로 이동
+        window.location.href = previousPage;
+    } else {
+        window.location.href = '/';
+    }
+}
+</script>
+</body>
+</html>

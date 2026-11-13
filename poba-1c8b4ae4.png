@@ -1,0 +1,37 @@
+
+
+
+
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=yes, target-densitydpi=medium-dpi">
+<meta http-equiv="X-UA-Compatible" content="IE=Edge">
+<meta name="format-detection" content="telephone=no">
+<title>POBA행정공제회</title>
+<link rel="shortcut icon" href="">
+<link rel="apple-touch-icon" href="">
+<!-- 공통 css -->
+<link rel="stylesheet" type="text/css" href="/static/css/jquery.datetimepicker.min.css">
+<link rel="stylesheet" type="text/css" href="/static/css/css.css">
+
+<!-- 공통 js -->
+<script type="text/javascript" src="/static/js/jquery-1.12.4.min.js"></script>
+<script type="text/javascript" src="/static/js/jquery.datetimepicker.full.min.js"></script>
+<script type="text/javascript" src="/static/js/popup.js"></script>
+<script type="text/javascript" src="/static/js/extension.js"></script>
+
+</head>
+
+<body style="height:100%;">
+    <div class="error_con">
+        <div class="error ico"></div>
+        <h1>페이지를 찾을 수 없습니다.</h1>
+        <p>요청하신 페이지를 찾을 수 없습니다.</p>
+        <p>주소가 잘못 입력되었거나 요청하신 페이지가 삭제되었습니다.</p>
+        <p>이용에 불편을 드려 죄송합니다.</p>
+        <a href="javascript:document.location.replace('/main');" class="btn lg sk">메인화면으로 이동</a>
+    </div>
+</body>
+</html>
