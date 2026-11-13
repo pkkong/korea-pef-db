@@ -38,6 +38,14 @@ class BodyQueueTests(unittest.TestCase):
         self.assertEqual(n,before)
         n2=doc(body='변경된 본문')
         with self.assertRaises(ValueError):queue.plan(state(),[n,n2])
+    def test_zero_width_space_in_listing_title_matches_detail_title(self):
+        # Korea Growth idx 855: the list shows '」\u200b 위탁', the detail page '」 위탁'.
+        s=state()
+        s['receipts'][0]=history.receipt(1,raw([('6','801','공고','2026-01-01'),
+            ('5','95','새 공고','2025-01-01'),('4','90','중간 공고','2024-01-01'),
+            ('3','12','옛 공고','2023-01-01'),('2','9','「다른」&#8203; 공고','2023-01-01')]))
+        result=queue.plan(s,[doc(title='「다른」 공고')])
+        self.assertEqual(result['validated_body_completed'],1)
     def test_invalid_completion_never_silently_skipped(self):
         for change in ({'url':'https://evil.test/'},{'source_id':'777'}, {'body':''},
                        {'sha256':'a'*64},{'date':'2024-01-01'},{'title':'다른 사업'},

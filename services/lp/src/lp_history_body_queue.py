@@ -25,7 +25,9 @@ def plan(state, completed_documents=(), *, limit=4):
         raise ValueError('Complete unblocked historical listing required')
     listing={r['source_id']:r for r in report['rows']}
     completed={}
-    compact=lambda text:re.sub(r'\s+','',text)
+    # Korea Growth listing titles can carry an invisible zero-width space after 」
+    # (idx 855/860, observed 2026-11-13) that the detail title lacks.
+    compact=lambda text:re.sub(r'[\s\u200b-\u200d\u2060\ufeff]+','',text)
     for document in completed_documents:
         if not isinstance(document,dict):raise ValueError('Invalid completed document')
         ident=document.get('source_id')
