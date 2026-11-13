@@ -132,7 +132,7 @@ Every non-trivial subagent task should state:
 - LP basic publication is authorized once official domestic PE blind recruitment is verified, even when amount, purpose, deadline, or GP names are missing. Missing fields stay absent. Mixed PE/VC sources require an independently isolated PE track; unverified scope stays held. Match later notices by sourced institution/year/business/round identity, retain existing URLs, and never let missing GP identities block a verified notice or stage update. Amendments/cancellations must not keep superseded deadlines or planned schedules as current facts.
 - LP 기관의 HTTP 수집 정상과 개별 사업의 후속 단계/선정명단 공개 반영을 따로 검증한다. 공식 후속 공고가 link_suggestions·program hold·범위 보류에 남아 있으면 수집 성공만으로 결과 반영 완료라고 보고하지 않는다. 사용자가 누락을 지적하면 미발견/첨부 미판독/사업 연결 보류/화면 누락과 개별통지 여부를 저장 원문부터 구분하고, 보류된 새 단계가 오래 방치되지 않도록 현황과 다음 작업에 명시한다.
 - Local secrets are not committed. Newsletter operating secrets live in GitHub Actions repository secrets; `config/daily_news.env` is not an operating path.
-- Product and role-specific operating briefs are in `docs/agent_operating_briefs.md`.
+- Product and role-specific operating briefs are in `docs/agent_operating_briefs.md`; LP collection, parsing, transport and publication rules are grouped by topic in `docs/lp_operating_rules.md`.
 - Product/service responsibility boundaries are in `docs/product_operating_model.md`.
 - DB/public-view/build data contracts are in `docs/data_operating_model.md`.
 - The Project Lead control document is `docs/project_lead_control_center.md`. Use it as the current source of truth for active service ownership, product decisions, verification commands, deployment state, and handoff notes before starting or delegating substantial work.
