@@ -16,8 +16,8 @@
 | 서비스 | 공식 주소 | 데이터 경로 | 상태 |
 | --- | --- | --- | --- |
 | 브리프(뉴스레터) | https://kpef-newsletter.vercel.app | 매일 수집 → Supabase → Vercel. 백업 미러 https://pkkong.github.io/kpef-newsletter/ | 매일 발행 정상 |
-| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 → Supabase 공개본 → Vercel | 19기관 39사업 공개(공개 실행 `caf86cbf516c80e4be13556f`) |
-| GP 운용사 | https://kpef-gp.vercel.app | 금감원 분기 자료 → Supabase 스냅샷 → Vercel | 2025Q4 기준. 없는 페이지는 404 |
+| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 → Supabase 공개본 → Vercel | 19기관 40사업 공개(공개 실행 `ef0522eff5f8e6c89a94be01`) |
+| GP 운용사 | https://kpef-gp.vercel.app | 금감원 분기 자료 → Supabase 스냅샷 → Vercel | 2025Q4 기준. 프로필에 LP 선정 이력 표시(11/13). 없는 페이지는 404 |
 | Wiki | — | — | 사용자가 다시 기획할 때까지 숨김 |
 
 공개 하단 메뉴는 `브리프 / LP / GP` 세 개로 고정한다.
