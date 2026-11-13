@@ -246,6 +246,26 @@
         }
       ],
       "reported_at": "2026-10-13"
+    },
+    {
+      "program_id": "pck_pension-2026-a7f284bfb5591feb",
+      "stage": "최종 선정",
+      "complete": true,
+      "managers": [
+        "크레센도에쿼티파트너스",
+        "어펄마캐피탈매니져스코리아"
+      ],
+      "note": "PE·VC·인프라 공동 모집에서 PE 부문 2곳이 선정됐다고 보도됐습니다(VC 2곳 별도, 인프라는 선정 없음).",
+      "scope_note": "PE 부문",
+      "sources": [
+        {
+          "publisher": "인베스트조선",
+          "title": "총회연금재단, 크레센도·어펄마 등 4곳 위탁 운용사 선정",
+          "date": "2026-11-10",
+          "url": "https://www.investchosun.com/site/data/html_dir/2026/11/10/2026111080182.html"
+        }
+      ],
+      "reported_at": "2026-11-10"
     }
   ]
 }
