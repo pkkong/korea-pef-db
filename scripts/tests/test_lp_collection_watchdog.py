@@ -78,7 +78,7 @@ class WatchdogTests(unittest.TestCase):
 
     def test_active_source_queue_skips_even_when_collection_missing(self):
         for status in w.ACTIVE:
-            api = FakeAPI(active=[run(status=status, name='inspect-lp-remaining-boards.yml')])
+            api = FakeAPI(active=[run(status=status, name='diagnose-lp-board-http.yml')])
             self.assertEqual(self.invoke(api)['reason'], 'source_queue_active')
             self.assertFalse(any(kw for _, kw in api.calls))
 
