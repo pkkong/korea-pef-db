@@ -96,6 +96,36 @@ def commons_files(query: str, limit: int = 4) -> list[str]:
     return [p["imageinfo"][0]["url"] for p in pages if p.get("imageinfo")]
 
 
+LOGO_FILE_WORDS = re.compile(r"(logo|로고|ci|심볼|symbol|emblem|엠블럼)", re.I)
+WIKI_EXTRA_TITLES = {
+    "kexim": [("ko", "한국수출입은행"), ("en", "Export–Import Bank of Korea")],
+    "kfcc": [("ko", "새마을금고"), ("en", "Korean Federation of Community Credit Cooperatives")],
+    "sema": [("ko", "과학기술인공제회")], "kfinco": [("ko", "전문건설공제조합")], "pck_pension": [("ko", "대한예수교장로회총회")],
+    "moel_eif": [("ko", "고용노동부"), ("en", "Ministry of Employment and Labor")],
+    "moel_iaci": [("ko", "근로복지공단")], "kic": [("ko", "한국투자공사"), ("en", "Korea Investment Corporation")],
+    "kafi": [("ko", "농업정책보험금융원")], "kobc": [("ko", "한국해양진흥공사")], "cu": [("ko", "신용협동조합")],
+    "kdb": [("ko", "한국산업은행")], "kgrowth": [("ko", "한국성장금융투자운용")], "kvic": [("ko", "한국벤처투자")],
+}
+
+
+def wiki_logo_files(lang: str, title: str) -> list[str]:
+    """Thumbnails (256px) of files on a Wikipedia article whose names look like a logo/CI."""
+    api = (f"https://{lang}.wikipedia.org/w/api.php?action=query&prop=images&imlimit=50&redirects=1&format=json&titles="
+           + quote(title))
+    data = json.loads(fetch(api)[0])
+    names = [img["title"] for page in data.get("query", {}).get("pages", {}).values() for img in page.get("images", [])]
+    names = [n for n in names if LOGO_FILE_WORDS.search(n)][:5]
+    urls = []
+    for name in names:
+        info = (f"https://{lang}.wikipedia.org/w/api.php?action=query&prop=imageinfo&iiprop=url&iiurlwidth=256&format=json&titles="
+                + quote(name))
+        pages = json.loads(fetch(info)[0]).get("query", {}).get("pages", {}).values()
+        for page in pages:
+            for item in page.get("imageinfo", []):
+                urls.append(item.get("thumburl") or item.get("url"))
+    return [u for u in urls if u]
+
+
 COMMONS_QUERIES = {
     "kdb": ["KDB Korea Development Bank logo", "한국산업은행 로고"], "kexim": ["Export-Import Bank of Korea logo", "한국수출입은행"],
     "kfcc": ["Saemaul Geumgo logo", "새마을금고 로고"], "cu": ["National Credit Union Federation of Korea logo", "신협 로고"],
@@ -177,6 +207,14 @@ def main() -> int:
                     save(args.out, code, "wikipedia", image, manifest)
             except Exception as exc:  # noqa: BLE001
                 manifest.append({"code": code, "kind": "wikipedia", "url": title, "error": type(exc).__name__})
+        for lang, wiki_title in WIKI_EXTRA_TITLES.get(code, []):
+            try:
+                for url in wiki_logo_files(lang, wiki_title):
+                    if url not in seen:
+                        seen.add(url)
+                        save(args.out, code, f"wikifile:{lang}", url, manifest)
+            except Exception as exc:  # noqa: BLE001
+                manifest.append({"code": code, "kind": f"wikifile:{lang}", "url": wiki_title, "error": type(exc).__name__})
         for query in COMMONS_QUERIES.get(code, []):
             try:
                 for url in commons_files(query):
