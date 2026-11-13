@@ -96,10 +96,10 @@ OK public frontend check
 
 이번 조치:
 
-- 과거 사건 로그는 `docs/project_history_archive.md`로 옮겼다.
+- 과거 사건 로그는 `docs/history/notes/project_history_archive.md`로 옮겼다.
 - 현재 기준은 `docs/project_lead_control_center.md`에 남겼다.
 - 코드로 강제되는 구조 규칙은 `docs/architecture_contracts.md`에 정리했다.
-- 이번 완료 보고서는 이 파일, `docs/refactor_closeout_2026-06-21.md`에 따로 남긴다.
+- 이번 완료 보고서는 이 파일, `docs/history/notes/refactor_closeout_2026-06-21.md`에 따로 남긴다.
 
 ## 내가 직접 확인하려면
 

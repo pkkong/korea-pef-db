@@ -6,7 +6,7 @@
 
 1. `AGENTS.md` — 특히 `Codex ↔ Claude Alternation` 절
 2. `git status`, `git log -10` — 미커밋 변경은 Codex의 미완료 작업일 수 있다. 되돌리지 말고 체크포인트와 대조한다.
-3. `docs/lp_resume_checkpoint.md`, `docs/project_lead_control_center.md`, `docs/lp_collection_status.md`의 최신 항목
+3. 작업 시작 문서 네 개: `docs/project_lead_control_center.md`, `docs/lp_resume_checkpoint.md`(맨 위 `현재 재개 지점`), `docs/lp_collection_status.md`, `docs/service_quality_backlog.md`. 지난 기록은 `docs/history/`에 있다.
 
 ## Claude 전용 읽기 규칙
 

@@ -104,7 +104,7 @@ Brief, LP, GP는 하나의 제품 안에서 보이지만 각각 독립적으로 
 
 Brief와 GP는 현재 이 `Supabase → Vercel` 경로로 공개된다. LP는 local collector와 static export에서 Supabase canonical/public read model로 옮기는 작업이 남아 있으며, 이 전환이 끝나기 전까지 GitHub Pages나 로컬 export를 LP 서비스의 기본 운영 경로로 보지 않는다.
 
-2026-09-06 점검 당시 LP Vercel 경로는 아직 없고 Pages 공고 페이지가 실제 메뉴 연결 대상이었다. 따라서 이번 오류 수정은 Brief의 GP 메뉴만 공식 `/gps.html`로 연결하고 LP 링크는 이전 완료까지 유지한다. 데이터 갱신 안전성·장애 응답 수정은 2026-09-07 뉴스·GP DB와 Vercel 앱에 반영했다. LP 화면은 전체 검수 원본 복원이 필요해 기존 공개본을 보존한다. 상세 운영 적용 결과는 `docs/project_lead_control_center.md`와 `docs/project_fixes_2026-09-06.md`에서 구분한다.
+2026-09-06 점검 당시 LP Vercel 경로는 아직 없고 Pages 공고 페이지가 실제 메뉴 연결 대상이었다. 따라서 이번 오류 수정은 Brief의 GP 메뉴만 공식 `/gps.html`로 연결하고 LP 링크는 이전 완료까지 유지한다. 데이터 갱신 안전성·장애 응답 수정은 2026-09-07 뉴스·GP DB와 Vercel 앱에 반영했다. LP 화면은 전체 검수 원본 복원이 필요해 기존 공개본을 보존한다. 상세 운영 적용 결과는 `docs/project_lead_control_center.md`와 `docs/history/notes/project_fixes_2026-09-06.md`에서 구분한다.
 
 ## 완료 기준
 
@@ -124,7 +124,7 @@ Brief와 GP는 현재 이 `Supabase → Vercel` 경로로 공개된다. LP는 lo
 OCIO 기본명단 제외 규칙은 새 기본 명단에 적용하지 않는다. 운영 공개 화면 설정은 별도 전환 전까지 유지한다.
 참여 자격·실제 출자활동·기금관리/운용 역할·공개 상태를 분리한다. 기관과 자금은 별개 주체로 관리하며,
 공고 운영기관을 실제 출자자로 자동 치환하지 않는다. 검토본과 현재 운영 입력을 혼동하지 않는다.
-상세 기준은 `docs/lp_directory_basis_2026-09-10.md`, 검토 데이터는 `data/lp_directory_review.json`이다.
+상세 기준은 `docs/history/notes/lp_directory_basis_2026-09-10.md`, 검토 데이터는 `data/lp_directory_review.json`이다.
 
 
 ## 독립 실행·배포 서비스 전환 (사용자 확정 지시)

@@ -87,7 +87,7 @@ python3 services/newsletter/scripts/check_vercel_supabase_readiness.py --smoke-a
 
 ## 인계 경계
 
-- 근거 기록: `docs/project_review_2026-09-06.md`는 수정 전 검토로 보존한다.
+- 근거 기록: `docs/history/notes/project_review_2026-09-06.md`는 수정 전 검토로 보존한다.
 - 최신 계약: `docs/data_operating_model.md`, `docs/product_operating_model.md`,
   `docs/project_lead_control_center.md`, `docs/service_quality_backlog.md`.
 - 생성된 HTML, 임시 DB, 로그, 의존성 설치 폴더와 자격증명은 소스에 포함하지 않는다.

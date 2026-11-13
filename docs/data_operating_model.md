@@ -324,7 +324,7 @@ python3 scripts/build_site_bundle.py --services wiki --date YYYY-MM-DD
 OCIO 기본명단 제외 규칙은 새 기본 명단에 적용하지 않는다. 운영 공개 화면 설정은 별도 전환 전까지 유지한다.
 참여 자격·실제 출자활동·기금관리/운용 역할·공개 상태를 분리한다. 기관과 자금은 별개 주체로 관리하며,
 공고 운영기관을 실제 출자자로 자동 치환하지 않는다. 검토본과 현재 운영 입력을 혼동하지 않는다.
-상세 기준은 `docs/lp_directory_basis_2026-09-10.md`, 검토 데이터는 `data/lp_directory_review.json`이다.
+상세 기준은 `docs/history/notes/lp_directory_basis_2026-09-10.md`, 검토 데이터는 `data/lp_directory_review.json`이다.
 
 
 ## 한국성장금융 출자사업 자동 수집 (2026-09-28)

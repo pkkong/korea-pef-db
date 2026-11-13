@@ -147,8 +147,9 @@ Every non-trivial subagent task should state:
 
 - 공통 운영 규칙의 단일 원본은 이 `AGENTS.md`다. `CLAUDE.md`는 이 파일을 가리키는 얇은 안내와 Claude 전용 차이만 둔다. 같은 규칙을 에이전트별로 복제하지 않는다.
 - 결정·진행상태·다음 작업은 저장소 문서와 commit에만 남긴다. ChatGPT 채팅 기록, Codex automation 메모, Claude Project/메모리는 보조일 뿐 유일한 기록이 될 수 없다.
-- 작업 시작 시: `git status`/`git log -10`, `docs/lp_resume_checkpoint.md`·`docs/project_lead_control_center.md` 최신 항목을 먼저 확인한다. 소유가 불분명한 미커밋 변경은 상대 에이전트의 미완료 작업일 수 있으므로 되돌리거나 덮어쓰지 않고, 검증 후 이어받거나 상태를 기록한다.
-- 작업 단위 종료 시: 체크포인트 문서에 `작성: Claude` 또는 `작성: Codex`, 로컬 완료와 운영 반영의 구분, 검증 결과, 다음 작은 단위를 남긴다. 가능하면 commit까지 마쳐 미커밋 WIP를 남기지 않으며, 남길 경우 그 파일과 이유를 체크포인트에 적는다.
+- 작업 시작 시: `git status`/`git log -10`, 그리고 작업 시작 문서 네 개(`docs/project_lead_control_center.md`, `docs/lp_resume_checkpoint.md`의 `현재 재개 지점`, `docs/lp_collection_status.md`, `docs/service_quality_backlog.md`)를 먼저 확인한다. 소유가 불분명한 미커밋 변경은 상대 에이전트의 미완료 작업일 수 있으므로 되돌리거나 덮어쓰지 않고, 검증 후 이어받거나 상태를 기록한다.
+- 문서는 `현재 상태`와 `기록`을 나눈다. 작업 시작 문서 네 개에는 지금 유효한 상태·규칙·다음 작업만 두고 각각 40KB 이하로 유지한다(`scripts/check_architecture_contracts.py`가 검사). 넘기 전에 오래된 날짜별 항목을 `docs/history/<문서명>/YYYY-MM.md`로 원문 그대로 옮긴다. 현재 상태 표는 덧붙이지 말고 고쳐 쓴다. 사람이 읽을 수 있게 띄어쓰기를 지키고 실행 ID·바이트 수는 근거에 필요한 만큼만 쓴다. 규칙은 [docs/history/README.md](docs/history/README.md).
+- 작업 단위 종료 시: `docs/lp_resume_checkpoint.md`의 `현재 재개 지점`을 고치고, 그 아래에 최신순으로 `작성: Claude` 또는 `작성: Codex`, 로컬 완료와 운영 반영의 구분, 검증 결과, 다음 작은 단위를 남긴다. 기관 범위가 바뀌면 `docs/lp_collection_status.md` 표를, 과제가 끝나거나 생기면 `docs/service_quality_backlog.md`를 고친다. 가능하면 commit까지 마쳐 미커밋 WIP를 남기지 않으며, 남길 경우 그 파일과 이유를 체크포인트에 적는다.
 - 반복 예약(automation/scheduled task)은 두 에이전트 중 한쪽만 켠다. 교대 시 사용자가 이전 쪽을 끄고, 새 담당 에이전트는 켜기 전에 사용자에게 확인한다. GitHub Actions 정기 수집·발행은 에이전트와 무관한 공통 실행 경로이므로 유지한다.
 - 운영 경로는 두 에이전트가 모두 실행할 수 있는 코드·GitHub Actions·문서로만 만든다. 한쪽 도구에만 있는 기능(Codex 전용 automation, Claude 전용 skill 등)에 운영 절차를 의존시키지 않는다.
 - commit에는 작성 에이전트 표시(trailer 등)를 남겨 이력에서 누가 했는지 구분되게 한다.

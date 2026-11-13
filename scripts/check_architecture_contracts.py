@@ -293,6 +293,33 @@ def check_generated_outputs_untracked() -> list[str]:
     return violations
 
 
+# Start-of-work documents that both agents read before every task. Keep them
+# short; dated entries move to docs/history/<doc>/YYYY-MM.md.
+START_DOCS = (
+    "docs/project_lead_control_center.md",
+    "docs/lp_collection_status.md",
+    "docs/lp_resume_checkpoint.md",
+    "docs/service_quality_backlog.md",
+)
+START_DOC_MAX_BYTES = 40_000
+
+
+def check_start_docs_size() -> list[str]:
+    errors = []
+    for name in START_DOCS:
+        path = REPO_ROOT / name
+        if not path.exists():
+            errors.append(f"{name} is missing")
+            continue
+        size = path.stat().st_size
+        if size > START_DOC_MAX_BYTES:
+            errors.append(
+                f"{name} is {size} bytes (limit {START_DOC_MAX_BYTES}); "
+                f"move older dated entries to docs/history/{path.stem}/YYYY-MM.md"
+            )
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check repository architecture contracts")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable result JSON")
@@ -305,6 +332,7 @@ def main() -> int:
         "import_isolation": check_import_isolation(),
         "workflow_contracts": check_workflow_contracts(),
         "generated_outputs_untracked": check_generated_outputs_untracked(),
+        "start_docs_size": check_start_docs_size(),
     }
     failures = {name: values for name, values in sections.items() if values}
     if args.json:
