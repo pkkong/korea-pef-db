@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "reviewed_at": "2026-11-12",
+  "reviewed_at": "2026-11-13",
   "policy": "공식 결과 공고가 없는 사업에만 언론 보도 기준 결과를 표시한다. 공식 선정·우선협상 명단이 생기면 보도 기준 결과는 표시하지 않는다. 출처 기사 링크를 반드시 함께 표시하며, 보도에 이름이 나온 운용사만 넣고 추정하지 않는다. 일부만 보도된 경우 complete=false로 표시한다. PE·VC 공동 사업은 PE 부문만 넣는다. reported_at은 결과가 처음 보도된 날짜다.",
   "results": [
     {
@@ -204,17 +204,24 @@
     {
       "program_id": "sema-2026-b9d11f3a1eb1f6b4",
       "stage": "최종 선정",
-      "complete": false,
-      "scope_note": "PE 중형 이하 리그",
+      "complete": true,
+      "scope_note": "PE 부문",
       "managers": [
+        "제네시스프라이빗에쿼티",
         "BNW인베스트먼트",
         "노앤파트너스",
         "VL인베스트먼트",
         "어펄마캐피탈매니저스코리아",
         "아크앤파트너스"
       ],
-      "note": "PE 중형 이하 리그 5곳(각 400억원)입니다. 대형·루키 리그 결과는 확인되지 않았습니다.",
+      "note": "PEF 부문 6곳이 선정됐다고 보도됐습니다. 중형 이하 리그 5곳은 각 400억원을 배정받았습니다.",
       "sources": [
+        {
+          "publisher": "인베스트조선",
+          "title": "과기공, PEF 위탁운용사에 제네시스PE·어펄마·BNW인베 등 6곳 선정",
+          "date": "2026-11-02",
+          "url": "https://www.investchosun.com/site/data/html_dir/2026/11/02/2026110280008.html"
+        },
         {
           "publisher": "딜사이트",
           "title": "bnw 과기공까지 6개 뷰티콘 싹쓸이…4호 8000억 타깃",
@@ -222,7 +229,7 @@
           "url": "https://dealsite.co.kr/articles/172173"
         }
       ],
-      "reported_at": "2026-11-06"
+      "reported_at": "2026-11-02"
     },
     {
       "program_id": "kfinco-2026-547fa724a1485c84",

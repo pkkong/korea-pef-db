@@ -1,0 +1,48 @@
+name: Find LP reported result candidates
+# Reads the Brief public read model and the published LP programs, and lists
+# press reports of selection results that data/lp_reported_results.json does
+# not reflect yet. Read-only: it never changes data or public pages.
+on:
+  schedule:
+    # Monday 08:43 KST, before the 09:20 LP collection.
+    - cron: '43 23 * * 0'
+  workflow_dispatch:
+    inputs:
+      days:
+        description: Days of Brief articles to scan
+        required: false
+        default: '180'
+permissions:
+  contents: read
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: python3 -m pip install 'psycopg[binary]==3.2.10'
+      - name: Test candidate matching
+        run: python3 -m unittest services.lp.tests.test_lp_reported_result_candidates
+      - name: Find candidates
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SCAN_DAYS: ${{ inputs.days || '180' }}
+        run: |
+          python3 services/lp/src/lp_reported_result_candidates.py \
+            --days "$SCAN_DAYS" \
+            --json-out lp-reported-result-candidates.json \
+            --markdown-out lp-reported-result-candidates.md
+          cat lp-reported-result-candidates.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lp-reported-result-candidates
+          path: |
+            lp-reported-result-candidates.json
+            lp-reported-result-candidates.md
+          retention-days: 30

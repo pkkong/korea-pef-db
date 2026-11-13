@@ -90,7 +90,7 @@ Renderer는 public read model을 HTML로 표현하는 역할만 한다.
 
 | 발행 서비스 | public contract | 사용하는 서비스 | 허용된 역할 |
 | --- | --- | --- | --- |
-| Brief | `archive.json` / Supabase newsletter public read model의 entity link | LP, GP | 관련 뉴스 링크와 기사 출처 표시 |
+| Brief | `archive.json` / Supabase newsletter public read model의 entity link | LP, GP | 관련 뉴스 링크와 기사 출처 표시. LP는 `newsletter_public_issue_articles`에서 선정 결과 보도 후보를 찾는 데도 쓴다(내부 검토용, 공개 화면 직접 반영 없음) |
 | LP | `lp-notices.json`의 validated lifecycle·선정 GP | GP | GP 프로필의 LP 선정 이력 표시 |
 | GP | Supabase GP public snapshot/page artifact | Brief, LP | GP profile URL과 공개 프로필 정보 연결 |
 

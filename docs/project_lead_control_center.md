@@ -33,7 +33,7 @@
 
 1. `collect-kgrowth-programs.yml`의 수집 job들이 기관별로 병렬 수집한다: 공유 협회 공고(`collect_shared_lp_notices`), 기관 게시판(`collect_lp_institution_boards` + `lp_board_adapter_*`), 교직원공제회, 우정사업본부, 수출입은행, 한국벤처투자 원문.
 2. `collect` job이 `lp_publication_runner.py` → `publish_lp_programs.py`로 판독·검증·발행한다. 사업 단위 묶기·PE 범위 판단은 `lp_notice_publication.py`, 화면 생성은 `lp_program_service.py`·`lp_program_detail.py`.
-3. 보도 기준 선정 결과는 `data/lp_reported_results.json`을 발행 때 붙인다(공식 명단이 생기면 자동으로 숨김).
+3. 보도 기준 선정 결과는 `data/lp_reported_results.json`을 발행 때 붙인다(공식 명단이 생기면 자동으로 숨김). 새 보도 후보는 주간 workflow가 찾고 사람·에이전트가 검토해 이 파일을 고친다.
 4. 발행 뒤 공개 페이지가 이번 실행과 같은지 확인하고, 마지막에 기관별 접속 장애를 보고한다. 장애 보고 단계만 실패하면 run은 failure지만 공개는 정상일 수 있다.
 
 ## 서비스 책임
@@ -54,7 +54,7 @@
 - 출자기관 공개 목록은 직접 운용사를 선정하는 기관만. OCIO 위임형 기금은 내부 분류로 둔다. 법적 LP 유형(`legal_lp_category`)과 공개 등급(`coverage_tier`, `display_enabled`)은 따로 관리한다.
 - 금감원 통계의 GP 수는 펀드별 대표 운용사 기준이며 공동 운용사 수와 섞지 않는다.
 
-## 정기·운영 workflow (30개)
+## 정기·운영 workflow (31개)
 
 | 구분 | workflow | 시각(KST) / 용도 |
 | --- | --- | --- |
@@ -62,6 +62,7 @@
 | LP 정기 | `lp-collection-watchdog` | 평일 매시 05분, 수집 누락 시 대신 실행 |
 | LP 정기 | `maintain-lp-report-storage` | 수집 뒤 자동, 오래된 보고서 보관·정리 |
 | LP 정기 | `audit-lp-official-inventory` | 일요일 10:00, 공식 목록 독립 대조 |
+| LP 정기 | `find-lp-reported-results` | 월요일 08:43, 브리프 기사에서 선정 결과 보도 후보 찾기(읽기 전용, [절차](lp_reported_results_operations.md)) |
 | LP 복구·진단 | `recover-lp-publication`, `diagnose-lp-board-http`, `diagnose-lp-inventory-failures` | 발행 복구, 공식 응답 제한 진단, 감사 실패 진단 |
 | LP 과거 이력 | `discover-lp-history`, `discover-ktcu-history`, `inspect-lp-history`, `collect-lp-history-bodies`, `collect-lp-history-attachments`, `collect-kgrowth-history-attachments`, `plan-lp-history-attachments`, `prepare-lp-history-publication`, `publish-lp-history` | 2023년 이후 이력 수집(진행 중 과제) |
 | LP 배포·설정 | `deploy-lp-vercel`, `deploy-lp-source-worker`, `configure-lp-reviewer` | 앱 배포, 서울 경유 수집 중계, 검토자 설정 |
