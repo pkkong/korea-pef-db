@@ -272,6 +272,34 @@ class PublicNoticeContextContract(unittest.TestCase):
                          (row['lpCode'], row['lpName'], row['eventType'], row['eventDate']))
 
 
+class ListSectionsForReaders(unittest.TestCase):
+    """Open work first, results second, old notices last; stage dates after the deadline."""
+    program = ProgramListPresentation.program
+    selected = ProgramListPresentation.selected
+
+    def render(self, programs, reported=None):
+        with tempfile.TemporaryDirectory() as folder:
+            build({'as_of': '2026-11-13', 'programs': programs, 'reported_results': reported or {}}, Path(folder))
+            return {p.name: p.read_text() for p in Path(folder).glob('*.html')}
+
+    def test_sections_and_reported_status(self):
+        shortlisted = self.program('s', '서류심사 결과', 'a', 'A', '2026-10-01', event='2026-10-20')
+        shortlisted['events'].append({'date': '2026-10-28', 'type': '서류심사 결과', 'title': 'r', 'url': 'https://official.example/s2'})
+        shortlisted['shortlisted_gps'] = ['가', '나', '다']
+        reported = self.program('r', '접수 마감', 'b', 'B', '2026-09-01', event='2026-08-14')
+        result = {'r': {'program_id': 'r', 'stage': '최종 선정', 'reported_at': '2026-11-02', 'complete': True,
+                        'managers': ['X'], 'sources': [{'publisher': 'P', 'title': 't', 'date': '2026-11-02', 'url': 'https://n.example/1'}]}}
+        pages = self.render([shortlisted, reported, self.selected('d', 'c', 'C', 'GP', 'k1'),
+                             self.program('old', '모집 공고', 'e', 'E', event='2024-12-20')], result)
+        index = pages['index.html']
+        order = [index.index(t) for t in ('>진행 중 <', '>결과 발표 <', '>지난 공고 <')]
+        self.assertEqual(order, sorted(order))
+        self.assertIn('data-status="결과 보도"', index)
+        self.assertIn('10.28 1차 심사 결과 · 3개사', index)
+        self.assertLess(index.index('program-s.html'), index.index('>결과 발표 <'))
+        self.assertGreater(index.index('program-old.html'), index.index('>지난 공고 <'))
+
+
 class ReportedResultFile(unittest.TestCase):
     def test_repository_file_is_valid_and_sourced(self):
         import json

@@ -50,7 +50,9 @@ PLAN_SCRIPT = '''<script>(function(){const parts=new Intl.DateTimeFormat('en-CA'
 
 # Public wording only: stored statuses keep their source-specific meaning.
 STATUS_DISPLAY = {'선정 결과 발표': '선정 완료', '서류심사 결과': '1차 심사 결과'}
-STATUS_ORDER = ('접수 중', '모집 공고', '접수 마감', '접수 결과', '1차 심사 결과', '우선협상대상자', '선정 완료', '공고')
+STATUS_ORDER = ('접수 중', '모집 공고', '접수 마감', '접수 결과', '1차 심사 결과', '우선협상대상자', '선정 완료', '결과 보도', '선정 없음', '공고')
+# List sections for readers: what is still moving, what has a result, and old notices.
+RESULT_STATUSES = ('선정 완료', '결과 보도', '선정 없음')
 
 
 def display_status(status):

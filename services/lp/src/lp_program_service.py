@@ -217,9 +217,9 @@ def build(data, out, gp_profiles=None):
     out.mkdir(parents=True, exist_ok=True)
     as_of = data['as_of']
     try:
-        from .lp_program_detail import render_detail_body, display_status, STATUS_ORDER, clean_title
+        from .lp_program_detail import render_detail_body, display_status, STATUS_ORDER, RESULT_STATUSES, clean_title
     except ImportError:
-        from lp_program_detail import render_detail_body, display_status, STATUS_ORDER, clean_title
+        from lp_program_detail import render_detail_body, display_status, STATUS_ORDER, RESULT_STATUSES, clean_title
     # One public name per institution: the most used stored name, then the shortest.
     names = defaultdict(list)
     for p in data['programs']:
@@ -241,6 +241,10 @@ def build(data, out, gp_profiles=None):
         status = display_status(p['status'])
         if status == '모집 공고' and max(e['date'] for e in p['events']) < stale_before:
             status = '공고'
+        reported_result = p.get('reported_result')
+        if reported_result and status not in RESULT_STATUSES:
+            # A press-reported outcome is a result, not an open 접수 마감 row.
+            status = '선정 없음' if reported_result['stage'] == '선정 없음' else '결과 보도'
         p['display_status'] = status
     # Reader-facing names: curated short names win; otherwise the cleaned source title.
     # Identical names within one institution are told apart by the notice month.
@@ -285,6 +289,11 @@ def build(data, out, gp_profiles=None):
             count = len(reported['managers'])
             outcome = '선정 없음' if not count else (f'{count}개사' if reported['complete'] else f'확인 {count}개사')
             timing = f"{short_date(reported['reported_at'])} 보도 · {outcome}"
+        elif status in ('1차 심사 결과', '우선협상대상자', '접수 결과') and (
+                not p.get('deadline') or last['date'] > str(p['deadline'])[:10]):
+            # After the deadline the latest stage is what readers need.
+            names = p.get('preferred_gps') if status == '우선협상대상자' else p.get('shortlisted_gps')
+            timing = f"{short_date(last['date'])} {status}" + (f" · {len(set(names))}개사" if names else '')
         elif p.get('deadline'):
             timing = f"{short_date(p['deadline'])} 마감"
             if p['status'] == '접수 중':
@@ -302,8 +311,15 @@ def build(data, out, gp_profiles=None):
     options = ''.join(f'<option value="{h(k)}">{h(v[0]["institution_name"])}</option>' for k,v in institutions.items())
     shown = {p['display_status'] for p in programs}
     statuses = ''.join(f'<option>{h(s)}</option>' for s in [*[s for s in STATUS_ORDER if s in shown], *sorted(shown - set(STATUS_ORDER))])
-    body = f'<header class="list-header"><p class="result-summary"><span id="count">{len(programs)}개 사업</span> · <a class="list-link" href="institution-directory.html">출자기관 {len(institutions)}곳</a></p></header><div class="controls"><input aria-label="사업 검색" placeholder="기관·사업명 검색"><select aria-label="진행 상태"><option value="">모든 상태</option>{statuses}</select><select aria-label="출자기관"><option value="">모든 기관</option>{options}</select></div>'+''.join(row(p) for p in programs)+'<p id="empty" hidden>조건에 맞는 사업이 없습니다.</p>'
-    body += '''<script>const q=document.querySelector('input'),s=document.querySelectorAll('select');function filter(){let n=0;document.querySelectorAll('.program').forEach(r=>{r.hidden=!((r.textContent+" "+r.dataset.search).toLowerCase().includes(q.value.toLowerCase())&&(!s[0].value||r.dataset.status===s[0].value)&&(!s[1].value||r.dataset.institution===s[1].value));if(!r.hidden)n++});document.querySelector('#count').textContent=n+'개 사업';document.querySelector('#empty').hidden=n!==0}q.addEventListener('input',filter);s.forEach(e=>e.addEventListener('change',filter));(function(){const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());const today=Date.parse(p+'T00:00:00Z');document.querySelectorAll('[data-lp-dday]').forEach(e=>{const n=Math.round((Date.parse(e.dataset.lpDday+'T00:00:00Z')-today)/86400000);e.textContent=n>0?' · D-'+n:(n===0?' · 오늘 마감':'')})})();</script>'''
+    body = f'<header class="list-header"><p class="result-summary"><span id="count">{len(programs)}개 사업</span> · <a class="list-link" href="institution-directory.html">출자기관 {len(institutions)}곳</a></p></header><div class="controls"><input aria-label="사업 검색" placeholder="기관·사업명 검색"><select aria-label="진행 상태"><option value="">모든 상태</option>{statuses}</select><select aria-label="출자기관"><option value="">모든 기관</option>{options}</select></div>'
+    sections = (('진행 중', [p for p in programs if p['display_status'] not in RESULT_STATUSES and p['display_status'] != '공고']),
+                ('결과 발표', [p for p in programs if p['display_status'] in RESULT_STATUSES]),
+                ('지난 공고', [p for p in programs if p['display_status'] == '공고']))
+    for label, group in sections:
+        if group:
+            body += f'<section class="program-section"><h2 class="section-title">{h(label)} <span>{len(group)}</span></h2>' + ''.join(row(p) for p in group) + '</section>'
+    body += '<p id="empty" hidden>조건에 맞는 사업이 없습니다.</p>'
+    body += '''<script>const q=document.querySelector('input'),s=document.querySelectorAll('select');function filter(){let n=0;document.querySelectorAll('.program').forEach(r=>{r.hidden=!((r.textContent+" "+r.dataset.search).toLowerCase().includes(q.value.toLowerCase())&&(!s[0].value||r.dataset.status===s[0].value)&&(!s[1].value||r.dataset.institution===s[1].value));if(!r.hidden)n++});document.querySelectorAll('.program-section').forEach(sec=>{const k=sec.querySelectorAll('.program:not([hidden])').length;sec.hidden=k===0;sec.querySelector('.section-title span').textContent=k});document.querySelector('#count').textContent=n+'개 사업';document.querySelector('#empty').hidden=n!==0}q.addEventListener('input',filter);s.forEach(e=>e.addEventListener('change',filter));(function(){const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());const today=Date.parse(p+'T00:00:00Z');document.querySelectorAll('[data-lp-dday]').forEach(e=>{const n=Math.round((Date.parse(e.dataset.lpDday+'T00:00:00Z')-today)/86400000);e.textContent=n>0?' · D-'+n:(n===0?' · 오늘 마감':'')})})();</script>'''
     (out/'index.html').write_text(shell('출자사업',body,as_of,path=''))
     for p in programs:
         urls = {}
