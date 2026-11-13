@@ -11,6 +11,15 @@ Codex와 Claude가 번갈아 작업을 이어받는 기록이다. 맨 위 `현�
 - 남은 개선 과제는 [서비스 품질 백로그](service_quality_backlog.md)의 `열린 과제` 순서를 따른다. 사용자 승인 없이 운영 workflow를 수동 실행하거나 배포하지 않는다.
 - 사용자 컴퓨터의 작업 폴더(`korea-pef-db`)는 5c321e0에 머물러 있다. 그 폴더의 git 갱신에는 파일 삭제 권한이 필요해 이번 세션에서 갱신하지 못했다. 거기서 작업을 시작하면 먼저 `git pull`한다. `.git/stale-maintenance-lock-20261113`은 남은 잠금 파일을 옮겨 둔 것이라 지워도 된다.
 
+## 남은 과제 연속 진행 (B-6·C-9·B-5·D-8) — 2026-11-13 14:35 KST (작성: Claude)
+
+- 사용자 지시 "순서대로 다 진행"에 따라 진행. 운영 반영은 14:21 사용자 승인(①Supabase 읽기 전용 함수 ②후보 workflow 1회 ③15:20 수집 뒤 GP 재배포, ④과거 이력 본문·첨부 각 1묶음)을 받았다.
+- **B-6** d33d03c·4462d10: `find-lp-reported-results.yml`(월 08:43) + `lp_reported_result_candidates.py`. 실제 [43372669277](https://github.com/pkkong/korea-pef-db/actions/runs/43372669277) 성공: 결과 미반영 후보 = 총회연금 하반기 2차(11/11 4곳), 산은 남부권·세컨더리(→ B-5가 공식 명단으로 해결 예정), 수은 하반기 글로벌 성장(노앤 보도). 첫 실행에서 PostgREST 1000행 상한으로 9월 이전 기사를 못 읽은 문제를 페이지 읽기로 고쳤다. 과기공 2026은 6곳으로 보강(인베스트조선 11/02).
+- **C-9** a4d8b76: 운용사 표기 변형 통합, LP→GP 프로필 링크(GP 게시 프로필 59곳 중 하나로 맞을 때만), LP→GP 계약 `lp_public_notice_context()`. 함수는 14:2x에 운영 DB에 적용했다(`services/lp/supabase/migrations/20261113090000_lp_public_notice_context.sql`). 계약 데이터는 다음 LP 발행 때 처음 저장된다. GP 재배포는 그 뒤.
+- **B-5** 627a21e: 산업은행 결과 첨부 표 판독. 저장 원문 기준 남부권 PE 2곳, 세컨더리 중형 2곳 예상. 다음 LP 발행에서 반영.
+- **D-8** 4bd4929: LP 규칙을 `docs/lp_operating_rules.md`로 주제별 정리(원문 그대로, 단어 대조 0 누락).
+- 회귀 1,307검사 실패 0, 구조 계약 통과. 다음: 15:20 정기 수집 결과(사전 테스트, GP 프로필 링크, KDB 명단, 계약 데이터) 확인 → GP 재배포 → 성장금융 과거 본문(listing 42304967533 / resume 42530280170)·첨부(body 42530280170 / resume 42631503536) 각 1묶음.
+
 ## D-4 구버전 LP 정적 화면 경로 삭제 — 2026-11-13 (작성: Claude)
 
 - 운영 workflow·Vercel 앱에서 닿는 코드를 import 그래프로 확인한 뒤, 닿지 않는 옛 LP 경로를 지웠다: `lp_legacy_service_pages.py`, `build_lp_service_pages.py`, `build_lp_commitment_monitor.py`(+ scripts 래퍼), `scripts/build_service_site.py`, `lp_public_views.py`, `lp_public_context.py`, `lp_notice_view.py`, `lp_notice_identity.py`, `build_lp_profile_backlog.py`, `review_lp_commitment_notices.py`(+ 래퍼)와 이 코드만 검사하던 테스트(뉴스레터 테스트 파일 안 LP 함수 13개 포함). 약 1만 8천 줄 삭제.
