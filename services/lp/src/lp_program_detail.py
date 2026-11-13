@@ -269,7 +269,11 @@ def render_detail_body(p, as_of=None):
             label = '우선협상 결과 원문' if result['type'] == '우선협상대상자' else '선정 결과 원문'
             if not p.get('preferred_gps') or result['url'] != p.get('manager_list_sources', {}).get('preferred_gps'):
                 body += f'<p>{link(result["url"], label)}</p>'
-    if p.get('mixed_scope') and (p.get('selected_gps') or p.get('preferred_gps') or p.get('shortlisted_gps')):
+    # Only an official result table that labels every selected manager 'PE' (e.g. KDB).
+    pe_only = bool(p.get('selected_gps')) and all((p.get('gp_tracks') or {}).get(g['name']) == 'PE' for g in p['selected_gps'])
+    if p.get('mixed_scope') and pe_only:
+        body += '<p class="muted">PE·VC 공동 모집 사업 중 PE 부문 선정 운용사입니다.</p>'
+    elif p.get('mixed_scope') and (p.get('selected_gps') or p.get('preferred_gps') or p.get('shortlisted_gps')):
         body += '<p class="muted">PE·VC 공동 모집 사업이라 선정 운용사에 벤처캐피탈이 포함될 수 있습니다.</p>'
     body += '</section>'
     return body + PLAN_SCRIPT

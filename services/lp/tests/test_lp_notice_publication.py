@@ -358,6 +358,53 @@ class BasicNoticePublicationTests(unittest.TestCase):
         self.assertIn('국내 중소기업', programs[0]['primary_investment']['text'])
 
 
+class KdbResultRosterTests(unittest.TestCase):
+    """KDB result tables lose cell borders; names are split only when unambiguous."""
+    TABLE = ('< 2026 남부권 지역성장지원펀드 위탁운용사 선정 결과 >지원분야지원 운용사명(가나다순)\n'
+             'PE더함파트너스릴슨프라이빗에쿼티\nVC리인베스트먼트원익투자파트너스이앤인베스트먼트')
+
+    def test_split_glued_names(self):
+        from services.lp.src.lp_notice_publication import split_glued_names
+        self.assertEqual(['아이엠엠인베스트먼트', '엘비인베스트먼트'], split_glued_names('아이엠엠인베스트먼트엘비인베스트먼트'))
+        self.assertEqual(['스카이레이크에쿼티파트너스', '에이티넘인베스트먼트'],
+                         split_glued_names('스카이레이크에쿼티파트너스에이티넘인베스트먼트'))
+        self.assertEqual(['미래에셋벤처투자/브레인자산운용'], split_glued_names('미래에셋벤처투자/브레인자산운용 (Co-GP)'))
+        # Two readings (one long name or two names) without a known name: no answer.
+        self.assertIsNone(split_glued_names('스마일게이트인베스트먼트파트너스인베스트먼트'))
+        self.assertEqual(['스마일게이트인베스트먼트', '파트너스인베스트먼트'],
+                         split_glued_names('스마일게이트인베스트먼트파트너스인베스트먼트', {'파트너스인베스트먼트'}))
+        self.assertIsNone(split_glued_names('컴퍼니케이파트너스'))
+        self.assertEqual(['컴퍼니케이파트너스'], split_glued_names('컴퍼니케이파트너스', {'컴퍼니케이파트너스'}))
+
+    def test_mixed_table_keeps_only_the_pe_field(self):
+        from services.lp.src.lp_notice_publication import kdb_result_roster
+        self.assertEqual([('PE', ['더함파트너스', '릴슨프라이빗에쿼티'])], kdb_result_roster(self.TABLE))
+        self.assertEqual([('중형', ['아이엠엠인베스트먼트', '엘비인베스트먼트'])], kdb_result_roster(
+            '<결과>\n지원분야선정 운용사명 (가나다순)중형아이엠엠인베스트먼트엘비인베스트먼트'))
+        self.assertEqual([], kdb_result_roster('지원분야운용사AI·IP노틱인베스트먼트(주)'))
+        self.assertEqual([], kdb_result_roster('운용사명(가나다순)\n중형이름모를곳'))
+
+    def test_result_attachment_becomes_pe_selection(self):
+        from services.lp.src.lp_notice_publication import _attach_result_roster
+        from services.lp.src.lp_program_service import validate
+        p = {'id': 'kdb-2026-x', 'institution_id': 'kdb', 'institution_name': '한국산업은행', 'title': 't',
+             'asset_scope': 'PE·VC 공동 모집', 'status': '선정 결과 발표', 'selected_gps': [],
+             'events': [{'date': '2026-05-07', 'type': '모집 공고', 'title': 'a', 'url': 'https://www.kdb.co.kr/a'},
+                        {'date': '2026-07-29', 'type': '선정 결과', 'title': 'b', 'url': 'https://www.kdb.co.kr/b'}]}
+        attachment = 'https://www.kdb.co.kr/fileView?groupId=1'
+        result = {'institution_id': 'kdb', 'title': '『2026 남부권 지역성장지원펀드』 위탁운용사 선정 결과', 'date': '2026-07-29',
+                  'url': 'https://www.kdb.co.kr/b', 'body': '선정 결과를 첨부파일과 같이 공고합니다.',
+                  'attachment_texts': {attachment: self.TABLE}, 'attachment_hashes': {attachment: 'a' * 64},
+                  'attachments': [{'name': '선정결과.hwp', 'url': attachment}]}
+        holds = []
+        _attach_result_roster(p, [result], holds)
+        self.assertEqual(['더함파트너스', '릴슨프라이빗에쿼티'], [g['name'] for g in p['selected_gps']])
+        self.assertEqual({'PE'}, {g['asset_scope'] for g in p['selected_gps']})
+        self.assertTrue(all(g['id'].startswith('kdb-') for g in p['selected_gps']))
+        self.assertEqual('선정 완료', p['status'])
+        validate({'as_of': '2026-11-12', 'programs': [p]})
+
+
 if __name__ == '__main__':
     unittest.main()
 

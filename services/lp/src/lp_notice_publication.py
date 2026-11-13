@@ -372,23 +372,123 @@ def ibk_result_roster(text):
     return rosters
 
 
-def _attach_result_roster(p, members, holds):
-    """Official result names posted in the result notice body (IBK only)."""
-    if p.get('institution_id') != 'ibk' or p.get('selected_gps'):
+# KDB posts results as an attachment table whose text extraction loses the cell
+# borders: '지원분야 선정 운용사명(가나다순)\nPE더함파트너스릴슨프라이빗에쿼티'.
+# Names are split only where exactly one reading is possible.
+KDB_FIELD_LABELS = ('PE', 'VC', '대형', '중형', '소형', '도전', '루키', '일반')
+GP_SUFFIX_WORDS = tuple(sorted((
+    '프라이빗에쿼티', '프라이빗에퀴티', '인베스트먼트', '파트너스', '자산운용', '캐피탈', '에쿼티', '에퀴티',
+    '벤처스', '벤처투자', '컴퍼니', '코리아', '증권', '매니지먼트', '홀딩스', '솔루션', '투자'), key=len, reverse=True))
+
+
+def _gp_key(name):
+    return re.sub(r'\(주\)|㈜|주식회사|\s+', '', name or '')
+
+
+def _rule_valid_name(piece):
+    """Stem + at most two trailing suffix words; the stem holds no suffix word."""
+    stem, words = piece, 0
+    while words < 2:
+        word = next((w for w in GP_SUFFIX_WORDS if stem.endswith(w) and len(stem) > len(w)), None)
+        if not word:
+            break
+        stem, words = stem[:-len(word)], words + 1
+    return words > 0 and bool(stem) and not any(w in stem for w in GP_SUFFIX_WORDS) and bool(re.fullmatch(r'[가-힣A-Za-z0-9&]+', stem))
+
+
+def split_glued_names(text, known=frozenset(), limit=64):
+    """Split concatenated manager names. Returns a list, or None when the
+    reading is not unique. Co-GP pairs joined by '-' or '/' stay one manager."""
+    text = re.sub(r'\(\s*Co-?GP\s*\)', '', text, flags=re.I)
+    text = re.sub(r'\s*([-/])\s*', r'\1', text).replace(' ', '')
+    if not text:
+        return None
+    known = {_gp_key(k) for k in known}
+
+    def piece_ok(piece):
+        if piece in known:
+            return 2
+        return 1 if _rule_valid_name(piece) else 0
+
+    from functools import lru_cache
+
+    @lru_cache(maxsize=None)
+    def solve(i):
+        if i == len(text):
+            return [((), 0)]
+        found = []
+        for j in range(i + 2, min(len(text), i + 40) + 1):
+            chunk = text[i:j]
+            parts = re.split(r'([-/])', chunk)
+            if parts[0] == '' or parts[-1] == '' or len(parts) > 3:
+                continue
+            scores = [piece_ok(x) for x in parts[::2]]
+            if not all(scores):
+                continue
+            for rest, score in solve(j):
+                found.append(((chunk,) + rest, score + sum(scores)))
+                if len(found) > limit:
+                    return found
+        return found
+
+    options = solve(0)
+    if not options or len(options) > limit:
+        return None
+    best = max(score for _, score in options)
+    winners = {names for names, score in options if score == best}
+    return list(next(iter(winners))) if len(winners) == 1 else None
+
+
+def kdb_result_roster(text, known=frozenset()):
+    """[(field, [names])] from a KDB result table, or [] when any line is unclear."""
+    match = re.search(r'운용사명\s*(?:\(가나다순\))?', text)
+    if not match:
+        return []
+    rosters = []
+    for line in text[match.end():].splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        label = next((l for l in KDB_FIELD_LABELS if line.startswith(l)), None)
+        names = split_glued_names(line[len(label):], known) if label else None
+        if not names:
+            return []
+        rosters.append((label, names))
+    labels = {label for label, _ in rosters}
+    if labels & {'PE', 'VC'}:
+        # Mixed PE·VC programs: only the PE field is a PE result.
+        rosters = [(label, names) for label, names in rosters if label == 'PE']
+    return rosters
+
+
+def _attach_result_roster(p, members, holds, known=frozenset()):
+    """Official result names: IBK result body, KDB result attachment table."""
+    institution = p.get('institution_id')
+    if institution not in ('ibk', 'kdb') or p.get('selected_gps'):
         return
     results = [n for n in members if _event(n)['type'] in ('선정 결과', '최종 선정')]
     if len(results) != 1:
         return
     result = results[0]
-    rosters = ibk_result_roster(result['body'])
+    if institution == 'ibk':
+        rosters = ibk_result_roster(result['body'])
+    else:
+        tables = [kdb_result_roster(text, known) for text in _texts(result)[1:]]
+        tables = [t for t in tables if t]
+        if len(tables) != 1:
+            if tables:
+                holds.append({'stage': 'result_roster', 'url': result['url'], 'reason': '결과 첨부 표가 여러 개'})
+            return
+        rosters = tables[0]
     names = [name for _, names in rosters for name in names]
     if not names:
         return
     if len(set(names)) != len(names):
         holds.append({'stage': 'result_roster', 'url': result['url'], 'reason': '선정 명단 중복'})
         return
-    p['selected_gps'] = [{'name': name, 'id': 'ibk-' + hashlib.sha256(name.encode()).hexdigest()[:16],
-                          'source_url': result['url'], 'asset_scope': p.get('asset_scope', 'PE'),
+    p['selected_gps'] = [{'name': name, 'id': f'{institution}-' + hashlib.sha256(name.encode()).hexdigest()[:16],
+                          'source_url': result['url'],
+                          'asset_scope': 'PE' if {l for l, _ in rosters} == {'PE'} else p.get('asset_scope', 'PE'),
                           'identity_match': 'official_result_body'} for name in names]
     p.setdefault('gp_tracks', {}).update({name: league for league, names in rosters for name in names})
     p.setdefault('manager_list_sources', {})['selected_gps'] = result['url']
@@ -446,6 +546,12 @@ def publish_basic_notices(data, growth_notices, checked_at):
     groups.update(pck_groups)
     holds.extend(pck_holds)
     programs = {p['id']: copy.deepcopy(p) for p in data['programs']}
+    # Manager names already published anywhere help split glued result tables.
+    known_names = frozenset(
+        name for p in data['programs']
+        for name in [*(g.get('name') for g in p.get('selected_gps') or []), *(p.get('preferred_gps') or []),
+                     *(p.get('shortlisted_gps') or []), *(p.get('applicants_gps') or [])]
+        if isinstance(name, str) and name.strip())
     for key, members in sorted(groups.items()):
         try:
             originals = [n for n in members if _event(n)['type'] == '모집 공고']
@@ -545,7 +651,7 @@ def publish_basic_notices(data, growth_notices, checked_at):
                         p.update(deadline=revised[0], deadline_precision=revised[1], deadline_source_url=latest['url'])
             _refresh(p, members, checked_at)
             _attach_preferred_roster(p, original, members, checked_at, holds)
-            _attach_result_roster(p, members, holds)
+            _attach_result_roster(p, members, holds, known_names)
             p['publication_version'] = 1
             p['source_program_key'] = key
             programs[p['id']] = p
