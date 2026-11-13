@@ -58,8 +58,13 @@ class Links(HTMLParser):
                 self.found.append((f"img:{a.get('alt', '')[:30]}", a["src"]))
 
 
+WIKI_UA = "kpef-lp-logo-review/1.0 (https://github.com/pkkong/korea-pef-db; review only)"
+
+
 def fetch(url: str, timeout: int = 20) -> tuple[bytes, str]:
-    request = Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
+    # Wikimedia asks for a descriptive agent and rejects browser look-alikes.
+    agent = WIKI_UA if "wiki" in urlparse(url).netloc else UA
+    request = Request(url, headers={"User-Agent": agent, "Accept": "*/*"})
     context = ssl.create_default_context()
     try:
         response = urlopen(request, timeout=timeout, context=context)
@@ -71,8 +76,8 @@ def fetch(url: str, timeout: int = 20) -> tuple[bytes, str]:
         return response.read(MAX_BYTES + 1), response.headers.get("Content-Type", "")
 
 
-def wiki_image(title: str) -> str:
-    api = ("https://ko.wikipedia.org/w/api.php?action=query&prop=pageimages&piprop=original&redirects=1&format=json&titles="
+def wiki_image(title: str, lang: str = "ko") -> str:
+    api = (f"https://{lang}.wikipedia.org/w/api.php?action=query&prop=pageimages&piprop=original&redirects=1&format=json&titles="
            + quote(title))
     data = json.loads(fetch(api)[0])
     for page in data.get("query", {}).get("pages", {}).values():
@@ -80,6 +85,34 @@ def wiki_image(title: str) -> str:
         if original:
             return original
     return ""
+
+
+def commons_files(query: str, limit: int = 4) -> list[str]:
+    """Original URLs of Commons files matching a search (logos, symbols)."""
+    api = ("https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&format=json"
+           f"&gsrlimit={limit}&prop=imageinfo&iiprop=url&gsrsearch=" + quote(query))
+    data = json.loads(fetch(api)[0])
+    pages = sorted(data.get("query", {}).get("pages", {}).values(), key=lambda p: p.get("index", 99))
+    return [p["imageinfo"][0]["url"] for p in pages if p.get("imageinfo")]
+
+
+COMMONS_QUERIES = {
+    "kdb": ["KDB Korea Development Bank logo", "한국산업은행 로고"], "kexim": ["Export-Import Bank of Korea logo", "한국수출입은행"],
+    "kfcc": ["Saemaul Geumgo logo", "새마을금고 로고"], "cu": ["National Credit Union Federation of Korea logo", "신협 로고"],
+    "suhyup": ["Suhyup logo", "수협 로고"], "sema": ["과학기술인공제회"], "kfinco": ["전문건설공제조합"],
+    "pck_pension": ["총회연금재단"], "kbiz": ["Korea Federation of SMEs logo", "중소기업중앙회"],
+    "mmaa": ["Military Mutual Aid Association logo", "군인공제회"], "kic": ["Korea Investment Corporation logo"],
+    "kobc": ["Korea Ocean Business Corporation logo"], "moel_eif": ["Ministry of Employment and Labor Korea logo"],
+    "moel_iaci": ["Korea Workers' Compensation and Welfare Service logo", "근로복지공단"], "kafi": ["농업정책보험금융원"],
+    "kgrowth": ["Korea Growth Investment Corporation logo"], "koreapost": ["Korea Post logo"], "kamco": ["KAMCO logo"],
+}
+KNOWN_URLS = {
+    "kdb": ["https://www.kdb.co.kr/wcmscontents/hmp/ch/bi/bi/rc/img_symbol_chbi.png"],
+    "kbiz": ["https://www.kbiz.or.kr/file/resource/image/AOS_192.png"],
+    "mmaa": ["https://www.mmaa.or.kr/images/common/logo.png"],
+    "kexim": ["https://www.koreaexim.go.kr/humanframe/theme/resources/assets/img/main/spr_gnb_ci.svg"],
+    "pmaa": ["https://www.pmaa.or.kr/icon.png"],
+}
 
 
 def save(out: Path, code: str, kind: str, url: str, manifest: list[dict]) -> None:
@@ -131,14 +164,27 @@ def main() -> int:
                 continue
             seen.add(url)
             save(args.out, code, kind, url, manifest)
+        for url in KNOWN_URLS.get(code, []):
+            if url not in seen:
+                seen.add(url)
+                save(args.out, code, "registry", url, manifest)
         title = WIKI_TITLES.get(code)
         if title:
             try:
                 image = wiki_image(title)
-                if image:
+                if image and image not in seen:
+                    seen.add(image)
                     save(args.out, code, "wikipedia", image, manifest)
             except Exception as exc:  # noqa: BLE001
                 manifest.append({"code": code, "kind": "wikipedia", "url": title, "error": type(exc).__name__})
+        for query in COMMONS_QUERIES.get(code, []):
+            try:
+                for url in commons_files(query):
+                    if url not in seen and re.search(r"\.(svg|png|jpg|jpeg|gif)$", url, re.I):
+                        seen.add(url)
+                        save(args.out, code, f"commons:{query[:20]}", url, manifest)
+            except Exception as exc:  # noqa: BLE001
+                manifest.append({"code": code, "kind": "commons", "url": query, "error": type(exc).__name__})
     (args.out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
     ok = sum(1 for row in manifest if row.get("file"))
     print(f"saved={ok} attempts={len(manifest)}")
