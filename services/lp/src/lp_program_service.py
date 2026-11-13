@@ -11,6 +11,73 @@ from datetime import date, timedelta
 
 ROOT = Path(__file__).resolve().parents[3]
 
+GP_PUBLIC_URL = os.environ.get('GP_PUBLIC_URL', 'https://kpef-gp.vercel.app').rstrip('/')
+GP_ALIAS_RULES = ROOT / 'data' / 'gp_alias_merge_rules.csv'
+_LEGAL_FORMS = re.compile(r'\(주\)|㈜|주식회사|유한책임회사|유한회사')
+
+
+def _raw_gp_key(name):
+    key = _LEGAL_FORMS.sub('', str(name or ''))
+    key = re.sub(r'[\s·.,]+', '', key)
+    # Spelling variants of the same romanised words.
+    key = key.replace('에퀴티', '에쿼티').replace('매니져스', '매니저스')
+    return key.lower()
+
+
+def _load_gp_alias_rules(path=GP_ALIAS_RULES):
+    import csv
+    rules = {}
+    try:
+        with open(path, encoding='utf-8') as handle:
+            for row in csv.DictReader(handle):
+                if row.get('verification_decision') == 'MERGE_ALIAS':
+                    rules[_raw_gp_key(row['alias_gp_name'])] = _raw_gp_key(row['canonical_gp_name'])
+    except OSError:
+        pass
+    return rules
+
+
+_GP_ALIASES = _load_gp_alias_rules()
+
+
+def gp_name_key(name):
+    """Comparison key for one manager across LPs: legal forms, spaces and known
+    spelling variants removed, reviewed GP aliases (gp_alias_merge_rules.csv) applied."""
+    key = _raw_gp_key(name)
+    return _GP_ALIASES.get(key, key)
+
+
+def gp_profile_index(profiles):
+    """Map published GP profile IDs and unambiguous name keys to GP service URLs.
+
+    `profiles` is the GP public contract read at publish time: {profile_id: name}
+    for the published snapshot's gp-<id>.html pages. Missing contract -> no links."""
+    by_id, by_name, clashes = {}, {}, set()
+    for pid, name in (profiles or {}).items():
+        if not re.fullmatch(r'[0-9]+', str(pid)) or not str(name or '').strip():
+            continue
+        url = f'{GP_PUBLIC_URL}/gp-{pid}.html'
+        by_id[str(pid)] = url
+        key = gp_name_key(name)
+        if key in by_name and by_name[key] != url:
+            clashes.add(key)
+        by_name[key] = url
+    for key in clashes:
+        by_name.pop(key, None)
+    return by_id, by_name
+
+
+def gp_profile_url(gp, index):
+    by_id, by_name = index
+    if isinstance(gp, dict):
+        if gp.get('master_id') and str(gp['master_id']) in by_id:
+            return by_id[str(gp['master_id'])]
+        name = gp.get('name')
+    else:
+        name = gp
+    return by_name.get(gp_name_key(name))
+
+
 def validate(data):
     date.fromisoformat(data['as_of'])
     ids = set()
@@ -87,8 +154,38 @@ def shell(title, body, as_of, description='', path=None):
             + (f'<link rel="canonical" href="{h(lp_url)}/{h(path)}"><meta property="og:url" content="{h(lp_url)}/{h(path)}">' if path is not None else ''))
     return f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{h(title)} · LP</title>{meta}<link rel="stylesheet" href="/assets/service.css"><style>{CSS}\n{sample_css}</style></head><body class="lp-sample"><main><div class="sample-brand"><a href="{newsletter_url}/">Korea PEF</a><span>LP</span></div>{body}</main><nav class="bottom-nav" aria-label="하단 메뉴"><a href="{newsletter_url}/"><span aria-hidden="true" class="nav-dot nav-icon-brief"></span><strong>브리프</strong></a><a class="active" aria-current="page" href="index.html"><span aria-hidden="true" class="nav-dot nav-icon-lp"></span><strong>LP</strong></a><a href="{gp_url}/"><span aria-hidden="true" class="nav-dot nav-icon-gp"></span><strong>GP</strong></a></nav></body></html>'
 
-def build(data, out):
+PUBLIC_NOTICE_CONTEXT_VERSION = 'lp-public-notice-context-v1'
+
+
+def public_notice_context(programs, as_of):
+    """LP -> GP public contract: official selection results only (no press-reported
+    results, no candidates). Same row shape GP's hydrate_gp_lp_context.py reads."""
+    lp_url = os.environ.get('LP_PUBLIC_URL', 'https://kpef-lp.vercel.app').rstrip('/')
+    rows = []
+    for p in programs:
+        if not p.get('selected_gps'):
+            continue
+        result_dates = [e['date'] for e in p['events'] if e['type'] in ('최종 선정', '선정 결과')]
+        rows.append({
+            'lpCode': p['institution_id'],
+            'lpName': p['institution_name'],
+            'noticeId': p['id'],
+            'title': p.get('public_title') or p['title'],
+            'programName': p.get('list_title') or p.get('public_title') or p['title'],
+            'eventType': 'final_selection',
+            'eventDate': max(result_dates) if result_dates else max(e['date'] for e in p['events']),
+            'announcedDate': min(e['date'] for e in p['events']),
+            'noticeUrl': f'{lp_url}/program-{p["id"]}.html',
+            'assetClass': 'PE·VC' if p.get('mixed_scope') else 'PE',
+            'selectedGpNames': list(dict.fromkeys(g['name'] for g in p['selected_gps'])),
+        })
+    rows.sort(key=lambda r: (r['eventDate'], r['noticeId']), reverse=True)
+    return {'schemaVersion': PUBLIC_NOTICE_CONTEXT_VERSION, 'reportDate': str(as_of)[:10], 'notices': rows}
+
+
+def build(data, out, gp_profiles=None):
     validate(data)
+    profile_index = gp_profile_index(gp_profiles)
     out.mkdir(parents=True, exist_ok=True)
     as_of = data['as_of']
     try:
@@ -181,6 +278,18 @@ def build(data, out):
     body += '''<script>const q=document.querySelector('input'),s=document.querySelectorAll('select');function filter(){let n=0;document.querySelectorAll('.program').forEach(r=>{r.hidden=!((r.textContent+" "+r.dataset.search).toLowerCase().includes(q.value.toLowerCase())&&(!s[0].value||r.dataset.status===s[0].value)&&(!s[1].value||r.dataset.institution===s[1].value));if(!r.hidden)n++});document.querySelector('#count').textContent=n+'개 사업';document.querySelector('#empty').hidden=n!==0}q.addEventListener('input',filter);s.forEach(e=>e.addEventListener('change',filter));(function(){const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());const today=Date.parse(p+'T00:00:00Z');document.querySelectorAll('[data-lp-dday]').forEach(e=>{const n=Math.round((Date.parse(e.dataset.lpDday+'T00:00:00Z')-today)/86400000);e.textContent=n>0?' · D-'+n:(n===0?' · 오늘 마감':'')})})();</script>'''
     (out/'index.html').write_text(shell('출자사업',body,as_of,path=''))
     for p in programs:
+        urls = {}
+        for gp in p['selected_gps']:
+            url = gp_profile_url(gp, profile_index)
+            if url:
+                urls[gp['name']] = url
+        others = list(p.get('preferred_gps') or []) + list(p.get('shortlisted_gps') or [])
+        others += list((p.get('reported_result') or {}).get('managers') or [])
+        for name in others:
+            url = gp_profile_url(name, profile_index)
+            if url:
+                urls.setdefault(name, url)
+        p['gp_profile_urls'] = urls
         (out/f'program-{p["id"]}.html').write_text(shell(p['public_title'], render_detail_body(p, as_of), as_of,
             description=f"{p['institution_name']} · {p['public_title']} · {display_status(p['status'])}. 모집 일정과 선정 운용사를 공식 원문과 함께 정리합니다.",
             path=f'program-{p["id"]}.html'))
@@ -194,7 +303,7 @@ def build(data, out):
         return x
     for key, entries in gp_programs.items():
         for _, gp in entries:
-            ids = [f'k:{key}', 'n:' + re.sub(r'\s+', '', gp['name'])]
+            ids = [f'k:{key}', 'n:' + gp_name_key(gp['name'])]
             if gp.get('master_id'):
                 ids.append(f"m:{gp['master_id']}")
             for other in ids[1:]:
@@ -203,12 +312,12 @@ def build(data, out):
     for key, entries in gp_programs.items():
         histories[find(f'k:{key}')].extend(entries)
     def selection_count(group):
-        return len({g['name'] for p in group for g in p['selected_gps']})
+        return len({gp_name_key(g['name']) for p in group for g in p['selected_gps']})
     def gp_links(group):
         names = {}
         for p in group:
             for g in p['selected_gps']:
-                names.setdefault(re.sub(r'\s+', '', g['name']), g)
+                names.setdefault(gp_name_key(g['name']), g)
         return ''.join(f'<li><a href="selected-gp-{h(g["page_key"])}.html">{h(g["name"])}</a></li>' for g in names.values())
     directory = sorted(institutions.items(), key=lambda kv: max(max(e['date'] for e in p['events']) for p in kv[1]), reverse=True)
     for key,group in institutions.items():
@@ -232,11 +341,14 @@ def build(data, out):
     for key,group in gp_programs.items():
         gp=gp_index[key]
         merged = list({p['id']: (p, g) for p, g in sorted(histories[find(f'k:{key}')], key=lambda pg: max(e['date'] for e in pg[0]['events']), reverse=True)}.values())
-        body=f'<a href="index.html">← 출자사업</a><header><div class="eyebrow">GP / 출자사업 선정 이력</div><h1>{h(gp["name"])}</h1><p>선정 이력 {len(merged)}건</p></header><h2>선정된 사업</h2>'
+        profile = gp_profile_url(gp, profile_index) or next((u for u in (gp_profile_url(g, profile_index) for _, g in merged) if u), None)
+        profile_link = f'<p><a class="gp-profile-link" href="{h(profile)}">GP 프로필 보기 →</a></p>' if profile else ''
+        body=f'<a href="index.html">← 출자사업</a><header><div class="eyebrow">GP / 출자사업 선정 이력</div><h1>{h(gp["name"])}</h1><p>선정 이력 {len(merged)}건</p>{profile_link}</header><h2>선정된 사업</h2>'
         for p,g in merged: body+=row(p)+f'<p>{source(g["source_url"],"공식 선정 근거")}</p>'
         body+='<p class="muted">수록된 출자사업의 선정 이력입니다.</p>'
         (out/f'selected-gp-{key}.html').write_text(shell(gp['name'],body,as_of,description=f"{gp['name']}의 출자사업 선정 이력 {len(merged)}건.",path=f'selected-gp-{key}.html'))
-    return {'programs':len(programs),'institutions':len(institutions),'gps':len(gp_programs),'as_of':as_of}
+    return {'programs':len(programs),'institutions':len(institutions),'gps':len(gp_programs),'as_of':as_of,
+            'public_notice_context': public_notice_context(programs, as_of)}
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--input',type=Path,required=True);parser.add_argument('--out',type=Path,required=True);args=parser.parse_args()

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -20,7 +21,10 @@ if str(REPO_ROOT) not in sys.path:
 from services.shared.src.daily_news_common import GpAlias, load_gp_aliases, normalize_for_match  # noqa: E402
 
 
+# Retired legacy static LP export; used only when no Supabase contract is configured.
 DEFAULT_LP_CONTEXT_URL = "https://pkkong.github.io/kpef-newsletter/lp-notices.json"
+# LP public contract RPC (services/lp/supabase/migrations/20261113090000_lp_public_notice_context.sql).
+LP_CONTEXT_RPC = "lp_public_notice_context"
 CONTEXT_SOURCE = "gp_public_lp_context"
 CONTEXT_VERSION = "lp-public-notice-context-v1"
 NOTICE_ID_MODULUS = 8_000_000_000_000_000_000
@@ -108,10 +112,7 @@ def ensure_lp_context_schema(conn: sqlite3.Connection) -> None:
     )
 
 
-def fetch_context(context_url: str) -> dict[str, object]:
-    request = Request(context_url, headers={"User-Agent": "kpef-gp-lp-context/1.0"})
-    with urlopen(request, timeout=30) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+def _validate_payload(payload: object) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise GPLPContextError("LP public context is not an object")
     if _clean(payload.get("schemaVersion")) != CONTEXT_VERSION:
@@ -119,6 +120,29 @@ def fetch_context(context_url: str) -> dict[str, object]:
     if not isinstance(payload.get("notices"), list):
         raise GPLPContextError("LP public context notices must be a list")
     return payload
+
+
+def fetch_context(context_url: str) -> dict[str, object]:
+    request = Request(context_url, headers={"User-Agent": "kpef-gp-lp-context/1.0"})
+    with urlopen(request, timeout=30) as response:
+        return _validate_payload(json.loads(response.read().decode("utf-8")))
+
+
+def fetch_context_rpc(supabase_url: str, api_key: str) -> dict[str, object]:
+    """Read the LP service's published public contract through its read-only RPC."""
+    request = Request(
+        f"{supabase_url.rstrip('/')}/rest/v1/rpc/{LP_CONTEXT_RPC}",
+        data=b"{}",
+        method="POST",
+        headers={
+            "apikey": api_key,
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "kpef-gp-lp-context/1.0",
+        },
+    )
+    with urlopen(request, timeout=30) as response:
+        return _validate_payload(json.loads(response.read().decode("utf-8")))
 
 
 def _aliases_by_normalized_name(aliases: list[GpAlias]) -> dict[str, list[GpAlias]]:
@@ -241,10 +265,15 @@ def hydrate_context(db_path: Path, payload: dict[str, object]) -> dict[str, int]
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Hydrate a temporary GP build DB from public LP notice context")
     parser.add_argument("--db", type=Path, required=True)
-    parser.add_argument("--context-url", default=DEFAULT_LP_CONTEXT_URL)
+    parser.add_argument("--context-url", help="read a static context file instead of the LP Supabase contract")
     args = parser.parse_args(argv)
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    api_key = os.environ.get("SUPABASE_PUBLISHABLE_KEY") or os.environ.get("SUPABASE_ANON_KEY", "")
     try:
-        payload = fetch_context(args.context_url)
+        if args.context_url or not (supabase_url and api_key):
+            payload = fetch_context(args.context_url or DEFAULT_LP_CONTEXT_URL)
+        else:
+            payload = fetch_context_rpc(supabase_url, api_key)
         result = hydrate_context(args.db, payload)
     except (OSError, ValueError, sqlite3.Error, GPLPContextError) as exc:
         print(f"FAIL GP LP context: {exc}", file=sys.stderr)

@@ -196,6 +196,82 @@ class ProgramListPresentation(unittest.TestCase):
         self.assertIn('11.04 결과 발표', index)
 
 
+class GpIdentityAndProfileLinks(unittest.TestCase):
+    """Same manager across LPs and links to the GP service's published profiles."""
+    program = ProgramListPresentation.program
+    selected = ProgramListPresentation.selected
+    def render_with(self, programs, profiles):
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder)
+            build({'as_of': '2026-11-12', 'programs': programs}, out, gp_profiles=profiles)
+            return {p.name: p.read_text() for p in out.glob('*.html')}
+
+    def test_name_key_ignores_legal_form_spacing_and_spelling_variants(self):
+        from services.lp.src.lp_program_service import gp_name_key
+        self.assertEqual(gp_name_key('어펄마캐피탈 매니져스코리아'), gp_name_key('어펄마캐피탈매니저스코리아'))
+        self.assertEqual(gp_name_key('(주)케이스톤파트너스'), gp_name_key('케이스톤파트너스 주식회사'))
+        # Reviewed rename in data/gp_alias_merge_rules.csv.
+        self.assertEqual(gp_name_key('우리프라이빗에퀴티'), gp_name_key('우리프라이빗에퀴티자산운용'))
+        self.assertNotEqual(gp_name_key('브이아이지파트너스'), gp_name_key('브이아이지파트너스이호'))
+
+    def test_spelling_variants_share_one_history(self):
+        pages = self.render_with([
+            self.selected('a1', 'kgrowth', '한국성장금융', '어펄마캐피탈 매니져스코리아', 'kg-1'),
+            self.selected('b1', 'kexim', '한국수출입은행', '어펄마캐피탈매니저스코리아', 'kx-1', event='2026-10-01'),
+        ], {})
+        for key in ('kg-1', 'kx-1'):
+            self.assertIn('선정 이력 2건', pages[f'selected-gp-{key}.html'])
+        self.assertIn('선정 운용사 1곳', pages['institution-kgrowth.html'])
+
+    def test_profile_links_by_master_id_or_exact_name(self):
+        pages = self.render_with([
+            self.selected('a1', 'kgrowth', '한국성장금융', '에스지프라이빗에쿼티', '138', master='138'),
+            self.selected('b1', 'kexim', '한국수출입은행', '우리프라이빗에퀴티', 'kx-1'),
+            self.selected('c1', 'kexim', '한국수출입은행', '공개프로필없는운용사', 'kx-2'),
+        ], {'138': '에스지프라이빗에쿼티', '719': '우리프라이빗에퀴티자산운용'})
+        self.assertIn('href="https://kpef-gp.vercel.app/gp-138.html">GP 프로필 보기', pages['selected-gp-138.html'])
+        self.assertIn('href="https://kpef-gp.vercel.app/gp-719.html">GP 프로필 보기', pages['selected-gp-kx-1.html'])
+        self.assertNotIn('GP 프로필', pages['selected-gp-kx-2.html'])
+        self.assertIn('class="gp-profile" href="https://kpef-gp.vercel.app/gp-719.html"', pages['program-b1.html'])
+
+    def test_ambiguous_profile_names_and_missing_contract_give_no_link(self):
+        programs = [self.selected('a1', 'kgrowth', '한국성장금융', '같은이름', 'kg-1')]
+        pages = self.render_with(copy.deepcopy(programs), {'1': '같은이름', '2': '같은 이름'})
+        self.assertNotIn('GP 프로필', pages['selected-gp-kg-1.html'])
+        pages = self.render_with(copy.deepcopy(programs), None)
+        self.assertNotIn('GP 프로필', pages['selected-gp-kg-1.html'])
+
+    def test_reported_managers_get_profile_links(self):
+        p = self.program('r1', '접수 마감', 'sema', '과학기술인공제회', '2026-09-01', event='2026-08-14')
+        p['reported_result'] = {'program_id': 'r1', 'stage': '최종 선정', 'reported_at': '2026-11-02', 'complete': True,
+                                'managers': ['제네시스프라이빗에쿼티', 'BNW인베스트먼트'],
+                                'sources': [{'publisher': 'X', 'title': 't', 'date': '2026-11-02', 'url': 'https://news.example/1'}]}
+        pages = self.render_with([p], {'20271': '제네시스프라이빗에쿼티'})
+        self.assertEqual(1, pages['program-r1.html'].count('class="gp-profile"'))
+
+
+class PublicNoticeContextContract(unittest.TestCase):
+    """LP -> GP contract rows: official results only, GP hydrate's row shape."""
+    program = ProgramListPresentation.program
+    selected = ProgramListPresentation.selected
+
+    def test_only_official_results_with_lp_links(self):
+        official = self.selected('a1', 'kgrowth', '한국성장금융', '에스지프라이빗에쿼티', '138', master='138')
+        reported = self.program('r1', '접수 마감', 'sema', '과학기술인공제회', '2026-09-01')
+        reported_results = {'r1': {'program_id': 'r1', 'stage': '최종 선정', 'reported_at': '2026-11-02', 'complete': True,
+                                   'managers': ['보도운용사'], 'sources': [{'publisher': 'X', 'title': 't', 'date': '2026-11-02', 'url': 'https://n.example/1'}]}}
+        with tempfile.TemporaryDirectory() as folder:
+            result = build({'as_of': '2026-11-12', 'programs': [official, reported], 'reported_results': reported_results}, Path(folder))
+        context = result['public_notice_context']
+        self.assertEqual('lp-public-notice-context-v1', context['schemaVersion'])
+        self.assertEqual(['a1'], [row['noticeId'] for row in context['notices']])
+        row = context['notices'][0]
+        self.assertEqual(['에스지프라이빗에쿼티'], row['selectedGpNames'])
+        self.assertEqual('https://kpef-lp.vercel.app/program-a1.html', row['noticeUrl'])
+        self.assertEqual(('kgrowth', '한국성장금융', 'final_selection', '2026-09-01'),
+                         (row['lpCode'], row['lpName'], row['eventType'], row['eventDate']))
+
+
 class ReportedResultFile(unittest.TestCase):
     def test_repository_file_is_valid_and_sourced(self):
         import json

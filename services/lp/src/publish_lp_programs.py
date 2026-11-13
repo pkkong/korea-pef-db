@@ -217,7 +217,7 @@ def source_index(conn):
                         for institution, title, url in rows]}
 
 
-def prepare(current, report):
+def prepare(current, report, gp_profiles=None):
     current, report = clean_database_text(current), clean_database_text(report)
     if not report.get('notices'):
         raise ValueError('Empty collection cannot replace published data')
@@ -359,7 +359,9 @@ def prepare(current, report):
     data['reported_results'], data['reported_result_holds'] = load_reported_results(data['programs'])
     with tempfile.TemporaryDirectory() as folder:
         out = Path(folder)
-        build(data, out)
+        built = build(data, out, gp_profiles=gp_profiles)
+        # LP -> GP public contract, served by lp_public_notice_context().
+        data['public_notice_context'] = built['public_notice_context']
         pages = {p.name:p.read_text() for p in out.glob('*.html')}
         from lp_review_preview import render_review
         pages['review.html'] = render_review(data, report, current)
@@ -374,6 +376,34 @@ def publication_revision(conn):
     return state, decisions
 
 
+# GP public contract (docs/data_operating_model.md): the published GP snapshot's
+# profile pages gp-<id>.html and the manager name in their <h1>. Read-only.
+GP_PROFILE_SQL = (
+    "SELECT substring(p.page_path from '^gp-([0-9]+)[.]html$'), "
+    "btrim(substring(p.page_html from '<h1[^>]*>([^<]+)</h1>')) "
+    "FROM public.gp_public_pages p WHERE p.snapshot_id = ("
+    "SELECT s.snapshot_id FROM public.gp_public_snapshots s WHERE s.status = 'published' "
+    "ORDER BY s.published_at DESC NULLS LAST LIMIT 1) AND p.page_path ~ '^gp-[0-9]+[.]html$'"
+)
+
+
+def load_gp_profiles():
+    """Enrichment only: any failure means no GP profile links, never a failed publication."""
+    started = time.monotonic()
+    try:
+        with connect() as conn:
+            conn.execute('SET TRANSACTION READ ONLY')
+            conn.execute("SET LOCAL statement_timeout='20s'")
+            rows = conn.execute(GP_PROFILE_SQL).fetchall()
+        profiles = {str(pid): name for pid, name in rows if pid and name}
+    except Exception as exc:  # noqa: BLE001 - contract outage must not block LP
+        print(json.dumps({'gp_profile_contract_error': type(exc).__name__}), file=sys.stderr, flush=True)
+        publication_phase('gp_profile_contract_unavailable', started)
+        return {}
+    publication_phase('gp_profile_contract', started, profiles=len(profiles))
+    return profiles
+
+
 def prepare_publication(report):
     # Release the pooled database connection before expensive source replay.
     # A single read snapshot keeps the baseline and its revision consistent.
@@ -382,8 +412,9 @@ def prepare_publication(report):
         conn.execute("SET LOCAL statement_timeout='120s'")
         current = baseline(conn)
         revision = publication_revision(conn)
+    gp_profiles = load_gp_profiles()
     started = time.monotonic()
-    data, pages = prepare(current, report)
+    data, pages = prepare(current, report, gp_profiles=gp_profiles)
     publication_phase('source_validation_and_pages', started, programs=len(data['programs']))
     return data, pages, revision
 

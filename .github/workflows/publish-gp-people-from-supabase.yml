@@ -125,6 +125,10 @@ jobs:
       - name: Hydrate public LP selection context for GP profiles
         continue-on-error: true
         shell: bash
+        env:
+          # LP public contract RPC lp_public_notice_context (read-only, publishable key).
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           python3 services/gp/src/hydrate_gp_lp_context.py \
             --db "$work_dir/private_equity.db"

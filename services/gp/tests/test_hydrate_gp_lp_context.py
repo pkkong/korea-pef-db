@@ -93,5 +93,43 @@ class GPLPContextTests(unittest.TestCase):
         self.assertEqual(signal["notice_url"], "https://example.test/notices/17")
 
 
+class GPLPContextSourceTests(unittest.TestCase):
+    """GP reads the LP Supabase contract; the retired static export is only a fallback."""
+
+    def test_rpc_request_and_schema_check(self) -> None:
+        import json
+        from unittest.mock import MagicMock, patch
+        from services.gp.src import hydrate_gp_lp_context as module
+
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(
+            {"schemaVersion": "lp-public-notice-context-v1", "reportDate": "2026-11-13", "notices": []}
+        ).encode()
+        with patch.object(module, "urlopen", return_value=response) as opened:
+            payload = module.fetch_context_rpc("https://db.example.co/", "public-key")
+        request = opened.call_args.args[0]
+        self.assertEqual("https://db.example.co/rest/v1/rpc/lp_public_notice_context", request.full_url)
+        self.assertEqual("POST", request.get_method())
+        self.assertEqual("public-key", request.get_header("Apikey"))
+        self.assertEqual([], payload["notices"])
+
+        response.__enter__.return_value.read.return_value = b"null"
+        with patch.object(module, "urlopen", return_value=response), self.assertRaises(module.GPLPContextError):
+            module.fetch_context_rpc("https://db.example.co", "public-key")
+
+    def test_main_prefers_supabase_contract_when_configured(self) -> None:
+        from unittest.mock import patch
+        from services.gp.src import hydrate_gp_lp_context as module
+
+        env = {"SUPABASE_URL": "https://db.example.co", "SUPABASE_PUBLISHABLE_KEY": "k"}
+        with patch.dict("os.environ", env, clear=False), \
+             patch.object(module, "fetch_context_rpc", return_value={"notices": []}) as rpc, \
+             patch.object(module, "fetch_context") as static, \
+             patch.object(module, "hydrate_context", return_value={}):
+            self.assertEqual(0, module.main(["--db", "x.db"]))
+        rpc.assert_called_once_with("https://db.example.co", "k")
+        static.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

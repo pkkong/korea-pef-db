@@ -91,8 +91,8 @@ Renderer는 public read model을 HTML로 표현하는 역할만 한다.
 | 발행 서비스 | public contract | 사용하는 서비스 | 허용된 역할 |
 | --- | --- | --- | --- |
 | Brief | `archive.json` / Supabase newsletter public read model의 entity link | LP, GP | 관련 뉴스 링크와 기사 출처 표시. LP는 `newsletter_public_issue_articles`에서 선정 결과 보도 후보를 찾는 데도 쓴다(내부 검토용, 공개 화면 직접 반영 없음) |
-| LP | `lp-notices.json`의 validated lifecycle·선정 GP | GP | GP 프로필의 LP 선정 이력 표시 |
-| GP | Supabase GP public snapshot/page artifact | Brief, LP | GP profile URL과 공개 프로필 정보 연결 |
+| LP | Supabase RPC `lp_public_notice_context()` (`lp-public-notice-context-v1`, 공식 선정 결과만. LP 발행 때 `program_state.data.public_notice_context`로 저장) | GP | GP 프로필의 LP 선정 이력 표시(`hydrate_gp_lp_context.py`). 옛 `lp-notices.json` 정적 파일은 Supabase 설정이 없을 때만 쓰는 fallback |
+| GP | Supabase GP public snapshot/page artifact. LP는 게시 스냅샷의 `gp-<id>.html` 경로와 `<h1>` 운용사명을 읽는다 | Brief, LP | GP profile URL과 공개 프로필 정보 연결. LP는 GP master ID 또는 정규화한 이름이 하나로 맞을 때만 `GP 프로필` 링크를 단다 |
 
 - contract에는 공개 가능한 값과 stable schema version만 넣는다. raw excerpt, candidate, confidence, 운영 상태는 넣지 않는다.
 - 소비 서비스는 contract를 자기 임시 build/read model에 복사해 사용할 수 있지만, 발행 서비스의 canonical DB를 직접 쓰거나 바꾸지 않는다.

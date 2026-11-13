@@ -88,7 +88,7 @@ class PublishContracts(unittest.TestCase):
         active = []
         conn.__enter__.side_effect = lambda: active.append(True) or conn
         conn.__exit__.side_effect = lambda *args: active.pop()
-        def offline(current, report):
+        def offline(current, report, gp_profiles=None):
             self.assertFalse(active, 'Source replay must not hold a pooled connection')
             return {'programs': []}, {'index.html': 'valid'}
         with patch('publish_lp_programs.connect', return_value=conn), patch('publish_lp_programs.baseline', return_value={}), \
@@ -620,3 +620,24 @@ class PublicationRunnerArchivePhases(unittest.TestCase):
         self.assertEqual(runner._phase(b'{"lp_phase":"collection_report_archive_fallback","seconds":1}')['lp_phase'],
                          'collection_report_archive_fallback')
         self.assertLessEqual(runner.MAX_TIMEOUT_SECONDS, 900)
+
+
+class GpProfileContract(unittest.TestCase):
+    """GP profile links are enrichment: a GP read failure must not stop LP publication."""
+    def test_rows_become_id_to_name_map(self):
+        from unittest.mock import MagicMock
+        import publish_lp_programs as module
+        conn = MagicMock()
+        conn.__enter__.return_value = conn
+        conn.execute.return_value.fetchall.return_value = [('138', '에스지프라이빗에쿼티'), (None, 'x'), ('2', None)]
+        with patch('publish_lp_programs.connect', return_value=conn), patch('publish_lp_programs.publication_phase') as phase:
+            self.assertEqual({'138': '에스지프라이빗에쿼티'}, module.load_gp_profiles())
+        self.assertIn('READ ONLY', conn.execute.call_args_list[0].args[0])
+        self.assertEqual('gp_profile_contract', phase.call_args.args[0])
+
+    def test_contract_outage_returns_no_profiles(self):
+        import publish_lp_programs as module
+        with patch('publish_lp_programs.connect', side_effect=OSError('down')), \
+             patch('publish_lp_programs.publication_phase') as phase:
+            self.assertEqual({}, module.load_gp_profiles())
+        self.assertEqual('gp_profile_contract_unavailable', phase.call_args.args[0])

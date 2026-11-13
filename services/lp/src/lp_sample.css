@@ -45,3 +45,5 @@ body.lp-sample {background:var(--bg);font-family:Pretendard,"Pretendard Variable
 .lp-sample .list-link{color:inherit}.lp-sample .gp-names{list-style:none;padding:0;margin:8px 0 20px;display:flex;flex-wrap:wrap;gap:6px 14px;font-size:14px}.lp-sample .institution-gps h2{margin-top:8px}
 .lp-sample .list-header>span{font-size:12px;color:var(--secondary)}.lp-sample .gp-names a{text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--separator)}
 .lp-sample .reported-result .badge{margin-right:6px}.lp-sample .reported-sources{font-size:12px;color:var(--secondary);line-height:1.8;word-break:keep-all;overflow-wrap:anywhere}
+.lp-sample a.gp-profile{margin-left:6px;font-size:11px;color:var(--secondary);text-decoration:underline;text-underline-offset:2px}.lp-sample td small a.gp-profile{margin-left:0}.lp-sample .gp-names small{display:inline}
+.lp-sample .gp-profile-link{font-size:13px;margin-top:6px}

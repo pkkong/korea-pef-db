@@ -97,13 +97,19 @@ def _flow_step(stage):
     return None
 
 
-def reported_block(result):
+def profile_link(p, name):
+    """Small link to the GP service profile when the GP contract has one."""
+    url = (p.get('gp_profile_urls') or {}).get(name)
+    return f'<small><a class="gp-profile" href="{h(url)}">GP 프로필</a></small>' if url else ''
+
+
+def reported_block(result, p=None):
     """Press-reported result: always labelled and sourced; never an official fact."""
     scope = f" ({result['scope_note']})" if result.get('scope_note') else ''
     out = (f'<div class="reported-result"><p><span class="badge">보도 기준</span> '
            f'공식 결과 공고가 확인되지 않아 언론 보도를 기준으로 정리했습니다{h(scope)}.</p>')
     if result['managers']:
-        out += '<ul class="gp-names">' + ''.join(f'<li>{h(m)}</li>' for m in result['managers']) + '</ul>'
+        out += '<ul class="gp-names">' + ''.join(f'<li>{h(m)}{profile_link(p or {}, m)}</li>' for m in result['managers']) + '</ul>'
         if not result['complete']:
             out += '<p class="muted">보도로 확인된 일부 운용사입니다.</p>'
     else:
@@ -213,7 +219,7 @@ def render_detail_body(p, as_of=None):
     if p.get('preferred_gps'):
         body += '<h3>우선협상대상자</h3><div class="scroll"><table><thead><tr><th>운용사</th><th>리그</th></tr></thead><tbody>'
         for name in p['preferred_gps']:
-            body += f'<tr><td>{h(name)}</td><td>{h(p.get("gp_tracks", {}).get(name) or "—")}</td></tr>'
+            body += f'<tr><td>{h(name)}{profile_link(p, name)}</td><td>{h(p.get("gp_tracks", {}).get(name) or "—")}</td></tr>'
         body += '</tbody></table></div><p>' + link(p.get('manager_list_sources', {}).get('preferred_gps'), '우선협상 결과 원문') + '</p>'
     if p.get('shortlisted_gps'):
         selected = {gp['name']: gp for gp in p['selected_gps']}
@@ -224,6 +230,7 @@ def render_detail_body(p, as_of=None):
         for name in dict.fromkeys(p['shortlisted_gps'] + list(selected)):
             gp = selected.get(name)
             name_html = f'<a href="selected-gp-{h(gp["page_key"])}.html">{h(name)}</a>' if gp else h(name)
+            name_html += profile_link(p, name)
             if p.get('gp_tracks', {}).get(name):
                 name_html += f'<small>{h(p["gp_tracks"][name])}</small>'
             if gp and gp.get('commitment_amount_krw'):
@@ -238,7 +245,7 @@ def render_detail_body(p, as_of=None):
         body += '<div class="scroll"><table><thead><tr><th>운용사</th><th>선정 결과</th></tr></thead><tbody>'
         for gp in p['selected_gps']:
             amount = f'<small>출자 예정 {gp["commitment_amount_krw"]/100000000:,.0f}억원</small>' if gp.get('commitment_amount_krw') else ''
-            body += f'<tr><td><a href="selected-gp-{h(gp["page_key"])}.html">{h(gp["name"])}</a>{amount}</td><td>{link(gp["source_url"],"선정 결과")}</td></tr>'
+            body += f'<tr><td><a href="selected-gp-{h(gp["page_key"])}.html">{h(gp["name"])}</a>{profile_link(p, gp["name"])}{amount}</td><td>{link(gp["source_url"],"선정 결과")}</td></tr>'
         body += '</tbody></table></div>'
     else:
         note = ('최종 선정 명단은 아직 확인되지 않았습니다.' if p.get('preferred_gps') else p.get('gp_stage_note'))
@@ -251,7 +258,7 @@ def render_detail_body(p, as_of=None):
             if until < as_of:
                 note = past_note
         if p.get('reported_result'):
-            body += reported_block(p['reported_result'])
+            body += reported_block(p['reported_result'], p)
         else:
             announced = any(e['type'] in ('최종 선정', '선정 결과') for e in p['events'])
             fallback = ('선정 결과가 발표됐습니다. 운용사 명단은 결과 원문에서 확인할 수 있습니다.' if announced
