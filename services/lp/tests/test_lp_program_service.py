@@ -300,6 +300,51 @@ class ListSectionsForReaders(unittest.TestCase):
         self.assertGreater(index.index('program-old.html'), index.index('>지난 공고 <'))
 
 
+class DeadlineCalendarAndNewNotice(unittest.TestCase):
+    """Readers can put an open deadline in their own calendar and spot new notices."""
+    program = ProgramListPresentation.program
+
+    def render(self, programs):
+        with tempfile.TemporaryDirectory() as folder:
+            build({'as_of': '2026-11-13', 'programs': programs}, Path(folder))
+            return {p.name: p.read_text() for p in Path(folder).glob('*.html')}
+
+    def test_open_program_gets_calendar_links(self):
+        from urllib.parse import unquote
+        pages = self.render([self.program('open', '접수 중', 'b', 'B', '2026-11-16T15:00:00+09:00', event='2026-10-26'),
+                             self.program('closed', '접수 마감', 'c', 'C', '2026-11-01', event='2026-10-01')])
+        detail = pages['program-open.html']
+        self.assertIn('data-lp-calendar-until="2026-11-16"', detail)
+        self.assertIn('접수 마감 11월 16일 15:00', detail)
+        self.assertIn('https://calendar.google.com/calendar/render?action=TEMPLATE', detail)
+        # 15:00 KST deadline: the event is 05:00-06:00 UTC on the deadline day.
+        self.assertIn('dates=20261116T050000Z%2F20261116T060000Z', detail)
+        ics = unquote(detail.split('href="data:text/calendar;charset=utf-8,', 1)[1].split('"', 1)[0])
+        lines = ics.split('\r\n')
+        self.assertEqual(lines[0], 'BEGIN:VCALENDAR')
+        self.assertIn('DTEND:20261116T060000Z', lines)
+        self.assertIn('TRIGGER:-P1D', lines)
+        self.assertTrue(all(len(line.encode('utf-8')) <= 75 for line in lines))
+        self.assertNotIn('data-lp-calendar-until="', pages['program-closed.html'])
+
+    def test_date_only_deadline_is_all_day_and_past_deadline_has_none(self):
+        from services.lp.src.lp_calendar import deadline_calendar_block
+        p = self.program('d', '접수 중', 'b', 'B', '2026-11-20', event='2026-11-01')
+        block = deadline_calendar_block(p, '2026-11-13')
+        self.assertIn('dates=20261120%2F20261121', block)
+        self.assertIn('DTSTART%3BVALUE%3DDATE%3A20261120', block)
+        self.assertEqual(deadline_calendar_block(p, '2026-11-21'), '')
+
+    def test_new_notice_mark_for_one_week(self):
+        pages = self.render([self.program('fresh', '접수 중', 'b', 'B', '2026-11-30', event='2026-11-10'),
+                             self.program('week', '모집 공고', 'c', 'C', event='2026-11-06'),
+                             self.program('older', '접수 중', 'd', 'D', '2026-11-30', event='2026-10-20')])
+        index = pages['index.html']
+        self.assertIn('data-lp-new-until="2026-11-17">새 공고</span>', index)
+        self.assertNotIn('data-lp-new-until="2026-11-13"', index)
+        self.assertEqual(index.count('data-lp-new-until="'), 1)
+
+
 class ReportedResultFile(unittest.TestCase):
     def test_repository_file_is_valid_and_sourced(self):
         import json

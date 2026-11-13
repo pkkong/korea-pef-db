@@ -182,6 +182,7 @@ def shell(title, body, as_of, description='', path=None):
             + (f'<link rel="canonical" href="{h(lp_url)}/{h(path)}"><meta property="og:url" content="{h(lp_url)}/{h(path)}">' if path is not None else ''))
     return f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{h(title)} · LP</title>{meta}<link rel="stylesheet" href="/assets/service.css"><style>{CSS}\n{sample_css}</style></head><body class="lp-sample"><main>{service_header(path)}{body}</main><nav class="bottom-nav" aria-label="하단 메뉴"><a href="{newsletter_url}/"><span aria-hidden="true" class="nav-dot nav-icon-brief"></span><strong>브리프</strong></a><a class="active" aria-current="page" href="index.html"><span aria-hidden="true" class="nav-dot nav-icon-lp"></span><strong>LP</strong></a><a href="{gp_url}/"><span aria-hidden="true" class="nav-dot nav-icon-gp"></span><strong>GP</strong></a></nav></body></html>'
 
+NEW_NOTICE_DAYS = 7
 PUBLIC_NOTICE_CONTEXT_VERSION = 'lp-public-notice-context-v1'
 
 
@@ -302,12 +303,18 @@ def build(data, out, gp_profiles=None):
             timing = f"{short_date(last['date'])} 결과 발표"
         else:
             timing = f"{short_date(last['date'])} 공고"
+        # A notice first published within the last week is marked new; the page
+        # script drops the mark when the week ends before the next publication.
+        first = min(e['date'] for e in p['events'])[:10]
+        new_until = (date.fromisoformat(first) + timedelta(days=NEW_NOTICE_DAYS)).isoformat()
+        fresh = (f'<span class="program-new" data-lp-new-until="{h(new_until)}">새 공고</span>'
+                 if status not in RESULT_STATUSES and status != '공고' and new_until > str(as_of)[:10] else '')
         amount = f"{p['commitment_amount_krw']/100000000:,.0f}억원" if p.get('commitment_amount_krw') else ''
         amount = p.get('list_commitment_label') or p.get('commitment_label') or amount
         if '미확인' in amount:
             # A total that is not this PE track's allocation is not a list amount.
             amount = ''
-        return f'<article class="program" data-status="{h(status)}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"] + " " + p["list_title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><span class="lp-mark" aria-hidden="true">{h(institution_mark(p["institution_id"], p["institution_name"]))}</span><div class="program-body"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}{" · PE·VC 공동" if p.get("mixed_scope") else ""}</span><span class="program-status{' open' if status == '접수 중' else ''}">{h(status)}</span></div><h2 class="program-title">{h(p["list_title"])}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}{dday}</span></div></div></a></article>'
+        return f'<article class="program" data-status="{h(status)}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"] + " " + p["list_title"])}"><a class="program-link" href="program-{h(p["id"])}.html"><span class="lp-mark" aria-hidden="true">{h(institution_mark(p["institution_id"], p["institution_name"]))}</span><div class="program-body"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}{" · PE·VC 공동" if p.get("mixed_scope") else ""}{fresh}</span><span class="program-status{' open' if status == '접수 중' else ''}">{h(status)}</span></div><h2 class="program-title">{h(p["list_title"])}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}{dday}</span></div></div></a></article>'
     options = ''.join(f'<option value="{h(k)}">{h(v[0]["institution_name"])}</option>' for k,v in institutions.items())
     shown = {p['display_status'] for p in programs}
     statuses = ''.join(f'<option>{h(s)}</option>' for s in [*[s for s in STATUS_ORDER if s in shown], *sorted(shown - set(STATUS_ORDER))])
@@ -319,7 +326,7 @@ def build(data, out, gp_profiles=None):
         if group:
             body += f'<section class="program-section"><h2 class="section-title">{h(label)} <span>{len(group)}</span></h2>' + ''.join(row(p) for p in group) + '</section>'
     body += '<p id="empty" hidden>조건에 맞는 사업이 없습니다.</p>'
-    body += '''<script>const q=document.querySelector('input'),s=document.querySelectorAll('select');function filter(){let n=0;document.querySelectorAll('.program').forEach(r=>{r.hidden=!((r.textContent+" "+r.dataset.search).toLowerCase().includes(q.value.toLowerCase())&&(!s[0].value||r.dataset.status===s[0].value)&&(!s[1].value||r.dataset.institution===s[1].value));if(!r.hidden)n++});document.querySelectorAll('.program-section').forEach(sec=>{const k=sec.querySelectorAll('.program:not([hidden])').length;sec.hidden=k===0;sec.querySelector('.section-title span').textContent=k});document.querySelector('#count').textContent=n+'개 사업';document.querySelector('#empty').hidden=n!==0}q.addEventListener('input',filter);s.forEach(e=>e.addEventListener('change',filter));(function(){const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());const today=Date.parse(p+'T00:00:00Z');document.querySelectorAll('[data-lp-dday]').forEach(e=>{const n=Math.round((Date.parse(e.dataset.lpDday+'T00:00:00Z')-today)/86400000);e.textContent=n>0?' · D-'+n:(n===0?' · 오늘 마감':'')})})();</script>'''
+    body += '''<script>const q=document.querySelector('input'),s=document.querySelectorAll('select');function filter(){let n=0;document.querySelectorAll('.program').forEach(r=>{r.hidden=!((r.textContent+" "+r.dataset.search).toLowerCase().includes(q.value.toLowerCase())&&(!s[0].value||r.dataset.status===s[0].value)&&(!s[1].value||r.dataset.institution===s[1].value));if(!r.hidden)n++});document.querySelectorAll('.program-section').forEach(sec=>{const k=sec.querySelectorAll('.program:not([hidden])').length;sec.hidden=k===0;sec.querySelector('.section-title span').textContent=k});document.querySelector('#count').textContent=n+'개 사업';document.querySelector('#empty').hidden=n!==0}q.addEventListener('input',filter);s.forEach(e=>e.addEventListener('change',filter));(function(){const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());const today=Date.parse(p+'T00:00:00Z');document.querySelectorAll('[data-lp-new-until]').forEach(e=>{e.hidden=Date.parse(e.dataset.lpNewUntil+'T00:00:00Z')<=today});document.querySelectorAll('[data-lp-dday]').forEach(e=>{const n=Math.round((Date.parse(e.dataset.lpDday+'T00:00:00Z')-today)/86400000);e.textContent=n>0?' · D-'+n:(n===0?' · 오늘 마감':'')})})();</script>'''
     (out/'index.html').write_text(shell('출자사업',body,as_of,path=''))
     for p in programs:
         urls = {}

@@ -4,6 +4,11 @@ import calendar
 import re
 from datetime import date, datetime, timedelta, timezone
 
+try:
+    from .lp_calendar import deadline_calendar_block
+except ImportError:
+    from lp_calendar import deadline_calendar_block
+
 
 def planned_until(event):
     """Conservative upper boundary for display, never a claimed event date.
@@ -46,7 +51,7 @@ def planned_badge(event, as_of):
     return f'<span class="planned-label"{attrs}>{label}</span>'
 
 
-PLAN_SCRIPT = '''<script>(function(){const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const part=t=>parts.find(p=>p.type===t).value;const today=part('year')+'-'+part('month')+'-'+part('day');document.querySelectorAll('[data-lp-plan-until]').forEach(e=>{e.textContent=e.dataset.lpPlanUntil<today?'예정일 경과':'예정'});document.querySelectorAll('[data-lp-note-until]').forEach(e=>{if(e.dataset.lpNoteUntil<today)e.textContent=e.dataset.lpPastNote})})();</script>'''
+PLAN_SCRIPT = '''<script>(function(){const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const part=t=>parts.find(p=>p.type===t).value;const today=part('year')+'-'+part('month')+'-'+part('day');document.querySelectorAll('[data-lp-plan-until]').forEach(e=>{e.textContent=e.dataset.lpPlanUntil<today?'예정일 경과':'예정'});document.querySelectorAll('[data-lp-note-until]').forEach(e=>{if(e.dataset.lpNoteUntil<today)e.textContent=e.dataset.lpPastNote});document.querySelectorAll('[data-lp-calendar-until]').forEach(e=>{e.hidden=e.dataset.lpCalendarUntil<today})})();</script>'''
 
 # Public wording only: stored statuses keep their source-specific meaning.
 STATUS_DISPLAY = {'선정 결과 발표': '선정 완료', '서류심사 결과': '1차 심사 결과'}
@@ -152,7 +157,7 @@ def render_detail_body(p, as_of=None):
     selection_recorded = bool(p.get('selected_gps')) or any(e['type'] in ('최종 선정', '선정 결과') for e in p['events'])
     original = next((e['url'] for e in p['events'] if e['type']=='모집 공고'), p['events'][0]['url'])
     original_title = f'<p class="source-title">공고명 {h(p["title"])}</p>' if clean_title(p['title']) != str(p['title']).strip() else ''
-    body = f'<a class="back" href="index.html">← 출자사업</a><header class="detail-header"><a class="institution" href="institution-{h(p["institution_id"])}.html">{h(p["institution_name"])}</a><h1>{h(p.get("public_title") or clean_title(p["title"]))}</h1>{original_title}<div class="detail-meta"><span class="badge">{h(p.get("display_status") or display_status(p["status"]))}</span>{"<span class=\"badge\">PE·VC 공동 모집</span>" if p.get("mixed_scope") else ""}{link(original,"출자 공고 원문")}</div></header>'
+    body = f'<a class="back" href="index.html">← 출자사업</a><header class="detail-header"><a class="institution" href="institution-{h(p["institution_id"])}.html">{h(p["institution_name"])}</a><h1>{h(p.get("public_title") or clean_title(p["title"]))}</h1>{original_title}<div class="detail-meta"><span class="badge">{h(p.get("display_status") or display_status(p["status"]))}</span>{"<span class=\"badge\">PE·VC 공동 모집</span>" if p.get("mixed_scope") else ""}{link(original,"출자 공고 원문")}</div>{deadline_calendar_block(p, as_of)}</header>'
     if p.get('schedule_stages'):
         body += standardized_schedule(p['schedule_stages'], as_of, selection_recorded=selection_recorded)
     else:
