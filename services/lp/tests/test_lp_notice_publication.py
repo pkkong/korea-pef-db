@@ -447,6 +447,38 @@ class StageNoticeIdentityTests(unittest.TestCase):
 
 
 
+class MinimumFundSizeTests(unittest.TestCase):
+    """Minimum fund size from explicit notice wording; ambiguous wording gives nothing."""
+
+    def size(self, body):
+        from services.lp.src.lp_notice_publication import minimum_fund_size
+        return minimum_fund_size({'body': body, 'url': 'https://example.or.kr/n', 'sha256': 'a' * 64}).get('fund_target_label')
+
+    def test_explicit_minimum(self):
+        self.assertEqual(self.size('펀드별 결성 규모 - 최소 결성규모 3,500억원 이상 선정 운용사 수'), '최소 3,500억원')
+        self.assertEqual(self.size('운용 방식 ‧ 블라인드 최소결성규모 ‧ 2,000억원 공동투자제안'), '최소 2,000억원')
+
+    def test_range(self):
+        self.assertEqual(self.size('Buyout, Growth 전략의 펀드별 결성 규모는 최소 1,000억원 ~ 최대 5,000억원 제한'), '1,000억~5,000억원')
+
+    def test_vc_section_minimum_is_skipped_and_pe_labelled(self):
+        body = ('최소결성규모 ㆍ최소 펀드 결성규모 : 3,000억원 이상 투자기구 ㆍ‘자본시장과 금융투자업에 관한 법률’에 의한 기관전용 사모집합투자기구 '
+                '최소결성규모 ㆍ최소 펀드 결성규모 : 1,000억원 이상 투자기구 ㆍ‘벤처투자 촉진에 관한 법률’에 의한 벤처투자조합')
+        self.assertEqual(self.size(body), '최소 3,000억원 (PE)')
+
+    def test_side_by_side_columns_and_leagues_give_nothing(self):
+        self.assertIsNone(self.size('최소 펀드 결성 규모 1,000억원 이상 500억원 이상 최소 투자확약서 규모'))
+        self.assertIsNone(self.size('제안대상 펀드의 최소결성규모~최대결성규모 - 대형리그 : 7,000억원 이상 ~ 제한없음 - 중형 이하 리그 : 1,000억원 이상'))
+        self.assertIsNone(self.size('최소 결성규모 1,000억원 이상 ... 다른 곳의 최소 결성규모 2,000억원 이상'))
+
+    def test_proposal_fund_and_overview_wording(self):
+        self.assertEqual(self.size('위탁운용사로 선정된 기관 중 제안펀드 결성 규모가 5,000억원 이상으로 30% 이상'), '최소 5,000억원')
+        self.assertEqual(self.size('[블라인드형] 누적운용규모 3,000억원 이상이면서 제안펀드 결성규모 1,000억원 이상(VC는 700억원 이상) '
+                                   '나) [인프라 프로젝트형] 제안펀드 결성규모 500억원 이상'), '최소 1,000억원')
+        self.assertEqual(self.size('조합 약정 금액 총 300억원 펀드 규모 5,000억원 이상 투자 부문 ... 예상펀드규모 및 출자자'), '최소 5,000억원')
+        self.assertIsNone(self.size('최종 펀드 결성규모의 15% 이내'))
+
+
 class LargeLpPeTrackTests(unittest.TestCase):
     """User decision 2026-11-12: large LPs' PE tracks are published, joint scope labelled."""
     BODY = ('투자기구: 기관전용 사모집합투자기구, 벤처투자조합, 신기술사업투자조합\n'

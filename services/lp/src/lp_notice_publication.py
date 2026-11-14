@@ -270,6 +270,48 @@ def headline_amount(n):
             'amount_scope': 'combined', 'extraction_evidence': evidence(quote)}
 
 
+# Minimum fund size a proposal must reach, from explicit notice wording only.
+# Tiers run in order; the first tier with any hit decides, and two different
+# values inside that tier (PE vs VC columns, leagues) give no value at all.
+_N = r'([\d,]+)억원?'
+_FUND_SIZE_TIERS = (
+    ('range', re.compile(r'결성규모는최소' + _N + r'~최대' + _N)),
+    ('minimum', re.compile(r'최소(?:펀드)?결성규모[:：‧·ㆍ\-]*(?:최소펀드결성규모[:：]*)?' + _N + r'(이상)?')),
+    ('blind_track', re.compile(r'블라인드형\].{0,80}?제안펀드결성규모' + _N + r'이상')),
+    ('proposal', re.compile(r'제안펀드결성규모가?' + _N + r'이상')),
+    ('overview', re.compile(r'(?<!예상)펀드규모[:：]?' + _N + r'이상')),
+)
+
+
+def minimum_fund_size(n):
+    """{'fund_target_label': '최소 N억원' | 'N억~M억원', evidence} or {} when absent/ambiguous."""
+    texts = [re.sub(r'\s+', '', text) for text in _texts(n)]
+    for kind, pattern in _FUND_SIZE_TIERS:
+        hits, skipped_vc = [], False
+        for text in texts:
+            for m in pattern.finditer(text):
+                after = text[m.end():m.end() + 60]
+                if kind == 'minimum' and re.match(r'[\d,]+억원', after):
+                    return {}  # side-by-side columns (e.g. PE | VC) without a header we can read
+                if kind == 'minimum' and re.search(r'벤처투자조합|신기술사업투자조합', after) \
+                        and not re.search(r'기관전용사모', after):
+                    skipped_vc = True
+                    continue  # the VC section's own minimum
+                hits.append(m)
+        if not hits:
+            continue
+        values = {m.groups()[:2] if kind == 'range' else m[1] for m in hits}
+        if len(values) != 1:
+            return {}
+        m = hits[0]
+        label = (f'{m[1]}억~{m[2]}억원' if kind == 'range' else f'최소 {m[1]}억원')
+        if skipped_vc:
+            label += ' (PE)'
+        return {'fund_target_label': label, 'extraction_evidence': {
+            'fund_target': [{'source_url': n['url'], 'sha256': n['sha256'], 'quote': m[0]}]}}
+    return {}
+
+
 def _terms(n, shared_notice, checked_at):
     terms = {}
     try:
@@ -304,6 +346,14 @@ def _terms(n, shared_notice, checked_at):
         if headline:
             evidence = {**terms.get('extraction_evidence', {}), **headline.pop('extraction_evidence')}
             terms = {**terms, **headline, 'extraction_evidence': evidence}
+    if not terms.get('fund_target_label'):
+        try:
+            size = minimum_fund_size(n)
+        except (KeyError, TypeError, ValueError):
+            size = {}
+        if size:
+            evidence = {**terms.get('extraction_evidence', {}), **size.pop('extraction_evidence')}
+            terms = {**terms, **size, 'extraction_evidence': evidence}
     # Only fields validated by the existing term parser may be copied.
     result = {k: copy.deepcopy(v) for k, v in terms.items() if k in OFFERING_FIELDS}
     if shared_notice and result.get('primary_investment'):

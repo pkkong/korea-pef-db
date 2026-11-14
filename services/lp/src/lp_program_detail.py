@@ -205,7 +205,8 @@ def render_detail_body(p, as_of=None):
     if p.get('commitment_label'):
         body += f'<div><small>출자 예정액</small><strong>{h(p["commitment_label"])}</strong></div>'
     if p.get('fund_target_label'):
-        body += f'<div><small>결성 목표</small><strong>{h(p["fund_target_label"])}</strong></div>'
+        size_label = '결성 규모' if re.match(r'최소|[\d,]+억~', p['fund_target_label']) else '결성 목표'
+        body += f'<div><small>{size_label}</small><strong>{h(p["fund_target_label"])}</strong></div>'
     if p.get('manager_count_label'):
         body += f'<div><small>선정 예정</small><strong>{h(p["manager_count_label"])}</strong></div>'
     if not p.get('segments') and p.get('per_fund_amount_krw'):
