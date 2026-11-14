@@ -250,15 +250,26 @@ def known_keys(documents):
 
 
 def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
-          configs=None, scope=None, fetch_factory=None, independent=False):
+          configs=None, scope=None, fetch_factory=None, independent=False, start=None):
+    """Recent-365-day audit, or with `start` a fixed-start history probe.
+
+    History mode (user decision 2026-11-14: every PE notice since 2020-01-01) keeps the
+    same parsers and boundaries but allows deeper paging and keeps only list rows,
+    not page HTML, in the report.
+    """
     as_of=as_of or datetime.now(ZoneInfo('Asia/Seoul')).date().isoformat()
-    start,end=window(as_of)
-    if not 1<=max_pages<=20 or not 1<=page_budget<=200:raise ValueError('inventory safety budget invalid')
+    history=start is not None
+    if history:
+        start,end=date.fromisoformat(start).isoformat(),date.fromisoformat(as_of).isoformat()
+        if not '2015-01-01'<=start<end:raise ValueError('history start invalid')
+    else:start,end=window(as_of)
+    page_cap,budget_cap,byte_cap=(150,4000,512*1024*1024) if history else (20,200,32*1024*1024)
+    if not 1<=max_pages<=page_cap or not 1<=page_budget<=budget_cap:raise ValueError('inventory safety budget invalid')
     # Pending institutions are read-only screening targets, not daily publication.
     configs=boards.load_configs(include_pending=True) if configs is None else configs
     scope=json.loads((ROOT/'data/lp_blind_contest_scope.json').read_text()) if scope is None else scope
     public=known_keys([{'programs':baseline.get('programs',[])}]);stored=known_keys([baseline,*archived])
-    report={'as_of':as_of,'window':{'start':start,'end':end,'days':365},'purpose':'Read-only official discovery audit; no publication or market recall claim',
+    report={'as_of':as_of,'window':{'start':start,'end':end,'days':(date.fromisoformat(end)-date.fromisoformat(start)).days+1,'history':history},'purpose':'Read-only official discovery audit; no publication or market recall claim',
             'query_policy':'independent_v1' if independent else 'configured',
             'market_recall':None,'institutions':[],'receipts':[],'holds':[]}
     names={}
@@ -307,7 +318,7 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
             url=page_url(institution,config,query['term'],page,start,end,**extra)
             if url not in cache:
                 raw=ctx['fetch'](url);body_bytes+=len(raw)
-                if body_bytes>32*1024*1024:raise ValueError('inventory total body budget exceeded')
+                if body_bytes>byte_cap:raise ValueError('inventory total body budget exceeded')
                 cache[url]=raw
             raw=cache[url]
             html=raw.decode('utf-8') if institution=='kdb' or config.get('response_format')=='json' else boards.decode_html(raw)
@@ -318,6 +329,7 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
             receipt={'institution_id':institution,'term':query['term'],'kind':query['kind'],'page':page,'url':url,'html':receipt_html,
                      'sha256':hashlib.sha256(receipt_html.encode()).hexdigest(),'row_count':None}
             if institution=='kfinco':receipt['response_sha256']=hashlib.sha256(raw).hexdigest()
+            if history:receipt['html']=None  # rows are kept below; page HTML would be hundreds of MB
             report['receipts'].append(receipt);query['pages'].append(len(report['receipts'])-1)
             rows=core_rows(institution,html,url) if institution in CORE else boards.adapter(config).parse_listing(html,url,config)
             receipt['row_count']=len(rows)
@@ -351,7 +363,8 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
         except Exception as error:
             query['boundary']='source_error';ctx['failed']=True
             report['holds'].append({'institution_id':institution,'url':url,'error':str(error)})
-        if body_bytes>32*1024*1024:break
+        if body_bytes>byte_cap:break
+        if history:cache.pop(url,None)
     for institution,ctx in contexts.items():
         entry=ctx['entry'];observed=ctx['observed']
         for key,row in observed.items():
@@ -409,10 +422,11 @@ def main():
     parser.add_argument('--max-pages',type=int,default=20)
     parser.add_argument('--independent',action='store_true',help='Compare broad queries independently of collector search terms')
     parser.add_argument('--page-budget',type=int,default=100)
+    parser.add_argument('--start',help='Fixed history start (YYYY-MM-DD); omit for the recent 365-day audit')
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--markdown',type=Path,required=True)
     args=parser.parse_args()
-    report=audit(json.loads(args.baseline.read_text()),[json.loads(p.read_text()) for p in args.archive],as_of=args.as_of,max_pages=args.max_pages,page_budget=args.page_budget,independent=args.independent)
+    report=audit(json.loads(args.baseline.read_text()),[json.loads(p.read_text()) for p in args.archive],as_of=args.as_of,max_pages=args.max_pages,page_budget=args.page_budget,independent=args.independent,start=args.start)
     args.output.parent.mkdir(parents=True,exist_ok=True);args.markdown.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n');args.markdown.write_text(markdown(report))
     print(json.dumps(report['summary'],ensure_ascii=False))

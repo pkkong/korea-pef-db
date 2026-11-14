@@ -270,3 +270,43 @@ class OfficialInventoryTests(unittest.TestCase):
             with self.subTest(institution=code),self.assertRaises(ValueError):inventory.core_rows(code,html,inventory.CORE[code])
         valid='<html><div class="notice-list">등록된 게시물이 없습니다</div></html>'
         self.assertEqual(inventory.core_rows('kexim',valid,inventory.CORE['kexim']),[])
+
+class HistoryProbeTests(unittest.TestCase):
+    """User decision 2026-11-14: list every notice since 2020-01-01."""
+
+    def audit(self, pages, **kwargs):
+        fetch=lambda url:pages[int(parse_qs(urlsplit(url).query)['page'][0])].encode()
+        return inventory.audit({'programs':[]},as_of='2026-11-14',scope={'confirmed_institution_ids':['kgrowth'],'priority_verification_ids':[]},
+                               configs={},fetch_factory=lambda *a:fetch,start='2020-01-01',**kwargs)
+
+    def test_fixed_start_walks_past_one_year_and_keeps_rows_not_html(self):
+        pages={1:growth([('3','300','2026년 PE 블라인드 선정 공고','2026-03-01')]),
+               2:growth([('2','200','2021년 PE 블라인드 선정 공고','2021-05-01')]),
+               3:growth([('1','100','오래된 공고','2019-12-01')])}
+        report=self.audit(pages,max_pages=60,page_budget=500)
+        query=report['institutions'][0]['queries'][0]
+        self.assertEqual(query['boundary'],'observed_older_page')
+        self.assertEqual([r['date'] for r in report['institutions'][0]['rows']],['2026-03-01','2021-05-01'])
+        self.assertEqual(report['window']['start'],'2020-01-01')
+        self.assertTrue(report['window']['history'])
+        self.assertTrue(all(r['html'] is None and len(r['sha256'])==64 for r in report['receipts']))
+
+    def test_history_caps_are_bounded_and_recent_caps_unchanged(self):
+        with self.assertRaises(ValueError):self.audit({},max_pages=151)
+        with self.assertRaises(ValueError):
+            inventory.audit({'programs':[]},as_of='2026-11-14',scope={'confirmed_institution_ids':[],'priority_verification_ids':[]},configs={},max_pages=21)
+        with self.assertRaises(ValueError):  # start must precede as_of
+            inventory.audit({'programs':[]},as_of='2026-11-14',scope={'confirmed_institution_ids':[],'priority_verification_ids':[]},configs={},start='2027-01-01')
+
+    def test_summary_reports_reach_and_year_counts(self):
+        import importlib.util
+        from pathlib import Path
+        spec=importlib.util.spec_from_file_location('probe',Path(__file__).resolve().parents[3]/'scripts/summarize_lp_history_probe.py')
+        probe=importlib.util.module_from_spec(spec);spec.loader.exec_module(probe)
+        pages={1:growth([('2','200','2021년 국내 PE 블라인드 위탁운용사 선정 공고','2021-05-01')]),2:growth([('1','100','x','2019-12-01')])}
+        result=probe.summarize(self.audit(pages,max_pages=10,page_budget=50))
+        row=result['institutions'][0]
+        self.assertTrue(row['reaches_start'])
+        self.assertTrue(row['searches_complete'])
+        self.assertEqual(row['relevant_by_year']['2021'],1)
+        self.assertIn('2021',probe.markdown(result))

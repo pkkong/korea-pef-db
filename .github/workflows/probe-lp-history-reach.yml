@@ -1,0 +1,63 @@
+name: Probe LP history reach
+
+# Read-only: walks every connected LP board back to a fixed start date and keeps
+# only list rows (title, date, URL). No body/attachment download, no DB write,
+# no publication. Results go to the lp-history-probe branch for review.
+on:
+  push:
+    branches: [main]
+    paths:
+      - data/lp_history_probe_request.json
+      - .github/workflows/probe-lp-history-reach.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  # Same official-source queue as daily collection: never hits sources in parallel.
+  group: lp-program-collection
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: macos-latest
+    timeout-minutes: 180
+    env:
+      LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install listing dependencies
+        run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47' 'truststore==0.10.5'
+      - name: Walk official lists back to the requested start
+        run: |
+          read START MAXP BUDGET < <(python3 -c "import json;r=json.load(open('data/lp_history_probe_request.json'));print(r['start'],r['max_pages'],r['page_budget'])")
+          echo '{"programs":[]}' > /tmp/empty-baseline.json
+          python3 services/lp/src/audit_lp_official_inventory.py --independent --start "$START" \
+            --max-pages "$MAXP" --page-budget "$BUDGET" --baseline /tmp/empty-baseline.json \
+            --output /tmp/probe/report.json --markdown /tmp/probe/report.md
+      - name: Summarize reach by institution and year
+        if: always()
+        run: |
+          mkdir -p /tmp/lp-history-probe
+          if [ -f /tmp/probe/report.json ]; then
+            python3 scripts/summarize_lp_history_probe.py --report /tmp/probe/report.json --out /tmp/lp-history-probe
+            python3 -c "import json;r=json.load(open('/tmp/probe/report.json'));json.dump({'summary':r['summary'],'holds':r['holds'],'window':r['window']},open('/tmp/lp-history-probe/run.json','w'),ensure_ascii=False,indent=2)"
+            cat /tmp/lp-history-probe/README.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "probe produced no report" > /tmp/lp-history-probe/README.md
+          fi
+      - name: Push results to review branch
+        if: always()
+        shell: bash
+        run: |
+          cd /tmp/lp-history-probe
+          git init -q -b lp-history-probe
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "LP history reach probe from run ${GITHUB_RUN_ID}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" lp-history-probe
