@@ -216,6 +216,13 @@ def _load_institution_profiles(path=ROOT / 'data' / 'lp_institutions.csv'):
 INSTITUTION_PROFILES = _load_institution_profiles()
 
 
+def institution_title_names(institution_id, name):
+    """The institution's own names, removed from program titles shown next to the institution."""
+    profile = INSTITUTION_PROFILES.get(institution_id, {})
+    aliases = [a.strip() for a in profile.get('aliases', '').split(';')]
+    return [name, profile.get('lp_name', ''), *[a for a in aliases if re.search(r'[가-힣]{3,}', a)]]
+
+
 def institution_header_html(institution_id, title, summary):
     """Institution page header: tile, name, type, counts and official links."""
     profile = INSTITUTION_PROFILES.get(institution_id, {})
@@ -338,7 +345,7 @@ def build(data, out, gp_profiles=None):
     # Reader-facing names: curated short names win; otherwise the cleaned source title.
     # Identical names within one institution are told apart by the notice month.
     for p in programs:
-        p['public_title'] = clean_title(p['title'])
+        p['public_title'] = clean_title(p['title'], institution_title_names(p['institution_id'], p['institution_name']))
         p['list_title'] = p.get('display_title') or p['public_title']
     seen = defaultdict(list)
     for p in programs:
@@ -402,6 +409,9 @@ def build(data, out, gp_profiles=None):
         if '미확인' in amount:
             # A total that is not this PE track's allocation is not a list amount.
             amount = ''
+        if not amount and p.get('per_fund_amount_krw'):
+            # No total in the notice, but a per-fund commitment: show that, labelled.
+            amount = f"펀드당 {p['per_fund_amount_krw']/100000000:,.0f}억원" + (f" {p['per_fund_qualifier']}" if p.get('per_fund_qualifier') else '')
         return f'<article class="program" data-status="{h(status)}" data-institution="{h(p["institution_id"])}" data-search="{h(p["title"] + " " + p["list_title"])}"><a class="program-link" href="program-{h(p["id"])}.html">{institution_mark_html(p["institution_id"], p["institution_name"])}<div class="program-body"><div class="program-top"><span class="program-institution">{h(p["institution_name"])}{" · PE·VC 공동" if p.get("mixed_scope") else ""}{fresh}</span><span class="program-status{' open' if status == '접수 중' else ''}">{h(status)}</span></div><h2 class="program-title">{h(p["list_title"])}</h2><div class="program-bottom"><span>{h(amount)}</span><span>{h(timing)}{dday}</span></div></div></a></article>'
     options = ''.join(f'<option value="{h(k)}">{h(v[0]["institution_name"])}</option>' for k,v in institutions.items())
     shown = {p['display_status'] for p in programs}

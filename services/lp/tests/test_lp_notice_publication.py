@@ -405,8 +405,46 @@ class KdbResultRosterTests(unittest.TestCase):
         validate({'as_of': '2026-11-12', 'programs': [p]})
 
 
-if __name__ == '__main__':
-    unittest.main()
+class RepostDuplicateTests(unittest.TestCase):
+    """An association repost and the institution's own notice are one solicitation."""
+
+    def program(self, pid, url, title, deadline='2026-09-07T16:00:00+09:00', amount=270000000000, extra_events=()):
+        return {'id': pid, 'institution_id': 'sema', 'title': title, 'basic_publication': True,
+                'deadline': deadline, 'commitment_amount_krw': amount, 'source_program_key': pid,
+                'events': [{'url': url, 'date': '2026-08-14', 'type': '모집 공고', 'title': title}, *extra_events]}
+
+    def test_repost_merges_into_the_institutions_own_program(self):
+        from services.lp.src.lp_notice_publication import merge_reposted_duplicates
+        own = self.program('sema-2026-b9d1', 'https://www.sema.or.kr/sema/bbs/view.do?nttId=1', '2026년 국내 PE·VC 블라인드 펀드 선정계획 공고')
+        repost = self.program('sema-2026-9a87', 'https://www.kvca.or.kr/Program/invest/listbody.html?po_no=896',
+                              '[과학기술인공제회] 2026년 국내 PE·VC 블라인드 펀드 선정 공고',
+                              extra_events=[{'url': 'https://www.kvca.or.kr/x', 'date': '2026-10-01', 'type': '선정 결과'}])
+        holds = []
+        merged = merge_reposted_duplicates([repost, own], holds)
+        self.assertEqual([p['id'] for p in merged], ['sema-2026-b9d1'])
+        self.assertEqual([e['type'] for e in merged[0]['events']], ['모집 공고', '선정 결과'])
+        self.assertEqual(holds[0]['stage'], 'basic_duplicate')
+
+    def test_different_rounds_are_not_merged(self):
+        from services.lp.src.lp_notice_publication import merge_reposted_duplicates
+        june = self.program('a', 'https://www.sema.or.kr/1', '2026년 국내 블라인드 펀드 선정 공고', deadline='2026-07-01')
+        september = self.program('b', 'https://www.sema.or.kr/2', '2026년 국내 블라인드 펀드 선정 공고', deadline='2026-10-12')
+        reviewed = {**self.program('c', 'https://www.kvca.or.kr/3', '2026년 국내 블라인드 펀드 선정 공고', deadline='2026-07-01'), 'basic_publication': False}
+        self.assertEqual(len(merge_reposted_duplicates([june, september, reviewed], [])), 3)
+
+
+class StageNoticeIdentityTests(unittest.TestCase):
+    """KDB drops 『』 on result notices; they must still join the round's announcement."""
+
+    def test_quoted_and_unquoted_fund_names_share_one_identity(self):
+        from services.lp.src.lp_notice_publication import _identity
+        def key(title):
+            return _identity({'title': title, 'institution_id': 'kdb', 'date': '2026-05-01'})
+        announce = key('『국민성장펀드(간접투자분야) 정책성펀드』 2026년 1차 위탁운용사 선정계획 공고')
+        self.assertEqual(key('국민성장펀드(간접투자분야) 정책성펀드 2026년 1차 위탁운용사 선정 결과'), announce)
+        self.assertEqual(key('국민성장펀드(간접투자분야) 정책성펀드 2026년 1차 위탁운용사 선정 서류심사 결과'), announce)
+        self.assertNotEqual(key('『국민성장펀드(간접투자분야) 정책성펀드』 2026년 2차 위탁운용사 선정계획 공고'), announce)
+
 
 
 class LargeLpPeTrackTests(unittest.TestCase):
@@ -479,3 +517,33 @@ class IbkResultRosterTests(unittest.TestCase):
         _attach_result_roster(other, [{'institution_id': 'kdb', 'title': '위탁운용사 선정 결과', 'date': '2026-11-04',
                                        'url': 'https://www.ibk.co.kr/b', 'body': self.BODY}], holds)
         self.assertEqual(other['selected_gps'], [])
+
+
+class HeadlineAmountTests(unittest.TestCase):
+    """The budget line of a notice fills an amount the term parsers missed, with its quote."""
+
+    def notice(self, body, institution='moel_eif'):
+        return {'url': 'https://www.moel.go.kr/1', 'sha256': 'a' * 64, 'body': body, 'title': 't',
+                'institution_id': institution, 'source_channel': 'institution_board'}
+
+    def test_pe_share_next_to_the_total_wins(self):
+        from services.lp.src.lp_notice_publication import headline_amount
+        result = headline_amount(self.notice('□ 선정 규모: 총 1,200억원 (PEF 600억원(2건), VC 600억원(3건) 선정'))
+        self.assertEqual((result['commitment_amount_krw'], result['commitment_label'], result['manager_count'], result['amount_scope']),
+                         (60_000_000_000, 'PE 부문 600억원', 2, 'pe_only'))
+        self.assertEqual(result['extraction_evidence']['commitment'][0]['quote'], '선정규모:총1,200억원(PEF600억원(2건)')
+
+    def test_single_total_with_qualifier(self):
+        from services.lp.src.lp_notice_publication import headline_amount
+        ibk = headline_amount(self.notice('주요 내용 (출자 금액) 총 1,200억원 이내 - 지원 분야별 출자비율 상이'))
+        self.assertEqual((ibk['commitment_label'], ibk['amount_scope']), ('총 1,200억원 이내', 'combined'))
+        kbiz = headline_amount(self.notice('배정금액 ∙ 10 개사 내외 , 100~800 억원 범위 내 출자규모 ∙ 총 3 ,000 억원 이내 신청 자격'))
+        self.assertEqual(kbiz['commitment_amount_krw'], 300_000_000_000)
+
+    def test_conflicting_totals_and_placeholders_give_nothing(self):
+        from services.lp.src.lp_notice_publication import headline_amount
+        self.assertEqual(headline_amount(self.notice('출자규모 총 3,000억원 이내 / 출자규모 총 2,000억원')), {})
+        self.assertEqual(headline_amount(self.notice('4. 펀드결성규모 총 ○○○○억원')), {})
+
+if __name__ == '__main__':
+    unittest.main()

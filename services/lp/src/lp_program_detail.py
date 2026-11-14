@@ -70,15 +70,39 @@ _NOTICE_NUMBER = re.compile(r'\s*\([^()]*공고\s*(?:제\s*)?\d{4}\s*-\s*\d+\s*�
 _SHORT_YEAR = re.compile(r"^[’'‘]\s*(\d{2})\s*년")
 
 
-def clean_title(title):
-    """Reader-facing program name; the source title stays in the stored evidence."""
-    text = str(title or '').strip()
-    text = _TITLE_PREFIX.sub('', text)
+# Notice wording around the fund name: "출자사업 위탁운용사 선정계획 공고" and its variants.
+_NOTICE_TAIL = re.compile(
+    r'\s*(?:출자\s*사업\s*)?(?:위탁\s*)?(?:운용사\s*)?(?:선정\s*)?(?:계획\s*)?(?:공고|선정)\s*$')
+_GP_WORD_BEFORE_TRACK = re.compile(r'\s*위탁\s*운용사\s*(?=\()')
+
+
+def clean_title(title, institution_names=()):
+    """Reader-facing program name; the source title is still shown on the detail page.
+
+    Drops board prefixes, notice numbers and the "…위탁운용사 선정계획 공고" tail, and the
+    institution's own name (shown next to every title). Keeps track words such as (중형PE).
+    """
+    original = str(title or '').strip()
+    text = _TITLE_PREFIX.sub('', original)
     text = _NOTICE_NUMBER.sub('', text)
     text = _SHORT_YEAR.sub(lambda m: f'20{m[1]}년', text)
     text = re.sub(r'[「」『』]', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
-    return text or str(title or '').strip()
+    trimmed = _GP_WORD_BEFORE_TRACK.sub(' ', text)
+    for _ in range(2):
+        trimmed = _NOTICE_TAIL.sub('', trimmed).strip()
+    names = sorted({n for n in institution_names if n and len(n) >= 3}, key=len, reverse=True)
+
+    def without_names(value):
+        for name in names:
+            value = re.sub(rf'(?<![가-힣]){re.escape(name)}\s*', '', value, count=1)
+        return re.sub(r'\s+', ' ', value).strip(' ·-')
+
+    trimmed = without_names(trimmed)
+    # Too little left (e.g. "국내 PE·VC"): keep the notice wording instead.
+    if len(re.sub(r'\s', '', trimmed)) < 8:
+        trimmed = without_names(text)
+    return trimmed or text or original
 
 
 def h(value):

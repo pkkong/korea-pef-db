@@ -43,6 +43,8 @@ class KbizTrackTests(unittest.TestCase):
         self.assertFalse(holds);self.assertEqual(len(programs),1)
         self.assertEqual(programs[0]['asset_scope'],'PE');self.assertFalse(programs[0]['selected_gps'])
         self.assertNotIn('commitment_amount_krw',programs[0]);self.assertNotIn('manager_count',programs[0])
+        # The joint PE·VC budget is shown as a labelled figure, never as this track's number.
+        self.assertEqual(programs[0]['commitment_label'],'총 3,000억원 이내 (PE·VC 합계)')
 
     def test_current_pe_and_separate_application_are_both_required(self):
         n={'institution_id':'kbiz','title':TITLE,'body':BODY,'url':'https://www.kbiz.or.kr/example','date':'2026-07-10','sha256':'a'*64}

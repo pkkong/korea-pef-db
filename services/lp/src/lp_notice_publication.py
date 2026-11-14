@@ -79,6 +79,8 @@ def _identity(n):
     # A reannouncement is a separate solicitation unless a source explicitly
     # ties its later documents to that round. Never merge it with the first call.
     title = re.sub(r'[\[【(][^\]】)]*공고\s*제?\s*20\d{2}\s*[-–]\s*\d+\s*호[^\]】)]*[\]】)]', '', n['title'])
+    # 『펀드명』 and 펀드명 are the same fund: stage notices often drop the quote brackets.
+    title = re.sub(r'[「」『』]', ' ', title)
     title = re.sub(r'(?:제?\d+차)\s*(?=정량평가|평가|심사|서류|면접)', '', title)
     title = re.sub(r'[（(\[【](?:정정|수정|변경|연장|취소)[）)\]】]', '', title)
     title = re.sub(r'(정정|수정|변경|연장|취소)\s*(?=공고|안내)', '', title)
@@ -232,6 +234,42 @@ def _deadline(n):
     return result
 
 
+# Headline budget lines in notices, read when the term parsers found no amount.
+# "선정 규모 : 총 1,200억원 (PEF 600억원(2건), VC 600억원(3건))" gives the PE share itself.
+_HEADLINE_PE_SPLIT = re.compile(r'선정규모[:：]?총([\d,]+)억원\(PEF([\d,]+)억원\((\d+)건\)', re.I)
+_HEADLINE_TOTAL = re.compile(
+    r'(?:\(출자금액\)|출자금액|위탁운용금액|위탁운용총액|출자규모|선정규모)[:：∙·•\-\s]{0,3}총([\d,]+)억원(이내|내외)?')
+
+
+def _won(text):
+    return int(text.replace(',', '')) * 100_000_000
+
+
+def headline_amount(n):
+    """Budget stated in a notice's headline line, with its quote; {} when absent or ambiguous.
+
+    A PE share stated next to the total wins (amount_scope 'pe_only'); otherwise one total
+    for the whole notice (amount_scope 'combined'). Different totals in one notice -> {}.
+    """
+    texts = _texts(n)
+    splits = {(m[2], m[3], m[0]) for text in texts for m in _HEADLINE_PE_SPLIT.finditer(re.sub(r'\s+', '', text))}
+    evidence = lambda quote: {'commitment': [{'source_url': n['url'], 'sha256': n['sha256'], 'quote': quote}]}
+    if splits:
+        if len({(a, c) for a, c, _ in splits}) != 1:
+            return {}
+        amount, count, quote = sorted(splits)[0]
+        return {'commitment_amount_krw': _won(amount), 'commitment_label': f'PE 부문 {amount}억원',
+                'list_commitment_label': f'PE 부문 {amount}억원', 'manager_count': int(count),
+                'manager_count_label': f'{count}개사', 'amount_scope': 'pe_only', 'extraction_evidence': evidence(quote)}
+    totals = {(m[1], m[2] or '', m[0]) for text in texts for m in _HEADLINE_TOTAL.finditer(re.sub(r'\s+', '', text))}
+    if not totals or len({a for a, _, _ in totals}) != 1:
+        return {}
+    amount, qualifier, quote = sorted(totals, key=lambda t: (not t[1], t[2]))[0]
+    label = f'총 {amount}억원' + (f' {qualifier}' if qualifier else '')
+    return {'commitment_amount_krw': _won(amount), 'commitment_label': label, 'list_commitment_label': label,
+            'amount_scope': 'combined', 'extraction_evidence': evidence(quote)}
+
+
 def _terms(n, shared_notice, checked_at):
     terms = {}
     try:
@@ -247,6 +285,25 @@ def _terms(n, shared_notice, checked_at):
             terms = extract_terms(n)
     except (KeyError, TypeError, ValueError):
         pass
+    if not (terms.get('commitment_amount_krw') or terms.get('commitment_label') or terms.get('segments')):
+        try:
+            headline = headline_amount(n)
+        except (KeyError, TypeError, ValueError):
+            headline = {}
+        if headline and terms.get('amount_scope') == 'pe_track_without_allocation':
+            if headline['amount_scope'] != 'combined':
+                headline = {}
+            else:
+                # A PE track inside a joint PE·VC budget (e.g. 중소기업중앙회): the joint total is
+                # shown as a labelled figure only. It is not this track's allocation, so no
+                # number is stored for totals or statistics.
+                headline.pop('commitment_amount_krw')
+                headline.pop('amount_scope')
+                for field in ('commitment_label', 'list_commitment_label'):
+                    headline[field] += ' (PE·VC 합계)'
+        if headline:
+            evidence = {**terms.get('extraction_evidence', {}), **headline.pop('extraction_evidence')}
+            terms = {**terms, **headline, 'extraction_evidence': evidence}
     # Only fields validated by the existing term parser may be copied.
     result = {k: copy.deepcopy(v) for k, v in terms.items() if k in OFFERING_FIELDS}
     if shared_notice and result.get('primary_investment'):
@@ -613,8 +670,10 @@ def publish_basic_notices(data, growth_notices, checked_at):
             else:
                 fund = _fund_name(original['title'])
                 if original['institution_id'] in PE_TRACK_INSTITUTIONS and fund and any(
-                        fund in _fund_key(q.get('title')) or fund in _fund_key(q.get('display_title'))
+                        q['institution_id'] != original['institution_id']
+                        and (fund in _fund_key(q.get('title')) or fund in _fund_key(q.get('display_title')))
                         for q in programs.values()):
+                    # Another round of the same institution's fund (1차 → 2차) is its own program.
                     # Joint notices (several LPs) and funds already published by another LP.
                     holds.append({'stage': 'basic_publication', 'program_key': key, 'reason': '같은 펀드가 다른 기관 사업으로 이미 공개됨'})
                     continue
@@ -657,4 +716,57 @@ def publish_basic_notices(data, growth_notices, checked_at):
             programs[p['id']] = p
         except (KeyError, TypeError, ValueError) as exc:
             holds.append({'stage': 'basic_publication', 'program_key': key, 'reason': str(exc)})
-    return list(programs.values()), holds
+    return merge_reposted_duplicates(list(programs.values()), holds), holds
+
+
+def _title_core(title):
+    """Title without board prefixes, '[기관명]', 계획/공고 wording or spacing."""
+    text = re.sub(r'^\s*(?:\[[^\]]{1,30}\]\s*)+', '', str(title or ''))
+    text = re.sub(r'선정\s*계획|선정|계획|공고|위탁운용사|운용사', '', text)
+    return re.sub(r'[^0-9A-Za-z가-힣]', '', text).lower()
+
+
+# Association boards that repost institutions' notices (collect_lp_original_notices.load_channels).
+REPOST_HOSTS = ('kofia.or.kr', 'kvca.or.kr', 'vcs.go.kr')
+
+
+def _own_site(p):
+    """True when a program's notice comes from the institution's own site, not a repost board."""
+    hosts = [(urlsplit(e.get('url', '')).hostname or '').removeprefix('www.') for e in p.get('events', [])]
+    return any(host and not host.endswith(REPOST_HOSTS) for host in hosts)
+
+
+def merge_reposted_duplicates(programs, holds):
+    """One program per solicitation when an association repost and the institution's own
+    board both produced one (same institution, announcement date, deadline, amount and title).
+
+    The program on the institution's own site is kept; the repost's extra dated events are
+    added to it. Reviewed programs (not basic_publication) are never merged.
+    """
+    def signature(p):
+        announced = min((e['date'] for e in p.get('events', []) if e.get('type') == '모집 공고'), default=None)
+        return (p['institution_id'], announced, p.get('deadline'), p.get('commitment_amount_krw'), _title_core(p.get('title')))
+
+    groups = defaultdict(list)
+    for p in programs:
+        sig = signature(p)
+        if p.get('basic_publication') and sig[1] and sig[2]:
+            groups[sig].append(p)
+    dropped = set()
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        keep = sorted(members, key=lambda p: (not _own_site(p), -len(p.get('selected_gps') or []), -len(p.get('events', [])), p['id']))[0]
+        seen = {(e.get('type'), e.get('date')) for e in keep.get('events', [])}
+        for other in members:
+            if other is keep:
+                continue
+            for event in other.get('events', []):
+                if (event.get('type'), event.get('date')) not in seen:
+                    keep['events'].append(copy.deepcopy(event))
+                    seen.add((event.get('type'), event.get('date')))
+            dropped.add(other['id'])
+            holds.append({'stage': 'basic_duplicate', 'program_key': other.get('source_program_key'),
+                          'reason': f"같은 출자사업의 재게시 공고: {keep['id']}로 합침"})
+        keep['events'].sort(key=lambda e: (e['date'], e.get('type', '')))
+    return [p for p in programs if p['id'] not in dropped]

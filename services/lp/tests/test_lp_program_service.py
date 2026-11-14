@@ -116,9 +116,9 @@ class ProgramListPresentation(unittest.TestCase):
         ])
         index = pages['index.html']
         self.assertIn('>같은 공고 · 6월 공고<', index); self.assertIn('>같은 공고 · 9월 공고<', index)
-        self.assertIn('>2026년 군인공제회 PE 선정 공고<', index)
-        self.assertIn('<h1>2026년 군인공제회 PE 선정 공고</h1><p class="source-title">공고명 [사업공고]', pages['program-c.html'])
-        self.assertIn('<title>2026년 군인공제회 PE 선정 공고 · LP</title>', pages['program-c.html'])
+        self.assertIn('>2026년 군인공제회 PE<', index)
+        self.assertIn('<h1>2026년 군인공제회 PE</h1><p class="source-title">공고명 [사업공고]', pages['program-c.html'])
+        self.assertIn('<title>2026년 군인공제회 PE · LP</title>', pages['program-c.html'])
 
     def test_institution_directory_and_merged_manager_history(self):
         pages = self.render([
@@ -183,9 +183,17 @@ class ProgramListPresentation(unittest.TestCase):
     def test_old_notice_without_deadline_not_current_and_brackets_spaced(self):
         from services.lp.src.lp_program_detail import clean_title
         self.assertEqual(clean_title('「정책금융기관 글로벌 스케일업 협력펀드」출자사업 위탁운용사 선정계획 공고'),
-                         '정책금융기관 글로벌 스케일업 협력펀드 출자사업 위탁운용사 선정계획 공고')
+                         '정책금융기관 글로벌 스케일업 협력펀드')
         self.assertEqual(clean_title('『2026 남부권 지역성장지원펀드』위탁운용사 선정계획 공고'),
-                         '2026 남부권 지역성장지원펀드 위탁운용사 선정계획 공고')
+                         '2026 남부권 지역성장지원펀드')
+        # Track words stay; the institution's own name goes (it is shown next to the title).
+        self.assertEqual(clean_title('2025년 신협중앙회 국내 기업형 블라인드펀드 위탁운용사(중형PE) 선정 공고', ['신협중앙회']),
+                         '2025년 국내 기업형 블라인드펀드 (중형PE)')
+        self.assertEqual(clean_title('’26년 군인공제회 국내 PE·VC 블라인드 펀드 선정계획 공고', ['군인공제회']),
+                         '2026년 국내 PE·VC 블라인드 펀드')
+        # Too little left: the notice wording is kept.
+        self.assertEqual(clean_title('[위탁운용사 공고] 경찰공제회 국내 PE·VC 위탁 운용사 선정 공고', ['경찰공제회']),
+                         '국내 PE·VC 위탁 운용사 선정 공고')
         old = self.program('old', '모집 공고', 'i', 'I', None, event='2024-12-20')
         fresh = self.program('fresh', '모집 공고', 'i', 'I', None, event='2026-11-01')
         result = self.program('res', '선정 결과 발표', 'i', 'I', None, event='2026-11-04')
@@ -397,6 +405,18 @@ class InstitutionTiles(unittest.TestCase):
         # An institution missing from the master still gets a clean header without type or links.
         self.assertIn('<div class="institution-heading"><h1>어느재단</h1>', unknown)
         self.assertNotIn('<div class="institution-links">', unknown)
+
+
+class ListAmountFallback(unittest.TestCase):
+    program = ProgramListPresentation.program
+
+    def test_per_fund_amount_shown_when_no_total(self):
+        with tempfile.TemporaryDirectory() as folder:
+            p = {**self.program('cu', '접수 마감', 'cu', '신협중앙회', '2025-07-22'),
+                 'per_fund_amount_krw': 50_000_000_000, 'per_fund_qualifier': '이내'}
+            build({'as_of': '2026-11-13', 'programs': [p]}, Path(folder))
+            index = (Path(folder) / 'index.html').read_text()
+        self.assertIn('<span>펀드당 500억원 이내</span>', index)
 
 
 class ReportedResultFile(unittest.TestCase):
