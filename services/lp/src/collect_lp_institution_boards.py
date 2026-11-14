@@ -381,6 +381,65 @@ def _detail(html, url, config, resolution=None):
     return parser.parse_detail(html, url, config, **kwargs)
 
 
+def fetch_notice(row, listing_receipt, config, fetch, checked_at, resolver_cache, holds, coverage=None):
+    """One official notice: detail page, attachment resolver, attachments. Shared by
+    the daily collector and the 2020+ history collector; raises when the detail
+    cannot be confirmed against its listing row."""
+    institution = config['institution_id']
+    coverage = coverage if coverage is not None else {'detail_count': 0, 'attachment_count': 0}
+    raw = fetch(row['url'], listing_receipt['url'])
+    html = raw.decode('utf-8') if config.get('response_format') == 'json' else _html(raw)
+    resolution = None
+    request = getattr(adapter(config), 'attachment_request', lambda *a: None)(html, row['url'], config)
+    if request:
+        try:
+            _same_host(request, config)
+            if request not in resolver_cache:
+                text = decode_html(fetch(request, row['url']))
+                resolver_cache[request] = {'url':request,'text':text,'sha256':digest(text),
+                    'kind':'attachment_listing' if institution=='mmaa' else 'resolver_script'}
+            resolution = resolver_cache[request]
+        except Exception as error:
+            holds.append({'institution_id':institution,'stage':'institution_attachment_discovery',
+                          'notice_url':row['url'],'url':request,'error':str(error)})
+    detail = _detail(html, row['url'], config, resolution)
+    titles_match = getattr(adapter(config), 'titles_match', lambda a,b: a==b)
+    if detail['date'] != row['date'] or not titles_match(row['title'], detail['title']):
+        raise ValueError('official listing/detail title or date differs')
+    n = {**detail, 'institution_id': institution, 'source_id': row['source_id'],
+         'url': row['url'], 'checked_at': checked_at, 'source_channel': 'institution_board',
+         'discovery_provenance': {'kind': 'institution_board_v1',
+             'listing': listing_receipt, 'detail_html': html, 'detail_sha256': digest(html)},
+         'attachment_hashes': {}, 'attachment_texts': {}, 'attachment_bytes': {}}
+    if resolution is not None:
+        n['discovery_provenance']['attachment_resolution'] = resolution
+    if config.get('attachment_extraction_version')==2:
+        n['attachment_extraction_version']=2
+    n['sha256'] = original_body_hash(n)
+    coverage['detail_count'] = coverage.get('detail_count', 0) + 1
+    # Unrelated investment boards remain discoverable, but their
+    # files cannot qualify the offered PE scope accidentally.
+    outside = (classify_scope(n['title'], n['title']) in {'outside', 'vc_only'}
+               or procurement_reason(n['title'],n['body']) is not None)
+    if not outside:
+        for item in n['attachments'][:6]:
+            if is_submission_form(item['name']):
+                continue
+            try:
+                raw = fetch(item['url'], n['url'])
+                text = (attachment_text(raw,item['name'],extraction_version=2) if n.get('attachment_extraction_version')==2
+                        else attachment_text(raw,item['name']))
+                n['attachment_bytes'][item['url']] = base64.b64encode(raw).decode('ascii')
+                n['attachment_hashes'][item['url']] = digest(raw)
+                if text:
+                    n['attachment_texts'][item['url']] = text
+                coverage['attachment_count'] = coverage.get('attachment_count', 0) + 1
+            except Exception as exc:
+                holds.append({'institution_id': institution, 'stage': 'institution_attachment',
+                              'url': item['url'], 'notice_url': n['url'], 'error': str(exc)})
+    return n
+
+
 def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures=True):
     checked_at = checked_at or datetime.now(timezone.utc).isoformat()
     result = {'checked_at': checked_at, 'notices': [], 'holds': [], 'coverage': {}}
@@ -499,56 +558,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                                     'error': 'detail budget reached; older candidates retained in listing receipts'})
         for row, listing_url in ordered[:limit]:
             try:
-                raw = fetch(row['url'], listing_url)
-                html = raw.decode('utf-8') if config.get('response_format') == 'json' else _html(raw)
-                resolution = None
-                request = getattr(adapter(config), 'attachment_request', lambda *a: None)(html, row['url'], config)
-                if request:
-                    try:
-                        _same_host(request, config)
-                        if request not in resolver_cache:
-                            text = decode_html(fetch(request, row['url']))
-                            resolver_cache[request] = {'url':request,'text':text,'sha256':digest(text),
-                                'kind':'attachment_listing' if institution=='mmaa' else 'resolver_script'}
-                        resolution = resolver_cache[request]
-                    except Exception as error:
-                        result['holds'].append({'institution_id':institution,'stage':'institution_attachment_discovery',
-                                                'notice_url':row['url'],'url':request,'error':str(error)})
-                detail = _detail(html, row['url'], config, resolution)
-                titles_match = getattr(adapter(config), 'titles_match', lambda a,b: a==b)
-                if detail['date'] != row['date'] or not titles_match(row['title'], detail['title']):
-                    raise ValueError('official listing/detail title or date differs')
-                n = {**detail, 'institution_id': institution, 'source_id': row['source_id'],
-                     'url': row['url'], 'checked_at': checked_at, 'source_channel': 'institution_board',
-                     'discovery_provenance': {'kind': 'institution_board_v1',
-                         'listing': receipts[listing_url], 'detail_html': html, 'detail_sha256': digest(html)},
-                     'attachment_hashes': {}, 'attachment_texts': {}, 'attachment_bytes': {}}
-                if resolution is not None:
-                    n['discovery_provenance']['attachment_resolution'] = resolution
-                if config.get('attachment_extraction_version')==2:
-                    n['attachment_extraction_version']=2
-                n['sha256'] = original_body_hash(n)
-                coverage['detail_count'] += 1
-                # Unrelated investment boards remain discoverable, but their
-                # files cannot qualify the offered PE scope accidentally.
-                outside = (classify_scope(n['title'], n['title']) in {'outside', 'vc_only'}
-                           or procurement_reason(n['title'],n['body']) is not None)
-                if not outside:
-                    for item in n['attachments'][:6]:
-                        if is_submission_form(item['name']):
-                            continue
-                        try:
-                            raw = fetch(item['url'], n['url'])
-                            text = (attachment_text(raw,item['name'],extraction_version=2) if n.get('attachment_extraction_version')==2
-                                    else attachment_text(raw,item['name']))
-                            n['attachment_bytes'][item['url']] = base64.b64encode(raw).decode('ascii')
-                            n['attachment_hashes'][item['url']] = digest(raw)
-                            if text:
-                                n['attachment_texts'][item['url']] = text
-                            coverage['attachment_count'] += 1
-                        except Exception as exc:
-                            result['holds'].append({'institution_id': institution, 'stage': 'institution_attachment',
-                                                    'url': item['url'], 'notice_url': n['url'], 'error': str(exc)})
+                n = fetch_notice(row, receipts[listing_url], config, fetch, checked_at, resolver_cache, result['holds'], coverage)
                 result['notices'].append(validate_notice(n, checked_at, config))
             except kfinco.RestrictedNotice as exc:
                 result['holds'].append({'institution_id': institution, 'stage': 'institution_restricted',
@@ -592,7 +602,19 @@ def retry_failed_sources(report, configs=None, fetch_factory=Session, checked_at
     return result
 
 
-def validate_notice(raw, checked_at, config=None):
+def _history_listing_ok(url, config):
+    try:
+        _same_host(url, config)
+    except ValueError:
+        return False
+    daily = {urlsplit(u).path for u in listing_receipt_urls(config)} | {urlsplit(config['listing_url']).path}
+    return urlsplit(url).path in daily
+
+
+def validate_notice(raw, checked_at, config=None, *, history_listing=False):
+    """history_listing: the listing page came from the 2020+ history walk (deep pages of
+    the same official board), so it is checked by host and board route, not by the
+    daily configured page set."""
     n = copy.deepcopy(raw)
     version = _extraction_version(n)
     config = config or load_configs()[n['institution_id']]
@@ -601,7 +623,9 @@ def validate_notice(raw, checked_at, config=None):
     _same_host(n['url'], config)
     proof = n['discovery_provenance']
     listing = proof['listing']
-    if (proof['kind'] != 'institution_board_v1' or listing['url'] not in listing_receipt_urls(config)
+    allowed_listing = (_history_listing_ok(listing['url'], config) if history_listing
+                       else listing['url'] in listing_receipt_urls(config))
+    if (proof['kind'] != 'institution_board_v1' or not allowed_listing
             or digest(listing['html']) != listing['sha256']
             or digest(proof['detail_html']) != proof['detail_sha256']):
         raise ValueError('institution source receipt mismatch')

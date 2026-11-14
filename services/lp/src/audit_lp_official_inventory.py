@@ -250,7 +250,7 @@ def known_keys(documents):
 
 
 def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
-          configs=None, scope=None, fetch_factory=None, independent=False, start=None):
+          configs=None, scope=None, fetch_factory=None, independent=False, start=None, keep_html=False):
     """Recent-365-day audit, or with `start` a fixed-start history probe.
 
     History mode (user decision 2026-11-14: every PE notice since 2020-01-01) keeps the
@@ -329,7 +329,7 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
             receipt={'institution_id':institution,'term':query['term'],'kind':query['kind'],'page':page,'url':url,'html':receipt_html,
                      'sha256':hashlib.sha256(receipt_html.encode()).hexdigest(),'row_count':None}
             if institution=='kfinco':receipt['response_sha256']=hashlib.sha256(raw).hexdigest()
-            if history:receipt['html']=None  # rows are kept below; page HTML would be hundreds of MB
+            if history and not keep_html:receipt['html']=None  # rows are kept below; page HTML would be hundreds of MB
             report['receipts'].append(receipt);query['pages'].append(len(report['receipts'])-1)
             rows=core_rows(institution,html,url) if institution in CORE else boards.adapter(config).parse_listing(html,url,config)
             receipt['row_count']=len(rows)
@@ -345,6 +345,7 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
                     old=ctx['observed'].get(key)
                     if old and any(old[k]!=item[k] for k in ('title','date')):raise ValueError('conflicting official listing metadata')
                     item['observed_in_queries']=(old or {}).get('observed_in_queries',[])+[{'term':query['term'],'kind':query['kind']}]
+                    item['receipt_index']=(old or {}).get('receipt_index',len(report['receipts'])-1)
                     ctx['observed'][key]=item
             regular=[row for row in rows if not row.get('pinned')]
             if not rows:query['boundary']='confirmed_empty'
@@ -371,7 +372,7 @@ def audit(baseline, archived=(), *, as_of=None, max_pages=20, page_budget=100,
             scope_label,_=title_scope(row['title']);stage=notice_stage(row['title'])
             relevant=bool(re.search(r'펀드|출자|블라인드|운용사|사모|(?<![A-Za-z])PEF?(?![A-Za-z])',row['title'],re.I))
             disposition='public_linked' if key in public else 'archived_unpublished' if key in stored else 'not_in_archive'
-            entry['rows'].append({k:row[k] for k in ('source_id','date','title','url','observed_in_queries')}|{'title_scope':scope_label,'stage':stage,'relevant':relevant,'disposition':disposition})
+            entry['rows'].append({k:row[k] for k in ('source_id','date','title','url','observed_in_queries','receipt_index')}|{'title_scope':scope_label,'stage':stage,'relevant':relevant,'disposition':disposition})
         entry['rows'].sort(key=lambda r:(r['date'],r['source_id']),reverse=True)
         limited=any(q['boundary'] in {'page_limit','repeated_page','global_page_budget'} for q in entry['queries'])
         entry['status']='source_error' if ctx['failed'] else 'query_limit' if limited or not entry['queries'] else 'observed_query_boundary'
