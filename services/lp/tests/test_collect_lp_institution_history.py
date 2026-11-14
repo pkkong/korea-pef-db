@@ -63,6 +63,21 @@ class InstitutionHistoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             history.collect('kgrowth', '2020-01-01', '2026-11-14', fetch_factory=lambda c: None)
 
+    def test_offline_review_turns_bundle_into_programs_without_db(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('review', Path(__file__).resolve().parents[3] / 'scripts/review_lp_history_bundles.py')
+        review = importlib.util.module_from_spec(spec); spec.loader.exec_module(review)
+        fetch = tp_fetch()
+        bundle = history.collect('tp', '2020-01-01', '2026-11-14', max_pages=3, page_budget=20,
+                                 fetch_factory=lambda c: fetch, checked_at=STAMP)
+        with tempfile.TemporaryDirectory() as tmp:
+            history.write_bundle(bundle, Path(tmp))
+            _, notices = review.load(tmp)
+        programs, by_inst, unlinked, _ = review.review(notices, STAMP)
+        self.assertEqual(len(by_inst['tp']), 1)
+        self.assertEqual(unlinked.get('tp', 0), 0)
+        self.assertIn('| tp | 1 | 1 | 0 |', review.markdown(by_inst, unlinked, __import__('collections').Counter(), notices))
+
 
 if __name__ == '__main__':
     unittest.main()
