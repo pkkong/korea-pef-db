@@ -1,0 +1,51 @@
+name: Probe LP association repost history
+
+# Read-only: walks the KVCA/KOFIA repost boards back to the probe start date and
+# keeps list rows only. No body download, DB write or publication. Results go to
+# the lp-history-shared-probe branch.
+on:
+  push:
+    branches: [main]
+    paths:
+      - data/lp_history_probe_request.json
+      - scripts/probe_shared_lp_history.py
+      - .github/workflows/probe-lp-shared-history.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: macos-latest
+    timeout-minutes: 120
+    env:
+      LP_SOURCE_WORKER_TOKEN: ${{ secrets.LP_SOURCE_WORKER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install listing dependencies
+        run: python3 -m pip install 'truststore==0.10.5'
+      - name: Walk repost boards back to the requested start
+        run: |
+          START=$(python3 -c "import json;print(json.load(open('data/lp_history_probe_request.json'))['start'])")
+          python3 scripts/probe_shared_lp_history.py --start "$START" --out /tmp/lp-history-shared-probe
+          cat /tmp/lp-history-shared-probe/README.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Push results to review branch
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p /tmp/lp-history-shared-probe && cd /tmp/lp-history-shared-probe
+          [ -f README.md ] || echo "probe produced no report" > README.md
+          git init -q -b lp-history-shared-probe
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "LP association repost history probe from run ${GITHUB_RUN_ID}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" lp-history-shared-probe
