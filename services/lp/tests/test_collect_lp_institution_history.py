@@ -78,6 +78,13 @@ class InstitutionHistoryTests(unittest.TestCase):
         self.assertEqual(unlinked.get('tp', 0), 0)
         self.assertIn('| tp | 1 | 1 | 0 |', review.markdown(by_inst, unlinked, __import__('collections').Counter(), notices))
 
+    def test_failed_detail_keeps_its_page_for_parser_fixes(self):
+        fetch = tp_fetch(detail='<div>no detail table</div>')
+        bundle = history.collect('tp', '2020-01-01', '2026-11-14', max_pages=3, page_budget=20,
+                                 fetch_factory=lambda c: fetch, checked_at=STAMP)
+        self.assertEqual(bundle['notices'], [])
+        self.assertIn('no detail table', bundle['holds'][0]['detail_page'])
+
 
 if __name__ == '__main__':
     unittest.main()

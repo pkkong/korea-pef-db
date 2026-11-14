@@ -1,9 +1,27 @@
 {
   "start": "2020-01-01",
   "end": "2026-11-14",
-  "reason": "사용자 결정 2026-11-14: 2020년 이후 PE 공고 전수. 1차는 일일 게시판 어댑터가 있고 게시판이 2020년까지 이어지는 기관(도달 범위 점검 결과). 이 파일을 바꾸면 수집이 다시 실행된다.",
-  "institutions": ["poba", "geps", "mmaa", "sema", "kbiz", "tp", "kamco", "moel_iaci", "moel_eif", "kfcc", "pck_pension", "nps", "nh_central", "suhyup", "cwma", "cu"],
+  "reason": "사용자 결정 2026-11-14: 2020년 이후 PE 공고 전수. 1차는 일일 게시판 어댑터가 있고 게시판이 2020년까지 이어지는 기관(도달 범위 점검 결과). 이 파일을 바꾸면 수집이 다시 실행된다. 2차(11/15): 과기공 목록 대조 수정, 공무원연금·농협·수협 DNS 실패 재시도, 실패한 상세 쪽 보관.",
+  "institutions": [
+    "poba",
+    "geps",
+    "mmaa",
+    "sema",
+    "kbiz",
+    "tp",
+    "kamco",
+    "moel_iaci",
+    "moel_eif",
+    "kfcc",
+    "pck_pension",
+    "nps",
+    "nh_central",
+    "suhyup",
+    "cwma",
+    "cu"
+  ],
   "max_pages": 150,
   "page_budget": 1500,
-  "max_notices": 400
+  "max_notices": 400,
+  "attempt": 2
 }

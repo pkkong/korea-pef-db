@@ -46,8 +46,11 @@ def load(directory):
 
 
 def review(notices, checked_at=None):
+    """Programs plus per-institution unlinked counts; `review.skips` keeps why groups were left out."""
     checked_at = checked_at or datetime.now(timezone.utc).isoformat()
-    programs, holds = publish_basic_notices({'programs': [], 'priority_notices': notices}, [], checked_at)
+    skips = []
+    programs, holds = publish_basic_notices({'programs': [], 'priority_notices': notices}, [], checked_at, skips)
+    review.skips = skips
     by_inst = defaultdict(list)
     for p in programs:
         by_inst[p['institution_id']].append(p)

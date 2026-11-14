@@ -50,7 +50,9 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parents[3]
 # Large LPs whose policy/pension notices mix PE and VC (user decision 2026-11-12).
-PE_TRACK_INSTITUTIONS = frozenset({'kdb', 'ibk', 'moel_eif', 'nps', 'geps', 'cwma', 'kic'})
+# 2026-11-14 (2020+ history, user decision): 산재보험기금 is 고용보험기금's twin fund under
+# the same ministry; 군인공제회·과기공 run one annual joint PE·VC blind contest.
+PE_TRACK_INSTITUTIONS = frozenset({'kdb', 'ibk', 'moel_eif', 'moel_iaci', 'nps', 'geps', 'cwma', 'kic', 'mmaa', 'sema'})
 MIXED_SCOPE_LABEL = 'PE·VC 공동 모집'
 
 
@@ -197,7 +199,8 @@ def _scope(n):
             and not re.search(r'(?<![A-Za-z])PEF?(?![A-Za-z])', n['title'], re.I)):
         return 'vc_only'
     # Co-investments, project funds and private debt are distinct product scope.
-    if re.search(r'공동투자|프로젝트|사모대출|대출형|크레딧|부동산|인프라|헤지펀드|private\s*debt|평가\s*기관\s*선정', n['title'], re.I):
+    if re.search(r'공동투자|프로젝트|사모대출|대출형|크레딧|부동산|인프라|헤지펀드|private\s*debt|평가\s*기관\s*선정'
+                 r'|개발\s*(?:블라인드\s*)?펀드|개발사업', n['title'], re.I):
         return 'outside'
     result = classify_scope(n['title'], text)
     # User decision 2026-11-12: for the large policy/pension LPs, an explicitly
@@ -238,7 +241,8 @@ def _deadline(n):
 # "선정 규모 : 총 1,200억원 (PEF 600억원(2건), VC 600억원(3건))" gives the PE share itself.
 _HEADLINE_PE_SPLIT = re.compile(r'선정규모[:：]?총([\d,]+)억원\(PEF([\d,]+)억원\((\d+)건\)', re.I)
 _HEADLINE_TOTAL = re.compile(
-    r'(?:\(출자금액\)|출자금액|위탁운용금액|위탁운용총액|출자규모|선정규모)[:：∙·•\-\s]{0,3}총([\d,]+)억원(이내|내외)?')
+    r'(?:\(출자금액\)|출자금액|위탁운용금액|위탁운용총액|출자규모|선정규모|투자금액)[:：∙·•\-\s]{0,3}총([\d,]+)억원(이내|내외)?'
+    r'(?:\((\d+)건선정예정\))?')
 
 
 def _won(text):
@@ -261,13 +265,19 @@ def headline_amount(n):
         return {'commitment_amount_krw': _won(amount), 'commitment_label': f'PE 부문 {amount}억원',
                 'list_commitment_label': f'PE 부문 {amount}억원', 'manager_count': int(count),
                 'manager_count_label': f'{count}개사', 'amount_scope': 'pe_only', 'extraction_evidence': evidence(quote)}
-    totals = {(m[1], m[2] or '', m[0]) for text in texts for m in _HEADLINE_TOTAL.finditer(re.sub(r'\s+', '', text))}
+    found = [m for text in texts for m in _HEADLINE_TOTAL.finditer(re.sub(r'\s+', '', text))]
+    totals = {(m[1], m[2] or '', m[0]) for m in found}
     if not totals or len({a for a, _, _ in totals}) != 1:
         return {}
     amount, qualifier, quote = sorted(totals, key=lambda t: (not t[1], t[2]))[0]
     label = f'총 {amount}억원' + (f' {qualifier}' if qualifier else '')
-    return {'commitment_amount_krw': _won(amount), 'commitment_label': label, 'list_commitment_label': label,
-            'amount_scope': 'combined', 'extraction_evidence': evidence(quote)}
+    result = {'commitment_amount_krw': _won(amount), 'commitment_label': label, 'list_commitment_label': label,
+              'amount_scope': 'combined', 'extraction_evidence': evidence(quote)}
+    counts = {m[3] for m in found if m[3]}
+    if len(counts) == 1:  # "총 1,500억원 (3건 선정 예정)"
+        count = int(next(iter(counts)))
+        result.update(manager_count=count, manager_count_label=f'{count}개사')
+    return result
 
 
 # Minimum fund size a proposal must reach, from explicit notice wording only.
@@ -278,7 +288,7 @@ _FUND_SIZE_TIERS = (
     ('range', re.compile(r'결성규모는최소' + _N + r'~최대' + _N)),
     ('minimum', re.compile(r'최소(?:펀드)?결성규모[:：‧·ㆍ\-]*(?:최소펀드결성규모[:：]*)?' + _N + r'(이상)?')),
     ('blind_track', re.compile(r'블라인드형\].{0,80}?제안펀드결성규모' + _N + r'이상')),
-    ('proposal', re.compile(r'제안펀드결성규모가?' + _N + r'이상')),
+    ('proposal', re.compile(r'(?:제안펀드결성규모가?|펀드별결성총액)' + _N + r'이상')),
     ('overview', re.compile(r'(?<!예상)펀드규모[:：]?' + _N + r'이상')),
 )
 
@@ -341,9 +351,14 @@ def _terms(n, shared_notice, checked_at):
                 # number is stored for totals or statistics.
                 headline.pop('commitment_amount_krw')
                 headline.pop('amount_scope')
+                headline.pop('manager_count', None)  # the joint notice's count, not this track's
+                headline.pop('manager_count_label', None)
                 for field in ('commitment_label', 'list_commitment_label'):
                     headline[field] += ' (PE·VC 합계)'
         if headline:
+            if terms.get('manager_count'):  # the institution parser's count stands
+                headline.pop('manager_count', None)
+                headline.pop('manager_count_label', None)
             evidence = {**terms.get('extraction_evidence', {}), **headline.pop('extraction_evidence')}
             terms = {**terms, **headline, 'extraction_evidence': evidence}
     if not terms.get('fund_target_label'):
@@ -628,8 +643,15 @@ def _attach_preferred_roster(p, original, members, checked_at, holds):
             holds.append({'stage': 'preferred_roster', 'url': preferred[0]['url'], 'reason': str(exc)})
 
 
-def publish_basic_notices(data, growth_notices, checked_at):
-    """Extend validated public programs; never consume a prepared candidate fact."""
+def publish_basic_notices(data, growth_notices, checked_at, skips=None):
+    """Extend validated public programs; never consume a prepared candidate fact.
+
+    `skips` (optional list) receives the groups left out without a hold, with the
+    rule that left them out; used by offline history review only."""
+    def skip(key, members, reason):
+        if skips is not None:
+            skips.append({'program_key': key, 'reason': reason,
+                          'urls': sorted(n['url'] for n in members), 'titles': sorted({n['title'] for n in members})})
     names = _names()
     docs, shared, holds = _sources(data, growth_notices, checked_at)
     groups = defaultdict(list)
@@ -663,6 +685,7 @@ def publish_basic_notices(data, growth_notices, checked_at):
         try:
             originals = [n for n in members if _event(n)['type'] == '모집 공고']
             if len(originals) != 1:
+                skip(key, members, 'no_announcement' if not originals else 'several_announcements')
                 continue
             original = originals[0]
             urls = {n['url'] for n in members}
@@ -679,6 +702,7 @@ def publish_basic_notices(data, growth_notices, checked_at):
             # its terms or interpreting its GP list again.
             reviewed = matches and not matches[0].get('basic_publication')
             if not reviewed and _scope(original) not in ('pe_blind', 'mixed_pe_blind'):
+                skip(key, members, 'scope:' + str(_scope(original)))
                 continue
             terms, raw_terms = _terms(original, shared.get(original['url']), checked_at)
             if raw_terms.get('deadline_error'):
@@ -686,6 +710,7 @@ def publish_basic_notices(data, growth_notices, checked_at):
             mixed_open = False
             if not reviewed and _scope(original) == 'mixed_pe_blind' and not ((raw_terms.get('amount_scope') == 'pe_only' and raw_terms.get('commitment_amount_krw')) or kbiz_terms.pe_track(original)):
                 if original['institution_id'] not in PE_TRACK_INSTITUTIONS:
+                    skip(key, members, 'mixed_without_pe_amount')
                     continue
                 # Published as one joint PE·VC program; a combined amount says so.
                 mixed_open = True
@@ -694,6 +719,7 @@ def publish_basic_notices(data, growth_notices, checked_at):
                         terms[field] = f"{terms[field]} (PE·VC 합계)"
             if (not reviewed and original.get('source_channel') == 'institution_board'
                     and '공동투자' in original['body'] and not raw_terms.get('extraction_evidence', {}).get('blind_allocation')):
+                skip(key, members, 'coinvestment_without_blind_allocation')
                 continue
             if matches:
                 p = matches[0]

@@ -479,6 +479,37 @@ class MinimumFundSizeTests(unittest.TestCase):
         self.assertIsNone(self.size('최종 펀드 결성규모의 15% 이내'))
 
 
+class HistoryScopeAndHeadlineTests(unittest.TestCase):
+    """2020+ history: 산재보험기금 PEF notices, investment-amount headlines, development funds."""
+
+    def notice(self, title, body, institution='moel_iaci'):
+        return {'title': title, 'body': body, 'url': 'https://www.moel.go.kr/x', 'sha256': 'a' * 64,
+                'institution_id': institution, 'source_channel': 'institution_board', 'date': '2022-06-13',
+                'attachments': [], 'attachment_texts': {}, 'attachment_hashes': {}}
+
+    def test_investment_amount_headline_with_manager_count(self):
+        from services.lp.src.lp_notice_publication import headline_amount
+        result = headline_amount(self.notice('2022년 산재보험기금 대체투자상품(PEF) 선정 공고',
+                                             '□ 선정 유형 : 블라인드 PEF □ 투자 금액 : 총 1,500억원 (3건 선정 예정)'))
+        self.assertEqual((result['commitment_label'], result['manager_count']), ('총 1,500억원', 3))
+
+    def test_moel_iaci_explicit_pef_notice_is_pe_scope(self):
+        from services.lp.src.lp_notice_publication import _scope
+        n = self.notice('2022년 산재보험기금 대체투자상품(PEF) 선정 공고',
+                        '선정 유형 : 블라인드 PEF 경영참여형사모집합투자기구(PEF) 상품')
+        self.assertIn(_scope(n), ('pe_blind', 'mixed_pe_blind'))
+
+    def test_development_blind_fund_is_outside(self):
+        from services.lp.src.lp_notice_publication import _scope
+        n = self.notice('군인공제회 국내 개발 블라인드 펀드 선정 계획 공고', '블라인드 펀드 PEF', institution='mmaa')
+        self.assertEqual(_scope(n), 'outside')
+
+    def test_fund_total_eligibility_is_a_minimum_fund_size(self):
+        from services.lp.src.lp_notice_publication import minimum_fund_size
+        n = self.notice('x', '제안 펀드 요건 운용 규모 펀드별 결성총액 1,500억원 이상 타기관 출자확약')
+        self.assertEqual(minimum_fund_size(n)['fund_target_label'], '최소 1,500억원')
+
+
 class LargeLpPeTrackTests(unittest.TestCase):
     """User decision 2026-11-12: large LPs' PE tracks are published, joint scope labelled."""
     BODY = ('투자기구: 기관전용 사모집합투자기구, 벤처투자조합, 신기술사업투자조합\n'

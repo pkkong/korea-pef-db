@@ -42,8 +42,16 @@ def history_candidate(row, institution):
 
 
 def _listing_row(receipt, notice_url, config):
+    """The board adapter's own row for this notice. Search words and page numbers in
+    notice URLs differ between queries (SEMA), so rows match on the official notice key."""
+    institution = config['institution_id']
     rows = boards.adapter(config).parse_listing(receipt['html'], receipt['url'], config)
-    return next((row for row in rows if row['url'] == notice_url), None)
+    exact = next((row for row in rows if row['url'] == notice_url), None)
+    if exact:
+        return exact
+    key = inventory.notice_key(institution, notice_url)
+    matches = [row for row in rows if inventory.notice_key(institution, row['url']) == key]
+    return matches[0] if len(matches) == 1 else None
 
 
 def collect(institution, start, end, *, max_pages=150, page_budget=1500, max_notices=400,
@@ -53,7 +61,14 @@ def collect(institution, start, end, *, max_pages=150, page_budget=1500, max_not
         raise ValueError(f'{institution}: no daily board adapter; use its dedicated history path')
     config = configs[institution]
     checked_at = checked_at or datetime.now(timezone.utc).isoformat()
-    fetch = (fetch_factory or boards.Session)(config)
+    session = (fetch_factory or boards.Session)(config)
+    seen_pages = {}
+
+    def fetch(url, referer=None):
+        raw = session(url, referer)
+        if url not in seen_pages and len(seen_pages) < 2000:
+            seen_pages[url] = raw[:400_000]
+        return raw
     listing = inventory.audit({'programs': []}, as_of=end, max_pages=max_pages, page_budget=page_budget,
                               configs={institution: config},
                               scope={'confirmed_institution_ids': [institution], 'priority_verification_ids': []},
@@ -73,6 +88,7 @@ def collect(institution, start, end, *, max_pages=150, page_budget=1500, max_not
     for row in sorted(candidates, key=lambda r: (r['date'], r['url']), reverse=True)[:max_notices]:
         receipt = receipts[row['receipt_index']]
         listing_receipt = {'url': receipt['url'], 'html': receipt['html'], 'sha256': receipt['sha256']}
+        board_row = None
         try:
             board_row = _listing_row(listing_receipt, row['url'], config)
             if board_row is None:
@@ -84,8 +100,13 @@ def collect(institution, start, end, *, max_pages=150, page_budget=1500, max_not
             bundle['skipped'].append({'url': exc.url, 'reason': 'owner_closed'})
             continue
         except Exception as exc:
-            bundle['holds'].append({'stage': 'history_detail', 'url': row['url'], 'date': row['date'],
-                                    'title': row['title'], 'error': str(exc)[:300]})
+            hold = {'stage': 'history_detail', 'url': row['url'], 'date': row['date'],
+                    'title': row['title'], 'error': str(exc)[:300]}
+            page = seen_pages.get(board_row['url'] if board_row else row['url'])
+            if page is not None:
+                # Kept so the parser can be fixed against the real (older) page format.
+                hold['detail_page'] = boards.decode_html(page)[:200_000]
+            bundle['holds'].append(hold)
             continue
         notice['history_title_scope'] = row['title_scope']
         bundle['notices'].append(notice)
