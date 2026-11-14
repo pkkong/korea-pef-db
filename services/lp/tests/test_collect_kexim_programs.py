@@ -211,12 +211,15 @@ class KeximCollectorTests(unittest.TestCase):
                          'kexim-2026-h1-regional-growth-pe','kexim-2026-h2-global-growth-pe'})
         h2=next(r for r in rows if r['id'].endswith('h2-global-growth-pe'))
         self.assertEqual(sum(map(len,h2['manager_lists']['applicants'].values())),14)
-        self.assertEqual({s['source_id'] for s in h2['sources']},{'115904','116241'})
+        # 11/9 official result reviewed 2026-11-14: screening 116666, final selection 117142.
+        self.assertEqual({s['source_id'] for s in h2['sources']},{'115904','116241','116666','117142'})
+        self.assertEqual(h2['manager_lists']['selected'],
+                         {'첨단전략 중형':['노앤파트너스','케이엘앤파트너스'],'첨단전략 소형':['노틱인베스트먼트','더함파트너스']})
         self.assertNotIn('115905',{s['source_id'] for r in rows for s in r['sources']})
         self.assertNotIn('116443',{s['source_id'] for r in rows for s in r['sources']})
         self.assertFalse(any(kexim._title_matches(r,'정책금융기관 글로벌 스케일업 협력펀드 선정 결과') for r in rows))
         self.assertTrue(all(not any('per_fund_max_krw' in s for s in r['facts']['segments']['value']) for r in rows))
-        for r in rows[:2]:
+        for r in rows:
             selected=r['manager_lists']['selected']
             allocations=r['allocation_evidence']['per_gp_krw']
             self.assertEqual(sum(len(names)*allocations[track] for track,names in selected.items()),

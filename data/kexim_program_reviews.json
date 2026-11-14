@@ -380,6 +380,26 @@
           "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=116241&fileTy=ATTACH&fileNo=1": "a6cebe26705c364262a4e923c8adb3ce7e8a2bee38953bf573bcc5c5b6afb2b2"
         },
         "team_count": 14
+      },
+      {
+        "source_id": "116666",
+        "date": "2026-10-13",
+        "event": "서류심사 결과",
+        "sha256": "95799c3024da8414bd3fa055addecfe849b88e7fd3a4c1e26d25f522348a6911",
+        "attachment_hashes": {
+          "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=116666&fileTy=ATTACH&fileNo=1": "341264570f97501be990bf31672e65f80f130d1c9b0b6ded79b8408b12fdb893"
+        },
+        "team_count": 8
+      },
+      {
+        "source_id": "117142",
+        "date": "2026-11-09",
+        "event": "최종 선정",
+        "sha256": "260621bf84012d33b7da4cd5eacde50be22c1f63a3e01ae079738adb5b4449ba",
+        "attachment_hashes": {
+          "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=117142&fileTy=ATTACH&fileNo=2": "e09a1a612a9910f66a8c78bcdea9dedd86638531b75ffcd030e1dbae3f774150"
+        },
+        "team_count": 4
       }
     ],
     "facts": {
@@ -431,6 +451,12 @@
             "manager_count": "2개사"
           }
         ]
+      },
+      "linkage_note": {
+        "source_id": "117142",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=117142&fileTy=ATTACH&fileNo=2",
+        "quote": "최종선정은 수출입은행 및 재정경제부 승인절차가 완료된 후 확정 예정",
+        "value": "선정 결과는 수출입은행·재정경제부 승인 후 확정 예정입니다."
       }
     },
     "manager_lists": {
@@ -454,24 +480,55 @@
           "화인자산운용"
         ]
       },
-      "shortlist": {},
-      "selected": {}
-    },
-    "planned_stages": [
-      {
-        "stage": "selection",
-        "label": "최종 선정",
-        "original_label": "공고상 예정",
-        "date": null,
-        "date_label": "2026년 12월",
-        "precision": "month"
+      "shortlist": {
+        "첨단전략 중형": [
+          "노앤파트너스",
+          "어펄마캐피탈매니져스코리아",
+          "제이앤프라이빗에쿼티",
+          "케이엘앤파트너스"
+        ],
+        "첨단전략 소형": [
+          "노틱인베스트먼트",
+          "더함파트너스",
+          "키스톤프라이빗에쿼티",
+          "화인자산운용"
+        ]
+      },
+      "selected": {
+        "첨단전략 중형": [
+          "노앤파트너스",
+          "케이엘앤파트너스"
+        ],
+        "첨단전략 소형": [
+          "노틱인베스트먼트",
+          "더함파트너스"
+        ]
       }
-    ],
+    },
     "manager_evidence": {
       "applicants": {
         "source_id": "116241",
         "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=116241&fileTy=ATTACH&fileNo=1",
         "quote": "14개사(중형 4, 소형 10)"
+      },
+      "shortlist": {
+        "source_id": "116666",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=116666&fileTy=ATTACH&fileNo=1",
+        "quote": "8개사(중형 4, 소형 4)"
+      },
+      "selected": {
+        "source_id": "117142",
+        "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=117142&fileTy=ATTACH&fileNo=2",
+        "quote": "4개사"
+      }
+    },
+    "allocation_evidence": {
+      "source_id": "117142",
+      "attachment_url": "https://www.koreaexim.go.kr/comm/getFile?srvcId=BBSTY1&upperNo=117142&fileTy=ATTACH&fileNo=2",
+      "quote": "500억원 500억원 250억원 250억원 1,500억원",
+      "per_gp_krw": {
+        "첨단전략 중형": 50000000000,
+        "첨단전략 소형": 25000000000
       }
     }
   }
