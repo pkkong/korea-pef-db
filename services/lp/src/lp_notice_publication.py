@@ -29,6 +29,7 @@ try:
     from .lp_kfcc_notice_terms import allocation as kfcc_allocation
     from . import lp_pck_programs as pck_programs
     from . import lp_kbiz_notice_terms as kbiz_terms
+    from . import lp_mmaa_notice_terms as mmaa_terms
     from . import lp_kfinco_notice_terms as kfinco_terms
     from . import lp_kamco_notice_terms as kamco_terms
 except ImportError:
@@ -45,6 +46,7 @@ except ImportError:
     from lp_kfcc_notice_terms import allocation as kfcc_allocation
     import lp_pck_programs as pck_programs
     import lp_kbiz_notice_terms as kbiz_terms
+    import lp_mmaa_notice_terms as mmaa_terms
     import lp_kfinco_notice_terms as kfinco_terms
     import lp_kamco_notice_terms as kamco_terms
 
@@ -339,7 +341,7 @@ def _terms(n, shared_notice, checked_at):
         pass
     if not (terms.get('commitment_amount_krw') or terms.get('commitment_label') or terms.get('segments')):
         try:
-            headline = headline_amount(n)
+            headline = mmaa_terms.pe_share(n) or headline_amount(n)
         except (KeyError, TypeError, ValueError):
             headline = {}
         if headline and terms.get('amount_scope') == 'pe_track_without_allocation':
