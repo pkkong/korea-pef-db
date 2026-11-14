@@ -26,6 +26,7 @@ def extract_terms(n):
         result = allocation
     evidence = result.setdefault('extraction_evidence', {})
     totals, counts, per_fund, deadlines = set(), set(), set(), set()
+    dates_only, dated_quotes = set(), []
     mixed = bool(re.search(r'PE\s*[·,/]\s*VC|PE.*VC', n['title'], re.I))
     for url, raw, sha in sources:
         text = re.sub(r'\s+', '', raw)
@@ -76,6 +77,20 @@ def extract_terms(n):
             stamp = datetime(year,int(m[2]),int(m[3]),hour,int(m[6] or 0)).isoformat() + '+09:00'
             deadlines.add(stamp)
             record('deadline',m[0])
+        # "마감일: 2026. 8. 20.(목) (PEF 오전 11시까지, VC 오후 4시까지)": the PE track's own time.
+        track = (labels + r"\s*[:：]*\s*[’'‘]?(20\d{2}|\d{2})[.년]\s*(\d{1,2})[.월]\s*(\d{1,2})[.일]?\s*"
+                 r'(?:\([월화수목금토일](?:요일)?\)\s*)?\(\s*PEF?\s*(오후|오전)?\s*(\d{1,2})(?::(\d{2})|시)')
+        for m in re.finditer(track, date_text):
+            hour = int(m[5]) % 12 + 12 if m[4]=='오후' else (0 if m[4]=='오전' and m[5]=='12' else int(m[5]))
+            year = int(m[1]) if len(m[1]) == 4 else 2000 + int(m[1])
+            deadlines.add(datetime(year,int(m[2]),int(m[3]),hour,int(m[6] or 0)).isoformat() + '+09:00')
+            record('deadline',m[0])
+        # A labelled date with no time at all is still the deadline, shown date-only.
+        dated = labels + r"\s*[:：]*\s*[’'‘]?(20\d{2}|\d{2})[.년]\s*(\d{1,2})[.월]\s*(\d{1,2})(?![\d])"
+        for m in re.finditer(dated, date_text):
+            year = int(m[1]) if len(m[1]) == 4 else 2000 + int(m[1])
+            dates_only.add(date(year,int(m[2]),int(m[3])).isoformat())
+            dated_quotes.append({'source_url': url, 'sha256': sha, 'quote': m[0]})
         if re.search(labels + r"\s*[:：]*\s*[’'‘]?(?:20\d{2}|\d{2})[.년]\d{1,2}[.월]\d{2,4}:\d{2}", date_text):
             result.pop('deadline', None)
             result['deadline_error'] = '접수 날짜와 시각 경계 불명확'
@@ -97,6 +112,9 @@ def extract_terms(n):
     if per_fund:
         amount, qualifier = next(iter(per_fund))
         result.update(per_fund_amount_krw=amount, per_fund_qualifier=qualifier)
+    if not deadlines and dates_only and len(dates_only) == 1 and min(dates_only) >= n['date']:
+        evidence.setdefault('deadline', []).extend(dated_quotes)
+        result.update(deadline=next(iter(dates_only)), deadline_precision='date')
     if deadlines:
         days = {d[:10] for d in deadlines}
         if len(days)>1 or min(days)<n['date']:

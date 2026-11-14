@@ -51,5 +51,27 @@ class InstitutionTermsTests(unittest.TestCase):
         self.assertEqual(result['deadline'],'2025-09-05T15:00:00+09:00')
 
 
+class DeadlineCaptionTests(unittest.TestCase):
+    """고용보험기금 2026: time is given per track after the date."""
+
+    def notice(self, body):
+        return {'url': 'https://www.moel.go.kr/x', 'body': body, 'sha256': 's', 'attachment_hashes': {},
+                'title': '2026년 고용보험기금 대체투자상품(PEF, VC) 선정 공고', 'date': '2026-08-07',
+                'institution_id': 'moel_eif'}
+
+    def test_pe_track_time_after_the_date(self):
+        result = extract_terms(self.notice('□ 제안서 접수 마감일: 2026. 8. 20.(목) (PEF 오전 11시까지, VC 오후 4시까지)'))
+        self.assertEqual(result['deadline'], '2026-08-20T11:00:00+09:00')
+        self.assertEqual(result['deadline_precision'], 'datetime')
+
+    def test_labelled_date_without_time_is_date_only(self):
+        result = extract_terms(self.notice('□ 제안서 접수 마감일: 2026. 8. 20.(목)'))
+        self.assertEqual((result['deadline'], result['deadline_precision']), ('2026-08-20', 'date'))
+
+    def test_two_labelled_dates_give_no_deadline(self):
+        result = extract_terms(self.notice('접수마감일: 2026. 8. 20. 그리고 접수마감일: 2026. 8. 27.'))
+        self.assertNotIn('deadline', result)
+
+
 if __name__ == '__main__':
     unittest.main()
