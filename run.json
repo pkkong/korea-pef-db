@@ -1,0 +1,36 @@
+{
+  "summary": {
+    "institutions": 24,
+    "audited": 23,
+    "unconnected": 0,
+    "unmeasured": 1,
+    "pages": 274,
+    "requests": 275,
+    "source_errors": 1,
+    "limited_institutions": [],
+    "independent_unavailable": [
+      "kfinco"
+    ],
+    "unarchived_relevant": 1157,
+    "unarchived_by_title_scope": {
+      "outside_policy": 181,
+      "pe_blind_title": 15,
+      "vc_explicit": 30,
+      "scope_unconfirmed": 911,
+      "mixed_pe_vc": 20
+    }
+  },
+  "holds": [
+    {
+      "institution_id": "koreapost",
+      "url": "https://www.kpasset.go.kr/board.es?mid=a10510000000&bid=0041&keySDate=2020-01-01&keyEDate=2026-11-14&nPage=1",
+      "error": "<urlopen error [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] sslv3 alert handshake failure (_ssl.c:1010)>"
+    }
+  ],
+  "window": {
+    "start": "2020-01-01",
+    "end": "2026-11-14",
+    "days": 2510,
+    "history": true
+  }
+}

@@ -1,0 +1,733 @@
+{
+  "window": {
+    "start": "2020-01-01",
+    "end": "2026-11-14",
+    "days": 2510,
+    "history": true
+  },
+  "summary": {
+    "institutions": 24,
+    "audited": 23,
+    "unconnected": 0,
+    "unmeasured": 1,
+    "pages": 274,
+    "requests": 275,
+    "source_errors": 1,
+    "limited_institutions": [],
+    "independent_unavailable": [
+      "kfinco"
+    ],
+    "unarchived_relevant": 1157,
+    "unarchived_by_title_scope": {
+      "outside_policy": 181,
+      "pe_blind_title": 15,
+      "vc_explicit": 30,
+      "scope_unconfirmed": 911,
+      "mixed_pe_vc": 20
+    }
+  },
+  "institutions": [
+    {
+      "institution_id": "koreapost",
+      "name": "우정사업본부",
+      "status": "source_error",
+      "oldest_listing_date": null,
+      "reaches_start": false,
+      "searches_complete": false,
+      "stops": {
+        "source_error": 1
+      },
+      "relevant_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 0,
+        "2026": 0
+      },
+      "pe_candidates_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 0,
+        "2026": 0
+      }
+    },
+    {
+      "institution_id": "ktcu",
+      "name": "한국교직원공제회",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2019-12-02",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_older_page": 1
+      },
+      "relevant_by_year": {
+        "2020": 4,
+        "2021": 4,
+        "2022": 1,
+        "2023": 4,
+        "2024": 2,
+        "2025": 4,
+        "2026": 4
+      },
+      "pe_candidates_by_year": {
+        "2020": 0,
+        "2021": 2,
+        "2022": 0,
+        "2023": 1,
+        "2024": 1,
+        "2025": 2,
+        "2026": 1
+      }
+    },
+    {
+      "institution_id": "kgrowth",
+      "name": "한국성장금융",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2019-07-09",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_older_page": 1
+      },
+      "relevant_by_year": {
+        "2020": 71,
+        "2021": 90,
+        "2022": 73,
+        "2023": 52,
+        "2024": 69,
+        "2025": 74,
+        "2026": 101
+      },
+      "pe_candidates_by_year": {
+        "2020": 68,
+        "2021": 87,
+        "2022": 66,
+        "2023": 52,
+        "2024": 69,
+        "2025": 74,
+        "2026": 96
+      }
+    },
+    {
+      "institution_id": "kexim",
+      "name": "한국수출입은행",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2018-01-19",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_older_page": 1
+      },
+      "relevant_by_year": {
+        "2020": 4,
+        "2021": 4,
+        "2022": 5,
+        "2023": 7,
+        "2024": 9,
+        "2025": 11,
+        "2026": 17
+      },
+      "pe_candidates_by_year": {
+        "2020": 4,
+        "2021": 4,
+        "2022": 5,
+        "2023": 7,
+        "2024": 9,
+        "2025": 11,
+        "2026": 16
+      }
+    },
+    {
+      "institution_id": "poba",
+      "name": "대한지방행정공제회",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2013-11-25",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_older_page": 2,
+        "confirmed_empty": 1
+      },
+      "relevant_by_year": {
+        "2020": 17,
+        "2021": 8,
+        "2022": 2,
+        "2023": 7,
+        "2024": 4,
+        "2025": 5,
+        "2026": 3
+      },
+      "pe_candidates_by_year": {
+        "2020": 6,
+        "2021": 2,
+        "2022": 1,
+        "2023": 2,
+        "2024": 1,
+        "2025": 2,
+        "2026": 1
+      }
+    },
+    {
+      "institution_id": "geps",
+      "name": "공무원연금공단",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2009-09-16",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_older_page": 1,
+        "observed_final_page": 2
+      },
+      "relevant_by_year": {
+        "2020": 3,
+        "2021": 0,
+        "2022": 3,
+        "2023": 5,
+        "2024": 8,
+        "2025": 10,
+        "2026": 9
+      },
+      "pe_candidates_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 1,
+        "2023": 0,
+        "2024": 2,
+        "2025": 2,
+        "2026": 0
+      }
+    },
+    {
+      "institution_id": "mmaa",
+      "name": "군인공제회",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2015-10-14",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_final_page": 3
+      },
+      "relevant_by_year": {
+        "2020": 4,
+        "2021": 2,
+        "2022": 1,
+        "2023": 2,
+        "2024": 4,
+        "2025": 3,
+        "2026": 3
+      },
+      "pe_candidates_by_year": {
+        "2020": 4,
+        "2021": 1,
+        "2022": 1,
+        "2023": 1,
+        "2024": 1,
+        "2025": 3,
+        "2026": 2
+      }
+    },
+    {
+      "institution_id": "pmaa",
+      "name": "경찰공제회",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2026-01-12",
+      "reaches_start": false,
+      "searches_complete": true,
+      "stops": {
+        "confirmed_empty": 3
+      },
+      "relevant_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 0,
+        "2026": 1
+      },
+      "pe_candidates_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 0,
+        "2026": 1
+      }
+    },
+    {
+      "institution_id": "sema",
+      "name": "과학기술인공제회",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2014-02-14",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_final_page": 3
+      },
+      "relevant_by_year": {
+        "2020": 4,
+        "2021": 2,
+        "2022": 2,
+        "2023": 4,
+        "2024": 4,
+        "2025": 6,
+        "2026": 6
+      },
+      "pe_candidates_by_year": {
+        "2020": 4,
+        "2021": 1,
+        "2022": 2,
+        "2023": 3,
+        "2024": 4,
+        "2025": 5,
+        "2026": 5
+      }
+    },
+    {
+      "institution_id": "kbiz",
+      "name": "중소기업중앙회",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2017-08-29",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_final_page": 3
+      },
+      "relevant_by_year": {
+        "2020": 3,
+        "2021": 5,
+        "2022": 5,
+        "2023": 6,
+        "2024": 7,
+        "2025": 3,
+        "2026": 9
+      },
+      "pe_candidates_by_year": {
+        "2020": 2,
+        "2021": 1,
+        "2022": 2,
+        "2023": 3,
+        "2024": 5,
+        "2025": 2,
+        "2026": 5
+      }
+    },
+    {
+      "institution_id": "tp",
+      "name": "사립학교교직원연금공단",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2012-11-09",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_older_page": 2,
+        "confirmed_empty": 1
+      },
+      "relevant_by_year": {
+        "2020": 4,
+        "2021": 4,
+        "2022": 6,
+        "2023": 6,
+        "2024": 4,
+        "2025": 3,
+        "2026": 3
+      },
+      "pe_candidates_by_year": {
+        "2020": 1,
+        "2021": 1,
+        "2022": 1,
+        "2023": 1,
+        "2024": 0,
+        "2025": 0,
+        "2026": 0
+      }
+    },
+    {
+      "institution_id": "cu",
+      "name": "신협중앙회",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2007-08-16",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "confirmed_empty": 3
+      },
+      "relevant_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 3,
+        "2026": 0
+      },
+      "pe_candidates_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 2,
+        "2026": 0
+      }
+    },
+    {
+      "institution_id": "kamco",
+      "name": "한국자산관리공사",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2018-01-03",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_final_page": 2,
+        "confirmed_empty": 1
+      },
+      "relevant_by_year": {
+        "2020": 2,
+        "2021": 4,
+        "2022": 5,
+        "2023": 9,
+        "2024": 9,
+        "2025": 8,
+        "2026": 8
+      },
+      "pe_candidates_by_year": {
+        "2020": 2,
+        "2021": 4,
+        "2022": 5,
+        "2023": 9,
+        "2024": 9,
+        "2025": 8,
+        "2026": 6
+      }
+    },
+    {
+      "institution_id": "kfinco",
+      "name": "전문건설공제조합",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2026-06-18",
+      "reaches_start": false,
+      "searches_complete": true,
+      "stops": {
+        "observed_final_page": 1
+      },
+      "relevant_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 0,
+        "2026": 3
+      },
+      "pe_candidates_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 0,
+        "2026": 2
+      }
+    },
+    {
+      "institution_id": "moel_iaci",
+      "name": "산재보험기금",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2018-02-12",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_older_page": 1
+      },
+      "relevant_by_year": {
+        "2020": 1,
+        "2021": 2,
+        "2022": 1,
+        "2023": 7,
+        "2024": 1,
+        "2025": 2,
+        "2026": 1
+      },
+      "pe_candidates_by_year": {
+        "2020": 1,
+        "2021": 2,
+        "2022": 1,
+        "2023": 7,
+        "2024": 1,
+        "2025": 2,
+        "2026": 1
+      }
+    },
+    {
+      "institution_id": "moel_eif",
+      "name": "고용보험기금",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2018-02-12",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_older_page": 1
+      },
+      "relevant_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 1,
+        "2024": 0,
+        "2025": 0,
+        "2026": 1
+      },
+      "pe_candidates_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 1,
+        "2024": 0,
+        "2025": 0,
+        "2026": 1
+      }
+    },
+    {
+      "institution_id": "kfcc",
+      "name": "새마을금고중앙회",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2018-09-10",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_final_page": 3
+      },
+      "relevant_by_year": {
+        "2020": 2,
+        "2021": 1,
+        "2022": 1,
+        "2023": 0,
+        "2024": 3,
+        "2025": 2,
+        "2026": 1
+      },
+      "pe_candidates_by_year": {
+        "2020": 1,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 3,
+        "2025": 2,
+        "2026": 1
+      }
+    },
+    {
+      "institution_id": "pck_pension",
+      "name": "총회연금재단",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2016-06-27",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_final_page": 3
+      },
+      "relevant_by_year": {
+        "2020": 4,
+        "2021": 1,
+        "2022": 2,
+        "2023": 0,
+        "2024": 2,
+        "2025": 3,
+        "2026": 4
+      },
+      "pe_candidates_by_year": {
+        "2020": 4,
+        "2021": 1,
+        "2022": 2,
+        "2023": 0,
+        "2024": 2,
+        "2025": 3,
+        "2026": 4
+      }
+    },
+    {
+      "institution_id": "nps",
+      "name": "국민연금기금",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2018-07-31",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_older_page": 1
+      },
+      "relevant_by_year": {
+        "2020": 3,
+        "2021": 6,
+        "2022": 6,
+        "2023": 2,
+        "2024": 13,
+        "2025": 4,
+        "2026": 2
+      },
+      "pe_candidates_by_year": {
+        "2020": 2,
+        "2021": 3,
+        "2022": 3,
+        "2023": 1,
+        "2024": 4,
+        "2025": 1,
+        "2026": 1
+      }
+    },
+    {
+      "institution_id": "kdb",
+      "name": "한국산업은행",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2024-01-03",
+      "reaches_start": false,
+      "searches_complete": true,
+      "stops": {
+        "confirmed_empty": 3
+      },
+      "relevant_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 39,
+        "2025": 58,
+        "2026": 45
+      },
+      "pe_candidates_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 39,
+        "2025": 58,
+        "2026": 45
+      }
+    },
+    {
+      "institution_id": "ibk",
+      "name": "IBK기업은행",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2024-12-20",
+      "reaches_start": false,
+      "searches_complete": true,
+      "stops": {
+        "observed_final_page": 3
+      },
+      "relevant_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 3,
+        "2025": 5,
+        "2026": 12
+      },
+      "pe_candidates_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 3,
+        "2025": 5,
+        "2026": 12
+      }
+    },
+    {
+      "institution_id": "nh_central",
+      "name": "농업협동조합중앙회",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2016-07-11",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "confirmed_empty": 2,
+        "observed_final_page": 4
+      },
+      "relevant_by_year": {
+        "2020": 0,
+        "2021": 7,
+        "2022": 4,
+        "2023": 0,
+        "2024": 1,
+        "2025": 0,
+        "2026": 2
+      },
+      "pe_candidates_by_year": {
+        "2020": 0,
+        "2021": 7,
+        "2022": 4,
+        "2023": 0,
+        "2024": 1,
+        "2025": 0,
+        "2026": 2
+      }
+    },
+    {
+      "institution_id": "suhyup",
+      "name": "수협중앙회",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2013-04-05",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "confirmed_empty": 1,
+        "observed_final_page": 2
+      },
+      "relevant_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 1,
+        "2023": 0,
+        "2024": 0,
+        "2025": 3,
+        "2026": 3
+      },
+      "pe_candidates_by_year": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 1,
+        "2023": 0,
+        "2024": 0,
+        "2025": 2,
+        "2026": 2
+      }
+    },
+    {
+      "institution_id": "cwma",
+      "name": "건설근로자공제회",
+      "status": "observed_query_boundary",
+      "oldest_listing_date": "2018-05-10",
+      "reaches_start": true,
+      "searches_complete": true,
+      "stops": {
+        "observed_older_page": 1
+      },
+      "relevant_by_year": {
+        "2020": 4,
+        "2021": 5,
+        "2022": 4,
+        "2023": 4,
+        "2024": 7,
+        "2025": 6,
+        "2026": 4
+      },
+      "pe_candidates_by_year": {
+        "2020": 2,
+        "2021": 0,
+        "2022": 0,
+        "2023": 1,
+        "2024": 2,
+        "2025": 1,
+        "2026": 0
+      }
+    }
+  ]
+}
