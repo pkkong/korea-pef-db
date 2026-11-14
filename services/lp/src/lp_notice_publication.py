@@ -55,6 +55,7 @@ ROOT = Path(__file__).resolve().parents[3]
 # 2026-11-14 (2020+ history, user decision): 산재보험기금 is 고용보험기금's twin fund under
 # the same ministry; 군인공제회·과기공 run one annual joint PE·VC blind contest.
 PE_TRACK_INSTITUTIONS = frozenset({'kdb', 'ibk', 'moel_eif', 'moel_iaci', 'nps', 'geps', 'cwma', 'kic', 'mmaa', 'sema'})
+TITLE_SIGNAL_PE_TRACK = frozenset({'moel_iaci', 'mmaa', 'sema'})
 MIXED_SCOPE_LABEL = 'PE·VC 공동 모집'
 
 
@@ -209,7 +210,12 @@ def _scope(n):
     # offered PE fund is published even when blind/domestic wording is absent.
     # Fund-of-funds manager selections are not GP recruitments.
     if (result == 'needs_confirmation' and n.get('institution_id') in PE_TRACK_INSTITUTIONS
-            and not re.search(r'모펀드', n['title'])):
+            and not re.search(r'모펀드', n['title'])
+            # Listed-securities mandates mention "PE, VC" only as allowed vehicles (과기공 Pre-IPO 2026).
+            and not re.search(r'Pre-?IPO|주식|채권|멀티에셋|EMP|재간접|절대수익|헤지', n['title'], re.I)
+            # Institutions added for the 2020+ history must name the PE blind round in the title.
+            and (n.get('institution_id') not in TITLE_SIGNAL_PE_TRACK
+                 or re.search(r'블라인드|(?<![A-Za-z])PEF?(?![A-Za-z])', n['title'], re.I))):
         signals = scope_signals(n['title'], text)
         if signals['pe']:
             return 'mixed_pe_blind' if signals['vc'] else 'pe_blind'
@@ -251,13 +257,26 @@ def _won(text):
     return int(text.replace(',', '')) * 100_000_000
 
 
+# "1. PE (부문) 선정개요 … 2. VC (부문) 선정개요". The leading 1 keeps a repeated table
+# caption ("2. VC 부문 선정개요 PE 부문 선정개요 - 구분") from opening a second PE section.
+_PE_SECTION = re.compile(r'(?<![\d.])1\s*\.?\s*PE\s*(?:부문\s*)?선정\s*개요(.*?)(?=2\s*\.?\s*VC\s*(?:부문\s*)?선정|VC\s*(?:부문\s*)?선정\s*개요|$)', re.S)
+
+
+def _pe_section(n):
+    """Texts cut to the PE part of a notice that sets out PE and VC separately
+    ("1. PE 선정개요 … 2. VC 선정개요", 과기공 2020-2023); [] when there is none."""
+    sections = [m[1] for text in _texts(n) for m in _PE_SECTION.finditer(text)]
+    return [s for s in sections if s.strip()]
+
+
 def headline_amount(n):
     """Budget stated in a notice's headline line, with its quote; {} when absent or ambiguous.
 
     A PE share stated next to the total wins (amount_scope 'pe_only'); otherwise one total
     for the whole notice (amount_scope 'combined'). Different totals in one notice -> {}.
     """
-    texts = _texts(n)
+    pe_only = _pe_section(n)
+    texts = pe_only or _texts(n)
     splits = {(m[2], m[3], m[0]) for text in texts for m in _HEADLINE_PE_SPLIT.finditer(re.sub(r'\s+', '', text))}
     evidence = lambda quote: {'commitment': [{'source_url': n['url'], 'sha256': n['sha256'], 'quote': quote}]}
     if splits:
@@ -267,14 +286,21 @@ def headline_amount(n):
         return {'commitment_amount_krw': _won(amount), 'commitment_label': f'PE 부문 {amount}억원',
                 'list_commitment_label': f'PE 부문 {amount}억원', 'manager_count': int(count),
                 'manager_count_label': f'{count}개사', 'amount_scope': 'pe_only', 'extraction_evidence': evidence(quote)}
-    found = [m for text in texts for m in _HEADLINE_TOTAL.finditer(re.sub(r'\s+', '', text))]
-    totals = {(m[1], m[2] or '', m[0]) for m in found}
+    found = []
+    for text in texts:
+        hits = list(_HEADLINE_TOTAL.finditer(re.sub(r'\s+', '', text)))
+        # A PE section's own total comes first; later totals in it belong to the next part.
+        found.extend(hits[:1] if pe_only else hits)
+    totals = {(m[1].replace(',', ''), m[2] or '', m[0]) for m in found}
     if not totals or len({a for a, _, _ in totals}) != 1:
         return {}
     amount, qualifier, quote = sorted(totals, key=lambda t: (not t[1], t[2]))[0]
+    amount = f'{int(amount):,}'
     label = f'총 {amount}억원' + (f' {qualifier}' if qualifier else '')
+    if pe_only:
+        label = 'PE 부문 ' + label.removeprefix('총 ')
     result = {'commitment_amount_krw': _won(amount), 'commitment_label': label, 'list_commitment_label': label,
-              'amount_scope': 'combined', 'extraction_evidence': evidence(quote)}
+              'amount_scope': 'pe_only' if pe_only else 'combined', 'extraction_evidence': evidence(quote)}
     counts = {m[3] for m in found if m[3]}
     if len(counts) == 1:  # "총 1,500억원 (3건 선정 예정)"
         count = int(next(iter(counts)))
@@ -297,7 +323,7 @@ _FUND_SIZE_TIERS = (
 
 def minimum_fund_size(n):
     """{'fund_target_label': '최소 N억원' | 'N억~M억원', evidence} or {} when absent/ambiguous."""
-    texts = [re.sub(r'\s+', '', text) for text in _texts(n)]
+    texts = [re.sub(r'\s+', '', text) for text in (_pe_section(n) or _texts(n))]
     for kind, pattern in _FUND_SIZE_TIERS:
         hits, skipped_vc = [], False
         for text in texts:

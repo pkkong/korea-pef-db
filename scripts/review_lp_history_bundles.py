@@ -49,7 +49,17 @@ def review(notices, checked_at=None):
     """Programs plus per-institution unlinked counts; `review.skips` keeps why groups were left out."""
     checked_at = checked_at or datetime.now(timezone.utc).isoformat()
     skips = []
-    programs, holds = publish_basic_notices({'programs': [], 'priority_notices': notices}, [], checked_at, skips)
+    # Same path as the daily institution-board notices. The bundles were validated in
+    # Actions (validate_notice with history_listing=True, attachment bytes included);
+    # the text bundle has no bytes, so re-validation is replaced by a copy here.
+    import copy
+    import lp_notice_publication as publication
+    original = publication.validate_institution_notice
+    publication.validate_institution_notice = lambda raw, checked_at: copy.deepcopy(raw)
+    try:
+        programs, holds = publish_basic_notices({'programs': [], 'institution_notices': notices}, [], checked_at, skips)
+    finally:
+        publication.validate_institution_notice = original
     review.skips = skips
     by_inst = defaultdict(list)
     for p in programs:

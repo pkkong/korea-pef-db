@@ -28,6 +28,9 @@ def notice_stage(title: str) -> str:
         return "우선협상대상자"
     if "faq" in value or "질의응답" in value:
         return "질의응답"
+    # "[공고] … 제안서 접수 관련 안내사항" is guidance about a round, not the round itself.
+    if re.search(r"관련(?:안내|안내사항|공지|공지사항)$", value):
+        return "단계 확인 필요"
     if any(word in value for word in ("정량평가결과", "서류심사결과", "1차평가결과")):
         return "1차 심사 결과"
     if any(word in value for word in ("접수결과", "접수현황")):
@@ -39,6 +42,13 @@ def notice_stage(title: str) -> str:
     if "재공고" in value:
         return "변경 공고"
     if "공고" in value or "모집" in value:
+        return "모집 공고"
+    # Press-release results posted on the board: "군인공제회, 국내 블라인드 펀드 운용사 8곳 선정".
+    if re.search(r"\d+(?:곳|개사|개)선정$", value) or ("," in title and value.endswith("선정")):
+        return "선정 결과"
+    # Boards that title the recruitment itself "… 위탁운용사 선정" / "… 선정계획"
+    # (공무원연금 2024, 국민연금 2025, 건설근로자 2024); results always say 결과/발표 above.
+    if re.search(r"(?:운용사선정|선정계획)$", value):
         return "모집 공고"
     return "단계 확인 필요"
 

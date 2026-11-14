@@ -504,6 +504,28 @@ class HistoryScopeAndHeadlineTests(unittest.TestCase):
         n = self.notice('군인공제회 국내 개발 블라인드 펀드 선정 계획 공고', '블라인드 펀드 PEF', institution='mmaa')
         self.assertEqual(_scope(n), 'outside')
 
+    def test_pe_section_total_when_pe_and_vc_are_set_out_separately(self):
+        from services.lp.src.lp_notice_publication import headline_amount
+        body = ('1. PE 선정개요 구분 내용 출자규모 : 총 1500억 원 이내 운용사당 약정규모 300억 원 '
+                '2. VC 선정개요 구분 내용 출자규모 : 총 900억원 이내')
+        result = headline_amount(self.notice('2022년 PE·VC 블라인드펀드 정기출자 시행 공고', body, institution='sema'))
+        self.assertEqual((result['commitment_label'], result['amount_scope']), ('PE 부문 1,500억원 이내', 'pe_only'))
+
+    def test_repeated_table_caption_does_not_open_a_second_pe_section(self):
+        from services.lp.src.lp_notice_publication import _pe_section
+        body = ('1. PE 부문 선정개요 출자규모 : 총 1,200억원 2. VC 부문 선정개요 PE 부문 선정개요 - 구분 출자규모 : 총 600억원')
+        sections = _pe_section(self.notice('x', body, institution='sema'))
+        self.assertEqual(len(sections), 1)
+        self.assertNotIn('600', sections[0])
+
+    def test_listed_securities_mandates_never_join_the_pe_track(self):
+        from services.lp.src.lp_notice_publication import _scope
+        n = self.notice('[공고] 과학기술인공제회 국내 Pre-IPO 위탁운용사 선정 공고',
+                        '투자 방식 : 직접 및 재간접(펀드, PE, VC, 신기사 등)', institution='sema')
+        self.assertNotIn(_scope(n), ('pe_blind', 'mixed_pe_blind'))
+        n = self.notice('[과학기술인공제회] 국내 Active주식(일반주식)형 위탁운용사 선정 공고', 'PE VC 블라인드', institution='sema')
+        self.assertNotIn(_scope(n), ('pe_blind', 'mixed_pe_blind'))
+
     def test_fund_total_eligibility_is_a_minimum_fund_size(self):
         from services.lp.src.lp_notice_publication import minimum_fund_size
         n = self.notice('x', '제안 펀드 요건 운용 규모 펀드별 결성총액 1,500억원 이상 타기관 출자확약')

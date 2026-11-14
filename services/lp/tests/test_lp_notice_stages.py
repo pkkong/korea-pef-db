@@ -45,6 +45,18 @@ class NoticeStageTests(unittest.TestCase):
     def test_unknown_title_stays_unknown(self):
         self.assertEqual(notice_stage("2026년 출자사업 담당자 연락처"), "단계 확인 필요")
 
+    def test_recruitment_titled_as_selection_or_plan_without_notice_word(self):
+        self.assertEqual(notice_stage("2024년 공무원연금공단 국내 사모대체 블라인드펀드(PEF) 위탁운용사 선정"), "모집 공고")
+        self.assertEqual(notice_stage("2024년도 대체투자(유럽기업 선순위 대출펀드) 위탁운용사 선정계획"), "모집 공고")
+        self.assertEqual(notice_stage("2024년 국내 사모대체 블라인드펀드(PEF) 위탁운용사 선정 결과 공고"), "선정 결과")
+
+    def test_press_release_results_on_the_board(self):
+        self.assertEqual(notice_stage("군인공제회, 국내 블라인드 펀드 운용사 8곳 선정"), "선정 결과")
+        self.assertEqual(notice_stage("군인공제회, 2차 국내 블라인드 펀드 운용사 선정"), "선정 결과")
+
+    def test_guidance_about_a_round_is_not_the_round(self):
+        self.assertEqual(notice_stage("[공고] 2020년 PE·VC 정기출자 제안서 접수 관련 안내사항"), "단계 확인 필요")
+
 
 if __name__ == "__main__":
     unittest.main()
