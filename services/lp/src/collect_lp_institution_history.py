@@ -166,7 +166,7 @@ def collect(institution, start, end, *, max_pages=150, page_budget=1500, max_not
     def fetch(url, referer=None):
         raw = session(url, referer)
         if url not in seen_pages and len(seen_pages) < 2000:
-            seen_pages[url] = raw[:400_000]
+            seen_pages[url] = raw[:2_000_000]
         return raw
     listing = inventory.audit({'programs': []}, as_of=end, max_pages=max_pages, page_budget=page_budget,
                               configs={institution: config},
@@ -204,7 +204,7 @@ def collect(institution, start, end, *, max_pages=150, page_budget=1500, max_not
             page = seen_pages.get(board_row['url'] if board_row else row['url'])
             if page is not None:
                 # Kept so the parser can be fixed against the real (older) page format.
-                hold['detail_page'] = boards.decode_html(page)[:200_000]
+                hold['detail_page'] = boards.decode_html(page)[:1_000_000]
             bundle['holds'].append(hold)
             continue
         notice['history_title_scope'] = row['title_scope']

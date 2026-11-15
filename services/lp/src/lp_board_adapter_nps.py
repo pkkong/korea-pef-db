@@ -114,7 +114,7 @@ def parse_detail(html,url,config,*,resolver_script=None):
             if not cls(item,'file-item'):continue
             name=one(n.clean() for n in item.nodes('p') if cls(n,'a-file'))
             a=one(a for a in item.nodes('a') if cls(a,'btn-file-down'))
-            m=re.fullmatch(r"javascript:fncAtchFileDownload\('(FL[0-9]+)',\s*'([1-9][0-9]*)'\);?",a.attrs.get('href',''))
+            m=re.fullmatch(r"javascript:fncAtchFileDownload\('((?:FL|KD)[0-9]+)',\s*'([1-9][0-9]*)'\);?",a.attrs.get('href',''))
             if not m or not name:raise ValueError('invalid NPS file control')
             target=BASE+'/fileDown.do?'+urlencode(dict(zip(('atchFileId','atchFileSn'),m.groups())))
             if any(f['url']==target for f in result['attachments']):raise ValueError('duplicate NPS attachment')

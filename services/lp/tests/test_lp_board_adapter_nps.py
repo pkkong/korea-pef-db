@@ -50,6 +50,10 @@ class NpsAdapterTests(unittest.TestCase):
         self.assertEqual(n.attachment_request(detail(),URL,CONFIG),n.SCRIPT)
         with self.assertRaises(ValueError):n.parse_detail(detail(),URL,CONFIG,resolver_script=SCRIPT.replace('/fileDown.do','/wrong.do'))
 
+    def test_pre_2025_file_ids_use_the_same_controller(self):
+        d=n.parse_detail(detail().replace('FL99999999','KD22144009'),URL,CONFIG,resolver_script=SCRIPT)
+        self.assertEqual(d['attachments'][0]['url'],n.BASE+'/fileDown.do?atchFileId=KD22144009&atchFileSn=1')
+
     def test_false_empty_malformed_date_foreign_duplicate_rejected(self):
         for bad in (listing().replace('총 1건','총 0건'),listing().replace('2099/02/03','2099/02/30'),listing().replace('</table>','<tr><td>missing metadata</td></tr></table>')):
             with self.assertRaises(ValueError):n.parse_listing(bad,CONFIG['listing_url'],CONFIG)
