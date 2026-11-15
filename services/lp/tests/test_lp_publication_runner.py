@@ -16,6 +16,7 @@ from services.lp.src import lp_publication_runner as a
 
 def receipt():
     return {'run_id': 'a' * 24, 'programs': 2, 'program_ids': ['sample-2026-a', 'sample-2026-b'],
+            'program_aliases': {'sample-2026-old': 'sample-2026-a'},
             'programs_by_institution': {'sample': 2}, 'notices': 3, 'review': 0,
             'institution_notices': 4, 'institution_validation_errors': 0, 'history_notices': 0, 'history_validation_errors': 0,
             'institution_institutions': ['sample'], 'shared_notices': 2, 'shared_originals': 1,
@@ -95,7 +96,8 @@ class PublicationRunnerTests(unittest.TestCase):
                 self.assertGreater(status['stdout_bytes_read'] + status['stderr_bytes_read'], a.MAX_OUTPUT_BYTES)
 
     def test_invalid_or_forged_receipt_fails_even_when_child_returns_zero(self):
-        for change in ('extra', 'missing', 'count', 'bool', 'run', 'id', 'duplicate', 'nan'):
+        for change in ('extra', 'missing', 'count', 'bool', 'run', 'id', 'duplicate', 'nan',
+                       'alias_target', 'alias_live', 'alias_type'):
             value = copy.deepcopy(receipt())
             if change == 'extra': value['secret'] = 'SECRET'
             elif change == 'missing': del value['run_id']
@@ -104,6 +106,9 @@ class PublicationRunnerTests(unittest.TestCase):
             elif change == 'run': value['run_id'] = 'SECRET'
             elif change == 'id': value['program_ids'][0] = 'private id with spaces'
             elif change == 'duplicate': value['program_ids'][1] = value['program_ids'][0]
+            elif change == 'alias_target': value['program_aliases'] = {'sample-2026-old': 'sample-2026-gone'}
+            elif change == 'alias_live': value['program_aliases'] = {'sample-2026-b': 'sample-2026-a'}
+            elif change == 'alias_type': value['program_aliases'] = ['sample-2026-old']
             else: value['notices'] = float('nan')
             with self.subTest(change=change), self.assertRaises(ValueError): a.validate_receipt(json.dumps(value).encode())
         status, output = self.supervise('print("SECRET not JSON")')

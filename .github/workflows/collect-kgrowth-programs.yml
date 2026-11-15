@@ -275,15 +275,18 @@ jobs:
           priority = json.load(open('/tmp/lp-priority-collection.json'))
           ids = publication['program_ids']
           baseline_ids = {p['id'] for p in json.load(open('/tmp/lp-baseline.json'))['programs']}
-          assert baseline_ids <= set(ids), 'Previously published LP programs must be retained'
-          for program_id in ids:
+          # A merged duplicate keeps its URL as an alias page of the kept program.
+          aliases = publication['program_aliases']
+          assert baseline_ids <= set(ids) | set(aliases), 'Previously published LP programs must be retained'
+          checks = [(i, '진행 일정') for i in ids] + [(old, f'program-{new}.html') for old, new in aliases.items()]
+          for program_id, marker in checks:
               url = f'https://kpef-lp.vercel.app/program-{program_id}.html'
               for attempt in range(3):
                   try:
                       with urllib.request.urlopen(url, timeout=30) as response:
                           assert response.headers.get('X-LP-Data-Source') == 'supabase'
                           assert response.headers.get('X-LP-Run') == expected
-                          assert '진행 일정' in response.read().decode('utf-8')
+                          assert marker in response.read().decode('utf-8')
                       break
                   except Exception:
                       if attempt == 2:

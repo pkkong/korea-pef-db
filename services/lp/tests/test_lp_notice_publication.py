@@ -424,6 +424,7 @@ class RepostDuplicateTests(unittest.TestCase):
         self.assertEqual([p['id'] for p in merged], ['sema-2026-b9d1'])
         self.assertEqual([e['type'] for e in merged[0]['events']], ['모집 공고', '선정 결과'])
         self.assertEqual(holds[0]['stage'], 'basic_duplicate')
+        self.assertEqual((holds[0]['program_id'], holds[0]['kept_program_id']), ('sema-2026-9a87', 'sema-2026-b9d1'))
 
     def test_different_rounds_are_not_merged(self):
         from services.lp.src.lp_notice_publication import merge_reposted_duplicates

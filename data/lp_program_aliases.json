@@ -1,0 +1,10 @@
+{
+  "note": "Reviewed aliases for published LP program ids that were merged before program_aliases existed. New merges are recorded automatically from basic_duplicate holds.",
+  "aliases": [
+    {
+      "program_id": "sema-2026-9a8767587e5612d3",
+      "kept_program_id": "sema-2026-b9d11f3a1eb1f6b4",
+      "evidence": "KVCA repost (kvca.or.kr po_no=896, 2026-08-14) of 과학기술인공제회 2026년 국내 PE·VC 블라인드 펀드 선정계획 공고 (sema.or.kr nttId=146215); merged as basic_duplicate in run f4c3c5a31cf0bf447b6f2d29 (2026-11-15), previously published in run ef0522eff5f8e6c89a94be01."
+    }
+  ]
+}

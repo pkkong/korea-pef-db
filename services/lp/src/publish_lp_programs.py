@@ -25,6 +25,7 @@ from discover_lp_original_boards import reuse_native_originals
 from lp_notice_publication import publish_basic_notices
 from collect_lp_institution_boards import update_catalog as update_institution_catalog
 from lp_history_notices import update_catalog as update_history_catalog
+from lp_program_aliases import update_aliases, alias_pages, load_seeds as load_alias_seeds
 from lp_state_storage import pack_state, unpack_state
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -356,6 +357,8 @@ def prepare(current, report, gp_profiles=None):
     data['programs'], basic_holds = publish_basic_notices(data, growth_notices, report['checked_at'],
                                                           known_gp_names=frozenset((gp_profiles or {}).values()))
     data['basic_publication_holds'] = basic_holds
+    # A merged duplicate's published URL stays as an alias of the kept program.
+    data['program_aliases'] = update_aliases(current, data['programs'], basic_holds, load_alias_seeds())
     data['as_of'] = str(report['checked_at'])[:10]
     validate(data)
     # Press-reported results only where no official roster exists (labelled, sourced).
@@ -371,6 +374,10 @@ def prepare(current, report, gp_profiles=None):
             # publication if GP cannot be read then.
             data['gp_profile_contract'] = {'profiles': dict(sorted(gp_profiles.items()))}
         pages = {p.name:p.read_text() for p in out.glob('*.html')}
+        for name, html in alias_pages(data['programs'], data['program_aliases']).items():
+            if name in pages:
+                raise ValueError('Program alias collides with a published page')
+            pages[name] = html
         from lp_review_preview import render_review
         pages['review.html'] = render_review(data, report, current)
     return data, pages
@@ -513,6 +520,7 @@ def main():
     run_id = publish_prepared(report, data, pages, revision,
                              'multi_lp' if args.priority_collection else 'kgrowth')
     print(json.dumps({'run_id':run_id,'programs':len(data['programs']),'program_ids':[p['id'] for p in data['programs']],
+                      'program_aliases':data.get('program_aliases',{}),
                       'programs_by_institution':dict(sorted(Counter(p['institution_id'] for p in data['programs']).items())),
                       'notices':len(report['notices']),'review':len(report.get('review',[])),
                       'institution_notices':len(data.get('institution_notices',[])),

@@ -77,7 +77,7 @@ def validate_receipt(raw):
     counts = {'programs', 'notices', 'review', 'institution_notices', 'institution_validation_errors',
               'history_notices', 'history_validation_errors',
               'shared_notices', 'shared_originals', 'shared_offering_terms'}
-    keys = counts | {'run_id', 'program_ids', 'programs_by_institution', 'institution_institutions', 'shared_institutions'}
+    keys = counts | {'run_id', 'program_ids', 'program_aliases', 'programs_by_institution', 'institution_institutions', 'shared_institutions'}
     if (not isinstance(value, dict) or set(value) != keys or not isinstance(value.get('run_id'), str)
             or not re.fullmatch('[0-9a-f]{24}', value['run_id'])):
         raise ValueError('Unexpected publisher success receipt fields')
@@ -90,6 +90,11 @@ def validate_receipt(raw):
             or any(not isinstance(v, str) or not re.fullmatch('[a-z0-9][a-z0-9_-]{0,199}', v) for v in ids)
             or len(set(ids)) != len(ids)):
         raise ValueError('Invalid publisher program identities')
+    aliases = value['program_aliases']
+    if (not isinstance(aliases, dict) or len(aliases) > 10000
+            or any(not isinstance(k, str) or not re.fullmatch('[a-z0-9][a-z0-9_-]{0,199}', k)
+                   or k in ids or v not in ids for k, v in aliases.items())):
+        raise ValueError('Invalid publisher program aliases')
     distribution = value['programs_by_institution']
     if (not isinstance(distribution, dict) or len(distribution) > 100
             or any(not isinstance(k, str) or not re.fullmatch('[a-z][a-z0-9_]{0,79}', k)

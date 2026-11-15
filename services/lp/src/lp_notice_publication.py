@@ -987,6 +987,7 @@ def merge_reposted_duplicates(programs, holds):
                     seen.add((event.get('type'), event.get('date')))
             dropped.add(other['id'])
             holds.append({'stage': 'basic_duplicate', 'program_key': other.get('source_program_key'),
+                          'program_id': other['id'], 'kept_program_id': keep['id'],
                           'reason': f"같은 출자사업의 재게시 공고: {keep['id']}로 합침"})
         keep['events'].sort(key=lambda e: (e['date'], e.get('type', '')))
     return [p for p in programs if p['id'] not in dropped]
