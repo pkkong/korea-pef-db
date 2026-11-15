@@ -86,5 +86,58 @@ class InstitutionHistoryTests(unittest.TestCase):
         self.assertIn('no detail table', bundle['holds'][0]['detail_page'])
 
 
+class KgrowthHistoryTests(unittest.TestCase):
+    """성장금융: body once, then one public session (body → file) per attachment."""
+
+    def run_collect(self, file_raw=b'%PDF-1.4 fake', attachment=True):
+        from urllib.parse import parse_qs, urlsplit
+        from services.lp.tests.test_audit_lp_official_inventory import growth
+        from services.lp.tests.test_collect_lp_history_bodies import detail
+        listing = {1: growth([('2', '1020', '2021년 PE 블라인드 펀드 위탁운용사 선정계획 공고', '2021-05-03')]),
+                   2: growth([('1', '900', '오래된 공고', '2019-12-01')])}
+        row = {'source_id': '1020', 'title': '2021년 PE 블라인드 펀드 위탁운용사 선정계획 공고', 'date': '2021-05-03'}
+        page = detail(row, body='PE 블라인드 펀드 출자 공고 본문', attachment=attachment)
+
+        def body_fetch(url, referer=None):
+            if 'notice_view.asp' in url:
+                return page
+            return listing[int(parse_qs(urlsplit(url).query).get('page', ['1'])[0])].encode()
+
+        sessions = []
+
+        class FakeSession:
+            def __init__(self, r):
+                self.row, self.calls = r, []
+                sessions.append(self)
+
+            def __call__(self, url, kind):
+                self.calls.append(kind)
+                return {'raw': page if kind == 'body' else file_raw, 'set_cookie_seen': True}
+
+        from services.lp.src import collect_lp_institution_history as h
+        import services.lp.src.collect_lp_history_attachments as attach
+        original = attach.read_attachment
+        attach.read_attachment = lambda raw: {'text': '공고문 PE 블라인드'}
+        try:
+            bundle = h.collect_kgrowth('2020-01-01', '2022-12-31', max_pages=5, page_budget=20,
+                                       body_fetch=body_fetch, session_factory=FakeSession, checked_at=STAMP)
+        finally:
+            attach.read_attachment = original
+        return bundle, sessions
+
+    def test_body_then_one_session_per_attachment(self):
+        bundle, sessions = self.run_collect()
+        self.assertEqual(len(bundle['notices']), 1, bundle['holds'])
+        n = bundle['notices'][0]
+        self.assertEqual((n['institution_id'], n['source_id'], n['date']), ('kgrowth', '1020', '2021-05-03'))
+        self.assertEqual([s.calls for s in sessions], [['body', 'file']])
+        self.assertEqual(len(n['attachment_hashes']), 1)
+
+    def test_blocked_file_is_held_not_stored(self):
+        bundle, _ = self.run_collect(file_raw='비정상적인 접근입니다'.encode('cp949'))
+        self.assertEqual(bundle['notices'][0]['attachment_hashes'], {})
+        self.assertEqual(bundle['holds'][0]['stage'], 'history_attachment')
+
+
 if __name__ == '__main__':
     unittest.main()

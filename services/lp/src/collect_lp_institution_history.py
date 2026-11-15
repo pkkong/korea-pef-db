@@ -26,6 +26,23 @@ except ImportError:
     import collect_lp_institution_boards as boards
     from collect_shared_lp_notices import classify_scope
 
+
+def _kgrowth_tools():
+    """성장금융 detail parser and the proven one-body-one-file public session."""
+    try:
+        from . import diagnose_kgrowth_history_session as control
+        from .collect_lp_history_attachments import read_attachment
+        from .collect_lp_history_bodies import read_body
+        from .kgrowth_listing import LIST_URL
+        from .lp_history_sources import canonical_url
+    except ImportError:
+        import diagnose_kgrowth_history_session as control
+        from collect_lp_history_attachments import read_attachment
+        from collect_lp_history_bodies import read_body
+        from kgrowth_listing import LIST_URL
+        from lp_history_sources import canonical_url
+    return control, read_attachment, read_body, LIST_URL, canonical_url
+
 KIND = 'lp_institution_history_v1'
 # Titles kept for PE history: the same predicate the daily board collector uses,
 # minus titles the inventory marks explicitly VC-only or outside policy.
@@ -54,8 +71,90 @@ def _listing_row(receipt, notice_url, config):
     return matches[0] if len(matches) == 1 else None
 
 
+def _kgrowth_notice(row, listing_receipt, body_fetch, session_factory, checked_at, holds):
+    control, read_attachment, read_body, list_url, canonical_url = _kgrowth_tools()
+    ident = row['source_id'] if re.fullmatch(r'[1-9]\d*', str(row['source_id'])) else \
+        re.search(r'idx=(\d+)', row['url'])[1]
+    url = canonical_url(ident, 'kgrowth')
+    raw = body_fetch(url, list_url)
+    detail = read_body(ident, raw, 'kgrowth')
+    if detail['date'] != row['date']:
+        raise ValueError('official listing/detail date differs')
+    n = {**detail, 'institution_id': 'kgrowth', 'checked_at': checked_at, 'source_channel': 'institution_board',
+         'discovery_provenance': {'kind': 'kgrowth_history_2020_v1', 'listing': listing_receipt,
+                                  'detail_sha256': hashlib.sha256(raw).hexdigest()},
+         'attachment_hashes': {}, 'attachment_texts': {}, 'attachment_bytes': {}}
+    outside = classify_scope(n['title'], n['title']) in {'outside', 'vc_only'}
+    # 성장금융 detail pages list bare download URLs (no file names): the reader is picked
+    # from the file's own signature, and at most four files are fetched per notice.
+    for file_url in ([] if outside else n.get('attachments', [])[:4]):
+        try:
+            session = session_factory({'source_id': ident, 'source_url': url, 'attachment_url': file_url})
+            session(url, 'body')
+            file = session(file_url, 'file')
+            file = file['raw'] if isinstance(file, dict) else file
+            if control._blocked(file[:4096].decode('cp949', errors='ignore')):
+                raise ValueError('public file blocked')
+            if file[:5] == b'%PDF-':
+                text = read_attachment(file)['text']
+            elif file[:4] == b'\xd0\xcf\x11\xe0':
+                text = boards.attachment_text(file, 'attachment.hwp')
+            elif file[:2] == b'PK':
+                text = boards.attachment_text(file, 'attachment.hwpx')
+            else:
+                raise ValueError('unrecognised attachment format')
+            n['attachment_bytes'][file_url] = base64.b64encode(file).decode('ascii')
+            n['attachment_hashes'][file_url] = hashlib.sha256(file).hexdigest()
+            if text:
+                n['attachment_texts'][file_url] = text
+        except Exception as exc:
+            holds.append({'stage': 'history_attachment', 'url': file_url, 'notice_url': url, 'error': str(exc)[:300]})
+    return n
+
+
+def collect_kgrowth(start, end, *, max_pages=150, page_budget=1500, max_notices=400, body_fetch=None,
+                    session_factory=None, checked_at=None):
+    """성장금융 board since `start` (its 2023+ originals already come from the existing history path)."""
+    control = _kgrowth_tools()[0]
+    checked_at = checked_at or datetime.now(timezone.utc).isoformat()
+    config = {'institution_id': 'kgrowth', 'listing_url': inventory.CORE['kgrowth']}
+    if body_fetch is None:
+        session = boards.Session(config)
+        body_fetch = lambda url, referer: session(url, referer)
+    session_factory = session_factory or control.PublicSession
+    listing = inventory.audit({'programs': []}, as_of=end, max_pages=max_pages, page_budget=page_budget,
+                              configs={}, scope={'confirmed_institution_ids': ['kgrowth'], 'priority_verification_ids': []},
+                              fetch_factory=(lambda *a: (lambda url: body_fetch(url, config['listing_url']))),
+                              independent=True, start=start, keep_html=True)
+    entry, receipts = listing['institutions'][0], listing['receipts']
+    bundle = {'kind': KIND, 'institution_id': 'kgrowth', 'window': listing['window'], 'checked_at': checked_at,
+              'listing': {'status': entry['status'], 'queries': entry['queries'], 'holds': listing['holds'],
+                          'rows': len(entry['rows'])},
+              'listing_receipts': {}, 'notices': [], 'holds': [], 'skipped': []}
+    candidates = [r for r in entry['rows'] if r['date'] <= end and history_candidate(r, 'kgrowth')]
+    bundle['candidate_count'] = len(candidates)
+    attachments = 0
+    for row in sorted(candidates, key=lambda r: (r['date'], r['url']), reverse=True)[:max_notices]:
+        receipt = receipts[row['receipt_index']]
+        listing_receipt = {'url': receipt['url'], 'html': receipt['html'], 'sha256': receipt['sha256']}
+        try:
+            n = _kgrowth_notice(row, listing_receipt, body_fetch, session_factory, checked_at, bundle['holds'])
+        except Exception as exc:
+            bundle['holds'].append({'stage': 'history_detail', 'url': row['url'], 'date': row['date'],
+                                    'title': row['title'], 'error': str(exc)[:300]})
+            continue
+        attachments += len(n['attachment_hashes'])
+        n['history_title_scope'] = row['title_scope']
+        bundle['notices'].append(n)
+    bundle['coverage'] = {'detail_count': len(bundle['notices']), 'attachment_count': attachments}
+    return bundle
+
+
 def collect(institution, start, end, *, max_pages=150, page_budget=1500, max_notices=400,
             fetch_factory=None, checked_at=None, skip_urls=()):
+    if institution == 'kgrowth' and fetch_factory is None:
+        return collect_kgrowth(start, end, max_pages=max_pages, page_budget=page_budget,
+                               max_notices=max_notices, checked_at=checked_at)
     configs = boards.load_configs(include_pending=True)
     if institution not in configs:
         raise ValueError(f'{institution}: no daily board adapter; use its dedicated history path')
