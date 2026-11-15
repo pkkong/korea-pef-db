@@ -1,0 +1,15 @@
+[
+  {
+    "institution_id": "kgrowth",
+    "listing_status": "observed_query_boundary",
+    "candidates": 162,
+    "collected": 162,
+    "attachments": 85,
+    "holds": 16,
+    "by_year": {
+      "2020": 50,
+      "2021": 58,
+      "2022": 54
+    }
+  }
+]
