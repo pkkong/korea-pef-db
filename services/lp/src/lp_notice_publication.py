@@ -31,6 +31,7 @@ try:
     from . import lp_kbiz_notice_terms as kbiz_terms
     from . import lp_mmaa_notice_terms as mmaa_terms
     from . import lp_result_rosters as result_rosters
+    from . import lp_nps_notice_terms as nps_terms
     from . import lp_kfinco_notice_terms as kfinco_terms
     from . import lp_kamco_notice_terms as kamco_terms
 except ImportError:
@@ -49,6 +50,7 @@ except ImportError:
     import lp_kbiz_notice_terms as kbiz_terms
     import lp_mmaa_notice_terms as mmaa_terms
     import lp_result_rosters as result_rosters
+    import lp_nps_notice_terms as nps_terms
     import lp_kfinco_notice_terms as kfinco_terms
     import lp_kamco_notice_terms as kamco_terms
 
@@ -369,7 +371,7 @@ def _terms(n, shared_notice, checked_at):
         pass
     if not (terms.get('commitment_amount_krw') or terms.get('commitment_label') or terms.get('segments')):
         try:
-            headline = mmaa_terms.pe_share(n) or headline_amount(n)
+            headline = mmaa_terms.pe_share(n) or nps_terms.pe_share(n) or headline_amount(n)
         except (KeyError, TypeError, ValueError):
             headline = {}
         if headline and terms.get('amount_scope') == 'pe_track_without_allocation':
@@ -811,6 +813,13 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
     for key, members in sorted(groups.items()):
         try:
             originals = [n for n in members if _event(n)['type'] == '모집 공고']
+            if len(originals) > 1:
+                # Same-titled recruitments in one year (국민연금 2020: PEF+VC in March, VC only in
+                # August): keep the single PE one; the others are not this program's recruitment.
+                pe = [o for o in originals if _scope(o) in ('pe_blind', 'mixed_pe_blind')]
+                if len(pe) == 1:
+                    members = [n for n in members if n not in originals or n is pe[0]]
+                    originals = pe
             if len(originals) != 1:
                 skip(key, members, 'no_announcement' if not originals else 'several_announcements')
                 continue

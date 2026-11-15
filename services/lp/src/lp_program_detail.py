@@ -214,6 +214,9 @@ def render_detail_body(p, as_of=None):
         if p.get('per_fund_qualifier'):
             amount += ' ' + p['per_fund_qualifier']
         body += f'<div><small>펀드당 출자액</small><strong>{h(amount)}</strong></div>'
+    elif not p.get('segments') and len(p.get('per_fund_range_krw') or []) == 2:
+        low, high = p['per_fund_range_krw']
+        body += f'<div><small>펀드당 출자액</small><strong>{low/100000000:,.0f}~{high/100000000:,.0f}억원</strong></div>'
     body += '</div>'
     if p.get('commitment_detail'):
         body += f'<p class="muted contribution-detail">{h(p["commitment_detail"])}<br>{h(p.get("contribution_note"))}</p>'
