@@ -187,6 +187,21 @@
       "lookback_days": 365
     },
     {
+      "channel_id": "moel_iaci_ocio",
+      "institution_id": "moel_iaci",
+      "adapter": "samsungfund_ocio",
+      "listing_url": "https://m.samsungfund.com/fund/lounge/notice-ajax.do?category=ALL",
+      "search_param": "searchText",
+      "searches": [
+        "산재보험기금"
+      ],
+      "page_param": "pageNo",
+      "pages": 5,
+      "since": "2020-01-01",
+      "response_format": "html_fragment",
+      "max_details": 12
+    },
+    {
       "institution_id": "kfinco",
       "listing_url": "https://www.kfinco.co.kr/api/pr/notice/list?page=1&size=10&searchKeyword=%EC%9C%84%ED%83%81%EC%9A%B4%EC%9A%A9%EC%82%AC",
       "search_param": "searchKeyword",

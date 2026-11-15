@@ -46,6 +46,7 @@ try:
     from . import lp_board_adapter_kfinco as kfinco
     from . import lp_board_adapter_kbiz as kbiz
     from . import lp_board_adapter_moel as moel
+    from . import lp_board_adapter_samsungfund as samsungfund
     from . import lp_board_adapter_mmaa as mmaa
     from . import lp_board_adapter_geps as geps
     from . import lp_board_adapter_kamco as kamco
@@ -74,6 +75,7 @@ except ImportError:
     import lp_board_adapter_kfinco as kfinco
     import lp_board_adapter_kbiz as kbiz
     import lp_board_adapter_moel as moel
+    import lp_board_adapter_samsungfund as samsungfund
     import lp_board_adapter_mmaa as mmaa
     import lp_board_adapter_geps as geps
     import lp_board_adapter_kamco as kamco
@@ -90,19 +92,46 @@ def is_form(name):
 
 def load_configs(*, include_pending=False):
     settings = json.loads(CONFIG.read_text())
-    configs = {c['institution_id']: {'history_years': settings['history_years'], **c} for c in settings['channels']}
-    for c in configs.values():
+    # A channel is keyed by its institution, or by `channel_id` when the institution has a
+    # second official board (an OCIO/주간운용사 board; AGENTS.md source order 2026-11-15).
+    configs = {c.get('channel_id', c['institution_id']): {'history_years': settings['history_years'], **c}
+               for c in settings['channels']}
+    if len(configs) != len(settings['channels']):
+        raise ValueError('duplicate institution board channel')
+    for key, c in configs.items():
+        if 'channel_id' in c and (c.get('adapter') not in CHANNEL_ADAPTERS or key == c['institution_id']
+                                  or not key.startswith(c['institution_id'] + '_')):
+            raise ValueError('second institution channel needs its own adapter and channel id')
         if type(c.get('enabled',True)) is not bool:
             raise ValueError('institution enabled flag must be boolean')
         if not 1 <= c.get('max_details', MAX_DETAILS) <= 60 or not 1 <= c['history_years'] <= 4:
             raise ValueError('institution discovery budget outside supported limits')
         if c.get('lookback_days') is not None and not 1 <= c['lookback_days'] <= 1461:
             raise ValueError('institution lookback period outside supported limits')
+        if 'since' in c and (c.get('adapter') not in CHANNEL_ADAPTERS or 'lookback_days' in c
+                             or not re.fullmatch(r'20[2-9]\d-\d{2}-\d{2}', str(c['since']))
+                             or c['since'] < '2020-01-01' or c.get('pages', 0) > 10):
+            raise ValueError('a fixed start date is only for small second channels (2020-01-01 or later)')
         _extraction_version(c)
     return {i:c for i,c in configs.items() if include_pending or c.get('enabled',True)}
 
 
+CHANNEL_ADAPTERS = {'samsungfund_ocio'}
+
+
+def bounded(config):
+    """The listing walk stops at an observed date boundary (lookback window or fixed start)."""
+    return bool(config.get('lookback_days') or config.get('since'))
+
+
+def channel_key(record):
+    """Config key of a channel, or of the channel a notice came from."""
+    return record.get('channel_id', record['institution_id'])
+
+
 def adapter(config):
+    if config.get('adapter') == 'samsungfund_ocio':
+        return samsungfund
     institution = config['institution_id']
     if institution == 'nh_central':
         return nh
@@ -407,6 +436,7 @@ def fetch_notice(row, listing_receipt, config, fetch, checked_at, resolver_cache
     if detail['date'] != row['date'] or not titles_match(row['title'], detail['title']):
         raise ValueError('official listing/detail title or date differs')
     n = {**detail, 'institution_id': institution, 'source_id': row['source_id'],
+         **({'channel_id': config['channel_id']} if 'channel_id' in config else {}),
          'url': row['url'], 'checked_at': checked_at, 'source_channel': 'institution_board',
          'discovery_provenance': {'kind': 'institution_board_v1',
              'listing': listing_receipt, 'detail_html': html, 'detail_sha256': digest(html)},
@@ -447,6 +477,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
     shared_listings = {}
     resolver_cache = {}
     for institution, config in configs.items():
+        first_hold = len(result['holds'])
         fetch = fetch_factory(config)
         receipts, candidates = {}, {}
         coverage = {'listing_pages': [], 'detail_count': 0, 'attachment_count': 0,
@@ -455,7 +486,10 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
         stopped_searches = set()
         seen_by_search = {}
         cutoff = None
-        if config.get('lookback_days'):
+        if config.get('since'):
+            cutoff = date.fromisoformat(config['since']).isoformat()
+            coverage.update(since=cutoff)
+        elif config.get('lookback_days'):
             observed_day = datetime.fromisoformat(checked_at.replace('Z', '+00:00')).astimezone(ZoneInfo('Asia/Seoul')).date()
             cutoff = (observed_day - timedelta(days=config['lookback_days'] - 1)).isoformat()
             coverage.update(lookback_days=config['lookback_days'], window_start=cutoff, window_end=observed_day.isoformat())
@@ -472,7 +506,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                     raw = fetch(url, config['listing_url'])
                     if institution in {'moel_eif', 'moel_iaci'}:
                         shared_listings[url] = raw
-                html = (raw.decode('utf-8') if institution == 'kdb' or config.get('response_format') == 'json' else
+                html = (raw.decode('utf-8') if institution == 'kdb' or config.get('response_format') in {'json', 'html_fragment'} else
                         decode_html(raw) if institution == 'nps' else _html(raw))
                 rows = adapter(config).parse_listing(html, url, config)
                 receipt_html = html
@@ -487,7 +521,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                 if institution == 'kfinco':
                     receipts[url]['response_sha256'] = digest(raw)
                 coverage['listing_pages'].append(listing_coverage)
-                if config.get('lookback_days'):
+                if bounded(config):
                     seen = seen_by_search.setdefault(stream, set())
                     identities = {row['source_id'] for row in rows}
                     if rows and not identities - seen:
@@ -518,14 +552,14 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                         result['holds'].append({'institution_id': institution, 'stage': 'institution_depth',
                                                'error': 'PCK configured listing limit reached before history boundary'})
                 for row in rows:
-                    if 'institution_id' in row and row['institution_id'] != institution:
+                    if 'institution_id' in row and row['institution_id'] != config['institution_id']:
                         continue
                     if ((re.search(r'위탁|운용사|블라인드|PEF?|사모|선정', row['title'], re.I)
                              or institution in {'kdb', 'ibk'} and re.search(r'출자사업|펀드', row['title'])
                              or re.search(r'(?:출자|펀드).*(?:공고|모집|공모|요청|결과)', row['title']))
                             and classify_scope(row['title'], row['title']) != 'outside'):
                         if (row['date'] >= cutoff if cutoff else row['date'][:4] >= str(int(checked_at[:4]) - config.get('history_years', 4) + 1)):
-                            key = row['source_id'] if config.get('lookback_days') else row['url']
+                            key = row['source_id'] if bounded(config) else row['url']
                             previous = candidates.get(key)
                             if previous and any(previous[0][k] != row[k] for k in ('title', 'date')):
                                 raise ValueError('Conflicting official listing identity metadata')
@@ -533,7 +567,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                         else:
                             coverage['older_rows_skipped'] = coverage.get('older_rows_skipped', 0) + 1
             except Exception as exc:
-                if config.get('lookback_days'):
+                if bounded(config):
                     stopped_searches.add(stream)
                 failure = {'institution_id': institution, 'stage': 'institution_listing', 'url': url, 'error': str(exc)}
                 if isinstance(exc, HTTPError):
@@ -570,16 +604,20 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
         coverage['native_ipv4_fetch_count'] = getattr(fetch, 'native_ipv4_fetches', 0)
         coverage['dns_ipv4_fetch_count'] = getattr(fetch, 'dns_ipv4_fetches', 0)
         coverage['alternate_dns_lookup_count'] = getattr(fetch, 'alternate_dns_lookups', 0)
+        if 'channel_id' in config:
+            # A second channel's holds name the fund (health reports) and the channel (retries).
+            for hold in result['holds'][first_hold:]:
+                hold.update(institution_id=config['institution_id'], channel_id=config['channel_id'])
     return retry_failed_sources(result, configs, fetch_factory, checked_at=checked_at) if retry_failures else result
 
 
 def retry_failed_sources(report, configs=None, fetch_factory=Session, checked_at=None):
     """One fresh session for at most two failed issuers; retain both attempts."""
     configs = load_configs() if configs is None else configs
-    failed = list(dict.fromkeys(h.get('institution_id') for h in report.get('holds', [])
+    failed = list(dict.fromkeys(h.get('channel_id', h.get('institution_id')) for h in report.get('holds', [])
                   if h.get('stage') in {'institution_listing', 'institution_detail'}
                   and h.get('failure_kind') != 'official_maintenance'
-                  and h.get('institution_id') in configs))[:2]
+                  and h.get('channel_id', h.get('institution_id')) in configs))[:2]
     if not failed:
         return report
     result = copy.deepcopy(report)
@@ -593,10 +631,10 @@ def retry_failed_sources(report, configs=None, fetch_factory=Session, checked_at
     for institution in failed:
         history.append({'institution_id': institution, 'retried_at': datetime.now(timezone.utc).isoformat(),
                         'previous_checked_at': report['checked_at'],
-                        'previous_holds': [h for h in report['holds'] if h.get('institution_id') == institution],
+                        'previous_holds': [h for h in report['holds'] if h.get('channel_id', h.get('institution_id')) == institution],
                         'previous_coverage': copy.deepcopy(report['coverage'].get(institution, {}))})
         result['coverage'][institution] = retried['coverage'][institution]
-    result['holds'] = [h for h in report['holds'] if h.get('institution_id') not in failed] + retried['holds']
+    result['holds'] = [h for h in report['holds'] if h.get('channel_id', h.get('institution_id')) not in failed] + retried['holds']
     result['initial_checked_at'] = report.get('initial_checked_at', report['checked_at'])
     result['checked_at'] = retried['checked_at']
     return result
@@ -623,8 +661,9 @@ def validate_notice(raw, checked_at, config=None, *, history_listing=False, requ
     observed on the detail receipt."""
     n = copy.deepcopy(raw)
     version = _extraction_version(n)
-    config = config or load_configs()[n['institution_id']]
-    if n['institution_id'] != config['institution_id'] or n['source_channel'] != 'institution_board':
+    config = config or load_configs()[channel_key(n)]
+    if (n['institution_id'] != config['institution_id'] or n.get('channel_id') != config.get('channel_id')
+            or n['source_channel'] != 'institution_board'):
         raise ValueError('institution collection identity mismatch')
     _same_host(n['url'], config)
     proof = n['discovery_provenance']
@@ -636,7 +675,7 @@ def validate_notice(raw, checked_at, config=None, *, history_listing=False, requ
             or digest(proof['detail_html']) != proof['detail_sha256']):
         raise ValueError('institution source receipt mismatch')
     rows = adapter(config).parse_listing(listing['html'], listing['url'], config)
-    if config.get('lookback_days'):
+    if bounded(config):
         adapter(config).last_page(listing['html'], listing['url'], config)
     detail = _detail(proof['detail_html'], n['url'], config, proof.get('attachment_resolution'))
     titles_match = getattr(adapter(config), 'titles_match', lambda a,b: a==b)

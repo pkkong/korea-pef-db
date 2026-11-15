@@ -764,17 +764,24 @@ def _merge_orphan_results(groups):
         same = {k: a for k, a in announcements.items() if a['institution_id'] == institution and k in groups}
         by_title = [k for k, a in same.items() if _identity_without_institution(a) == _identity_without_institution(first)]
         target = by_title[0] if len(by_title) == 1 else None
-        if target is None and not by_title and _generic_result_title(first):
+        # A result posted by the fund's OCIO (second channel, AGENTS.md source order) names
+        # the fund, its year and the PE track but words the track differently from the
+        # fund's own recruitment ("(PE)" for "(PEF, VC)"): same window rule, same year.
+        ocio = bool(first.get('channel_id')) and re.search(r'20\d{2}', first['title'])
+        if target is None and not by_title and (_generic_result_title(first) or ocio):
             text = ' '.join([first['title'], first.get('body', '')[:4000]])
             if re.search(r'(?<![A-Za-z])PEF?(?![A-Za-z])|사모|블라인드', text, re.I):
                 window = [k for k, a in same.items()
                           if 0 <= (date.fromisoformat(first['date']) - date.fromisoformat(a['date'])).days <= _ORPHAN_WINDOW_DAYS
+                          and (not ocio or ocio[0] in a['title'] or (not re.search(r'20\d{2}', a['title'])
+                                                                    and a['date'][:4] == ocio[0]))
                           and _scope(a) in ('pe_blind', 'mixed_pe_blind')
                           and not any(_event(n)['type'] in ('선정 결과', '최종 선정') for n in groups[k])]
                 target = window[0] if len(window) == 1 else None
         if target is not None:
             for n in members:
-                n.setdefault('stage_link', 'title_without_institution_name' if by_title else 'single_recruitment_in_window')
+                n.setdefault('stage_link', 'title_without_institution_name' if by_title else
+                             'ocio_result_single_recruitment' if ocio else 'single_recruitment_in_window')
             groups[target] = groups[target] + members
             del groups[key]
 

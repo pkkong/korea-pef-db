@@ -1,0 +1,55 @@
+name: Verify LP board channel
+
+# Read-only: collects one configured institution board channel (listing, detail,
+# attachments) exactly as the daily job would, reads PE result rosters, and keeps
+# a summary on the lp-board-channel-check branch. No DB write, no publication.
+on:
+  push:
+    branches: [main]
+    paths:
+      - data/lp_board_channel_check_request.json
+      - .github/workflows/verify-lp-board-channel.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  # Same official-source queue as daily collection: never hits sources in parallel.
+  group: lp-program-collection
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install collection dependencies
+        run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47' 'truststore==0.10.5'
+      - name: Collect the requested channels
+        run: |
+          mkdir -p /tmp/lp-board-channel-check
+          for CHANNEL in $(python3 -c "import json;print(' '.join(json.load(open('data/lp_board_channel_check_request.json'))['channels']))"); do
+            python3 services/lp/src/collect_lp_institution_boards.py --institution "$CHANNEL" \
+              --output "/tmp/channel-$CHANNEL.json" || true
+          done
+      - name: Summarize notices, holds and result rosters
+        if: always()
+        run: |
+          python3 scripts/summarize_lp_board_channel.py --out /tmp/lp-board-channel-check /tmp/channel-*.json
+          cat /tmp/lp-board-channel-check/README.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Push results to review branch
+        if: always()
+        shell: bash
+        run: |
+          cd /tmp/lp-board-channel-check
+          git init -q -b lp-board-channel-check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "LP board channel check from run ${GITHUB_RUN_ID}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" lp-board-channel-check

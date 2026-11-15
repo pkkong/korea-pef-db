@@ -35,7 +35,8 @@ def notice_stage(title: str) -> str:
         return "1차 심사 결과"
     if any(word in value for word in ("접수결과", "접수현황")):
         return "접수 결과"
-    if "선정결과" in value or "최종선정" in value:
+    # OCIO boards (삼성자산운용 for 산재보험기금): "… 대체투자상품(PEF) 선정 최종 결과 안내".
+    if "선정결과" in value or "최종선정" in value or "최종결과" in value:
         return "선정 결과"
     # Reopening identifies the offering round. It must not turn its subsequent
     # receipt/screening/final-result notices into fresh amendment events.
