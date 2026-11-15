@@ -532,6 +532,30 @@ class HistoryScopeAndHeadlineTests(unittest.TestCase):
         self.assertEqual(minimum_fund_size(n)['fund_target_label'], '최소 1,500억원')
 
 
+class OrphanResultLinkTests(unittest.TestCase):
+    """Results whose titles drop the institution name, or name nothing specific, still join their round."""
+
+    def n(self, title, day, body='', institution='geps', url_id='1'):
+        return {'title': title, 'date': day, 'body': body, 'institution_id': institution,
+                'url': f'https://www.geps.or.kr/{url_id}', 'sha256': 'a' * 64, 'source_channel': 'institution_board',
+                'attachments': [], 'attachment_texts': {}, 'attachment_hashes': {}}
+
+    def test_result_without_institution_name_joins_by_title(self):
+        from services.lp.src.lp_notice_publication import _identity, _merge_orphan_results
+        a = self.n('2024년 공무원연금공단 국내 사모대체 블라인드펀드(PEF) 위탁운용사 선정', '2024-05-21', '블라인드 PEF')
+        r = self.n('2024년 국내 사모대체 블라인드펀드(PEF) 위탁운용사 선정 결과 공고', '2024-06-28', url_id='2')
+        groups = {_identity(a): [a], _identity(r): [r]}
+        _merge_orphan_results(groups)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(r['stage_link'], 'title_without_institution_name')
+
+    def test_generic_result_title_needs_a_single_pe_round_in_the_window(self):
+        from services.lp.src.lp_notice_publication import _generic_result_title
+        self.assertTrue(_generic_result_title(self.n('총회연금재단 2026 위탁운용사 최종 선정 결과 공지', '2026-08-11', institution='pck_pension')))
+        self.assertFalse(_generic_result_title(self.n('총회연금재단 2025 위탁운용사 최종 선정 결과 공지', '2026-08-11', institution='pck_pension')))
+        self.assertFalse(_generic_result_title(self.n('2026년 국내 「산업성장펀드」 블라인드 PEF 위탁운용사 선정결과', '2026-10-15')))
+
+
 class LargeLpPeTrackTests(unittest.TestCase):
     """User decision 2026-11-12: large LPs' PE tracks are published, joint scope labelled."""
     BODY = ('투자기구: 기관전용 사모집합투자기구, 벤처투자조합, 신기술사업투자조합\n'

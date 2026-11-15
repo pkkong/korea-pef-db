@@ -30,6 +30,7 @@ try:
     from . import lp_pck_programs as pck_programs
     from . import lp_kbiz_notice_terms as kbiz_terms
     from . import lp_mmaa_notice_terms as mmaa_terms
+    from . import lp_result_rosters as result_rosters
     from . import lp_kfinco_notice_terms as kfinco_terms
     from . import lp_kamco_notice_terms as kamco_terms
 except ImportError:
@@ -47,6 +48,7 @@ except ImportError:
     import lp_pck_programs as pck_programs
     import lp_kbiz_notice_terms as kbiz_terms
     import lp_mmaa_notice_terms as mmaa_terms
+    import lp_result_rosters as result_rosters
     import lp_kfinco_notice_terms as kfinco_terms
     import lp_kamco_notice_terms as kamco_terms
 
@@ -612,16 +614,29 @@ def kdb_result_roster(text, known=frozenset()):
 
 
 def _attach_result_roster(p, members, holds, known=frozenset()):
-    """Official result names: IBK result body, KDB result attachment table."""
+    """Official result names: IBK result body, KDB result attachment table, and the
+    board layouts in lp_result_rosters for the other institutions (2020+ history)."""
     institution = p.get('institution_id')
-    if institution not in ('ibk', 'kdb') or p.get('selected_gps'):
-        return
+    if p.get('selected_gps') or institution in ('kgrowth', 'kexim', 'koreapost'):
+        return  # these have their own reviewed or dedicated roster paths
     results = [n for n in members if _event(n)['type'] in ('선정 결과', '최종 선정')]
     if len(results) != 1:
         return
     result = results[0]
     if institution == 'ibk':
         rosters = ibk_result_roster(result['body'])
+    elif institution != 'kdb':
+        readings = [result_rosters.pe_result_roster(text, known=known, valid=_rule_valid_name,
+                                                    split_glued=split_glued_names,
+                                                    pe_only_program=p.get('asset_scope') == 'PE')
+                    for text in _texts(result)]
+        readings = [r for r in readings if r]
+        if not readings:
+            return
+        if any(r != readings[0] for r in readings[1:]):
+            holds.append({'stage': 'result_roster', 'url': result['url'], 'reason': '본문·첨부 명단이 서로 다름'})
+            return
+        rosters = readings[0]
     else:
         tables = [kdb_result_roster(text, known) for text in _texts(result)[1:]]
         tables = [t for t in tables if t]
@@ -671,7 +686,90 @@ def _attach_preferred_roster(p, original, members, checked_at, holds):
             holds.append({'stage': 'preferred_roster', 'url': preferred[0]['url'], 'reason': str(exc)})
 
 
-def publish_basic_notices(data, growth_notices, checked_at, skips=None):
+def _institution_title_names():
+    """Each institution's own names (master CSV name and 3+ character Korean aliases)."""
+    import csv
+    names = {}
+    try:
+        with open(ROOT / 'data' / 'lp_institutions.csv', encoding='utf-8') as handle:
+            for row in csv.DictReader(handle):
+                aliases = [a.strip() for a in row.get('aliases', '').split(';') if re.search(r'[가-힣]{3,}', a)]
+                names[row['lp_code']] = tuple(n for n in (row.get('lp_name', ''), *aliases) if n)
+    except (OSError, KeyError):
+        pass
+    for key, name in _names().items():
+        names[key] = tuple(dict.fromkeys((*names.get(key, ()), name)))
+    return names
+
+
+INSTITUTION_TITLE_NAMES = _institution_title_names()
+_RESULT_TYPES = ('선정 결과', '최종 선정', '우선협상대상자', '1차 심사 결과', '접수 결과')
+_ORPHAN_WINDOW_DAYS = 240
+
+
+def _identity_without_institution(n):
+    """Identity title without the institution's own names (공무원연금 2024: the
+    recruitment names 공무원연금공단, the result does not)."""
+    title = n['title']
+    for name in sorted(INSTITUTION_TITLE_NAMES.get(n['institution_id'], ()), key=len, reverse=True):
+        title = title.replace(name, ' ')
+    return _identity({**n, 'title': title})
+
+
+_GENERIC_RESULT_WORDS = re.compile(
+    r'20\d{2}년?도?|[\'’`´]\d{2}년?|위탁운용사|운용사|위탁|최종|선정|결과|공지|공고|안내|게시|발표|알림|재단|[\[\]【】()（）,.·\s]')
+
+
+def _generic_result_title(n):
+    """A result title that names no fund, round, track or year of its own once the
+    institution's names are removed ("총회연금재단 2026 위탁운용사 최종 선정 결과 공지").
+    Results that name anything specific must match by title instead."""
+    title = n['title']
+    for name in sorted(INSTITUTION_TITLE_NAMES.get(n['institution_id'], ()), key=len, reverse=True):
+        title = title.replace(name, ' ')
+    year = re.search(r'20\d{2}', title)
+    if year and year[0] != n['date'][:4]:
+        return False
+    return not _GENERIC_RESULT_WORDS.sub('', title)
+
+
+def _merge_orphan_results(groups):
+    """Attach result-only groups to their recruitment group at the same institution.
+
+    Joined when the titles match without the institution's names, or when exactly one
+    PE recruitment of that institution was announced in the 240 days before the result
+    and the result itself speaks of PE. Anything ambiguous stays apart (no guess)."""
+    announcements = {}
+    for key, members in groups.items():
+        originals = [n for n in members if _event(n)['type'] == '모집 공고']
+        if len(originals) == 1:
+            announcements[key] = originals[0]
+    for key, members in list(groups.items()):
+        if key not in groups or any(_event(n)['type'] == '모집 공고' for n in members):
+            continue
+        if not members or not all(_event(n)['type'] in _RESULT_TYPES for n in members):
+            continue
+        first = min(members, key=lambda n: n['date'])
+        institution = first['institution_id']
+        same = {k: a for k, a in announcements.items() if a['institution_id'] == institution and k in groups}
+        by_title = [k for k, a in same.items() if _identity_without_institution(a) == _identity_without_institution(first)]
+        target = by_title[0] if len(by_title) == 1 else None
+        if target is None and not by_title and _generic_result_title(first):
+            text = ' '.join([first['title'], first.get('body', '')[:4000]])
+            if re.search(r'(?<![A-Za-z])PEF?(?![A-Za-z])|사모|블라인드', text, re.I):
+                window = [k for k, a in same.items()
+                          if 0 <= (date.fromisoformat(first['date']) - date.fromisoformat(a['date'])).days <= _ORPHAN_WINDOW_DAYS
+                          and _scope(a) in ('pe_blind', 'mixed_pe_blind')
+                          and not any(_event(n)['type'] in ('선정 결과', '최종 선정') for n in groups[k])]
+                target = window[0] if len(window) == 1 else None
+        if target is not None:
+            for n in members:
+                n.setdefault('stage_link', 'title_without_institution_name' if by_title else 'single_recruitment_in_window')
+            groups[target] = groups[target] + members
+            del groups[key]
+
+
+def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp_names=()):
     """Extend validated public programs; never consume a prepared candidate fact.
 
     `skips` (optional list) receives the groups left out without a hold, with the
@@ -702,13 +800,14 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None):
     pck_groups, pck_holds = pck_programs.groups([n for n in docs.values() if n['institution_id'] == 'pck_pension'], data['programs'])
     groups.update(pck_groups)
     holds.extend(pck_holds)
+    _merge_orphan_results(groups)
     programs = {p['id']: copy.deepcopy(p) for p in data['programs']}
     # Manager names already published anywhere help split glued result tables.
     known_names = frozenset(
         name for p in data['programs']
         for name in [*(g.get('name') for g in p.get('selected_gps') or []), *(p.get('preferred_gps') or []),
                      *(p.get('shortlisted_gps') or []), *(p.get('applicants_gps') or [])]
-        if isinstance(name, str) and name.strip())
+        if isinstance(name, str) and name.strip()) | frozenset(n for n in known_gp_names if isinstance(n, str) and n.strip())
     for key, members in sorted(groups.items()):
         try:
             originals = [n for n in members if _event(n)['type'] == '모집 공고']

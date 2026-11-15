@@ -350,7 +350,8 @@ def prepare(current, report, gp_profiles=None):
     seen_urls = {n['url'] for n in data['discovery_candidates']}
     data['discovery_candidates'].extend(n for n in data['shared_discovery_candidates'] if n['url'] not in seen_urls)
     apply_decisions(data, report['notices'], current.get('review_decisions', []))
-    data['programs'], basic_holds = publish_basic_notices(data, growth_notices, report['checked_at'])
+    data['programs'], basic_holds = publish_basic_notices(data, growth_notices, report['checked_at'],
+                                                          known_gp_names=frozenset((gp_profiles or {}).values()))
     data['basic_publication_holds'] = basic_holds
     data['as_of'] = str(report['checked_at'])[:10]
     validate(data)
