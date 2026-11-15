@@ -50,6 +50,9 @@ class NoticeStageTests(unittest.TestCase):
         self.assertEqual(notice_stage("2024년도 대체투자(유럽기업 선순위 대출펀드) 위탁운용사 선정계획"), "모집 공고")
         self.assertEqual(notice_stage("2024년 국내 사모대체 블라인드펀드(PEF) 위탁운용사 선정 결과 공고"), "선정 결과")
 
+    def test_bracket_result_label_on_a_screening_notice(self):
+        self.assertEqual(notice_stage("【선정결과】 2020년 제1차 「성장지원펀드(스케일업 혁신리그)」 1차 심사 결과"), "1차 심사 결과")
+
     def test_press_release_results_on_the_board(self):
         self.assertEqual(notice_stage("군인공제회, 국내 블라인드 펀드 운용사 8곳 선정"), "선정 결과")
         self.assertEqual(notice_stage("군인공제회, 2차 국내 블라인드 펀드 운용사 선정"), "선정 결과")

@@ -31,7 +31,7 @@ def notice_stage(title: str) -> str:
     # "[공고] … 제안서 접수 관련 안내사항" is guidance about a round, not the round itself.
     if re.search(r"관련(?:안내|안내사항|공지|공지사항)$", value):
         return "단계 확인 필요"
-    if any(word in value for word in ("정량평가결과", "서류심사결과", "1차평가결과")):
+    if any(word in value for word in ("정량평가결과", "서류심사결과", "1차평가결과", "1차심사결과", "2차심사결과")):
         return "1차 심사 결과"
     if any(word in value for word in ("접수결과", "접수현황")):
         return "접수 결과"
