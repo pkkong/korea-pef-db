@@ -17,7 +17,7 @@ from services.lp.src import lp_publication_runner as a
 def receipt():
     return {'run_id': 'a' * 24, 'programs': 2, 'program_ids': ['sample-2026-a', 'sample-2026-b'],
             'programs_by_institution': {'sample': 2}, 'notices': 3, 'review': 0,
-            'institution_notices': 4, 'institution_validation_errors': 0,
+            'institution_notices': 4, 'institution_validation_errors': 0, 'history_notices': 0, 'history_validation_errors': 0,
             'institution_institutions': ['sample'], 'shared_notices': 2, 'shared_originals': 1,
             'shared_offering_terms': 1, 'shared_institutions': ['sample']}
 
@@ -125,7 +125,7 @@ class PublicationRunnerTests(unittest.TestCase):
             with self.subTest(field=field), self.assertRaisesRegex(ValueError, 'nonempty'):
                 a.validate_receipt(json.dumps(value).encode())
         value = receipt()
-        for field in ('review', 'institution_notices', 'institution_validation_errors',
+        for field in ('review', 'institution_notices', 'institution_validation_errors', 'history_notices', 'history_validation_errors',
                       'shared_notices', 'shared_originals', 'shared_offering_terms'):
             value[field] = 0
         value['institution_institutions'] = []; value['shared_institutions'] = []

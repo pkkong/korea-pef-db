@@ -24,6 +24,7 @@ from lp_shared_notice_catalog import update_shared_catalog
 from discover_lp_original_boards import reuse_native_originals
 from lp_notice_publication import publish_basic_notices
 from collect_lp_institution_boards import update_catalog as update_institution_catalog
+from lp_history_notices import update_catalog as update_history_catalog
 from lp_state_storage import pack_state, unpack_state
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -60,7 +61,7 @@ def document_hash(document):
 
 def store_documents(conn, report, data, wrap_json):
     """Bound single statements; never enter executemany's pipeline mode."""
-    docs = report['notices'] + data.get('priority_notices', []) + data.get('supporting_notices', []) + data.get('shared_notices', []) + data.get('institution_notices', [])
+    docs = report['notices'] + data.get('priority_notices', []) + data.get('supporting_notices', []) + data.get('shared_notices', []) + data.get('institution_notices', []) + data.get('history_notices', [])
     docs += [original for notice in data.get('shared_notices', []) for original in notice.get('original_notices', [])]
     query = ('INSERT INTO lp_program_private.documents(source_url,content_hash,document) '
              'SELECT r.source_url,r.content_hash,r.document FROM jsonb_to_recordset(%s::jsonb) '
@@ -347,6 +348,8 @@ def prepare(current, report, gp_profiles=None):
         shared=reuse_native_originals(shared,growth_notices+official_notices,report['checked_at'])
     data.update(update_shared_catalog(current, shared, report['checked_at']))
     data.update(update_institution_catalog(current, report.get('institution_collection'), report['checked_at']))
+    data.update(update_history_catalog(current, (report.get('institution_collection') or {}).get('history_import'),
+                                       report['checked_at']))
     seen_urls = {n['url'] for n in data['discovery_candidates']}
     data['discovery_candidates'].extend(n for n in data['shared_discovery_candidates'] if n['url'] not in seen_urls)
     apply_decisions(data, report['notices'], current.get('review_decisions', []))
@@ -515,6 +518,8 @@ def main():
                       'institution_notices':len(data.get('institution_notices',[])),
                       'institution_validation_errors':sum(h.get('stage')=='institution_validation' for h in data.get('institution_collection_holds',[])),
                       'institution_institutions':sorted({n['institution_id'] for n in data.get('institution_notices',[])}),
+                      'history_notices':len(data.get('history_notices',[])),
+                      'history_validation_errors':len(data.get('history_notice_holds',[])),
                       'shared_notices':len(data.get('shared_notices',[])),
                       'shared_originals':sum(len(n.get('original_notices',[])) for n in data.get('shared_notices',[])),
                       'shared_offering_terms':len(data.get('shared_offering_terms',{})),

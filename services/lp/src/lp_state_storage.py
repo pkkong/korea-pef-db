@@ -12,7 +12,7 @@ MAX_RAW_BYTES = 256 * 1024 * 1024
 MAX_COMPRESSED_BYTES = 50 * 1024 * 1024
 # These cumulative receipts are consumed after baseline hydration, never by SQL.
 EVIDENCE_KEYS = frozenset({'accepted_notices', 'tracked_notices', 'priority_notices',
-                          'supporting_notices', 'shared_notices', 'institution_notices'})
+                          'supporting_notices', 'shared_notices', 'institution_notices', 'history_notices'})
 
 
 def _json(value):

@@ -64,6 +64,14 @@ jobs:
         run: python3 -m unittest services.lp.tests.test_lp_board_adapter_nps services.lp.tests.test_lp_board_adapter_cwma services.lp.tests.test_lp_pdf_ocr services.lp.tests.test_lp_pending_collection services.lp.tests.test_lp_attachment_policy services.lp.tests.test_lp_board_adapters_mutuals services.lp.tests.test_lp_board_adapters_pensions services.lp.tests.test_lp_board_adapter_kfcc services.lp.tests.test_lp_board_adapters_banks services.lp.tests.test_lp_board_adapter_pck services.lp.tests.test_lp_board_adapter_sema services.lp.tests.test_lp_board_adapter_mmaa services.lp.tests.test_lp_board_adapter_kbiz services.lp.tests.test_lp_board_adapter_geps services.lp.tests.test_lp_board_adapter_kamco services.lp.tests.test_lp_board_adapter_moel services.lp.tests.test_lp_board_adapter_kfinco services.lp.tests.test_lp_kbiz_notice_terms services.lp.tests.test_lp_kfinco_notice_terms services.lp.tests.test_collect_lp_institution_boards services.lp.tests.test_lp_institution_notice_terms services.lp.tests.test_lp_kfcc_notice_terms services.lp.tests.test_lp_three_board_collection services.lp.tests.test_lp_regional_transport services.lp.tests.test_lp_cu_transport services.lp.tests.test_lp_ipv4_transport
       - name: Discover configured official institution boards
         run: python3 services/lp/src/collect_lp_institution_boards.py --output /tmp/lp-institution-collection.json
+      - name: Add the reviewed 2020+ history import (once; the publisher re-validates)
+        if: hashFiles('data/lp_history_import_request.json') != ''
+        run: |
+          read COMMIT FILE SHA < <(python3 -c "import json;r=json.load(open('data/lp_history_import_request.json'));print(r['commit'],r['file'],r['sha256'])")
+          git fetch -q --depth 1 origin "$COMMIT"
+          git show "$COMMIT:$FILE" > /tmp/lp-history-import.json
+          python3 services/lp/src/build_lp_history_import.py merge --collection /tmp/lp-institution-collection.json \
+            --import-file /tmp/lp-history-import.json --sha256 "$SHA"
       - name: Pass direct institution evidence to publisher
         if: always()
         uses: actions/upload-artifact@v4

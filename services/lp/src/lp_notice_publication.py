@@ -32,6 +32,7 @@ try:
     from . import lp_mmaa_notice_terms as mmaa_terms
     from . import lp_result_rosters as result_rosters
     from . import lp_nps_notice_terms as nps_terms
+    from . import lp_history_notices as history_notices
     from . import lp_kfinco_notice_terms as kfinco_terms
     from . import lp_kamco_notice_terms as kamco_terms
 except ImportError:
@@ -51,6 +52,7 @@ except ImportError:
     import lp_mmaa_notice_terms as mmaa_terms
     import lp_result_rosters as result_rosters
     import lp_nps_notice_terms as nps_terms
+    import lp_history_notices as history_notices
     import lp_kfinco_notice_terms as kfinco_terms
     import lp_kamco_notice_terms as kamco_terms
 
@@ -156,6 +158,12 @@ def _sources(data, growth_notices, checked_at):
             docs[n['url']] = n
         except (KeyError, TypeError, ValueError) as exc:
             holds.append({'stage': 'basic_publication', 'url': raw.get('url'), 'reason': str(exc)})
+    for raw in data.get('history_notices', []):
+        try:
+            n = _valid(history_notices.validate_history_notice(raw, checked_at), checked_at)
+            docs.setdefault(n['url'], n)  # a current daily version of the same notice wins
+        except (KeyError, TypeError, ValueError) as exc:
+            holds.append({'stage': 'basic_publication', 'url': raw.get('url'), 'reason': str(exc)})
     return docs, shared, holds
 
 
@@ -207,7 +215,7 @@ def _scope(n):
         return 'vc_only'
     # Co-investments, project funds and private debt are distinct product scope.
     if re.search(r'공동투자|프로젝트|사모대출|대출형|크레딧|부동산|인프라|헤지펀드|private\s*debt|평가\s*기관\s*선정'
-                 r'|개발\s*(?:블라인드\s*)?펀드|개발사업', n['title'], re.I):
+                 r'|개발\s*(?:블라인드\s*)?펀드|개발사업|PF\s*사업장', n['title'], re.I):
         return 'outside'
     result = classify_scope(n['title'], text)
     # User decision 2026-11-12: for the large policy/pension LPs, an explicitly

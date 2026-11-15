@@ -611,10 +611,16 @@ def _history_listing_ok(url, config):
     return urlsplit(url).path in daily
 
 
-def validate_notice(raw, checked_at, config=None, *, history_listing=False):
+def validate_notice(raw, checked_at, config=None, *, history_listing=False, require_attachment_bytes=True):
     """history_listing: the listing page came from the 2020+ history walk (deep pages of
     the same official board), so it is checked by host and board route, not by the
-    daily configured page set."""
+    daily configured page set.
+
+    require_attachment_bytes=False (history notices kept in state, 2026-11-15): the
+    state is near its size bound, so history notices keep attachment hashes and the text
+    extracted from the bytes in the collecting run, not the bytes. Every page receipt,
+    the adapter re-parse and the body hash are still checked; attachments must have been
+    observed on the detail receipt."""
     n = copy.deepcopy(raw)
     version = _extraction_version(n)
     config = config or load_configs()[n['institution_id']]
@@ -650,6 +656,14 @@ def validate_notice(raw, checked_at, config=None, *, history_listing=False):
     if not n['body'].strip() or original_body_hash(n) != n['sha256']:
         raise ValueError('invalid official notice body hash')
     observed_attachments = {a['url']: a['name'] for a in detail['attachments']}
+    if not require_attachment_bytes:
+        if n.get('attachment_bytes') or not set(n['attachment_texts']) <= set(n['attachment_hashes']) \
+                or not set(n['attachment_hashes']) <= set(observed_attachments) \
+                or not all(re.fullmatch('[0-9a-f]{64}', h) for h in n['attachment_hashes'].values()):
+            raise ValueError('history attachment proof maps differ')
+        for url in n['attachment_hashes']:
+            _same_host(url, config)
+        return n
     if set(n['attachment_bytes']) != set(n['attachment_hashes']) or not set(n['attachment_texts']) <= set(n['attachment_bytes']):
         raise ValueError('attachment proof maps differ')
     for url, encoded in n['attachment_bytes'].items():

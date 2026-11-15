@@ -139,5 +139,49 @@ class KgrowthHistoryTests(unittest.TestCase):
         self.assertEqual(bundle['holds'][0]['stage'], 'history_attachment')
 
 
+class HistoryNoticeStateTests(unittest.TestCase):
+    """Imported history notices: no attachment bytes, every receipt re-checked each run."""
+
+    def imported(self):
+        from services.lp.src import lp_history_notices as hn
+        fetch = tp_fetch()
+        bundle = history.collect('tp', '2020-01-01', '2026-11-14', max_pages=3, page_budget=20,
+                                 fetch_factory=lambda c: fetch, checked_at=STAMP)
+        n = dict(bundle['notices'][0])
+        n['attachment_bytes'] = {}
+        n['history_import'] = hn.KIND
+        return hn, n
+
+    def test_valid_import_is_retained_and_marked(self):
+        hn, n = self.imported()
+        result = hn.update_catalog({}, {'notices': [n]}, '2026-11-15T00:00:00+00:00')
+        self.assertEqual(len(result['history_notices']), 1)
+        self.assertEqual(result['history_notice_holds'], [])
+        again = hn.update_catalog(result, None, '2026-11-16T00:00:00+00:00')
+        self.assertEqual(len(again['history_notices']), 1)
+
+    def test_tampered_or_unmarked_or_byte_carrying_notices_are_held(self):
+        hn, n = self.imported()
+        bad_body = {**n, 'body': n['body'] + ' 변조'}
+        unmarked = {k: v for k, v in n.items() if k != 'history_import'}
+        with_bytes = {**n, 'attachment_bytes': {'x': 'eA=='}}
+        result = hn.update_catalog({}, {'notices': [bad_body, unmarked, with_bytes]}, '2026-11-15T00:00:00+00:00')
+        self.assertEqual(result['history_notices'], [])
+        self.assertEqual(len(result['history_notice_holds']), 3)
+
+    def test_merge_requires_the_reviewed_hash(self):
+        from services.lp.src import build_lp_history_import as imp
+        with tempfile.TemporaryDirectory() as tmp:
+            collection, payload = Path(tmp) / 'c.json', Path(tmp) / 'i.json'
+            collection.write_text(json.dumps({'notices': [], 'holds': []}))
+            payload.write_bytes(json.dumps({'kind': 'lp_history_import_v1', 'notices': [{'url': 'u'}]}).encode())
+            import hashlib
+            digest = hashlib.sha256(payload.read_bytes()).hexdigest()
+            with self.assertRaises(ValueError):
+                imp.merge(collection, payload, '0' * 64)
+            self.assertEqual(imp.merge(collection, payload, digest), 1)
+            self.assertEqual(json.loads(collection.read_text())['history_import']['sha256'], digest)
+
+
 if __name__ == '__main__':
     unittest.main()

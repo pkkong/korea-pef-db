@@ -75,6 +75,7 @@ def validate_receipt(raw):
         raise ValueError('Bounded publisher success receipt required')
     value = _json_load(raw.decode('utf-8'))
     counts = {'programs', 'notices', 'review', 'institution_notices', 'institution_validation_errors',
+              'history_notices', 'history_validation_errors',
               'shared_notices', 'shared_originals', 'shared_offering_terms'}
     keys = counts | {'run_id', 'program_ids', 'programs_by_institution', 'institution_institutions', 'shared_institutions'}
     if (not isinstance(value, dict) or set(value) != keys or not isinstance(value.get('run_id'), str)
