@@ -82,7 +82,8 @@ def _kgrowth_notice(row, listing_receipt, body_fetch, session_factory, checked_a
         raise ValueError('official listing/detail date differs')
     n = {**detail, 'institution_id': 'kgrowth', 'checked_at': checked_at, 'source_channel': 'institution_board',
          'discovery_provenance': {'kind': 'kgrowth_history_2020_v1', 'listing': listing_receipt,
-                                  'detail_sha256': hashlib.sha256(raw).hexdigest()},
+                                  'detail_sha256': hashlib.sha256(raw).hexdigest(),
+                                  'detail_response_base64': base64.b64encode(raw).decode('ascii')},
          'attachment_hashes': {}, 'attachment_texts': {}, 'attachment_bytes': {}}
     outside = classify_scope(n['title'], n['title']) in {'outside', 'vc_only'}
     # 성장금융 detail pages list bare download URLs (no file names): the reader is picked

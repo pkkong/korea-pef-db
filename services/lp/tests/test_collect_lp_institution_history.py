@@ -133,6 +133,21 @@ class KgrowthHistoryTests(unittest.TestCase):
         self.assertEqual([s.calls for s in sessions], [['body', 'file']])
         self.assertEqual(len(n['attachment_hashes']), 1)
 
+    def test_kgrowth_detail_bytes_survive_bundle_for_independent_replay(self):
+        import base64
+        import hashlib
+        from services.lp.src.collect_lp_history_bodies import read_body
+        bundle, _ = self.run_collect()
+        with tempfile.TemporaryDirectory() as tmp:
+            saved = json.loads(history.write_bundle(bundle, Path(tmp)).read_text())
+        n = saved['notices'][0]
+        proof = n['discovery_provenance']
+        raw = base64.b64decode(proof['detail_response_base64'], validate=True)
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), proof['detail_sha256'])
+        replayed = read_body(n['source_id'], raw, 'kgrowth')
+        self.assertTrue(all(n[k] == value for k, value in replayed.items()))
+        self.assertNotIn('attachment_bytes', n)
+
     def test_blocked_file_is_held_not_stored(self):
         bundle, _ = self.run_collect(file_raw='비정상적인 접근입니다'.encode('cp949'))
         self.assertEqual(bundle['notices'][0]['attachment_hashes'], {})

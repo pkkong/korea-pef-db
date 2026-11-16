@@ -38,7 +38,7 @@
 
 ## 현재 LP 담당·실행 경계
 
-- 2026-11-16 Claude → Codex 인수. Lead는 고용보험기금 채널·문서·통합, Verifier는 정기 수집/공개 읽기, Worker는 저장 성장금융 과거 판독 준비를 맡는다. 서비스 전체 완료는 아니다.
+- 2026-11-16 Claude → Codex 인수. Lead는 고용보험기금 채널·문서·통합, Verifier는 정기 수집/공개 읽기, Worker는 저장 산재보험기금 마감 판독을 맡는다. 성장금융 첫 판독기는 로컬 완료·공개 미반영이다. 서비스 전체 완료는 아니다.
 - 신규 OCIO 채널은 비활성 설정으로 구현 → 요청 파일 push의 읽기 전용 실행기 확인 → 검증 후 정기 수집 반영 순서다. 운영 발행·수집·배포를 수동 실행하지 않는다. 반복 예약도 새로 켜지 않는다.
 
 ## 서비스 책임
@@ -82,7 +82,7 @@
 공통 검사(로컬 기준 환경: Python 3.12 + `services/newsletter/web/requirements.txt` + `olefile==0.47` + `pypdf==6.10.0`):
 
 ```bash
-python3 scripts/run_regression_tests.py          # 2026-11-16 기준 1,434검사
+python3 scripts/run_regression_tests.py          # 2026-11-16 기준 1,454검사
 python3 scripts/check_architecture_contracts.py
 npm ci --prefix scripts/tests/sql --ignore-scripts && npm test --prefix scripts/tests/sql
 ```
