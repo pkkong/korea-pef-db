@@ -51,7 +51,11 @@ def build_report(growth=None, priority=None, institution=None, publication=None,
     if channels is None:
         channels = json.loads((ROOT / 'data/lp_institution_board_channels.json').read_text())['channels']
     targets = list(dict.fromkeys(scope['confirmed_institution_ids'] + scope['priority_verification_ids']))
-    modes = {c['institution_id']: c.get('enabled', True) for c in channels}
+    active_channels = {}
+    for channel in channels:
+        if channel.get('enabled', True):
+            active_channels.setdefault(channel['institution_id'], []).append(
+                channel.get('channel_id', channel['institution_id']))
     with (ROOT / 'data/lp_institutions.csv').open() as source:
         names = {row['lp_code']: row['lp_name'] for row in csv.DictReader(source)}
     for path in (ROOT / 'data').glob('lp_blind_contest_screening_*.json'):
@@ -73,7 +77,7 @@ def build_report(growth=None, priority=None, institution=None, publication=None,
             global_issues.append({'report': label, 'kind': 'report_error'})
     rows = []
     for iid in targets:
-        daily = iid in CORE or modes.get(iid) is True
+        daily = iid in CORE or bool(active_channels.get(iid))
         report = reports['growth'] if iid == 'kgrowth' else (
             reports['priority'].get('sources', {}).get(iid, {}) if iid in CORE else reports['institution'])
         if not isinstance(report, dict):
@@ -118,11 +122,14 @@ def build_report(growth=None, priority=None, institution=None, publication=None,
             row['listing_count'] = len(objects(c.get('listing_pages'))) if c else None
             observed = isinstance(report.get('notices'), list) and (bool(notices) or bool(row['listing_count']))
         else:
-            c = report.get('coverage', {}).get(iid, {})
+            coverage = report.get('coverage', {})
+            channel_coverage = [coverage.get(key, {}) for key in active_channels.get(iid, [iid])]
             row.update(hold_counts([h for h in objects(report.get('holds')) if isinstance(h, dict) and h.get('institution_id') == iid]))
-            row.update(body_count=count(c.get('detail_count')), stored_attachment_count=count(c.get('attachment_count')),
-                       listing_count=len(objects(c.get('listing_pages'))))
-            observed = bool(row['listing_count']) and row['body_count'] is not None and row['stored_attachment_count'] is not None
+            observed = all(bool(objects(c.get('listing_pages'))) and count(c.get('detail_count')) is not None
+                           and count(c.get('attachment_count')) is not None for c in channel_coverage)
+            row.update(body_count=sum(c['detail_count'] for c in channel_coverage) if observed else None,
+                       stored_attachment_count=sum(c['attachment_count'] for c in channel_coverage) if observed else None,
+                       listing_count=sum(len(objects(c.get('listing_pages'))) for c in channel_coverage))
         if report.get('error') or report.get('errors'):
             row['source_errors'] += 1
         row['source_health'] = ('weekly_only' if not daily else 'error' if row['source_errors'] or row['unknown_holds']

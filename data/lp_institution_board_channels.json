@@ -202,6 +202,21 @@
       "max_details": 12
     },
     {
+      "channel_id": "moel_eif_ocio",
+      "institution_id": "moel_eif",
+      "adapter": "miraeasset_ocio",
+      "enabled": false,
+      "listing_url": "https://securities.miraeasset.com/bbs/board/message/list.do?categoryId=66",
+      "search_param": "searchText",
+      "searches": [
+        "고용보험기금"
+      ],
+      "page_param": "curPage",
+      "pages": 10,
+      "since": "2023-07-01",
+      "max_details": 12
+    },
+    {
       "institution_id": "kfinco",
       "listing_url": "https://www.kfinco.co.kr/api/pr/notice/list?page=1&size=10&searchKeyword=%EC%9C%84%ED%83%81%EC%9A%B4%EC%9A%A9%EC%82%AC",
       "search_param": "searchKeyword",

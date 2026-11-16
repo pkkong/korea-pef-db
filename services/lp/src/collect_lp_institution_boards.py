@@ -47,6 +47,7 @@ try:
     from . import lp_board_adapter_kbiz as kbiz
     from . import lp_board_adapter_moel as moel
     from . import lp_board_adapter_samsungfund as samsungfund
+    from . import lp_board_adapter_miraeasset as miraeasset
     from . import lp_board_adapter_mmaa as mmaa
     from . import lp_board_adapter_geps as geps
     from . import lp_board_adapter_kamco as kamco
@@ -76,6 +77,7 @@ except ImportError:
     import lp_board_adapter_kbiz as kbiz
     import lp_board_adapter_moel as moel
     import lp_board_adapter_samsungfund as samsungfund
+    import lp_board_adapter_miraeasset as miraeasset
     import lp_board_adapter_mmaa as mmaa
     import lp_board_adapter_geps as geps
     import lp_board_adapter_kamco as kamco
@@ -116,7 +118,7 @@ def load_configs(*, include_pending=False):
     return {i:c for i,c in configs.items() if include_pending or c.get('enabled',True)}
 
 
-CHANNEL_ADAPTERS = {'samsungfund_ocio'}
+CHANNEL_ADAPTERS = {'samsungfund_ocio', 'miraeasset_ocio'}
 
 
 def bounded(config):
@@ -132,6 +134,8 @@ def channel_key(record):
 def adapter(config):
     if config.get('adapter') == 'samsungfund_ocio':
         return samsungfund
+    if config.get('adapter') == 'miraeasset_ocio':
+        return miraeasset
     institution = config['institution_id']
     if institution == 'nh_central':
         return nh
@@ -169,6 +173,10 @@ def adapter(config):
 
 
 def listing_urls(config):
+    planner = getattr(adapter(config), 'listing_urls', None)
+    if planner:
+        yield from planner(config)
+        return
     if config['institution_id'] in {'kdb', 'ibk'}:
         yield from (request['url'] for request in banks.listing_requests(config))
         return
@@ -493,10 +501,14 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
             observed_day = datetime.fromisoformat(checked_at.replace('Z', '+00:00')).astimezone(ZoneInfo('Asia/Seoul')).date()
             cutoff = (observed_day - timedelta(days=config['lookback_days'] - 1)).isoformat()
             coverage.update(lookback_days=config['lookback_days'], window_start=cutoff, window_end=observed_day.isoformat())
-        for url in listing_urls(config):
+        urls = list(listing_urls(config))
+        for url in urls:
             search = parse_qsl(urlsplit(url).query)
             search = next((value for key, value in search if key == config.get('search_param')), '')
             stream=(urlsplit(url).path,search) if institution=='nh_central' else search
+            cursor_walk = getattr(adapter(config), 'next_listing_url', None)
+            if cursor_walk:
+                stream = adapter(config).listing_stream(url, config)
             if stream in stopped_searches:
                 continue
             try:
@@ -538,6 +550,12 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
                     elif current_page == config['pages']:
                         result['holds'].append({'institution_id': institution, 'stage': 'institution_depth',
                                                'error': institution + ' configured listing limit reached before history boundary'})
+                    elif cursor_walk:
+                        next_url = cursor_walk(html, url, config)
+                        if next_url:
+                            if next_url in urls:
+                                raise ValueError('official cursor listing repeated before boundary')
+                            urls.append(next_url)
                 if institution == 'pck_pension':
                     current_page = int(dict(parse_qsl(urlsplit(url).query))[config['page_param']])
                     final_page = pck.last_page(html, url, config)
@@ -668,8 +686,10 @@ def validate_notice(raw, checked_at, config=None, *, history_listing=False, requ
     _same_host(n['url'], config)
     proof = n['discovery_provenance']
     listing = proof['listing']
-    allowed_listing = (_history_listing_ok(listing['url'], config) if history_listing
-                       else listing['url'] in listing_receipt_urls(config))
+    allowed = getattr(adapter(config), 'listing_url_allowed', None)
+    allowed_listing = (allowed(listing['url'], config) if allowed else
+                       _history_listing_ok(listing['url'], config) if history_listing else
+                       listing['url'] in listing_receipt_urls(config))
     if (proof['kind'] != 'institution_board_v1' or not allowed_listing
             or digest(listing['html']) != listing['sha256']
             or digest(proof['detail_html']) != proof['detail_sha256']):

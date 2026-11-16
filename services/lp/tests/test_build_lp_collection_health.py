@@ -16,6 +16,23 @@ def rows(**kwargs):
 
 
 class CollectionHealthTests(unittest.TestCase):
+    def test_pending_second_channel_does_not_disable_daily_primary_in_either_order(self):
+        channels = [{'institution_id': 'moel_eif'},
+                    {'institution_id': 'moel_eif', 'channel_id': 'moel_eif_ocio', 'enabled': False}]
+        for ordered in (channels, channels[::-1]):
+            self.assertEqual(rows(channels=ordered)['moel_eif']['frequency'], 'daily')
+
+    def test_active_channels_are_summed_and_missing_channel_stays_unobserved(self):
+        channels = [{'institution_id': 'moel_eif'}, {'institution_id': 'moel_eif', 'channel_id': 'moel_eif_ocio'}]
+        c = lambda details: {'listing_pages': [{'count': details}], 'detail_count': details, 'attachment_count': 0}
+        d = {'checked_at': STAMP, 'coverage': {'moel_eif': c(1), 'moel_eif_ocio': c(2)}, 'holds': []}
+        r = rows(channels=channels, institution=d)['moel_eif']
+        self.assertEqual((r['source_health'], r['body_count'], r['listing_count']), ('ok', 3, 2))
+        del d['coverage']['moel_eif_ocio']
+        r = rows(channels=channels, institution=d)['moel_eif']
+        self.assertEqual(r['source_health'], 'not_observed')
+        self.assertIsNone(r['body_count'])
+
     def test_target24_daily22_weekly2_missing_not_ok(self):
         report = build_report()
         self.assertEqual(report['target_count'], 24)
