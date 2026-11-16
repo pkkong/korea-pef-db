@@ -67,6 +67,20 @@ def _money(token):
     return int(token.replace(',', '')) * 100_000_000
 
 
+def _numeric_rounds(text):
+    text = _compact(text)
+    text = re.sub(r'제?\d+차\s*심사', '', text)
+    return {re.sub(r'^제', '', _compact(m)) for m in re.findall(r'제?\d+차(?:년도)?', text)}
+
+
+def _fund_rounds(fund):
+    fund = _compact(fund)
+    found = re.search(r'(?:\((제?\d+차(?:년도)?)\)|(제?\d+차(?:년도)?))$', fund)
+    if not found:
+        return fund, set()
+    return fund[:found.start()], _numeric_rounds(found[0])
+
+
 def _identity(notice):
     """Exact quoted fund identity, title year and explicit round; no fuzzy join."""
     title = unicodedata.normalize('NFKC', notice['title'])
@@ -81,12 +95,18 @@ def _identity(notice):
     if year < '2020' or year > '2022':
         raise ValueError('검토 대상 사업 연도 밖')
     fund = re.sub(r'20\d{2}년?도?', '', fund)
+    fund, inline_rounds = _fund_rounds(fund)
     tail = title[found[0].end():]
     # A screening's "1차 심사" is a stage, not a new round of the fund.
     tail = re.sub(r'\d+차\s*심사', '', tail)
     tail = re.split(r'위탁운용사|출자사업|제출서류|제안서|선정계획', tail, maxsplit=1)[0]
-    rounds = re.findall(r'(?:제?\d+차(?:년도)?|정시(?:사업)?|수시(?:사업)?|앵커출자|매칭출자)', tail)
-    return {'fund': _compact(fund), 'year': year, 'round': '/'.join(_compact(r) for r in rounds)}
+    context = title[:found[0].start()] + tail
+    suffix = re.search(r'(제?\d+차(?:년도)?)\)?$', _compact(title[found[0].end():]))
+    numeric = inline_rounds | _numeric_rounds(context) | (_numeric_rounds(suffix[1]) if suffix else set())
+    if len(numeric) > 1:
+        raise ValueError('펀드명·제목 앞뒤의 명시 회차 충돌')
+    named = re.findall(r'정시(?:사업)?|수시(?:사업)?|앵커출자|매칭출자', tail)
+    return {'fund': fund, 'year': year, 'round': '/'.join(sorted(numeric) + [_compact(r) for r in named])}
 
 
 def _check_metadata(bundle):
@@ -362,6 +382,8 @@ def _offering_identity(n, text):
     years = set(re.findall(r'(20\d{2})년', text[:350]))
     if identity['fund'] not in text[:350] or years and years != {identity['year']}:
         raise ValueError('모집 첨부의 펀드명·연도가 게시물과 다름')
+    if _numeric_rounds(text[:350]) != _numeric_rounds(identity['round']):
+        raise ValueError('모집 첨부의 명시 회차가 게시물과 다름')
     return identity
 
 
@@ -456,7 +478,9 @@ def _shared_early_close(n, identity):
                       r'잔여신청기간에도불구하고출자사업을조기에마감함을알려드립니다\.', text)
     if not quote:
         return None
-    if identity['fund'] not in quote[0]:
+    quoted = re.search(r'[「『]([^」』]+)[」』]', quote[0])
+    fund, rounds = _fund_rounds(quoted[1])
+    if fund != identity['fund'] or rounds != _numeric_rounds(identity['round']):
         raise ValueError('조기마감 본문의 펀드명이 모집과 다름')
     return {'kind': 'early_close', 'notice_date': n['date'], 'actual_deadline': '',
             'date_basis': '조기마감 공고 게시일; 실제 접수 종료일·시각은 미명시',
@@ -480,13 +504,35 @@ def review_bundle(bundle, *, valid_name, known_gp_names=()):
     manager names. All candidates still require raw replay and domestic PE scope
     verification. No guessed budget, scope, GP name or loose date-based join.
     """
+    try:
+        from .lp_kgrowth_scaleup_history import parse_scaleup_notice
+        from .lp_kgrowth_multifund_history import parse_multifund_notice
+    except ImportError:
+        from lp_kgrowth_scaleup_history import parse_scaleup_notice
+        from lp_kgrowth_multifund_history import parse_multifund_notice
     notices, errors = _check_metadata(bundle)
-    groups, unassigned = defaultdict(list), []
+    groups, unassigned, expanded = defaultdict(list), [], []
+    derived = {}
     for n in notices:
         if re.search(r'온라인\s*설명회|질의응답|FAQ|제출서류|서식|접수방식|소개자료', n['title'], re.I):
             unassigned.append({'url': n['url'], 'reason': '설명회·양식·보충 안내, 모집·결과로 쓰지 않음'})
             continue
         try:
+            reading = parse_scaleup_notice(n) or parse_multifund_notice(n)
+            if reading:
+                keys = []
+                for section in reading['funds']:
+                    identity = {k: section['identity'][k] for k in ('fund', 'year', 'round')}
+                    key = tuple(identity.values())
+                    if key in keys or identity['year'] < '2020' or identity['year'] > '2022':
+                        raise ValueError('분리한 모집의 펀드·연도·회차 중복 또는 범위 충돌')
+                    keys.append(key)
+                for section, key in zip(reading['funds'], keys):
+                    identity = {k: section['identity'][k] for k in ('fund', 'year', 'round')}
+                    groups[key].append((identity, n))
+                    derived[(key, n['url'])] = section
+                expanded.append({'source_url': n['url'], **reading})
+                continue
             identity = _identity(n)
             groups[tuple(identity.values())].append((identity, n))
         except ValueError as exc:
@@ -505,10 +551,16 @@ def review_bundle(bundle, *, valid_name, known_gp_names=()):
             group['holds'].append({'reason': '같은 펀드·연도·회차의 모집 공고가 없거나 여러 개임'})
         else:
             try:
-                parsed = _offering(offerings[0])
+                section = derived.get((key, offerings[0]['url']))
+                parsed = section['held_terms'] if section else _offering(offerings[0])
                 if 'shared_tracks' in parsed:
                     group['held_offering'] = parsed
                     group['holds'].append({'source_url': offerings[0]['url'], 'reason': parsed['scope_hold']})
+                    if section:
+                        for reason in section.get('holds', []):
+                            held = reason if isinstance(reason, dict) else {'reason': reason}
+                            if held['reason'] != parsed['scope_hold']:
+                                group['holds'].append({'source_url': offerings[0]['url'], **held})
                     if parsed.get('deadline_error'):
                         group['holds'].append({'source_url': offerings[0]['url'], 'reason': parsed['deadline_error']})
                 else:
@@ -551,7 +603,7 @@ def review_bundle(bundle, *, valid_name, known_gp_names=()):
                                    n.get('discovery_provenance', {}).get('detail_response_base64') for n in notices),
                                'attachment_bytes_present': any(n.get('attachment_bytes') for n in notices),
                                'detail_raw_replayed': False, 'attachment_bytes_replayed': False},
-            'groups': output, 'unassigned': unassigned,
+            'groups': output, 'unassigned': unassigned, 'expanded_offerings': expanded,
             'summary': {'retained_notices': len(bundle.get('notices', [])), 'groups': len(output),
                         'parsed_offerings': sum(g['offering'] is not None for g in output),
                         'parsed_pe_offerings': sum(g['offering'] is not None for g in output),
