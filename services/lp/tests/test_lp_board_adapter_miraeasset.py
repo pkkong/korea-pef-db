@@ -1,8 +1,11 @@
 """OCIO title/year/cursor isolation and source replay before publication."""
 import copy
+import re
+import tempfile
 import unittest
 from datetime import date
 from html import escape
+from pathlib import Path
 from unittest.mock import patch
 
 from services.lp.src import collect_lp_institution_boards as boards
@@ -190,6 +193,64 @@ class MiraeAssetTests(unittest.TestCase):
         self.assertEqual(len(programs), 1, holds)
         self.assertEqual(programs[0]['status'], '선정 완료')
         self.assertEqual([g['name'] for g in programs[0]['selected_gps']], ['에이치앤큐에쿼티파트너스', '제네시스프라이빗에쿼티'])
+
+    def recruitment_and_repost(self):
+        from services.lp.tests import test_lp_board_adapter_moel as fx
+        c = {**boards.load_configs()['moel_eif'], 'pages': 1}
+        body = ('2026년 고용보험기금 대체투자상품 선정계획을 다음과 같이 공고합니다. '
+                '□ 선정 유형: 블라인드 PEF, VC '
+                '□ 선정 규모: 총 1,200억원 (PEF 600억원(2건), VC 600억원(3건) 선정 예정) '
+                '□ 제안서 접수 마감일: 2026. 8. 20.(목) (PEF 오전 11시까지, VC 오후 4시까지)')
+        def fetch(url, referer=None):
+            return (fx.detail(files=False, body=body) if 'imchaeBbsView' in url else fx.listing()).encode()
+        own = boards.collect({'moel_eif': c}, fetch_factory=lambda c: fetch, checked_at=STAMP, retry_failures=False)['notices'][0]
+        # The caller supplies shared_notices after the association catalog's own
+        # validation. This excerpt matches the observed KVCA po_no=894 repost.
+        shared = {**copy.deepcopy(own), 'source_channel': 'kvca', 'source_id': 'kvca:894',
+                  'url': 'https://www.kvca.or.kr/Program/invest/listbody.html?po_no=894',
+                  'body': body.replace('□', '-'), 'discovery_provenance': {}}
+        shared['sha256'] = boards.digest(shared['body'])
+        return own, shared
+
+    def test_valid_repost_does_not_block_the_official_result_or_change_public_id(self):
+        own, shared = self.recruitment_and_repost()
+        before, _ = publish_basic_notices({'programs': [], 'institution_notices': [own]}, [], STAMP)
+        result = self.collect()['notices'][0]
+        for incoming in ([own, result], [result, own]):
+            programs, holds = publish_basic_notices({'programs': before, 'institution_notices': incoming,
+                                                    'shared_notices': [shared]}, [], STAMP)
+            self.assertEqual(len(programs), 1, holds)
+            p = programs[0]
+            self.assertEqual(p['id'], before[0]['id'])
+            self.assertEqual(p['status'], '선정 완료')
+            self.assertEqual([g['name'] for g in p['selected_gps']], ['에이치앤큐에쿼티파트너스', '제네시스프라이빗에쿼티'])
+            self.assertEqual(p['deadline'], '2026-08-20T11:00:00+09:00')
+            self.assertEqual({e['url'] for e in p['events']}, {own['url'], shared['url'], result['url']})
+            self.assertEqual(p['events'][0]['url'], own['url'])
+            self.assertEqual(next(s['source_url'] for s in p['schedule_stages']
+                                  if s['status'] == 'announced_deadline'), own['url'])
+            from services.lp.src.lp_program_service import build
+            with tempfile.TemporaryDirectory() as folder:
+                build({'as_of': STAMP[:10], 'programs': copy.deepcopy(programs)}, Path(folder))
+                html = (Path(folder) / f'program-{p["id"]}.html').read_text()
+            source_link = re.search(r'<a[^>]*href="([^"]+)"[^>]*>출자 공고 원문(?:\s*↗)?</a>', html)
+            self.assertIsNotNone(source_link)
+            self.assertEqual(source_link[1], own['url'])
+
+    def test_conflicting_repost_date_budget_count_or_deadline_cannot_authorize_a_join(self):
+        own, source = self.recruitment_and_repost()
+        before, _ = publish_basic_notices({'programs': [], 'institution_notices': [own]}, [], STAMP)
+        result = self.collect()['notices'][0]
+        for changed in ({'date': '2026-08-08'},
+                        {'body': source['body'].replace('1,200억원', '1,300억원').replace('PEF 600억원', 'PEF 700억원')},
+                        {'body': source['body'].replace('PEF 600억원(2건)', 'PEF 600억원(3건)')},
+                        {'body': source['body'].replace('8. 20.(목)', '8. 21.(금)')}):
+            shared = {**source, **changed}
+            shared['sha256'] = boards.digest(shared['body'])
+            with self.subTest(changed=changed):
+                programs, _ = publish_basic_notices({'programs': before, 'institution_notices': [own, result],
+                                                     'shared_notices': [shared]}, [], STAMP)
+                self.assertEqual(programs, before)
 
 
 if __name__ == '__main__':

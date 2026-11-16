@@ -1,4 +1,5 @@
 """Conservative labelled facts for independently validated issuer-board receipts."""
+import copy
 import re
 from datetime import date, datetime
 try:
@@ -6,13 +7,36 @@ try:
     from .lp_shared_notice_terms import extract_offering_sources
     from .lp_kfcc_notice_terms import allocation as kfcc_allocation
     from .lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
+    from .lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 except ImportError:
     from lp_attachment_policy import is_submission_attachment
     from lp_shared_notice_terms import extract_offering_sources
     from lp_kfcc_notice_terms import allocation as kfcc_allocation
     from lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
+    from lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 
 NUM = r'(\d[\d,]*)'
+
+
+def apply_iaci_allocation(n, result):
+    """Use the same explicit PE league totals for own-board and repost sources."""
+    allocation = iaci_allocation(n)
+    if not allocation:
+        return result
+    result = copy.deepcopy(result)
+    evidence = result.setdefault('extraction_evidence', {})
+    if allocation.get('allocation_error'):
+        for key in ('commitment_amount_krw', 'total_commitment_amount_krw', 'commitment_label',
+                    'list_commitment_label', 'manager_count', 'manager_count_label', 'segments',
+                    'per_fund_amount_krw', 'per_fund_range_krw', 'per_fund_qualifier'):
+            result.pop(key, None)
+        for key in ('commitment', 'pe_allocation', 'manager_count', 'count', 'total', 'per_fund'):
+            evidence.pop(key, None)
+        result.update(allocation_error=allocation['allocation_error'], allocation_reading_failed=True)
+    else:
+        evidence.update(allocation.pop('extraction_evidence'))
+        result.update(allocation)
+    return result
 
 
 def extract_terms(n):
@@ -141,4 +165,4 @@ def extract_terms(n):
         else:
             result.update(deadline=specific['deadline'], deadline_precision=specific['deadline_precision'])
             evidence.setdefault('deadline', []).extend(specific['extraction_evidence']['deadline'])
-    return result
+    return apply_iaci_allocation(n, result)

@@ -26,6 +26,7 @@ try:
     from .lp_shared_notice_terms import extract_shared_terms
     from .collect_lp_institution_boards import validate_notice as validate_institution_notice
     from .lp_institution_notice_terms import extract_terms as extract_institution_terms
+    from .lp_institution_notice_terms import apply_iaci_allocation
     from .lp_kfcc_notice_terms import allocation as kfcc_allocation
     from . import lp_pck_programs as pck_programs
     from . import lp_kbiz_notice_terms as kbiz_terms
@@ -46,6 +47,7 @@ except ImportError:
     from lp_shared_notice_terms import extract_shared_terms
     from collect_lp_institution_boards import validate_notice as validate_institution_notice
     from lp_institution_notice_terms import extract_terms as extract_institution_terms
+    from lp_institution_notice_terms import apply_iaci_allocation
     from lp_kfcc_notice_terms import allocation as kfcc_allocation
     import lp_pck_programs as pck_programs
     import lp_kbiz_notice_terms as kbiz_terms
@@ -377,7 +379,9 @@ def _terms(n, shared_notice, checked_at):
             terms = extract_terms(n)
     except (KeyError, TypeError, ValueError):
         pass
-    if not (terms.get('commitment_amount_krw') or terms.get('commitment_label') or terms.get('segments')):
+    if n.get('source_channel') != 'institution_board':
+        terms = apply_iaci_allocation(n, terms)
+    if not terms.get('allocation_reading_failed') and not (terms.get('commitment_amount_krw') or terms.get('commitment_label') or terms.get('segments')):
         try:
             headline = mmaa_terms.pe_share(n) or nps_terms.pe_share(n) or headline_amount(n)
         except (KeyError, TypeError, ValueError):
@@ -464,7 +468,7 @@ def _schedule_order(stages):
     return sorted(stages, key=key)
 
 
-def _refresh(p, members, checked_at):
+def _refresh(p, members, checked_at, *, original=None):
     phases = dict(STAGES)
     if p['institution_id'] == 'pck_pension':
         phases['최종 선정'] = 'selection'
@@ -479,7 +483,11 @@ def _refresh(p, members, checked_at):
                 existing_events[previous['url']] = {**event, 'url': previous['url']}
                 continue
         existing_events.setdefault(n['url'], _event(n))
-    p['events'] = sorted(existing_events.values(), key=lambda e: (e['date'], e['url']))
+    # The verified recruitment anchor precedes its same-day repost. Both the
+    # detail header and the original deadline cite the first recruitment event.
+    # URL alphabetic order must not make an association the primary source.
+    p['events'] = sorted(existing_events.values(), key=lambda e: (
+        e['date'], 0 if original and e['url'] == original['url'] else 1, e['url']))
     changed = any(_event(n)['type'] == '변경 공고' for n in members)
     confirmed = {phases[e['type']] for e in p['events'] if e['type'] in phases}
     stages = [s for s in p.get('schedule_stages', []) if not changed
@@ -743,7 +751,46 @@ def _generic_result_title(n):
     return not _GENERIC_RESULT_WORDS.sub('', title)
 
 
-def _merge_orphan_results(groups):
+def _recruitments(members, shared, checked_at):
+    """One ministry/LP original may also appear as a verified association repost.
+
+    Keep every source in members/events, but use the own-board notice as the
+    recruitment anchor only when date, title, scope, PE amount, fund count and
+    deadline agree. A date-only repost may refine to the own board's time on
+    that same date. Conflicting or incomplete facts remain separate candidates.
+    """
+    originals = [n for n in members if _event(n)['type'] == '모집 공고']
+    if len(originals) < 2 or checked_at is None:
+        return originals
+    own = [n for n in originals if n.get('source_channel') == 'institution_board' and not n.get('channel_id')]
+    if len(own) != 1:
+        return originals
+    anchor = own[0]
+    scope = _scope(anchor)
+    if scope not in ('pe_blind', 'mixed_pe_blind'):
+        return originals
+    facts, raw = _terms(anchor, shared.get(anchor['url']), checked_at)
+    if raw.get('deadline_error') or any(facts.get(k) is None for k in ('deadline', 'commitment_amount_krw', 'manager_count')):
+        return originals
+    for n in originals:
+        if n is anchor:
+            continue
+        host = (urlsplit(n['url']).hostname or '').removeprefix('www.')
+        if (host not in REPOST_HOSTS or n.get('source_channel') == 'institution_board'
+                or n['institution_id'] != anchor['institution_id'] or n['date'] != anchor['date']
+                or compact(n['title']) != compact(anchor['title']) or _scope(n) != scope):
+            return originals
+        other, raw = _terms(n, shared.get(n['url']), checked_at)
+        if (raw.get('deadline_error') or not other.get('deadline')
+                or any(other.get(k) != facts[k] for k in ('commitment_amount_krw', 'manager_count'))
+                or other['deadline'][:10] != facts['deadline'][:10]
+                or (other.get('deadline_precision') == facts.get('deadline_precision') == 'datetime'
+                    and other['deadline'] != facts['deadline'])):
+            return originals
+    return [anchor]
+
+
+def _merge_orphan_results(groups, shared=None, checked_at=None):
     """Attach result-only groups to their recruitment group at the same institution.
 
     Joined when the titles match without the institution's names, or when exactly one
@@ -751,7 +798,7 @@ def _merge_orphan_results(groups):
     and the result itself speaks of PE. Anything ambiguous stays apart (no guess)."""
     announcements = {}
     for key, members in groups.items():
-        originals = [n for n in members if _event(n)['type'] == '모집 공고']
+        originals = _recruitments(members, shared or {}, checked_at)
         if len(originals) == 1:
             announcements[key] = originals[0]
     for key, members in list(groups.items()):
@@ -817,7 +864,7 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
     pck_groups, pck_holds = pck_programs.groups([n for n in docs.values() if n['institution_id'] == 'pck_pension'], data['programs'])
     groups.update(pck_groups)
     holds.extend(pck_holds)
-    _merge_orphan_results(groups)
+    _merge_orphan_results(groups, shared, checked_at)
     programs = {p['id']: copy.deepcopy(p) for p in data['programs']}
     # Manager names already published anywhere help split glued result tables.
     known_names = frozenset(
@@ -827,7 +874,7 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
         if isinstance(name, str) and name.strip()) | frozenset(n for n in known_gp_names if isinstance(n, str) and n.strip())
     for key, members in sorted(groups.items()):
         try:
-            originals = [n for n in members if _event(n)['type'] == '모집 공고']
+            originals = _recruitments(members, shared, checked_at)
             if len(originals) > 1:
                 # Same-titled recruitments in one year (국민연금 2020: PEF+VC in March, VC only in
                 # August): keep the single PE one; the others are not this program's recruitment.
@@ -858,6 +905,8 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
             terms, raw_terms = _terms(original, shared.get(original['url']), checked_at)
             if raw_terms.get('deadline_error'):
                 holds.append({'stage': 'basic_deadline', 'url': original['url'], 'reason': raw_terms['deadline_error']})
+            if raw_terms.get('allocation_reading_failed'):
+                holds.append({'stage': 'basic_allocation', 'url': original['url'], 'reason': raw_terms['allocation_error']})
             mixed_open = False
             if not reviewed and _scope(original) == 'mixed_pe_blind' and not ((raw_terms.get('amount_scope') == 'pe_only' and raw_terms.get('commitment_amount_krw')) or kbiz_terms.pe_track(original)):
                 if original['institution_id'] not in PE_TRACK_INSTITUTIONS:
@@ -935,7 +984,7 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
                         holds.append({'stage': 'basic_deadline', 'url': latest['url'], 'reason': str(exc)})
                     if revised:
                         p.update(deadline=revised[0], deadline_precision=revised[1], deadline_source_url=latest['url'])
-            _refresh(p, members, checked_at)
+            _refresh(p, members, checked_at, original=original)
             _attach_preferred_roster(p, original, members, checked_at, holds)
             _attach_result_roster(p, members, holds, known_names)
             p['publication_version'] = 1

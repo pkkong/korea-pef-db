@@ -28,6 +28,33 @@ TEXT = '''운용사 선정계획 공고
 공사 출자금액 ▪ 999억원
 '''
 
+# Excerpt from the retained 2022-03-22 capital-expansion PEF offering
+# (run 43674085399). "국내에 설립된 법인" belongs to the GP qualification;
+# it does not limit the offered fund's investments to domestic companies.
+HISTORICAL_2022 = '''캠코 자본확충형 기업지원펀드(PEF) 운용사 선정계획 공고
+2022년도 한국자산관리공사의 자본확충형 기업지원펀드(PEF, Private Equity Fund) 운용사 선정계획을 아래와 같이 공고합니다.
+2. 선정계획 개요
+운용 방식 ▪ 블라인드 펀드
+선정방식 ▪ 공개모집 공고를 통해 공사가 정한 절차에 따라 선정
+공사 투자금액 ▪ 총 1천억원 이내(필요시 펀드 약정총액의 10% 이내 후순위 투자 가능)
+선정 운용사 ▪ 1개사
+투자대상 투자기구
+▪「자본시장과 금융투자업에 관한 법률」에 의한 기관전용 사모집합투자기구
+▪「자본시장과 금융투자업에 관한 법률」에 의한 일반 사모집합투자기구
+접수일시 ▪ 2022년 4월 19일 14:00 限
+선정결과발표 ▪ 2022년 5월 중(예정)
+3. 투자대상
+□ 주목적 투자대상
+ㅇ 다음 기업의 지분으로 전환·인수 가능한 증권 또는 지분형태 증권 등에 투자기간 내 의무투자비율 이상을 투자
+- 자동차 부품 제조 기업 중 친환경차 Value Chain으로 진출했거나 진출하고자 하는 구조개선기업
+- 친환경차 및 모빌리티 Value Chain 내 사업을 영위하거나 관련 신기술을 사업화 하고자 하는 구조개선기업
+□ 주목적 투자비율 : 60% 이상
+4. 주요 투자조건
+최소결성 금액 ▪ 3,000억원 이상
+운용사 자격
+▪「투자대상 투자기구」의 관련 법규에 따른 펀드 결성과 업무의 집행이 가능한 제안서 접수일 현재 국내에 설립된 법인
+'''
+
 def notice(text=TEXT):
     url = 'https://www.kamco.or.kr/cmm/fms/FileDown.do?atchFileId=FILE_777&fileSn=0'
     raw = b'test file bytes'
@@ -96,6 +123,17 @@ class KamcoTermsTests(unittest.TestCase):
         for title in ['PF사업장 정상화 지원펀드','구조조정 부동산펀드','대출형 펀드','프로젝트 펀드','VC 펀드']:
             n=notice();n['title']=title
             self.assertFalse(pe_track(n))
+
+    def test_actual_2022_pef_offering_keeps_unverified_domestic_scope_held(self):
+        n = notice(HISTORICAL_2022)
+        n.update(date='2022-03-22', title='2022년 캠코 자본확충형 기업지원펀드(PEF) 운용사 선정계획 공고')
+        before = copy.deepcopy(n)
+        # A PE title, blind mandate, explicit terms and a domestic GP address
+        # cannot replace evidence about the fund's actual investment region.
+        self.assertFalse(pe_track(n))
+        with self.assertRaisesRegex(ValueError, 'domestic PE blind offering not verified'):
+            terms(n)
+        self.assertEqual(n, before)
 
 
 if __name__=='__main__':unittest.main()

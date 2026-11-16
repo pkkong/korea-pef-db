@@ -112,6 +112,34 @@ class IaciScheduleIntegrationTests(unittest.TestCase):
             self.assertNotIn('deadline_precision', result)
             self.assertIn('deadline_error', result)
 
+    def test_multi_league_plan_uses_all_five_managers_and_keeps_deadline(self):
+        from services.lp.tests.test_lp_moel_iaci_notice_terms import ALLOCATION_2025
+        n = self.notice()
+        n['body'] = ALLOCATION_2025
+        result = extract_terms(n)
+        self.assertEqual((result['manager_count'], result['commitment_amount_krw']), (5, 240_000_000_000))
+        self.assertEqual(result['deadline'], '2025-04-18T16:00:00+09:00')
+        self.assertEqual([s['manager_count'] for s in result['segments']], [2, 3])
+
+    def test_validated_association_body_uses_the_same_explicit_league_totals(self):
+        from services.lp.src.lp_notice_publication import _terms
+        from services.lp.tests.test_lp_moel_iaci_notice_terms import ALLOCATION_2025
+        n = self.notice()
+        n.update(body=ALLOCATION_2025, source_channel='kvca', url='https://www.kvca.or.kr/Program/invest/listbody.html?po_no=1')
+        result, _ = _terms(n, n, '2026-11-16T00:40:00+00:00')
+        self.assertEqual((result['manager_count'], result['commitment_amount_krw']), (5, 240_000_000_000))
+
+    def test_allocation_conflict_cannot_fall_back_to_the_first_league_count(self):
+        from services.lp.src.lp_notice_publication import _terms
+        from services.lp.tests.test_lp_moel_iaci_notice_terms import ALLOCATION_2025
+        n = self.notice()
+        n['body'] = ALLOCATION_2025.replace('총 2,400억원', '총 2,500억원')
+        result, raw = _terms(n, None, '2026-11-16T00:40:00+00:00')
+        for field in ('manager_count', 'commitment_amount_krw', 'segments', 'commitment_label'):
+            self.assertNotIn(field, result)
+        self.assertTrue(raw['allocation_reading_failed'])
+        self.assertEqual(result['deadline'], '2025-04-18T16:00:00+09:00')
+
 
 if __name__ == '__main__':
     unittest.main()

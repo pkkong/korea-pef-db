@@ -1,4 +1,4 @@
-"""산재보험기금 PE recruitment deadline from the offering's actual schedule.
+"""산재보험기금 PE offering deadlines and explicitly split league allocations.
 
 Observed 2020–2026: the offering calls it "제안서 접수", not "접수마감일".
 The schedule supplies its own four-digit announcement year; a date-only row
@@ -186,3 +186,81 @@ def extract_deadline(n):
     value, precision = (next(iter(times)), 'datetime') if times else (next(iter(days)), 'date')
     return {'deadline': value, 'deadline_precision': precision,
             'extraction_evidence': {'deadline': evidence}}
+
+
+def extract_allocation(n):
+    """Sum a PE-only recruitment's labelled league amounts and planned counts.
+
+    Observed layout: 투자금액: 총 N억원 (대형 A억원(X건), 중형 B억원(Y건) 선정 예정).
+    Simple one-count notices keep their existing parser. Joint PE/VC notices,
+    result rosters and GP qualification examples cannot enter this path. An
+    allocation_error means the caller must remove generic quantity readings;
+    retaining the first league's count would reproduce the original error.
+    """
+    title = n.get('title', '')
+    if (n.get('institution_id') != 'moel_iaci' or '산재보험기금' not in title
+            or not re.search(r'대체투자(?:상품|펀드)', title) or not _PE.search(title)
+            or re.search(r'(?<![A-Za-z])VC(?![A-Za-z])', title, re.I)
+            or re.search(r'취소|철회|중단|정정|수정|변경|연장', title)
+            or notice_stage(title) != '모집 공고'):
+        return {}
+    raw = n.get('body', '')
+    text, positions = _compact(raw)
+    # Current headline only: an example under GP qualifications is not a second
+    # allocation even when it repeats the same words and numeric layout.
+    overview = re.split(r'신청자격|운용사자격|과거운용실적|과거실적|작성예시|※|\*', text, maxsplit=1)[0]
+    scopes = list(re.finditer(r'선정유형[:：]*블라인드PEF?[○□■▪·]*투자금액[:：]*총', overview, re.I))
+    if not scopes:
+        return {}
+    if len(scopes) != 1:
+        return {'allocation_error': '산재보험기금 현재 모집의 투자금액 표기 중복'}
+    scope = scopes[0]
+    if '산재보험기금' not in overview[:scope.start()]:
+        return {}
+    title_years = set(re.findall(r'20\d{2}', title))
+    body_years = set(re.findall(r'(20\d{2})년도?', overview[:scope.start()]))
+    if len(title_years) != 1 or body_years != title_years:
+        return {'allocation_error': '산재보험기금 모집 제목과 본문 사업 연도 불일치 또는 미확인'}
+    rest = overview[scope.end():]
+    header = re.match(r'(?P<amount>.*?)억원(?P<qualifier>이내|내외|이하)?\(', rest)
+    if not header:
+        return {}
+    opening = header.end() - 1
+    depth, closing = 0, None
+    for i, char in enumerate(rest[opening:], opening):
+        depth += char == '('
+        depth -= char == ')'
+        if depth == 0:
+            closing = i
+            break
+    if closing is None:
+        return {'allocation_error': '산재보험기금 리그별 투자금액 괄호 경계 미확인'}
+    allocation = rest[opening + 1:closing]
+    if not re.search(r'[가-힣]+[\d,]+억원', allocation):
+        return {}  # E.g. (3건 선정 예정): no multiple-league reading is needed.
+    number = r'(?:\d{1,3}(?:,\d{3})+|\d+)'
+    row_pattern = re.compile(r'([가-힣]+)(' + number + r')억원\((\d+)건\)')
+    content = re.sub(r'선정예정$', '', allocation)
+    rows = list(row_pattern.finditer(content))
+    if (not allocation.endswith('선정예정') or not re.fullmatch(number, header['amount'])
+            or len(rows) < 2 or ','.join(row[0] for row in rows) != content):
+        return {'allocation_error': '산재보험기금 리그별 금액·선정 예정 수 누락 또는 양식 미확인'}
+    total = int(header['amount'].replace(',', '')) * 100_000_000
+    segments = [{'name': row[1], 'amount_krw': int(row[2].replace(',', '')) * 100_000_000,
+                 'manager_count': int(row[3])} for row in rows]
+    if (total <= 0 or len({s['name'] for s in segments}) != len(segments)
+            or any(s['amount_krw'] <= 0 or s['manager_count'] <= 0 for s in segments)
+            or sum(s['amount_krw'] for s in segments) != total):
+        return {'allocation_error': '산재보험기금 리그별 금액·선정 예정 수와 총계 불일치'}
+    sha = n.get('sha256', '')
+    if not isinstance(sha, str) or not _HASH.fullmatch(sha):
+        return {'allocation_error': '산재보험기금 모집 본문 지문 누락'}
+    proof = {'source_url': n['url'], 'sha256': sha,
+             'quote': _quote(raw, positions, scope.start(), scope.end() + closing + 1)}
+    count = sum(s['manager_count'] for s in segments)
+    qualifier = header['qualifier'] or ''
+    return {'amount_scope': 'pe_only', 'commitment_amount_krw': total,
+            'total_commitment_amount_krw': total,
+            'commitment_label': f'{total / 100_000_000:,.0f}억원' + (' ' + qualifier if qualifier else ''),
+            'manager_count': count, 'manager_count_label': f'{count}개사', 'segments': segments,
+            'extraction_evidence': {'pe_allocation': [proof], 'manager_count': [dict(proof)]}}

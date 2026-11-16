@@ -40,6 +40,7 @@
 
 ## Project Lead Responsibilities
 
+- 사용자와의 진행·완료 대화는 항상 한국어로 한다.
 - Start by clarifying the user goal, current system state, and the smallest useful next milestone.
 - Decide which work should be done locally by the main agent and which work should be delegated.
 - Keep subagent tasks concrete, bounded, and non-overlapping.
@@ -152,6 +153,7 @@ Every non-trivial subagent task should state:
 - 문서는 `현재 상태`와 `기록`을 나눈다. 작업 시작 문서 네 개에는 지금 유효한 상태·규칙·다음 작업만 두고 각각 40KB 이하로 유지한다(`scripts/check_architecture_contracts.py`가 검사). 넘기 전에 오래된 날짜별 항목을 `docs/history/<문서명>/YYYY-MM.md`로 원문 그대로 옮긴다. 현재 상태 표는 덧붙이지 말고 고쳐 쓴다. 사람이 읽을 수 있게 띄어쓰기를 지키고 실행 ID·바이트 수는 근거에 필요한 만큼만 쓴다. 규칙은 [docs/history/README.md](docs/history/README.md).
 - 작업 단위 종료 시: `docs/lp_resume_checkpoint.md`의 `현재 재개 지점`을 고치고, 그 아래에 최신순으로 `작성: Claude` 또는 `작성: Codex`, 로컬 완료와 운영 반영의 구분, 검증 결과, 다음 작은 단위를 남긴다. 기관 범위가 바뀌면 `docs/lp_collection_status.md` 표를, 과제가 끝나거나 생기면 `docs/service_quality_backlog.md`를 고친다. 가능하면 commit까지 마쳐 미커밋 WIP를 남기지 않으며, 남길 경우 그 파일과 이유를 체크포인트에 적는다.
 - 반복 예약(automation/scheduled task)은 두 에이전트 중 한쪽만 켠다. 교대 시 사용자가 이전 쪽을 끄고, 새 담당 에이전트는 켜기 전에 사용자에게 확인한다. GitHub Actions 정기 수집·발행은 에이전트와 무관한 공통 실행 경로이므로 유지한다.
+- 2026-11-16 사용자 승인: LP 미션이 끝날 때까지 사용량이 자연 회복되면 스스로 이어서 한다. 이번 Codex 재개는 기존 `lp-db` 예약 하나를 현재 담당 채팅으로 옮겨 60분 간격으로 활성화하는 승인으로 기록한다. 새 예약을 중복 생성하지 않으며 유료 충전·리셋 사용·예산 증액은 승인하지 않는다. 다음 Claude/Codex 교대에는 위 확인 규칙을 다시 적용한다.
 - 운영 경로는 두 에이전트가 모두 실행할 수 있는 코드·GitHub Actions·문서로만 만든다. 한쪽 도구에만 있는 기능(Codex 전용 automation, Claude 전용 skill 등)에 운영 절차를 의존시키지 않는다.
 - commit에는 작성 에이전트 표시(trailer 등)를 남겨 이력에서 누가 했는지 구분되게 한다.
 - 로컬 검증 기준 환경은 CI와 같은 Python 3.12 + `services/newsletter/web/requirements.txt` + `olefile==0.47` + `pypdf==6.10.0`이며, `python3 scripts/run_regression_tests.py`와 `python3 scripts/check_architecture_contracts.py`를 공통 검사로 쓴다.

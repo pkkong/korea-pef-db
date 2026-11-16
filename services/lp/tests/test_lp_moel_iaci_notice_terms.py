@@ -6,7 +6,7 @@ Selection dates and unrelated LOC/event times must never become the deadline.
 import copy
 import unittest
 
-from services.lp.src.lp_moel_iaci_notice_terms import extract_deadline
+from services.lp.src.lp_moel_iaci_notice_terms import extract_allocation, extract_deadline
 
 
 SAMPLES = {
@@ -208,6 +208,112 @@ class IaciDeadlineTests(unittest.TestCase):
             self.assertEqual(proof['sha256'], 'b' * 64)
             self.assertEqual(proof['source_url'], n['attachments'][0]['url'])
         self.assertEqual(n, before)
+
+
+ALLOCATION_2025 = ('산재보험기금 주간운용사인 삼성자산운용에서 2025년 산재보험기금 대체투자상품 선정계획을 '
+                   '다음과 같이 공고하였음을 알려드립니다. ○ 선정유형: 블라인드 PEF '
+                   '○ 투자금액: 총 2,400억원 (대형 1,200억원(2건), 중형 1,200억원(3건) 선정 예정) '
+                   '※ 기타 자세한 내용은 첨부파일을 참조하시기 바랍니다.')
+
+
+def allocation_notice(body=ALLOCATION_2025):
+    return {'institution_id': 'moel_iaci', 'title': '2025년 산재보험기금 대체투자상품(PEF) 선정 공고',
+            'url': 'https://www.moel.go.kr/info/astmgmt/employ/imchaeBbsView.do?bbs_seq=20',
+            'date': '2025-04-01', 'body': body, 'sha256': 'a' * 64}
+
+
+class IaciAllocationTests(unittest.TestCase):
+    def test_another_years_body_cannot_supply_the_current_allocation(self):
+        n = allocation_notice()
+        n['title'] = n['title'].replace('2025년', '2026년')
+        r = extract_allocation(n)
+        self.assertNotIn('manager_count', r)
+        self.assertIn('사업 연도', r['allocation_error'])
+
+    def test_actual_multi_league_counts_sum_to_five_instead_of_first_two(self):
+        n = allocation_notice()
+        before = copy.deepcopy(n)
+        r = extract_allocation(n)
+        self.assertEqual((r['commitment_amount_krw'], r['total_commitment_amount_krw']),
+                         (240_000_000_000, 240_000_000_000))
+        self.assertEqual((r['manager_count'], r['manager_count_label']), (5, '5개사'))
+        self.assertEqual(r['segments'], [{'name': '대형', 'amount_krw': 120_000_000_000, 'manager_count': 2},
+                                         {'name': '중형', 'amount_krw': 120_000_000_000, 'manager_count': 3}])
+        self.assertNotIn('per_fund_amount_krw', r)
+        self.assertTrue(all('per_fund_amount_krw' not in s for s in r['segments']))
+        for proofs in r['extraction_evidence'].values():
+            for proof in proofs:
+                self.assertIn(proof['quote'], n['body'])
+                self.assertEqual(proof['sha256'], n['sha256'])
+                self.assertEqual(proof['source_url'], n['url'])
+        self.assertEqual(n, before)
+
+    def test_number_of_leagues_and_values_are_read_from_current_source(self):
+        n = allocation_notice(ALLOCATION_2025.replace(
+            '총 2,400억원 (대형 1,200억원(2건), 중형 1,200억원(3건) 선정 예정)',
+            '총 3,300억원 이내 (대형 1,100억원(1건), 중형 1,100억원(2건), 소형 1,100억원(3건) 선정 예정)'))
+        n['title'] = n['title'].replace('2025', '2031')
+        n['date'] = '2031-04-01'
+        n['body'] = n['body'].replace('2025', '2031')
+        r = extract_allocation(n)
+        self.assertEqual(r['commitment_label'], '3,300억원 이내')
+        self.assertEqual((r['manager_count'], len(r['segments'])), (6, 3))
+
+    def test_league_amount_count_or_coverage_errors_produce_no_quantity(self):
+        for body in (ALLOCATION_2025.replace('총 2,400억원', '총 2,500억원'),
+                     ALLOCATION_2025.replace('총 2,400억원', '총 2,40억원'),
+                     ALLOCATION_2025.replace('중형 1,200억원(3건)', '중형 1,200억원(0건)'),
+                     ALLOCATION_2025.replace(', 중형 1,200억원(3건)', ''),
+                     ALLOCATION_2025.replace('중형 1,200억원(3건)', '중형 1,200억원()'),
+                     ALLOCATION_2025.replace('중형', '대형'),
+                     ALLOCATION_2025.replace('선정 예정)', '선정 예정')):
+            with self.subTest(body=body):
+                r = extract_allocation(allocation_notice(body))
+                self.assertIn('allocation_error', r)
+                for field in ('manager_count', 'commitment_amount_krw', 'segments', 'per_fund_amount_krw'):
+                    self.assertNotIn(field, r)
+
+    def test_joint_title_or_joint_current_investment_type_is_excluded(self):
+        for year in (2024, 2026):
+            n = allocation_notice()
+            n['title'] = f'{year}년 산재보험기금 대체투자상품(PEF, VC) 선정 공고'
+            self.assertEqual(extract_allocation(n), {})
+        body = ALLOCATION_2025.replace('선정유형: 블라인드 PEF', '선정유형: 블라인드 PEF 및 VC')
+        self.assertEqual(extract_allocation(allocation_notice(body)), {})
+
+    def test_single_count_layouts_2020_to_2023_keep_their_existing_parser(self):
+        for year, total, count in ((2020, 1500, 3), (2021, 1000, 2), (2022, 1500, 3), (2023, 2000, 4)):
+            with self.subTest(year=year):
+                n = allocation_notice(f'{year}년 산재보험기금 대체투자상품 선정계획을 공고합니다. '
+                    f'□ 선정유형: 블라인드 PEF □ 투자금액: 총 {total:,}억원 ({count}건 선정 예정)')
+                n['title'] = f'{year}년 산재보험기금 대체투자상품(PEF) 선정 공고'
+                self.assertEqual(extract_allocation(n), {})
+
+    def test_result_and_amendment_titles_never_supply_recruitment_quantities(self):
+        n = allocation_notice()
+        for title in (n['title'].replace('선정 공고', '선정 최종 결과 안내'),
+                      '(취소) ' + n['title'], '(변경) ' + n['title'], '(수정공고) ' + n['title']):
+            self.assertEqual(extract_allocation({**n, 'title': title}), {})
+
+    def test_other_fund_and_gp_qualification_examples_cannot_supply_quantities(self):
+        n = allocation_notice()
+        self.assertEqual(extract_allocation({**n, 'institution_id': 'moel_eif'}), {})
+        self.assertEqual(extract_allocation({**n, 'body': n['body'].replace('산재보험기금', '고용보험기금')}), {})
+        for caption in ('신청 자격', '운용사 자격', '과거 운용실적', '작성 예시'):
+            self.assertEqual(extract_allocation(allocation_notice(caption + ' ' + ALLOCATION_2025)), {})
+        decoy = ALLOCATION_2025 + ' 신청 자격: 과거 GP 투자금액 총 50,000억원 (대형 25,000억원(10건), 중형 25,000억원(20건) 선정 예정)'
+        r = extract_allocation(allocation_notice(decoy))
+        self.assertEqual((r['commitment_amount_krw'], r['manager_count']), (240_000_000_000, 5))
+
+    def test_duplicate_current_allocation_or_missing_body_hash_is_held(self):
+        repeated = ALLOCATION_2025.split('※')[0] * 2
+        r = extract_allocation(allocation_notice(repeated))
+        self.assertIn('allocation_error', r)
+        n = allocation_notice()
+        n['sha256'] = ''
+        r = extract_allocation(n)
+        self.assertIn('지문 누락', r['allocation_error'])
+        self.assertNotIn('manager_count', r)
 
 
 if __name__ == '__main__':
