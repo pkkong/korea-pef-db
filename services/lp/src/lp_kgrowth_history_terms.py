@@ -507,16 +507,25 @@ def review_bundle(bundle, *, valid_name, known_gp_names=()):
     try:
         from .lp_kgrowth_scaleup_history import parse_scaleup_notice
         from .lp_kgrowth_multifund_history import parse_multifund_notice
+        from .lp_kgrowth_joint_history import parse_materials_joint_notice
     except ImportError:
         from lp_kgrowth_scaleup_history import parse_scaleup_notice
         from lp_kgrowth_multifund_history import parse_multifund_notice
+        from lp_kgrowth_joint_history import parse_materials_joint_notice
     notices, errors = _check_metadata(bundle)
     groups, unassigned, expanded = defaultdict(list), [], []
+    joint_offerings, joint_holds = [], []
     derived = {}
     for n in notices:
         if re.search(r'온라인\s*설명회|질의응답|FAQ|제출서류|서식|접수방식|소개자료', n['title'], re.I):
             unassigned.append({'url': n['url'], 'reason': '설명회·양식·보충 안내, 모집·결과로 쓰지 않음'})
             continue
+        try:
+            joint = parse_materials_joint_notice(n)
+            if joint:
+                joint_offerings.append(joint)
+        except ValueError as exc:
+            joint_holds.append({'source_url': n['url'], 'reason': str(exc)})
         try:
             reading = parse_scaleup_notice(n) or parse_multifund_notice(n)
             if reading:
@@ -604,11 +613,13 @@ def review_bundle(bundle, *, valid_name, known_gp_names=()):
                                'attachment_bytes_present': any(n.get('attachment_bytes') for n in notices),
                                'detail_raw_replayed': False, 'attachment_bytes_replayed': False},
             'groups': output, 'unassigned': unassigned, 'expanded_offerings': expanded,
+            'joint_offerings': joint_offerings, 'joint_holds': joint_holds,
             'summary': {'retained_notices': len(bundle.get('notices', [])), 'groups': len(output),
                         'parsed_offerings': sum(g['offering'] is not None for g in output),
                         'parsed_pe_offerings': sum(g['offering'] is not None for g in output),
                         'parsed_mixed_offerings': sum(g['held_offering'] is not None for g in output),
                         'parsed_pe_roster_tracks': sum(len(g['rosters']) for g in output),
+                        'parsed_joint_offerings': len(joint_offerings),
                         'by_year': dict(sorted(Counter(n['date'][:4] for n in notices).items()))}}
 
 
