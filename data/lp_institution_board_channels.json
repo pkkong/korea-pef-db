@@ -205,7 +205,6 @@
       "channel_id": "moel_eif_ocio",
       "institution_id": "moel_eif",
       "adapter": "miraeasset_ocio",
-      "enabled": false,
       "listing_url": "https://securities.miraeasset.com/bbs/board/message/list.do?categoryId=66",
       "search_param": "searchText",
       "searches": [

@@ -503,7 +503,7 @@ def collect(configs=None, fetch_factory=Session, checked_at=None, retry_failures
             coverage.update(lookback_days=config['lookback_days'], window_start=cutoff, window_end=observed_day.isoformat())
         urls = list(listing_urls(config))
         for url in urls:
-            search = parse_qsl(urlsplit(url).query)
+            search = parse_qsl(urlsplit(url).query, encoding=getattr(adapter(config), 'QUERY_ENCODING', 'utf-8'), errors='strict')
             search = next((value for key, value in search if key == config.get('search_param')), '')
             stream=(urlsplit(url).path,search) if institution=='nh_central' else search
             cursor_walk = getattr(adapter(config), 'next_listing_url', None)

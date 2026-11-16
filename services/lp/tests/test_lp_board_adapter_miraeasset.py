@@ -75,8 +75,8 @@ class MiraeAssetTests(unittest.TestCase):
             return boards.collect({'moel_eif_ocio': c}, fetch_factory=lambda c: fetch or default,
                                   checked_at=STAMP, retry_failures=False)
 
-    def test_pending_channel_belongs_to_the_fund_and_uses_annual_windows(self):
-        self.assertNotIn('moel_eif_ocio', boards.load_configs())
+    def test_channel_belongs_to_the_fund_and_uses_annual_windows(self):
+        self.assertIn('moel_eif_ocio', boards.load_configs())
         self.assertEqual(config()['institution_id'], 'moel_eif')
         self.assertIs(boards.adapter(config()), ma)
         windows = [ma._listing_query(u, config()) for u in urls()]
@@ -98,6 +98,7 @@ class MiraeAssetTests(unittest.TestCase):
         self.assertEqual(report['holds'], [])
         self.assertEqual(len(report['notices']), 1)
         self.assertEqual(len(report['coverage']['moel_eif_ocio']['listing_boundaries']), 4)
+        self.assertEqual({b['search'] for b in report['coverage']['moel_eif_ocio']['listing_boundaries']}, {'고용보험기금'})
         n = report['notices'][0]
         self.assertEqual(n['source_id'], 'moel_eif:miraeasset:2343655')
         self.assertEqual(boards.validate_notice(n, STAMP, config()), n)
@@ -185,11 +186,7 @@ class MiraeAssetTests(unittest.TestCase):
         own = boards.collect({'moel_eif': c}, fetch_factory=lambda c: fetch, checked_at=STAMP, retry_failures=False)
         self.assertEqual(len(own['notices']), 1, own['holds'])
         n = self.collect()['notices'][0]
-        # Publication validation uses active channels; pending status must be lifted
-        # only after the read-only runner check. Simulate that gate in this test.
-        active = {**boards.load_configs(), 'moel_eif_ocio': config(enabled=True)}
-        with patch.object(boards, 'load_configs', return_value=active):
-            programs, holds = publish_basic_notices({'programs': [], 'institution_notices': own['notices'] + [n]}, [], STAMP)
+        programs, holds = publish_basic_notices({'programs': [], 'institution_notices': own['notices'] + [n]}, [], STAMP)
         self.assertEqual(len(programs), 1, holds)
         self.assertEqual(programs[0]['status'], '선정 완료')
         self.assertEqual([g['name'] for g in programs[0]['selected_gps']], ['에이치앤큐에쿼티파트너스', '제네시스프라이빗에쿼티'])

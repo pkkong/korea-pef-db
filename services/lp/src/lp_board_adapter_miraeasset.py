@@ -21,6 +21,7 @@ LIST_PATH = '/bbs/board/message/list.do'
 DETAIL_PATH = '/bbs/board/message/view.do'
 FUND = '고용보험기금'
 MAX_HTML = 2_000_000
+QUERY_ENCODING = 'euc-kr'
 _VIEW = re.compile(r"javascript:view\('([1-9]\d{0,9})','\d+'\)")
 _FIELDS = {'categoryId', 'searchType', 'searchText', 'startId', 'startPage',
            'curPage', 'listType', 'searchStartYear', 'searchStartMonth',
