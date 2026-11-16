@@ -5,10 +5,12 @@ try:
     from .lp_attachment_policy import is_submission_attachment
     from .lp_shared_notice_terms import extract_offering_sources
     from .lp_kfcc_notice_terms import allocation as kfcc_allocation
+    from .lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
 except ImportError:
     from lp_attachment_policy import is_submission_attachment
     from lp_shared_notice_terms import extract_offering_sources
     from lp_kfcc_notice_terms import allocation as kfcc_allocation
+    from lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
 
 NUM = r'(\d[\d,]*)'
 
@@ -124,4 +126,19 @@ def extract_terms(n):
             result.update(deadline=next(iter(days)), deadline_precision='date')
         else:
             result.update(deadline=next(iter(deadlines)), deadline_precision='datetime')
+    specific = iaci_deadline(n)
+    if specific:
+        conflict = specific.get('deadline_error') or result.get('deadline_error')
+        if specific.get('deadline') and result.get('deadline'):
+            current, revised = result['deadline'], specific['deadline']
+            if current[:10] != revised[:10] or (len(current) > 10 and len(revised) > 10 and current != revised):
+                conflict = '접수 일정 표와 다른 원문 마감 불일치'
+        if conflict:
+            result.pop('deadline', None)
+            result.pop('deadline_precision', None)
+            evidence.pop('deadline', None)
+            result['deadline_error'] = conflict
+        else:
+            result.update(deadline=specific['deadline'], deadline_precision=specific['deadline_precision'])
+            evidence.setdefault('deadline', []).extend(specific['extraction_evidence']['deadline'])
     return result

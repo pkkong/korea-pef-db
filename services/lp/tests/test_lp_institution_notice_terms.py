@@ -73,5 +73,45 @@ class DeadlineCaptionTests(unittest.TestCase):
         self.assertNotIn('deadline', result)
 
 
+class IaciScheduleIntegrationTests(unittest.TestCase):
+    def notice(self, year=2025):
+        from services.lp.tests.test_lp_moel_iaci_notice_terms import notice
+        return notice(year)
+
+    def test_schedule_deadline_keeps_other_offering_facts_and_attachment_evidence(self):
+        n = self.notice()
+        n['body'] += ' 위탁운용금액: 총 2,400억원 이내'
+        result = extract_terms(n)
+        self.assertEqual(result['deadline'], '2025-04-18T16:00:00+09:00')
+        self.assertEqual(result['commitment_amount_krw'], 240_000_000_000)
+        self.assertEqual(result['extraction_evidence']['deadline'][0]['source_url'], n['attachments'][0]['url'])
+
+    def test_joint_schedule_uses_pe_closing_time_through_the_publication_term_path(self):
+        from services.lp.src.lp_notice_publication import _terms
+        result, raw = _terms(self.notice(2024), None, '2026-11-16T00:40:00+00:00')
+        self.assertEqual(result['deadline'], '2024-11-05T11:00:00+09:00')
+        self.assertEqual(result['deadline_precision'], 'datetime')
+        self.assertNotIn('deadline_error', raw)
+
+    def test_conflicting_body_and_table_do_not_fall_back_to_a_generic_date(self):
+        n = self.notice()
+        n['body'] += ' 접수마감일: 2025. 4. 19. 16:00'
+        result = extract_terms(n)
+        self.assertNotIn('deadline', result)
+        self.assertNotIn('deadline_precision', result)
+        self.assertNotIn('deadline', result['extraction_evidence'])
+        self.assertIn('불일치', result['deadline_error'])
+
+    def test_cancelled_or_amended_notice_drops_even_an_explicit_generic_deadline(self):
+        for label in ('취소', '정정'):
+            n = self.notice()
+            n['title'] = f'({label}) ' + n['title']
+            n['body'] += ' 접수마감일: 2025. 4. 18. 16:00'
+            result = extract_terms(n)
+            self.assertNotIn('deadline', result)
+            self.assertNotIn('deadline_precision', result)
+            self.assertIn('deadline_error', result)
+
+
 if __name__ == '__main__':
     unittest.main()
