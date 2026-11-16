@@ -1,6 +1,6 @@
 # 프로젝트 리드 현재 상태판
 
-갱신: 2026-11-17 03:30 KST (작성: Codex)
+갱신: 2026-11-17 04:36 KST (작성: Codex)
 
 새 작업을 시작하는 에이전트(Codex·Claude)가 가장 먼저 읽는 현재 상태 문서다. 여기에는 지금 유효한 상태·구조·규칙·다음 작업만 둔다. 날짜별 작업 기록은 [`docs/history/`](history/README.md)로 옮긴다. 2026-11-13 이전의 전체 기록은 [history/project_lead_control_center/until-2026-11-13.md](history/project_lead_control_center/until-2026-11-13.md)에 원문 그대로 있다.
 
@@ -84,7 +84,7 @@
 공통 검사(로컬 기준 환경: Python 3.12 + `services/newsletter/web/requirements.txt` + `olefile==0.47` + `pypdf==6.10.0`):
 
 ```bash
-python3 scripts/run_regression_tests.py          # 2026-11-17 기준 1,569검사
+python3 scripts/run_regression_tests.py          # 2026-11-17 기준 1,570검사
 python3 scripts/check_architecture_contracts.py
 npm ci --prefix scripts/tests/sql --ignore-scripts && npm test --prefix scripts/tests/sql
 ```
