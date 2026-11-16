@@ -18,10 +18,16 @@ from http.cookiejar import CookieJar
 from pathlib import Path
 from urllib.parse import parse_qs, urljoin, urlparse
 from urllib.request import HTTPCookieProcessor, Request, build_opener
-from kgrowth_program_review import recipes, candidate_queue, link_suggestions, reviewed_programs
-from lp_attachment_text import extract_attachment
-from kgrowth_notice_terms import discovery as discover_terms
-from kgrowth_listing import BASE, LIST_URL, discover_window
+try:
+    from .kgrowth_program_review import recipes, candidate_queue, link_suggestions, reviewed_programs
+    from .lp_attachment_text import extract_attachment
+    from .kgrowth_notice_terms import discovery as discover_terms
+    from .kgrowth_listing import BASE, LIST_URL, discover_window
+except ImportError:
+    from kgrowth_program_review import recipes, candidate_queue, link_suggestions, reviewed_programs
+    from lp_attachment_text import extract_attachment
+    from kgrowth_notice_terms import discovery as discover_terms
+    from kgrowth_listing import BASE, LIST_URL, discover_window
 
 ROOT = Path(__file__).resolve().parents[3]
 PROGRAM_ID = "kgrowth-2026-bank-valueup-3"

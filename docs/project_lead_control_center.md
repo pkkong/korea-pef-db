@@ -1,6 +1,6 @@
 # 프로젝트 리드 현재 상태판
 
-갱신: 2026-11-16 17:05 KST (작성: Codex)
+갱신: 2026-11-16 21:40 KST (작성: Codex)
 
 새 작업을 시작하는 에이전트(Codex·Claude)가 가장 먼저 읽는 현재 상태 문서다. 여기에는 지금 유효한 상태·구조·규칙·다음 작업만 둔다. 날짜별 작업 기록은 [`docs/history/`](history/README.md)로 옮긴다. 2026-11-13 이전의 전체 기록은 [history/project_lead_control_center/until-2026-11-13.md](history/project_lead_control_center/until-2026-11-13.md)에 원문 그대로 있다.
 
@@ -70,6 +70,7 @@
 | LP 정기 | `audit-lp-official-inventory` | 일요일 10:00, 공식 목록 독립 대조 |
 | LP 정기 | `find-lp-reported-results` | 월요일 08:43, 브리프 기사에서 선정 결과 보도 후보 찾기(읽기 전용, [절차](lp_reported_results_operations.md)) |
 | LP 복구·진단 | `recover-lp-publication`, `diagnose-lp-board-http`, `diagnose-lp-inventory-failures` | 발행 복구, 공식 응답 제한 진단, 감사 실패 진단 |
+| LP 원문 확인 | `verify-lp-kgrowth-history` | 요청 파일 push로 자동 선택한 과거 묶음의 누락 상세 최대2건 보존·재생. DB·발행 없음 |
 | LP 과거 이력 | `discover-lp-history`, `discover-ktcu-history`, `inspect-lp-history`, `collect-lp-history-bodies`, `collect-lp-history-attachments`, `collect-kgrowth-history-attachments`, `plan-lp-history-attachments`, `prepare-lp-history-publication`, `publish-lp-history` | 2020년 이후 이력 수집(진행 중 과제) |
 | LP 배포·설정 | `deploy-lp-vercel`, `deploy-lp-source-worker`, `configure-lp-reviewer` | 앱 배포, 서울 경유 수집 중계, 검토자 설정 |
 | 브리프 | `deploy-newsletter-pages`(매일 08:37), `newsletter-watchdog`(09:22), `sync-newsletter-supabase`, `deploy-newsletter-vercel`, `apply-newsletter-supabase-migration`, `check-newsletter-vercel-readiness` | 미러 수집·빌드 → Supabase 동기화 → Vercel |
@@ -83,7 +84,7 @@
 공통 검사(로컬 기준 환경: Python 3.12 + `services/newsletter/web/requirements.txt` + `olefile==0.47` + `pypdf==6.10.0`):
 
 ```bash
-python3 scripts/run_regression_tests.py          # 2026-11-16 기준 1,507검사
+python3 scripts/run_regression_tests.py          # 2026-11-16 기준 1,521검사
 python3 scripts/check_architecture_contracts.py
 npm ci --prefix scripts/tests/sql --ignore-scripts && npm test --prefix scripts/tests/sql
 ```

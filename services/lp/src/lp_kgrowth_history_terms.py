@@ -1,9 +1,10 @@
 """Offline review of retained Korea Growth 2020–2022 notice text.
 
 This is deliberately not a public-program adapter or source validator. The review
-bundle has listing HTML and parsed body/attachment text, but lacks detail HTML
-and attachment bytes. Matching their stored metadata is useful for review; it
-cannot replace replaying those originals before publication.
+bundle has listing HTML and parsed body/attachment text. The original 162-row
+bundle omits detail bytes; attachment bytes are in a separate workflow artifact.
+Matching stored metadata cannot replace replaying those originals. The companion
+lp_kgrowth_history_replay module reports that distinct evidence check.
 
 The first supported offering layouts are the explicitly separated PEF/PDF tables
 observed in 2020/2021. Other legal-form mixtures stay held. Names are read only

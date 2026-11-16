@@ -1,0 +1,59 @@
+name: Verify retained LP KGrowth history
+
+# A request-file push only: recover missing raw detail evidence for one
+# automatically selected group. No DB credentials, publication, manual dispatch,
+# attachment downloads or notice-ID inputs. Originals stay in an artifact.
+on:
+  push:
+    branches: [main]
+    paths:
+      - data/lp_kgrowth_history_check_request.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Load the pinned retained bundle
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, re, subprocess
+          request = json.loads(pathlib.Path('data/lp_kgrowth_history_check_request.json').read_bytes())
+          assert set(request) == {'bundle_commit', 'bundle_sha256', 'reason', 'attempt'}
+          commit, digest = request['bundle_commit'], request['bundle_sha256']
+          assert re.fullmatch(r'[a-f0-9]{40}', commit)
+          assert re.fullmatch(r'[a-f0-9]{64}', digest)
+          assert type(request['attempt']) is int and request['attempt'] > 0
+          subprocess.run(['git', 'fetch', '--no-tags', '--depth=1', 'origin', commit], check=True)
+          raw = subprocess.check_output(['git', 'show', commit + ':kgrowth.json'])
+          assert len(raw) <= 40 * 1024 * 1024
+          assert hashlib.sha256(raw).hexdigest() == digest
+          out = pathlib.Path('/tmp/lp-kgrowth-history-check')
+          out.mkdir()
+          (out / 'bundle.json').write_bytes(raw)
+          (out / 'request.json').write_text(json.dumps(request, ensure_ascii=False, indent=2))
+          PY
+      - name: Recover at most two missing detail pages
+        run: |
+          python3 services/lp/src/lp_kgrowth_history_replay.py \
+            --bundle /tmp/lp-kgrowth-history-check/bundle.json \
+            --capture-details --out /tmp/lp-kgrowth-history-check/capture.json
+      - name: Keep raw responses including a failed attempt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lp-kgrowth-history-check
+          path: /tmp/lp-kgrowth-history-check
+          retention-days: 90
+          if-no-files-found: error

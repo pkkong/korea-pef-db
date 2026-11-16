@@ -1,0 +1,6 @@
+{
+  "bundle_commit": "8044b5d7b107481a70b3b2bb7891cd19dfd66898",
+  "bundle_sha256": "a5b4c1d35660dbbbcd376149e6856814e4405242452a5dc63458b9a3d5bca97b",
+  "reason": "저장된 펀드/연도/회차와 PE 명단으로 자동 선택한 첫 검토 묶음의 누락 상세만 최대2건 보완. 첨부85개 원본은 기존 artifact를 재사용하며 DB/공개 변경은 없다.",
+  "attempt": 1
+}

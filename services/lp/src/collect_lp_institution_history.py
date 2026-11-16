@@ -71,6 +71,17 @@ def _listing_row(receipt, notice_url, config):
     return matches[0] if len(matches) == 1 else None
 
 
+def kgrowth_attachment_text(raw):
+    """Use the same reader when collecting and replaying a retained attachment."""
+    if raw[:5] == b'%PDF-':
+        return _kgrowth_tools()[1](raw)['text']
+    if raw[:4] == b'\xd0\xcf\x11\xe0':
+        return boards.attachment_text(raw, 'attachment.hwp')
+    if raw[:2] == b'PK':
+        return boards.attachment_text(raw, 'attachment.hwpx')
+    raise ValueError('unrecognised attachment format')
+
+
 def _kgrowth_notice(row, listing_receipt, body_fetch, session_factory, checked_at, holds):
     control, read_attachment, read_body, list_url, canonical_url = _kgrowth_tools()
     ident = row['source_id'] if re.fullmatch(r'[1-9]\d*', str(row['source_id'])) else \
@@ -96,14 +107,7 @@ def _kgrowth_notice(row, listing_receipt, body_fetch, session_factory, checked_a
             file = file['raw'] if isinstance(file, dict) else file
             if control._blocked(file[:4096].decode('cp949', errors='ignore')):
                 raise ValueError('public file blocked')
-            if file[:5] == b'%PDF-':
-                text = read_attachment(file)['text']
-            elif file[:4] == b'\xd0\xcf\x11\xe0':
-                text = boards.attachment_text(file, 'attachment.hwp')
-            elif file[:2] == b'PK':
-                text = boards.attachment_text(file, 'attachment.hwpx')
-            else:
-                raise ValueError('unrecognised attachment format')
+            text = kgrowth_attachment_text(file)
             n['attachment_bytes'][file_url] = base64.b64encode(file).decode('ascii')
             n['attachment_hashes'][file_url] = hashlib.sha256(file).hexdigest()
             if text:
