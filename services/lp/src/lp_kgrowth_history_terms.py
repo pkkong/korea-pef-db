@@ -6,8 +6,9 @@ bundle omits detail bytes; attachment bytes are in a separate workflow artifact.
 Matching stored metadata cannot replace replaying those originals. The companion
 lp_kgrowth_history_replay module reports that distinct evidence check.
 
-The first supported offering layouts are the explicitly separated PEF/PDF tables
-observed in 2020/2021. Other legal-form mixtures stay held. Names are read only
+The first supported PE layouts are the explicitly separated PEF/PDF tables
+observed in 2020/2021. Two common-budget layouts can also be reviewed, but their
+mixed legal forms stay in held_offering, never PE tracks. Names are read only
 from a matching final result's labelled PEF sections, with planned fund counts
 checked separately from the number of managers in a Co-GP team.
 """
@@ -32,6 +33,7 @@ except ImportError:
 KIND = 'lp_kgrowth_history_review_v1'
 _HASH = re.compile(r'[a-f0-9]{64}')
 _NUMBER = r'(?:[1-9]\d{0,2}(?:,\d{3})+|[1-9]\d*)'
+_BULLET = r'[ㅇᄋ◦]'
 _WINDOW = ('2020-01-01', '2022-12-31')
 _TABLE = ('리그모펀드출자총액선정운용사수운용사별배정금액'
           '펀드별최소결성금액모펀드출자비율')
@@ -217,23 +219,173 @@ def _two_track_table(text):
         'evidence_quote': head + budget[0] + '선정운용사수' + budget[1][:count.end()]}
 
 
+def _shared_scope(text, parsed):
+    """Current investment/legal-form sections, not GP/LP domestic qualifications."""
+    legal = re.search(r'출자대상투자기구(.+?)운용사신청자격', text)
+    target = re.search(r'2\.출자분야및투자대상(.+?)3\.주요출자조건', text)
+    if not legal or not target:
+        raise ValueError('공통 모집의 투자기구·현재 투자대상 구간 미확인')
+    if not ('기관전용사모집합투자기구' in legal[1]
+            and '벤처투자조합' in legal[1] and '신기술사업투자조합' in legal[1]):
+        raise ValueError('공통 모집의 혼합 투자기구 양식 미확인')
+    parsed.update(pe_scope_verified=False, blind_track_observed=False,
+                  domestic_investment_verified=bool(re.search(
+                      r'법인형태의국내중소·중견기업', target[1]))
+                      and not bool(re.search(r'국외|해외|외국', target[1])),
+                  scope_hold='PE·VC 허용 법형태가 혼합되어 독립 PE 블라인드 트랙 미확인')
+    parsed['evidence_quotes'] = {'legal_scope': legal[0], 'strategy': target[0]}
+    return target[1]
+
+
+def _shared_anchor_matching_table(text):
+    head = ('선정운용사수분야선정운용사수운용사별출자금액'
+            '최소결성금액출자비율')
+    if head not in text or '투자대상은중소·중견기업및사모펀드의LP지분' not in text:
+        return None
+    row = (r'([1-9]\d?)개(' + _NUMBER + r')억원(' + _NUMBER
+           + r')억원(100|[1-9]?\d)%이하')
+    pattern = (r'위탁운용금액' + _BULLET + '(' + _NUMBER + r')억원이내\(([^()]+)\)'
+               + re.escape(head) + r'앵커' + row + r'매칭' + row + r'출자대상투자기구')
+    hits = list(re.finditer(pattern, text))
+    if len(hits) != 1:
+        raise ValueError('앵커·매칭 공통 금액·상한 표 미확인')
+    hit = hits[0]
+    tracks = []
+    for label, start in [('앵커', 3), ('매칭', 7)]:
+        tracks.append({'label': label, 'planned_fund_count': int(hit[start]),
+                       'amount_krw': _money(hit[start + 1]),
+                       'amount_basis': '운용사별 계획 출자금액',
+                       'minimum_fund_size_krw': _money(hit[start + 2]),
+                       'lp_ratio_max_pct': int(hit[start + 3])})
+    total = _money(hit[1])
+    notes = re.findall('(' + _NUMBER + r')억원', hit[2])
+    if (not notes or sum(_money(v) for v in notes) != total
+            or total != sum(t['amount_krw'] * t['planned_fund_count'] for t in tracks)):
+        raise ValueError('앵커·매칭 공통 출자금액과 명시 총액 불일치')
+    parsed = {'layout': 'shared_anchor_matching_secondary', 'shared_tracks': tracks,
+              'shared_planned_amount_krw': total, 'amount_bound': '이내',
+              'evidence_quote': hit[0]}
+    target = _shared_scope(text, parsed)
+    obligation = re.search(r'\(앵커\)약정총액의(100|[1-9]?\d)%이상투자-'
+                           r'\(매칭\)모펀드출자금액의([1-9]\d*(?:\.\d+)?)배이상투자', target)
+    domestic = re.search(r'펀드의투자금액기준,국내중소·중견기업비중이(100|[1-9]?\d)%이상인', target)
+    if ('투자대상은중소·중견기업및사모펀드의LP지분' not in target
+            or not obligation or not domestic):
+        raise ValueError('LP지분 투자대상·분모별 의무투자 양식 미확인')
+    tracks[0]['investment_obligation'] = {'min_pct': int(obligation[1]), 'basis': '약정총액'}
+    tracks[1]['investment_obligation'] = {'min_multiple': obligation[2], 'basis': '모펀드 출자금액'}
+    parsed['strategy'] = {'kind': 'lp_interest_secondary',
+                          'target_fund_domestic_sme_min_pct': int(domestic[1]),
+                          'domestic_basis': '인수 대상 기존 펀드의 투자금액 비중; 순수 PE 제한 아님'}
+    schedule = re.search(r'신청기간:공고일이후부터소진시까지' + _BULLET + r'접수일시:'
+                         r'신청기간내매월마지막영업일에접수', text)
+    parsed['deadline'] = ''
+    if schedule:
+        parsed['deadline_kind'] = 'budget_exhaustion'
+        parsed['application_cadence'] = 'monthly_last_business_day'
+        parsed['evidence_quotes']['deadline'] = schedule[0]
+    else:
+        parsed['deadline_error'] = '소진 시 종료·매월 마지막 영업일 접수조건 미확인'
+    return parsed
+
+
+def _shared_fixed_deadline(text, year):
+    """Two explicit recruitment rows must agree; other event dates are irrelevant."""
+    day = r'(20\d{2})년([1-9]\d?)월([1-9]\d?)일\(([월화수목금토일])\)'
+    clock = r'([01]\d|2[0-3]):([0-5]\d)'
+    heads = list(re.finditer(r'접수일시' + _BULLET + day + r'\(' + clock + r'限\)', text))
+    rows = list(re.finditer(r'(20\d{2})\.([1-9]\d?)\.([1-9]\d?)\(([월화수목금토일])\)'
+                            r'제안서접수' + clock + r'~' + clock, text))
+    if len(heads) != 1 or len(rows) != 1:
+        return {'deadline': '', 'deadline_error': '접수일시와 선정일정의 단일 마감 행 미확인'}
+    head, row = heads[0], rows[0]
+    try:
+        stated, scheduled = date(*map(int, head.group(1, 2, 3))), date(*map(int, row.group(1, 2, 3)))
+    except ValueError:
+        return {'deadline': '', 'deadline_error': '접수일의 실제 달력 날짜 미확인'}
+    if (str(stated.year) != year or stated != scheduled
+            or '월화수목금토일'[stated.weekday()] != head[4]
+            or '월화수목금토일'[scheduled.weekday()] != row[4]
+            or head.group(5, 6) != row.group(7, 8)
+            or row.group(5, 6) >= row.group(7, 8)):
+        return {'deadline': '', 'deadline_error': '접수일·요일·연도 또는 마감 시각 충돌'}
+    return {'deadline': f'{stated.isoformat()}T{head[5]}:{head[6]}:00+09:00',
+            'deadline_kind': 'fixed',
+            'evidence_quotes': {'deadline': head[0], 'deadline_schedule': row[0]}}
+
+
+def _shared_single_table(text, year):
+    head = '위탁운용금액및선정운용사수'
+    if (head not in text or '선정운용사수출자금액최소결성금액' not in text
+            or '사업재편기업에최소결성금액의' not in text
+            or '사업재편승인기업에최소결성금액의' not in text):
+        return None
+    pattern = (re.escape(head) + _BULLET + r'총(' + _NUMBER + r')억원이상'
+               r'선정운용사수출자금액최소결성금액([1-9]\d?)개사('
+               + _NUMBER + r')억원\*(' + _NUMBER + r')억원\*공동출자자:'
+               r'([^*]+?)출자출자대상투자기구')
+    hits = list(re.finditer(pattern, text))
+    if len(hits) != 1:
+        raise ValueError('공통 출자금액·최소결성금액 표 미확인')
+    hit = hits[0]
+    contributors = re.findall(r'([^,\d]+)(' + _NUMBER + r')억원', hit[5])
+    minimums = re.findall(r'3\.주요출자조건항목내용최소결성금액' + _BULLET
+                          + '(' + _NUMBER + r')억원이상', text)
+    if (not contributors or ','.join(f'{name}{money}억원' for name, money in contributors) != hit[5]
+            or sum(_money(money) for _, money in contributors) != _money(hit[3])
+            or _money(hit[1]) != _money(hit[4]) or len(minimums) != 1
+            or _money(minimums[0]) != _money(hit[4])):
+        raise ValueError('공동 출자금액 합계 또는 최소결성금액 불일치')
+    parsed = {'layout': 'shared_single_reorganization',
+              'shared_tracks': [{'label': '공통 모집', 'planned_fund_count': int(hit[2]),
+                                 'amount_krw': _money(hit[3]), 'minimum_fund_size_krw': _money(hit[4])}],
+              'shared_planned_amount_krw': _money(hit[3]),
+              'shared_contributors': [{'name': name, 'amount_krw': _money(money)} for name, money in contributors],
+              'evidence_quote': hit[0]}
+    target = _shared_scope(text, parsed)
+    obligations = re.search(r'사업재편기업에최소결성금액의(100|[1-9]?\d)%이상투자주1\)'
+                            r'2사업재편승인기업에최소결성금액의(100|[1-9]?\d)%이상투자', target)
+    if not obligations:
+        raise ValueError('사업재편 투자대상·최소결성금액 의무비율 양식 미확인')
+    parsed['strategy'] = {'kind': 'business_reorganization', 'obligation_basis': '최소결성금액',
+                          'reorganization_min_pct': int(obligations[1]),
+                          'approved_reorganization_min_pct': int(obligations[2]),
+                          'overlap_permitted': '단일투자건의주목적투자대상중복적용가능' in target}
+    deadline = _shared_fixed_deadline(text, year)
+    parsed['evidence_quotes'].update(deadline.pop('evidence_quotes', {}))
+    parsed.update(deadline)
+    return parsed
+
+
+def _offering_identity(n, text):
+    identity = _identity(n)
+    years = set(re.findall(r'(20\d{2})년', text[:350]))
+    if identity['fund'] not in text[:350] or years and years != {identity['year']}:
+        raise ValueError('모집 첨부의 펀드명·연도가 게시물과 다름')
+    return identity
+
+
 def _offering(n):
     readings = []
     for url, raw in n.get('attachment_texts', {}).items():
         text = _compact(raw)
         if not re.search(r'선정계획(?:을아래와같이)?공고|선정계획공고', text[:350]):
             continue
-        parsed = _three_track_table(text) or _two_track_table(text)
+        parsed = (_three_track_table(text) or _two_track_table(text)
+                  or _shared_anchor_matching_table(text) or _shared_single_table(text, _identity(n)['year']))
         if parsed:
-            identity = _identity(n)
-            years = set(re.findall(r'(20\d{2})년', text[:350]))
-            if identity['fund'] not in text[:350] or years and years != {identity['year']}:
-                raise ValueError('모집 첨부의 펀드명·연도가 게시물과 다름')
+            _offering_identity(n, text)
             quote = _source_quote(raw, parsed.pop('evidence_quote'))
             parsed['evidence'] = _evidence(n, quote, url)
+            for field, normalized in parsed.pop('evidence_quotes', {}).items():
+                parsed[field + '_evidence'] = _evidence(n, _source_quote(raw, normalized), url)
             parsed['amount_basis'] = '공고의 모집 계획, 실제 GP별 배정액 아님'
-            parsed['blind_track_observed'] = True
-            parsed['domestic_investment_verified'] = False
+            if 'tracks' in parsed:
+                parsed['blind_track_observed'] = True
+                parsed['domestic_investment_verified'] = False
+            elif parsed.get('deadline') and parsed['deadline'][:10] < n['date']:
+                parsed['deadline'] = ''
+                parsed['deadline_error'] = '모집 게시일보다 앞선 접수 마감'
             readings.append(parsed)
     if len(readings) > 1:
         raise ValueError('같은 공고의 지원 양식 첨부가 여러 개임')
@@ -298,6 +450,29 @@ def _rosters(n, offering, *, valid_name, known):
     return results, holds
 
 
+def _shared_early_close(n, identity):
+    text = _compact(n['body'])
+    quote = re.search(r'금번[「『][^」』]+[」』]출자사업의위탁운용금액소진이완료되어,'
+                      r'잔여신청기간에도불구하고출자사업을조기에마감함을알려드립니다\.', text)
+    if not quote:
+        return None
+    if identity['fund'] not in quote[0]:
+        raise ValueError('조기마감 본문의 펀드명이 모집과 다름')
+    return {'kind': 'early_close', 'notice_date': n['date'], 'actual_deadline': '',
+            'date_basis': '조기마감 공고 게시일; 실제 접수 종료일·시각은 미명시',
+            'evidence': _evidence(n, _source_quote(n['body'], quote[0]))}
+
+
+def _changed_shared_terms(original, changes):
+    """Keep the old recruitment evidence, without presenting superseded terms."""
+    return {'layout': original['layout'], 'terms_status': '변경·취소 검토',
+            'pe_scope_verified': False, 'deadline': '', 'shared_tracks': [],
+            'original_recruitment_terms': original,
+            'change_notices': [{'source_url': n['url'], 'date': n['date'], 'title': n['title'],
+                                'evidence': _evidence(n, n['body'])}
+                               for n in sorted(changes, key=lambda n: (n['date'], n['url']))]}
+
+
 def review_bundle(bundle, *, valid_name, known_gp_names=()):
     """Return reproducible review groups, never public-program or approved GP rows.
 
@@ -322,14 +497,22 @@ def review_bundle(bundle, *, valid_name, known_gp_names=()):
         entries = [n for _, n in members]
         offerings = [n for n in entries if notice_stage(n['title']) == '모집 공고']
         results = [n for n in entries if notice_stage(n['title']) in {'선정 결과', '최종 선정'}]
+        changes = [n for n in entries if notice_stage(n['title']) == '변경 공고']
         group = {'identity': identity, 'notices': [{'url': n['url'], 'date': n['date'],
                   'title': n['title'], 'stage': notice_stage(n['title'])} for n in sorted(entries, key=lambda n: n['date'])],
-                 'offering': None, 'rosters': [], 'holds': []}
+                 'offering': None, 'held_offering': None, 'rosters': [], 'holds': []}
         if len(offerings) != 1:
             group['holds'].append({'reason': '같은 펀드·연도·회차의 모집 공고가 없거나 여러 개임'})
         else:
             try:
-                group['offering'] = _offering(offerings[0])
+                parsed = _offering(offerings[0])
+                if 'shared_tracks' in parsed:
+                    group['held_offering'] = parsed
+                    group['holds'].append({'source_url': offerings[0]['url'], 'reason': parsed['scope_hold']})
+                    if parsed.get('deadline_error'):
+                        group['holds'].append({'source_url': offerings[0]['url'], 'reason': parsed['deadline_error']})
+                else:
+                    group['offering'] = parsed
             except ValueError as exc:
                 group['holds'].append({'source_url': offerings[0]['url'], 'reason': str(exc)})
         if group['offering'] and results:
@@ -343,6 +526,23 @@ def review_bundle(bundle, *, valid_name, known_gp_names=()):
                     group['holds'].append({'source_url': results[0]['url'], 'reason': str(exc)})
         if group['offering']:
             group['holds'].append({'reason': '상세 HTML·첨부 원본 재생과 국내 투자범위 검증 필요'})
+        if group['held_offering']:
+            shared = group['held_offering']
+            if results and shared.get('deadline_kind') == 'budget_exhaustion':
+                if len(results) != 1 or results[0]['date'] < offerings[0]['date']:
+                    group['holds'].append({'reason': '조기마감 결과가 여러 개이거나 모집보다 앞섬'})
+                else:
+                    try:
+                        closure = _shared_early_close(results[0], identity)
+                        if closure:
+                            shared['closure_event'] = closure
+                    except ValueError as exc:
+                        group['holds'].append({'source_url': results[0]['url'], 'reason': str(exc)})
+            group['holds'].append({'reason': '상세 HTML·첨부 원본 재생 필요; 혼합 모집은 PE 공개 승인 아님'})
+            if changes:
+                group['held_offering'] = _changed_shared_terms(shared, changes)
+                group['holds'].append({'source_urls': [n['url'] for n in changes],
+                    'reason': '같은 사업의 정정·연장·취소 후속 공고로 기존 모집조건을 현재값으로 쓰지 않음'})
         output.append(group)
     return {'kind': KIND, 'publication_ready': False, 'raw_replay_required': True,
             'source_checked_at': bundle.get('checked_at'),
@@ -354,6 +554,8 @@ def review_bundle(bundle, *, valid_name, known_gp_names=()):
             'groups': output, 'unassigned': unassigned,
             'summary': {'retained_notices': len(bundle.get('notices', [])), 'groups': len(output),
                         'parsed_offerings': sum(g['offering'] is not None for g in output),
+                        'parsed_pe_offerings': sum(g['offering'] is not None for g in output),
+                        'parsed_mixed_offerings': sum(g['held_offering'] is not None for g in output),
                         'parsed_pe_roster_tracks': sum(len(g['rosters']) for g in output),
                         'by_year': dict(sorted(Counter(n['date'][:4] for n in notices).items()))}}
 
