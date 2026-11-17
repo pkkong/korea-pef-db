@@ -1,0 +1,80 @@
+name: Verify LP historical import without publishing
+
+# Read-only preflight only. No manual dispatch, operating import request,
+# source HTTP, deployment, database writes or baseline state in artifacts.
+on:
+  push:
+    branches: [main]
+    paths:
+      - data/lp_history_import_check_request.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lp-program-collection
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install LP validation and read-only database dependencies
+        run: python3 -m pip install -r services/lp/web/requirements.txt 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47'
+      - name: Verify pinned official source bundle and request
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, re, subprocess
+          from services.lp.src.collect_lp_institution_boards import load_configs
+          request = json.loads(pathlib.Path('data/lp_history_import_check_request.json').read_bytes())
+          assert set(request) == {'kind', 'institution_id', 'bundle_commit', 'bundle_sha256',
+                                  'candidate_sha256', 'candidate_checked_at', 'reason'}
+          assert request['kind'] == 'lp_history_import_check_request_v1'
+          institution = request['institution_id']
+          assert re.fullmatch(r'[a-z_]+', institution) and institution != 'kgrowth'
+          assert institution in load_configs(include_pending=True)
+          assert re.fullmatch(r'[a-f0-9]{40}', request['bundle_commit'])
+          for key in ('bundle_sha256', 'candidate_sha256'):
+              assert re.fullmatch(r'[a-f0-9]{64}', request[key])
+          subprocess.run(['git', 'fetch', '--no-tags', '--depth=1', 'origin', request['bundle_commit']], check=True)
+          raw = subprocess.check_output(['git', 'show', request['bundle_commit'] + ':' + institution + '.json'])
+          assert len(raw) <= 40 * 1024 * 1024
+          assert hashlib.sha256(raw).hexdigest() == request['bundle_sha256']
+          assert json.loads(raw)['institution_id'] == institution
+          inputs = pathlib.Path('/tmp/lp-history-import-input'); inputs.mkdir()
+          (inputs / 'bundle.json').write_bytes(raw)
+          out = pathlib.Path('/tmp/lp-history-import-check'); out.mkdir()
+          (out / 'request.json').write_text(json.dumps(request, ensure_ascii=False, indent=2))
+          PY
+      - name: Check preservation, read-only queries and offline page rendering
+        run: python3 -m unittest services.lp.tests.test_lp_history_import_preflight
+      - name: Rebuild the pinned candidate and compare a read-only operating snapshot
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS: '1'
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, subprocess
+          out = pathlib.Path('/tmp/lp-history-import-check')
+          request = json.loads((out / 'request.json').read_text())
+          subprocess.run(['python3', 'services/lp/src/lp_history_import_preflight.py',
+                          '--bundle', '/tmp/lp-history-import-input/bundle.json',
+                          '--sha256', request['candidate_sha256'],
+                          '--candidate-checked-at', request['candidate_checked_at'],
+                          '--candidate-output', str(out / 'candidate-import.json'),
+                          '--output', str(out / 'preflight.json')], check=True)
+          PY
+      - name: Keep the public-source candidate and summary only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lp-history-import-check
+          path: /tmp/lp-history-import-check
+          retention-days: 30
+          if-no-files-found: error

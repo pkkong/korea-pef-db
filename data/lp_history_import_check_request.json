@@ -1,0 +1,9 @@
+{
+  "kind": "lp_history_import_check_request_v1",
+  "institution_id": "kbiz",
+  "bundle_commit": "973f4ebf4fa6ffe9cb3a120a2115541438e79749",
+  "bundle_sha256": "a11ac5df6d46914a7e5e5d52a65cdf38f833964522d28c710d521bf082ca6be0",
+  "candidate_sha256": "663425b0b6b3bb6aa6174f2f6b7cd71daaec9b0828d1a345818cf59e09039781",
+  "candidate_checked_at": "2026-11-16T13:34:09.139259+00:00",
+  "reason": "기존 공개 주소·조건·선정 명단·과거 원문·별칭을 보존하며 중기중앙회2020/2021 후보를 추가할 수 있는지 고정 원문과 읽기 전용 운영 상태로 재구성해 검증한다. DB 갱신·발행·수동 실행·원기관 HTTP·운영 상태나 비공개 메모의 artifact 출력은 없다."
+}
