@@ -1,28 +1,13 @@
 {
-  "label": "boards",
-  "attempt": 3,
+  "label": "kdb-2020-2025",
+  "attempt": 4,
   "start": "2020-01-01",
-  "end": "2026-11-15",
-  "reason": "사용자 결정 2026-11-14: 2020년 이후 PE 공고 전수. 4차(11/15): 국민연금 2020~2024 옛 첨부 표기(KD…) 수정 반영, 실패 상세 쪽 크게 보관. 성장금융 2020~2022는 lp-history-bundles-kgrowth 브랜치(3차).",
+  "end": "2025-12-31",
+  "reason": "산업은행 옛 공고 목록은 관측됐으나 기존16기관 과거 수집 대상에는 빠져 있었다. 기존 읽기 전용 경로로 2020~2025 범위의 최신 후보6건만 표본 수집해 목록·본문·첨부 원본과 실패를 보존한다. 공고ID 입력·DB 쓰기·발행·수동 dispatch는 없으며 공개 사업 수를 늘리지 않는다.",
   "institutions": [
-    "poba",
-    "geps",
-    "mmaa",
-    "sema",
-    "kbiz",
-    "tp",
-    "kamco",
-    "moel_iaci",
-    "moel_eif",
-    "kfcc",
-    "pck_pension",
-    "nps",
-    "nh_central",
-    "suhyup",
-    "cwma",
-    "cu"
+    "kdb"
   ],
-  "max_pages": 150,
-  "page_budget": 1500,
-  "max_notices": 400
+  "max_pages": 12,
+  "page_budget": 36,
+  "max_notices": 6
 }

@@ -1,6 +1,6 @@
 # 프로젝트 리드 현재 상태판
 
-갱신: 2026-11-17 14:31 KST (작성: Codex)
+갱신: 2026-11-17 15:05 KST (작성: Codex)
 
 새 작업을 시작하는 에이전트(Codex·Claude)가 가장 먼저 읽는 현재 상태 문서다. 여기에는 지금 유효한 상태·구조·규칙·다음 작업만 둔다. 날짜별 작업 기록은 [`docs/history/`](history/README.md)로 옮긴다. 2026-11-13 이전의 전체 기록은 [history/project_lead_control_center/until-2026-11-13.md](history/project_lead_control_center/until-2026-11-13.md)에 원문 그대로 있다.
 
