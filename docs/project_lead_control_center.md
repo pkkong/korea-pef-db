@@ -70,7 +70,7 @@
 | LP 정기 | `audit-lp-official-inventory` | 일요일 10:00, 공식 목록 독립 대조 |
 | LP 정기 | `find-lp-reported-results` | 월요일 08:43, 브리프 기사에서 선정 결과 보도 후보 찾기(읽기 전용, [절차](lp_reported_results_operations.md)) |
 | LP 복구·진단 | `recover-lp-publication`, `diagnose-lp-board-http`, `diagnose-lp-inventory-failures` | 발행 복구, 공식 응답 제한 진단, 감사 실패 진단 |
-| LP 원문 확인 | `verify-lp-kgrowth-history` | 요청 파일 push로 자동 선택한 PE 명단 묶음 또는 공동 원모집 첫2건의 누락 상세 최대2GET 보존·재생. 첨부 재사용, DB·발행 없음 |
+| LP 원문 확인 | `verify-lp-kgrowth-history` | 요청 파일 push로 누락 상세 최대2GET 또는 별도 보도자료 첫 목록1GET 보존. 행·명단 승인/첨부 요청/DB/발행 없음 |
 | LP 가져오기 확인 | `verify-lp-history-import` | 고정 원본으로 후보를 재구성하고 읽기 전용 운영 상태와 기존 사업·원문·별칭·크기 보존을 비교. 운영 상태·검토 메모를 artifact에 내보내지 않음. DB 쓰기·발행 없음 |
 | LP 과거 이력 | `discover-lp-history`, `discover-ktcu-history`, `inspect-lp-history`, `collect-lp-history-bodies`, `collect-lp-history-attachments`, `collect-kgrowth-history-attachments`, `plan-lp-history-attachments`, `prepare-lp-history-publication`, `publish-lp-history` | 2020년 이후 이력 수집(진행 중 과제) |
 | LP 배포·설정 | `deploy-lp-vercel`, `deploy-lp-source-worker`, `configure-lp-reviewer` | 앱 배포, 서울 경유 수집 중계, 검토자 설정 |
@@ -85,7 +85,7 @@ LP 미션의 운영 workflow 실행·배포는 2026-11-17 승인 범위에서 �
 공통 검사(로컬 기준 환경: Python 3.12 + `services/newsletter/web/requirements.txt` + `olefile==0.47` + `pypdf==6.10.0`):
 
 ```bash
-python3 scripts/run_regression_tests.py          # 2026-11-17 기준 1,659검사
+python3 scripts/run_regression_tests.py          # 2026-11-17 기준 1,680검사
 python3 scripts/check_architecture_contracts.py
 npm ci --prefix scripts/tests/sql --ignore-scripts && npm test --prefix scripts/tests/sql
 ```
