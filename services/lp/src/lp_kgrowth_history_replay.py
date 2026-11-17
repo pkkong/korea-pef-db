@@ -1,7 +1,8 @@
 """Recover and replay one source-discovered historical KGrowth group.
 
-The text review selects a supported offering with an official PE roster. No
-notice IDs are supplied by an operator. A capture only fetches missing detail
+The text review selects a supported offering with an official PE roster, or a
+bounded batch of hosted joint originals. No notice IDs are supplied by an
+operator. A capture only fetches missing detail
 pages, once each, and saves bounded responses before parsing. Attachments are
 reused from the original collection artifact. This module never writes a DB,
 projects a public program, or treats successful replay as domestic PE approval.
@@ -36,6 +37,7 @@ MAX_DETAIL_BYTES = 12 * 1024 * 1024
 MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_INPUT_BYTES = 40 * 1024 * 1024
 _FIELDS = ('source_id', 'url', 'title', 'date', 'body', 'sha256', 'attachments')
+REVIEW_SCOPES = ('pe_roster', 'joint_originals')
 
 
 def _sha(raw):
@@ -54,16 +56,34 @@ def _stamp(value):
     return stamp
 
 
-def target_group(bundle):
+def target_group(bundle, *, review_scope='pe_roster'):
     """Choose a complete reviewable group; no hand-picked notice-ID queue."""
+    if review_scope not in REVIEW_SCOPES:
+        raise ValueError('지원하지 않는 원문 검토 범위')
     report = review_bundle(bundle, valid_name=_rule_valid_name)
     if report['metadata_check']['errors']:
         raise ValueError('보관 목록·본문 메타 검증 실패')
-    candidates = [g for g in report['groups'] if g['offering'] and g['rosters']]
-    if not candidates:
-        return None, []
-    group = candidates[0]  # review groups already have stable fund/year/round order
-    urls = {n['url'] for n in group['notices']}
+    if review_scope == 'joint_originals':
+        if report['joint_holds']:
+            raise ValueError('공동 모집 판독 보류를 먼저 확인해야 함')
+        candidates = sorted(report['joint_offerings'], key=lambda g: (
+            g['identity']['fund'], g['identity']['year'], g['identity']['round'], g['source_url']))
+        if not candidates:
+            raise ValueError('자동 판독된 공동 원모집이 없음')
+        identities = [tuple(g['identity'][k] for k in ('fund', 'year', 'round')) for g in candidates]
+        if len(set(identities)) != len(identities):
+            raise ValueError('공동 원모집의 사업·연도·회차 중복')
+        selected = candidates[:2]
+        group = {'identity': {'kind': 'hosted_joint_originals',
+                             'programs': [g['identity'] for g in selected]},
+                 'remaining_candidates': len(candidates) - len(selected)}
+        urls = {g['source_url'] for g in selected}
+    else:
+        candidates = [g for g in report['groups'] if g['offering'] and g['rosters']]
+        if not candidates:
+            return None, []
+        group = candidates[0]  # review groups already have stable fund/year/round order
+        urls = {n['url'] for n in group['notices']}
     notices = sorted((n for n in bundle['notices'] if n['url'] in urls),
                      key=lambda n: (n['date'], n['url']))
     if len(notices) > 4:
@@ -87,10 +107,13 @@ def _detail(n, encoded, expected_sha):
     return raw
 
 
-def _captured(bundle, capture, notices):
+def _captured(bundle, capture, notices, *, review_scope='pe_roster', group=None):
     if capture is None:
         return {}
     if (capture.get('kind') != KIND or capture.get('bundle_content_sha256') != _bundle_sha(bundle)
+            or capture.get('review_scope', 'pe_roster') != review_scope
+            or capture.get('identity') != (group['identity'] if group else None)
+            or capture.get('remaining_candidates', 0) != (group.get('remaining_candidates', 0) if group else 0)
             or capture.get('planned_urls') != [n['url'] for n in notices]
             or len(capture.get('responses', [])) > 4):
         raise ValueError('상세 보완의 원래 묶음·자동 선택 불일치')
@@ -117,14 +140,15 @@ def _captured(bundle, capture, notices):
     return found
 
 
-def capture_details(bundle, fetch, *, checked_at=None, retain=lambda report: None, limit=2):
+def capture_details(bundle, fetch, *, checked_at=None, retain=lambda report: None, limit=2,
+                    review_scope='pe_roster'):
     """At most four detail GETs, one per missing page, stopping at first failure.
 
     ``retain`` persists the response receipt before any HTML parsing, including
     denied/truncated/changed pages. A failed capture is evidence, never a retry
     cursor. A new attempt needs a reviewed request change.
     """
-    group, notices = target_group(bundle)
+    group, notices = target_group(bundle, review_scope=review_scope)
     if (type(limit) is not int or not 1 <= limit <= 4 or
             sum(not n['discovery_provenance'].get('detail_response_base64') for n in notices) > limit):
         raise ValueError('상세 보완 요청 상한 초과; 묶음을 나눠 추정 연결하지 않음')
@@ -133,6 +157,8 @@ def capture_details(bundle, fetch, *, checked_at=None, retain=lambda report: Non
             any(_stamp(stamp) < _stamp(n['checked_at']) for n in notices)):
         raise ValueError('상세 보완 시각이 원래 관측 전 또는 현재보다 미래임')
     report = {'kind': KIND, 'bundle_content_sha256': _bundle_sha(bundle),
+              'review_scope': review_scope,
+              'remaining_candidates': group.get('remaining_candidates', 0) if group else 0,
               'identity': group['identity'] if group else None,
               'planned_urls': [n['url'] for n in notices], 'responses': [], 'holds': [],
               'requests': 0, 'published': False, 'database_writes': 0}
@@ -156,7 +182,7 @@ def capture_details(bundle, fetch, *, checked_at=None, retain=lambda report: Non
                      'raw_base64': base64.b64encode(retained).decode('ascii')}
             report['responses'].append(entry)
             retain(report)  # save even an error response before parsing it
-            _captured(bundle, report, notices)
+            _captured(bundle, report, notices, review_scope=review_scope, group=group)
         except Exception as exc:
             report['holds'].append({'url': n['url'], 'reason': f'{type(exc).__name__}: {str(exc)[:300]}'})
             retain(report)
@@ -164,13 +190,13 @@ def capture_details(bundle, fetch, *, checked_at=None, retain=lambda report: Non
     return report
 
 
-def replay_group(bundle, load_attachment, *, capture=None):
+def replay_group(bundle, load_attachment, *, capture=None, review_scope='pe_roster'):
     """Replay current raw evidence; preserve old response hashes separately."""
-    group, notices = target_group(bundle)
+    group, notices = target_group(bundle, review_scope=review_scope)
     # A failed receipt is not silently turned into usable source evidence.
     if capture and capture.get('holds'):
         raise ValueError('실패 응답 보완은 진단 후 별도 검토 필요')
-    recovered = _captured(bundle, capture, notices)
+    recovered = _captured(bundle, capture, notices, review_scope=review_scope, group=group)
     results, holds = [], []
     for n in notices:
         detail, attachments = None, []
@@ -203,6 +229,8 @@ def replay_group(bundle, load_attachment, *, capture=None):
             holds.append({'url': n['url'], 'reason': str(exc)[:300]})
         results.append({'url': n['url'], 'detail': detail, 'attachments': attachments})
     return {'kind': 'lp_kgrowth_history_replay_v1', 'bundle_content_sha256': _bundle_sha(bundle),
+            'review_scope': review_scope,
+            'remaining_candidates': group.get('remaining_candidates', 0) if group else 0,
             'identity': group['identity'] if group else None, 'notices': results, 'holds': holds,
             'raw_replay_complete': bool(notices) and not holds,
             'publication_ready': False, 'domestic_investment_approved': False}
@@ -237,6 +265,7 @@ def main(argv=None):
     mode.add_argument('--capture-details', action='store_true')
     mode.add_argument('--assets', type=Path)
     parser.add_argument('--capture', type=Path)
+    parser.add_argument('--review-scope', choices=REVIEW_SCOPES, default='pe_roster')
     args = parser.parse_args(argv)
     if args.out.resolve() in {p.resolve() for p in (args.bundle, args.capture) if p}:
         parser.error('입력 원문·보완 영수증을 덮어쓸 수 없습니다')
@@ -256,17 +285,19 @@ def main(argv=None):
     if args.capture_details:
         if args.capture:
             parser.error('실패 보완을 자동 재시도하지 않습니다')
-        report = capture_details(bundle, fetch_detail, retain=save)
+        report = capture_details(bundle, fetch_detail, retain=save, review_scope=args.review_scope)
     else:
         def load(sha):
             path = args.assets / sha
             if path.stat().st_size > MAX_FILE_BYTES:
                 raise ValueError('첨부 원본 25MiB 상한 초과')
             return path.read_bytes()
-        report = replay_group(bundle, load, capture=read_json(args.capture) if args.capture else None)
+        report = replay_group(bundle, load, capture=read_json(args.capture) if args.capture else None,
+                              review_scope=args.review_scope)
         save(report)
     print(json.dumps({k: v for k, v in report.items() if k in
-                      {'kind', 'identity', 'holds', 'requests', 'raw_replay_complete', 'publication_ready'}}, ensure_ascii=False))
+                      {'kind', 'identity', 'review_scope', 'remaining_candidates', 'holds', 'requests',
+                       'raw_replay_complete', 'publication_ready'}}, ensure_ascii=False))
     return 1 if report['holds'] else 0
 
 

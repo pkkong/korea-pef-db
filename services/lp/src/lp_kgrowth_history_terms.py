@@ -508,10 +508,12 @@ def review_bundle(bundle, *, valid_name, known_gp_names=()):
         from .lp_kgrowth_scaleup_history import parse_scaleup_notice
         from .lp_kgrowth_multifund_history import parse_multifund_notice
         from .lp_kgrowth_joint_history import parse_materials_joint_notice
+        from .lp_kgrowth_newdeal_joint_history import parse_newdeal_joint_notice
     except ImportError:
         from lp_kgrowth_scaleup_history import parse_scaleup_notice
         from lp_kgrowth_multifund_history import parse_multifund_notice
         from lp_kgrowth_joint_history import parse_materials_joint_notice
+        from lp_kgrowth_newdeal_joint_history import parse_newdeal_joint_notice
     notices, errors = _check_metadata(bundle)
     groups, unassigned, expanded = defaultdict(list), [], []
     joint_offerings, joint_holds = [], []
@@ -521,7 +523,7 @@ def review_bundle(bundle, *, valid_name, known_gp_names=()):
             unassigned.append({'url': n['url'], 'reason': '설명회·양식·보충 안내, 모집·결과로 쓰지 않음'})
             continue
         try:
-            joint = parse_materials_joint_notice(n)
+            joint = parse_materials_joint_notice(n) or parse_newdeal_joint_notice(n)
             if joint:
                 joint_offerings.append(joint)
         except ValueError as exc:

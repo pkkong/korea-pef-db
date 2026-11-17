@@ -11,6 +11,9 @@ from unittest.mock import patch
 
 from services.lp.src import lp_kgrowth_history_replay as replay
 from services.lp.tests.test_lp_kgrowth_history_terms import iii
+from services.lp.tests.test_lp_kgrowth_history_terms import bundle, notice
+from services.lp.tests.test_lp_kgrowth_joint_history import materials, OFFER, TITLE, BODY
+from services.lp.tests.test_lp_kgrowth_newdeal_joint_history import newdeal
 
 STAMP = '2026-11-16T12:31:00+00:00'
 
@@ -192,6 +195,89 @@ class GrowthReplayTests(unittest.TestCase):
         self.assertIsNone(replay._NoRedirect().redirect_request(None, None, 302, '', {}, 'https://other.example'))
         with self.assertRaises(ValueError):
             replay.fetch_detail('https://other.example/notice_view.asp?idx=489')
+
+    def test_joint_originals_are_selected_without_a_roster_or_source_id_input(self):
+        b = bundle(materials())
+        group, selected = replay.target_group(b, review_scope='joint_originals')
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(group['identity']['kind'], 'hosted_joint_originals')
+        self.assertEqual(selected[0]['institution_id'], 'kgrowth')
+        self.assertEqual(replay.target_group(b), (None, []))
+        before = copy.deepcopy(b)
+        n = selected[0]
+        captured, calls = self.capture(b, {n['url']: detail(n)}, review_scope='joint_originals')
+        self.assertEqual(captured['holds'], [])
+        self.assertEqual(calls, [n['url']])
+        self.assertEqual(b, before)
+        self.assertEqual(captured['database_writes'], 0)
+        self.assertFalse(captured['published'])
+
+    def test_joint_selection_is_stable_bounded_and_reports_remaining_sources(self):
+        ns = [notice(str(471 + i), TITLE.replace('(2차)', f'({i+2}차)'), '2021-04-01', BODY,
+                     OFFER.replace('(2차)', f'({i+2}차)')) for i in range(3)]
+        b = bundle(*reversed(ns))
+        group, selected = replay.target_group(b, review_scope='joint_originals')
+        b['notices'].reverse()
+        other, ordered = replay.target_group(b, review_scope='joint_originals')
+        self.assertEqual(group, other)
+        self.assertEqual([n['url'] for n in selected], [n['url'] for n in ordered])
+        self.assertEqual(len(selected), 2)
+        self.assertEqual(group['remaining_candidates'], 1)
+        with self.assertRaisesRegex(ValueError, '상한'):
+            self.capture(b, {}, limit=1, review_scope='joint_originals')
+
+    def test_different_joint_plans_are_selected_without_reassigning_or_merging_them(self):
+        b = bundle(materials(), newdeal())
+        group, ns = replay.target_group(b, review_scope='joint_originals')
+        self.assertEqual(len(ns), 2)
+        self.assertEqual([i['year'] for i in group['identity']['programs']], ['2021', '2021'])
+        self.assertEqual([i['round'] for i in group['identity']['programs']], ['2차', '정시'])
+        self.assertEqual({n['institution_id'] for n in ns}, {'kgrowth'})
+        self.assertEqual([n['date'] for n in ns], ['2020-12-29', '2021-04-01'])
+        result, calls = self.capture(b, {n['url']: detail(n) for n in ns}, review_scope='joint_originals')
+        self.assertEqual(result['holds'], [])
+        self.assertEqual(result['requests'], 2)
+        self.assertEqual(calls, [n['url'] for n in ns])
+        self.assertEqual(result['remaining_candidates'], 0)
+
+    def test_joint_capture_and_attachment_replay_preserve_source_identity(self):
+        b = bundle(materials())
+        n = b['notices'][0]
+        attachment = b'%PDF joint fixture'
+        url = n['attachments'][0]
+        n['attachment_hashes'][url] = hashlib.sha256(attachment).hexdigest()
+        captured, _ = self.capture(b, {n['url']: detail(n)}, review_scope='joint_originals')
+        with patch.object(replay, 'kgrowth_attachment_text', return_value=OFFER):
+            result = replay.replay_group(b, lambda sha: attachment, capture=captured, review_scope='joint_originals')
+        self.assertTrue(result['raw_replay_complete'], result['holds'])
+        self.assertFalse(result['publication_ready'])
+        self.assertFalse(result['domestic_investment_approved'])
+        self.assertEqual(result['review_scope'], 'joint_originals')
+        for key, value in [('review_scope', 'pe_roster'), ('identity', {'fund': '다른 사업'}),
+                           ('remaining_candidates', 999)]:
+            changed = copy.deepcopy(captured)
+            changed[key] = value
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, '자동 선택'):
+                replay.replay_group(b, lambda sha: attachment, capture=changed, review_scope='joint_originals')
+
+    def test_joint_scope_rejects_unknown_empty_held_and_duplicate_candidates_before_http(self):
+        for b, scope in [(bundle(materials()), 'arbitrary_id'), (iii(), 'joint_originals'),
+                         (bundle(materials(OFFER.replace('3,100 5,000', '3,200 5,000'))), 'joint_originals'),
+                         (bundle(materials(), notice('472', TITLE, '2021-04-01', BODY, OFFER)), 'joint_originals')]:
+            with self.subTest(scope=scope), patch.object(replay, 'fetch_detail') as fetch:
+                with self.assertRaises(ValueError):
+                    replay.capture_details(b, fetch, checked_at=STAMP, review_scope=scope)
+                fetch.assert_not_called()
+
+    def test_pre_scope_pe_receipts_still_replay_without_recapture(self):
+        b, raw, attachment = fixture()
+        captured, _ = self.capture(b, raw)
+        del captured['review_scope']
+        del captured['remaining_candidates']
+        text = next(iter(b['notices'][0]['attachment_texts'].values()))
+        with patch.object(replay, 'kgrowth_attachment_text', return_value=text):
+            result = replay.replay_group(b, lambda sha: attachment, capture=captured)
+        self.assertTrue(result['raw_replay_complete'])
 
 
 if __name__ == '__main__':
