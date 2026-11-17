@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from services.lp.src import lp_kgrowth_history_replay as replay
+from services.lp.src import lp_kgrowth_press_probe as press
 from services.lp.tests.test_lp_kgrowth_history_terms import iii
 from services.lp.tests.test_lp_kgrowth_history_terms import bundle, notice
 from services.lp.tests.test_lp_kgrowth_joint_history import materials, OFFER, TITLE, BODY
@@ -278,6 +279,48 @@ class GrowthReplayTests(unittest.TestCase):
         with patch.object(replay, 'kgrowth_attachment_text', return_value=text):
             result = replay.replay_group(b, lambda sha: attachment, capture=captured)
         self.assertTrue(result['raw_replay_complete'])
+
+    def test_press_cli_preserves_one_raw_response_without_using_notice_identities(self):
+        b, _, _ = fixture()
+        raw = b'<html><body>Unparsed press board</body></html>'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path, out = root/'bundle.json', root/'press.json'
+            path.write_text(json.dumps(b))
+            with patch.object(press, 'fetch_press_listing', return_value={
+                    'raw': raw, 'http_status': 200, 'geturl': press.PRESS_LISTING_URL}) as fetch:
+                self.assertEqual(replay.main(['--bundle', str(path), '--capture-details',
+                                              '--review-scope', 'press_listing', '--out', str(out)]), 0)
+            fetch.assert_called_once_with(press.PRESS_LISTING_URL)
+            report = json.loads(out.read_text())
+            self.assertEqual(report['kind'], press.KIND)
+            self.assertEqual(report['context_bundle_sha256'], hashlib.sha256(path.read_bytes()).hexdigest())
+            self.assertEqual(base64.b64decode(report['raw_base64']), raw)
+            self.assertFalse(report['parsed'])
+            self.assertFalse(report['source_health_verified'])
+            with self.assertRaises(ValueError):
+                replay.replay_group(b, lambda sha: None, capture=report)
+
+    def test_press_scope_never_weakens_the_existing_group_selector(self):
+        b, _, _ = fixture()
+        with self.assertRaisesRegex(ValueError, '범위'):
+            replay.target_group(b, review_scope='press_listing')
+
+    def test_press_listing_cannot_be_used_as_a_replayed_notice_or_overwrite_an_input(self):
+        b, _, _ = fixture()
+        with tempfile.TemporaryDirectory() as directory:
+            path, out = Path(directory)/'bundle.json', Path(directory)/'out.json'
+            path.write_text(json.dumps(b))
+            with patch.object(press, 'fetch_press_listing') as fetch, self.assertRaises(SystemExit):
+                replay.main(['--bundle', str(path), '--assets', directory,
+                             '--review-scope', 'press_listing', '--out', str(out)])
+            fetch.assert_not_called()
+            self.assertFalse(out.exists())
+            before = path.read_bytes()
+            with self.assertRaises(SystemExit):
+                replay.main(['--bundle', str(path), '--capture-details',
+                             '--review-scope', 'press_listing', '--out', str(path)])
+            self.assertEqual(path.read_bytes(), before)
 
 
 if __name__ == '__main__':

@@ -38,6 +38,7 @@ MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_INPUT_BYTES = 40 * 1024 * 1024
 _FIELDS = ('source_id', 'url', 'title', 'date', 'body', 'sha256', 'attachments')
 REVIEW_SCOPES = ('pe_roster', 'joint_originals')
+CAPTURE_SCOPES = REVIEW_SCOPES + ('press_listing',)
 
 
 def _sha(raw):
@@ -265,8 +266,10 @@ def main(argv=None):
     mode.add_argument('--capture-details', action='store_true')
     mode.add_argument('--assets', type=Path)
     parser.add_argument('--capture', type=Path)
-    parser.add_argument('--review-scope', choices=REVIEW_SCOPES, default='pe_roster')
+    parser.add_argument('--review-scope', choices=CAPTURE_SCOPES, default='pe_roster')
     args = parser.parse_args(argv)
+    if args.review_scope == 'press_listing' and (not args.capture_details or args.capture):
+        parser.error('보도자료 목록은 새 응답 진단만 지원하며 기존 묶음 재생에 쓸 수 없습니다')
     if args.out.resolve() in {p.resolve() for p in (args.bundle, args.capture) if p}:
         parser.error('입력 원문·보완 영수증을 덮어쓸 수 없습니다')
     if args.out.exists() or args.out.is_symlink():
@@ -285,7 +288,18 @@ def main(argv=None):
     if args.capture_details:
         if args.capture:
             parser.error('실패 보완을 자동 재시도하지 않습니다')
-        report = capture_details(bundle, fetch_detail, retain=save, review_scope=args.review_scope)
+        if args.review_scope == 'press_listing':
+            try:
+                from .lp_kgrowth_press_probe import capture_press_listing, fetch_press_listing
+            except ImportError:
+                from lp_kgrowth_press_probe import capture_press_listing, fetch_press_listing
+            report = capture_press_listing(fetch_press_listing, retain=save)
+            report['review_scope'] = args.review_scope
+            report['context_bundle_content_sha256'] = _bundle_sha(bundle)
+            report['context_bundle_sha256'] = _sha(args.bundle.read_bytes())
+            save(report)
+        else:
+            report = capture_details(bundle, fetch_detail, retain=save, review_scope=args.review_scope)
     else:
         def load(sha):
             path = args.assets / sha
@@ -297,7 +311,8 @@ def main(argv=None):
         save(report)
     print(json.dumps({k: v for k, v in report.items() if k in
                       {'kind', 'identity', 'review_scope', 'remaining_candidates', 'holds', 'requests',
-                       'raw_replay_complete', 'publication_ready'}}, ensure_ascii=False))
+                       'raw_replay_complete', 'publication_ready', 'board_type', 'capture_status',
+                       'parsed', 'source_health_verified', 'http_status', 'bytes', 'sha256'}}, ensure_ascii=False))
     return 1 if report['holds'] else 0
 
 
