@@ -279,6 +279,31 @@ class PressListingProbeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             source_id('https://www.kgrowth.or.kr/notice_view.asp?idx=258&str_type=3&tab=1')
 
+    def test_observed_complete_style_script_postamble_retains_original_bytes(self):
+        # The actual retained board-3 page has these two complete blocks after
+        # </html>. Their contents are not executed or treated as notice rows.
+        tail = (b'\r\n<style type="text/css">\r\n.txt_line { overflow: hidden; }\r\n</style>\r\n'
+                b'<script type="text/javascript">\r\n<!--\r\nvar tab = \'1\';\r\n//-->\r\n</script>')
+        raw = HTML + tail
+        report, _ = self.capture(response(raw))
+        self.assertEqual(report['holds'], [])
+        self.assertEqual(base64.b64decode(report['raw_base64']), raw)
+        for field in ('parsed', 'source_health_verified', 'publication_ready', 'published'):
+            self.assertFalse(report[field])
+
+    def test_postamble_requires_complete_observed_pair_and_no_other_markup(self):
+        style = b'<style type="text/css">.txt_line { overflow: hidden; }</style>'
+        script = b'<script type="text/javascript">var tab = \'1\';</script>'
+        for tail in (style, script, script + style, style + script[:-1],
+                     style + script + b'<div>other document</div>',
+                     style.replace(b'text/css', b'text/plain') + script,
+                     style + b'<script type="text/javascript">'):
+            with self.subTest(tail=tail):
+                report, _ = self.capture(response(HTML + tail))
+                self.assertTrue(report['holds'])
+                self.assertTrue(report['response_retained'])
+                self.assertEqual(base64.b64decode(report['raw_base64']), HTML + tail)
+
 
 if __name__ == '__main__':
     unittest.main()

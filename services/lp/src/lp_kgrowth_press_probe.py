@@ -59,6 +59,29 @@ def _checked_at(value):
     return value
 
 
+def _complete_html(raw):
+    if not re.search(br'<html(?:\s[^>]*)?>', raw, re.I) or not re.search(br'<body(?:\s[^>]*)?>', raw, re.I):
+        return False
+    closing = re.search(br'</body\s*>\s*</html\s*>', raw, re.I)
+    if not closing:
+        return False
+    tail = raw[closing.end():].strip()
+    if not tail:
+        return True
+    # The retained board-3 response appends a complete style and script pair
+    # after </html>. Accept only that witnessed order and exact type markers;
+    # unknown markup or an incomplete block remains a diagnostic hold.
+    for tag, mime in ((b'style', b'text/css'), (b'script', b'text/javascript')):
+        opened = re.match(br'<' + tag + br'\s+type="' + mime + br'"\s*>', tail, re.I)
+        if not opened:
+            return False
+        ended = re.search(br'</' + tag + br'\s*>', tail[opened.end():], re.I)
+        if not ended:
+            return False
+        tail = tail[opened.end() + ended.end():].strip()
+    return not tail
+
+
 def _validate_response(response, report):
     """Minimal capture checks, called only after persisting the observation."""
     if not isinstance(response, dict):
@@ -78,9 +101,7 @@ def _validate_response(response, report):
         raise ValueError('목록 원응답이 비어 있음')
     # ASCII tag boundaries work for UTF-8 and CP949 without guessing or
     # transforming the source encoding. This is not a listing/row parser.
-    if (not re.search(br'<html(?:\s[^>]*)?>', raw, re.I)
-            or not re.search(br'<body(?:\s[^>]*)?>', raw, re.I)
-            or not re.search(br'</body\s*>\s*</html\s*>\s*$', raw, re.I)):
+    if not _complete_html(raw):
         raise ValueError('목록 HTML 완결성 미확인')
 
 

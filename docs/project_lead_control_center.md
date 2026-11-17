@@ -1,6 +1,6 @@
 # 프로젝트 리드 현재 상태판
 
-갱신: 2026-11-17 15:20 KST (작성: Codex)
+갱신: 2026-11-17 19:55 KST (작성: Codex)
 
 새 작업을 시작하는 에이전트(Codex·Claude)가 가장 먼저 읽는 현재 상태 문서다. 여기에는 지금 유효한 상태·구조·규칙·다음 작업만 둔다. 날짜별 작업 기록은 [`docs/history/`](history/README.md)로 옮긴다. 2026-11-13 이전의 전체 기록은 [history/project_lead_control_center/until-2026-11-13.md](history/project_lead_control_center/until-2026-11-13.md)에 원문 그대로 있다.
 
@@ -11,12 +11,12 @@
 - 현재 상태는 고쳐 쓰고, 날짜별 경과는 체크포인트에 쌓는다. 같은 내용을 여러 문서에 복사하지 않는다.
 - 사람이 읽을 수 있게 쓴다. 띄어쓰기를 지키고, 실행 ID·바이트 수는 근거로 필요한 만큼만 붙인다.
 
-## 현재 공개 서비스 (LP: 2026-11-16 확인, 기타: 2026-11-13)
+## 현재 공개 서비스 (LP: 2026-11-17 확인, 기타: 2026-11-13)
 
 | 서비스 | 공식 주소 | 데이터 경로 | 상태 |
 | --- | --- | --- | --- |
 | 브리프(뉴스레터) | https://kpef-newsletter.vercel.app | 매일 수집 → Supabase → Vercel. 백업 미러 https://pkkong.github.io/kpef-newsletter/ | 매일 발행 정상 |
-| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 21기관 72사업, 11/16 16:11 공개 확인(`84bffd0804ff395e6e42d8f1`). 산재 결과/마감·별칭 반영, EIF 연결 수정은 운영 확인 전 |
+| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 21기관74사업,11/17 수동·후속 정기 모두 성공(최신73e11537…). KBIZ과거2건·EIF선정2명·산재예정5·기존 주소/명단 보존 확인 |
 | GP 운용사 | https://kpef-gp.vercel.app | 금감원 분기 자료 → Supabase 스냅샷 → Vercel | 2025Q4 기준. 프로필에 LP 선정 이력 표시(11/13). 없는 페이지는 404 |
 | Wiki | — | — | 사용자가 다시 기획할 때까지 숨김 |
 
@@ -85,7 +85,7 @@ LP 미션의 운영 workflow 실행·배포는 2026-11-17 승인 범위에서 �
 공통 검사(로컬 기준 환경: Python 3.12 + `services/newsletter/web/requirements.txt` + `olefile==0.47` + `pypdf==6.10.0`):
 
 ```bash
-python3 scripts/run_regression_tests.py          # 2026-11-17 기준 1,680검사
+python3 scripts/run_regression_tests.py          # 2026-11-17 기준 1,686검사
 python3 scripts/check_architecture_contracts.py
 npm ci --prefix scripts/tests/sql --ignore-scripts && npm test --prefix scripts/tests/sql
 ```
@@ -128,11 +128,11 @@ curl -fsS "https://kpef-newsletter.vercel.app/health.json?refresh=1"
 
 받는 쪽은 대화 기억에 의존하지 않고 `AGENTS.md`와 이 문서부터 읽는다.
 
-## 알려진 리스크 (LP: 2026-11-16, 기타: 2026-11-13)
+## 알려진 리스크 (LP: 2026-11-17, 기타: 2026-11-13)
 
-- **LP 오전 실행 누락:** 11/10·11/12·11/16 오전09:20 창은 늦은 watchdog이 보완했다. watchdog 자체도 최근 수시간 간격 관측이며, cron 설정/활성 상태는 유지된다. 원인 미확정이므로 정시 자동운영 완료로 보고하지 않는다.
+- **LP 오전 실행 누락:** 11/10·11/12·11/16 오전 창은 늦은 watchdog이 보완했고11/17 오전도 미관측이다. 11/17 수동 복구와17:08 지연 시작한 오후 정기는 모두 성공했다. 정기/감시 설정은 유지하며 늦은 성공을 정시 자동운영으로 보고하지 않는다.
 - **LP 과학기술인공제회 목록 410(과거 관측)**: 11/13 수동 실행에서 기관 게시판 검색 목록이 HTTP 410을 반환해 장애 보고 단계가 실패했다(공개는 정상). 처음 관측이라 코드 변경 없음. 정기 실행에서 반복되면 게시판 주소·검색 파라미터 변경을 원문으로 확인한다.
-- **LP 결과 명단 공백:** 고용보험기금의 자체/협회 중복 모집으로 결과 연결이 보류되던 문제는 로컬 수정·재생 완료, 운영 확인 전이다. 산업은행 국민성장1·2차는 공식 결과 이벤트와 명단 표시를 따로 보강한다. 보도 후보는 주간 검토 경로를 쓰며 공식 원문이 생기면 보도 기준보다 우선한다.
+- **LP 결과 명단 공백:** 고용보험기금의 중복 모집 문제는11/17 PE2곳 선정 완료와 원문 연결까지 공개 확인했다. 산업은행 국민성장1·2차와 과거 공동 공고는 공식 결과 이벤트와 명단 표시를 따로 검증·보강한다. 공식 원문이 생기면 보도 기준보다 우선한다.
 - **농협 주간 감사 DNS 실패**: 11/8 주간 감사에서 농협 검색 7개가 DNS 오류였다. 진단은 끝났고 원래 실패 기록은 유지한다.
 - **공용 Supabase 서버**: 세 서비스가 같은 서버를 쓴다. 앱·배포는 분리됐지만 DB 서버 장애는 함께 겪는다. DB 용량과 Storage 예산(900MB)을 발행 때 검사한다.
 - **뉴스레터**: 분류·태그 품질은 계속 관리 대상이다. 분류 로직을 바꾸면 `services/newsletter/tests/test_daily_news_logic.py`에 제목 기반 회귀 검사를 추가한다. 매일 자동 발행은 `stable` 소스 프로필을 쓴다(전체 67개 소스는 수동 `all` 실행만). 장애 판단은 GitHub Actions 로그와 공개 `health.json`/`archive.json`을 기준으로 한다.

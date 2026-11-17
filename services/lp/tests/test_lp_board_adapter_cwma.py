@@ -1,6 +1,8 @@
 import unittest
+import copy
 from urllib.parse import urlencode
 from services.lp.src import lp_board_adapter_cwma as c
+from services.lp.src import collect_lp_institution_boards as boards
 
 CONFIG={'institution_id':'cwma','listing_url':c.BASE+'/board.do?'+urlencode(c.BOARD)}
 
@@ -44,6 +46,78 @@ class CwmaAdapterTests(unittest.TestCase):
         for html in (detail().replace('[국내 사모 및 벤처펀드 모집]','[다른 제목]'),detail().replace('2099-03-04 12:34','2099-02-30 12:34'),detail().replace('2099-03-04 12:34','2099-03-04'),detail().replace('공식 모집 본문','')):
             with self.assertRaises(ValueError):c.parse_detail(html,DETAIL_URL,CONFIG)
         self.assertTrue(c.parse_detail(detail().replace('fileList','unknownWidget'),DETAIL_URL,CONFIG)['unresolved_attachments'])
+
+    def test_observed_caption_title_edge_whitespace_only(self):
+        # Small excerpt of the saved 2023 caption (stored-string proof, not
+        # wire bytes): [2023년도 대체투자(국내 사모투자펀드) 위탁운용사 선정 공고 ]
+        # 게시물의 등록 내용을 보여줍니다.
+        original=c.parse_detail(detail(),DETAIL_URL,CONFIG)
+        title='국내 사모 및 벤처펀드 모집'
+        for left,right in (('', ' '), (' ', ''), (' \t', '\r\n '), ('', '')):
+            with self.subTest(left=left,right=right):
+                padded=detail().replace('['+title+']', '['+left+title+right+']')
+                self.assertEqual(c.parse_detail(padded,DETAIL_URL,CONFIG),original)
+
+    def test_caption_nested_title_brackets_and_order_independence(self):
+        title='[건설근로자공제회] 2020년도 국내채권 일반채권형(단기) 위탁운용사 선정공고'
+        base=detail().replace('국내 사모 및 벤처펀드 모집',title)
+        variants=[base.replace('['+title+']','['+left+title+right+']')
+                  for left,right in (('', ' '), (' ', ''), (' ', ' '), ('', ''))]
+        expected=c.parse_detail(base,DETAIL_URL,CONFIG)
+        self.assertEqual([c.parse_detail(x,DETAIL_URL,CONFIG) for x in variants],[expected]*4)
+        self.assertEqual([c.parse_detail(x,DETAIL_URL,CONFIG) for x in reversed(variants)],[expected]*4)
+
+    def test_caption_padding_never_permits_substrings_neighbours_or_changed_marker(self):
+        title='국내 사모 및 벤처펀드 모집'
+        wrapper='['+title+'] 게시물의 등록 내용을 보여줍니다.'
+        captions=['[다른 제목 ] 게시물의 등록 내용을 보여줍니다.',
+                  '[이웃 게시물 '+title+' ] 게시물의 등록 내용을 보여줍니다.',
+                  '['+title+' 다른 제목 ] 게시물의 등록 내용을 보여줍니다.',
+                  '['+title+' ]', '['+title+' ] 게시물의 등록 내용을 보여줍니다',
+                  '['+title+' ] 게시물의 등록 내용을 보여줍니다. 다른 내용',
+                  '다른 내용 ['+title+' ] 게시물의 등록 내용을 보여줍니다.',
+                  '('+title+' ) 게시물의 등록 내용을 보여줍니다.']
+        for caption in captions:
+            with self.subTest(caption=caption),self.assertRaisesRegex(ValueError,'title mismatch'):
+                c.parse_detail(detail().replace(wrapper,caption),DETAIL_URL,CONFIG)
+        # An otherwise exact title elsewhere in the document is not evidence
+        # that a different caption belongs to this subject.
+        wrong=detail().replace('['+title+']','[이웃 게시물 ]').replace('</html>','<div>'+title+'</div></html>')
+        with self.assertRaisesRegex(ValueError,'title mismatch'):
+            c.parse_detail(wrong,DETAIL_URL,CONFIG)
+
+    def test_padding_preserves_subject_and_real_listing_date_conflict_checks(self):
+        # Retained listing/detail verification still compares title, date,
+        # URL and source identity after the adapter accepts caption padding.
+        config=boards.load_configs()['cwma']
+        listing_html=listing().replace('2099-02-03','2026-02-03')
+        row=c.parse_listing(listing_html,config['listing_url'],config)[0]
+        html=detail().replace('국내 사모 및 벤처펀드 모집',row['title']).replace(
+            '['+row['title']+']','['+row['title']+' ]').replace('2099-03-04 12:34','2026-02-03 12:34')
+        parsed=c.parse_detail(html,row['url'],config)
+        receipt={'url':config['listing_url'],'html':listing_html,'sha256':boards.digest(listing_html)}
+        stamp='2026-02-03T12:35:00+09:00'
+        n={**parsed,'institution_id':'cwma','source_id':row['source_id'],'url':row['url'],
+           'source_channel':'institution_board','checked_at':stamp,
+           'attachment_bytes':{},'attachment_hashes':{},'attachment_texts':{},
+           'discovery_provenance':{'kind':'institution_board_v1','listing':receipt,
+                                   'detail_html':html,'detail_sha256':boards.digest(html)}}
+        n['sha256']=boards.original_body_hash(n)
+        self.assertEqual(boards.validate_notice(n,stamp,config,history_listing=True,
+                                                require_attachment_bytes=False)['date'],'2026-02-03')
+        for change in ('date','subject','institution_id','source_id'):
+            with self.subTest(change=change):
+                bad=copy.deepcopy(n)
+                if change in ('date','subject'):
+                    old,new=('2026-02-03 12:34','2026-02-04 12:34') if change=='date' else (
+                        '<th class="subject">'+row['title'],'<th class="subject">다른 제목')
+                    proof=bad['discovery_provenance']
+                    proof['detail_html']=proof['detail_html'].replace(old,new)
+                    proof['detail_sha256']=boards.digest(proof['detail_html'])
+                else:
+                    bad[change]='kdb' if change=='institution_id' else 'cwma:99999'
+                with self.assertRaises(ValueError):
+                    boards.validate_notice(bad,stamp,config,history_listing=True,require_attachment_bytes=False)
 
     def test_observed_ids_and_post_plans(self):
         rows=c.parse_listing(listing(),CONFIG['listing_url'],CONFIG)

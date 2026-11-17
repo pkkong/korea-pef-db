@@ -111,7 +111,11 @@ def parse_detail(html,url,config):
     table=one(n for n in root.nodes('table') if cls(n,'board-view'))
     title=one(n.clean() for n in table.nodes('th') if cls(n,'subject'))
     caption=one(n.clean() for n in table.nodes('caption'))
-    if not title or caption!='['+title+'] 게시물의 등록 내용을 보여줍니다.':raise ValueError('CWMA detail title mismatch')
+    # Stored CWMA captions can pad the title inside the literal wrapper. Keep
+    # the complete marker and exact subject comparison, including nested [] in
+    # an actual title; only trim the wrapper's title-edge whitespace.
+    wrapped=re.fullmatch(r'\[(.*)\] 게시물의 등록 내용을 보여줍니다\.',caption)
+    if not title or not wrapped or wrapped[1].strip()!=title:raise ValueError('CWMA detail title mismatch')
     dates=[];attachment_cells=[]
     for tr in table.nodes('tr'):
         cells=[x for x in tr.children if getattr(x,'tag',None) in {'th','td'}]
