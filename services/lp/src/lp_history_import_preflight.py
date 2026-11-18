@@ -42,6 +42,11 @@ def _sha(value):
     return hashlib.sha256(_json(value)).hexdigest()
 
 
+def retained_gp_context(context, new_programs):
+    new_ids = {program['id'] for program in new_programs}
+    return {**context, 'notices': [row for row in context['notices'] if row['noticeId'] not in new_ids]}
+
+
 def load_import(raw, expected_sha256):
     if (not isinstance(raw, bytes) or len(raw) > MAX_IMPORT_BYTES
             or not isinstance(expected_sha256, str) or not re.fullmatch(r'[a-f0-9]{64}', expected_sha256)
@@ -227,7 +232,9 @@ def preflight(conn, payload, checked_at, *, source_bundle=None, candidate_checke
         out = Path(folder)
         # The renderer adds nested GP page keys; isolate those display fields
         # from both the retained evidence and the proposed stored state.
-        build(copy.deepcopy(after), out, gp_profiles=profiles)
+        context = build(copy.deepcopy(after), out, gp_profiles=profiles)['public_notice_context']
+        previous_context = current.get('public_notice_context')
+        gp_context_preserved = previous_context is None or retained_gp_context(context, result['new_programs']) == previous_context
         generated_aliases = alias_pages(after['programs'], after.get('program_aliases', {}))
         if any((out / name).exists() for name in generated_aliases):
             raise ValueError('기존 별칭 주소와 새 공개 페이지 충돌')
@@ -236,6 +243,7 @@ def preflight(conn, payload, checked_at, *, source_bundle=None, candidate_checke
         _assert_preserved(current, after)
     return {**result, 'kind': 'lp_history_import_preflight_v1', 'checked_at': checked_at,
             'import_build_summary': import_summary,
+            'existing_gp_context_preserved': gp_context_preserved,
             'baseline_run_id': row[1], 'baseline_updated_at': str(row[2]),
             'built_pages': len(files) + len(generated_aliases),
             'pages_bytes': page_bytes + sum(len(s.encode()) for s in generated_aliases.values()),

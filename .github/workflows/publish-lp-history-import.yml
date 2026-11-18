@@ -65,6 +65,7 @@ jobs:
           assert checked['kind'] == 'lp_history_import_preflight_v1' and checked['database_writes'] == 0
           assert checked['published'] is False and checked['existing_programs_preserved'] is True
           assert checked['existing_sources_preserved'] is True and checked['aliases_preserved'] is True
+          assert checked['existing_gp_context_preserved'] is True, 'Recheck after the regular LP publication'
           assert checked['new_programs'] and not checked['reused_program_ids']
           assert checked['source_code_commit'] == os.environ['LP_HISTORY_PREFLIGHT_SHA']
           assert re.fullmatch('[a-f0-9]{24}', baseline) and re.fullmatch('[a-f0-9]{64}', digest)

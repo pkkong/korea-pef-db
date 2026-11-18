@@ -461,7 +461,7 @@ def prepare_publication(report):
 
 def prepare_historical_addition(payload, expected_run, checked_at):
     """Add pinned historical programs while preserving already published evidence."""
-    from lp_history_import_preflight import proposal
+    from lp_history_import_preflight import proposal, retained_gp_context
     from lp_reported_results import load_reported_results
 
     started = time.monotonic()
@@ -508,7 +508,7 @@ def prepare_historical_addition(payload, expected_run, checked_at):
         profiles = current.get('gp_profile_contract', {}).get('profiles', {})
         context = build(copy.deepcopy(data), out, gp_profiles=profiles)['public_notice_context']
         previous_context = current.get('public_notice_context')
-        retained_context = {**context, 'notices': [n for n in context['notices'] if n['noticeId'] not in new_ids]}
+        retained_context = retained_gp_context(context, added)
         if previous_context is not None and retained_context != previous_context:
             raise ValueError('Historical addition changed existing GP selection context')
         if context != retained_context or previous_context is not None:

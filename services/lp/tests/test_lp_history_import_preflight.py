@@ -192,16 +192,31 @@ class ImportPreflightTests(unittest.TestCase):
 
     def test_database_preflight_sets_readonly_before_select_and_never_exports_old_notes(self):
         conn = ReadConnection(self.current)
-        with patch.object(p, 'build', return_value={}) as render:
+        with patch.object(p, 'build', return_value={'public_notice_context': {'notices': []}}) as render:
             result = p.preflight(conn, self.payload, STAMP)
         self.assertEqual(conn.sql[0], 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
         self.assertTrue(all(q.startswith(('SET ', 'SHOW ', 'SELECT ')) for q in conn.sql))
         self.assertEqual(result['baseline_run_id'], 'baseline-run')
         self.assertEqual(result['database_writes'], 0)
         self.assertFalse(result['published'])
+        self.assertTrue(result['existing_gp_context_preserved'])
         self.assertTrue(result['approval_required'])
         self.assertNotIn('DO_NOT_EXPORT', json.dumps(result))
         render.assert_called_once()
+
+    def test_readonly_preflight_reports_changed_existing_gp_display_context(self):
+        before = {'noticeId': self.current['programs'][0]['id'], 'title': '기존 사업 이름 (재)'}
+        after = {**before, 'title': '기존 사업 이름 재공고'}
+        added = {'noticeId': p.proposal(self.current, self.payload, STAMP)[0]['programs'][-1]['id'],
+                 'title': '새 사업'}
+        self.current['public_notice_context'] = {'notices': [before]}
+        for title_row, expected in ((before, True), (after, False)):
+            with self.subTest(preserved=expected), patch.object(
+                    p, 'build', return_value={'public_notice_context': {'notices': [added, title_row]}}):
+                result = p.preflight(ReadConnection(self.current), self.payload, STAMP)
+                self.assertIs(result['existing_gp_context_preserved'], expected)
+                self.assertEqual(result['database_writes'], 0)
+                self.assertFalse(result['published'])
 
     def test_missing_database_or_nonreadonly_transaction_cannot_use_a_pilot_baseline(self):
         for conn in (ReadConnection(self.current, readonly=False), ReadConnection(self.current, present=False)):
