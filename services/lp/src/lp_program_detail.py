@@ -225,7 +225,7 @@ def render_detail_body(p, as_of=None):
     if objective and all(re.search(r'미확인\s*$', str(item or '')) for item in items):
         objective = None  # A placeholder is not an investment purpose.
     if objective:
-        paragraphs = "".join(f"<p>{h(item)}</p>" for item in objective.get("items", [objective["text"]]))
+        paragraphs = "".join(f"<p>{h(item)}</p>" for item in items)
         body += f'<div class="investment-purpose"><strong>주목적</strong>{paragraphs}</div>'
     segments = p.get('segments', [])
     if segments:

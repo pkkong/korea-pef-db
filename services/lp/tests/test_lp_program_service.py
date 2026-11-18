@@ -155,6 +155,13 @@ class ProgramListPresentation(unittest.TestCase):
         self.assertIn('<meta name="description" content="K · s · 접수 마감.', page)
         self.assertIn('<link rel="canonical" href="https://kpef-lp.vercel.app/program-s.html">', page)
 
+    def test_detail_renders_several_sourced_mandates_without_a_summary(self):
+        p = self.program('joint', '접수 마감', 'kdb', '한국산업은행')
+        p['primary_investment'] = {'items': ['AI 밸류체인에 60% 이상 투자', '중소·중견기업에 60% 이상 투자'],
+                                   'source_url': 'https://www.kdb.co.kr/offering.pdf'}
+        detail = self.render([p])['program-joint.html']
+        self.assertIn('<strong>주목적</strong><p>AI 밸류체인에 60% 이상 투자</p><p>중소·중견기업에 60% 이상 투자</p>', detail)
+
     def reported(self, pid, managers=('가PE', '나PE'), complete=True, stage='최종 선정'):
         return {'program_id': pid, 'stage': stage, 'reported_at': '2026-10-15', 'complete': complete,
                 'managers': list(managers), 'note': '보도 메모',
