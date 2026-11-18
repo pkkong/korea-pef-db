@@ -26,9 +26,11 @@ _ALLOCATION_FIELDS = ('commitment_amount_krw', 'total_commitment_amount_krw', 'c
                       'per_fund_amount_krw', 'per_fund_range_krw', 'per_fund_qualifier', 'fund_target_label')
 
 
-def kdb_joint_vehicles(raw):
-    """Read the complete current eligible-vehicles cell of a KDB offering."""
+def kdb_joint_size_offering(raw):
+    """Recognize the KDB size plan with one current eligible-vehicles cell."""
     text = re.sub(r'\s+', '', raw)
+    if not _KDB_SIZE_PLAN.search(text):
+        return False
     for cell in re.findall(r'출자대상투자기구((?:○[^○※]{1,180}){2,7})(?=※선정된위탁운용사)', text):
         rows = cell.split('○')[1:]
         if (any('기관전용사모집합투자기구' in row for row in rows)
@@ -265,7 +267,7 @@ def extract_terms(n):
     totals, counts, per_fund, deadlines = set(), set(), set(), set()
     dates_only, dated_quotes = set(), []
     mixed = bool(re.search(r'PE\s*[·,/]\s*VC|PE.*VC', n['title'], re.I))
-    kdb_vehicles_sources = {url for url, text, _ in sources if n.get('institution_id') == 'kdb' and kdb_joint_vehicles(text)}
+    kdb_vehicles_sources = {url for url, text, _ in sources if n.get('institution_id') == 'kdb' and kdb_joint_size_offering(text)}
     kdb_joint = bool(kdb_vehicles_sources)
     kdb_plan = None
     kdb_mandates = []

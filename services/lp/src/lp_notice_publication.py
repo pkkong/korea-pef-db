@@ -26,7 +26,7 @@ try:
     from .lp_shared_notice_terms import extract_shared_terms
     from .collect_lp_institution_boards import validate_notice as validate_institution_notice
     from .lp_institution_notice_terms import extract_terms as extract_institution_terms
-    from .lp_institution_notice_terms import apply_iaci_allocation, kdb_joint_vehicles
+    from .lp_institution_notice_terms import apply_iaci_allocation, kdb_joint_size_offering
     from .lp_kfcc_notice_terms import allocation as kfcc_allocation
     from . import lp_pck_programs as pck_programs
     from . import lp_kbiz_notice_terms as kbiz_terms
@@ -47,7 +47,7 @@ except ImportError:
     from lp_shared_notice_terms import extract_shared_terms
     from collect_lp_institution_boards import validate_notice as validate_institution_notice
     from lp_institution_notice_terms import extract_terms as extract_institution_terms
-    from lp_institution_notice_terms import apply_iaci_allocation, kdb_joint_vehicles
+    from lp_institution_notice_terms import apply_iaci_allocation, kdb_joint_size_offering
     from lp_kfcc_notice_terms import allocation as kfcc_allocation
     import lp_pck_programs as pck_programs
     import lp_kbiz_notice_terms as kbiz_terms
@@ -223,7 +223,7 @@ def _scope(n):
     result = classify_scope(n['title'], text)
     if (n.get('institution_id') == 'kdb' and n.get('source_channel') == 'institution_board'
             and result != 'outside' and not re.search(r'모펀드|Pre-?IPO|주식|채권|멀티에셋|EMP|재간접|절대수익|헤지', n['title'], re.I)
-            and any(kdb_joint_vehicles(source) for source in texts)):
+            and any(kdb_joint_size_offering(source) for source in texts)):
         return 'mixed_pe_blind'
     # User decision 2026-11-12: for the large policy/pension LPs, an explicitly
     # offered PE fund is published even when blind/domestic wording is absent.
@@ -621,8 +621,11 @@ def kdb_result_roster(text, known=frozenset()):
         return []
     rosters = []
     pending_size = None
-    selected_table = bool(re.search(r'지원분야\s*선정\s*운용사명', text[:match.end()]))
-    for line in text[match.end():].splitlines():
+    lines = text[match.end():].splitlines()
+    size_labels = {'대형', '중형', '소형'}
+    wrapped_size_table = (re.search(r'지원분야\s*선정\s*운용사명', text[:match.end()])
+                          and any(line.strip() in size_labels for line in lines))
+    for line in lines:
         line = line.strip()
         if not line:
             continue
@@ -634,12 +637,12 @@ def kdb_result_roster(text, known=frozenset()):
             manager_text = line
         elif label:
             manager_text = line[len(label):]
-            if selected_table and label in {'대형', '중형', '소형'} and not manager_text:
+            if wrapped_size_table and label in size_labels and not manager_text:
                 pending_size = label
                 continue
         else:
             return []
-        if selected_table and label in {'대형', '중형', '소형'}:
+        if wrapped_size_table and label in size_labels:
             manager_text = re.sub(r'\((?:주|유)\)|㈜', '', manager_text)
         names = split_glued_names(manager_text, known)
         if not names:

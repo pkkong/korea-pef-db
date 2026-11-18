@@ -248,6 +248,7 @@ jobs:
           from datetime import datetime,timezone
           from pathlib import Path
           from publish_lp_programs import connect,baseline,prepare
+          from lp_notice_publication import OFFERING_FIELDS
           from lp_program_service import validate,assert_selected_gp_history
           root=Path('/tmp/lp-recovery')
           report=json.loads((root/'kgrowth-collection.json').read_text())
@@ -287,7 +288,6 @@ jobs:
               assert receipt['source_url'] in {e['url'] for e in current['events'] if e['type']=='서류심사 결과'}
               assert set(current['shortlisted_gps'])<=set(previous['applicants_gps'])
           if os.environ.get('KOREAPOST_STAGE_RUN'):
-              from lp_notice_publication import OFFERING_FIELDS
               receipt=json.loads((root/'koreapost-preferred-reuse.json').read_text())
               assert current_run==receipt['baseline_public_run'],'Public model changed since bounded source lookup'
               before={p['id']:p for p in old['programs']}
@@ -317,6 +317,10 @@ jobs:
               raise ValueError('Invalid official receipt')
           new=[p for p in data['programs'] if p['id'] not in {old['id'] for old in old['programs']}]
           if expected_baseline:
+              for previous in old['programs']:
+                  current=after[previous['id']]
+                  for field in ('asset_scope', 'status', *(f for f in OFFERING_FIELDS if f != 'extraction_evidence')):
+                      assert current.get(field)==previous.get(field), f'Existing public terms changed: {previous["id"]} {field}'
               assert not data.get('history_notice_holds'), 'History import validation holds'
               requested={n['url'] for n in report['institution_collection']['history_import']['notices']}
               assert requested <= {n['url'] for n in data['history_notices']}, 'Pinned history missing from retained evidence'

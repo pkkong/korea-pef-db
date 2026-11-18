@@ -385,7 +385,7 @@ class KdbResultRosterTests(unittest.TestCase):
         self.assertEqual([], kdb_result_roster('운용사명(가나다순)\n중형이름모를곳'))
 
     def test_kdb_joint_vehicles_keep_combined_budget_and_end_of_reception_window(self):
-        from services.lp.src.lp_institution_notice_terms import kdb_joint_vehicles
+        from services.lp.src.lp_institution_notice_terms import kdb_joint_size_offering
         from services.lp.src.lp_notice_publication import _scope, _terms
         url = 'https://www.kdb.co.kr/program'
         file = 'https://www.kdb.co.kr/offering.pdf'
@@ -416,8 +416,9 @@ class KdbResultRosterTests(unittest.TestCase):
                          ['목표결성금액의 60% 이상을 AI 밸류체인에 투자', '약정총액의 60% 이상을 중소·중견기업에 투자'])
         notice['attachment_texts'][file] = pdf.replace('소형900억원', '소형901억원')
         self.assertNotIn('segments', _terms(notice, None, NOW)[0])
-        self.assertFalse(kdb_joint_vehicles(pdf.replace('출자대상투자기구', '과거투자기구')))
-        self.assertFalse(kdb_joint_vehicles(pdf.replace('※선정된위탁운용사', '※과거운용사')))
+        self.assertFalse(kdb_joint_size_offering(pdf.replace('출자대상투자기구', '과거투자기구')))
+        self.assertFalse(kdb_joint_size_offering(pdf.replace('※선정된위탁운용사', '※과거운용사')))
+        self.assertFalse(kdb_joint_size_offering(pdf.replace(overview, '')))
 
     def test_kdb_size_roster_handles_a_wrapped_cell_and_legal_form_markers(self):
         from services.lp.src.lp_notice_publication import kdb_result_roster
