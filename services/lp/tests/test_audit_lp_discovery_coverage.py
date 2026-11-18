@@ -198,6 +198,7 @@ class DiscoveryCoverageTests(unittest.TestCase):
         # or fund facts may be approved from these discovery labels.
         mixed = '2025년도 대체투자(국내 사모투자펀드 및 벤처펀드) 위탁운용사 선정 공고'
         for title in [mixed, mixed.replace('사모투자펀드', '사모 투자 펀드'),
+                      '2021년도 대체투자(국내 벤처펀드 및 사모투자펀드) 위탁운용사 선정',
                       '벤처펀드 및 국내 사모투자펀드 위탁운용사 선정 공고']:
             with self.subTest(title=title):
                 scope, mentions = audit.title_scope(title)
@@ -211,6 +212,7 @@ class DiscoveryCoverageTests(unittest.TestCase):
             ('2024년도 대체투자(국내 벤처펀드) 위탁운용사 선정계획', 'vc_explicit'),
             ('국내 사모펀드 및 벤처펀드 위탁운용사 선정 공고', 'vc_explicit'),
             ('국내 사모투자신탁 및 벤처펀드 위탁운용사 선정 공고', 'vc_explicit'),
+            ('국내 벤처펀드 및 사모대출펀드 위탁운용사 선정 공고', 'outside_policy'),
             ('국내 사모투자펀드 위탁운용사 선정 공고', 'scope_unconfirmed'),
             ('국내 사모투자펀드 블라인드 위탁운용사 선정 공고', 'scope_unconfirmed'),
             ('해외 사모투자펀드 및 벤처펀드 위탁운용사 선정 공고', 'outside_policy'),

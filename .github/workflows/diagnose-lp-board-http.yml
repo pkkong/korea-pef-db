@@ -73,6 +73,7 @@ jobs:
           python3 - <<'PY'
           import hashlib, json
           from datetime import datetime, timezone
+          from http.client import IncompleteRead
           from pathlib import Path
           from urllib.error import HTTPError, URLError
           from urllib.request import Request, HTTPRedirectHandler, build_opener
@@ -89,7 +90,7 @@ jobs:
           out = Path('/tmp/eif-listing-diagnostic')
           out.mkdir()
           report = {'url': url, 'checked_at': datetime.now(timezone.utc).isoformat(),
-                    'logical_requests': 1, 'parsed': False}
+                    'logical_requests': 1, 'parsed': False, 'read_complete': False}
           def save():
               (out / 'receipt.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))
           save()
@@ -102,17 +103,37 @@ jobs:
               except HTTPError as error:
                   response = error
               with response:
-                  body = response.read(MAX_BYTES + 1)
-                  raw = body[:MAX_BYTES]
+                  lengths = response.headers.get_all('Content-Length', [])
+                  encoding = response.headers.get('Content-Encoding', '')
+                  transfer = response.headers.get('Transfer-Encoding', '')
                   report.update(http_status=response.getcode(), response_url=response.geturl(),
+                                http_version=getattr(response, 'version', None),
                                 content_type=response.headers.get('Content-Type', '')[:160],
-                                encoding=response.headers.get('Content-Encoding', '')[:80],
-                                bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest(),
-                                truncated=len(body) > MAX_BYTES)
+                                encoding=encoding[:80], transfer_encoding=transfer[:80],
+                                content_length_count=len(lengths),
+                                content_length=lengths[0][:40] if len(lengths) == 1 else None)
+                  save()
+                  try:
+                      body = response.read(MAX_BYTES + 1)
+                  except IncompleteRead as error:
+                      body = error.partial
+                      report.update(read_error_type=type(error).__name__,
+                                    missing_bytes=error.expected)
+              raw = body[:MAX_BYTES]
+              report.update(bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest(),
+                            truncated=len(body) > MAX_BYTES)
               (out / 'response.bin').write_bytes(raw)
               save()
               if report['http_status'] != 200 or report['response_url'] != url or report['truncated']:
                   raise ValueError('listing transport evidence does not match the expected response')
+              length = report['content_length']
+              if (report.get('read_error_type') or encoding.lower() not in ('', 'identity')
+                      or transfer.lower() not in ('', 'chunked')
+                      or lengths and (transfer or len(lengths) != 1 or length != lengths[0]
+                                      or not length.isascii() or not length.isdecimal()
+                                      or int(length) != len(raw))):
+                  raise ValueError('listing response framing is incomplete or unexpected')
+              report['read_complete'] = True
               report.update(rows=len(board.parse_listing(_html(raw), url, config)), parsed=True)
           except (OSError, URLError, ValueError) as error:
               report['error_type'] = type(error).__name__

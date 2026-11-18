@@ -63,6 +63,7 @@ class InstitutionHistoryTests(unittest.TestCase):
         from services.lp.src.audit_lp_discovery_coverage import title_scope
         cases = [
             ('2025년도 대체투자(국내 사모투자펀드 및 벤처펀드) 위탁운용사 선정 공고', True),
+            ('2021년도 대체투자(국내 벤처펀드 및 사모투자펀드) 위탁운용사 선정', True),
             ('2024년도 대체투자(국내 벤처펀드) 위탁운용사 선정계획', False),
             ('국내 사모투자신탁 및 벤처펀드 위탁운용사 선정 공고', False),
             ('해외 사모투자펀드 및 벤처펀드 위탁운용사 선정 공고', False),
