@@ -193,6 +193,20 @@ class ProgramListPresentation(unittest.TestCase):
         self.assertIn('PE·VC 공동 모집</span>', pages['program-v.html'])
         self.assertIn('벤처캐피탈이 포함될 수 있습니다', pages['program-v.html'])
 
+    def test_split_reannouncement_uses_readable_title_and_keeps_official_title(self):
+        p = self.program('reopened', '모집 공고', 'kdb', '한국산업은행', event='2025-05-14')
+        original = '혁신성장펀드(혁신산업펀드) 2024년 2차 위탁운용사 선정계획 (재)공고'
+        p['title'] = original
+        p['events'][0]['title'] = original
+        title = '혁신성장펀드(혁신산업펀드) 2024년 2차 재공고'
+
+        pages = self.render([p])
+
+        self.assertIn(title, pages['index.html'])
+        self.assertIn(f'<h1>{title}</h1>', pages['program-reopened.html'])
+        self.assertIn(f'<p class="source-title">공고명 {original}</p>', pages['program-reopened.html'])
+        self.assertEqual(p['title'], original)
+
     def test_old_notice_without_deadline_not_current_and_brackets_spaced(self):
         from services.lp.src.lp_program_detail import clean_title
         self.assertEqual(clean_title('「정책금융기관 글로벌 스케일업 협력펀드」출자사업 위탁운용사 선정계획 공고'),
