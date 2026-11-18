@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from html.parser import HTMLParser
+from urllib.parse import urlsplit
 from services.lp.src.lp_program_service import validate, build, assert_selected_gp_history
 
 class Links(HTMLParser):
@@ -29,7 +30,12 @@ class ProgramContracts(unittest.TestCase):
             out=Path(folder); build(copy.deepcopy(self.data),out)
             for page in out.glob('*.html'):
                 parser=Links();parser.feed(page.read_text())
-                for href in parser.links:self.assertTrue((out/href).is_file(),f'{page.name}: {href}')
+                for href in parser.links:
+                    target = urlsplit(href)
+                    destination = out / target.path if target.path else page
+                    self.assertTrue(destination.is_file(), f'{page.name}: {href}')
+                    if target.fragment:
+                        self.assertIn(f'id="{target.fragment}"', destination.read_text(), f'{page.name}: {href}')
             self.assertIn('program-fund-2026.html',(out/'selected-gp-240.html').read_text())
 
     def test_preservation_allows_validated_additions_without_replacing_history(self):
@@ -202,6 +208,124 @@ class ProgramListPresentation(unittest.TestCase):
         self.assertIn('data-status="공고"', index); self.assertIn('data-status="모집 공고"', index)
         self.assertIn('class="badge">공고<', pages['program-old.html'])
         self.assertIn('11.04 결과 발표', index)
+
+
+class InstitutionYearComparison(unittest.TestCase):
+    program = ProgramListPresentation.program
+    selected = ProgramListPresentation.selected
+
+    def render(self, programs, reported=None):
+        with tempfile.TemporaryDirectory() as folder:
+            build({'as_of': '2026-11-12', 'programs': copy.deepcopy(programs),
+                   'reported_results': reported or {}}, Path(folder))
+            return (Path(folder) / 'institution-test.html').read_text()
+
+    def row(self, page, pid):
+        import re
+        return re.search(r'<tr data-program-id="' + pid + r'">(.*?)</tr>', page, re.S)[1]
+
+    def test_posting_year_is_separate_from_business_and_result_years(self):
+        old = self.selected('old', 'test', '테스트기관', '공식운용사', 'gp-old', event='2020-12-29')
+        old.update(title='2021년 사업', business_year='2021')
+        old['events'][1]['date'] = '2026-11-01'
+        old['events'].append({'date': '2021-01-15', 'type': '변경 공고', 'title': '정정',
+                              'url': 'https://official.example/amended'})
+        recent = self.program('recent', '접수 마감', 'test', '테스트기관', event='2023-03-03')
+        unknown = self.selected('undated', 'test', '테스트기관', '다른공식운용사', 'gp-undated')
+        unknown['events'] = unknown['events'][1:]
+        unknown.update(title='2025년 모집 추정 금지', business_year='2025')
+        unknown['planned_events'] = [{'date': '2024-01-01', 'type': '모집 공고', 'title': '예정',
+                                      'url': 'https://official.example/planned'}]
+        page = self.render([old, unknown, recent])
+        comparison = page.split('<section class="institution-history"', 1)[1]
+        positions = [comparison.index(f'id="recruitment-{year}"') for year in ('2023', '2020', 'undated')]
+        self.assertEqual(positions, sorted(positions))
+        self.assertNotIn('id="recruitment-2021"', comparison)
+        self.assertNotIn('id="recruitment-2026"', comparison)
+        self.assertIn('모집 2020.12.29', self.row(page, 'old'))
+        self.assertIn('최종 선정 2026.11.01', self.row(page, 'old'))
+        self.assertNotIn('마감', self.row(page, 'old'))
+        self.assertIn('모집 공고일 미확인', self.row(page, 'undated'))
+        for p in [old, recent, unknown]:
+            self.assertEqual(page.count(f'<tr data-program-id="{p["id"]}"'), 1)
+            self.assertIn(f'href="program-{p["id"]}.html"', page)
+
+    def test_amount_basis_and_missing_fields_are_not_totals_or_fund_size(self):
+        joint = self.program('joint', '접수 마감', 'test', '테스트기관',
+                             label='공동출자자 모집 계획 2,100억원 (PE·VC 포함)')
+        joint['asset_scope'] = 'PE·VC 공동 모집'
+        joint['fund_target_label'] = '최소 5,000억원'
+        joint['commitment_amount_krw'] = None
+        cap = self.program('cap', '접수 마감', 'test', '테스트기관')
+        cap.update(per_fund_amount_krw=30_000_000_000, per_fund_qualifier='이내')
+        missing = self.program('missing', '접수 마감', 'test', '테스트기관')
+        missing.update(commitment_amount_krw=0, fund_target_label='최소 9,999억원')
+        uncertain = self.program('uncertain', '접수 마감', 'test', '테스트기관',
+                                 label='전체 대체투자 1,000억원 · PE 배정 미확인')
+        uncertain['commitment_amount_krw'] = 100_000_000_000
+        mixed_number = self.program('mixed-number', '접수 마감', 'test', '테스트기관')
+        mixed_number.update(asset_scope='PE·VC 공동 모집', commitment_amount_krw=70_000_000_000)
+        pe_label = self.program('pe-label', '접수 마감', 'test', '테스트기관', label='PE 부문 200억원')
+        pe_label.update(asset_scope='PE·VC 공동 모집', commitment_amount_krw=20_000_000_000)
+        page = self.render([joint, cap, missing, uncertain, mixed_number, pe_label])
+        self.assertIn('공동출자자 모집 계획 2,100억원 (PE·VC 포함)', self.row(page, 'joint'))
+        self.assertIn('PE·VC 공동 모집', self.row(page, 'joint'))
+        self.assertIn('펀드당 300억원 이내', self.row(page, 'cap'))
+        for pid in ('missing', 'uncertain', 'mixed-number'):
+            self.assertNotIn('억원', self.row(page, pid))
+        self.assertIn('PE 부문 200억원', self.row(page, 'pe-label'))
+        self.assertNotIn('PE·VC 합계', self.row(page, 'pe-label'))
+        self.assertNotIn('5,000억원', page)
+        self.assertNotIn('9,999억원', page)
+        self.assertNotIn('연간 출자 총액', page)
+
+    def test_only_official_selected_names_and_sourced_strategy_are_compared(self):
+        official = self.selected('official', 'test', '테스트기관', '공식선정운용사', 'gp-official')
+        official['primary_investment'] = {'text': '국내 성장기업에 60% 이상 투자',
+                                          'source_url': 'https://official.example/purpose'}
+        official['segments'] = [{'name': '크레딧 리그'}, {'name': '성장 리그'}]
+        unconfirmed = self.program('unconfirmed', '접수 마감', 'test', '테스트기관')
+        unconfirmed['primary_investment'] = {'text': '출처 없는 전략'}
+        unconfirmed['preferred_gps'] = ['우선협상운용사']
+        unconfirmed['manager_list_sources'] = {'preferred_gps': 'https://official.example/preferred'}
+        unconfirmed['events'].append({'date': '2026-10-02', 'type': '우선협상대상자', 'title': '우선협상',
+                                      'url': 'https://official.example/preferred'})
+        press = self.program('press', '접수 마감', 'test', '테스트기관')
+        reported = {'press': {'program_id': 'press', 'stage': '최종 선정', 'reported_at': '2026-10-03', 'complete': True,
+                             'managers': ['보도운용사'], 'sources': [{'publisher': '예시신문', 'title': '예시 결과',
+                              'date': '2026-10-03', 'url': 'https://news.example/result'}]}}
+        page = self.render([official, unconfirmed, press], reported)
+        row = self.row(page, 'official')
+        self.assertIn('selected-gp-gp-official.html', row)
+        self.assertIn('href="https://official.example/result-official"', row)
+        self.assertIn('href="https://official.example/purpose"', row)
+        self.assertIn('국내 성장기업에 60% 이상 투자', row)
+        self.assertIn('크레딧 리그', row)
+        self.assertIn('성장 리그', row)
+        other = self.row(page, 'unconfirmed')
+        for value in ('우선협상운용사', '보도운용사', '출처 없는 전략'):
+            self.assertNotIn(value, other)
+            self.assertNotIn(value, self.row(page, 'press'))
+        self.assertIn('결과 보도', self.row(page, 'press'))
+        self.assertIn('<h2>선정 운용사</h2>', page)
+
+    def test_year_rows_keep_open_deadline_priority_and_escape_source_words(self):
+        early = self.program('early', '접수 중', 'test', '테스트기관', '2026-11-20', event='2026-10-01')
+        late = self.program('late', '접수 중', 'test', '테스트기관', '2026-12-01', event='2026-11-01')
+        closed = self.program('closed', '접수 마감', 'test', '테스트기관', event='2026-11-10')
+        early['display_title'] = '<script>사업</script> & 투자'
+        early['primary_investment'] = {'text': '<성장> & 투자', 'source_url': 'https://official.example/purpose?a=1&b=2'}
+        page = self.render([closed, late, early])
+        order = [page.index(f'<tr data-program-id="{pid}"') for pid in ('early', 'late', 'closed')]
+        self.assertEqual(order, sorted(order))
+        self.assertEqual(page, self.render([early, closed, late]))
+        row = self.row(page, 'early')
+        self.assertIn('&lt;script&gt;사업&lt;/script&gt; &amp; 투자', row)
+        self.assertIn('&lt;성장&gt; &amp; 투자', row)
+        self.assertNotIn('<script>', row)
+        self.assertIn('접수 중', row)
+        self.assertIn('11.20 마감', row)
+        self.assertIn('aria-label="모집 공고 연도"', page)
 
 
 class GpIdentityAndProfileLinks(unittest.TestCase):

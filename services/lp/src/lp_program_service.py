@@ -141,11 +141,65 @@ def source(url, label='공식 원문'):
         return h(label)
     return f'<a href="{h(url)}" target="_blank" rel="noopener">{h(label)} ↗</a>'
 
+
+def _recruitment_notice(program):
+    """The first sourced recruitment posting, never a result or a title year."""
+    notices = [e for e in program['events'] if e['type'] == '모집 공고']
+    return min(notices, key=lambda e: (e['date'], e['url'])) if notices else None
+
+
+def _history_amount(program):
+    """Keep the notice's amount basis; do not add budgets or infer allocations."""
+    label = program.get('commitment_label') or program.get('list_commitment_label')
+    if label and not re.search(r'미확인|미정', label):
+        return label
+    if label:
+        # A stated combined budget with an unknown PE share is not a PE amount.
+        return ''
+    if program.get('mixed_scope'):
+        # Mixed legal scope cannot tell whether a bare number is PE-only or
+        # jointly budgeted. Only the source's explicit amount label is shown.
+        return ''
+    amount = program.get('commitment_amount_krw')
+    if isinstance(amount, (int, float)) and not isinstance(amount, bool) and 0 < amount < float('inf'):
+        return f'{amount / 100_000_000:,.0f}억원'
+    per_fund = program.get('per_fund_amount_krw')
+    if isinstance(per_fund, (int, float)) and not isinstance(per_fund, bool) and 0 < per_fund < float('inf'):
+        return f'펀드당 {per_fund / 100_000_000:,.0f}억원' + (
+            f' {program["per_fund_qualifier"]}' if program.get('per_fund_qualifier') else '')
+    return ''
+
 CSS = '''*{box-sizing:border-box}body{margin:0;background:#fff;color:#171717;font:15px/1.65 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif}main{max-width:1000px;margin:auto;padding:32px 24px 110px}a{color:inherit;text-underline-offset:4px}header{border-bottom:1px solid #e8e8e8;padding-bottom:22px;margin-bottom:24px}h1{word-break:keep-all;overflow-wrap:break-word;font-size:28px;line-height:1.35;letter-spacing:-1px;margin:12px 0}h2{font-size:19px;margin:32px 0 12px}p{margin:8px 0}.muted,small{color:#737373}small{display:block}.eyebrow{font-size:12px;letter-spacing:1px;color:#666}.controls{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0}input,select{font:inherit;border:1px solid #ddd;border-radius:6px;padding:10px;background:white}input{flex:1;min-width:180px}.program{padding:22px 0;border-bottom:1px solid #e8e8e8}.program h2{font-size:18px;margin:8px 0}.program a{text-decoration:none}.program a:hover{text-decoration:underline}.badge{font-size:12px;background:#f3f5f6;border-radius:4px;padding:4px 8px;color:#414b54}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding:20px 0;border-block:1px solid #eee}.facts strong{display:block}.timeline{padding-left:20px}.timeline li{padding:0 0 22px 12px}.timeline time{font-size:13px;color:#737373}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:15px 10px;border-bottom:1px solid #eee;vertical-align:top}th{font-size:12px;color:#737373}.scroll{overflow:auto}nav:where(.bottom-nav){position:fixed;bottom:0;left:0;right:0;background:#fffffff5;border-top:1px solid #eee;display:flex;justify-content:center;gap:80px;padding:16px;backdrop-filter:blur(10px)}nav:where(.bottom-nav) a{text-decoration:none;color:#777}nav:where(.bottom-nav) .active{color:#171717;font-weight:700}.notice{font-size:13px;color:#737373;background:#f8f8f8;padding:14px 16px;margin:24px 0}[hidden]{display:none!important}@media(max-width:600px){main{padding:22px 18px 90px}h1{font-size:23px}.facts{grid-template-columns:1fr 1fr}nav:where(.bottom-nav){gap:65px}td{min-width:105px}}'''
 
 CSS += """.investment-purpose{padding:16px 0;border-bottom:1px solid #e3e8ee}.investment-purpose>strong{font-size:14px;color:#66717e}.investment-purpose p{margin:6px 0;font-size:16px}.investment-purpose>a{font-size:13px;color:#456181}.back{font-size:14px;color:#6d7783;text-decoration:none}.detail-header{margin-top:22px;padding-bottom:22px}.institution{font-size:15px;color:#456181}.detail-meta{display:flex;align-items:center;justify-content:space-between;gap:16px}.detail-meta>a{font-size:14px;color:#365d87}.detail-header h1{margin:12px 0 20px}.event-list{list-style:none;padding:0;margin:0;border-top:2px solid #344c68}.event{display:grid;grid-template-columns:160px minmax(0,1fr) 55px;gap:18px;padding:14px 0;border-bottom:1px solid #e3e8ee;align-items:start}.event time{font-size:14px;color:#53677f;font-variant-numeric:tabular-nums}.event strong{font-size:16px;font-weight:600}.event>a{font-size:13px;color:#4b6786}.event small{font-size:13px;margin-top:4px}.planned{background:#f8f9fb}.planned-label{font-size:12px;color:#687d94;border:1px solid #dce3ec;border-radius:3px;padding:2px 5px;margin-left:6px}#offering .facts{grid-template-columns:1fr 2fr;border-top:1px solid #e3e8ee}section{margin-bottom:30px}#schedule h2{margin-top:0}#selection{margin-bottom:0}@media(max-width:600px){.event{grid-template-columns:minmax(0,1fr) 48px;gap:5px 10px;padding:14px 0}.event time{grid-column:1;grid-row:1}.event>div{grid-column:1/-1;grid-row:2}.event>a{grid-column:2;grid-row:1}.event time{font-size:13px}.event strong{font-size:15px}.detail-meta{align-items:start}.facts strong{font-size:15px}}"""
 
 CSS += """.stage-flow{display:flex;list-style:none;padding:12px 0;gap:20px;color:#53677f;font-size:14px}.stage-flow li+li:before{content:"→";margin-right:20px;color:#aaa}.planned-label:empty{display:none}#offering .facts:has(>div:nth-child(3)){grid-template-columns:1fr 1fr 1fr}"""
+
+CSS += """
+.lp-sample .institution-history .history-note{font-size:12px;color:#737373;margin:0 0 12px}
+.lp-sample .history-years{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;margin:0 0 22px}
+.lp-sample .history-year{margin:24px 0 0}.lp-sample .history-year h3{font-size:15px;margin:0 0 7px}
+.lp-sample .history-table{table-layout:fixed;width:100%;border-top:1px solid #d4d4d4}
+.lp-sample .history-table th,.lp-sample .history-table td{min-width:0;padding:12px 8px;overflow-wrap:anywhere}
+.lp-sample .history-table th:first-child{width:34%}.lp-sample .history-table th:nth-child(2){width:19%}
+.lp-sample .history-table th:nth-child(3){width:25%}.lp-sample .history-table th:nth-child(4){width:22%}
+.lp-sample .history-program{font-size:14px;font-weight:600;text-decoration:none}
+.lp-sample .history-date,.lp-sample .history-source{font-size:11px;color:#737373;margin-top:5px}
+.lp-sample .history-state{display:block;font-size:12px;margin-top:5px}.lp-sample .history-state.open{color:#257352}
+.lp-sample .history-table td{font-size:13px}.lp-sample .history-empty{color:#a3a3a3}
+.lp-sample .history-table ul{list-style:none;padding:0;margin:0}.lp-sample .history-table li+li{margin-top:5px}
+.lp-sample .history-strategy a{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.lp-sample .history-caption{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+@media(max-width:600px){
+.lp-sample .history-table,.lp-sample .history-table tbody{display:block}
+.lp-sample .history-table thead{display:none}.lp-sample .history-table tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid #e5e5e5;padding:12px 0;gap:12px 16px}
+.lp-sample .history-table td{display:block;border:0;padding:0;min-width:0}
+.lp-sample .history-table td:first-child,.lp-sample .history-table td:last-child{grid-column:1/-1}
+.lp-sample .history-table td[data-label]:before{content:attr(data-label);display:block;font-size:11px;color:#737373;margin-bottom:4px}
+.lp-sample .history-table .history-gps{display:flex;flex-wrap:wrap;gap:3px 14px}
+.lp-sample .history-table .history-gps li+li{margin-top:0}.lp-sample .history-program{font-size:15px}
+}
+"""
 
 # 40px monogram slot, like the publisher and GP logo circles in 브리프·GP rows.
 INSTITUTION_MARKS = {
@@ -468,6 +522,80 @@ def build(data, out, gp_profiles=None):
             for g in p['selected_gps']:
                 names.setdefault(gp_name_key(g['name']), g)
         return ''.join(f'<li><a href="selected-gp-{h(g["page_key"])}.html">{h(g["name"])}</a></li>' for g in names.values())
+    def institution_history(group):
+        years = defaultdict(list)
+        recruitment = {}
+        for p in group:
+            original = _recruitment_notice(p)
+            recruitment[p['id']] = original
+            years[original['date'][:4] if original else None].append(p)
+        ordered_years = sorted((y for y in years if y is not None), reverse=True)
+        if None in years:
+            ordered_years.append(None)
+        year_label = lambda year: f'{year}년' if year else '모집 연도 미확인'
+        anchor = lambda year: 'recruitment-' + (year or 'undated')
+        body = ('<section class="institution-history" aria-labelledby="institution-history-title">'
+                '<h2 id="institution-history-title">연도별 출자사업</h2>'
+                '<p class="history-note">모집 공고 게시 연도 기준 · 공고별 출자 예정액</p>'
+                '<nav class="history-years" aria-label="모집 공고 연도">'
+                + ''.join(f'<a href="#{anchor(y)}">{year_label(y)}</a>' for y in ordered_years) + '</nav>')
+        for year in ordered_years:
+            body += (f'<section class="history-year" id="{anchor(year)}"><h3>{year_label(year)}</h3>'
+                     '<table class="history-table"><caption class="history-caption">'
+                     + year_label(year) + ' 출자사업 비교</caption><thead><tr>'
+                     '<th scope="col">출자사업</th><th scope="col">출자 예정액</th>'
+                     '<th scope="col">전략·리그</th><th scope="col">공식 선정 운용사</th>'
+                     '</tr></thead><tbody>')
+            # Preserve open/nearest-deadline priority, then latest sourced stage.
+            ordered = sorted(years[year], key=lambda p: (
+                p['status'] != '접수 중', (p.get('deadline') or '9999') if p['status'] == '접수 중' else '',
+                -date.fromisoformat(latest(p)).toordinal(), p['id']))
+            for p in ordered:
+                url = f'program-{h(p["id"])}.html'
+                original = recruitment[p['id']]
+                posted = (source(original['url'], '모집 ' + original['date'].replace('-', '.'))
+                          if original else '모집 공고일 미확인')
+                last = max(p['events'], key=lambda e: (e['date'], e['url']))
+                if not original or last['url'] != original['url']:
+                    posted += '<br>' + source(last['url'], last['type'] + ' ' + last['date'].replace('-', '.'))
+                status = p['display_status']
+                # Final/intermediate results keep their actual stage date above;
+                # an old application deadline must not stand in for that date.
+                show_deadline = p.get('deadline') and not p['selected_gps'] and (
+                    status in ('접수 중', '접수 마감', '모집 공고', '공고')
+                    or last['date'] <= str(p['deadline'])[:10]) and not p.get('reported_result')
+                timing = ' · ' + short_date(p['deadline']) + ' 마감' if show_deadline else ''
+                if p.get('reported_result'):
+                    timing = ' · ' + short_date(p['reported_result']['reported_at']) + ' 보도'
+                scope = ' · PE·VC 공동 모집' if p.get('mixed_scope') else ''
+                amount = _history_amount(p)
+                empty = '<span class="history-empty">—</span>'
+                amount_html = f'<a href="{url}#offering">{h(amount)}</a>' if amount else empty
+                strategies = []
+                objective = p.get('primary_investment') or {}
+                if str(objective.get('source_url') or '').startswith('https://'):
+                    items = objective.get('items') or [objective.get('text')]
+                    for item in items:
+                        if isinstance(item, str) and item.strip() and not re.search(r'미확인\s*$', item):
+                            strategies.append(source(objective['source_url'], item))
+                for segment in p.get('segments') or []:
+                    name = segment.get('name')
+                    if isinstance(name, str) and name.strip() and not re.search(r'미확인|미정', name):
+                        strategies.append(f'<a href="{url}#offering">{h(name)}</a>')
+                strategy_html = ('<ul class="history-strategy">' + ''.join(
+                    f'<li>{item}</li>' for item in dict.fromkeys(strategies)) + '</ul>') if strategies else empty
+                selections = gp_links([p])
+                selected_html = '<ul class="history-gps">' + selections + '</ul>' if selections else empty
+                if selections:
+                    origins = dict.fromkeys(g['source_url'] for g in p['selected_gps'])
+                    selected_html += '<div class="history-source">' + ' · '.join(
+                        source(origin, '선정 원문') for origin in origins) + '</div>'
+                body += (f'<tr data-program-id="{h(p["id"])}"><td><a class="history-program" href="{url}">{h(p["list_title"])}</a>'
+                         f'<div class="history-date">{posted}</div><span class="history-state{" open" if status == "접수 중" else ""}">'
+                         f'{h(status + scope + timing)}</span></td><td data-label="출자 예정액">{amount_html}</td>'
+                         f'<td data-label="전략·리그">{strategy_html}</td><td data-label="공식 선정 운용사">{selected_html}</td></tr>')
+            body += '</tbody></table></section>'
+        return body + '</section>'
     directory = sorted(institutions.items(), key=lambda kv: max(max(e['date'] for e in p['events']) for p in kv[1]), reverse=True)
     for key,group in institutions.items():
         title=group[0]['institution_name']
@@ -476,7 +604,7 @@ def build(data, out, gp_profiles=None):
         body=f'<a class="back" href="institution-directory.html">← 출자기관</a>{institution_header_html(key, title, summary)}'
         if selected:
             body += f'<section class="institution-gps"><h2>선정 운용사</h2><ul class="gp-names">{gp_links(group)}</ul></section>'
-        body += '<h2>출자사업</h2>' + ''.join(row(p) for p in group)
+        body += institution_history(group)
         (out/f'institution-{key}.html').write_text(shell(title,body,as_of,description=f'{title}의 기관전용 사모펀드 출자사업 {summary}.',path=f'institution-{key}.html'))
     rows = ''
     for key, group in directory:
