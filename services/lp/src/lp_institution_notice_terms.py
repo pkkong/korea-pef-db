@@ -16,6 +16,51 @@ except ImportError:
     from lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 
 NUM = r'(\d[\d,]*)'
+_CWMA_OVERVIEW = re.compile(r'(?m)^1\.\s*선정\s*개요\s*$')
+_CWMA_CONDITIONS = re.compile(r'(?m)^2\.\s*주요\s*출자조건\s*$')
+
+
+def _cwma_pe_allocation(notice, sources):
+    if notice.get('institution_id') != 'cwma' or '국내사모투자펀드' not in re.sub(r'\s+', '', notice['title']):
+        return {}
+    matches = []
+    for url, raw, sha in sources:
+        start = _CWMA_OVERVIEW.search(raw)
+        end = _CWMA_CONDITIONS.search(raw, start.end()) if start else None
+        if not end:
+            continue
+        section = raw[start.end():end.start()]
+        compact = re.sub(r'\s+', '', section)
+        if not all(marker in compact for marker in ('운용방식ㆍ블라인드형', '공개모집',
+                                                   '기관전용사모집합투자기구', '창업·벤처전문사모투자기구제외')):
+            continue
+        rows = (
+            re.findall(r'(?m)^운용사[ \t]+수[ \t]*\n[ \t]*ㆍ[ \t]*(\d+)개사[ \t]*이내[ \t]*$', section),
+            re.findall(r'(?m)^공제회[ \t]+약정금액[ \t]*\n[ \t]*ㆍ[ \t]*총[ \t]*' + NUM
+                       + r'억원\(운용사당[ \t]+' + NUM + r'억원\)[ \t]*이내[ \t]*$', section),
+            re.findall(r'(?m)^최소[ \t]+결성금액[ \t]*\n[ \t]*ㆍ[ \t]*' + NUM
+                       + r'억원\(공제회[ \t]+출자비율:[ \t]*펀드결성총액의[ \t]*\d+%[ \t]+이하\)[ \t]*$', section),
+        )
+        if any(len(row) != 1 for row in rows):
+            raise ValueError('CWMA PE 모집 표의 출자 조건이 불명확함')
+        count = int(rows[0][0])
+        total, per_fund = (int(value.replace(',', '')) for value in rows[1][0])
+        minimum = int(rows[2][0].replace(',', ''))
+        if not (count > 0 and 0 < per_fund <= total <= minimum * count and total == count * per_fund):
+            raise ValueError('CWMA PE 모집 표의 약정액과 운용사 수 불일치')
+        matches.append(((count, total, per_fund, minimum), {
+            'source_url': url, 'sha256': sha, 'quote': section.strip(),
+        }))
+    if not matches:
+        return {}
+    if len({facts for facts, _ in matches}) != 1:
+        raise ValueError('CWMA 원문 사이에 PE 약정 조건 불일치')
+    count, total, per_fund, minimum = matches[0][0]
+    return {'commitment_amount_krw': total * 100_000_000, 'commitment_label': f'{total:,}억원 이내',
+            'manager_count': count, 'manager_count_label': f'{count}개사 이내',
+            'per_fund_amount_krw': per_fund * 100_000_000, 'per_fund_qualifier': '이내',
+            'fund_target_label': f'최소 {minimum:,}억원', 'amount_scope': 'pe_only',
+            'extraction_evidence': {'pe_allocation': [proof for _, proof in matches]}}
 
 
 def apply_iaci_allocation(n, result):
@@ -165,4 +210,8 @@ def extract_terms(n):
         else:
             result.update(deadline=specific['deadline'], deadline_precision=specific['deadline_precision'])
             evidence.setdefault('deadline', []).extend(specific['extraction_evidence']['deadline'])
+    cwma = _cwma_pe_allocation(n, sources)
+    if cwma:
+        evidence.update(cwma.pop('extraction_evidence'))
+        result.update(cwma)
     return apply_iaci_allocation(n, result)

@@ -51,6 +51,56 @@ class InstitutionTermsTests(unittest.TestCase):
         self.assertEqual(result['deadline'],'2025-09-05T15:00:00+09:00')
 
 
+class CwmaOfferingTermsTests(unittest.TestCase):
+    # The labelled rows come from the retained 2023 issuer attachment.
+    overview = """1. 선정개요
+구    분
+사모투자펀드
+운용방식
+ㆍ블라인드형
+선정방식
+ㆍ공개모집 공고를 통해 일괄심사방식으로 선정
+운용사 수
+ㆍ2개사 이내
+공제회 약정금액
+ㆍ총 600억원(운용사당 300억원) 이내
+최소 결성금액
+ㆍ1,500억원(공제회 출자비율: 펀드결성총액의 20% 이하)
+투자기구
+․기관전용사모집합투자기구※ 경영참여 목적 투자를 포함하여 운용하며, 창업·벤처전문사모투자기구 제외
+2. 주요 출자조건
+"""
+
+    def notice(self, attachment):
+        url = 'https://www.cw.or.kr/upload/boardAdmin/offer.hwp'
+        return {'institution_id': 'cwma', 'title': '2023년도 대체투자(국내 사모투자펀드) 위탁운용사 선정 공고',
+                'url': 'https://www.cw.or.kr/board.do', 'date': '2023-03-03', 'sha256': 'a'*64,
+                'body': "제안서 제출기한 : '23.03.17.(금) 11시",
+                'attachment_hashes': {url: 'b'*64}, 'attachment_texts': {url: attachment}}
+
+    def test_preserves_whole_pe_limit_and_per_manager_limit(self):
+        result = extract_terms(self.notice(self.overview))
+        self.assertEqual(result['commitment_amount_krw'], 60_000_000_000)
+        self.assertEqual(result['commitment_label'], '600억원 이내')
+        self.assertEqual(result['manager_count_label'], '2개사 이내')
+        self.assertEqual(result['per_fund_amount_krw'], 30_000_000_000)
+        self.assertEqual(result['fund_target_label'], '최소 1,500억원')
+        self.assertEqual(result['deadline'], '2023-03-17T11:00:00+09:00')
+        self.assertEqual(result['extraction_evidence']['pe_allocation'][0]['sha256'], 'b'*64)
+
+    def test_rejects_inconsistent_total_and_parallel_rows(self):
+        for source in (self.overview.replace('600억원', '900억원'),
+                       self.overview.replace('운용사 수', '운용사 수\nㆍ3개사 이내\n운용사 수')):
+            with self.subTest(source=source), self.assertRaisesRegex(ValueError, 'CWMA'):
+                extract_terms(self.notice(source))
+
+    def test_does_not_use_same_terms_for_credit_or_others(self):
+        n = self.notice(self.overview)
+        self.assertNotIn('commitment_amount_krw',
+                         extract_terms({**n, 'title': '국내 선순위 인수금융펀드 위탁운용사 선정계획'}))
+        self.assertNotIn('commitment_amount_krw', extract_terms({**n, 'institution_id': 'other'}))
+
+
 class DeadlineCaptionTests(unittest.TestCase):
     """고용보험기금 2026: time is given per track after the date."""
 
