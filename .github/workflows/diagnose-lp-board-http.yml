@@ -44,6 +44,10 @@ on:
         description: Verify all configured Mirae Asset EIF listing years and result notices without publishing
         type: boolean
         default: false
+      compare_eif_framing:
+        description: Compare one public Mirae Asset EIF listing under HTTP/1.0 and HTTP/1.1
+        type: boolean
+        default: false
       verify_tp_collection:
         type: boolean
         default: false
@@ -68,7 +72,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Retain the first public EIF OCIO listing response before decoding
-        if: '!inputs.verify_eif_ocio'
+        if: '!inputs.verify_eif_ocio && !inputs.compare_eif_framing'
         run: |
           python3 - <<'PY'
           import hashlib, json
@@ -145,10 +149,85 @@ jobs:
               raise SystemExit(1)
           PY
       - uses: actions/upload-artifact@v4
-        if: always() && !inputs.verify_eif_ocio
+        if: always() && !inputs.verify_eif_ocio && !inputs.compare_eif_framing
         with:
           name: eif-ocio-listing-diagnostic
           path: /tmp/eif-listing-diagnostic/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Compare the two bounded anonymous HTTP versions and retain both bodies
+        if: inputs.compare_eif_framing && !inputs.verify_eif_ocio
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, re, subprocess, tempfile
+          from datetime import datetime, timezone
+          from email.parser import BytesHeaderParser
+          from pathlib import Path
+          from services.lp.src.collect_lp_institution_boards import MAX_BYTES, _html, adapter, load_configs
+
+          config = load_configs()['moel_eif_ocio']
+          board = adapter(config)
+          url = next(board.listing_urls(config))
+          assert board.listing_url_allowed(url, config)
+          out = Path('/tmp/eif-framing-comparison')
+          out.mkdir()
+          reports = []
+          for version in ('1.0', '1.1'):
+              report = {'url': url, 'requested_http_version': version, 'parsed': False,
+                        'checked_at': datetime.now(timezone.utc).isoformat(), 'logical_requests': 1}
+              reports.append(report)
+              with tempfile.TemporaryDirectory() as tmp:
+                  header = Path(tmp) / 'headers'
+                  command = ['curl', '--disable', '--silent', '--http' + version,
+                             '--proto', '=https', '--noproxy', '*', '--max-time', '20',
+                             '--max-filesize', str(MAX_BYTES), '--dump-header', str(header),
+                             '--user-agent', 'Mozilla/5.0 (LP official board collector)',
+                             '--header', 'Accept-Encoding: identity', '--header', 'Connection: close',
+                             '--referer', config['listing_url'], url]
+                  with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as process:
+                      body = process.stdout.read(MAX_BYTES + 1)
+                      if len(body) > MAX_BYTES:
+                          process.kill()
+                      report['curl_exit'] = process.wait(timeout=22)
+                  raw = body[:MAX_BYTES]
+                  (out / ('http-' + version + '.bin')).write_bytes(raw)
+                  report.update(bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest(), truncated=len(body) > MAX_BYTES)
+                  if header.exists() and header.stat().st_size <= 64 * 1024:
+                      frames = re.split(br'\r?\n\r?\n', header.read_bytes().strip())
+                      status, _, fields = frames[-1].partition(b'\n')
+                      match = re.fullmatch(br'HTTP/(1\.[01]) (\d{3})(?: [^\r\n]*)?\r?', status)
+                      if match:
+                          report.update(http_version=match[1].decode('ascii'), http_status=int(match[2]))
+                          headers = BytesHeaderParser().parsebytes(fields)
+                          lengths = headers.get_all('Content-Length', [])
+                          report.update(content_length_count=len(lengths),
+                                        content_length=lengths[0][:40] if len(lengths) == 1 else None,
+                                        transfer_encoding=headers.get('Transfer-Encoding', '')[:80],
+                                        content_encoding=headers.get('Content-Encoding', '')[:80])
+              receipt = out / 'receipt.json'
+              receipt.write_text(json.dumps(reports, ensure_ascii=False, indent=2))
+              try:
+                  length = report.get('content_length')
+                  transfer = report.get('transfer_encoding', '').lower()
+                  if (report['curl_exit'] or report['truncated'] or report.get('http_status') != 200
+                          or report.get('content_encoding', '').lower() not in ('', 'identity')
+                          or transfer not in ('', 'chunked')
+                          or report.get('content_length_count', 0) and
+                          (transfer or not length or not length.isascii() or not length.isdecimal() or int(length) != len(raw))):
+                      raise ValueError('listing transfer did not complete with the expected framing')
+                  report.update(parsed=True, rows=len(board.parse_listing(_html(raw), url, config)))
+              except ValueError as error:
+                  report['parse_error'] = str(error)[:200]
+              receipt.write_text(json.dumps(reports, ensure_ascii=False, indent=2))
+          print(json.dumps(reports, ensure_ascii=False))
+          if not any(r['parsed'] for r in reports):
+              raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always() && inputs.compare_eif_framing && !inputs.verify_eif_ocio
+        with:
+          name: eif-ocio-framing-comparison
+          path: /tmp/eif-framing-comparison/
           retention-days: 7
           if-no-files-found: error
       - name: Verify the full configured EIF OCIO channel without publishing
