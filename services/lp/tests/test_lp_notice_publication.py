@@ -431,6 +431,29 @@ class KdbResultRosterTests(unittest.TestCase):
         self.assertEqual(kdb_result_roster(table + '\n다른칸자료'), [])
         self.assertEqual(kdb_result_roster(table.replace('선정 운용사명', '지원 운용사명')), [])
 
+    def test_kdb_separate_pe_strategies_use_their_own_budget(self):
+        from services.lp.src.lp_institution_notice_terms import extract_terms
+        header = ('분야별출자계획○출자계획분야산은출자금액산은출자비율펀드별목표결성금액(최소결성규모)선정운용사수조성목표')
+        rows = ('VC300억원28.6%350억원3개1,050억원PE신산업투자350억원29.2%1,200억원1개1,200억원'
+                '사업재편350억원29.2%1,200억원1개1,200억원합계1,000억원--5개3,450억원')
+        policy = ('○PE펀드 ①[신산업투자]신산업을 영위하는 남부권 지역 중소·중견기업에 당행 출자금의 1배수* 이상 투자 '
+                  '②[사업재편]남부권 지역 중소·중견기업의 사업재편에 당행 출자금의 1배수* 이상 투자 '
+                  '*단, 동남권 지역 기업에 0.3배수 이상 및 서남권 지역 기업에 0.3배수 이상 투자하여야 함')
+        body = '위탁운용금액: 총 1,000억원 이내 ' + header + rows + ' 접수일시 ○ 2025년 8월 1일(금) 10:00 ~ 15:00 접수방법 ○ 제출' + policy
+        notice = {'institution_id': 'kdb', 'title': '2025년 남부권 지역성장지원펀드 선정계획 공고',
+                  'url': 'https://www.kdb.co.kr/program', 'date': '2025-06-20', 'body': body, 'sha256': 'a' * 64}
+        terms = extract_terms(notice)
+        self.assertEqual(terms['commitment_amount_krw'], 700 * 10**8)
+        self.assertEqual(terms['total_commitment_amount_krw'], 1_000 * 10**8)
+        self.assertEqual(terms['manager_count'], 2)
+        self.assertEqual([s['amount_krw'] for s in terms['segments']], [350 * 10**8, 350 * 10**8])
+        self.assertEqual(terms['deadline'], '2025-08-01T15:00:00+09:00')
+        self.assertIn('서남권 기업', terms['primary_investment']['items'][-1])
+        for change in (body.replace('사업재편350억원', '사업재편351억원'), body.replace('총 1,000억원 이내', '총 1,100억원 이내')):
+            held = extract_terms({**notice, 'body': change})
+            self.assertTrue(held['allocation_reading_failed'])
+            self.assertNotIn('commitment_amount_krw', held)
+
     def test_result_attachment_becomes_pe_selection(self):
         from services.lp.src.lp_notice_publication import _attach_result_roster
         from services.lp.src.lp_program_service import validate

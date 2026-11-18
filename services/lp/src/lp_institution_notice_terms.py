@@ -57,6 +57,18 @@ _KDB_AI_MANDATE = re.compile(
     r'목표결성금액의\[(\d{1,3})%\]이상투자※AI밸류체인.{1,1200}?'
     r'②중소[·․]중견기업에약정총액의(\d{1,3})%이상투자산은출자비율'
 )
+_KDB_SECTOR_PLAN = re.compile(
+    r'분야별출자계획○출자계획분야산은출자금액산은출자비율펀드별목표결성금액\(최소결성규모\)선정운용사수조성목표'
+    r'VC' + NUM + r'억원\d+(?:\.\d+)?%' + NUM + r'억원(\d+)개' + NUM + r'억원'
+    r'PE신산업투자' + NUM + r'억원\d+(?:\.\d+)?%' + NUM + r'억원(\d+)개' + NUM + r'억원'
+    r'사업재편' + NUM + r'억원\d+(?:\.\d+)?%' + NUM + r'억원(\d+)개' + NUM + r'억원'
+    r'합계' + NUM + r'억원--(\d+)개' + NUM + r'억원'
+)
+_KDB_SECTOR_MANDATE = re.compile(
+    r'○PE펀드.{1,16}?\[신산업투자\].{1,100}?남부권지역.{0,7}?중소[·․]중견기업에당행출자금의(\d+(?:\.\d+)?)배수\*이상투자'
+    r'.{1,16}?\[사업재편\].{0,12}?남부권지역.{0,7}?중소[·․]중견기업의.{0,8}?사업재편에당행출자금의(\d+(?:\.\d+)?)배수\*이상투자'
+    r'\*단,동남권지역기업에(\d+(?:\.\d+)?)배수이상및서남권지역기업에(\d+(?:\.\d+)?)배수이상투자하여야함'
+)
 
 
 def _kdb_size_plan(match):
@@ -70,6 +82,25 @@ def _kdb_size_plan(match):
         'segments': [{'name': '중형', 'amount_krw': medium * 10**8, 'manager_count': medium_count},
                      {'name': '소형', 'amount_krw': small * 10**8, 'manager_count': f'{small_low}~{small_high}'}],
         'manager_count_label': f'{count_low}~{count_high}개사', 'fund_target_label': f'{goal:,}억원'}
+
+
+def _kdb_sector_plan(match):
+    values = [int(value.replace(',', '')) for value in match.groups()]
+    groups = [values[i:i+4] for i in (0, 4, 8)]
+    total, count, goal = values[-3:]
+    if (not all(values) or any(fund * managers != formation for _, fund, managers, formation in groups)
+            or (sum(row[0] for row in groups), sum(row[2] for row in groups), sum(row[3] for row in groups)) != (total, count, goal)):
+        raise ValueError('산업은행 PE·VC 리그 표 합계 불일치')
+    pe = groups[1:]
+    amount = sum(row[0] for row in pe)
+    managers = sum(row[2] for row in pe)
+    return {'amount_scope': 'pe_only', 'commitment_amount_krw': amount * 10**8,
+            'total_commitment_amount_krw': total * 10**8,
+            'commitment_label': f'PE 부문 {amount:,}억원 (PE·VC 합계 {total:,}억원 이내)',
+            'list_commitment_label': f'PE 부문 {amount:,}억원', 'manager_count': managers,
+            'manager_count_label': f'{managers}개사',
+            'segments': [{'name': name, 'amount_krw': row[0] * 10**8, 'manager_count': row[2]}
+                         for name, row in zip(('신산업 투자', '사업재편'), pe)]}
 
 
 def _cwma_joint_table(section, kind):
@@ -271,6 +302,7 @@ def extract_terms(n):
     kdb_joint = bool(kdb_vehicles_sources)
     kdb_plan = None
     kdb_mandates = []
+    sector_plan, sector_mandates = None, []
     for url, raw, sha in sources:
         text = re.sub(r'\s+', '', raw)
         def record(key, quote):
@@ -322,7 +354,24 @@ def extract_terms(n):
             stamp = datetime(year,int(m[2]),int(m[3]),hour,int(m[6] or 0)).isoformat() + '+09:00'
             deadlines.add(stamp)
             record('deadline',m[0])
-        if kdb_joint:
+        sector = _KDB_SECTOR_PLAN.search(text) if n.get('institution_id') == 'kdb' else None
+        if sector:
+            try:
+                allocation = _kdb_sector_plan(sector)
+                caps = {int(value.replace(',', '')) * 10**8 for value in
+                        re.findall(r'위탁운용금액[:：]*총' + NUM + r'억원이내', text)}
+                if caps != {allocation['total_commitment_amount_krw']}:
+                    raise ValueError('산업은행 PE·VC 표와 모집 상한 불일치')
+                if sector_plan is not None and allocation != sector_plan:
+                    raise ValueError('산업은행 PE·VC 리그 표 복수 값')
+                sector_plan = allocation
+                record('pe_allocation', sector[0])
+            except ValueError as exc:
+                result.update(allocation_reading_failed=True, allocation_error=str(exc))
+            mandate = _KDB_SECTOR_MANDATE.search(text)
+            if mandate:
+                sector_mandates.append((mandate, url, sha))
+        if kdb_joint or sector:
             for m in _KDB_RECEPTION.finditer(text):
                 year, month, day, start_hour, start_minute, end_hour, end_minute = map(int, m.groups())
                 start = datetime(year, month, day, start_hour, start_minute)
@@ -387,6 +436,18 @@ def extract_terms(n):
                 'items': [f'목표결성금액의 {mandate[1]}% 이상을 AI 밸류체인에 투자',
                           f'약정총액의 {mandate[2]}% 이상을 중소·중견기업에 투자'], 'source_url': url}
             evidence['purpose'] = [{'source_url': url, 'sha256': sha, 'quote': m[0]} for m, url, sha in kdb_mandates]
+    if result.get('allocation_reading_failed'):
+        for field in _ALLOCATION_FIELDS:
+            result.pop(field, None)
+    elif sector_plan:
+        result.update(sector_plan)
+        if sector_mandates and len({m.groups() for m, _, _ in sector_mandates}) == 1:
+            mandate, url, _ = sector_mandates[0]
+            result['primary_investment'] = {'source_url': url, 'items': [
+                f'신산업 투자 · 남부권 중소·중견기업에 산업은행 출자금의 {mandate[1]}배 이상 투자',
+                f'사업재편 · 남부권 중소·중견기업 사업재편에 산업은행 출자금의 {mandate[2]}배 이상 투자',
+                f'산업은행 출자금의 {mandate[3]}배 이상을 동남권 기업에, {mandate[4]}배 이상을 서남권 기업에 투자']}
+            evidence['purpose'] = [{'source_url': url, 'sha256': sha, 'quote': m[0]} for m, url, sha in sector_mandates]
     if per_fund:
         amount, qualifier = next(iter(per_fund))
         result.update(per_fund_amount_krw=amount, per_fund_qualifier=qualifier)
