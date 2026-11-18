@@ -39,7 +39,8 @@ MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_INPUT_BYTES = 40 * 1024 * 1024
 _FIELDS = ('source_id', 'url', 'title', 'date', 'body', 'sha256', 'attachments')
 REVIEW_SCOPES = ('pe_roster', 'joint_originals')
-CAPTURE_SCOPES = REVIEW_SCOPES + ('press_listing', 'press_search', 'press_followup', 'press_result')
+PRESS_CHAIN_SCOPES = ('press_followup', 'press_result', 'press_pdf')
+CAPTURE_SCOPES = REVIEW_SCOPES + ('press_listing', 'press_search') + PRESS_CHAIN_SCOPES
 
 
 def _sha(raw):
@@ -285,15 +286,18 @@ def main(argv=None):
     mode.add_argument('--assets', type=Path)
     parser.add_argument('--capture', type=Path)
     parser.add_argument('--followup-capture', type=Path)
+    parser.add_argument('--result-capture', type=Path)
     parser.add_argument('--review-scope', choices=CAPTURE_SCOPES, default='pe_roster')
     args = parser.parse_args(argv)
     if args.review_scope in ('press_listing', 'press_search') and (not args.capture_details or args.capture):
         parser.error('보도자료 목록은 새 응답 진단만 지원하며 기존 묶음 재생에 쓸 수 없습니다')
-    if args.review_scope in ('press_followup', 'press_result') and (not args.capture_details or not args.capture):
+    if args.review_scope in PRESS_CHAIN_SCOPES and (not args.capture_details or not args.capture):
         parser.error('보도자료 후속 조회에는 앞선 검색 응답 영수증이 필요합니다')
-    if bool(args.followup_capture) != (args.review_scope == 'press_result'):
-        parser.error('보도자료 결과 상세에만 검증된 2쪽 응답 영수증을 지정합니다')
-    if args.out.resolve() in {p.resolve() for p in (args.bundle, args.capture, args.followup_capture) if p}:
+    if bool(args.followup_capture) != (args.review_scope in ('press_result', 'press_pdf')):
+        parser.error('보도자료 상세와 첨부에는 검증된 2쪽 응답 영수증이 필요합니다')
+    if bool(args.result_capture) != (args.review_scope == 'press_pdf'):
+        parser.error('보도자료 첨부에는 상세 응답 영수증이 필요합니다')
+    if args.out.resolve() in {p.resolve() for p in (args.bundle, args.capture, args.followup_capture, args.result_capture) if p}:
         parser.error('입력 원문·보완 영수증을 덮어쓸 수 없습니다')
     if args.out.exists() or args.out.is_symlink():
         parser.error('기존 원본·실패 영수증·보고서를 덮어쓸 수 없습니다. 새 출력 경로를 사용하세요')
@@ -309,7 +313,7 @@ def main(argv=None):
     def save(report):
         args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     if args.capture_details:
-        if args.capture and args.review_scope not in ('press_followup', 'press_result'):
+        if args.capture and args.review_scope not in PRESS_CHAIN_SCOPES:
             parser.error('실패 보완을 자동 재시도하지 않습니다')
         if args.review_scope == 'press_listing':
             try:
@@ -337,7 +341,7 @@ def main(argv=None):
                                             retain=lambda receipts: save(search_report(receipts)))
             report = search_report(receipts)
             save(report)
-        elif args.review_scope in ('press_followup', 'press_result'):
+        elif args.review_scope in PRESS_CHAIN_SCOPES:
             prior = read_json(args.capture)
             bundle_sha = _sha(args.bundle.read_bytes())
             if not isinstance(prior, dict) or prior.get('context_bundle_sha256') != bundle_sha:
@@ -356,15 +360,22 @@ def main(argv=None):
                 report = capture_press_followup(prior, terms, fetch_press_followup, retain=save_press)
             else:
                 try:
-                    from .lp_kgrowth_press_probe import capture_press_result_detail, fetch_press_detail
+                    from .lp_kgrowth_press_probe import capture_press_result_detail, capture_press_result_pdf, fetch_press_detail
                 except ImportError:
-                    from lp_kgrowth_press_probe import capture_press_result_detail, fetch_press_detail
+                    from lp_kgrowth_press_probe import capture_press_result_detail, capture_press_result_pdf, fetch_press_detail
                 followup = read_json(args.followup_capture)
                 if (not isinstance(followup, dict) or followup.get('context_bundle_sha256') != bundle_sha
                         or followup.get('prior_capture_sha256') != prior_sha):
                     raise ValueError('보도자료 2쪽과 앞선 검색 응답 지문 불일치')
                 proof['followup_capture_sha256'] = _sha(args.followup_capture.read_bytes())
-                report = capture_press_result_detail(prior, followup, terms, fetch_press_detail, retain=save_press)
+                if args.review_scope == 'press_result':
+                    report = capture_press_result_detail(prior, followup, terms, fetch_press_detail, retain=save_press)
+                else:
+                    detail = read_json(args.result_capture)
+                    if not isinstance(detail, dict) or any(detail.get(k) != v for k, v in proof.items() if k != 'review_scope'):
+                        raise ValueError('보도자료 상세와 앞선 목록 응답 지문 불일치')
+                    proof['result_capture_sha256'] = _sha(args.result_capture.read_bytes())
+                    report = capture_press_result_pdf(prior, followup, detail, terms, retain=save_press)
             save_press(report)
         else:
             report = capture_details(bundle, fetch_detail, retain=save, review_scope=args.review_scope)

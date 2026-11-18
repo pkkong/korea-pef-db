@@ -22,6 +22,17 @@ _PRESS_FORM = {'search_colume': 'Title', 'str_type': '3', 'pagesize': '10',
                'orderby': '1', 'notice_type': '1', 'tab': '1'}
 MAX_DETAIL_BYTES = 12 * 1024 * 1024
 TIMEOUT_SECONDS = 25
+_DETAIL_SUFFIX = """<script type="text/javascript">
+<!--
+var tab = '1';
+$(function(){
+//if (tab != '') {
+var sT = $('#notice2').offset().top - $('header').outerHeight() + 20;
+$(document).scrollTop(sT, 0);
+//}
+});
+//-->
+</script>"""
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -105,8 +116,7 @@ def _complete_html(raw):
     return not tail
 
 
-def _validate_response(response, report, *, expected_url=PRESS_LISTING_URL):
-    """Minimal capture checks, called only after persisting the observation."""
+def _validate_wire_response(response, report, *, expected_url):
     if not isinstance(response, dict):
         raise ValueError('목록 응답 형식 미확인')
     if not isinstance(response.get('raw'), bytes):
@@ -122,13 +132,19 @@ def _validate_response(response, report, *, expected_url=PRESS_LISTING_URL):
     raw = response['raw']
     if not raw:
         raise ValueError('목록 원응답이 비어 있음')
+    return raw
+
+
+def _validate_response(response, report, *, expected_url=PRESS_LISTING_URL):
+    """Minimal capture checks, called only after persisting the observation."""
+    raw = _validate_wire_response(response, report, expected_url=expected_url)
     # ASCII tag boundaries work for UTF-8 and CP949 without guessing or
     # transforming the source encoding. This is not a listing/row parser.
     if not _complete_html(raw):
         raise ValueError('목록 HTML 완결성 미확인')
 
 
-def _capture(url, fetch, *, checked_at, retain):
+def _capture(url, fetch, *, checked_at, retain, validate=_validate_response):
     """Retain a single allowed observation before any response validation.
 
     ``fetch`` returns only the useful values ``raw``, ``http_status``, ``geturl``;
@@ -183,7 +199,7 @@ def _capture(url, fetch, *, checked_at, retain):
     try:
         if failure:
             raise ValueError('목록 요청 실패: ' + failure)
-        _validate_response(response, report, expected_url=url)
+        validate(response, report, expected_url=url)
     except ValueError as error:
         report['holds'].append({'url': url, 'reason': str(error)})
     report['capture_status'] = 'held' if report['holds'] else 'response_retained'
@@ -539,3 +555,167 @@ def capture_press_result_detail(first_capture, followup_capture, expected_terms,
         report['capture_status'] = 'held'
     save(report)
     return {**context, 'requests': report['requests'], 'receipts': [report], 'holds': copy.deepcopy(report['holds'])}
+
+
+def _complete_press_detail(raw):
+    """Only the separately witnessed detail suffix; listing checks stay strict."""
+    closing = list(re.finditer(br'</body\s*>\s*</html\s*>', raw, re.I))
+    if (len(closing) != 1 or len(re.findall(br'<html(?:\s[^>]*)?>', raw, re.I)) != 1
+            or len(re.findall(br'<body(?:\s[^>]*)?>', raw, re.I)) != 1):
+        raise ValueError('보도자료 상세 HTML 경계 미확인')
+    def lines(value):
+        return [line.strip() for line in value.splitlines() if line.strip()]
+    if lines(raw[closing[0].end():]) != lines(_DETAIL_SUFFIX.encode('ascii')):
+        raise ValueError('보도자료 상세의 관측된 단일 script 끝부분 불일치')
+
+
+def _press_result_detail_dom(raw, target, term, digest):
+    try:
+        from .collect_shared_lp_notices import Document
+    except ImportError:
+        from collect_shared_lp_notices import Document
+    _complete_press_detail(raw)
+    root = Document(raw.decode('cp949')).root
+    def one(nodes, label):
+        values = list(nodes)
+        if len(values) != 1:
+            raise ValueError('보도자료 상세의 ' + label + ' 구획 누락·중복')
+        return values[0]
+    def cls(node, tag, name):
+        return [n for n in node.nodes(tag) if name in n.attrs.get('class', '').split()]
+    if [n.clean() for n in root.nodes('title')] != ['보도자료 > 공지사항 > 한국성장금융투자운용']:
+        raise ValueError('보도자료 상세 문서 제목 불일치')
+    meta = one((n for n in root.nodes('meta') if n.attrs.get('http-equiv', '').lower() == 'content-type'), '문자셋')
+    if not re.search(r'charset\s*=\s*euc-kr\b', meta.attrs.get('content', ''), re.I):
+        raise ValueError('보도자료 상세 원문 문자셋 미확인')
+    wrap = one(cls(root, 'div', 'notice_view_wrap'), '본문 틀')
+    inner = one(cls(wrap, 'div', 'notice_view_inner'), '본문 내부 틀')
+    if [n.clean() for n in one(cls(inner, 'div', 'noti_view_top'), '게시판 이름').nodes('h3')] != ['보도자료']:
+        raise ValueError('보도자료 상세 게시판 이름 불일치')
+    article = one(cls(inner, 'div', 'noti_veiw'), '공고')
+    info = one(cls(article, 'div', 'view_info'), '제목·날짜')
+    title = one(cls(info, 'p', 'tit'), '공고 제목').clean()
+    posted = one(cls(info, 'p', 'date'), '게시일')
+    day = one(posted.nodes('span'), '게시일 값').clean()
+    if title != target['title'] or day != target['date'] or posted.clean() != '작성일 ' + day:
+        raise ValueError('보도자료 상세 제목·게시일이 원목록과 다름')
+    contents = one(cls(article, 'div', 'veiw_contents'), '공고 본문')
+    if len(cls(root, 'div', 'view_info')) != 1 or len(cls(root, 'div', 'veiw_contents')) != 1:
+        raise ValueError('보도자료 상세에 이웃 제목·본문 구획이 섞임')
+    body = contents.clean()
+    compact = re.sub(r'[\s\u200b\xa0]+', '', body)
+    business = re.search(r'『' + re.escape(re.sub(r'\s+', '', term)) + r'』(20\d{2})년정시위탁운용사선정결과', compact)
+    headline = re.search(r'([1-9]\d*)개운용사최종선정$', re.sub(r'\s+', '', title))
+    if (not business or not headline or not all(name in compact for name in ('한국산업은행', '한국성장금융'))
+            or not re.search(r'최종' + re.escape(headline[1]) + r'개사가선정되었다고', compact)):
+        raise ValueError('보도자료 상세의 공동 정시 최종 선정 본문 불일치')
+    files = one(cls(article, 'ul', 'file_list'), '첨부 목록')
+    anchors = list(files.nodes('a'))
+    if len(anchors) != 2 or len(cls(root, 'ul', 'file_list')) != 1:
+        raise ValueError('보도자료 상세의 HWP·PDF 첨부 수 불일치')
+    stem = re.sub(r'\s+', ' ', title.replace('産銀·성장금융', '산은 성장금융').replace('「', '').replace('」', '')).strip()
+    attachments = {}
+    for anchor in anchors:
+        name = anchor.clean()
+        url = urljoin(target['url'], anchor.attrs.get('href', ''))
+        parsed = urlsplit(url)
+        fields = parse_qsl(parsed.query, keep_blank_values=True)
+        query = dict(fields)
+        slot = query.get('SelType')
+        if (parsed.scheme != 'https' or parsed.netloc != 'www.kgrowth.or.kr' or parsed.path != '/down_file.asp'
+                or parsed.fragment or len(fields) != 2 or set(query) != {'idx', 'SelType'}
+                or query.get('idx') != target['board_record_id'] or slot not in ('News1', 'News2')
+                or slot in attachments or url != 'https://www.kgrowth.or.kr/down_file.asp?' + urlencode(
+                    {'idx': target['board_record_id'], 'SelType': slot})):
+            raise ValueError('보도자료 첨부의 호스트·경로·ID·News 구획 불일치')
+        extension = '.hwp' if slot == 'News1' else '.pdf'
+        if name != stem + extension or anchor.attrs.get('title') != f'첨부파일 [{name}] 다운로드':
+            raise ValueError('보도자료 첨부 파일명·형식과 공고 제목 불일치')
+        attachments[slot] = {'url': url, 'name': name, 'slot': slot,
+                             'board_record_id': target['board_record_id'], 'source_detail_sha256': digest,
+                             'downloaded': False}
+    if set(attachments) != {'News1', 'News2'}:
+        raise ValueError('보도자료의 단일 News2 PDF 원문 링크 미확인')
+    return {'title': title, 'date': day, 'body': body,
+            'body_text_sha256': hashlib.sha256(body.encode('utf-8')).hexdigest(),
+            'stated_business_year': business[1], 'stated_round': '정시',
+            'attachments': [attachments['News1'], attachments['News2']]}, attachments['News2']
+
+
+def replay_press_result_detail(first_capture, followup_capture, detail_capture, expected_terms, *,
+                               checked_at=None, retain=lambda report: None):
+    """Recheck saved bytes only; never revise the original held capture receipt."""
+    stamp = _checked_at(checked_at)
+    result = {'kind': 'lp_kgrowth_press_result_replay_v1', 'checked_at': stamp, 'requests': 0,
+              'source_institution_id': 'kgrowth', 'board_type': 3, 'replay_complete': False,
+              'detail_template_verified': False, 'notice_identity_verified': False, 'pdf_link_verified': False,
+              'roster_verified': False, 'parsed': False, 'source_health_verified': False,
+              'publication_ready': False, 'published': False, 'database_reads': 0, 'database_writes': 0,
+              'holds': []}
+    try:
+        if not isinstance(detail_capture, dict):
+            raise ValueError('보도자료 상세 보존 묶음 형식 불일치')
+        receipts = detail_capture.get('receipts')
+        if not isinstance(receipts, list) or len(receipts) != 1 or not isinstance(receipts[0], dict):
+            raise ValueError('보도자료 상세 원영수증이 하나가 아님')
+        receipt = receipts[0]
+        if not isinstance(receipt.get('checked_at'), str):
+            raise ValueError('보도자료 상세 관측시각 누락')
+        observed = _checked_at(receipt['checked_at'])
+        if datetime.fromisoformat(observed.replace('Z', '+00:00')) > datetime.fromisoformat(stamp.replace('Z', '+00:00')):
+            raise ValueError('보도자료 상세 관측시각이 재생시각보다 늦음')
+        encoded = receipt.get('raw_base64')
+        if not isinstance(encoded, str) or len(encoded) > (MAX_DETAIL_BYTES + 2) // 3 * 4:
+            raise ValueError('보도자료 상세 원바이트 누락·상한 초과')
+        raw = base64.b64decode(encoded, validate=True)
+        replayed = capture_press_result_detail(first_capture, followup_capture, expected_terms, lambda url: {
+            'raw': raw, 'http_status': receipt.get('http_status'), 'geturl': receipt.get('response_url')}, checked_at=observed)
+        if (not _same_proof(replayed['receipts'][0], receipt)
+                or any(not _same_proof(detail_capture.get(k), v) for k, v in replayed.items() if k != 'receipts')):
+            raise ValueError('보도자료 목록→상세 원영수증 재생 불일치')
+        target = replayed['listing_target']
+        allowed_hold = [{'url': target['url'], 'reason': '목록 HTML 완결성 미확인'}]
+        if (type(receipt.get('http_status')) is not int or receipt['http_status'] != 200
+                or receipt.get('full_response_retained') is not True
+                or replayed['holds'] not in ([], allowed_hold)):
+            raise ValueError('보도자료 상세 응답 상태·전체 원문 보존 미확인')
+        result.update(listing_target=target,
+                      source_detail={k: receipt[k] for k in ('url', 'sha256', 'bytes', 'checked_at')},
+                      original_capture_status=receipt['capture_status'], original_capture_holds=copy.deepcopy(receipt['holds']))
+        detail, pdf = _press_result_detail_dom(raw, target, replayed['search_term'], receipt['sha256'])
+        result.update(replay_complete=True, detail_template_verified=True, notice_identity_verified=True,
+                      pdf_link_verified=True, detail=detail, pdf_attachment=pdf)
+    except (ValueError, KeyError, TypeError, StopIteration) as error:
+        result['holds'].append({'reason': str(error) if isinstance(error, ValueError) else '보도자료 상세 증거 형식 불일치'})
+    retain(copy.deepcopy(result))
+    return result
+
+
+def _validate_pdf_response(response, report, *, expected_url):
+    raw = _validate_wire_response(response, report, expected_url=expected_url)
+    if not re.match(br'%PDF-[12]\.\d[\r\n]', raw) or not raw.rstrip().endswith(b'%%EOF'):
+        raise ValueError('보도자료 첨부의 PDF 시작·종료 표식 불일치')
+
+
+def capture_press_result_pdf(first, followup, detail, terms, *, checked_at=None, retain=lambda report: None):
+    """Replay the official chain and retain its one observed PDF before reading it."""
+    stamp = _checked_at(checked_at)
+    replay = replay_press_result_detail(first, followup, detail, terms, checked_at=stamp)
+    result = {'kind': 'lp_kgrowth_press_result_pdf_v1', 'review_scope': 'press_pdf',
+              'detail_replay': replay, 'requests': 0, 'receipts': [], 'holds': replay['holds'],
+              'pdf_container_observed': False, 'parsed': False, 'roster_verified': False,
+              'publication_ready': False, 'published': False, 'database_reads': 0, 'database_writes': 0}
+    if not replay['pdf_link_verified']:
+        retain(copy.deepcopy(result))
+        return result
+
+    def save(receipt):
+        retain({**copy.deepcopy(result), 'requests': receipt['requests'], 'receipts': [receipt],
+                'holds': copy.deepcopy(receipt['holds'])})
+
+    receipt = _capture(replay['pdf_attachment']['url'], _fetch, checked_at=stamp,
+                       retain=save, validate=_validate_pdf_response)
+    result.update(requests=receipt['requests'], receipts=[receipt], holds=receipt['holds'],
+                  pdf_container_observed=not receipt['holds'])
+    retain(copy.deepcopy(result))
+    return result

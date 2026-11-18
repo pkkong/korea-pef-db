@@ -651,5 +651,146 @@ class PressResultDetailProbeTests(unittest.TestCase):
             fetch.assert_called_once_with(url)
 
 
+class PressResultDetailReplayTests(unittest.TestCase):
+    terms = PressResultDetailProbeTests.terms
+    title = '(보도자료) 産銀·성장금융 「정책형 뉴딜펀드」 26개 운용사 최종 선정'
+    stem = '(보도자료) 산은 성장금융 정책형 뉴딜펀드 26개 운용사 최종 선정'
+    tail = """<script type="text/javascript">
+<!--
+var tab = '1';
+$(function(){
+//if (tab != '') {
+var sT = $('#notice2').offset().top - $('header').outerHeight() + 20;
+$(document).scrollTop(sT, 0);
+//}
+});
+//-->
+</script>"""
+
+    def page(self, transform=None):
+        # Observed detail markup/body phrases; the record ID remains synthetic.
+        files = ''.join(f'<li><a href="/down_file.asp?idx=1002&SelType=News{slot}" '
+                        f'title="첨부파일 [{self.stem}.{ext}] 다운로드">{self.stem}.{ext}</a></li>'
+                        for slot, ext in ((1, 'hwp'), (2, 'pdf')))
+        html = ('<html><head><meta http-equiv="Content-Type" content="text/html; charset=euc-kr">'
+                '<title>보도자료 > 공지사항 > 한국성장금융투자운용</title></head><body>'
+                '<div class="notice_view_wrap"><div class="notice_view_inner">'
+                '<div class="noti_view_top"><h3>보도자료</h3></div><div class="noti_veiw">'
+                f'<div class="view_info"><p class="tit">{self.title}</p>'
+                '<p class="date">작성일 <span>2021-02-26</span></p></div>'
+                '<div class="veiw_contents"><p>한국산업은행 및 한국성장금융은 『정책형 뉴딜펀드』 '
+                '2021년 정시 위탁운용사 선정 결과, 최종 26개사가 선정되었다고 밝혔습니다.</p></div>'
+                f'<ul class="file_list">{files}</ul></div></div></div></body></html>\n' + self.tail)
+        return (transform(html) if transform else html).encode('cp949')
+
+    def chain(self, transform=None):
+        first, second = PressResultDetailProbeTests().chain()
+        raw = self.page(transform)
+        capture = probe.capture_press_result_detail(first, second, self.terms,
+                                                    lambda url: response(raw, url=url), checked_at=STAMP)
+        return first, second, capture
+
+    def test_new_detail_replay_preserves_the_held_capture_and_emits_only_one_pdf_link(self):
+        first, second, capture = self.chain();before = copy.deepcopy((first, second, capture));saved = []
+        self.assertFalse(probe._complete_html(self.page()))
+        self.assertEqual(capture['receipts'][0]['capture_status'], 'held')
+        result = probe.replay_press_result_detail(first, second, capture, self.terms, checked_at=STAMP, retain=saved.append)
+        self.assertEqual((first, second, capture), before)
+        self.assertTrue(result['replay_complete'])
+        self.assertTrue(result['detail_template_verified'])
+        self.assertTrue(result['notice_identity_verified'])
+        self.assertEqual(result['holds'], [])
+        self.assertEqual(result['requests'], 0)
+        self.assertEqual(result['original_capture_status'], 'held')
+        self.assertEqual(result['original_capture_holds'], capture['holds'])
+        self.assertEqual(result['pdf_attachment']['url'], 'https://www.kgrowth.or.kr/down_file.asp?idx=1002&SelType=News2')
+        self.assertEqual(result['pdf_attachment']['source_detail_sha256'], capture['receipts'][0]['sha256'])
+        self.assertEqual(result['detail']['body_text_sha256'], hashlib.sha256(result['detail']['body'].encode()).hexdigest())
+        self.assertEqual(result['detail']['stated_business_year'], '2021')
+        for key in ('roster_verified', 'publication_ready', 'published', 'source_health_verified'):
+            self.assertIs(result[key], False)
+        self.assertFalse(result['pdf_attachment']['downloaded'])
+        self.assertNotIn('selected_gps', result)
+        self.assertEqual(saved[-1], result)
+
+    def test_only_the_exact_observed_detail_script_tail_is_supported(self):
+        for tail in ('', self.tail[:-9], self.tail + self.tail,
+                     self.tail.replace("var tab = '1'", "var tab = '2'"),
+                     self.tail + '<style type="text/css"></style>'):
+            first, second, capture = self.chain(lambda h: h.replace(self.tail, tail))
+            result = probe.replay_press_result_detail(first, second, capture, self.terms, checked_at=STAMP)
+            self.assertFalse(result['replay_complete'])
+            self.assertTrue(result['holds'])
+            self.assertNotIn('pdf_attachment', result)
+
+    def test_title_date_body_container_and_current_body_are_not_taken_from_neighbours(self):
+        changes = [
+            ('class="tit"', 'class="other-title"'), ('2021-02-26', '2021-02-27'),
+            ('26개 운용사 최종 선정', '25개 운용사 최종 선정'),
+            ('class="veiw_contents"', 'class="view_contents"'),
+            ('최종 26개사가 선정되었다고', '최종 25개사가 선정되었다고'),
+            ('2021년 정시 위탁운용사', '2021년 수시 위탁운용사'),
+            ('<div class="veiw_contents">', '<div class="veiw_contents"></div><div class="neighbour">'),
+        ]
+        for old, new in changes:
+            with self.subTest(old=old):
+                first, second, capture = self.chain(lambda h: h.replace(old, new, 1))
+                result = probe.replay_press_result_detail(first, second, capture, self.terms, checked_at=STAMP)
+                self.assertFalse(result['replay_complete'])
+                self.assertNotIn('pdf_attachment', result)
+
+    def test_file_id_slot_type_name_count_and_host_must_all_match_the_observed_pair(self):
+        import re
+        changes = [
+            lambda h: h.replace('idx=1002&SelType=News2', 'idx=1003&SelType=News2'),
+            lambda h: h.replace('SelType=News2', 'SelType=News1'),
+            lambda h: h.replace('SelType=News2', 'SelType=News%32'),
+            lambda h: h.replace('idx=1002&SelType=News2', 'idx=1002&idx=1002&SelType=News2'),
+            lambda h: h.replace(self.stem + '.pdf', self.stem + '.hwp'),
+            lambda h: h.replace(self.stem + '.pdf', '다른 결과.pdf'),
+            lambda h: h.replace('href="/down_file.asp', 'href="https://other.example/down_file.asp', 1),
+            lambda h: h.replace('/down_file.asp?', '/other.asp?', 1),
+            lambda h: re.sub(r'<li><a href="/down_file.asp\?idx=1002&SelType=News2".*?</li>', '', h),
+            lambda h: h.replace('</ul>', f'<li><a href="/down_file.asp?idx=1002&SelType=News2">{self.stem}.pdf</a></li></ul>', 1),
+        ]
+        for transform in changes:
+            first, second, capture = self.chain(transform)
+            result = probe.replay_press_result_detail(first, second, capture, self.terms, checked_at=STAMP)
+            self.assertFalse(result['replay_complete'])
+            self.assertTrue(result['holds'])
+            self.assertNotIn('pdf_attachment', result)
+
+    def test_source_receipt_types_hashes_and_both_prior_proofs_are_not_bypassed(self):
+        for key, value in [('sha256', '0'*64), ('bytes', True), ('http_status', 403), ('full_response_retained', 1)]:
+            first, second, capture = self.chain();capture['receipts'][0][key] = value
+            result = probe.replay_press_result_detail(first, second, capture, self.terms, checked_at=STAMP)
+            self.assertTrue(result['holds'])
+            self.assertNotIn('pdf_attachment', result)
+        first, second, capture = self.chain();first['receipts'][0]['sha256'] = '0'*64
+        self.assertTrue(probe.replay_press_result_detail(first, second, capture, self.terms, checked_at=STAMP)['holds'])
+        first, second, capture = self.chain();second['current_page_verified'] = False
+        self.assertTrue(probe.replay_press_result_detail(first, second, capture, self.terms, checked_at=STAMP)['holds'])
+
+    def test_pdf_fetch_requires_full_detail_proof_and_retains_failed_bytes(self):
+        first, second, capture = self.chain()
+        for raw, valid in ((b'%PDF-1.4\nfixture\n%%EOF\n', True), (b'<html>denied</html>', False)):
+            saved = []
+            with patch.object(probe, '_fetch', side_effect=lambda url: response(raw, url=url)) as fetch:
+                result = probe.capture_press_result_pdf(first, second, capture, self.terms,
+                                                        checked_at=STAMP, retain=saved.append)
+            fetch.assert_called_once_with('https://www.kgrowth.or.kr/down_file.asp?idx=1002&SelType=News2')
+            self.assertEqual(result['pdf_container_observed'], valid)
+            self.assertEqual(result['requests'], 1)
+            self.assertFalse(result['roster_verified'])
+            observed = next(r['receipts'][0] for r in saved if r['receipts'] and
+                            r['receipts'][0]['capture_status'] == 'observed')
+            self.assertEqual(base64.b64decode(observed['raw_base64']), raw)
+        capture['receipts'][0]['sha256'] = '0' * 64
+        with patch.object(probe, '_fetch') as fetch:
+            result = probe.capture_press_result_pdf(first, second, capture, self.terms, checked_at=STAMP)
+        fetch.assert_not_called()
+        self.assertTrue(result['holds'])
+
+
 if __name__ == '__main__':
     unittest.main()
