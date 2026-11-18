@@ -283,7 +283,8 @@ class InstitutionYearComparison(unittest.TestCase):
         official = self.selected('official', 'test', '테스트기관', '공식선정운용사', 'gp-official')
         official['primary_investment'] = {'text': '국내 성장기업에 60% 이상 투자',
                                           'source_url': 'https://official.example/purpose'}
-        official['segments'] = [{'name': '크레딧 리그'}, {'name': '성장 리그'}]
+        official['segments'] = [{'name': '크레딧 리그', 'amount_krw': 40_000_000_000},
+                                {'name': '성장 리그', 'per_fund_max_krw': 5_000_000_000}]
         unconfirmed = self.program('unconfirmed', '접수 마감', 'test', '테스트기관')
         unconfirmed['primary_investment'] = {'text': '출처 없는 전략'}
         unconfirmed['preferred_gps'] = ['우선협상운용사']
@@ -300,8 +301,9 @@ class InstitutionYearComparison(unittest.TestCase):
         self.assertIn('href="https://official.example/result-official"', row)
         self.assertIn('href="https://official.example/purpose"', row)
         self.assertIn('국내 성장기업에 60% 이상 투자', row)
-        self.assertIn('크레딧 리그', row)
+        self.assertIn('크레딧 리그 · 400억원', row)
         self.assertIn('성장 리그', row)
+        self.assertNotIn('50억원', row)
         other = self.row(page, 'unconfirmed')
         for value in ('우선협상운용사', '보도운용사', '출처 없는 전략'):
             self.assertNotIn(value, other)

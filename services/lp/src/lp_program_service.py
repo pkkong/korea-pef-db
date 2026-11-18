@@ -581,6 +581,10 @@ def build(data, out, gp_profiles=None):
                 for segment in p.get('segments') or []:
                     name = segment.get('name')
                     if isinstance(name, str) and name.strip() and not re.search(r'미확인|미정', name):
+                        segment_amount = segment.get('amount_krw')
+                        if (isinstance(segment_amount, (int, float)) and not isinstance(segment_amount, bool)
+                                and 0 < segment_amount < float('inf')):
+                            name = f'{name} · {segment_amount / 100_000_000:,.0f}억원'
                         strategies.append(f'<a href="{url}#offering">{h(name)}</a>')
                 strategy_html = ('<ul class="history-strategy">' + ''.join(
                     f'<li>{item}</li>' for item in dict.fromkeys(strategies)) + '</ul>') if strategies else empty
