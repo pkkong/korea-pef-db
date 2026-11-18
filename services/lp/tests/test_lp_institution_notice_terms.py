@@ -226,6 +226,49 @@ class CwmaJointOfferingTermsTests(unittest.TestCase):
         n['attachment_texts'] = {}
         self.assert_allocation_held(extract_terms(n))
 
+    def test_parallel_legacy_table_reads_vc_first_but_does_not_assign_the_shared_manager_count(self):
+        table = """1. 선정개요
+구    분
+벤처펀드
+사모투자펀드
+운용방식
+ㆍ개별합동펀드(블라인드형)
+선정방식
+ㆍ공개모집 공고를 통해 일괄심사방식으로 선정
+운용사 수
+ㆍ2개사 이내
+공제회 약정금액
+ㆍ총 200억원(운용사당 100억원) 이내
+ㆍ총 400억원(운용사당 200억원) 이내
+최소 결성금액
+ㆍ500억원
+ㆍ1,000억원
+투자기구
+ㆍ벤처투자 촉진에 관한 법률에 의한 벤처투자조합
+ㆍ여신전문금융업법에 의한 신기술사업투자조합
+ㆍ자본시장과 금융투자업에 관한 법률에 의한 창업·벤처전문 경영참여형 사모집합투자기구
+ㆍ자본시장과 금융투자업에 관한 법률에 의한 경영참여형 사모집합투자기구
+＊자격 미달 시 약정금액 조정 가능
+2. 주요 출자조건
+"""
+        def read(attachment):
+            n = self.notice(attachment)
+            n['title'] = '2021년도 대체투자(국내 벤처펀드 및 사모투자펀드) 위탁운용사 선정 공고'
+            return extract_terms(n)
+
+        terms = read(table)
+        self.assertEqual(terms['commitment_amount_krw'], 60_000_000_000)
+        self.assertEqual(terms['amount_scope'], 'combined')
+        self.assertNotIn('manager_count', terms)
+        pe, vc = terms['segments']
+        self.assertIn('PEF', pe['name'])
+        self.assertEqual((pe['amount_krw'], pe['per_fund_max_krw'], pe['fund_target_label']),
+                         (40_000_000_000, 20_000_000_000, '최소 1,000억원'))
+        self.assertEqual((vc['amount_krw'], vc['per_fund_max_krw']), (20_000_000_000, 10_000_000_000))
+        self.assertNotIn('manager_count', pe)
+        self.assert_allocation_held(read(table.replace('벤처펀드\n사모투자펀드', '사모투자펀드\n벤처펀드', 1)))
+        self.assert_allocation_held(read(table.replace('ㆍ총 400억원(운용사당 200억원) 이내\n', '', 1)))
+
     def test_past_qualifications_and_later_stage_numbers_do_not_become_allocations(self):
         unrelated = '선정 운용사 수\nㆍ99개사 이내\n공제회 선정규모\nㆍ총 9,900억원(1개사 당 100억원 이내) 이내\n'
         old_layout = CwmaOfferingTermsTests.overview.replace('2개사', '3개사')

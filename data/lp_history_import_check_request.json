@@ -1,9 +1,9 @@
 {
   "kind": "lp_history_import_check_request_v1",
   "institution_id": "cwma",
-  "bundle_commit": "574951875f64a1c4cb574489110b4b7ae159fedd",
-  "bundle_sha256": "fb5a934e7f498ad5827d286032d82fd27cd6ff20751ae14ed35b0d4f78424eef",
-  "candidate_sha256": "d58d3713ace6a9cf9512c0720b259a0148695f50d7c929f69add4cfa69656565",
-  "candidate_checked_at": "2026-11-18T01:38:53.171197+00:00",
-  "reason": "운영 44255393307 발행 시간 초과 뒤 lp_program_private.program_state의 현재 공개본과 사업 수를 읽기 전용으로 확인한다. 같은 건설근로자공제회 2025년 원문 후보와 기존 사업·주소·선정 명단·별칭 보존을 재검증한다."
+  "bundle_commit": "eb9e78b8d2cd8dca2b011ee1c95d68655642ee8d",
+  "bundle_sha256": "02de04fc4ac8ae0658923234d4f1488ddbc55461a85adb10241f16109c74e755",
+  "candidate_sha256": "bf17ba1a4425bfe0c3658cedb5740e747a365bf460cf05c2de621e9c5bc1179d",
+  "candidate_checked_at": "2026-11-18T12:29:47.468964+00:00",
+  "reason": "건설근로자공제회 2021년 자체 모집 원문에서 PE·VC 병렬 표와 마감 조건을 검증한다. 기존 공개 사업·주소·선정 명단·별칭과 후보의 저장 크기를 읽기 전용으로 대조한다."
 }

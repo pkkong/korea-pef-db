@@ -67,12 +67,22 @@ def _cwma_joint_table(section, kind):
 
 def _cwma_joint_allocation(notice, sources):
     title = re.sub(r'\s+', '', notice['title'])
-    if notice.get('institution_id') != 'cwma' or not all(word in title for word in ('국내사모투자펀드', '벤처펀드')):
+    shared_table = '국내벤처펀드및사모투자펀드' in title
+    if notice.get('institution_id') != 'cwma' or not (
+            shared_table or all(word in title for word in ('국내사모투자펀드', '벤처펀드'))):
         return {}
     if re.search(r'결과|정정|수정|연장|취소', title):
         raise ValueError('CWMA 후속 공고의 원모집 조건 사용 보류')
     matches = []
     for url, raw, sha in sources:
+        if shared_table:
+            start = _CWMA_OVERVIEW.search(raw)
+            end = _CWMA_CONDITIONS.search(raw, start.end()) if start else None
+            if start and end:
+                section = raw[start.end():end.start()]
+                matches.append((_cwma_joint_shared_table(section),
+                                {'source_url': url, 'sha256': sha, 'quote': section.strip()}))
+            continue
         pe, vc, end = [list(pattern.finditer(raw)) for pattern in (_CWMA_JOINT_PE, _CWMA_JOINT_VC, _CWMA_PROCEDURE)]
         if not (pe or vc):
             continue
@@ -88,18 +98,44 @@ def _cwma_joint_allocation(notice, sources):
         raise ValueError('CWMA 원문 사이에 PE·VC 모집 조건 불일치')
     matches.sort(key=lambda item: (item[1]['source_url'], item[1]['sha256']))
     facts = matches[0][0]
-    count, total = sum(f[0] for f in facts), sum(f[1] for f in facts)
+    total = sum(f[1] for f in facts)
     segments = []
     for name, (number, amount, per_manager, minimum, maximum) in zip(('국내 사모투자펀드(PEF)', '국내 벤처펀드(VC)'), facts):
-        segments.append({'name': name, 'manager_count': number, 'amount_krw': amount * 100_000_000,
-                         'per_fund_max_krw': per_manager * 100_000_000,
-                         'fund_target_label': f'{minimum:,}~{maximum:,}억원'})
+        segment = {'name': name, 'amount_krw': amount * 100_000_000,
+                   'per_fund_max_krw': per_manager * 100_000_000,
+                   'fund_target_label': f'{minimum:,}~{maximum:,}억원' if maximum else f'최소 {minimum:,}억원'}
+        if number is not None:
+            segment['manager_count'] = number
+        segments.append(segment)
+    counts = {}
+    if all(f[0] is not None for f in facts):
+        count = sum(f[0] for f in facts)
+        counts = {'manager_count': count, 'manager_count_label': f'{count}개사 이내 (PE·VC 합계)'}
     return {'commitment_amount_krw': total * 100_000_000, 'commitment_label': f'{total:,}억원 이내',
-            'list_commitment_label': f'{total:,}억원 이내', 'amount_scope': 'combined',
-            'manager_count': count, 'manager_count_label': f'{count}개사 이내 (PE·VC 합계)',
+            'list_commitment_label': f'{total:,}억원 이내', 'amount_scope': 'combined', **counts,
             'segments': segments, 'fund_target_label': ' · '.join(
-                f'{name} {fact[3]:,}~{fact[4]:,}억원' for name, fact in zip(('PE', 'VC'), facts)),
+                f'{name} {segment["fund_target_label"]}' for name, segment in zip(('PE', 'VC'), segments)),
             'extraction_evidence': {'combined_allocation': [proof for _, proof in matches]}}
+
+
+def _cwma_joint_shared_table(section):
+    """The retained parallel VC/PE overview orders each pair VC first."""
+    compact = re.sub(r'\s+', '', section)
+    if (not compact.startswith('구분벤처펀드사모투자펀드운용방식ㆍ개별합동펀드(블라인드형)선정방식ㆍ공개모집')
+            or compact.count('투자기구') != 3
+            or '벤처투자조합' not in compact or '신기술사업투자조합' not in compact
+            or not re.search(r'창업·벤처전문경영참여형사모집합투자기구ㆍ[^ㆍ]+의한경영참여형사모집합투자기구(?:＊|\*)', compact)):
+        raise ValueError('CWMA 병렬 모집 표의 현재 PE·VC 열과 투자기구 미확인')
+    money = r'ㆍ총' + NUM + r'억원\(운용사당' + NUM + r'억원\)이내'
+    minimum = r'ㆍ' + NUM + '억원'
+    rows = re.findall('공제회약정금액' + money + money + '최소결성금액' + minimum + minimum + '투자기구', compact)
+    if len(rows) != 1:
+        raise ValueError('CWMA 병렬 모집 표의 PE·VC 금액 행 누락·중복')
+    vc, vc_per, pe, pe_per, vc_min, pe_min = (int(value.replace(',', '')) for value in rows[0])
+    if not (0 < vc_per <= vc and vc_per <= vc_min and 0 < pe_per <= pe and pe_per <= pe_min):
+        raise ValueError('CWMA 병렬 모집 표의 PE·VC 금액 불일치')
+    # The extracted shared manager-count row does not identify a track count.
+    return (None, pe, pe_per, pe_min, None), (None, vc, vc_per, vc_min, None)
 
 
 def _cwma_pe_allocation(notice, sources):
