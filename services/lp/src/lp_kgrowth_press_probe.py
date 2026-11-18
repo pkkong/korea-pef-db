@@ -700,6 +700,14 @@ def _validate_pdf_response(response, report, *, expected_url):
         raise ValueError('보도자료 첨부의 PDF 시작·종료 표식 불일치')
 
 
+def _validate_session_detail(response, receipt, replay, search_term, *, expected_url):
+    raw = _validate_wire_response(response, receipt, expected_url=expected_url)
+    source, pdf = _press_result_detail_dom(raw, replay['listing_target'], search_term, receipt['sha256'])
+    if (any(source[key] != replay['detail'][key] for key in ('title', 'date', 'body_text_sha256'))
+            or pdf['url'] != replay['pdf_attachment']['url']):
+        raise ValueError('공개 세션의 상세 제목·게시일·본문·PDF 주소가 저장 원문과 다름')
+
+
 def capture_press_result_pdf(first, followup, detail, terms, *, prior_failure=None,
                              checked_at=None, retain=lambda report: None):
     """Replay the official chain and retain its one observed PDF before reading it."""
@@ -727,10 +735,7 @@ def capture_press_result_pdf(first, followup, detail, terms, *, prior_failure=No
         source_url = replay['source_detail']['url']
 
         def validate_detail(response, receipt, *, expected_url):
-            raw = _validate_wire_response(response, receipt, expected_url=expected_url)
-            source, _ = _press_result_detail_dom(raw, replay['listing_target'], followup['search_term'], receipt['sha256'])
-            if any(source[key] != replay['detail'][key] for key in ('title', 'date', 'body_text_sha256')):
-                raise ValueError('공개 세션의 상세 제목·게시일·본문이 저장 원문과 다름')
+            _validate_session_detail(response, receipt, replay, followup['search_term'], expected_url=expected_url)
 
         body = _capture(source_url, lambda url: _fetch(url, opener=opener, referer=followup['receipts'][0]['url']),
                         checked_at=stamp, retain=save, validate=validate_detail)
@@ -747,6 +752,52 @@ def capture_press_result_pdf(first, followup, detail, terms, *, prior_failure=No
                   pdf_container_observed=not receipt['holds'])
     retain(copy.deepcopy(result))
     return result
+
+
+def replay_press_result_pdf(first, followup, detail, pdf_capture, terms, *, prior_failure=None, checked_at=None):
+    """Recover PDF bytes from the original receipts without making a request."""
+    limit = datetime.fromisoformat(_checked_at(checked_at).replace('Z', '+00:00'))
+    session = prior_failure is not None
+    scope = 'press_pdf_session' if session else 'press_pdf'
+    if not isinstance(pdf_capture, dict):
+        raise ValueError('보도자료 PDF 보존 묶음 형식 불일치')
+    receipts = pdf_capture.get('receipts')
+    if (pdf_capture.get('kind') != 'lp_kgrowth_press_result_pdf_v1' or pdf_capture.get('review_scope') != scope
+            or not isinstance(receipts, list) or len(receipts) != (2 if session else 1)
+            or any(not isinstance(receipt, dict) for receipt in receipts)
+            or type(pdf_capture.get('requests')) is not int or pdf_capture['requests'] != len(receipts)
+            or pdf_capture.get('holds') != [] or pdf_capture.get('pdf_container_observed') is not True):
+        raise ValueError('보도자료 PDF 보존 묶음 형식 불일치')
+    stamp = receipts[0].get('checked_at')
+    if (not isinstance(stamp, str) or any(receipt.get('checked_at') != stamp for receipt in receipts)
+            or datetime.fromisoformat(_checked_at(stamp).replace('Z', '+00:00')) > limit):
+        raise ValueError('보도자료 PDF 관측시각 불일치')
+    replay = replay_press_result_detail(first, followup, detail, terms, checked_at=stamp)
+    if not replay['pdf_link_verified'] or not _same_proof(pdf_capture.get('detail_replay'), replay):
+        raise ValueError('보도자료 목록·상세·PDF 링크 재생 불일치')
+
+    def verify(receipt, url, validator):
+        encoded = receipt.get('raw_base64')
+        if not isinstance(encoded, str) or len(encoded) > (MAX_DETAIL_BYTES + 2) // 3 * 4:
+            raise ValueError('보도자료 원바이트 누락·상한 초과')
+        raw = base64.b64decode(encoded, validate=True)
+        response = {'raw': raw, 'http_status': receipt.get('http_status'), 'geturl': receipt.get('response_url')}
+        expected = _capture(url, lambda _: response, checked_at=stamp, retain=lambda _: None, validate=validator)
+        if expected['holds'] or not _same_proof(receipt, expected):
+            raise ValueError('보도자료 원응답·지문·파일 완결 재생 불일치')
+        return raw
+
+    if session:
+        if pdf_capture.get('prior_direct_failure_sha256') != _check_pdf_direct_failure(prior_failure, replay):
+            raise ValueError('보도자료 PDF 직접 접근 실패 지문 불일치')
+
+        def validate_detail(response, receipt, *, expected_url):
+            _validate_session_detail(response, receipt, replay, followup['search_term'], expected_url=expected_url)
+
+        verify(receipts[0], replay['source_detail']['url'], validate_detail)
+    raw = verify(receipts[-1], replay['pdf_attachment']['url'], _validate_pdf_response)
+    return raw, {'source_detail': replay['source_detail'], 'detail': replay['detail'],
+                 'source_pdf': {k: receipts[-1][k] for k in ('url', 'sha256', 'bytes', 'checked_at')}}
 
 
 def _check_pdf_direct_failure(failure, replay):

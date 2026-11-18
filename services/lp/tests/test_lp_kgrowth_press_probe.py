@@ -807,6 +807,18 @@ $(document).scrollTop(sT, 0);
         self.assertTrue(result['pdf_container_observed'])
         self.assertEqual(calls[1][2], calls[0][0])
         self.assertIs(calls[0][1], calls[1][1])
+        with patch.object(probe, '_fetch') as fetch:
+            raw, proof = probe.replay_press_result_pdf(first, second, capture, result, self.terms,
+                                                       prior_failure=failed, checked_at=STAMP)
+            self.assertEqual(raw, b'%PDF-1.4\nfixture\n%%EOF')
+            self.assertEqual(proof['source_pdf']['sha256'], result['receipts'][1]['sha256'])
+            for offset, key, value in ((0, 'full_response_retained', 1), (1, 'sha256', '0' * 64),
+                                       (1, 'http_status', 403), (1, 'response_url', calls[0][0])):
+                with self.subTest(key=key), patch.dict(result['receipts'][offset], {key: value}):
+                    with self.assertRaises(ValueError):
+                        probe.replay_press_result_pdf(first, second, capture, result, self.terms,
+                                                      prior_failure=failed, checked_at=STAMP)
+            fetch.assert_not_called()
         failed['receipts'][0]['sha256'] = '0' * 64
         with patch.object(probe, '_fetch') as fetch, self.assertRaises(ValueError):
             probe.capture_press_result_pdf(first, second, capture, self.terms, prior_failure=failed, checked_at=STAMP)
