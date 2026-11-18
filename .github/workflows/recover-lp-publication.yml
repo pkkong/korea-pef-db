@@ -6,7 +6,7 @@ on:
       runner:
         description: Standard macOS runner for the retained scanned-PDF evidence
         type: choice
-        options: [macos-latest, macos-15-intel]
+        options: [macos-latest, macos-26-intel]
         default: macos-latest
       collection_run:
         description: Completed main-branch Collect LP programs run with retained evidence
@@ -309,7 +309,12 @@ jobs:
               assert current['manager_list_sources']['preferred_gps']==receipt['source_url']
               assert receipt['source_url'] in {e['url'] for e in current['events'] if e['type']=='우선협상대상자'}
           errors=data.get('institution_collection_holds',[])
-          assert not any(h.get('stage')=='institution_validation' for h in errors), 'Invalid official receipt'
+          validation_errors=[h for h in errors if h.get('stage')=='institution_validation']
+          if validation_errors:
+              print(json.dumps({'invalid_official_receipts': [
+                  {k: h[k] for k in ('institution_id', 'source_id', 'url', 'error', 'reason') if k in h}
+                  for h in validation_errors[:20]]}, ensure_ascii=False), flush=True)
+              raise ValueError('Invalid official receipt')
           new=[p for p in data['programs'] if p['id'] not in {old['id'] for old in old['programs']}]
           if expected_baseline:
               assert not data.get('history_notice_holds'), 'History import validation holds'

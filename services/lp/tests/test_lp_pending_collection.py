@@ -87,7 +87,7 @@ class PendingCollectionTests(unittest.TestCase):
         workflow=(root/'.github/workflows/collect-kgrowth-programs.yml').read_text().split('  collect:\n',1)[1]
         self.assertIn('runs-on: macos-latest',workflow)
         recovery=(root/'.github/workflows/recover-lp-publication.yml').read_text()
-        self.assertIn('options: [macos-latest, macos-15-intel]',recovery)
+        self.assertIn('options: [macos-latest, macos-26-intel]',recovery)
         self.assertIn('default: macos-latest',recovery)
         self.assertIn('runs-on: ${{ inputs.runner }}',recovery)
 
