@@ -100,6 +100,52 @@ class PublishContracts(unittest.TestCase):
                     prepare_publication({})
         self.assertIn('REPEATABLE READ READ ONLY', conn.execute.call_args_list[0].args[0])
 
+    def test_history_addition_preserves_existing_details_and_adds_official_gp_context(self):
+        import tempfile
+        from unittest.mock import MagicMock
+        from lp_program_aliases import alias_pages
+        from lp_program_service import build
+        from lp_state_storage import pack_state
+        from publish_lp_programs import prepare_historical_addition
+        from services.lp.tests.test_lp_history_import_preflight import payload_fixture, current_fixture, STAMP
+
+        payload = payload_fixture()
+        current = current_fixture(payload)
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            current['public_notice_context'] = build(copy.deepcopy(current), out)['public_notice_context']
+            saved = {p.name: p.read_text() for p in out.glob('*.html')}
+        saved.update(alias_pages(current['programs'], current['program_aliases']))
+        saved['review.html'] = '<p>Existing review</p>'
+        from lp_history_import_preflight import proposal
+        data, summary = proposal(current, payload, STAMP)
+        new = data['programs'][-1]
+        source = 'https://www.kbiz.or.kr/result'
+        new['events'].append({'type': '선정 결과', 'date': '2020-10-01', 'url': source, 'title': '선정 결과'})
+        new['status'] = '선정 완료'
+        new['selected_gps'] = [{'id': 'new-gp', 'name': '새로운파트너스', 'asset_scope': 'PE', 'source_url': source}]
+        revision = (('baseline', 'stamp'), current['review_decisions'])
+        conn = MagicMock()
+        conn.__enter__.return_value = conn
+        conn.execute.return_value.fetchone.return_value = (pack_state(current), saved)
+        with patch('publish_lp_programs.connect', return_value=conn), \
+             patch('publish_lp_programs.publication_revision', return_value=revision), \
+             patch('lp_history_import_preflight.proposal', return_value=(data, summary)), \
+             patch('publish_lp_programs.publication_phase'):
+            report, published, pages, expected_revision = prepare_historical_addition(payload, 'baseline', STAMP)
+            self.assertEqual(expected_revision, revision)
+            self.assertEqual(published['programs'][:-1], current['programs'])
+            self.assertEqual(pages['program-existing-2026.html'], saved['program-existing-2026.html'])
+            self.assertEqual(pages['program-retired-2026.html'], saved['program-retired-2026.html'])
+            self.assertEqual(pages['review.html'], saved['review.html'])
+            self.assertIn('새로운파트너스', pages['selected-gp-new-gp.html'])
+            self.assertIn(new['id'], pages['institution-kbiz.html'])
+            self.assertEqual(published['public_notice_context']['notices'][:-1], current['public_notice_context']['notices'])
+            self.assertEqual(published['public_notice_context']['notices'][-1]['selectedGpNames'], ['새로운파트너스'])
+            self.assertEqual(report['new_program_ids'], [new['id']])
+            with self.assertRaisesRegex(ValueError, 'changed since history-import preflight'):
+                prepare_historical_addition(payload, 'other-run', STAMP)
+
     def test_changed_publication_or_review_cannot_write_prepared_results(self):
         from unittest.mock import MagicMock
         from publish_lp_programs import publish_prepared

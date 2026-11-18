@@ -4,6 +4,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import tempfile
 import sys
 import time
@@ -458,7 +459,73 @@ def prepare_publication(report):
     return data, pages, revision
 
 
-def publish_prepared(report, data, pages, revision, institution, wrap_json=None):
+def prepare_historical_addition(payload, expected_run, checked_at):
+    """Add pinned historical programs while preserving already published evidence."""
+    from lp_history_import_preflight import proposal
+    from lp_reported_results import load_reported_results
+
+    started = time.monotonic()
+    with connect() as conn:
+        conn.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+        conn.execute("SET LOCAL statement_timeout='120s'")
+        revision = publication_revision(conn)
+        if not revision[0] or revision[0][0] != expected_run:
+            raise ValueError('Public model changed since history-import preflight')
+        row = conn.execute('SELECT data,pages FROM lp_program_private.program_state WHERE id=1').fetchone()
+    current, old_pages = unpack_state(row[0]), row[1]
+    current['review_decisions'] = revision[1]
+    publication_phase('publication_baseline', started)
+
+    started = time.monotonic()
+    data, summary = proposal(current, payload, checked_at)
+    added = summary['new_programs']
+    if (not added or summary['reused_program_ids']
+            or summary['history_notices_after'] - summary['history_notices_before'] != len(payload['notices'])):
+        raise ValueError('Pinned import must append only previously unpublished programs and stages')
+    new_ids = {p['id'] for p in added}
+    previous_results = current.get('reported_results', {})
+    results, holds = load_reported_results(added)
+    new_result_holds = [h for h in holds if h['program_id'] in new_ids]
+    if new_ids & previous_results.keys() or any(h['reason'] != 'official result exists' for h in new_result_holds):
+        raise ValueError('Historical addition has conflicting reported results')
+    if results:
+        data['reported_results'] = {**previous_results, **results}
+    if 'reported_result_holds' in current or new_result_holds:
+        data['reported_result_holds'] = [h for h in current.get('reported_result_holds', []) if h['program_id'] not in new_ids]
+        data['reported_result_holds'].extend(new_result_holds)
+
+    aliases = alias_pages(current['programs'], current.get('program_aliases', {}))
+    required_pages = {'review.html', 'index.html', 'institution-directory.html'} | {
+        f"program-{p['id']}.html" for p in current['programs']}
+    changed_pages = {'index.html', 'institution-directory.html'} | {
+        f"institution-{p['institution_id']}.html" for p in added}
+    new_pages = {f'program-{program_id}.html' for program_id in new_ids}
+    if (not isinstance(old_pages, dict) or any(not old_pages.get(n) for n in required_pages)
+            or any(old_pages.get(n) != html for n, html in aliases.items()) or new_pages & old_pages.keys()):
+        raise ValueError('Historical addition would lose or replace an existing public URL or review page')
+    with tempfile.TemporaryDirectory() as folder:
+        out = Path(folder)
+        profiles = current.get('gp_profile_contract', {}).get('profiles', {})
+        context = build(copy.deepcopy(data), out, gp_profiles=profiles)['public_notice_context']
+        previous_context = current.get('public_notice_context')
+        retained_context = {**context, 'notices': [n for n in context['notices'] if n['noticeId'] not in new_ids]}
+        if previous_context is not None and retained_context != previous_context:
+            raise ValueError('Historical addition changed existing GP selection context')
+        if context != retained_context or previous_context is not None:
+            data['public_notice_context'] = context
+        if context != retained_context:
+            changed_pages.update(p.name for p in out.glob('selected-gp-*.html'))
+        pages = {**old_pages, **{name: (out / name).read_text() for name in changed_pages | new_pages}}
+
+    notices = data['history_notices'][summary['history_notices_before']:]
+    report = {'kind': 'lp_history_import_publication_v1', 'checked_at': payload['checked_at'],
+              'prepared_at': checked_at, 'baseline_run_id': expected_run, 'new_program_ids': sorted(new_ids),
+              'notices': notices, 'official_http_requests': 0}
+    publication_phase('source_validation_and_pages', started, programs=len(data['programs']))
+    return report, data, pages, revision
+
+
+def publish_prepared(report, data, pages, revision, institution, wrap_json=None, *, source_only=False):
     if wrap_json is None:
         from psycopg.types.json import Jsonb
         wrap_json = Jsonb
@@ -485,7 +552,7 @@ def publish_prepared(report, data, pages, revision, institution, wrap_json=None)
             store_report_locator(conn, stub, run_id, institution)
         else:
             store_collection_report(conn, report_json, run_id, institution)
-        documents = store_documents(conn, report, data, wrap_json)
+        documents = store_documents(conn, report, {} if source_only else data, wrap_json)
         publication_phase('evidence_storage', started, documents=documents)
         store_public_state(conn, data, pages, run_id)
         started = time.monotonic()
@@ -501,6 +568,8 @@ def main():
     parser.add_argument('--priority-collection', type=Path)
     parser.add_argument('--shared-collection', type=Path)
     parser.add_argument('--institution-collection', type=Path)
+    parser.add_argument('--history-import', type=Path)
+    parser.add_argument('--history-import-sha256')
     args = parser.parse_args()
     if args.export_source_index or args.export_baseline:
         with connect() as conn:
@@ -509,6 +578,22 @@ def main():
         target = args.export_source_index or args.export_baseline
         target.write_text(json.dumps(value, ensure_ascii=False))
         return
+    if args.history_import:
+        from lp_history_import_preflight import load_import, MAX_IMPORT_BYTES
+
+        expected_run = os.environ.get('LP_EXPECTED_PUBLICATION_BASELINE', '')
+        if (not args.history_import_sha256 or not re.fullmatch('[a-f0-9]{24}', expected_run)
+                or args.history_import.stat().st_size > MAX_IMPORT_BYTES
+                or any((args.collection, args.priority_collection, args.shared_collection, args.institution_collection))):
+            parser.error('Pinned historical candidate and an exclusive public baseline are required')
+        payload = load_import(args.history_import.read_bytes(), args.history_import_sha256)
+        report, data, pages, revision = prepare_historical_addition(payload, expected_run, datetime.now(timezone.utc).isoformat())
+        report['candidate_sha256'] = args.history_import_sha256
+        run_id = publish_prepared(report, data, pages, revision, 'lp_history', source_only=True)
+        print_receipt(run_id, report, data)
+        return
+    if not args.collection or args.history_import_sha256:
+        parser.error('A collection or pinned historical candidate is required')
     report = json.loads(args.collection.read_text())
     if args.priority_collection:
         priority_report = json.loads(args.priority_collection.read_text())
@@ -527,6 +612,10 @@ def main():
     data, pages, revision = prepare_publication(report)
     run_id = publish_prepared(report, data, pages, revision,
                              'multi_lp' if args.priority_collection else 'kgrowth')
+    print_receipt(run_id, report, data)
+
+
+def print_receipt(run_id, report, data):
     print(json.dumps({'run_id':run_id,'programs':len(data['programs']),'program_ids':[p['id'] for p in data['programs']],
                       'program_aliases':data.get('program_aliases',{}),
                       'programs_by_institution':dict(sorted(Counter(p['institution_id'] for p in data['programs']).items())),
