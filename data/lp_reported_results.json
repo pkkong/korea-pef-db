@@ -1,8 +1,26 @@
 {
   "version": 1,
-  "reviewed_at": "2026-11-13",
+  "reviewed_at": "2026-11-18",
   "policy": "공식 결과 공고가 없는 사업에만 언론 보도 기준 결과를 표시한다. 공식 선정·우선협상 명단이 생기면 보도 기준 결과는 표시하지 않는다. 출처 기사 링크를 반드시 함께 표시하며, 보도에 이름이 나온 운용사만 넣고 추정하지 않는다. 일부만 보도된 경우 complete=false로 표시한다. PE·VC 공동 사업은 PE 부문만 넣는다. reported_at은 결과가 처음 보도된 날짜다.",
   "results": [
+    {
+      "program_id": "cwma-2023-a9c44d29fd23c8bb",
+      "stage": "최종 선정",
+      "reported_at": "2023-05-03",
+      "complete": true,
+      "managers": [
+        "IMM인베스트먼트",
+        "스카이레이크에쿼티파트너스"
+      ],
+      "sources": [
+        {
+          "publisher": "파이낸셜뉴스",
+          "title": "[fn마켓워치]건근공 600억 PEF 운용사에 'IMM인베·스카이레이크'",
+          "date": "2023-05-03",
+          "url": "https://busan.fnnews.com/news/202305030706470411"
+        }
+      ]
+    },
     {
       "program_id": "tp-2023-e1d544d8f0817e5c",
       "stage": "최종 선정",
