@@ -9,6 +9,7 @@ import base64
 import copy
 import hashlib
 import html
+import json
 import unittest
 from unittest.mock import patch
 
@@ -73,6 +74,44 @@ def candidate_program(b, assets, extracted):
 
 
 class JointHistoryProjectionTests(unittest.TestCase):
+    def test_newdeal_result_must_follow_the_same_bundle_and_business_round(self):
+        source, assets, extracted, _ = fixture()
+        raw = json.dumps(source, ensure_ascii=False).encode()
+        source_sha = hashlib.sha256(raw).hexdigest()
+
+        def receipt(**refs):
+            return json.dumps({'context_bundle_sha256': source_sha, **refs}).encode()
+
+        def sha(content):
+            return hashlib.sha256(content).hexdigest()
+
+        listing = receipt()
+        followup = receipt(prior_capture_sha256=sha(listing))
+        detail = receipt(prior_capture_sha256=sha(listing), followup_capture_sha256=sha(followup))
+        linked = {'prior_capture_sha256': sha(listing), 'followup_capture_sha256': sha(followup),
+                  'result_capture_sha256': sha(detail)}
+        failure = receipt(**linked)
+        captures = {'search': listing, 'followup': followup, 'detail': detail, 'failed_pdf': failure,
+                    'pdf': receipt(**linked, failed_capture_sha256=sha(failure))}
+        proof = {'detail': {'stated_business_year': '2021', 'stated_round': '정시', 'date': '2021-02-26'}}
+        with patch.object(replay, 'kgrowth_attachment_text', side_effect=lambda pdf: extracted[pdf]), \
+             patch('services.lp.src.lp_kgrowth_press_probe.replay_press_result_pdf', return_value=(b'pdf', proof)), \
+             patch('services.lp.src.lp_kgrowth_newdeal_joint_history.read_newdeal_growth_result_pdf',
+                   return_value={'selected_managers': ['예시운용사']}) as read:
+            def reviewed(evidence):
+                return projection.review_newdeal_growth_selection(raw, None, assets.__getitem__, evidence, checked_at=CHECKED)
+
+            result = reviewed(captures)
+            self.assertEqual(result['track']['key'], 'blind_newdeal_growth')
+            self.assertEqual(result['selection']['selected_managers'], ['예시운용사'])
+            self.assertFalse(result['publication_ready'])
+            self.assertEqual(result['existing_match_status'], 'not_checked')
+            with self.assertRaisesRegex(ValueError, '연결 지문 불일치'):
+                reviewed({**captures, 'failed_pdf': failure + b' '})
+            with patch.dict(proof['detail'], {'stated_round': '수시'}), self.assertRaisesRegex(ValueError, '회차'):
+                reviewed(captures)
+            read.assert_called_once()
+
     def test_two_businesses_each_keep_only_two_kdb_blind_tracks(self):
         b, assets, texts, _ = fixture()
         before = copy.deepcopy(b)

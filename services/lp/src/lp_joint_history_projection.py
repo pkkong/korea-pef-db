@@ -346,3 +346,53 @@ def review_joint_candidates(bundle, capture, load_attachment, *, checked_at, exi
         result['candidates'] = []
         result['holds'].append({'stage': 'joint_source_validation', 'reason': str(exc)})
     return result
+
+
+def review_newdeal_growth_selection(bundle_bytes, recruitment_capture, load_attachment, press_captures, *,
+                                    checked_at, existing_programs=None):
+    """Bind the KDB PE track to the official result, using only saved originals."""
+    try:
+        from .lp_kgrowth_newdeal_joint_history import read_newdeal_growth_result_pdf
+        from .lp_kgrowth_press_probe import replay_press_result_pdf
+    except ImportError:
+        from lp_kgrowth_newdeal_joint_history import read_newdeal_growth_result_pdf
+        from lp_kgrowth_press_probe import replay_press_result_pdf
+
+    stages = ('search', 'followup', 'detail', 'failed_pdf', 'pdf')
+    if (not isinstance(bundle_bytes, bytes) or not 0 < len(bundle_bytes) <= MAX_BUNDLE_BYTES
+            or not isinstance(press_captures, dict) or set(press_captures) != set(stages)
+            or any(not isinstance(raw, bytes) or not 0 < len(raw) <= MAX_BUNDLE_BYTES for raw in press_captures.values())):
+        raise ValueError('뉴딜 모집·결과 원본 묶음 형식·크기 불일치')
+    bundle = json.loads(bundle_bytes)
+    captures = {name: json.loads(raw) for name, raw in press_captures.items()}
+    hashes = {name: hashlib.sha256(raw).hexdigest() for name, raw in press_captures.items()}
+    bundle_sha = hashlib.sha256(bundle_bytes).hexdigest()
+    if any(not isinstance(c, dict) or c.get('context_bundle_sha256') != bundle_sha for c in captures.values()):
+        raise ValueError('모집 원문과 결과 조회의 묶음 지문 불일치')
+    links = {'followup': {'prior': 'search'}, 'detail': {'prior': 'search', 'followup': 'followup'},
+             'failed_pdf': {'prior': 'search', 'followup': 'followup', 'result': 'detail'},
+             'pdf': {'prior': 'search', 'followup': 'followup', 'result': 'detail', 'failed': 'failed_pdf'}}
+    if any(captures[stage].get(key + '_capture_sha256') != hashes[source]
+           for stage, refs in links.items() for key, source in refs.items()):
+        raise ValueError('결과 목록·상세·첨부 영수증 연결 지문 불일치')
+
+    review = review_joint_candidates(bundle, recruitment_capture, load_attachment,
+                                     checked_at=checked_at, existing_programs=existing_programs)
+    matches = [c for c in review['candidates'] if any(t.get('key') == 'blind_newdeal_growth' for t in c['tracks'])]
+    if len(matches) != 1 or matches[0]['reuse_proposal'] is not None:
+        raise ValueError('뉴딜성장형 모집 원문 미확인 또는 기존 사업 재사용 검토 필요')
+    candidate = matches[0]
+    track = next(t for t in candidate['tracks'] if t['key'] == 'blind_newdeal_growth')
+    raw, proof = replay_press_result_pdf(captures['search'], captures['followup'], captures['detail'], captures['pdf'],
+                                         replay.press_search_terms(bundle), prior_failure=captures['failed_pdf'],
+                                         checked_at=checked_at)
+    identity = candidate['identity']
+    detail = proof['detail']
+    if (detail['stated_business_year'] != identity['year'] or detail['stated_round'] != identity['round']
+            or not track['deadline'][:10] <= detail['date'] <= checked_at[:10]):
+        raise ValueError('뉴딜 공식 결과의 사업연도·회차 또는 접수 마감 이후 게시일 불일치')
+    selection = read_newdeal_growth_result_pdf(raw, candidate)
+    return {'identity': copy.deepcopy(identity), 'track': copy.deepcopy(track), 'selection': selection,
+            'recruitment_proof': candidate['source_replay'], 'official_result_proof': proof,
+            'capture_sha256': hashes, 'existing_match_status': candidate['existing_match_status'],
+            'publication_ready': False, 'published': False}
