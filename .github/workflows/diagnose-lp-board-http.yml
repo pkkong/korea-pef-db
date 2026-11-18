@@ -9,7 +9,7 @@ on:
       institution:
         type: choice
         default: cu
-        options: [cu, kfcc, kfinco, tp, kexim, koreapost, all]
+        options: [cu, kfcc, kfinco, tp, kexim, koreapost, moel_eif_ocio, all]
       koreapost_collection_run:
         description: Completed current collection for automatic preferred-stage raw reuse/capture
         type: string
@@ -52,8 +52,81 @@ concurrency:
   group: lp-program-collection
   cancel-in-progress: false
 jobs:
+  eif-listing:
+    if: inputs.institution == 'moel_eif_ocio' && github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Retain the first public EIF OCIO listing response before decoding
+        run: |
+          python3 - <<'PY'
+          import hashlib, json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, HTTPRedirectHandler, build_opener
+          from services.lp.src.collect_lp_institution_boards import MAX_BYTES, _html, adapter, load_configs
+
+          class NoRedirect(HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          config = load_configs()['moel_eif_ocio']
+          board = adapter(config)
+          url = next(board.listing_urls(config))
+          assert board.listing_url_allowed(url, config)
+          out = Path('/tmp/eif-listing-diagnostic')
+          out.mkdir()
+          report = {'url': url, 'checked_at': datetime.now(timezone.utc).isoformat(),
+                    'logical_requests': 1, 'parsed': False}
+          def save():
+              (out / 'receipt.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))
+          save()
+          request = Request(url, headers={'User-Agent': 'Mozilla/5.0 (LP official board collector)',
+                            'Accept-Encoding': 'identity', 'Connection': 'close',
+                            'Referer': config['listing_url']})
+          try:
+              try:
+                  response = build_opener(NoRedirect()).open(request, timeout=20)
+              except HTTPError as error:
+                  response = error
+              with response:
+                  body = response.read(MAX_BYTES + 1)
+                  raw = body[:MAX_BYTES]
+                  report.update(http_status=response.getcode(), response_url=response.geturl(),
+                                content_type=response.headers.get('Content-Type', '')[:160],
+                                encoding=response.headers.get('Content-Encoding', '')[:80],
+                                bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest(),
+                                truncated=len(body) > MAX_BYTES)
+              (out / 'response.bin').write_bytes(raw)
+              save()
+              if report['http_status'] != 200 or report['response_url'] != url or report['truncated']:
+                  raise ValueError('listing transport evidence does not match the expected response')
+              report.update(rows=len(board.parse_listing(_html(raw), url, config)), parsed=True)
+          except (OSError, URLError, ValueError) as error:
+              report['error_type'] = type(error).__name__
+              if isinstance(error, ValueError):
+                  report['parse_error'] = str(error)[:200]
+          save()
+          print(json.dumps(report, ensure_ascii=False))
+          if not report['parsed']:
+              raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eif-ocio-listing-diagnostic
+          path: /tmp/eif-listing-diagnostic/
+          retention-days: 7
+          if-no-files-found: error
   diagnose:
-    if: inputs.institution != 'kexim' && inputs.institution != 'koreapost'
+    if: inputs.institution != 'kexim' && inputs.institution != 'koreapost' && inputs.institution != 'moel_eif_ocio'
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     steps:

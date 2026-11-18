@@ -1,6 +1,6 @@
 # 프로젝트 리드 현재 상태판
 
-갱신: 2026-11-17 19:55 KST (작성: Codex)
+갱신: 2026-11-18 (작성: Codex)
 
 새 작업을 시작하는 에이전트(Codex·Claude)가 가장 먼저 읽는 현재 상태 문서다. 여기에는 지금 유효한 상태·구조·규칙·다음 작업만 둔다. 날짜별 작업 기록은 [`docs/history/`](history/README.md)로 옮긴다. 2026-11-13 이전의 전체 기록은 [history/project_lead_control_center/until-2026-11-13.md](history/project_lead_control_center/until-2026-11-13.md)에 원문 그대로 있다.
 
@@ -11,12 +11,12 @@
 - 현재 상태는 고쳐 쓰고, 날짜별 경과는 체크포인트에 쌓는다. 같은 내용을 여러 문서에 복사하지 않는다.
 - 사람이 읽을 수 있게 쓴다. 띄어쓰기를 지키고, 실행 ID·바이트 수는 근거로 필요한 만큼만 붙인다.
 
-## 현재 공개 서비스 (LP: 2026-11-17 확인, 기타: 2026-11-13)
+## 현재 공개 서비스 (LP: 2026-11-18 확인, 기타: 2026-11-13)
 
 | 서비스 | 공식 주소 | 데이터 경로 | 상태 |
 | --- | --- | --- | --- |
 | 브리프(뉴스레터) | https://kpef-newsletter.vercel.app | 매일 수집 → Supabase → Vercel. 백업 미러 https://pkkong.github.io/kpef-newsletter/ | 매일 발행 정상 |
-| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 21기관74사업,11/17 수동·후속 정기 모두 성공(최신73e11537…). KBIZ과거2건·EIF선정2명·산재예정5·기존 주소/명단 보존 확인 |
+| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 22기관 75사업, 건설근로자공제회 2023년 추가와 기존 주소·명단 보존 확인. 미래에셋 목록 수집 장애는 별도 진단 |
 | GP 운용사 | https://kpef-gp.vercel.app | 금감원 분기 자료 → Supabase 스냅샷 → Vercel | 2025Q4 기준. 프로필에 LP 선정 이력 표시(11/13). 없는 페이지는 404 |
 | Wiki | — | — | 사용자가 다시 기획할 때까지 숨김 |
 
@@ -85,7 +85,7 @@ LP 미션의 운영 workflow 실행·배포는 2026-11-17 승인 범위에서 �
 공통 검사(로컬 기준 환경: Python 3.12 + `services/newsletter/web/requirements.txt` + `olefile==0.47` + `pypdf==6.10.0`):
 
 ```bash
-python3 scripts/run_regression_tests.py          # 2026-11-17 기준 1,686검사
+python3 scripts/run_regression_tests.py          # 2026-11-18 기준 1,700검사
 python3 scripts/check_architecture_contracts.py
 npm ci --prefix scripts/tests/sql --ignore-scripts && npm test --prefix scripts/tests/sql
 ```
