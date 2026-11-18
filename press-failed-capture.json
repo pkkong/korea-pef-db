@@ -1,0 +1,135 @@
+{
+  "kind": "lp_kgrowth_press_result_pdf_v1",
+  "review_scope": "press_pdf",
+  "detail_replay": {
+    "kind": "lp_kgrowth_press_result_replay_v1",
+    "checked_at": "2026-11-18T12:28:05.210725+00:00",
+    "requests": 0,
+    "source_institution_id": "kgrowth",
+    "board_type": 3,
+    "replay_complete": true,
+    "detail_template_verified": true,
+    "notice_identity_verified": true,
+    "pdf_link_verified": true,
+    "roster_verified": false,
+    "parsed": false,
+    "source_health_verified": false,
+    "publication_ready": false,
+    "published": false,
+    "database_reads": 0,
+    "database_writes": 0,
+    "holds": [],
+    "listing_target": {
+      "source_institution_id": "kgrowth",
+      "board_type": 3,
+      "source_id": "kgrowth:press:258",
+      "board_record_id": "258",
+      "title": "(보도자료) 産銀·성장금융 「정책형 뉴딜펀드」 26개 운용사 최종 선정",
+      "date": "2021-02-26",
+      "url": "https://www.kgrowth.or.kr/notice_view.asp?page=2&search_colume=Title&search_text=%C1%A4%C3%A5%C7%FC+%B4%BA%B5%F4%C6%DD%B5%E5&idx=258&str_type=3&tab=1",
+      "observed_href": "notice_view.asp?page=2&search_colume=Title&search_text=정책형 뉴딜펀드&idx=258&str_type=3&tab=1"
+    },
+    "source_detail": {
+      "url": "https://www.kgrowth.or.kr/notice_view.asp?page=2&search_colume=Title&search_text=%C1%A4%C3%A5%C7%FC+%B4%BA%B5%F4%C6%DD%B5%E5&idx=258&str_type=3&tab=1",
+      "sha256": "df958adf725b66523e200d787a207c69f7e6cd6ffd7ab5d94d6eaf12261c21fb",
+      "bytes": 10834,
+      "checked_at": "2026-11-18T08:13:49.845834+00:00"
+    },
+    "original_capture_status": "held",
+    "original_capture_holds": [
+      {
+        "url": "https://www.kgrowth.or.kr/notice_view.asp?page=2&search_colume=Title&search_text=%C1%A4%C3%A5%C7%FC+%B4%BA%B5%F4%C6%DD%B5%E5&idx=258&str_type=3&tab=1",
+        "reason": "목록 HTML 완결성 미확인"
+      }
+    ],
+    "detail": {
+      "title": "(보도자료) 産銀·성장금융 「정책형 뉴딜펀드」 26개 운용사 최종 선정",
+      "date": "2021-02-26",
+      "body": "한국산업은행(회장 이동걸) 및 한국성장금융(사장 성기홍)은 2월 26일(금) 『정책형 뉴딜펀드』 2021년 정시 위탁운용사 선정 결과, 전체 3.2대 1의 경쟁률을 뚫고 최종 26개사가 선정되었다고 밝혔​습니다. ​​※ 자세한 내용은 붙임을 참고하여 주시기 바랍니다.​ ​",
+      "body_text_sha256": "df097def2ceda7331d619a9b530a2957fbda54bb727800056fcacf2b0b6ed7f7",
+      "stated_business_year": "2021",
+      "stated_round": "정시",
+      "attachments": [
+        {
+          "url": "https://www.kgrowth.or.kr/down_file.asp?idx=258&SelType=News1",
+          "name": "(보도자료) 산은 성장금융 정책형 뉴딜펀드 26개 운용사 최종 선정.hwp",
+          "slot": "News1",
+          "board_record_id": "258",
+          "source_detail_sha256": "df958adf725b66523e200d787a207c69f7e6cd6ffd7ab5d94d6eaf12261c21fb",
+          "downloaded": false
+        },
+        {
+          "url": "https://www.kgrowth.or.kr/down_file.asp?idx=258&SelType=News2",
+          "name": "(보도자료) 산은 성장금융 정책형 뉴딜펀드 26개 운용사 최종 선정.pdf",
+          "slot": "News2",
+          "board_record_id": "258",
+          "source_detail_sha256": "df958adf725b66523e200d787a207c69f7e6cd6ffd7ab5d94d6eaf12261c21fb",
+          "downloaded": false
+        }
+      ]
+    },
+    "pdf_attachment": {
+      "url": "https://www.kgrowth.or.kr/down_file.asp?idx=258&SelType=News2",
+      "name": "(보도자료) 산은 성장금융 정책형 뉴딜펀드 26개 운용사 최종 선정.pdf",
+      "slot": "News2",
+      "board_record_id": "258",
+      "source_detail_sha256": "df958adf725b66523e200d787a207c69f7e6cd6ffd7ab5d94d6eaf12261c21fb",
+      "downloaded": false
+    }
+  },
+  "requests": 1,
+  "receipts": [
+    {
+      "kind": "lp_kgrowth_press_probe_v1",
+      "source_institution_id": "kgrowth",
+      "board_type": 3,
+      "url": "https://www.kgrowth.or.kr/down_file.asp?idx=258&SelType=News2",
+      "checked_at": "2026-11-18T12:28:05.210725+00:00",
+      "requests": 1,
+      "response_url": "https://www.kgrowth.or.kr/down_file.asp?idx=258&SelType=News2",
+      "http_status": 200,
+      "response_type": "dict",
+      "http_status_type": "int",
+      "response_url_type": "str",
+      "raw_type": "bytes",
+      "bytes": 67,
+      "observed_bytes": 67,
+      "sha256": "708a9329ec3a120bee7f5ceb2369d57cd6f5547ac0ddab7b28fabdd4c22f8de8",
+      "raw_base64": "PHNjcmlwdD5hbGVydCgnuvHBpLvzwPvAziDBorHZwNS0z7TZLicpO2xvY2F0aW9uLmhyZWY9Jy8nOzwvc2NyaXB0Pg==",
+      "truncated": false,
+      "observed_bytes_is_lower_bound": false,
+      "response_retained": true,
+      "full_response_retained": true,
+      "capture_status": "held",
+      "holds": [
+        {
+          "url": "https://www.kgrowth.or.kr/down_file.asp?idx=258&SelType=News2",
+          "reason": "보도자료 첨부의 PDF 시작·종료 표식 불일치"
+        }
+      ],
+      "parsed": false,
+      "source_health_verified": false,
+      "publication_ready": false,
+      "published": false,
+      "database_reads": 0,
+      "database_writes": 0
+    }
+  ],
+  "holds": [
+    {
+      "url": "https://www.kgrowth.or.kr/down_file.asp?idx=258&SelType=News2",
+      "reason": "보도자료 첨부의 PDF 시작·종료 표식 불일치"
+    }
+  ],
+  "pdf_container_observed": false,
+  "parsed": false,
+  "roster_verified": false,
+  "publication_ready": false,
+  "published": false,
+  "database_reads": 0,
+  "database_writes": 0,
+  "context_bundle_sha256": "a5b4c1d35660dbbbcd376149e6856814e4405242452a5dc63458b9a3d5bca97b",
+  "prior_capture_sha256": "98654f72a68e04d8367dbded968a1cd8f97783c179c9677fa84eae7a576ac524",
+  "followup_capture_sha256": "aa4b6439a9dccd8ec46c34a9ab35091b2e2833bcf560482e5a7b662da2387599",
+  "result_capture_sha256": "b1af29bb50107bb7234138d156e1e63ecdcdaf070fb1d468af37129cb761075a"
+}
