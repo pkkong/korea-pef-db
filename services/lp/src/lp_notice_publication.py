@@ -37,6 +37,7 @@ try:
     from . import lp_kfinco_notice_terms as kfinco_terms
     from . import lp_kamco_notice_terms as kamco_terms
     from . import lp_kdb_policy_reopen as kdb_reopen
+    from . import lp_kdb_nuclear_terms as kdb_nuclear
 except ImportError:
     from lp_offering_policy import procurement_reason,central_not_investing
     from lp_attachment_policy import is_submission_attachment
@@ -59,6 +60,7 @@ except ImportError:
     import lp_kfinco_notice_terms as kfinco_terms
     import lp_kamco_notice_terms as kamco_terms
     import lp_kdb_policy_reopen as kdb_reopen
+    import lp_kdb_nuclear_terms as kdb_nuclear
 
 ROOT = Path(__file__).resolve().parents[3]
 # Large LPs whose policy/pension notices mix PE and VC (user decision 2026-11-12).
@@ -688,6 +690,7 @@ def _attach_result_roster(p, members, holds, known=frozenset()):
         rosters = readings[0]
     else:
         tables = [kdb_result_roster(text, known) or kdb_reopen.result_roster(result, text, p)
+                  or kdb_nuclear.result_roster(result, text, p, lambda names: split_glued_names(names, known))
                   for text in _texts(result)[1:]]
         tables = [t for t in tables if t]
         if len(tables) != 1:

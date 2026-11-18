@@ -396,6 +396,39 @@ class KdbResultRosterTests(unittest.TestCase):
                         roster + '\n2,000억원다른파트너스'):
             self.assertEqual(result_roster(final, altered, program), [])
 
+    def test_entrusted_subfund_keeps_contributor_and_manager_roles_separate(self):
+        from services.lp.src.lp_kdb_nuclear_terms import result_roster
+        from services.lp.src.lp_notice_publication import _identity, _terms, split_glued_names
+        title = '『원전산업성장펀드』 자펀드 위탁운용사 '
+        table = ('위탁운용 총액: 총 700억원\n(단위: 억원)\n정책출자자\n지정출자자\n합 계\n'
+                 '재정\n(원전산업성장펀드1호)\n한국산업은행\n한국수력원자력\n(원전산업성장펀드2호)\n'
+                 '350\n50\n300\n700\n* 출자자별 승인\n'
+                 '조성목표\n선정\n운용사수\n출자비율\n주관기관\n자율제안*\n1,000\n1~2\n70% 이내\n신한자산운용\n')
+        body = (table + '접수일시○2025년6월5일(목)13:00~16:00(신한자산운용앞제출)접수방법○접수\n'
+                '출자대상투자기구○기관전용사모집합투자기구○벤처투자조합※선정된위탁운용사 허용')
+        notice = {'title': title + '선정계획 공고', 'institution_id': 'kdb', 'date': '2025-05-22',
+                  'body': body, 'sha256': 'a'*64, 'url': 'https://www.kdb.co.kr/offer', 'source_channel': 'institution_board'}
+        terms, raw = _terms(notice, None, NOW)
+        self.assertEqual(raw['amount_scope'], 'combined')
+        self.assertEqual(terms['commitment_amount_krw'], 700 * 10**8)
+        self.assertEqual(terms['contribution_allocations']['한국산업은행'], 50 * 10**8)
+        self.assertIn('주관기관은 신한자산운용', terms['contribution_note'])
+        self.assertEqual(terms['deadline'], '2025-06-05T16:00:00+09:00')
+        final = {**notice, 'title': title + '선정 결과'}
+        parent = {**final, 'title': final['title'].replace('자펀드', '모펀드')}
+        self.assertEqual(_identity(notice), _identity(final))
+        self.assertNotEqual(_identity(notice), _identity(parent))
+        page = ('<원전산업성장펀드 자펀드 위탁운용사 선정 결과> (단위 : 억원, 개)운용사 수펀드규모'
+                '지원 운용사명 (가나다순)\n2500(총 1,000)브이엘인베스트먼트인라이트벤처스')
+        program = {**terms, 'asset_scope': 'PE·VC 공동 모집'}
+        self.assertEqual(result_roster(final, page, program, split_glued_names),
+                         [('공동 모집', ['브이엘인베스트먼트', '인라이트벤처스'])])
+        self.assertEqual(result_roster(parent, page, program, split_glued_names), [])
+        self.assertEqual(result_roster(final, page.replace('1,000', '900'), program, split_glued_names), [])
+        broken, raw = _terms({**notice, 'body': body.replace('\n50\n', '\n51\n')}, None, NOW)
+        self.assertTrue(raw['allocation_reading_failed'])
+        self.assertNotIn('commitment_amount_krw', broken)
+
     def test_split_glued_names(self):
         from services.lp.src.lp_notice_publication import split_glued_names
         self.assertEqual(['아이엠엠인베스트먼트', '엘비인베스트먼트'], split_glued_names('아이엠엠인베스트먼트엘비인베스트먼트'))

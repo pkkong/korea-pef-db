@@ -1,9 +1,9 @@
 {
   "kind": "lp_history_import_check_request_v1",
   "institution_id": "kdb",
-  "bundle_commit": "4fdd4e290b1e23dd2ef59f1d65d9a37671c9ade7",
-  "bundle_sha256": "566e54926a8692931c8f2c4a28eee75fe8b6f0595bdbc6f852823eee1ec59a43",
-  "candidate_sha256": "c824e1eba1e72054da127fcefba6a7942a7aa06c9079160ea56bf40c4d6c2d96",
-  "candidate_checked_at": "2026-11-18T19:22:03.588809+00:00",
-  "reason": "산업은행 혁신산업 2024년 2차 재공고의 공식 4단계·공동 정책출자 예정 370억원 내외·산은 155억원·공동 모집 선정 명단을 고정 원문에서 재생한다. 기존 공개 사업·주소·명단·별칭과 저장 크기를 대조한다."
+  "bundle_commit": "fe7a629b83ae1f6d851442f01d35af1a1ba65742",
+  "bundle_sha256": "ea9b85f6613929fcd9586d1928ae1d49d9e45440d07eebfde75c516765129215",
+  "candidate_sha256": "a80c82e79c04c697a283aacb074e300e03d38f7dffdb333c754b65d228831176",
+  "candidate_checked_at": "2026-11-18T19:29:49.148633+00:00",
+  "reason": "2025 원전산업성장 자펀드의 공식 4단계와 신한자산운용 주관, 공동 예정 700억원 중 산은 50억원, 공동 모집 선정 명단을 읽기 전용으로 대조한다. 기존 사업·주소·명단·별칭과 저장 크기를 검증한다."
 }
