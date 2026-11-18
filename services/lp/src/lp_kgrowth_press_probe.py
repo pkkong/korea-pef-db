@@ -10,9 +10,9 @@ import base64
 import copy
 import hashlib
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from urllib.error import HTTPError
-from urllib.parse import parse_qsl, urlencode, urlsplit
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 
@@ -405,3 +405,137 @@ def capture_press_followup(prior_capture, expected_terms, fetch, *, checked_at=N
     return {**context, 'requests': report['requests'], 'receipts': [report],
             'search_echo_verified': report['search_echo_verified'], 'current_page_verified': report['current_page_verified'],
             'holds': copy.deepcopy(report['holds'])}
+
+
+def _press_detail_url(value, term=None):
+    """Canonicalise only the observed board-3 page-2 notice-link fields."""
+    parsed = urlsplit(value)
+    fields = parse_qsl(parsed.query, keep_blank_values=True, encoding='euc-kr', errors='strict')
+    query = dict(fields)
+    if (parsed.scheme != 'https' or parsed.netloc != 'www.kgrowth.or.kr'
+            or parsed.path != '/notice_view.asp' or parsed.fragment
+            or len(fields) != 6 or set(query) != {'page', 'search_colume', 'search_text', 'idx', 'str_type', 'tab'}
+            or query.get('page') != '2' or query.get('search_colume') != 'Title'
+            or query.get('str_type') != '3' or query.get('tab') != '1'
+            or not re.fullmatch(r'[1-9]\d*', query.get('idx', ''))
+            or term is not None and query.get('search_text') != term):
+        raise ValueError('보도자료 상세 링크의 출처·게시판·검색어·ID 경계 불일치')
+    press_search_url(query['search_text'])
+    return 'https://www.kgrowth.or.kr/notice_view.asp?' + urlencode(fields, encoding='euc-kr'), query['idx']
+
+
+def fetch_press_detail(url):
+    """Strict one-shot transport; the capture API requires retained list proof."""
+    canonical, _ = _press_detail_url(url)
+    if canonical != url:
+        raise ValueError('허용된 보도자료 상세 요청 주소가 아님')
+    return _fetch(url)
+
+
+def _same_proof(left, right):
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return left.keys() == right.keys() and all(_same_proof(left[k], right[k]) for k in left)
+    if isinstance(left, list):
+        return len(left) == len(right) and all(_same_proof(a, b) for a, b in zip(left, right))
+    return left == right
+
+
+def _verified_followup(first_capture, followup_capture, expected_terms, checked_at):
+    if not isinstance(followup_capture, dict):
+        raise ValueError('보도자료 2쪽 보존 묶음 형식 불일치')
+    receipts = followup_capture.get('receipts')
+    if not isinstance(receipts, list) or len(receipts) != 1 or not isinstance(receipts[0], dict):
+        raise ValueError('보도자료 2쪽 원영수증이 하나가 아님')
+    receipt = receipts[0]
+    if not isinstance(receipt.get('checked_at'), str):
+        raise ValueError('보도자료 2쪽 관측시각 누락')
+    observed = _checked_at(receipt['checked_at'])
+    if datetime.fromisoformat(observed.replace('Z', '+00:00')) > datetime.fromisoformat(checked_at.replace('Z', '+00:00')):
+        raise ValueError('보도자료 2쪽 관측시각이 상세 관측시각보다 늦음')
+    encoded = receipt.get('raw_base64')
+    if not isinstance(encoded, str) or len(encoded) > (MAX_DETAIL_BYTES + 2) // 3 * 4:
+        raise ValueError('보도자료 2쪽 원바이트 누락·상한 초과')
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (ValueError, TypeError) as error:
+        raise ValueError('보도자료 2쪽 원바이트 인코딩 불일치') from error
+    # This callback replays retained bytes only. No origin request or diagnostic
+    # flags supplied by the caller can replace the complete first->second check.
+    replayed = capture_press_followup(first_capture, expected_terms, lambda url: {
+        'raw': raw, 'http_status': receipt.get('http_status'), 'geturl': receipt.get('response_url')},
+        checked_at=observed)
+    if (replayed['holds'] or not _same_proof(replayed['receipts'][0], receipt)
+            or any(not _same_proof(followup_capture.get(key), value) for key, value in replayed.items() if key != 'receipts')):
+        raise ValueError('보도자료 첫 검색→2쪽 원영수증 재생 불일치')
+    return raw, receipt, replayed
+
+
+def _joint_result_listing_target(raw, term, listing_url, observed_at):
+    try:
+        from .collect_shared_lp_notices import Document
+    except ImportError:
+        from collect_shared_lp_notices import Document
+    root = Document(raw.decode('cp949')).root
+    table = next(t for t in root.nodes('table') if 'notice_tbl' in t.attrs.get('class', '').split())
+    candidates, seen = [], set()
+    previous_date = None
+    pattern = (r'\(보도자료\)産銀·성장금융「' + re.escape(re.sub(r'\s+', '', term))
+               + r'」[1-9]\d*개운용사최종선정')
+    for row in table.nodes('tr'):
+        cells = [n for n in row.children if getattr(n, 'tag', '') == 'td']
+        if not cells:
+            continue
+        links = list(row.nodes('a'))
+        if len(cells) != 4 or len(links) != 1 or not cells[0].clean().isdigit():
+            raise ValueError('보도자료 목록 행의 제목·날짜·링크 구획 미확인')
+        title, day = cells[1].clean(), cells[2].clean()
+        if not title or title != links[0].clean() or not re.fullmatch(r'20\d{2}-\d{2}-\d{2}', day):
+            raise ValueError('보도자료 목록의 제목·게시일 불일치')
+        date.fromisoformat(day)
+        if day > observed_at[:10] or previous_date is not None and day > previous_date:
+            raise ValueError('보도자료 목록의 게시일·정렬 불일치')
+        previous_date = day
+        href = links[0].attrs.get('href', '')
+        url, ident = _press_detail_url(urljoin(listing_url, href), term)
+        if ident in seen:
+            raise ValueError('보도자료 목록의 공고 ID 중복·충돌')
+        seen.add(ident)
+        if re.fullmatch(pattern, re.sub(r'\s+', '', title)):
+            candidates.append({'source_institution_id': 'kgrowth', 'board_type': 3,
+                               'source_id': 'kgrowth:press:' + ident, 'board_record_id': ident,
+                               'title': title, 'date': day, 'url': url, 'observed_href': href})
+    if len(candidates) != 1:
+        raise ValueError('공동 최종 선정 보도자료가 실제 목록에서 하나로 확인되지 않음')
+    return candidates[0]
+
+
+def capture_press_result_detail(first_capture, followup_capture, expected_terms, fetch, *,
+                                checked_at=None, retain=lambda report: None):
+    """Capture one list-derived result response; its detail template is unknown.
+
+    Selection is discovery only. The observed joint title does not assign the
+    article's managers to a particular LP, PE track, business year or round.
+    """
+    stamp = _checked_at(checked_at)
+    raw, prior, replayed = _verified_followup(first_capture, followup_capture, expected_terms, stamp)
+    term = replayed['search_term']
+    target = _joint_result_listing_target(raw, term, prior['url'], prior['checked_at'])
+    context = {'kind': 'lp_kgrowth_press_result_detail_v1', 'review_scope': 'press_result',
+               'source_institution_id': 'kgrowth', 'board_type': 3, 'search_term': term,
+               'listing_target': target, 'prior_receipt_sha256': prior['sha256'],
+               'first_receipt_sha256': replayed['prior_receipt_sha256'],
+               'parsed': False, 'source_health_verified': False, 'publication_ready': False, 'published': False,
+               'detail_template_verified': False, 'notice_identity_verified': False, 'roster_verified': False,
+               'database_reads': 0, 'database_writes': 0}
+    def save(receipt):
+        retain({**copy.deepcopy(context), 'requests': receipt['requests'],
+                'receipts': [copy.deepcopy(receipt)], 'holds': copy.deepcopy(receipt['holds'])})
+    report = _capture(target['url'], fetch, checked_at=stamp, retain=save)
+    listing_hashes = {r['sha256'] for r in first_capture['receipts']} | {prior['sha256']}
+    if not report['holds'] and report['sha256'] in listing_hashes:
+        report['holds'].append({'url': target['url'], 'reason': '상세 요청에 선행 목록 원바이트가 반복됨'})
+        report['capture_status'] = 'held'
+    save(report)
+    return {**context, 'requests': report['requests'], 'receipts': [report], 'holds': copy.deepcopy(report['holds'])}

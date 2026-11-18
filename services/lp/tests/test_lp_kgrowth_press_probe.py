@@ -504,5 +504,152 @@ class PressFollowupProbeTests(unittest.TestCase):
             fetch.assert_called_once_with(url)
 
 
+class PressResultDetailProbeTests(unittest.TestCase):
+    term = PressFollowupProbeTests.term
+    terms = [PressFollowupProbeTests.term, PressFollowupProbeTests.empty_term]
+    detail = '<html><head><title>아직 판독하지 않은 본문</title></head><body>uninterpreted response</body></html>'.encode('utf-8')
+
+    def listing(self, transform=None):
+        import re
+        # Relevant titles/dates from the observed second page. Synthetic record
+        # IDs deliberately differ from production, so selection cannot use one.
+        rows = [
+            ('(보도자료) 産銀·성장금융, 1조원 규모 정책형 뉴딜펀드 수시출자 추진', '2021-04-23'),
+            ('(보도자료) 투자기업 방문', '2021-03-11'),
+            ('(보도자료) 産銀·성장금융 「정책형 뉴딜펀드」 26개 운용사 최종 선정', '2021-02-26'),
+            ('(보도자료) 産銀·성장금융 「정책형 뉴딜펀드」 서류심사 결과 발표', '2021-02-17'),
+            ('(보도자료) 産銀·성장금융, 정책형 뉴딜펀드 조성을 위한 첫발을 내딛다', '2021-01-27'),
+            ('(보도자료) 지자체 대상 정책형 뉴딜펀드 설명회 개최', '2021-01-11'),
+            ('(보도자료) 산은·성장금융, 정책형 뉴딜펀드 2021년 정시 출자사업 공고', '2020-12-29'),
+        ]
+        body = '<table class="notice_tbl"><tr><th>번호</th><th>제목</th><th>작성일</th><th>첨부</th></tr>'
+        for index, (title, day) in enumerate(rows):
+            href = f'notice_view.asp?page=2&search_colume=Title&search_text={self.term}&idx={1000+index}&str_type=3&tab=1'
+            body += f'<tr><td>{7-index}</td><td><a href="{href}">{title}</a></td><td>{day}</td><td></td></tr>'
+        body += '</table>'
+        html = PressFollowupProbeTests.page(self.term, page=2).decode('cp949')
+        html = re.sub(r'<table class="notice_tbl">.*?</table>', lambda match: body, html, flags=re.S)
+        return (transform(html) if transform else html).encode('cp949')
+
+    def chain(self, transform=None):
+        first = PressFollowupProbeTests().prior()
+        raw = self.listing(transform)
+        second = probe.capture_press_followup(first, self.terms, lambda url: response(raw, url=url), checked_at=STAMP)
+        self.assertEqual(second['holds'], [])
+        return first, second
+
+    def test_unique_joint_final_row_derives_one_encoded_request_without_body_approval(self):
+        from urllib.parse import parse_qs, urlsplit
+        first, second = self.chain()
+        calls, saved = [], []
+        def fetch(url):
+            calls.append(url)
+            return response(self.detail, url=url)
+        report = probe.capture_press_result_detail(first, second, self.terms, fetch,
+                                                   checked_at=STAMP, retain=saved.append)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(parse_qs(urlsplit(calls[0]).query, encoding='euc-kr'),
+                         {'page': ['2'], 'search_colume': ['Title'], 'search_text': [self.term],
+                          'idx': ['1002'], 'str_type': ['3'], 'tab': ['1']})
+        self.assertEqual(report['review_scope'], 'press_result')
+        self.assertEqual(report['listing_target']['source_id'], 'kgrowth:press:1002')
+        self.assertEqual(report['listing_target']['date'], '2021-02-26')
+        self.assertEqual(report['holds'], [])
+        self.assertEqual(report['requests'], 1)
+        self.assertEqual(base64.b64decode(report['receipts'][0]['raw_base64']), self.detail)
+        self.assertTrue(any(r['receipts'][0]['capture_status'] == 'observed' for r in saved))
+        for key in ('parsed', 'source_health_verified', 'publication_ready', 'published',
+                    'detail_template_verified', 'notice_identity_verified', 'roster_verified'):
+            self.assertIs(report[key], False)
+        self.assertTrue(all(key not in report for key in ('selected_gps', 'manager_count', 'business_year')))
+
+    def test_missing_different_event_ambiguous_joint_result_and_mixed_links_send_nothing(self):
+        result = '26개 운용사 최종 선정'
+        transforms = [
+            lambda h: h.replace(result, '26개 운용사 서류심사 결과'),
+            lambda h: h.replace('産銀·성장금융 「정책형 뉴딜펀드」 26개', '성장금융 「정책형 뉴딜펀드」 26개'),
+            lambda h: h.replace('(보도자료) 투자기업 방문', '(보도자료) 産銀·성장금융 「정책형 뉴딜펀드」 2개 운용사 최종 선정'),
+            lambda h: h.replace('idx=1000&str_type=3', 'idx=1000&str_type=1'),
+            lambda h: h.replace('notice_view.asp?page=2', 'https://other.example/notice_view.asp?page=2', 1),
+            lambda h: h.replace('idx=1000', 'idx=1002'),
+            lambda h: h.replace('2021-04-23', '2030-04-23'),
+            lambda h: h.replace(result + '</a>', result + '</a><a href="notice_view.asp?idx=9000">다른 링크</a>'),
+        ]
+        for transform in transforms:
+            first, second = self.chain(transform)
+            fetch = Mock()
+            with self.assertRaises(ValueError):
+                probe.capture_press_result_detail(first, second, self.terms, fetch, checked_at=STAMP)
+            fetch.assert_not_called()
+
+    def test_followup_and_first_raw_proofs_are_replayed_before_requesting_detail(self):
+        changes = [('sha256', '0'*64), ('bytes', 1), ('http_status', 403), ('current_page_verified', 1)]
+        for key, value in changes:
+            first, second = self.chain();second['receipts'][0][key] = value;fetch = Mock()
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                probe.capture_press_result_detail(first, second, self.terms, fetch, checked_at=STAMP)
+            fetch.assert_not_called()
+        first, second = self.chain();second['prior_receipt_sha256'] = 'f'*64;fetch = Mock()
+        with self.assertRaises(ValueError):
+            probe.capture_press_result_detail(first, second, self.terms, fetch, checked_at=STAMP)
+        fetch.assert_not_called()
+        first, second = self.chain();first['receipts'][0]['http_status'] = 403
+        with self.assertRaises(ValueError):
+            probe.capture_press_result_detail(first, second, self.terms, fetch, checked_at=STAMP)
+        fetch.assert_not_called()
+
+    def test_replayed_listing_or_rejected_detail_is_retained_with_one_get_and_one_hold(self):
+        first, second = self.chain()
+        prior_bytes = [base64.b64decode(first['receipts'][0]['raw_base64']),
+                       base64.b64decode(second['receipts'][0]['raw_base64'])]
+        for raw, status in [(b'denied', 403), (prior_bytes[0], 200), (prior_bytes[1], 200)]:
+            saved, calls = [], []
+            def fetch(url):
+                calls.append(url)
+                return response(raw, status=status, url=url)
+            report = probe.capture_press_result_detail(first, second, self.terms, fetch,
+                                                       checked_at=STAMP, retain=saved.append)
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(len(report['holds']), 1)
+            self.assertEqual(report['receipts'][0]['capture_status'], 'held')
+            self.assertEqual(base64.b64decode(report['receipts'][0]['raw_base64']), raw)
+            self.assertTrue(any(r['receipts'][0]['capture_status'] == 'observed' for r in saved))
+            self.assertIs(report['roster_verified'], False)
+
+    def test_detail_raw_is_retained_before_status_or_template_checks(self):
+        first, second = self.chain()
+        saved, calls, original = [], [], probe._validate_response
+        def fetch(url):
+            calls.append(url)
+            return response(b'rejected detail body', status=403, url=url)
+        def validate(observed, receipt, *, expected_url):
+            if '/notice_view.asp?' in expected_url:
+                self.assertEqual(saved[-1]['receipts'][0]['capture_status'], 'observed')
+                self.assertEqual(base64.b64decode(saved[-1]['receipts'][0]['raw_base64']), b'rejected detail body')
+                self.assertIs(saved[-1]['detail_template_verified'], False)
+            return original(observed, receipt, expected_url=expected_url)
+        with patch.object(probe, '_validate_response', side_effect=validate):
+            report = probe.capture_press_result_detail(first, second, self.terms, fetch,
+                                                       checked_at=STAMP, retain=saved.append)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(report['holds']), 1)
+
+    def test_detail_transport_rejects_cross_board_id_query_or_download_routes(self):
+        first, second = self.chain()
+        report = probe.capture_press_result_detail(first, second, self.terms,
+                                                   lambda url: response(self.detail, url=url), checked_at=STAMP)
+        url = report['listing_target']['url']
+        for changed in (url + '&idx=2', url + '#other', url.replace('str_type=3', 'str_type=1'),
+                        url.replace('page=2', 'page=1'), url.replace('tab=1', 'tab=3'),
+                        url.replace('www.kgrowth.or.kr', 'other.example'),
+                        url.replace('/notice_view.asp', '/down_file.asp')):
+            with self.subTest(url=changed), patch.object(probe, '_fetch') as fetch, self.assertRaises(ValueError):
+                probe.fetch_press_detail(changed)
+            fetch.assert_not_called()
+        with patch.object(probe, '_fetch', return_value=response(self.detail, url=url)) as fetch:
+            probe.fetch_press_detail(url)
+            fetch.assert_called_once_with(url)
+
+
 if __name__ == '__main__':
     unittest.main()
