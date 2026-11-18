@@ -93,7 +93,10 @@ class JointHistoryProjectionTests(unittest.TestCase):
         failure = receipt(**linked)
         captures = {'search': listing, 'followup': followup, 'detail': detail, 'failed_pdf': failure,
                     'pdf': receipt(**linked, failed_capture_sha256=sha(failure))}
-        proof = {'detail': {'stated_business_year': '2021', 'stated_round': '정시', 'date': '2021-02-26'}}
+        proof = {'detail': {'stated_business_year': '2021', 'stated_round': '정시', 'date': '2021-02-26',
+                            'title': '정책형 뉴딜펀드 정시 선정 결과'},
+                 'source_detail': {'url': 'https://www.kgrowth.or.kr/selection'},
+                 'source_pdf': {'checked_at': CHECKED}}
         with patch.object(replay, 'kgrowth_attachment_text', side_effect=lambda pdf: extracted[pdf]), \
              patch('services.lp.src.lp_kgrowth_press_probe.replay_press_result_pdf', return_value=(b'pdf', proof)), \
              patch('services.lp.src.lp_kgrowth_newdeal_joint_history.read_newdeal_growth_result_pdf',
@@ -106,6 +109,12 @@ class JointHistoryProjectionTests(unittest.TestCase):
             self.assertEqual(result['selection']['selected_managers'], ['예시운용사'])
             self.assertFalse(result['publication_ready'])
             self.assertEqual(result['existing_match_status'], 'not_checked')
+            program = result['program']
+            self.assertEqual(program['status'], '선정 완료')
+            self.assertEqual(program['selected_gps'][0]['source_url'], proof['source_detail']['url'])
+            self.assertEqual(program['funding_plan']['actual_gp_allocation_krw'], None)
+            self.assertNotIn('commitment_amount_krw', program)
+            self.assertTrue(program['commitment_label'].startswith('공동 정책출자 예정'))
             with self.assertRaisesRegex(ValueError, '연결 지문 불일치'):
                 reviewed({**captures, 'failed_pdf': failure + b' '})
             with patch.dict(proof['detail'], {'stated_round': '수시'}), self.assertRaisesRegex(ValueError, '회차'):

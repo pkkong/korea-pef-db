@@ -392,7 +392,34 @@ def review_newdeal_growth_selection(bundle_bytes, recruitment_capture, load_atta
             or not track['deadline'][:10] <= detail['date'] <= checked_at[:10]):
         raise ValueError('뉴딜 공식 결과의 사업연도·회차 또는 접수 마감 이후 게시일 불일치')
     selection = read_newdeal_growth_result_pdf(raw, candidate)
-    return {'identity': copy.deepcopy(identity), 'track': copy.deepcopy(track), 'selection': selection,
+    source = candidate['source_document']
+    result_url = proof['source_detail']['url']
+    track_identity = {**identity, 'track': track['key']}
+    digest = hashlib.sha256(json.dumps(track_identity, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    names = selection['selected_managers']
+    strategy = track['strategy']
+    program = {'id': f"{_TARGET}-{identity['year']}-{digest[:16]}",
+               'institution_id': _TARGET, 'institution_name': _TARGET_NAME,
+               'title': f"정책형 뉴딜펀드 {identity['year']}년 {identity['round']} · {track['label']}",
+               'asset_scope': 'PE', 'status': '선정 완료', 'basic_publication': True,
+               'source_program_key': 'joint-track:' + digest, 'joint_history_identity': copy.deepcopy(identity),
+               'joint_history_track_keys': [track['key']], 'business_year': identity['year'],
+               'business_round': identity['round'], 'checked_at': proof['source_pdf']['checked_at'],
+               'deadline': track['deadline'], 'deadline_precision': 'datetime',
+               'funding_plan': _funding([track]),
+               'commitment_label': f"공동 정책출자 예정 {track['planned_commitment_total_krw'] / 10**8:,.0f}억원",
+               'fund_target_label': f"{track['planned_formation_total_krw'] / 10**8:,.0f}억원",
+               'primary_investment': {'source_url': source['url'], 'items': [
+                   f"목표결성금액의 {strategy['newdeal_min_investment_pct']}% 이상을 뉴딜 지침의 {strategy['newdeal_field_count']}개 분야에 투자",
+                   f"목표결성금액의 {strategy['domestic_sme_min_investment_pct']}% 이상을 국내 중소·중견기업에 투자"]},
+               'events': [copy.deepcopy(candidate['program']['events'][0]),
+                          {'date': detail['date'], 'type': '선정 결과', 'title': detail['title'], 'url': result_url}],
+               'selected_gps': [{'name': name, 'id': _TARGET + '-' + hashlib.sha256(name.encode()).hexdigest()[:16],
+                                 'asset_scope': 'PE', 'source_url': result_url} for name in names],
+               'gp_tracks': {name: track['label'] for name in names},
+               'manager_list_sources': {'selected_gps': result_url}, 'publication_ready': False}
+    validate({'as_of': checked_at[:10], 'programs': [program]})
+    return {'identity': copy.deepcopy(identity), 'track': copy.deepcopy(track), 'selection': selection, 'program': program,
             'recruitment_proof': candidate['source_replay'], 'official_result_proof': proof,
             'capture_sha256': hashes, 'existing_match_status': candidate['existing_match_status'],
             'publication_ready': False, 'published': False}
