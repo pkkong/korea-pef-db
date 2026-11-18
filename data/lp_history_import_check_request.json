@@ -1,9 +1,9 @@
 {
   "kind": "lp_history_import_check_request_v1",
   "institution_id": "kdb",
-  "bundle_commit": "87e0999b5e16bb3771388be910181ff947c7488f",
-  "bundle_sha256": "a23eb0cf1971088227acbbdf6bf9ae0a64b2e90aa2db1efa48d962d3c8d8b348",
-  "candidate_sha256": "1ba66ecde730727d8bc6062b2863891278a4a727acd2a1d1cb1fec70dcebae23",
-  "candidate_checked_at": "2026-11-18T19:02:15.217867+00:00",
-  "reason": "산업은행 2025 남부권 지역성장지원펀드의 공식 4단계와 PE 부문 700억원, PE·VC 합계 상한, 선정 PE 2곳을 확인한다. 기존 사업·주소·명단·별칭과 저장 크기를 읽기 전용으로 대조한다."
+  "bundle_commit": "4fdd4e290b1e23dd2ef59f1d65d9a37671c9ade7",
+  "bundle_sha256": "566e54926a8692931c8f2c4a28eee75fe8b6f0595bdbc6f852823eee1ec59a43",
+  "candidate_sha256": "c824e1eba1e72054da127fcefba6a7942a7aa06c9079160ea56bf40c4d6c2d96",
+  "candidate_checked_at": "2026-11-18T19:22:03.588809+00:00",
+  "reason": "산업은행 혁신산업 2024년 2차 재공고의 공식 4단계·공동 정책출자 예정 370억원 내외·산은 155억원·공동 모집 선정 명단을 고정 원문에서 재생한다. 기존 공개 사업·주소·명단·별칭과 저장 크기를 대조한다."
 }

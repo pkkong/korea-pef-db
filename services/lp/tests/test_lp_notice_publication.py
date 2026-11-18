@@ -363,6 +363,39 @@ class KdbResultRosterTests(unittest.TestCase):
     TABLE = ('< 2026 남부권 지역성장지원펀드 위탁운용사 선정 결과 >지원분야지원 운용사명(가나다순)\n'
              'PE더함파트너스릴슨프라이빗에쿼티\nVC리인베스트먼트원익투자파트너스이앤인베스트먼트')
 
+    def test_explicit_reannouncement_separates_business_round_and_reads_joint_plan(self):
+        from services.lp.src.lp_kdb_policy_reopen import result_roster
+        from services.lp.src.lp_notice_publication import _identity, _scope, _terms
+        fund = '혁신성장펀드(혁신산업펀드)'
+        title = '『' + fund + '』 2024년 2차 '
+        table = ('정책출자자 위탁운용 총액 : 총 370억원 내외\n(단위: 억원)\n정책출자자\n합계\n'
+                 '정부재정(재정모펀드)\n한국산업은행\n성장사다리펀드2\n115\n155\n100\n370\n* 출자자별 승인\n'
+                 '재정\n산은\n사다리2\n합계(비율)\n115\n155\n100\n370(37%)\n1\n1,000\n산은\n')
+        legal = '출자대상투자기구○기관전용사모집합투자기구○벤처투자조합※선정된위탁운용사 허용'
+        body = table + '접수일시○2025년5월29일(목)13:00~16:00접수방법○접수\n' + legal
+        notice = {'title': title + '위탁운용사 선정계획 (재)공고', 'institution_id': 'kdb', 'date': '2025-05-14',
+                  'body': body, 'sha256': 'a' * 64, 'url': 'https://www.kdb.co.kr/offer', 'source_channel': 'institution_board'}
+        key = _identity(notice)
+        final = {**notice, 'title': title + '(재공고) 자펀드 위탁운용사 선정 결과'}
+        self.assertEqual(key, _identity(final))
+        self.assertNotEqual(key, _identity({**final, 'title': final['title'].replace('(재공고)', '')}))
+        self.assertNotEqual(key, _identity({**final, 'title': final['title'].replace('2024년', '2025년')}))
+        self.assertEqual(_scope(notice), 'mixed_pe_blind')
+        offering, raw = _terms(notice, None, NOW)
+        self.assertEqual(raw['amount_scope'], 'combined')
+        self.assertEqual(offering['contribution_allocations']['한국산업은행'], 155 * 10**8)
+        self.assertEqual(offering['commitment_amount_krw'], 370 * 10**8)
+        self.assertEqual(offering['deadline'], '2025-05-29T16:00:00+09:00')
+        broken, raw = _terms({**notice, 'body': body.replace('\n155\n', '\n150\n', 1)}, None, NOW)
+        self.assertTrue(raw['allocation_reading_failed'])
+        self.assertNotIn('commitment_amount_krw', broken)
+        program = {**offering, 'source_program_key': key, 'asset_scope': 'PE·VC 공동 모집'}
+        roster = f'< {fund} 2024년 2차(재공고) 위탁운용사 선정 결과 >펀드규모선정 운용사명1,000억원인터베스트'
+        self.assertEqual(result_roster(final, roster, program), [('공동 모집', ['인터베스트'])])
+        for altered in (roster.replace('2024년', '2025년'), roster.replace('1,000억원', '2,000억원'),
+                        roster + '\n2,000억원다른파트너스'):
+            self.assertEqual(result_roster(final, altered, program), [])
+
     def test_split_glued_names(self):
         from services.lp.src.lp_notice_publication import split_glued_names
         self.assertEqual(['아이엠엠인베스트먼트', '엘비인베스트먼트'], split_glued_names('아이엠엠인베스트먼트엘비인베스트먼트'))

@@ -36,6 +36,7 @@ try:
     from . import lp_history_notices as history_notices
     from . import lp_kfinco_notice_terms as kfinco_terms
     from . import lp_kamco_notice_terms as kamco_terms
+    from . import lp_kdb_policy_reopen as kdb_reopen
 except ImportError:
     from lp_offering_policy import procurement_reason,central_not_investing
     from lp_attachment_policy import is_submission_attachment
@@ -57,6 +58,7 @@ except ImportError:
     import lp_history_notices as history_notices
     import lp_kfinco_notice_terms as kfinco_terms
     import lp_kamco_notice_terms as kamco_terms
+    import lp_kdb_policy_reopen as kdb_reopen
 
 ROOT = Path(__file__).resolve().parents[3]
 # Large LPs whose policy/pension notices mix PE and VC (user decision 2026-11-12).
@@ -91,6 +93,8 @@ STAGES = {'모집 공고': 'announcement', '접수 결과': 'application',
 def _identity(n):
     # A reannouncement is a separate solicitation unless a source explicitly
     # ties its later documents to that round. Never merge it with the first call.
+    if key := kdb_reopen.identity(n):
+        return key
     title = re.sub(r'[\[【(][^\]】)]*공고\s*제?\s*20\d{2}\s*[-–]\s*\d+\s*호[^\]】)]*[\]】)]', '', n['title'])
     # 『펀드명』 and 펀드명 are the same fund: stage notices often drop the quote brackets.
     title = re.sub(r'[「」『』]', ' ', title)
@@ -223,7 +227,8 @@ def _scope(n):
     result = classify_scope(n['title'], text)
     if (n.get('institution_id') == 'kdb' and n.get('source_channel') == 'institution_board'
             and result != 'outside' and not re.search(r'모펀드|Pre-?IPO|주식|채권|멀티에셋|EMP|재간접|절대수익|헤지', n['title'], re.I)
-            and any(kdb_joint_size_offering(source) for source in texts)):
+            and (any(kdb_joint_size_offering(source) for source in texts)
+                 or (kdb_reopen.identity(n) and any(kdb_reopen.mixed_vehicles(source) for source in texts)))):
         return 'mixed_pe_blind'
     # User decision 2026-11-12: for the large policy/pension LPs, an explicitly
     # offered PE fund is published even when blind/domestic wording is absent.
@@ -682,7 +687,8 @@ def _attach_result_roster(p, members, holds, known=frozenset()):
             return
         rosters = readings[0]
     else:
-        tables = [kdb_result_roster(text, known) for text in _texts(result)[1:]]
+        tables = [kdb_result_roster(text, known) or kdb_reopen.result_roster(result, text, p)
+                  for text in _texts(result)[1:]]
         tables = [t for t in tables if t]
         if len(tables) != 1:
             if tables:

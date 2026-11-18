@@ -6,12 +6,14 @@ try:
     from .lp_attachment_policy import is_submission_attachment
     from .lp_shared_notice_terms import extract_offering_sources
     from .lp_kfcc_notice_terms import allocation as kfcc_allocation
+    from .lp_kdb_policy_reopen import terms as kdb_reopen_terms
     from .lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
     from .lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 except ImportError:
     from lp_attachment_policy import is_submission_attachment
     from lp_shared_notice_terms import extract_offering_sources
     from lp_kfcc_notice_terms import allocation as kfcc_allocation
+    from lp_kdb_policy_reopen import terms as kdb_reopen_terms
     from lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
     from lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 
@@ -288,6 +290,10 @@ def extract_terms(n):
     except ValueError as exc:
         cwma_joint = {'allocation_reading_failed': True, 'allocation_error': str(exc)}
     try:
+        kdb_reopen = kdb_reopen_terms(n, sources)
+    except ValueError as exc:
+        kdb_reopen = {'allocation_reading_failed': True, 'allocation_error': str(exc)}
+    try:
         result = extract_offering_sources(n, sources)
     except ValueError:
         result = {}
@@ -371,7 +377,7 @@ def extract_terms(n):
             mandate = _KDB_SECTOR_MANDATE.search(text)
             if mandate:
                 sector_mandates.append((mandate, url, sha))
-        if kdb_joint or sector:
+        if kdb_joint or sector or kdb_reopen:
             for m in _KDB_RECEPTION.finditer(text):
                 year, month, day, start_hour, start_minute, end_hour, end_minute = map(int, m.groups())
                 start = datetime(year, month, day, start_hour, start_minute)
@@ -492,4 +498,9 @@ def extract_terms(n):
         result.update(cwma_joint)
         result['missing_fields'] = [field for field in (
             'commitment_amount_krw', 'manager_count', 'deadline', 'primary_investment') if field not in result]
+    if kdb_reopen:
+        for field in _ALLOCATION_FIELDS:
+            result.pop(field, None)
+        evidence.update(kdb_reopen.pop('extraction_evidence', {}))
+        result.update(kdb_reopen)
     return apply_iaci_allocation(n, result)
