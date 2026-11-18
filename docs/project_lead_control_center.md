@@ -70,7 +70,7 @@
 | LP 정기 | `audit-lp-official-inventory` | 일요일 10:00, 공식 목록 독립 대조 |
 | LP 정기 | `find-lp-reported-results` | 월요일 08:43, 브리프 기사에서 선정 결과 보도 후보 찾기(읽기 전용, [절차](lp_reported_results_operations.md)) |
 | LP 복구·진단 | `recover-lp-publication`, `diagnose-lp-board-http`, `diagnose-lp-inventory-failures` | 발행 복구, 공식 응답 제한 진단, 감사 실패 진단 |
-| LP 원문 확인 | `verify-lp-kgrowth-history` | 요청 파일 push로 누락 상세 최대 2건, 보도자료 첫 목록 1건 또는 공동 원모집 펀드명 검색 최대 2건의 응답을 보존. 명단 연결과 발행은 별도 경로 |
+| LP 원문 확인 | `verify-lp-kgrowth-history` | 요청 파일 push로 누락 상세 최대 2건, 보도자료 첫 목록, 공동 원모집 펀드명 검색 최대 2건 또는 검증한 검색 2쪽 1건의 응답을 보존. 명단 연결과 발행은 별도 경로 |
 | LP 가져오기 확인 | `verify-lp-history-import` | 고정 원본으로 후보를 재구성하고 읽기 전용 운영 상태와 기존 사업·원문·별칭·크기 보존을 비교. 운영 상태·검토 메모를 artifact에 내보내지 않음. DB 쓰기·발행 없음 |
 | LP 과거 이력 | `discover-lp-history`, `discover-ktcu-history`, `inspect-lp-history`, `collect-lp-history-bodies`, `collect-lp-history-attachments`, `collect-kgrowth-history-attachments`, `plan-lp-history-attachments`, `prepare-lp-history-publication`, `publish-lp-history` | 2020년 이후 이력 수집(진행 중 과제) |
 | LP 배포·설정 | `deploy-lp-vercel`, `deploy-lp-source-worker`, `configure-lp-reviewer` | 앱 배포, 서울 경유 수집 중계, 검토자 설정 |
@@ -128,9 +128,10 @@ curl -fsS "https://kpef-newsletter.vercel.app/health.json?refresh=1"
 
 받는 쪽은 대화 기억에 의존하지 않고 `AGENTS.md`와 이 문서부터 읽는다.
 
-## 알려진 리스크 (LP: 2026-11-17, 기타: 2026-11-13)
+## 알려진 리스크 (LP: 2026-11-18, 기타: 2026-11-13)
 
 - **LP 오전 실행 누락:** 11/10·11/12·11/16 오전 창은 늦은 watchdog이 보완했고11/17 오전도 미관측이다. 11/17 수동 복구와17:08 지연 시작한 오후 정기는 모두 성공했다. 정기/감시 설정은 유지하며 늦은 성공을 정시 자동운영으로 보고하지 않는다.
+- **LP 미래에셋 목록 오류:** 11/18 두 운영 수집의 고용보험기금 OCIO 목록 네 건에서 응답 판독 오류가 있었다. 별도 읽기 전용 확인에서는 한 차례 정상 응답과 결과 PE 2곳을 확인했다. 발행은 기존 검증 결과를 보존하며, 원 응답의 전송 길이·본문 완결성을 진단해 재발 원인을 확인한다.
 - **LP 과학기술인공제회 목록 410(과거 관측)**: 11/13 수동 실행에서 기관 게시판 검색 목록이 HTTP 410을 반환해 장애 보고 단계가 실패했다(공개는 정상). 처음 관측이라 코드 변경 없음. 정기 실행에서 반복되면 게시판 주소·검색 파라미터 변경을 원문으로 확인한다.
 - **LP 결과 명단 공백:** 고용보험기금의 중복 모집 문제는11/17 PE2곳 선정 완료와 원문 연결까지 공개 확인했다. 산업은행 국민성장1·2차와 과거 공동 공고는 공식 결과 이벤트와 명단 표시를 따로 검증·보강한다. 공식 원문이 생기면 보도 기준보다 우선한다.
 - **농협 주간 감사 DNS 실패**: 11/8 주간 감사에서 농협 검색 7개가 DNS 오류였다. 진단은 끝났고 원래 실패 기록은 유지한다.
