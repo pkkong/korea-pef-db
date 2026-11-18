@@ -1,5 +1,7 @@
 """OCIO title/year/cursor isolation and source replay before publication."""
 import copy
+import io
+import json
 import re
 import tempfile
 import unittest
@@ -107,6 +109,39 @@ class MiraeAssetTests(unittest.TestCase):
         self.assertEqual(boards.validate_notice(n, STAMP, config()), n)
         self.assertEqual(pe_result_roster(n['body'], valid=_rule_valid_name),
                          [('PE', ['에이치앤큐에쿼티파트너스', '제네시스프라이빗에쿼티'])])
+
+    def test_curl_read_only_probe_preserves_each_receipt_and_uses_the_existing_parser(self):
+        from services.lp.src.diagnose_lp_eif_curl import collect_via_curl
+
+        class Process:
+            def __init__(self, command, **kwargs):
+                url = command[-1]
+                if 'searchStartYear=2025' in url:
+                    raw, status = b'denied', b'403'
+                else:
+                    raw = (detail(url) if ma.DETAIL_PATH in url else listing(url)).encode('cp949')
+                    status = b'200'
+                self.stdout = io.BytesIO(raw)
+                self.stderr = io.BytesIO(status)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def wait(self, timeout):
+                return 0
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(ma, 'date', Today):
+            out = Path(tmp) / 'probe'
+            report = collect_via_curl(out, process_factory=Process)
+            receipts = json.loads((out / 'transport-receipts.json').read_text())
+            self.assertEqual(len(receipts), 5)
+            self.assertEqual(len(report['notices']), 1)
+            self.assertEqual(len(report['holds']), 1)
+            denied = next(r for r in receipts if r['http_status'] == 403)
+            self.assertEqual((out / denied['response_file']).read_bytes(), b'denied')
 
     def test_actual_next_cursor_is_followed_and_validated(self):
         first = urls()[0]

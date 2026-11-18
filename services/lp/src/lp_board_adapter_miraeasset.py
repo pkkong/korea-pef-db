@@ -182,12 +182,17 @@ def last_page(html, url, config):
     return page + 1 if next_listing_url(html, url, config) else page
 
 
-def parse_detail(html, url, config):
+def detail_query(url, config):
     q = _query(url, DETAIL_PATH, config)
     if (set(q) != {'categoryId', 'messageId', 'startId', 'startPage', 'curPage'}
             or not re.fullmatch(r'[1-9]\d{0,9}', q['messageId'])
             or any(q[k] != v for k, v in dict(startId='zzzzz~', startPage='1', curPage='1').items())):
         raise ValueError('미래에셋증권 detail identity changed')
+    return q
+
+
+def parse_detail(html, url, config):
+    q = detail_query(url, config)
     root = _root(html)
     _form(root, q)
     table = _one((n for n in root.nodes('table', 'bbs_linetype2')
