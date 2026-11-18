@@ -241,5 +241,42 @@ class NewdealJointRecruitmentTests(unittest.TestCase):
         self.assertEqual(r['planned_commitment_total_krw'], 7450*10**8)
 
 
+class NewdealGrowthResultTests(unittest.TestCase):
+    summary = ('한국산업은행 및 한국성장금융 정책형뉴딜펀드 2021년 정시 위탁운용사 선정 결과\n'
+               '지원분야별로는 투자제안형 2개사, 뉴딜성장형 3개사, 국민참여형 1개사, 인프라 1개사 등 총 7개사')
+    appendix = '''별첨 정책형 뉴딜펀드 2021년 정시 위탁운용사 선정 명단
+ 지원분야       운용사(가나다순)
+투자          혼합투자사, 공동운용사
+제안형        혼합파트너스
+              첫째파트너스
+ 뉴딜성장형       둘째인베스트먼트
+              셋째프라이빗에쿼티
+ 국민참여형       예시자산운용
+ 인프라          인프라운용사
+          - 3 -
+'''
+
+    def test_centered_growth_label_includes_the_preceding_name_and_excludes_adjacent_tracks(self):
+        from services.lp.src.lp_kgrowth_newdeal_joint_history import _result_growth_roster
+        names, total = _result_growth_roster(self.summary, self.appendix, parse(OFFER))
+        self.assertEqual(names, ['첫째파트너스', '둘째인베스트먼트', '셋째프라이빗에쿼티'])
+        self.assertEqual(total, 7)
+
+    def test_wrong_scope_counts_page_identity_and_roster_are_rejected(self):
+        from services.lp.src.lp_kgrowth_newdeal_joint_history import _result_growth_roster
+        offer = parse(OFFER)
+        for summary, appendix in (
+                (self.summary.replace('뉴딜성장형 3', '뉴딜성장형 4'), self.appendix),
+                (self.summary.replace('2021년', '2022년'), self.appendix),
+                (self.summary, self.appendix.replace('뉴딜성장형', '투자제안형')),
+                (self.summary, self.appendix.replace('셋째프라이빗에쿼티', '첫째파트너스')),
+                (self.summary, self.appendix.replace('셋째프라이빗에쿼티', '첫째, 공동 GP'))):
+            with self.assertRaises(ValueError):
+                _result_growth_roster(summary, appendix, offer)
+        next(t for t in offer['tracks'] if t['key'] == 'blind_newdeal_growth')['pe_only_current_legal_form_observed'] = False
+        with self.assertRaises(ValueError):
+            _result_growth_roster(self.summary, self.appendix, offer)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -6,6 +6,8 @@ and publication remain separate. Policy capital is not the lead LP's own money.
 """
 from __future__ import annotations
 
+import hashlib
+import io
 import itertools
 import re
 from datetime import date
@@ -317,6 +319,74 @@ def _read(n, url, raw, year) -> NewdealJointReview:
             'evidence': {key: evidence(n, raw, fragment, url) for key, fragment in quotes.items()},
             'board_attribution_evidence': {'source_url': n['url'], 'sha256': n['sha256'],
                                            'quote': n['body']}}
+
+
+def _result_growth_roster(summary, appendix, recruitment):
+    identity = recruitment['identity']
+    tracks = [t for t in recruitment['tracks'] if t.get('key') == 'blind_newdeal_growth']
+    year = identity.get('year', '')
+    if (identity.get('fund') != _FUND or identity.get('round') != '정시' or not re.fullmatch(r'20\d{2}', year)
+            or len(tracks) != 1
+            or tracks[0].get('program_lead_institution_id') != 'kdb' or tracks[0].get('fund_kind') != 'blind'
+            or tracks[0].get('pe_only_current_legal_form_observed') is not True):
+        raise ValueError('뉴딜성장형 모집의 산은 주관·독립 PE 범위 미확인')
+    heading = _FUND + year + '년정시위탁운용사선정'
+    compact_summary = compact(summary)
+    if (heading + '결과' not in compact_summary or heading + '명단' not in compact(appendix)
+            or not all(issuer in compact_summary for issuer in ('한국산업은행', '한국성장금융'))):
+        raise ValueError('정책형 뉴딜펀드 공동 결과의 모집 연도·회차·기관 불일치')
+    count = _only(r'지원분야별로는투자제안형(\d+)개사,뉴딜성장형(\d+)개사,국민참여형(\d+)개사,인프라(\d+)개사등총(\d+)개사',
+                  compact_summary, '보도자료 결과의 리그별 선정 수 미확인')
+    proposal_count, growth_count, citizen_count, infra_count, total_count = map(int, count.groups())
+    if (not all(0 < n <= 50 for n in (proposal_count, growth_count, citizen_count, infra_count))
+            or sum((proposal_count, growth_count, citizen_count, infra_count)) != total_count):
+        raise ValueError('뉴딜 공동 결과의 리그별 수와 전체 선정 수 불일치')
+    table = _only(r'(?ms)^[ \t]*지원분야[ \t]{2,}운용사[ \t]*\(가나다순\)[ \t]*\n(.+?)^[ \t]*-[ \t]*\d+[ \t]*-[ \t]*$',
+                  appendix, '뉴딜 공동 결과 별첨 명단 표 미확인')[1]
+    rows, labels = [], {}
+    for line in table.splitlines():
+        if not line.strip():
+            continue
+        label = re.fullmatch(r'[ \t]{0,7}(1200억원|이하|초과|투자|제안형|뉴딜성장형|국민참여형|인프라)(?:[ \t]{2,}(.+?))?[ \t]*', line)
+        if label:
+            labels.setdefault(label[1], []).append(len(rows))
+            name = label[2]
+        else:
+            name = line.strip() if re.match(r'^ {8,}\S', line) else None
+            if name is None:
+                raise ValueError('뉴딜 공동 결과 별첨 이름 열의 위치 불일치')
+        if name:
+            rows.append(name)
+    growth_end = proposal_count + growth_count
+    citizen_end = growth_end + citizen_count
+    for label, low, high in (('투자', 0, proposal_count), ('제안형', 0, proposal_count),
+                             ('뉴딜성장형', proposal_count, growth_end),
+                             ('국민참여형', growth_end, citizen_end), ('인프라', citizen_end, total_count)):
+        positions = labels.get(label, [])
+        if len(positions) != 1 or not low <= positions[0] < high:
+            raise ValueError('뉴딜 공동 결과 별첨 구획과 리그별 선정 수 불일치')
+    names = rows[proposal_count:growth_end]
+    if (len(rows) != total_count or len(set(names)) != growth_count
+            or any(not re.fullmatch(r'[가-힣A-Za-z0-9]+(?:[ \t][가-힣A-Za-z0-9]+)*', n) for n in names)):
+        raise ValueError('뉴딜성장형 운용사 이름·중복·선정 수 불일치')
+    return names, total_count
+
+
+def read_newdeal_growth_result_pdf(raw, recruitment):
+    """Read the separate PE league of the retained official selection PDF."""
+    from pypdf import PdfReader
+
+    if not isinstance(raw, bytes) or not 0 < len(raw) <= 12 * 1024 * 1024 or not raw.startswith(b'%PDF-'):
+        raise ValueError('뉴딜 선정 결과 PDF 크기·원문 형식 불일치')
+    pdf = PdfReader(io.BytesIO(raw), strict=True)
+    if pdf.is_encrypted or len(pdf.pages) != 3:
+        raise ValueError('뉴딜 선정 결과 PDF의 관측 양식·페이지 구성 불일치')
+    summary, appendix = (pdf.pages[i].extract_text(extraction_mode='layout') for i in (0, 2))
+    names, total_count = _result_growth_roster(summary, appendix, recruitment)
+    return {'kind': 'lp_kgrowth_newdeal_growth_result_review_v1', 'identity': recruitment['identity'],
+            'source_sha256': hashlib.sha256(raw).hexdigest(), 'track_key': 'blind_newdeal_growth',
+            'program_lead_institution_id': 'kdb', 'selected_managers': names,
+            'joint_total_selected_count': total_count, 'publication_ready': False}
 
 
 def parse_newdeal_joint_notice(n) -> NewdealJointReview | None:
