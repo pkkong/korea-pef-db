@@ -52,7 +52,8 @@
 
 | 실행 | 종류 | 결과 |
 | --- | --- | --- |
-| 11/18 22:10 [44306415719](https://github.com/pkkong/korea-pef-db/actions/runs/44306415719) | 수동 발행 | macOS arm64 배정 실패로 발행 전 취소. 공개본은 76사업 기준 유지. [Intel 복구](https://github.com/pkkong/korea-pef-db/actions/runs/44311923540)의 원문 재생 진행 중 |
+| 11/18 22:33 [44313622936](https://github.com/pkkong/korea-pef-db/actions/runs/44313622936) | 저장 원문 복구 | Intel 실행기에서 국민연금 첨부 재판독 불일치로 쓰기 전에 종료. [arm64 복구](https://github.com/pkkong/korea-pef-db/actions/runs/44315139812)가 대기 중 |
+| 11/18 22:10 [44306415719](https://github.com/pkkong/korea-pef-db/actions/runs/44306415719) | 수동 발행 | macOS arm64 배정 실패로 발행 전 취소. 76사업 공개본 유지 |
 | 11/18 17:13 [44260987002](https://github.com/pkkong/korea-pef-db/actions/runs/44260987002) | 지연 정기 | 발행·공개 확인 성공. 공개본 `f7c30efe2daa5b595f56f73d`, 76사업·이력 37건 유지. 미래에셋 목록 4개 오류로 장애 보고는 실패 |
 | 11/18 16:49 [44260557078](https://github.com/pkkong/korea-pef-db/actions/runs/44260557078) | 저장 원문 복구 | 발행 399초·76사업·이력 37건·검증 오류 0. 2025년 신규와 연도 비교, 기존 주소·명단·별칭을 공개 확인했다. 미래에셋 목록 4개 오류가 남아 장애 보고는 실패 |
 | 11/18 16:32 [44255393307](https://github.com/pkkong/korea-pef-db/actions/runs/44255393307) | 수동 발행 | 발행 840초 제한 초과. 원문 수집 보고 보존. 미래에셋 목록 4개 오류 재발. [읽기 전용 확인](https://github.com/pkkong/korea-pef-db/actions/runs/44259914502)에서 75사업 공개본과 갱신시각 유지 확인 |
