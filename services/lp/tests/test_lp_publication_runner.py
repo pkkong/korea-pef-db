@@ -40,14 +40,17 @@ class PublicationRunnerTests(unittest.TestCase):
     def test_harmless_success_returns_original_receipt_and_safe_phases_only(self):
         value = receipt(); raw = json.dumps(value, ensure_ascii=False).encode()
         phase = {'lp_phase': 'collection_report_parts', 'seconds': 1.25, 'report_bytes': 91222622,
-                 'parts': 87, 'token': 'SECRET', 'sql': 'SECRET SQL', 'host': 'private.example'}
+                 'parts': 87, 'elapsed_seconds': 100000, 'token': 'SECRET', 'sql': 'SECRET SQL', 'host': 'private.example'}
         code = ('import json,sys;print(' + repr(json.dumps(value)) + ');'
                 'print(' + repr(json.dumps(phase)) + ',file=sys.stderr)')
         status, output = self.supervise(code)
         self.assertTrue(status['success']); self.assertEqual(output, raw + b'\n')
         self.assertEqual(status['last_phase'], 'collection_report_parts')
-        self.assertEqual(status['phases'], [{'lp_phase': 'collection_report_parts', 'seconds': 1.25,
-                                          'report_bytes': 91222622, 'parts': 87}])
+        self.assertEqual(len(status['phases']), 1)
+        observed = dict(status['phases'][0])
+        self.assertTrue(0 <= observed.pop('elapsed_seconds') < 100000)
+        self.assertEqual(observed, {'lp_phase': 'collection_report_parts', 'seconds': 1.25,
+                                    'report_bytes': 91222622, 'parts': 87})
         self.assertNotIn('SECRET', json.dumps(status)); self.assertNotIn('private.example', json.dumps(status))
         self.assertEqual(status['process_attempts'], 1)
         self.assertFalse(status['automatic_retry'])

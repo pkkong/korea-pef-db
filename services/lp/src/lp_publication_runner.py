@@ -23,6 +23,7 @@ MAX_GRACE_SECONDS = 10
 MAX_OUTPUT_BYTES = 64 * 1024
 KIND = 'lp_publication_process_status_v1'
 PHASE_COUNTS = {
+    'publication_baseline': set(),
     'gp_profile_contract': {'profiles'},
     'gp_profile_contract_unavailable': set(),
     'gp_profile_contract_previous': {'profiles'},
@@ -36,7 +37,9 @@ PHASE_COUNTS = {
     'evidence_storage': {'documents'},
     'public_payload_serialization_started': set(),
     'public_payload_serialization': {'data_bytes', 'pages_bytes'},
+    'public_state_storage_started': set(),
     'public_state_storage': set(),
+    'publication_commit': set(),
 }
 
 
@@ -185,6 +188,15 @@ def _supervise(command, *, status_file, timeout_seconds, termination_grace_secon
                                            env=env, shell=False, close_fds=True, start_new_session=(os.name == 'posix'))
                 emit()
                 stderr_pending = b''; failure = None; term_at = None; kill_at = None
+
+                def record_phase(line):
+                    phase = _phase(line)
+                    if phase:
+                        phase['elapsed_seconds'] = round(time.monotonic() - started, 3)
+                        status['phases'].append(phase)
+                        status['last_phase'] = phase['lp_phase']
+                        emit()
+
                 with selectors.DefaultSelector() as selector:
                     selector.register(process.stdout, selectors.EVENT_READ, ('stdout', stdout))
                     selector.register(process.stderr, selectors.EVENT_READ, ('stderr', stderr))
@@ -213,16 +225,13 @@ def _supervise(command, *, status_file, timeout_seconds, termination_grace_secon
                                 stderr_pending += raw[:remaining + 1]
                                 while b'\n' in stderr_pending:
                                     line, stderr_pending = stderr_pending.split(b'\n', 1)
-                                    phase = _phase(line)
-                                    if phase:
-                                        status['phases'].append(phase); status['last_phase'] = phase['lp_phase']; emit()
+                                    record_phase(line)
                             if status['stdout_bytes_read'] + status['stderr_bytes_read'] > MAX_OUTPUT_BYTES:
                                 failure = 'OutputLimitExceeded'
                         if process.poll() is not None and not selector.get_map():
                             break
                     if stderr_pending:
-                        phase = _phase(stderr_pending)
-                        if phase: status['phases'].append(phase); status['last_phase'] = phase['lp_phase']
+                        record_phase(stderr_pending)
                 for pipe in (process.stdout, process.stderr):
                     if not pipe.closed: pipe.close()
                 try: process.wait(timeout=1)

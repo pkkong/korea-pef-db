@@ -194,8 +194,11 @@ def store_public_state(conn, data, pages, run_id):
     pages_json = json.dumps(pages, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
     publication_phase('public_payload_serialization', started,
                       data_bytes=len(data_json.encode()), pages_bytes=len(pages_json.encode()))
+    started = time.monotonic()
+    publication_phase('public_state_storage_started', started)
     conn.execute('INSERT INTO lp_program_private.program_state(id,data,pages,run_id) VALUES(1,%s::jsonb,%s::jsonb,%s) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,pages=EXCLUDED.pages,run_id=EXCLUDED.run_id,updated_at=now()',
                  (data_json, pages_json, run_id))
+    publication_phase('public_state_storage', started)
 
 
 def connect():
@@ -438,11 +441,13 @@ def gp_profiles_or_previous(profiles, current):
 def prepare_publication(report):
     # Release the pooled database connection before expensive source replay.
     # A single read snapshot keeps the baseline and its revision consistent.
+    started = time.monotonic()
     with connect() as conn:
         conn.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
         conn.execute("SET LOCAL statement_timeout='120s'")
         current = baseline(conn)
         revision = publication_revision(conn)
+    publication_phase('publication_baseline', started)
     gp_profiles = gp_profiles_or_previous(load_gp_profiles(), current)
     started = time.monotonic()
     data, pages = prepare(current, report, gp_profiles=gp_profiles)
@@ -479,9 +484,9 @@ def publish_prepared(report, data, pages, revision, institution, wrap_json=None)
             store_collection_report(conn, report_json, run_id, institution)
         documents = store_documents(conn, report, data, wrap_json)
         publication_phase('evidence_storage', started, documents=documents)
-        started = time.monotonic()
         store_public_state(conn, data, pages, run_id)
-        publication_phase('public_state_storage', started)
+        started = time.monotonic()
+    publication_phase('publication_commit', started)
     return run_id
 
 
