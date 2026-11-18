@@ -1,4 +1,4 @@
-"""Read-only collection of configured public Mirae Asset searches through curl."""
+"""Collect the configured public Mirae Asset channel through bounded curl requests."""
 import argparse
 import hashlib
 import json

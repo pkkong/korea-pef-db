@@ -49,7 +49,7 @@ jobs:
           path: /tmp/lp-shared-collection.json
           if-no-files-found: error
   collect-eif-ocio:
-    # Verified Ubuntu responses for all four listing years and the PE result.
+    # Ubuntu curl replay covers all four search years and the observed PE result.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -62,13 +62,24 @@ jobs:
       - name: Install official attachment readers
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
       - name: Collect the Mirae Asset EIF OCIO channel
-        run: python3 services/lp/src/collect_lp_institution_boards.py --institution moel_eif_ocio --output /tmp/eif-ocio-collection.json
+        run: |
+          python3 -m services.lp.src.lp_eif_curl_collection --out /tmp/eif-ocio-curl
+          cp /tmp/eif-ocio-curl/eif-ocio-collection.json /tmp/eif-ocio-collection.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: lp-eif-ocio-collection
           path: /tmp/eif-ocio-collection.json
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-eif-ocio-transport
+          path: |
+            /tmp/eif-ocio-curl/transport-receipts.json
+            /tmp/eif-ocio-curl/response-*.bin
+          retention-days: 7
+          if-no-files-found: warn
   collect-institution-boards:
     needs: collect-eif-ocio
     if: always()

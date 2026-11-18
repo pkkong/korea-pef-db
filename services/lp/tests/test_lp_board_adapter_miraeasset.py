@@ -111,7 +111,7 @@ class MiraeAssetTests(unittest.TestCase):
                          [('PE', ['에이치앤큐에쿼티파트너스', '제네시스프라이빗에쿼티'])])
 
     def test_curl_read_only_probe_preserves_each_receipt_and_uses_the_existing_parser(self):
-        from services.lp.src.diagnose_lp_eif_curl import collect_via_curl
+        from services.lp.src.lp_eif_curl_collection import collect_via_curl
 
         class Process:
             def __init__(self, command, **kwargs):
