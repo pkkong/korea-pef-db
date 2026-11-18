@@ -34,18 +34,17 @@ jobs:
           request = json.loads(pathlib.Path('data/lp_kgrowth_history_check_request.json').read_bytes())
           fields = {'bundle_commit', 'bundle_sha256', 'reason', 'attempt', 'review_scope'}
           scope = request.get('review_scope')
-          if scope in {'press_followup', 'press_result', 'press_pdf'}:
-              fields |= {'prior_press_commit', 'prior_press_sha256'}
-          if scope in {'press_result', 'press_pdf'}:
-              fields.add('followup_press_sha256')
-          if scope == 'press_pdf':
-              fields.add('result_press_sha256')
+          proof_roles = ('prior', 'followup', 'result', 'failed')
+          proof_count = {'press_followup': 1, 'press_result': 2, 'press_pdf': 3, 'press_pdf_session': 4}.get(scope, 0)
+          if proof_count:
+              fields.add('prior_press_commit')
+              fields.update(role + '_press_sha256' for role in proof_roles[:proof_count])
           assert set(request) == fields
           commit, digest = request['bundle_commit'], request['bundle_sha256']
           assert re.fullmatch(r'[a-f0-9]{40}', commit)
           assert re.fullmatch(r'[a-f0-9]{64}', digest)
           assert type(request['attempt']) is int and request['attempt'] > 0
-          assert scope in {'pe_roster', 'joint_originals', 'press_listing', 'press_search', 'press_followup', 'press_result', 'press_pdf'}
+          assert proof_count or scope in {'pe_roster', 'joint_originals', 'press_listing', 'press_search'}
           subprocess.run(['git', 'fetch', '--no-tags', '--depth=1', 'origin', commit], check=True)
           raw = subprocess.check_output(['git', 'show', commit + ':kgrowth.json'])
           assert len(raw) <= 40 * 1024 * 1024
@@ -54,15 +53,13 @@ jobs:
           out.mkdir()
           (out / 'bundle.json').write_bytes(raw)
           (out / 'request.json').write_text(json.dumps(request, ensure_ascii=False, indent=2))
-          if scope in {'press_followup', 'press_result', 'press_pdf'}:
+          if proof_count:
               prior_commit = request['prior_press_commit']
               assert re.fullmatch(r'[a-f0-9]{40}', prior_commit)
               subprocess.run(['git', 'fetch', '--no-tags', '--depth=1', 'origin', prior_commit], check=True)
-              proofs = (('prior', 'press-search'), ('followup', 'press-followup'), ('result', 'press-result'))
-              for role, source in proofs:
+              for role in proof_roles[:proof_count]:
+                  source = 'press-' + ('search' if role == 'prior' else role)
                   key = role + '_press_sha256'
-                  if key not in request:
-                      continue
                   expected = request[key]
                   assert re.fullmatch(r'[a-f0-9]{64}', expected)
                   data = subprocess.check_output(['git', 'show', prior_commit + ':' + source + '-capture.json'])
@@ -78,12 +75,11 @@ jobs:
           args = ['python3', 'services/lp/src/lp_kgrowth_history_replay.py',
                   '--bundle', str(root / 'bundle.json'), '--capture-details',
                   '--review-scope', request['review_scope'], '--out', str(root / 'capture.json')]
-          if request['review_scope'] in {'press_followup', 'press_result', 'press_pdf'}:
-              args += ['--capture', str(root / 'prior-capture.json')]
-          if request['review_scope'] in {'press_result', 'press_pdf'}:
-              args += ['--followup-capture', str(root / 'followup-capture.json')]
-          if request['review_scope'] == 'press_pdf':
-              args += ['--result-capture', str(root / 'result-capture.json')]
+          for role, flag in (('prior', '--capture'), ('followup', '--followup-capture'),
+                             ('result', '--result-capture'), ('failed', '--failed-capture')):
+              path = root / (role + '-capture.json')
+              if path.exists():
+                  args += [flag, str(path)]
           subprocess.run(args, check=True)
           PY
       - name: Keep raw responses including a failed attempt

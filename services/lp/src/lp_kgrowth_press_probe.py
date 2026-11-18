@@ -11,9 +11,10 @@ import copy
 import hashlib
 import re
 from datetime import date, datetime, timezone
+from http.cookiejar import CookieJar
 from urllib.error import HTTPError
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
-from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, HTTPCookieProcessor, ProxyHandler, Request, build_opener
 
 
 KIND = 'lp_kgrowth_press_probe_v1'
@@ -48,18 +49,20 @@ def press_search_url(term):
     return PRESS_LISTING_URL.split('?')[0] + '?' + query
 
 
-def _fetch(url):
+def _fetch(url, *, opener=None, referer=None):
     """One workflow-only GET, with ordinary TLS verification and no credentials.
 
-    HTTP error bodies are observations too. No cookies, response headers,
-    redirects, proxy credentials, authentication handlers or retries are used.
-    The extra byte detects an oversized body without reading it unboundedly.
+    HTTP error bodies are observations too. No redirects, proxy credentials,
+    authentication handlers or retries are used. The extra byte detects overflow.
     """
-    opener = build_opener(ProxyHandler({}), _NoRedirect())
-    request = Request(url, method='GET', headers={
+    opener = opener or build_opener(ProxyHandler({}), _NoRedirect())
+    headers = {
         'User-Agent': 'Mozilla/5.0 (LP public source verification)',
         'Accept-Encoding': 'identity',
-    })
+    }
+    if referer:
+        headers['Referer'] = referer
+    request = Request(url, method='GET', headers=headers)
     try:
         response = opener.open(request, timeout=TIMEOUT_SECONDS)
     except HTTPError as error:
@@ -697,11 +700,13 @@ def _validate_pdf_response(response, report, *, expected_url):
         raise ValueError('보도자료 첨부의 PDF 시작·종료 표식 불일치')
 
 
-def capture_press_result_pdf(first, followup, detail, terms, *, checked_at=None, retain=lambda report: None):
+def capture_press_result_pdf(first, followup, detail, terms, *, prior_failure=None,
+                             checked_at=None, retain=lambda report: None):
     """Replay the official chain and retain its one observed PDF before reading it."""
     stamp = _checked_at(checked_at)
     replay = replay_press_result_detail(first, followup, detail, terms, checked_at=stamp)
-    result = {'kind': 'lp_kgrowth_press_result_pdf_v1', 'review_scope': 'press_pdf',
+    scope = 'press_pdf_session' if prior_failure is not None else 'press_pdf'
+    result = {'kind': 'lp_kgrowth_press_result_pdf_v1', 'review_scope': scope,
               'detail_replay': replay, 'requests': 0, 'receipts': [], 'holds': replay['holds'],
               'pdf_container_observed': False, 'parsed': False, 'roster_verified': False,
               'publication_ready': False, 'published': False, 'database_reads': 0, 'database_writes': 0}
@@ -710,12 +715,58 @@ def capture_press_result_pdf(first, followup, detail, terms, *, checked_at=None,
         return result
 
     def save(receipt):
-        retain({**copy.deepcopy(result), 'requests': receipt['requests'], 'receipts': [receipt],
+        retain({**copy.deepcopy(result), 'requests': result['requests'] + receipt['requests'],
+                'receipts': [*copy.deepcopy(result['receipts']), receipt],
                 'holds': copy.deepcopy(receipt['holds'])})
 
-    receipt = _capture(replay['pdf_attachment']['url'], _fetch, checked_at=stamp,
-                       retain=save, validate=_validate_pdf_response)
-    result.update(requests=receipt['requests'], receipts=[receipt], holds=receipt['holds'],
+    pdf_url = replay['pdf_attachment']['url']
+    fetch = _fetch
+    if prior_failure is not None:
+        result['prior_direct_failure_sha256'] = _check_pdf_direct_failure(prior_failure, replay)
+        opener = build_opener(ProxyHandler({}), HTTPCookieProcessor(CookieJar()), _NoRedirect())
+        source_url = replay['source_detail']['url']
+
+        def validate_detail(response, receipt, *, expected_url):
+            raw = _validate_wire_response(response, receipt, expected_url=expected_url)
+            source, _ = _press_result_detail_dom(raw, replay['listing_target'], followup['search_term'], receipt['sha256'])
+            if any(source[key] != replay['detail'][key] for key in ('title', 'date', 'body_text_sha256')):
+                raise ValueError('공개 세션의 상세 제목·게시일·본문이 저장 원문과 다름')
+
+        body = _capture(source_url, lambda url: _fetch(url, opener=opener, referer=followup['receipts'][0]['url']),
+                        checked_at=stamp, retain=save, validate=validate_detail)
+        result.update(requests=body['requests'], receipts=[body], holds=body['holds'])
+        if body['holds']:
+            retain(copy.deepcopy(result))
+            return result
+
+        def fetch(url):
+            return _fetch(url, opener=opener, referer=source_url)
+
+    receipt = _capture(pdf_url, fetch, checked_at=stamp, retain=save, validate=_validate_pdf_response)
+    result.update(requests=result['requests'] + receipt['requests'], receipts=[*result['receipts'], receipt], holds=receipt['holds'],
                   pdf_container_observed=not receipt['holds'])
     retain(copy.deepcopy(result))
     return result
+
+
+def _check_pdf_direct_failure(failure, replay):
+    """Require the retained direct-link entry alert for this very attachment."""
+    if (not isinstance(failure, dict) or failure.get('review_scope') != 'press_pdf'
+            or type(failure.get('requests')) is not int or failure['requests'] != 1
+            or failure.get('pdf_container_observed') is not False or failure.get('published') is not False
+            or not isinstance(failure.get('detail_replay'), dict)
+            or any(not _same_proof(failure['detail_replay'].get(key), replay[key])
+                   for key in ('source_detail', 'pdf_attachment'))):
+        raise ValueError('같은 보도자료 첨부의 이전 직접 접근 실패가 필요함')
+    receipts = failure.get('receipts')
+    if not isinstance(receipts, list) or len(receipts) != 1 or not isinstance(receipts[0], dict):
+        raise ValueError('보도자료 첨부 접근 실패 영수증 형식 불일치')
+    url = replay['pdf_attachment']['url']
+    receipt = receipts[0]
+    raw = "<script>alert('비정상적인 접근입니다.');location.href='/';</script>".encode('cp949')
+    response = {'raw': raw, 'http_status': 200, 'geturl': url}
+    expected = _capture(url, lambda _: response, checked_at=receipt.get('checked_at'),
+                        retain=lambda _: None, validate=_validate_pdf_response)
+    if not _same_proof(expected, receipt) or not _same_proof(failure.get('holds'), expected['holds']):
+        raise ValueError('보도자료 첨부의 실제 직접 접근 실패 응답 불일치')
+    return receipt['sha256']

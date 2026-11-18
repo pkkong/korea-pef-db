@@ -791,6 +791,27 @@ $(document).scrollTop(sT, 0);
         fetch.assert_not_called()
         self.assertTrue(result['holds'])
 
+    def test_pdf_follows_rechecked_detail_in_one_public_session_after_entry_alert(self):
+        first, second, capture = self.chain()
+        alert = "<script>alert('비정상적인 접근입니다.');location.href='/';</script>".encode('cp949')
+        with patch.object(probe, '_fetch', side_effect=lambda url: response(alert, url=url)):
+            failed = probe.capture_press_result_pdf(first, second, capture, self.terms, checked_at=STAMP)
+        calls = []
+        def transport(url, *, opener, referer):
+            calls.append((url, opener, referer))
+            payload = self.page() if len(calls) == 1 else b'%PDF-1.4\nfixture\n%%EOF'
+            return response(payload, url=url)
+        with patch.object(probe, '_fetch', side_effect=transport):
+            result = probe.capture_press_result_pdf(first, second, capture, self.terms, prior_failure=failed, checked_at=STAMP)
+        self.assertEqual(result['requests'], 2)
+        self.assertTrue(result['pdf_container_observed'])
+        self.assertEqual(calls[1][2], calls[0][0])
+        self.assertIs(calls[0][1], calls[1][1])
+        failed['receipts'][0]['sha256'] = '0' * 64
+        with patch.object(probe, '_fetch') as fetch, self.assertRaises(ValueError):
+            probe.capture_press_result_pdf(first, second, capture, self.terms, prior_failure=failed, checked_at=STAMP)
+        fetch.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

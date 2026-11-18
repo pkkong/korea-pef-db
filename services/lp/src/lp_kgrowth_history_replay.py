@@ -39,7 +39,8 @@ MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_INPUT_BYTES = 40 * 1024 * 1024
 _FIELDS = ('source_id', 'url', 'title', 'date', 'body', 'sha256', 'attachments')
 REVIEW_SCOPES = ('pe_roster', 'joint_originals')
-PRESS_CHAIN_SCOPES = ('press_followup', 'press_result', 'press_pdf')
+PRESS_PDF_SCOPES = ('press_pdf', 'press_pdf_session')
+PRESS_CHAIN_SCOPES = ('press_followup', 'press_result') + PRESS_PDF_SCOPES
 CAPTURE_SCOPES = REVIEW_SCOPES + ('press_listing', 'press_search') + PRESS_CHAIN_SCOPES
 
 
@@ -287,17 +288,20 @@ def main(argv=None):
     parser.add_argument('--capture', type=Path)
     parser.add_argument('--followup-capture', type=Path)
     parser.add_argument('--result-capture', type=Path)
+    parser.add_argument('--failed-capture', type=Path)
     parser.add_argument('--review-scope', choices=CAPTURE_SCOPES, default='pe_roster')
     args = parser.parse_args(argv)
     if args.review_scope in ('press_listing', 'press_search') and (not args.capture_details or args.capture):
         parser.error('보도자료 목록은 새 응답 진단만 지원하며 기존 묶음 재생에 쓸 수 없습니다')
     if args.review_scope in PRESS_CHAIN_SCOPES and (not args.capture_details or not args.capture):
         parser.error('보도자료 후속 조회에는 앞선 검색 응답 영수증이 필요합니다')
-    if bool(args.followup_capture) != (args.review_scope in ('press_result', 'press_pdf')):
+    if bool(args.followup_capture) != (args.review_scope in ('press_result', *PRESS_PDF_SCOPES)):
         parser.error('보도자료 상세와 첨부에는 검증된 2쪽 응답 영수증이 필요합니다')
-    if bool(args.result_capture) != (args.review_scope == 'press_pdf'):
+    if bool(args.result_capture) != (args.review_scope in PRESS_PDF_SCOPES):
         parser.error('보도자료 첨부에는 상세 응답 영수증이 필요합니다')
-    if args.out.resolve() in {p.resolve() for p in (args.bundle, args.capture, args.followup_capture, args.result_capture) if p}:
+    if bool(args.failed_capture) != (args.review_scope == 'press_pdf_session'):
+        parser.error('보도자료 세션 확인에는 앞선 직접 접근 실패 영수증이 필요합니다')
+    if args.out.resolve() in {p.resolve() for p in (args.bundle, args.capture, args.followup_capture, args.result_capture, args.failed_capture) if p}:
         parser.error('입력 원문·보완 영수증을 덮어쓸 수 없습니다')
     if args.out.exists() or args.out.is_symlink():
         parser.error('기존 원본·실패 영수증·보고서를 덮어쓸 수 없습니다. 새 출력 경로를 사용하세요')
@@ -375,7 +379,13 @@ def main(argv=None):
                     if not isinstance(detail, dict) or any(detail.get(k) != v for k, v in proof.items() if k != 'review_scope'):
                         raise ValueError('보도자료 상세와 앞선 목록 응답 지문 불일치')
                     proof['result_capture_sha256'] = _sha(args.result_capture.read_bytes())
-                    report = capture_press_result_pdf(prior, followup, detail, terms, retain=save_press)
+                    failed = None
+                    if args.failed_capture:
+                        failed = read_json(args.failed_capture)
+                        if not isinstance(failed, dict) or any(failed.get(k) != v for k, v in proof.items() if k != 'review_scope'):
+                            raise ValueError('보도자료 첨부 실패와 앞선 응답 지문 불일치')
+                        proof['failed_capture_sha256'] = _sha(args.failed_capture.read_bytes())
+                    report = capture_press_result_pdf(prior, followup, detail, terms, prior_failure=failed, retain=save_press)
             save_press(report)
         else:
             report = capture_details(bundle, fetch_detail, retain=save, review_scope=args.review_scope)
