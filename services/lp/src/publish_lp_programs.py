@@ -442,11 +442,14 @@ def prepare_publication(report):
     # Release the pooled database connection before expensive source replay.
     # A single read snapshot keeps the baseline and its revision consistent.
     started = time.monotonic()
+    expected_run = os.environ.get('LP_EXPECTED_PUBLICATION_BASELINE')
     with connect() as conn:
         conn.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
         conn.execute("SET LOCAL statement_timeout='120s'")
         current = baseline(conn)
         revision = publication_revision(conn)
+        if expected_run and (not revision[0] or revision[0][0] != expected_run):
+            raise ValueError('Public model changed since history-import preflight')
     publication_phase('publication_baseline', started)
     gp_profiles = gp_profiles_or_previous(load_gp_profiles(), current)
     started = time.monotonic()

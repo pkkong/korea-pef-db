@@ -3,6 +3,11 @@ name: Recover LP publication
 on:
   workflow_dispatch:
     inputs:
+      runner:
+        description: Standard macOS runner for the retained scanned-PDF evidence
+        type: choice
+        options: [macos-latest, macos-15-intel]
+        default: macos-latest
       collection_run:
         description: Completed main-branch Collect LP programs run with retained evidence
         required: true
@@ -24,6 +29,10 @@ on:
         description: Optional successful recovery run for the same collection; reuse its issuer evidence without HTTP
         required: false
         type: string
+      history_import_baseline:
+        description: Optional public run ID verified by read-only history-import preflight
+        required: false
+        type: string
 permissions:
   contents: read
   actions: read
@@ -33,7 +42,7 @@ concurrency:
 jobs:
   publish:
     # Must replay scanned-PDF evidence with the same bounded Vision reader.
-    runs-on: macos-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
@@ -200,6 +209,31 @@ jobs:
           Path('/tmp/lp-recovery/koreapost-preferred-reuse.json').write_text(json.dumps(receipt,ensure_ascii=False))
           print(json.dumps(receipt,ensure_ascii=False))
           PY
+      - name: Load the pinned historical import for the checked baseline
+        if: inputs.history_import_baseline != ''
+        env:
+          EXPECTED_BASELINE: ${{ inputs.history_import_baseline }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          from services.lp.src.build_lp_history_import import merge
+
+          assert os.environ['GITHUB_REPOSITORY'] == 'pkkong/korea-pef-db' and os.environ['GITHUB_REF'] == 'refs/heads/main'
+          assert re.fullmatch('[a-f0-9]{24}', os.environ['EXPECTED_BASELINE'])
+          request = json.loads(Path('data/lp_history_import_request.json').read_bytes())
+          assert set(request) == {'commit', 'file', 'sha256'}
+          commit, name = request['commit'], request['file']
+          assert re.fullmatch('[a-f0-9]{40}', commit) and re.fullmatch(r'[a-zA-Z0-9._-]+\.json', name)
+          assert re.fullmatch('[a-f0-9]{64}', request['sha256'])
+          subprocess.run(['git', 'fetch', '--no-tags', '--depth=1', 'origin', commit], check=True)
+          raw = subprocess.check_output(['git', 'show', commit + ':' + name])
+          assert len(raw) <= 40 * 1024 * 1024
+          root = Path('/tmp/lp-recovery')
+          pinned = root / 'reviewed-history-import.json'
+          pinned.write_bytes(raw)
+          merge(root / 'lp-institution-collection.json', pinned, request['sha256'])
+          PY
       - name: Replay source proofs and preserve existing public programs
         env:
           PYTHONPATH: services/lp/src
@@ -207,6 +241,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           KEXIM_STAGE_RUN: ${{ inputs.kexim_stage_evidence_run }}
           KOREAPOST_STAGE_RUN: ${{ inputs.koreapost_preferred_evidence_run }}
+          EXPECTED_BASELINE: ${{ inputs.history_import_baseline }}
         run: |
           python3 - <<'PY'
           import copy,json,os,tempfile
@@ -225,6 +260,9 @@ jobs:
               conn.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
               old=baseline(conn)
               current_run=conn.execute('SELECT run_id FROM lp_program_private.program_state WHERE id=1').fetchone()[0]
+          expected_baseline=os.environ.get('EXPECTED_BASELINE')
+          if expected_baseline:
+              assert current_run==expected_baseline, 'Public model changed since history-import preflight'
           (root/'baseline.json').write_text(json.dumps(old,ensure_ascii=False))
           data,pages=prepare(copy.deepcopy(old),report)
           validate(data)
@@ -273,6 +311,11 @@ jobs:
           errors=data.get('institution_collection_holds',[])
           assert not any(h.get('stage')=='institution_validation' for h in errors), 'Invalid official receipt'
           new=[p for p in data['programs'] if p['id'] not in {old['id'] for old in old['programs']}]
+          if expected_baseline:
+              assert not data.get('history_notice_holds'), 'History import validation holds'
+              requested={n['url'] for n in report['institution_collection']['history_import']['notices']}
+              assert requested <= {n['url'] for n in data['history_notices']}, 'Pinned history missing from retained evidence'
+              assert new and requested <= {e['url'] for p in new for e in p['events']}, 'Pinned history did not create the reviewed programs'
           for p in new:
               if p['institution_id']=='kbiz':
                   assert not any(p.get(k) for k in ('commitment_amount_krw','manager_count','per_fund_amount_krw')), 'Common PE/VC budget cannot become PE facts'
@@ -287,6 +330,7 @@ jobs:
       - name: Publish validated evidence in one transaction
         env:
           NEWSLETTER_SKIP_BRAND_ASSET_DOWNLOADS: '1'
+          LP_EXPECTED_PUBLICATION_BASELINE: ${{ inputs.history_import_baseline }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

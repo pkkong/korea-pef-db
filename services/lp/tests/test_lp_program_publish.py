@@ -87,14 +87,17 @@ class PublishContracts(unittest.TestCase):
         conn = MagicMock()
         active = []
         conn.__enter__.side_effect = lambda: active.append(True) or conn
-        conn.__exit__.side_effect = lambda *args: active.pop()
+        conn.__exit__.side_effect = lambda *args: active.clear()
         def offline(current, report, gp_profiles=None):
             self.assertFalse(active, 'Source replay must not hold a pooled connection')
             return {'programs': []}, {'index.html': 'valid'}
         with patch('publish_lp_programs.connect', return_value=conn), patch('publish_lp_programs.baseline', return_value={}), \
-             patch('publish_lp_programs.publication_revision', return_value=('old', [])), \
+             patch('publish_lp_programs.publication_revision', return_value=(('old', 'stamp'), [])), \
              patch('publish_lp_programs.prepare', side_effect=offline), patch('publish_lp_programs.publication_phase'):
-            self.assertEqual(prepare_publication({})[2], ('old', []))
+            self.assertEqual(prepare_publication({})[2], (('old', 'stamp'), []))
+            with patch.dict('os.environ', {'LP_EXPECTED_PUBLICATION_BASELINE': 'different'}):
+                with self.assertRaisesRegex(ValueError, 'changed since history-import preflight'):
+                    prepare_publication({})
         self.assertIn('REPEATABLE READ READ ONLY', conn.execute.call_args_list[0].args[0])
 
     def test_changed_publication_or_review_cannot_write_prepared_results(self):
