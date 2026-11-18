@@ -18,6 +18,88 @@ except ImportError:
 NUM = r'(\d[\d,]*)'
 _CWMA_OVERVIEW = re.compile(r'(?m)^1\.\s*선정\s*개요\s*$')
 _CWMA_CONDITIONS = re.compile(r'(?m)^2\.\s*주요\s*출자조건\s*$')
+_CWMA_JOINT_PE = re.compile(r'(?m)^□[ \t]*국내[ \t]+사모투자펀드\(PEF\)[ \t]+위탁운용사[ \t]+선정계획[ \t]*$')
+_CWMA_JOINT_VC = re.compile(r'(?m)^□[ \t]*국내[ \t]+벤처펀드\(VC\)[ \t]+위탁운용사[ \t]+선정계획[ \t]*$')
+_CWMA_PROCEDURE = re.compile(r'(?m)^\d+\.[ \t]*선정절차[ \t]*$')
+_ALLOCATION_FIELDS = ('commitment_amount_krw', 'total_commitment_amount_krw', 'commitment_label',
+                      'list_commitment_label', 'manager_count', 'manager_count_label', 'segments',
+                      'per_fund_amount_krw', 'per_fund_range_krw', 'per_fund_qualifier', 'fund_target_label')
+
+
+def _cwma_joint_table(section, kind):
+    """Read rows inside one named current-offering section, never its neighbour."""
+    def row(label, pattern):
+        values = re.findall(r'(?m)^' + label + r'[ \t]*\n[ \t]*' + pattern + r'[ \t]*$', section)
+        if len(values) != 1:
+            raise ValueError('CWMA PE·VC 모집 표의 행 누락·중복: ' + label)
+        return values[0]
+
+    is_pe = kind == 'PE'
+    fund = r'사모투자펀드\(PEF\)' if is_pe else r'벤처펀드\(VC\)'
+    division = r'국내[ \t]+사모투자펀드\(Private Equity\)' if is_pe else r'국내[ \t]+벤처펀드\(Venture Capital\)'
+    row(r'구[ \t]+분', division)
+    row('운용방식', r'ㆍ[ \t]*블라인드[ \t]+형태의[ \t]+' + fund)
+    row('선정방식', r'ㆍ[ \t]*공개모집[ \t]+공고를[ \t]+통해[ \t]+일괄심사방식으로[ \t]+선정')
+    count = int(row(r'선정[ \t]+운용사[ \t]+수', r'ㆍ[ \t]*(\d+)개사[ \t]+이내'))
+    total, per_manager = (int(v.replace(',', '')) for v in row(
+        r'공제회[ \t]+선정규모', r'ㆍ[ \t]*총[ \t]+' + NUM + r'억원\(1개사[ \t]+당[ \t]+'
+        + NUM + r'억원[ \t]+이내\)[ \t]+이내'))
+    minimum, maximum = (int(v.replace(',', '')) for v in row(
+        '펀드결성총액', r'ㆍ[ \t]*' + NUM + r'억원[ \t]+이상[ \t]+' + NUM
+        + r'억원[ \t]+이하(?:[ \t]*※[^\n]*)?'))
+    legal = re.findall(r'(?ms)^투자기구[ \t]*\n(.+?)^운용사[ \t]+의무출자[ \t]*$', section)
+    if len(legal) != 1:
+        raise ValueError('CWMA PE·VC 모집 표의 투자기구 구획 미확인')
+    compact = re.sub(r'\s+', '', legal[0])
+    if is_pe:
+        valid_legal = ('기관전용사모집합투자기구(PEF)' in compact
+                       and not re.search(r'벤처|신기술', compact))
+    else:
+        valid_legal = all(word in compact for word in (
+            '벤처투자조합', '신기술사업투자조합', '창업·벤처전문기관전용사모집합투자기구'))
+    if not valid_legal:
+        raise ValueError('CWMA PE·VC 현재 투자기구 구분 미확인')
+    if not (count > 0 and 0 < per_manager <= total and total == count * per_manager
+            and per_manager <= minimum <= maximum):
+        raise ValueError('CWMA PE·VC 금액·운용사 수·결성규모 불일치')
+    return count, total, per_manager, minimum, maximum
+
+
+def _cwma_joint_allocation(notice, sources):
+    title = re.sub(r'\s+', '', notice['title'])
+    if notice.get('institution_id') != 'cwma' or not all(word in title for word in ('국내사모투자펀드', '벤처펀드')):
+        return {}
+    if re.search(r'결과|정정|수정|연장|취소', title):
+        raise ValueError('CWMA 후속 공고의 원모집 조건 사용 보류')
+    matches = []
+    for url, raw, sha in sources:
+        pe, vc, end = [list(pattern.finditer(raw)) for pattern in (_CWMA_JOINT_PE, _CWMA_JOINT_VC, _CWMA_PROCEDURE)]
+        if not (pe or vc):
+            continue
+        if len(pe) != 1 or len(vc) != 1 or len(end) != 1 or not pe[0].end() < vc[0].start() < end[0].start():
+            raise ValueError('CWMA PE·VC 현재 모집 구획 누락·중복·순서 불일치')
+        pe_text, vc_text = raw[pe[0].end():vc[0].start()], raw[vc[0].end():end[0].start()]
+        facts = (_cwma_joint_table(pe_text, 'PE'), _cwma_joint_table(vc_text, 'VC'))
+        matches.append((facts, {'source_url': url, 'sha256': sha,
+                                'quote': raw[pe[0].start():end[0].start()].strip()}))
+    if not matches:
+        raise ValueError('CWMA PE·VC 분리 모집 표 원문 미확인')
+    if len({facts for facts, _ in matches}) != 1:
+        raise ValueError('CWMA 원문 사이에 PE·VC 모집 조건 불일치')
+    matches.sort(key=lambda item: (item[1]['source_url'], item[1]['sha256']))
+    facts = matches[0][0]
+    count, total = sum(f[0] for f in facts), sum(f[1] for f in facts)
+    segments = []
+    for name, (number, amount, per_manager, minimum, maximum) in zip(('국내 사모투자펀드(PEF)', '국내 벤처펀드(VC)'), facts):
+        segments.append({'name': name, 'manager_count': number, 'amount_krw': amount * 100_000_000,
+                         'per_fund_max_krw': per_manager * 100_000_000,
+                         'fund_target_label': f'{minimum:,}~{maximum:,}억원'})
+    return {'commitment_amount_krw': total * 100_000_000, 'commitment_label': f'{total:,}억원 이내',
+            'list_commitment_label': f'{total:,}억원 이내', 'amount_scope': 'combined',
+            'manager_count': count, 'manager_count_label': f'{count}개사 이내 (PE·VC 합계)',
+            'segments': segments, 'fund_target_label': ' · '.join(
+                f'{name} {fact[3]:,}~{fact[4]:,}억원' for name, fact in zip(('PE', 'VC'), facts)),
+            'extraction_evidence': {'combined_allocation': [proof for _, proof in matches]}}
 
 
 def _cwma_pe_allocation(notice, sources):
@@ -89,6 +171,10 @@ def extract_terms(n):
     sources += [(u, t, n['attachment_hashes'][u]) for u, t in n.get('attachment_texts', {}).items()
                 if not is_submission_attachment(n, u)]
     try:
+        cwma_joint = _cwma_joint_allocation(n, sources)
+    except ValueError as exc:
+        cwma_joint = {'allocation_reading_failed': True, 'allocation_error': str(exc)}
+    try:
         result = extract_offering_sources(n, sources)
     except ValueError:
         result = {}
@@ -104,7 +190,9 @@ def extract_terms(n):
         def record(key, quote):
             evidence.setdefault(key, []).append({'source_url': url, 'sha256': sha, 'quote': quote})
         # Explicit split allocations must reconcile before a PE field is emitted.
-        if mixed:
+        if cwma_joint:
+            pass  # This named two-section layout is validated independently.
+        elif mixed:
             pe = re.search(r'PE부문[(:：]*' + NUM + r'억원[)]?[:：]*각' + NUM + r'억원[,，]*총(\d+)개사', text)
             vc = re.search(r'VC부문[(:：]*' + NUM + r'억원[)]?[:：]*각' + NUM + r'억원[,，]*총(\d+)개사', text)
             total = re.search(r'출자규모[:：]*총' + NUM + r'억원', text)
@@ -210,8 +298,18 @@ def extract_terms(n):
         else:
             result.update(deadline=specific['deadline'], deadline_precision=specific['deadline_precision'])
             evidence.setdefault('deadline', []).extend(specific['extraction_evidence']['deadline'])
-    cwma = _cwma_pe_allocation(n, sources)
+    cwma = {} if cwma_joint else _cwma_pe_allocation(n, sources)
     if cwma:
         evidence.update(cwma.pop('extraction_evidence'))
         result.update(cwma)
+    if cwma_joint:
+        for field in _ALLOCATION_FIELDS:
+            result.pop(field, None)
+        for field in ('manager_count', 'count', 'total', 'pe_total', 'vc_total', 'pe_count',
+                      'per_fund', 'pe_segments', 'pe_fund_range', 'pe_fund_qualifier', 'amount_qualifier'):
+            evidence.pop(field, None)
+        evidence.update(cwma_joint.pop('extraction_evidence', {}))
+        result.update(cwma_joint)
+        result['missing_fields'] = [field for field in (
+            'commitment_amount_krw', 'manager_count', 'deadline', 'primary_investment') if field not in result]
     return apply_iaci_allocation(n, result)

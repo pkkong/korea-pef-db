@@ -48,7 +48,30 @@ jobs:
           name: lp-shared-collection
           path: /tmp/lp-shared-collection.json
           if-no-files-found: error
+  collect-eif-ocio:
+    # Verified Ubuntu responses for all four listing years and the PE result.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install official attachment readers
+        run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47'
+      - name: Collect the Mirae Asset EIF OCIO channel
+        run: python3 services/lp/src/collect_lp_institution_boards.py --institution moel_eif_ocio --output /tmp/eif-ocio-collection.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-eif-ocio-collection
+          path: /tmp/eif-ocio-collection.json
+          if-no-files-found: error
   collect-institution-boards:
+    needs: collect-eif-ocio
+    if: always()
     runs-on: macos-latest
     timeout-minutes: 20
     env:
@@ -62,8 +85,14 @@ jobs:
         run: python3 -m pip install 'pypdf==6.10.0' 'olefile==0.47' 'truststore==0.10.5'
       - name: Test independent institution-board discovery
         run: python3 -m unittest services.lp.tests.test_lp_board_adapter_nps services.lp.tests.test_lp_board_adapter_cwma services.lp.tests.test_lp_pdf_ocr services.lp.tests.test_lp_pending_collection services.lp.tests.test_lp_attachment_policy services.lp.tests.test_lp_board_adapters_mutuals services.lp.tests.test_lp_board_adapters_pensions services.lp.tests.test_lp_board_adapter_kfcc services.lp.tests.test_lp_board_adapters_banks services.lp.tests.test_lp_board_adapter_pck services.lp.tests.test_lp_board_adapter_sema services.lp.tests.test_lp_board_adapter_mmaa services.lp.tests.test_lp_board_adapter_kbiz services.lp.tests.test_lp_board_adapter_geps services.lp.tests.test_lp_board_adapter_kamco services.lp.tests.test_lp_board_adapter_moel services.lp.tests.test_lp_board_adapter_kfinco services.lp.tests.test_lp_kbiz_notice_terms services.lp.tests.test_lp_kfinco_notice_terms services.lp.tests.test_collect_lp_institution_boards services.lp.tests.test_lp_institution_notice_terms services.lp.tests.test_lp_kfcc_notice_terms services.lp.tests.test_lp_three_board_collection services.lp.tests.test_lp_regional_transport services.lp.tests.test_lp_cu_transport services.lp.tests.test_lp_ipv4_transport
+      - name: Receive the separate EIF OCIO report
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: lp-eif-ocio-collection
+          path: /tmp
       - name: Discover configured official institution boards
-        run: python3 services/lp/src/collect_lp_institution_boards.py --output /tmp/lp-institution-collection.json
+        run: python3 services/lp/src/collect_lp_institution_boards.py --eif-ocio-report /tmp/eif-ocio-collection.json --output /tmp/lp-institution-collection.json
       - name: Add the reviewed 2020+ history import (once; the publisher re-validates)
         if: hashFiles('data/lp_history_import_request.json') != ''
         run: |

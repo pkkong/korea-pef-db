@@ -13,6 +13,40 @@ from services.lp.tests.test_lp_board_adapters_pensions import TP_LIST, TP_DETAIL
 STAMP = '2026-10-20T06:00:00+00:00'
 
 
+class EifOcioReportMergeTests(unittest.TestCase):
+    def setUp(self):
+        self.primary = {'checked_at': STAMP, 'notices': [{'institution_id': 'moel_eif', 'url': 'native'}],
+                        'holds': [{'institution_id': 'other'}], 'coverage': {'moel_eif': {}}}
+        self.eif = {'checked_at': '2026-10-20T06:05:00+00:00',
+                    'notices': [{'institution_id': 'moel_eif', 'channel_id': 'moel_eif_ocio', 'url': 'ocio'}],
+                    'holds': [], 'coverage': {'moel_eif_ocio': {'detail_count': 1}},
+                    'retry_history': [{'institution_id': 'moel_eif_ocio'}]}
+
+    def test_both_sources_and_original_errors_are_preserved(self):
+        merged = boards.merge_eif_ocio_report(self.primary, self.eif)
+        self.assertEqual(merged['checked_at'], self.eif['checked_at'])
+        self.assertEqual([n['url'] for n in merged['notices']], ['native', 'ocio'])
+        self.assertEqual(merged['holds'], self.primary['holds'])
+        self.assertEqual(set(merged['coverage']), {'moel_eif', 'moel_eif_ocio'})
+        self.assertEqual(merged['retry_history'], self.eif['retry_history'])
+        self.assertEqual(len(self.primary['notices']), 1)
+
+    def test_missing_secondary_report_marks_only_its_channel(self):
+        merged = boards.merge_eif_ocio_report(self.primary, None)
+        self.assertEqual(merged['notices'], self.primary['notices'])
+        self.assertEqual(merged['coverage'], self.primary['coverage'])
+        self.assertEqual(merged['holds'][-1]['channel_id'], 'moel_eif_ocio')
+        self.assertEqual(merged['holds'][-1]['stage'], 'institution_listing')
+
+    def test_rejects_misattributed_or_duplicate_secondary_reports(self):
+        bad = {**self.eif, 'notices': self.primary['notices']}
+        with self.assertRaisesRegex(ValueError, 'unexpected source'):
+            boards.merge_eif_ocio_report(self.primary, bad)
+        merged = boards.merge_eif_ocio_report(self.primary, self.eif)
+        with self.assertRaisesRegex(ValueError, 'duplicate'):
+            boards.merge_eif_ocio_report(merged, self.eif)
+
+
 class InstitutionCollectionTests(unittest.TestCase):
     def test_terminal_templates_with_reused_notice_titles_skip_fetch_but_preserve_both_archive_versions(self):
         from services.lp.tests.test_lp_board_adapters_banks import IBK_LIST,IBK_HTML

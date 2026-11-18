@@ -758,12 +758,49 @@ def update_catalog(current, incoming, checked_at):
                                                             current.get('institution_collection_coverage', {})))}
 
 
+def merge_eif_ocio_report(report, eif, *, missing_reason='EIF OCIO collection artifact is missing'):
+    """Join the separately collected EIF OCIO report without replacing other sources."""
+    channel = 'moel_eif_ocio'
+    if channel in report['coverage']:
+        raise ValueError('duplicate EIF OCIO collection')
+    if eif is None:
+        return {**report, 'holds': [*report['holds'], {
+            'institution_id': 'moel_eif', 'channel_id': channel, 'stage': 'institution_listing',
+            'error': missing_reason,
+        }]}
+    if set(eif['coverage']) != {channel} or any(
+            n.get('institution_id') != 'moel_eif' or n.get('channel_id') != channel
+            for n in (*eif['notices'], *eif['holds'])):
+        raise ValueError('unexpected source in EIF OCIO collection')
+    checked_at = max((report['checked_at'], eif['checked_at']), key=datetime.fromisoformat)
+    combined = {**report, 'checked_at': checked_at,
+                'notices': [*report['notices'], *eif['notices']],
+                'holds': [*report['holds'], *eif['holds']],
+                'coverage': {**report['coverage'], **eif['coverage']}}
+    if 'retry_history' in report or 'retry_history' in eif:
+        combined['retry_history'] = [*report.get('retry_history', []), *eif.get('retry_history', [])]
+    return combined
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--institution', choices=sorted(load_configs(include_pending=True)), help='Verify one configured or pending institution without publication')
+    parser.add_argument('--eif-ocio-report', type=Path, help='Collect other channels and add the separately collected EIF OCIO report')
     args = parser.parse_args()
-    result = collect({args.institution: load_configs(include_pending=True)[args.institution]} if args.institution else None)
+    if args.institution and args.eif_ocio_report:
+        parser.error('single-channel verification and a separate EIF report are mutually exclusive')
+    configs = ({args.institution: load_configs(include_pending=True)[args.institution]}
+               if args.institution else load_configs())
+    if args.eif_ocio_report:
+        configs.pop('moel_eif_ocio', None)
+    result = collect(configs)
+    if args.eif_ocio_report:
+        try:
+            eif = json.loads(args.eif_ocio_report.read_text()) if args.eif_ocio_report.is_file() else None
+            result = merge_eif_ocio_report(result, eif)
+        except (OSError, KeyError, TypeError, ValueError):
+            result = merge_eif_ocio_report(result, None, missing_reason='EIF OCIO collection artifact is invalid')
     args.output.write_text(json.dumps(result, ensure_ascii=False))
     print(json.dumps({'notices': len(result['notices']), 'holds': len(result['holds']),
                       'coverage': result['coverage']}, ensure_ascii=False))

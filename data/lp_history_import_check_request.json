@@ -1,9 +1,9 @@
 {
   "kind": "lp_history_import_check_request_v1",
   "institution_id": "cwma",
-  "bundle_commit": "486fd2a41a1750490c3424e6f016b1e56d3e0094",
-  "bundle_sha256": "8e82c9b80ccb7e5921d667101782cef5e1f4e50f9303269254d44bb0c0f4c852",
-  "candidate_sha256": "b48b81f61f06a35db7e14e46bfb8224f1e39ecd845257549773159e22101a5ec",
-  "candidate_checked_at": "2026-11-17T10:57:26.262188+00:00",
-  "reason": "건설근로자공제회 2023년 국내 블라인드 PE 공고를 고정 원문과 읽기 전용 운영 상태에서 재구성해 검증한다. 모집 약정 총액, 운용사당 금액과 예정 수를 확인하고 기존 공개 주소, 명단과 별칭은 보존한다."
+  "bundle_commit": "574951875f64a1c4cb574489110b4b7ae159fedd",
+  "bundle_sha256": "fb5a934e7f498ad5827d286032d82fd27cd6ff20751ae14ed35b0d4f78424eef",
+  "candidate_sha256": "d58d3713ace6a9cf9512c0720b259a0148695f50d7c929f69add4cfa69656565",
+  "candidate_checked_at": "2026-11-18T01:38:53.171197+00:00",
+  "reason": "건설근로자공제회 2025년 국내 PE·VC 공동 모집을 고정 원문에서 재구성한다. 모집 부문별 상한, 마감과 기존 공개 사업·주소·명단·별칭의 보존을 읽기 전용으로 검증한다."
 }
