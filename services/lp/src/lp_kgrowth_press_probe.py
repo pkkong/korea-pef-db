@@ -237,3 +237,171 @@ def capture_press_search(terms, fetch, *, checked_at=None, retain=lambda report:
         reports.append(report)
         retain(copy.deepcopy(reports))
     return reports
+
+
+def _page_fields(term, page):
+    return {'page': str(page), 'search_colume': 'Title', 'search_text': term,
+            'SearchValue': '', 'SearchMode': '', 'SearchGubun': '', 'str_year': '',
+            'str_type': '3', 'str_num': '', 'pagesize': '10', 'orderby': '1',
+            'notice_type': '1', 'tab': '1'}
+
+
+def _followup_url(term):
+    press_search_url(term)  # The same source-derived term/encoding limits.
+    return PRESS_LISTING_URL.split('?')[0] + '?' + urlencode(_page_fields(term, 2), encoding='euc-kr')
+
+
+def fetch_press_followup(url):
+    """Transport guard only; capture_press_followup verifies the prior proof."""
+    fields = parse_qsl(urlsplit(url).query, keep_blank_values=True, encoding='euc-kr', errors='strict')
+    terms = [value for key, value in fields if key == 'search_text']
+    if len(terms) != 1 or url != _followup_url(terms[0]):
+        raise ValueError('허용된 보도자료 검색 2쪽 주소가 아님')
+    return _fetch(url)
+
+
+def _page_contract(raw, term, page):
+    """Validate visible pagination/form evidence, without extracting notice IDs."""
+    try:
+        from .collect_shared_lp_notices import Document
+    except ImportError:
+        from collect_shared_lp_notices import Document
+    _validate_search_echo(raw, term)
+    root = Document(raw.decode('cp949')).root
+    charset = [n.attrs.get('content', '') for n in root.nodes('meta')
+               if n.attrs.get('http-equiv', '').lower() == 'content-type']
+    if len(charset) != 1 or not re.search(r'charset\s*=\s*euc-kr\b', charset[0], re.I):
+        raise ValueError('보도자료 페이지의 원문 문자셋 미확인')
+    forms = [f for f in root.nodes('form') if f.attrs.get('name') == 'List']
+    if (len(forms) != 1 or forms[0].attrs.get('method', '').lower() != 'get'
+            or forms[0].attrs.get('action') not in (None, '', '/notice.asp')):
+        raise ValueError('보도자료 페이지 이동 원양식 미확인')
+    inputs = list(forms[0].nodes('input'))
+    fields = [(i.attrs.get('name'), i.attrs.get('value')) for i in inputs]
+    expected = _page_fields(term, page)
+    if (len(fields) != len(expected) or len(dict(fields)) != len(fields)
+            or any(i.attrs.get('type', '').lower() != 'hidden' for i in inputs)
+            or dict(fields).get('page') not in (None, '', str(page))
+            or {k: v for k, v in fields if k != 'page'} != {k: v for k, v in expected.items() if k != 'page'}):
+        raise ValueError('보도자료 페이지 이동의 전체 필드·검색어 불일치')
+    totals = [n for n in root.nodes('div') if 'total_wrap' in n.attrs.get('class', '').split()]
+    counts = re.findall(r'전체\s*(\d+)\s*개의\s*글이\s*있습니다\.', totals[0].clean()) if len(totals) == 1 else []
+    tables = [n for n in root.nodes('table') if 'notice_tbl' in n.attrs.get('class', '').split()]
+    if (len(counts) != 1 or len(tables) != 1
+            or [n.clean() for n in tables[0].nodes('th')] != ['번호', '제목', '작성일', '첨부']):
+        raise ValueError('보도자료 전체 건수·목록 표 구조 미확인')
+    total = int(counts[0])
+    # Count the observed rows only; no source ID, title, date or GP is emitted.
+    rows = [n for n in tables[0].nodes('tr') if list(n.nodes('td')) and list(n.nodes('a'))]
+    if len(rows) != min(10, max(0, total - (page - 1) * 10)):
+        raise ValueError('보도자료 페이지의 표시 행 수 불일치')
+    if total == 0 and not re.search(r'등록된\s*글이\s*없습니다\.', tables[0].clean()):
+        raise ValueError('보도자료 빈 검색 결과 표시 미확인')
+    pagers = [n for n in root.nodes('p') if 'page' in n.attrs.get('class', '').split()]
+    links = [a for p in pagers for a in p.nodes('a')]
+    current = [a for a in links if '현재 페이지' in a.attrs.get('title', '')]
+    if total:
+        if (len(pagers) != 1 or len(current) != 1
+                or current[0].attrs.get('title') != f'{page} 페이지로 이동 [현재 페이지]'
+                or current[0].attrs.get('href', '').lower() != f'javascript:listview({page},3,0)'
+                or current[0].clean() != str(page)):
+            raise ValueError('보도자료 현재 페이지 표시 불일치')
+    elif current:
+        raise ValueError('보도자료 빈 결과와 현재 페이지 표시 충돌')
+    if any(not re.fullmatch(r'Javascript:ListView\([1-9]\d*,3,0\)', a.attrs.get('href', ''), re.I) for a in links):
+        raise ValueError('보도자료 페이지 이동의 게시판·그룹 불일치')
+    return {'total_count': total, 'observed_row_count': len(rows), 'current_page': page if total else None,
+            'page_two_offered': any(a.attrs['href'].lower() == 'javascript:listview(2,3,0)' for a in links)}
+
+
+def _prior_search_receipt(receipt, term, checked_at):
+    if not isinstance(receipt, dict):
+        raise ValueError('선행 보도자료 원영수증 형식 불일치')
+    url = press_search_url(term)
+    if (receipt.get('kind') != KIND or receipt.get('source_institution_id') != 'kgrowth'
+            or type(receipt.get('board_type')) is not int or receipt['board_type'] != 3
+            or receipt.get('url') != url or receipt.get('response_url') != url
+            or type(receipt.get('requests')) is not int or receipt['requests'] != 1
+            or receipt.get('search_term') != term or receipt.get('search_echo_verified') is not True
+            or receipt.get('capture_status') != 'response_retained' or receipt.get('holds') != []
+            or any(receipt.get(k) is not True for k in ('response_retained', 'full_response_retained'))
+            or any(receipt.get(k) is not False for k in ('truncated', 'observed_bytes_is_lower_bound', 'parsed',
+                                                       'source_health_verified', 'publication_ready', 'published'))
+            or receipt.get('raw_type') != 'bytes' or receipt.get('response_type') != 'dict'
+            or receipt.get('http_status_type') != 'int' or receipt.get('response_url_type') != 'str'
+            or any(type(receipt.get(k)) is not int or receipt[k] != 0 for k in ('database_reads', 'database_writes'))):
+        raise ValueError('선행 보도자료 원영수증의 출처·완료 상태 불일치')
+    if not isinstance(receipt.get('checked_at'), str):
+        raise ValueError('선행 보도자료 관측시각 누락')
+    prior_time = _checked_at(receipt['checked_at'])
+    if datetime.fromisoformat(prior_time.replace('Z', '+00:00')) > datetime.fromisoformat(checked_at.replace('Z', '+00:00')):
+        raise ValueError('선행 보도자료 관측시각이 후속 관측시각보다 늦음')
+    encoded = receipt.get('raw_base64')
+    if not isinstance(encoded, str) or len(encoded) > (MAX_DETAIL_BYTES + 2) // 3 * 4:
+        raise ValueError('선행 보도자료 원바이트 누락·상한 초과')
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (ValueError, TypeError) as error:
+        raise ValueError('선행 보도자료 원바이트 인코딩 불일치') from error
+    if (any(type(receipt.get(k)) is not int or receipt[k] != len(raw) for k in ('bytes', 'observed_bytes'))
+            or hashlib.sha256(raw).hexdigest() != receipt.get('sha256')):
+        raise ValueError('선행 보도자료 원바이트 크기·SHA 불일치')
+    _validate_response({'raw': raw, 'http_status': receipt.get('http_status'), 'geturl': url}, receipt, expected_url=url)
+    return _page_contract(raw, term, 1)
+
+
+def capture_press_followup(prior_capture, expected_terms, fetch, *, checked_at=None, retain=lambda report: None):
+    """Revalidate a retained first-search batch and capture its unique page 2."""
+    stamp = _checked_at(checked_at)
+    if (not isinstance(expected_terms, (list, tuple)) or not 1 <= len(expected_terms) <= 2
+            or any(not isinstance(t, str) for t in expected_terms) or len(set(expected_terms)) != len(expected_terms)):
+        raise ValueError('선행 보도자료 원검색어는 중복 없이 최대 두 개')
+    if (not isinstance(prior_capture, dict) or prior_capture.get('kind') != 'lp_kgrowth_press_search_v1'
+            or prior_capture.get('review_scope') != 'press_search' or prior_capture.get('holds') != []
+            or type(prior_capture.get('requests')) is not int or prior_capture['requests'] != len(expected_terms)
+            or any(prior_capture.get(k) is not False for k in ('parsed', 'source_health_verified', 'publication_ready', 'published'))):
+        raise ValueError('선행 보도자료 검색 묶음의 종류·상태 불일치')
+    receipts = prior_capture.get('receipts')
+    if (not isinstance(receipts, list) or len(receipts) != len(expected_terms)
+            or any(not isinstance(r, dict) for r in receipts)
+            or any(not isinstance(r.get('search_term'), str) for r in receipts)
+            or sorted(r.get('search_term', '') for r in receipts) != sorted(expected_terms)):
+        raise ValueError('선행 보도자료 검색 묶음과 원검색어 불일치')
+    candidates = []
+    for term in expected_terms:
+        receipt = next(r for r in receipts if r.get('search_term') == term)
+        contract = _prior_search_receipt(receipt, term, stamp)
+        if contract['page_two_offered'] and contract['total_count'] > 10:
+            candidates.append((term, receipt, contract))
+    if len(candidates) != 1:
+        raise ValueError('선행 증거에 검색 2쪽 대상이 하나로 확인되지 않음')
+    term, prior, previous = candidates[0]
+    url = _followup_url(term)
+    context = {'kind': 'lp_kgrowth_press_followup_v1', 'review_scope': 'press_followup',
+               'source_institution_id': 'kgrowth', 'board_type': 3, 'search_term': term, 'requested_page': 2,
+               'prior_receipt_sha256': prior['sha256'], 'prior_receipt_url': prior['url'],
+               'prior_checked_at': prior['checked_at'], 'prior_page_contract': previous,
+               'search_echo_verified': False, 'current_page_verified': False,
+               'parsed': False, 'source_health_verified': False, 'publication_ready': False, 'published': False,
+               'database_reads': 0, 'database_writes': 0}
+    def save(receipt):
+        retain({**copy.deepcopy(context), 'requests': receipt['requests'], 'receipts': [copy.deepcopy(receipt)],
+                'search_echo_verified': receipt.get('search_echo_verified', False),
+                'current_page_verified': receipt.get('current_page_verified', False),
+                'holds': copy.deepcopy(receipt['holds'])})
+    report = _capture(url, fetch, checked_at=stamp, retain=save)
+    report.update(search_term=term, requested_page=2, search_echo_verified=False, current_page_verified=False)
+    if not report['holds']:
+        try:
+            contract = _page_contract(base64.b64decode(report['raw_base64'], validate=True), term, 2)
+            if contract['total_count'] != previous['total_count']:
+                raise ValueError('보도자료 검색 전체 건수가 선행 원문과 다름')
+        except ValueError as error:
+            report['holds'].append({'url': url, 'reason': str(error)})
+            report['capture_status'] = 'held'
+        else:
+            report.update(search_echo_verified=True, current_page_verified=True, page_contract=contract)
+    save(report)
+    return {**context, 'requests': report['requests'], 'receipts': [report],
+            'search_echo_verified': report['search_echo_verified'], 'current_page_verified': report['current_page_verified'],
+            'holds': copy.deepcopy(report['holds'])}

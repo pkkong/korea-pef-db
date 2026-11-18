@@ -1,7 +1,9 @@
 {
   "bundle_commit": "8044b5d7b107481a70b3b2bb7891cd19dfd66898",
   "bundle_sha256": "a5b4c1d35660dbbbcd376149e6856814e4405242452a5dc63458b9a3d5bca97b",
-  "reason": "공동 원모집에서 확인한 두 펀드명으로 공식 보도자료 게시판의 제목 검색 첫 응답을 각각 보존한다. 저장된 검색 폼과 실제 검색 조건 회신을 대조하며 선정 결과와 명단은 별도로 판독한다.",
-  "attempt": 4,
-  "review_scope": "press_search"
+  "reason": "공동 원모집 펀드명과 앞선 공식 검색 응답을 대조해 게시판이 제시한 정책형 뉴딜펀드 검색 2쪽만 한 번 조회한다. 검색어와 현재 페이지를 검증하며 사업과 명단 판독은 별도로 진행한다.",
+  "attempt": 5,
+  "review_scope": "press_followup",
+  "prior_press_commit": "eb1786f1c02b970d23bee04e79822c074464caed",
+  "prior_press_sha256": "98654f72a68e04d8367dbded968a1cd8f97783c179c9677fa84eae7a576ac524"
 }

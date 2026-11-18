@@ -351,5 +351,158 @@ class PressListingProbeTests(unittest.TestCase):
                 self.assertEqual(base64.b64decode(report['raw_base64']), HTML + tail)
 
 
+class PressFollowupProbeTests(unittest.TestCase):
+    term = '정책형 뉴딜펀드'
+    empty_term = '소재·부품·장비 분야 투자 전용 펀드'
+
+    @staticmethod
+    def page(term, page=1, total=17):
+        # Small observed form/pagination excerpts from the retained first search.
+        # Page 2 and repeated row scaffolding are synthetic, never roster facts.
+        fields = f'''<form name="List" method="get">
+<input type="hidden" name="page">
+<input type="hidden" name="search_colume" value="Title">
+<input type="hidden" name="search_text" value="{term}">
+<input type="hidden" name="SearchValue" value=""><input type="hidden" name="SearchMode" value="">
+<input type="hidden" name="SearchGubun" value=""><input type="hidden" name="str_year" value="">
+<input type="hidden" name="str_type" value="3"><input type="hidden" name="str_num" value="">
+<input type="hidden" name="pagesize" value="10"><input type="hidden" name="orderby" value="1">
+<input type="hidden" name="notice_type" value="1"><input type="hidden" name="tab" value="1"></form>
+<div class="total_wrap">전체 <span>{total}</span>개의 글이 있습니다.</div>
+<form name="search" id="search" method="get">
+<input name="search_colume" value="Title"><input name="str_type" value="3">
+<input name="pagesize" value="10"><input name="orderby" value="1">
+<input name="notice_type" value="1"><input name="tab" value="1">
+<input name="search_text" value="{term}"></form>'''
+        count = min(10, max(0, total - (page - 1) * 10))
+        rows = ''.join('<tr><td>8</td><td><a href="#">(보도자료) 「정책형 뉴딜펀드」 결성 및 투자 순항</a>'
+                       '</td><td>2021-04-26</td><td></td></tr>' for _ in range(count))
+        if not total:
+            rows = '<tr><td colspan="4">등록된 글이 없습니다.</td></tr>'
+        table = '<table class="notice_tbl"><tr><th>번호</th><th>제목</th><th>작성일</th><th>첨부</th></tr>' + rows + '</table>'
+        pager = ('<p class="page">' + ''.join(
+            f'<a href="Javascript:ListView({n},3,0)" title="{n} 페이지로 이동'
+            + (' [현재 페이지]' if n == page else '') + f'">{n}</a>' for n in (1, 2)) + '</p>') if total else ''
+        return ('<html><head><meta http-equiv="Content-Type" content="text/html; charset=euc-kr">'
+                '<title>보도자료 > 공지사항 > 한국성장금융투자운용</title></head><body>'
+                + fields + table + pager + '</body></html>').encode('cp949')
+
+    def prior(self):
+        terms = [self.term, self.empty_term]
+        responses = {probe.press_search_url(t): self.page(t, total=17 if t == self.term else 0) for t in terms}
+        receipts = probe.capture_press_search(terms, lambda url: response(responses[url], url=url), checked_at=STAMP)
+        return {'kind': 'lp_kgrowth_press_search_v1', 'review_scope': 'press_search', 'requests': 2,
+                'receipts': receipts, 'holds': [], 'parsed': False, 'source_health_verified': False,
+                'publication_ready': False, 'published': False}
+
+    @staticmethod
+    def reseal(receipt, raw):
+        receipt.update(raw_base64=base64.b64encode(raw).decode(), sha256=hashlib.sha256(raw).hexdigest(),
+                       bytes=len(raw), observed_bytes=len(raw))
+
+    def test_one_followup_keeps_every_source_form_field_and_retains_before_page_validation(self):
+        from urllib.parse import parse_qsl, urlsplit
+        prior, saved, calls = self.prior(), [], []
+        raw = self.page(self.term, page=2)
+        def fetch(url):
+            calls.append(url)
+            return response(raw, url=url)
+        original = probe._page_contract
+        def validate(observed, term, page):
+            if page == 2:
+                self.assertFalse(saved[-1]['current_page_verified'])
+                self.assertEqual(base64.b64decode(saved[-1]['receipts'][0]['raw_base64']), raw)
+            return original(observed, term, page)
+        with patch.object(probe, '_page_contract', side_effect=validate):
+            report = probe.capture_press_followup(prior, [self.empty_term, self.term], fetch,
+                                                  checked_at=STAMP, retain=saved.append)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(dict(parse_qsl(urlsplit(calls[0]).query, keep_blank_values=True, encoding='euc-kr')),
+                         {'page': '2', 'search_colume': 'Title', 'search_text': self.term, 'SearchValue': '',
+                          'SearchMode': '', 'SearchGubun': '', 'str_year': '', 'str_type': '3', 'str_num': '',
+                          'pagesize': '10', 'orderby': '1', 'notice_type': '1', 'tab': '1'})
+        self.assertEqual(report['kind'], 'lp_kgrowth_press_followup_v1')
+        self.assertEqual((report['requests'], report['requested_page']), (1, 2))
+        self.assertEqual(report['holds'], [])
+        self.assertTrue(report['current_page_verified'])
+        self.assertTrue(report['search_echo_verified'])
+        self.assertEqual(report['prior_receipt_sha256'], prior['receipts'][0]['sha256'])
+        self.assertEqual(report['receipts'][0]['page_contract']['observed_row_count'], 7)
+        for key in ('parsed', 'source_health_verified', 'publication_ready', 'published'):
+            self.assertIs(report[key], False)
+        self.assertTrue(any(r['receipts'][0]['capture_status'] == 'observed' for r in saved))
+        self.assertEqual((report['database_reads'], report['database_writes']), (0, 0))
+        self.assertTrue(all(key not in report for key in ('rows', 'programs', 'selected_gps')))
+
+    def test_forged_or_incomplete_prior_receipt_never_sends_a_request(self):
+        alterations = [('sha256', '0'*64), ('bytes', 1), ('http_status', 403), ('checked_at', None),
+                       ('checked_at', '2026-11-17T00:00:00+00:00'), ('source_institution_id', 'kdb'),
+                       ('board_type', 1), ('search_echo_verified', False), ('full_response_retained', False),
+                       ('truncated', True), ('raw_base64', 'not base64'), ('holds', [{'reason': 'held'}])]
+        for key, value in alterations:
+            prior, fetch = self.prior(), Mock()
+            prior['receipts'][0][key] = value
+            with self.subTest(field=key), self.assertRaises(ValueError):
+                probe.capture_press_followup(prior, [self.term, self.empty_term], fetch, checked_at=STAMP)
+            fetch.assert_not_called()
+        for old, new in [(b'ListView(2,3,0)', b'ListView(2,1,0)'),
+                         ('[현재 페이지]'.encode('cp949'), b''),
+                         (b'name="str_num" value=""', b'name="str_num" value="0"'),
+                         (b'name="page"', b'name="idx"')]:
+            prior, fetch = self.prior(), Mock()
+            raw = base64.b64decode(prior['receipts'][0]['raw_base64']).replace(old, new)
+            self.reseal(prior['receipts'][0], raw)  # Even forged success flags and a matching SHA cannot bypass HTML proof.
+            with self.subTest(raw_change=old), self.assertRaises(ValueError):
+                probe.capture_press_followup(prior, [self.term, self.empty_term], fetch, checked_at=STAMP)
+            fetch.assert_not_called()
+
+    def test_batch_terms_provenance_and_unique_next_page_are_required(self):
+        for mutate in [lambda c: c.update(kind='lp_kgrowth_press_followup_v1'),
+                       lambda c: c.update(requests=1), lambda c: c.update(receipts=c['receipts'][:1]),
+                       lambda c: c['receipts'][1].update(search_term=self.term)]:
+            prior, fetch = self.prior(), Mock(); mutate(prior)
+            with self.assertRaises(ValueError):
+                probe.capture_press_followup(prior, [self.term, self.empty_term], fetch, checked_at=STAMP)
+            fetch.assert_not_called()
+        prior, fetch = self.prior(), Mock()
+        with self.assertRaises(ValueError):
+            probe.capture_press_followup(prior, ['다른 펀드', self.empty_term], fetch, checked_at=STAMP)
+        fetch.assert_not_called()
+        self.reseal(prior['receipts'][1], self.page(self.empty_term))
+        with self.assertRaises(ValueError):
+            probe.capture_press_followup(prior, [self.term, self.empty_term], fetch, checked_at=STAMP)
+        fetch.assert_not_called()
+
+    def test_wrong_second_page_echo_current_marker_and_transport_are_retained_as_holds(self):
+        correct = self.page(self.term, page=2)
+        cases = [(self.page(self.term), 200), (self.page(self.empty_term, page=2), 200),
+                 (correct.replace('2 페이지로 이동 [현재 페이지]'.encode('cp949'), b'other marker'), 200),
+                 (self.page(self.term, page=2, total=18), 200), (correct[:-7], 200), (b'denied', 403)]
+        for raw, status in cases:
+            calls, saved = [], []
+            def fetch(url):
+                calls.append(url)
+                return response(raw, status=status, url=url)
+            report = probe.capture_press_followup(self.prior(), [self.term, self.empty_term], fetch,
+                                                  checked_at=STAMP, retain=saved.append)
+            self.assertEqual(len(calls), 1)
+            self.assertTrue(report['holds'])
+            self.assertFalse(report['current_page_verified'])
+            self.assertEqual(base64.b64decode(report['receipts'][0]['raw_base64']), raw)
+            self.assertTrue(any(r['receipts'][0]['capture_status'] == 'observed' for r in saved))
+
+    def test_followup_transport_rejects_user_ids_other_pages_and_changed_form(self):
+        url = probe._followup_url(self.term)
+        for changed in (url + '&idx=1', url + '&page=2', url.replace('page=2', 'page=3'),
+                        url.replace('str_type=3', 'str_type=1'), url.replace('tab=1', 'tab=3'),
+                        url.replace('www.kgrowth.or.kr', 'other.example')):
+            with self.subTest(url=changed), patch.object(probe, '_fetch') as fetch, self.assertRaises(ValueError):
+                probe.fetch_press_followup(changed)
+            fetch.assert_not_called()
+        with patch.object(probe, '_fetch', return_value=response()) as fetch:
+            probe.fetch_press_followup(url)
+            fetch.assert_called_once_with(url)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -39,7 +39,7 @@ MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_INPUT_BYTES = 40 * 1024 * 1024
 _FIELDS = ('source_id', 'url', 'title', 'date', 'body', 'sha256', 'attachments')
 REVIEW_SCOPES = ('pe_roster', 'joint_originals')
-CAPTURE_SCOPES = REVIEW_SCOPES + ('press_listing', 'press_search')
+CAPTURE_SCOPES = REVIEW_SCOPES + ('press_listing', 'press_search', 'press_followup')
 
 
 def _sha(raw):
@@ -288,6 +288,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.review_scope in ('press_listing', 'press_search') and (not args.capture_details or args.capture):
         parser.error('보도자료 목록은 새 응답 진단만 지원하며 기존 묶음 재생에 쓸 수 없습니다')
+    if args.review_scope == 'press_followup' and (not args.capture_details or not args.capture):
+        parser.error('다음 보도자료 목록은 앞선 검색 응답 영수증이 필요합니다')
     if args.out.resolve() in {p.resolve() for p in (args.bundle, args.capture) if p}:
         parser.error('입력 원문·보완 영수증을 덮어쓸 수 없습니다')
     if args.out.exists() or args.out.is_symlink():
@@ -304,7 +306,7 @@ def main(argv=None):
     def save(report):
         args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     if args.capture_details:
-        if args.capture:
+        if args.capture and args.review_scope != 'press_followup':
             parser.error('실패 보완을 자동 재시도하지 않습니다')
         if args.review_scope == 'press_listing':
             try:
@@ -332,6 +334,22 @@ def main(argv=None):
                                             retain=lambda receipts: save(search_report(receipts)))
             report = search_report(receipts)
             save(report)
+        elif args.review_scope == 'press_followup':
+            try:
+                from .lp_kgrowth_press_probe import capture_press_followup, fetch_press_followup
+            except ImportError:
+                from lp_kgrowth_press_probe import capture_press_followup, fetch_press_followup
+            prior = read_json(args.capture)
+            bundle_sha = _sha(args.bundle.read_bytes())
+            if prior.get('context_bundle_sha256') != bundle_sha:
+                raise ValueError('보도자료 앞선 검색과 공동 원모집 묶음 지문 불일치')
+            prior_sha = _sha(args.capture.read_bytes())
+            def save_followup(receipt):
+                save({**receipt, 'review_scope': args.review_scope, 'context_bundle_sha256': bundle_sha,
+                      'prior_capture_sha256': prior_sha})
+            report = capture_press_followup(prior, press_search_terms(bundle), fetch_press_followup,
+                                            retain=save_followup)
+            save_followup(report)
         else:
             report = capture_details(bundle, fetch_detail, retain=save, review_scope=args.review_scope)
     else:
