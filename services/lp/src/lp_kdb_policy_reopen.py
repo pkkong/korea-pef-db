@@ -40,7 +40,7 @@ def identity(notice):
 def mixed_vehicles(text):
     compact = re.sub(r'\s+', '', text)
     return any('기관전용사모집합투자기구' in cell and '벤처투자조합' in cell
-               for cell in re.findall(r'출자대상투자기구((?:○[^○※]{1,180}){2,7})(?=※선정된위탁운용사)', compact))
+               for cell in re.findall(r'출자대상투자기구((?:[○◦][^○◦※]{1,180}){2,7})(?=※선정된위탁운용사)', compact))
 
 
 def _read(raw, url, sha):

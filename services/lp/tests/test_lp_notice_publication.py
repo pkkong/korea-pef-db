@@ -429,6 +429,45 @@ class KdbResultRosterTests(unittest.TestCase):
         self.assertTrue(raw['allocation_reading_failed'])
         self.assertNotIn('commitment_amount_krw', broken)
 
+    def test_media_technology_terms_reconcile_joined_cells_and_bind_only_matching_result(self):
+        from services.lp.src.lp_kdb_media_terms import result_roster
+        from services.lp.src.lp_notice_publication import _identity, _scope, _terms, split_glued_names
+        title = '「K-콘텐츠·미디어 전략펀드」 위탁운용사 '
+        allocation = ('모펀드및지정출자자(한국산업은행)위탁운용금액:총400억원이내(단위:억원)'
+                      '모펀드지정출자자(한국산업은행)합 계정부 재정(재정모펀드)비재정모펀드16040200400')
+        plan = ('분야별 출자계획◦출자계획(단위:개,억원)지원 분야출자금액출자비율펀드별 목표결성금액선정운용사수'
+                '조성목표 주관 기관재정비재정산은기술심화(블라인드펀드)1604020040%이내50021,000산은◦')
+        body = (allocation + plan + '접수일시○2025년4월30일(수)13:30~16:30접수방법○'
+                '출자대상투자기구◦기관전용사모집합투자기구◦벤처투자조합※선정된위탁운용사 허용')
+        notice = {'title': title + '선정계획 공고', 'institution_id': 'kdb', 'date': '2025-04-16',
+                  'body': body, 'sha256': 'a'*64, 'url': 'https://www.kdb.co.kr/offer', 'source_channel': 'institution_board'}
+        self.assertEqual(_scope(notice), 'mixed_pe_blind')
+        terms, raw = _terms(notice, None, NOW)
+        self.assertEqual(raw['amount_scope'], 'combined')
+        self.assertEqual(terms['commitment_label'], '공동 위탁운용 예정 400억원 이내')
+        self.assertEqual(terms['contribution_allocations'],
+                         {'정부재정': 160 * 10**8, '비재정모펀드': 40 * 10**8, '한국산업은행': 200 * 10**8})
+        self.assertEqual(terms['deadline'], '2025-04-30T16:30:00+09:00')
+        self.assertEqual(terms['fund_target_label'], '1,000억원')
+        broken, raw = _terms({**notice, 'body': body.replace('16040200400', '16040200401')}, None, NOW)
+        self.assertTrue(raw['allocation_reading_failed'])
+        self.assertNotIn('commitment_amount_krw', broken)
+        invalid_date, raw = _terms({**notice, 'body': body.replace('4월30일', '4월31일')}, None, NOW)
+        self.assertIn('deadline_error', raw)
+        self.assertNotIn('deadline', invalid_date)
+        self.assertIn('commitment_amount_krw', invalid_date)
+
+        final_title = '『K-콘텐츠 미디어 전략펀드』 위탁운용사 선정 결과'
+        final = {**notice, 'title': final_title}
+        self.assertEqual(_identity(notice), _identity(final))
+        program = {**terms, 'asset_scope': 'PE·VC 공동 모집'}
+        result = (final_title + '지원분야(운용사 수) 펀드규모(억원) 선정 운용사명 (가나다순) '
+                  '기술심화 (2) 500(총 1,000) 에스비파트너스 유니온투자파트너스')
+        self.assertEqual(result_roster(final, result, program, split_glued_names),
+                         [('기술심화', ['에스비파트너스', '유니온투자파트너스'])])
+        for wrong in (result.replace('기술심화', 'IP'), result.replace('500', '600'), result.replace('선정 결과', '서류심사 결과')):
+            self.assertEqual(result_roster(final, wrong, program, split_glued_names), [])
+
     def test_split_glued_names(self):
         from services.lp.src.lp_notice_publication import split_glued_names
         self.assertEqual(['아이엠엠인베스트먼트', '엘비인베스트먼트'], split_glued_names('아이엠엠인베스트먼트엘비인베스트먼트'))

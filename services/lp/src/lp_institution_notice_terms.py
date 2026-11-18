@@ -8,6 +8,7 @@ try:
     from .lp_kfcc_notice_terms import allocation as kfcc_allocation
     from .lp_kdb_policy_reopen import terms as kdb_reopen_terms
     from .lp_kdb_nuclear_terms import terms as kdb_nuclear_terms
+    from .lp_kdb_media_terms import terms as kdb_media_terms
     from .lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
     from .lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 except ImportError:
@@ -16,6 +17,7 @@ except ImportError:
     from lp_kfcc_notice_terms import allocation as kfcc_allocation
     from lp_kdb_policy_reopen import terms as kdb_reopen_terms
     from lp_kdb_nuclear_terms import terms as kdb_nuclear_terms
+    from lp_kdb_media_terms import terms as kdb_media_terms
     from lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
     from lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 
@@ -292,7 +294,7 @@ def extract_terms(n):
     except ValueError as exc:
         cwma_joint = {'allocation_reading_failed': True, 'allocation_error': str(exc)}
     try:
-        kdb_policy = kdb_reopen_terms(n, sources) or kdb_nuclear_terms(n, sources)
+        kdb_policy = kdb_reopen_terms(n, sources) or kdb_nuclear_terms(n, sources) or kdb_media_terms(n, sources)
     except ValueError as exc:
         kdb_policy = {'allocation_reading_failed': True, 'allocation_error': str(exc)}
     try:
@@ -382,8 +384,12 @@ def extract_terms(n):
         if kdb_joint or sector or kdb_policy:
             for m in _KDB_RECEPTION.finditer(text):
                 year, month, day, start_hour, start_minute, end_hour, end_minute = map(int, m.groups())
-                start = datetime(year, month, day, start_hour, start_minute)
-                end = datetime(year, month, day, end_hour, end_minute)
+                try:
+                    start = datetime(year, month, day, start_hour, start_minute)
+                    end = datetime(year, month, day, end_hour, end_minute)
+                except ValueError:
+                    result['deadline_error'] = '산업은행 접수 날짜·시각 형식 불일치'
+                    continue
                 if start >= end:
                     result['deadline_error'] = '산업은행 접수 시작·마감 시각 불일치'
                     continue

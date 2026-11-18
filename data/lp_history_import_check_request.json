@@ -1,9 +1,9 @@
 {
   "kind": "lp_history_import_check_request_v1",
   "institution_id": "kdb",
-  "bundle_commit": "fe7a629b83ae1f6d851442f01d35af1a1ba65742",
-  "bundle_sha256": "ea9b85f6613929fcd9586d1928ae1d49d9e45440d07eebfde75c516765129215",
-  "candidate_sha256": "a80c82e79c04c697a283aacb074e300e03d38f7dffdb333c754b65d228831176",
-  "candidate_checked_at": "2026-11-18T19:29:49.148633+00:00",
-  "reason": "2025 원전산업성장 자펀드의 공식 4단계와 신한자산운용 주관, 공동 예정 700억원 중 산은 50억원, 공동 모집 선정 명단을 읽기 전용으로 대조한다. 기존 사업·주소·명단·별칭과 저장 크기를 검증한다."
+  "bundle_commit": "7755261411f7612266f8dd473de5128f3cebd9af",
+  "bundle_sha256": "06bc190cdd5e275c2f492ffb48c89c59cb4fccf1d50a6ae7006925a37f5e64bd",
+  "candidate_sha256": "08a3f143f0c6383392dcc6a5c95e92152370bd07a1dfdefedc1ac6cbcba0b18c",
+  "candidate_checked_at": "2026-11-18T23:34:12.853030+00:00",
+  "reason": "산업은행 K-콘텐츠·미디어 전략펀드 기술심화 과정의 공식 모집·접수·심사·선정 네 건을 재생했다. 산은 예정분과 PE·VC 합계를 분리한 후보를 운영 중복·기존 공개 보존 기준으로 읽기 전용 검증한다."
 }
