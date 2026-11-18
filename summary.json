@@ -1,0 +1,13 @@
+[
+  {
+    "institution_id": "cwma",
+    "listing_status": "observed_query_boundary",
+    "candidates": 1,
+    "collected": 1,
+    "attachments": 1,
+    "holds": 2,
+    "by_year": {
+      "2021": 1
+    }
+  }
+]
