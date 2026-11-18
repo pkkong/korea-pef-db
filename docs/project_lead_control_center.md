@@ -16,7 +16,7 @@
 | 서비스 | 공식 주소 | 데이터 경로 | 상태 |
 | --- | --- | --- | --- |
 | 브리프(뉴스레터) | https://kpef-newsletter.vercel.app | 매일 수집 → Supabase → Vercel. 백업 미러 https://pkkong.github.io/kpef-newsletter/ | 매일 발행 정상 |
-| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 22기관 80사업·과거 공고 50건. 산은 혁신산업 2024년 2차 재공고의 공동 예정액·선정 명단을 공개했다. 기존 주소·근거·별칭을 확인했다. 미래에셋 수집 변경은 다음 정기에 확인한다 |
+| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 22기관 81사업·과거 공고 54건. 원전산업성장 자펀드의 공동 예정액·산은 예정분·주관기관·공식 선정 명단을 공개했다. 기존 주소·근거·별칭을 확인했다. 미래에셋 수집 변경은 다음 정기에 확인한다 |
 | GP 운용사 | https://kpef-gp.vercel.app | 금감원 분기 자료 → Supabase 스냅샷 → Vercel | 2025Q4 기준. 프로필에 LP 선정 이력 표시(11/13). 없는 페이지는 404 |
 | Wiki | — | — | 사용자가 다시 기획할 때까지 숨김 |
 
