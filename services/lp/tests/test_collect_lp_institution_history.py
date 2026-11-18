@@ -59,6 +59,20 @@ class InstitutionHistoryTests(unittest.TestCase):
         self.assertFalse(history.history_candidate({**base, 'title_scope': 'vc_explicit', 'title': '2021년 VC 위탁운용사 선정'}, 'tp'))
         self.assertFalse(history.history_candidate({**base, 'relevant': False, 'title': '직원 채용 공고'}, 'tp'))
 
+    def test_mixed_private_equity_title_reaches_body_review_but_venture_only_does_not(self):
+        from services.lp.src.audit_lp_discovery_coverage import title_scope
+        cases = [
+            ('2025년도 대체투자(국내 사모투자펀드 및 벤처펀드) 위탁운용사 선정 공고', True),
+            ('2024년도 대체투자(국내 벤처펀드) 위탁운용사 선정계획', False),
+            ('국내 사모투자신탁 및 벤처펀드 위탁운용사 선정 공고', False),
+            ('해외 사모투자펀드 및 벤처펀드 위탁운용사 선정 공고', False),
+        ]
+        for title, expected in cases:
+            row = {'title': title, 'relevant': True, 'title_scope': title_scope(title)[0]}
+            for institution in ('cwma', 'tp'):
+                with self.subTest(title=title, institution=institution):
+                    self.assertEqual(history.history_candidate(row, institution), expected)
+
     def test_institution_without_board_adapter_is_refused(self):
         with self.assertRaises(ValueError):
             history.collect('kgrowth', '2020-01-01', '2026-11-14', fetch_factory=lambda c: None)

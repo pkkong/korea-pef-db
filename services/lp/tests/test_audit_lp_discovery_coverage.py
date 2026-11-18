@@ -193,6 +193,33 @@ class DiscoveryCoverageTests(unittest.TestCase):
             item = compare(notice(title=title, scope='pe_blind_title'))['items'][0]
             self.assertEqual(item['scope'], scope, title)
 
+    def test_actual_private_equity_and_venture_title_is_only_a_mixed_review_signal(self):
+        # Small title excerpts from the retained official CWMA listing; no body
+        # or fund facts may be approved from these discovery labels.
+        mixed = '2025년도 대체투자(국내 사모투자펀드 및 벤처펀드) 위탁운용사 선정 공고'
+        for title in [mixed, mixed.replace('사모투자펀드', '사모 투자 펀드'),
+                      '벤처펀드 및 국내 사모투자펀드 위탁운용사 선정 공고']:
+            with self.subTest(title=title):
+                scope, mentions = audit.title_scope(title)
+                self.assertEqual(scope, 'mixed_pe_vc')
+                self.assertEqual(mentions, {'pe': True, 'vc': True, 'blind': False})
+                item = compare(notice(title=title, scope='pe_blind_title'))['items'][0]
+                self.assertEqual(item['scope'], 'mixed_pe_vc')
+
+    def test_venture_only_and_unconfirmed_private_fund_titles_keep_their_boundary(self):
+        cases = [
+            ('2024년도 대체투자(국내 벤처펀드) 위탁운용사 선정계획', 'vc_explicit'),
+            ('국내 사모펀드 및 벤처펀드 위탁운용사 선정 공고', 'vc_explicit'),
+            ('국내 사모투자신탁 및 벤처펀드 위탁운용사 선정 공고', 'vc_explicit'),
+            ('국내 사모투자펀드 위탁운용사 선정 공고', 'scope_unconfirmed'),
+            ('국내 사모투자펀드 블라인드 위탁운용사 선정 공고', 'scope_unconfirmed'),
+            ('해외 사모투자펀드 및 벤처펀드 위탁운용사 선정 공고', 'outside_policy'),
+            ('국내 부동산 사모투자펀드 및 벤처펀드 위탁운용사 선정 공고', 'outside_policy'),
+        ]
+        for title, expected in cases:
+            with self.subTest(title=title):
+                self.assertEqual(audit.title_scope(title)[0], expected)
+
     def test_valid_empty_is_not_malformed(self):
         result = compare()
         self.assertEqual(result['status'], 'ok')

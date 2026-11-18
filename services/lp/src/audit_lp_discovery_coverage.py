@@ -182,6 +182,10 @@ def extract_known(document, channels=None):
 def title_scope(title):
     pe = bool(re.search(r'(?<![A-Za-z])PEF?(?![A-Za-z])|기관전용\s*사모|경영참여형\s*사모', title, re.I))
     vc = bool(re.search(r'(?<![A-Za-z])VC(?![A-Za-z])|벤처|신기술사업투자', title, re.I))
+    # Retain explicit private-equity/venture joint titles for body review. This
+    # vocabulary is only a mixed-title discovery signal, not standalone PE or
+    # blind-fund verification; unchanged single-fund titles remain unconfirmed.
+    pe = pe or (vc and bool(re.search(r'국내\s*사모\s*투자\s*펀드', title)))
     blind = bool(re.search(r'블라인드|blind', title, re.I))
     outside = classify_scope(title, '') == 'outside' or bool(re.search(r'사모\s*(?:대출|채권)|(?<![A-Za-z])PD(?![A-Za-z])|크레딧|인프라|헤지펀드|부동산', title, re.I))
     scope = 'outside_policy' if outside else 'mixed_pe_vc' if pe and vc else 'vc_explicit' if vc else 'pe_blind_title' if pe and blind else 'scope_unconfirmed'
