@@ -26,6 +26,50 @@ _ALLOCATION_FIELDS = ('commitment_amount_krw', 'total_commitment_amount_krw', 'c
                       'per_fund_amount_krw', 'per_fund_range_krw', 'per_fund_qualifier', 'fund_target_label')
 
 
+def kdb_joint_vehicles(raw):
+    """Read the complete current eligible-vehicles cell of a KDB offering."""
+    text = re.sub(r'\s+', '', raw)
+    for cell in re.findall(r'출자대상투자기구((?:○[^○※]{1,180}){2,7})(?=※선정된위탁운용사)', text):
+        rows = cell.split('○')[1:]
+        if (any('기관전용사모집합투자기구' in row for row in rows)
+                and any(re.search(r'창업[·ㆍ]벤처전문사모집합투자기구|법」에의한(?:벤처투자조합|신기술사업투자조합)', row)
+                        for row in rows)):
+            return True
+    return False
+
+
+_KDB_RECEPTION = re.compile(
+    r'접수일시○(20\d{2})년(\d{1,2})월(\d{1,2})일\([월화수목금토일]\)'
+    r'(\d{1,2}):(\d{2})[~～](\d{1,2}):(\d{2})접수방법○'
+)
+_KDB_SIZE_PLAN = re.compile(
+    r'분야별출자계획○출자계획분야산은출자금액산은출자비율펀드별목표결성금액선정운용사수조성목표'
+    r'중형' + NUM + r'억원\d+(?:\.\d+)?%' + NUM + r'억원(\d+)개' + NUM + r'억원'
+    r'소형' + NUM + r'억원\d+(?:\.\d+)?%[\d,]+또는[\d,]+억원\(운용사자율선택\)'
+    r'(\d+)[~～](\d+)개' + NUM + r'억원'
+    r'합계' + NUM + r'억원\d+(?:\.\d+)?%[-–](\d+)[~～](\d+)개' + NUM + r'억원'
+)
+_KDB_AI_MANDATE = re.compile(
+    r'주목적투자대상및의무투자비율□아래①과②를모두충족하여야함'
+    r'①➊AI인프라,➋AI모델,➌AI응용서비스,➍AI전환\(AIX\)등AI밸류체인에'
+    r'목표결성금액의\[(\d{1,3})%\]이상투자※AI밸류체인.{1,1200}?'
+    r'②중소[·․]중견기업에약정총액의(\d{1,3})%이상투자산은출자비율'
+)
+
+
+def _kdb_size_plan(match):
+    medium, medium_target, medium_count, medium_goal, small, small_low, small_high, small_goal, total, count_low, count_high, goal = (
+        int(value.replace(',', '')) for value in match.groups())
+    if (not all((medium, small, medium_count, small_low, small_goal)) or small_low > small_high
+            or medium_target * medium_count != medium_goal or medium_goal + small_goal != goal
+            or medium + small != total or (medium_count + small_low, medium_count + small_high) != (count_low, count_high)):
+        return None
+    return total * 10**8, {
+        'segments': [{'name': '중형', 'amount_krw': medium * 10**8, 'manager_count': medium_count},
+                     {'name': '소형', 'amount_krw': small * 10**8, 'manager_count': f'{small_low}~{small_high}'}],
+        'manager_count_label': f'{count_low}~{count_high}개사', 'fund_target_label': f'{goal:,}억원'}
+
+
 def _cwma_joint_table(section, kind):
     """Read rows inside one named current-offering section, never its neighbour."""
     def row(label, pattern):
@@ -221,6 +265,10 @@ def extract_terms(n):
     totals, counts, per_fund, deadlines = set(), set(), set(), set()
     dates_only, dated_quotes = set(), []
     mixed = bool(re.search(r'PE\s*[·,/]\s*VC|PE.*VC', n['title'], re.I))
+    kdb_vehicles_sources = {url for url, text, _ in sources if n.get('institution_id') == 'kdb' and kdb_joint_vehicles(text)}
+    kdb_joint = bool(kdb_vehicles_sources)
+    kdb_plan = None
+    kdb_mandates = []
     for url, raw, sha in sources:
         text = re.sub(r'\s+', '', raw)
         def record(key, quote):
@@ -272,6 +320,27 @@ def extract_terms(n):
             stamp = datetime(year,int(m[2]),int(m[3]),hour,int(m[6] or 0)).isoformat() + '+09:00'
             deadlines.add(stamp)
             record('deadline',m[0])
+        if kdb_joint:
+            for m in _KDB_RECEPTION.finditer(text):
+                year, month, day, start_hour, start_minute, end_hour, end_minute = map(int, m.groups())
+                start = datetime(year, month, day, start_hour, start_minute)
+                end = datetime(year, month, day, end_hour, end_minute)
+                if start >= end:
+                    result['deadline_error'] = '산업은행 접수 시작·마감 시각 불일치'
+                    continue
+                deadlines.add(end.isoformat() + '+09:00')
+                record('deadline', m[0])
+            if url in kdb_vehicles_sources:
+                size_plan = _KDB_SIZE_PLAN.search(text)
+                plan = _kdb_size_plan(size_plan) if size_plan else None
+                if plan:
+                    if kdb_plan is not None and kdb_plan != plan:
+                        raise ValueError('conflicting KDB funding size tables')
+                    kdb_plan = plan
+                    record('size_plan', size_plan[0])
+                mandate = _KDB_AI_MANDATE.search(text)
+                if mandate and all(1 <= int(value) <= 100 for value in mandate.groups()):
+                    kdb_mandates.append((mandate, url, sha))
         # "마감일: 2026. 8. 20.(목) (PEF 오전 11시까지, VC 오후 4시까지)": the PE track's own time.
         track = (labels + r"\s*[:：]*\s*[’'‘]?(20\d{2}|\d{2})[.년]\s*(\d{1,2})[.월]\s*(\d{1,2})[.일]?\s*"
                  r'(?:\([월화수목금토일](?:요일)?\)\s*)?\(\s*PEF?\s*(오후|오전)?\s*(\d{1,2})(?::(\d{2})|시)')
@@ -300,10 +369,22 @@ def extract_terms(n):
         amount, qualifier = next(iter(totals))
         if not mixed and result.get('commitment_amount_krw') and amount != result['commitment_amount_krw']:
             raise ValueError('conflicting independently parsed total')
-        result.update(commitment_amount_krw=amount, commitment_label=f'{amount/100_000_000:,.0f}억원'+(' '+qualifier if qualifier else ''), amount_scope='pe_only')
+        result.update(commitment_amount_krw=amount, commitment_label=f'{amount/100_000_000:,.0f}억원'+(' '+qualifier if qualifier else ''),
+                      amount_scope='combined' if kdb_joint and not mixed else 'pe_only')
+        if kdb_plan and result['amount_scope'] == 'combined' and kdb_plan[0] == amount:
+            result.update(kdb_plan[1])
     if counts:
         count, qualifier = next(iter(counts))
         result.update(manager_count=count, manager_count_label=f'{count}개사'+(' '+qualifier if qualifier else ''))
+    if kdb_mandates:
+        result.pop('primary_investment', None)
+        evidence.pop('purpose', None)
+        if len({m.groups() for m, _, _ in kdb_mandates}) == 1:
+            mandate, url, _ = kdb_mandates[0]
+            result['primary_investment'] = {
+                'items': [f'목표결성금액의 {mandate[1]}% 이상을 AI 밸류체인에 투자',
+                          f'약정총액의 {mandate[2]}% 이상을 중소·중견기업에 투자'], 'source_url': url}
+            evidence['purpose'] = [{'source_url': url, 'sha256': sha, 'quote': m[0]} for m, url, sha in kdb_mandates]
     if per_fund:
         amount, qualifier = next(iter(per_fund))
         result.update(per_fund_amount_krw=amount, per_fund_qualifier=qualifier)

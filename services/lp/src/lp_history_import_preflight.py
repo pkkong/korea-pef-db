@@ -1,6 +1,6 @@
 """Propose a pinned history import against one read-only operating snapshot.
 
-Only new recruitment programs and their validated source receipts are appended.
+Only new programs anchored by a recruitment and their validated source receipts are appended.
 Existing programs, aliases, decisions, freshness and other catalogs stay exact.
 This is an isolated import preview, not a simulation of new daily source updates,
 and is never approval to publish or permission to call a write function.
@@ -121,7 +121,7 @@ def _catalog_versions(current):
 
 
 def proposal(current, payload, checked_at):
-    """Append only source-validated recruitments; never re-project old programs."""
+    """Append source-validated programs and their stages; keep old programs exact."""
     _validate_payload(payload)
     validate(current)
     incoming = [validate_history_notice(n, checked_at) for n in payload['notices']]
@@ -141,7 +141,7 @@ def proposal(current, payload, checked_at):
                   or old.get('attachment_hashes', {}) != n.get('attachment_hashes', {})):
             raise ValueError('기존 원문 카탈로그의 기관·본문·첨부 버전 충돌')
     programs, holds = publish_basic_notices({'programs': [], 'history_notices': incoming}, [], checked_at)
-    represented = {e['url'] for p in programs for e in p['events'] if e['type'] == '모집 공고'}
+    represented = {e['url'] for p in programs for e in p['events']}
     if holds or represented != {n['url'] for n in incoming}:
         raise ValueError('가져오기 원문이 모두 검증된 모집 사업으로 연결되지 않음')
     after = copy.deepcopy(current)
@@ -166,8 +166,9 @@ def proposal(current, payload, checked_at):
         if matches:
             reused.append(matches[0]['id'])
             continue
-        if p.get('selected_gps'):
-            raise ValueError('모집 원문만으로 선정 GP를 추가할 수 없음')
+        selection_urls = {e['url'] for e in p['events'] if e['type'] in ('선정 결과', '최종 선정')}
+        if any(g.get('source_url') not in selection_urls for g in p['selected_gps']):
+            raise ValueError('가져오기 선정 GP의 공식 결과 원문 연결 미확인')
         source = next(n for n in incoming if n['url'] in urls)
         p['checked_at'] = source['checked_at']
         after['programs'].append(p)

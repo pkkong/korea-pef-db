@@ -384,6 +384,52 @@ class KdbResultRosterTests(unittest.TestCase):
         self.assertEqual([], kdb_result_roster('지원분야운용사AI·IP노틱인베스트먼트(주)'))
         self.assertEqual([], kdb_result_roster('운용사명(가나다순)\n중형이름모를곳'))
 
+    def test_kdb_joint_vehicles_keep_combined_budget_and_end_of_reception_window(self):
+        from services.lp.src.lp_institution_notice_terms import kdb_joint_vehicles
+        from services.lp.src.lp_notice_publication import _scope, _terms
+        url = 'https://www.kdb.co.kr/program'
+        file = 'https://www.kdb.co.kr/offering.pdf'
+        cell = ('출자대상투자기구\n○「자본시장과금융투자업에관한법률」에의한기관전용사모집합투자기구* '
+                '*경영참여목적에한함○「자본시장과금융투자업에관한법률」에의한창업·벤처전문사모집합투자기구'
+                '○「여신전문금융업법」에의한신기술사업투자조합○「벤처투자촉진에관한법률」에의한벤처투자조합'
+                '※선정된위탁운용사는관련법규에따라협의')
+        overview = ('분야별출자계획○출자계획분야산은출자금액산은출자비율펀드별목표결성금액선정운용사수조성목표'
+                    '중형600억원30.0%2,000억원1개2,000억원소형900억원30.0%750 또는 1,000억원(운용사 자율선택)'
+                    '3~4개3,000억원합계1,500억원30.0%-4~5개5,000억원')
+        purpose = ('주목적투자대상및의무투자비율□아래①과②를모두충족하여야함'
+                   '①➊AI인프라,➋AI모델,➌AI응용서비스,➍AI전환(AIX)등AI밸류체인에목표결성금액의[60%]이상투자'
+                   '※AI밸류체인관련분야②중소․중견기업에약정총액의60%이상투자산은출자비율')
+        pdf = ('위탁운용금액○위탁운용금액:총1,500억원 접수일시○2025년7월25일(금)10:00~15:00접수방법○제출서류\n'
+               + overview + '\n' + cell + '\n' + purpose)
+        notice = {'institution_id': 'kdb', 'source_channel': 'institution_board', 'date': '2025-06-27',
+                  'title': '2025 AI 코리아 펀드 위탁운용사 선정계획 공고', 'body': '첨부파일 참고',
+                  'url': url, 'sha256': 'a' * 64, 'attachments': [{'name': '선정계획.pdf', 'url': file}],
+                  'attachment_hashes': {file: 'b' * 64}, 'attachment_texts': {file: pdf}}
+        self.assertEqual(_scope(notice), 'mixed_pe_blind')
+        terms, raw = _terms(notice, None, NOW)
+        self.assertEqual(raw['amount_scope'], 'combined')
+        self.assertEqual(terms['commitment_amount_krw'], 1_500 * 10**8)
+        self.assertEqual(terms['deadline'], '2025-07-25T15:00:00+09:00')
+        self.assertEqual([s['amount_krw'] for s in terms['segments']], [600 * 10**8, 900 * 10**8])
+        self.assertEqual(terms['manager_count_label'], '4~5개사')
+        self.assertEqual(terms['primary_investment']['items'],
+                         ['목표결성금액의 60% 이상을 AI 밸류체인에 투자', '약정총액의 60% 이상을 중소·중견기업에 투자'])
+        notice['attachment_texts'][file] = pdf.replace('소형900억원', '소형901억원')
+        self.assertNotIn('segments', _terms(notice, None, NOW)[0])
+        self.assertFalse(kdb_joint_vehicles(pdf.replace('출자대상투자기구', '과거투자기구')))
+        self.assertFalse(kdb_joint_vehicles(pdf.replace('※선정된위탁운용사', '※과거운용사')))
+
+    def test_kdb_size_roster_handles_a_wrapped_cell_and_legal_form_markers(self):
+        from services.lp.src.lp_notice_publication import kdb_result_roster
+        table = ('<2025 AI 코리아 펀드 위탁운용사 선정 결과>지원분야선정 운용사명 (가나다순)'
+                 '중형스톤브릿지벤처스(주)\n소형\n'
+                 '스틱벤처스(주)위벤처스(유)(주)코오롱인베스트먼트키움인베스트먼트(주)')
+        self.assertEqual(kdb_result_roster(table), [('중형', ['스톤브릿지벤처스']),
+                         ('소형', ['스틱벤처스', '위벤처스', '코오롱인베스트먼트', '키움인베스트먼트'])])
+        self.assertEqual(kdb_result_roster(table.rsplit('\n', 1)[0]), [])
+        self.assertEqual(kdb_result_roster(table + '\n다른칸자료'), [])
+        self.assertEqual(kdb_result_roster(table.replace('선정 운용사명', '지원 운용사명')), [])
+
     def test_result_attachment_becomes_pe_selection(self):
         from services.lp.src.lp_notice_publication import _attach_result_roster
         from services.lp.src.lp_program_service import validate

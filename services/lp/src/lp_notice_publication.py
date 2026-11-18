@@ -26,7 +26,7 @@ try:
     from .lp_shared_notice_terms import extract_shared_terms
     from .collect_lp_institution_boards import validate_notice as validate_institution_notice
     from .lp_institution_notice_terms import extract_terms as extract_institution_terms
-    from .lp_institution_notice_terms import apply_iaci_allocation
+    from .lp_institution_notice_terms import apply_iaci_allocation, kdb_joint_vehicles
     from .lp_kfcc_notice_terms import allocation as kfcc_allocation
     from . import lp_pck_programs as pck_programs
     from . import lp_kbiz_notice_terms as kbiz_terms
@@ -47,7 +47,7 @@ except ImportError:
     from lp_shared_notice_terms import extract_shared_terms
     from collect_lp_institution_boards import validate_notice as validate_institution_notice
     from lp_institution_notice_terms import extract_terms as extract_institution_terms
-    from lp_institution_notice_terms import apply_iaci_allocation
+    from lp_institution_notice_terms import apply_iaci_allocation, kdb_joint_vehicles
     from lp_kfcc_notice_terms import allocation as kfcc_allocation
     import lp_pck_programs as pck_programs
     import lp_kbiz_notice_terms as kbiz_terms
@@ -210,7 +210,8 @@ def _scope(n):
         return 'pe_blind' if pck_programs.offering_sources(n) else 'unknown'
     if n.get('institution_id') == 'kfcc':
         return 'mixed_pe_blind' if kfcc_allocation(n) else 'unknown'
-    text = '\n'.join(_texts(n))
+    texts = _texts(n)
+    text = '\n'.join(texts)
     if (n.get('source_channel') == 'institution_board'
             and re.search(r'(?<![A-Za-z])VC(?![A-Za-z])', n['title'], re.I)
             and not re.search(r'(?<![A-Za-z])PEF?(?![A-Za-z])', n['title'], re.I)):
@@ -220,6 +221,10 @@ def _scope(n):
                  r'|개발\s*(?:블라인드\s*)?펀드|개발사업|PF\s*사업장', n['title'], re.I):
         return 'outside'
     result = classify_scope(n['title'], text)
+    if (n.get('institution_id') == 'kdb' and n.get('source_channel') == 'institution_board'
+            and result != 'outside' and not re.search(r'모펀드|Pre-?IPO|주식|채권|멀티에셋|EMP|재간접|절대수익|헤지', n['title'], re.I)
+            and any(kdb_joint_vehicles(source) for source in texts)):
+        return 'mixed_pe_blind'
     # User decision 2026-11-12: for the large policy/pension LPs, an explicitly
     # offered PE fund is published even when blind/domestic wording is absent.
     # Fund-of-funds manager selections are not GP recruitments.
@@ -615,16 +620,34 @@ def kdb_result_roster(text, known=frozenset()):
     if not match:
         return []
     rosters = []
+    pending_size = None
+    selected_table = bool(re.search(r'지원분야\s*선정\s*운용사명', text[:match.end()]))
     for line in text[match.end():].splitlines():
         line = line.strip()
         if not line:
             continue
         label = next((l for l in KDB_FIELD_LABELS if line.startswith(l)), None)
-        names = split_glued_names(line[len(label):], known) if label else None
+        if pending_size:
+            if label:
+                return []
+            label, pending_size = pending_size, None
+            manager_text = line
+        elif label:
+            manager_text = line[len(label):]
+            if selected_table and label in {'대형', '중형', '소형'} and not manager_text:
+                pending_size = label
+                continue
+        else:
+            return []
+        if selected_table and label in {'대형', '중형', '소형'}:
+            manager_text = re.sub(r'\((?:주|유)\)|㈜', '', manager_text)
+        names = split_glued_names(manager_text, known)
         if not names:
             return []
         rosters.append((label, names))
     labels = {label for label, _ in rosters}
+    if pending_size:
+        return []
     if labels & {'PE', 'VC'}:
         # Mixed PE·VC programs: only the PE field is a PE result.
         rosters = [(label, names) for label, names in rosters if label == 'PE']
