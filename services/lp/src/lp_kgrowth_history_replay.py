@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError
@@ -38,7 +39,7 @@ MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_INPUT_BYTES = 40 * 1024 * 1024
 _FIELDS = ('source_id', 'url', 'title', 'date', 'body', 'sha256', 'attachments')
 REVIEW_SCOPES = ('pe_roster', 'joint_originals')
-CAPTURE_SCOPES = REVIEW_SCOPES + ('press_listing',)
+CAPTURE_SCOPES = REVIEW_SCOPES + ('press_listing', 'press_search')
 
 
 def _sha(raw):
@@ -94,6 +95,23 @@ def target_group(bundle, *, review_scope='pe_roster'):
             raise ValueError('보관 상세의 표준 원문 주소 불일치')
         _stamp(n['checked_at'])
     return group, notices
+
+
+def press_search_terms(bundle):
+    group, notices = target_group(bundle, review_scope='joint_originals')
+    expected = {item['fund'] for item in group['identity']['programs']}
+    terms = []
+    for notice in notices:
+        names = re.findall(r'「([^」]+)」', notice['title'])
+        if len(names) != 1:
+            raise ValueError('공동 원모집 제목에서 펀드명 인용 확인 실패')
+        term = re.sub(r'\([1-9][0-9]*차\)$', '', names[0]).strip()
+        if re.sub(r'\s+', '', term) not in expected:
+            raise ValueError('공동 원모집 펀드명과 검색어 불일치')
+        terms.append(term)
+    if {re.sub(r'\s+', '', term) for term in terms} != expected:
+        raise ValueError('공동 원모집 검색 범위 불일치')
+    return terms
 
 
 def _detail(n, encoded, expected_sha):
@@ -268,7 +286,7 @@ def main(argv=None):
     parser.add_argument('--capture', type=Path)
     parser.add_argument('--review-scope', choices=CAPTURE_SCOPES, default='pe_roster')
     args = parser.parse_args(argv)
-    if args.review_scope == 'press_listing' and (not args.capture_details or args.capture):
+    if args.review_scope in ('press_listing', 'press_search') and (not args.capture_details or args.capture):
         parser.error('보도자료 목록은 새 응답 진단만 지원하며 기존 묶음 재생에 쓸 수 없습니다')
     if args.out.resolve() in {p.resolve() for p in (args.bundle, args.capture) if p}:
         parser.error('입력 원문·보완 영수증을 덮어쓸 수 없습니다')
@@ -297,6 +315,22 @@ def main(argv=None):
             report['review_scope'] = args.review_scope
             report['context_bundle_content_sha256'] = _bundle_sha(bundle)
             report['context_bundle_sha256'] = _sha(args.bundle.read_bytes())
+            save(report)
+        elif args.review_scope == 'press_search':
+            try:
+                from .lp_kgrowth_press_probe import capture_press_search, fetch_press_search
+            except ImportError:
+                from lp_kgrowth_press_probe import capture_press_search, fetch_press_search
+            def search_report(receipts):
+                return {'kind': 'lp_kgrowth_press_search_v1', 'review_scope': args.review_scope,
+                        'context_bundle_sha256': _sha(args.bundle.read_bytes()),
+                        'requests': sum(r['requests'] for r in receipts), 'receipts': receipts,
+                        'holds': [hold for r in receipts for hold in r['holds']],
+                        'parsed': False, 'source_health_verified': False,
+                        'publication_ready': False, 'published': False}
+            receipts = capture_press_search(press_search_terms(bundle), fetch_press_search,
+                                            retain=lambda receipts: save(search_report(receipts)))
+            report = search_report(receipts)
             save(report)
         else:
             report = capture_details(bundle, fetch_detail, retain=save, review_scope=args.review_scope)

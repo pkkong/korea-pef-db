@@ -75,11 +75,11 @@ class PressListingProbeTests(unittest.TestCase):
 
     def test_response_is_retained_before_even_type_or_html_validation(self):
         saved, original = [], probe._validate_response
-        def validate(observed, report):
+        def validate(observed, report, *, expected_url):
             self.assertEqual(saved[-1]['capture_status'], 'observed')
             self.assertEqual(saved[-1]['holds'], [])
             self.assertEqual(base64.b64decode(saved[-1]['raw_base64']), b'Access denied')
-            return original(observed, report)
+            return original(observed, report, expected_url=expected_url)
         with patch.object(probe, '_validate_response', side_effect=validate):
             result = probe.capture_press_listing(Mock(return_value=response(b'Access denied',403)),
                                                  checked_at=STAMP, retain=saved.append)
@@ -278,6 +278,52 @@ class PressListingProbeTests(unittest.TestCase):
     def test_original_type_one_validator_is_not_relaxed(self):
         with self.assertRaises(ValueError):
             source_id('https://www.kgrowth.or.kr/notice_view.asp?idx=258&str_type=3&tab=1')
+
+    @staticmethod
+    def search_page(term):
+        fields = {**probe._PRESS_FORM, 'search_text': term}
+        inputs = ''.join(f'<input name="{k}" value="{v}">' for k, v in fields.items())
+        return ('<html><head><title>보도자료 > 공지사항 > 한국성장금융투자운용</title></head>'
+                f'<body><form name="search" id="search" method="get">{inputs}</form></body></html>').encode('cp949')
+
+    def test_search_uses_observed_title_form_and_keeps_original_responses(self):
+        term = '정책형 뉴딜펀드'
+        url = probe.press_search_url(term)
+        self.assertEqual(url, probe.PRESS_LISTING_URL.split('?')[0] +
+                         '?search_colume=Title&str_type=3&pagesize=10&orderby=1&notice_type=1'
+                         '&tab=1&search_text=%C1%A4%C3%A5%C7%FC+%B4%BA%B5%F4%C6%DD%B5%E5')
+        raw = self.search_page(term)
+        fetch = Mock(return_value=response(raw, url=url))
+        saved = []
+        report, = probe.capture_press_search([term], fetch, checked_at=STAMP, retain=saved.append)
+        fetch.assert_called_once_with(url)
+        self.assertTrue(report['search_echo_verified'])
+        self.assertTrue(any(r[0]['capture_status'] == 'observed' for r in saved))
+        self.assertEqual(base64.b64decode(report['raw_base64']), raw)
+        self.assertEqual(report['holds'], [])
+        self.assertFalse(report['parsed'])
+
+    def test_search_echo_mismatch_keeps_raw_and_holds(self):
+        term = '정책형 뉴딜펀드'
+        other = '소재·부품·장비 분야 투자 전용 펀드'
+        terms = [term, other]
+        calls = []
+        def fetch(url):
+            calls.append(url)
+            return response(self.search_page(''), url=url)
+        receipts = probe.capture_press_search(terms, fetch, checked_at=STAMP)
+        self.assertEqual(calls, [probe.press_search_url(t) for t in terms])
+        self.assertTrue(all(not r['search_echo_verified'] and r['holds'] and r['response_retained']
+                            for r in receipts))
+
+    def test_search_transport_rejects_extra_parameters_and_other_hosts(self):
+        url = probe.press_search_url('정책형 뉴딜펀드')
+        with patch.object(probe, '_fetch') as fetch:
+            for changed in (url + '&page=2', url + '&idx=258', url.replace('str_type=3', 'str_type=1'),
+                            url.replace('www.kgrowth.or.kr', 'other.example')):
+                with self.subTest(url=changed), self.assertRaises(ValueError):
+                    probe.fetch_press_search(changed)
+            fetch.assert_not_called()
 
     def test_observed_complete_style_script_postamble_retains_original_bytes(self):
         # The actual retained board-3 page has these two complete blocks after

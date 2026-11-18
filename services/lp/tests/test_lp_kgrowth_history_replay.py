@@ -241,6 +241,13 @@ class GrowthReplayTests(unittest.TestCase):
         self.assertEqual(calls, [n['url'] for n in ns])
         self.assertEqual(result['remaining_candidates'], 0)
 
+    def test_press_search_selects_quoted_funds_from_verified_joint_offerings(self):
+        expected = ['정책형 뉴딜펀드', '소재·부품·장비 분야 투자 전용 펀드']
+        self.assertEqual(replay.press_search_terms(bundle(materials(), newdeal())), expected)
+        self.assertEqual(replay.press_search_terms(bundle(newdeal(), materials())), expected)
+        with self.assertRaisesRegex(ValueError, '공동 원모집'):
+            replay.press_search_terms(iii())
+
     def test_joint_capture_and_attachment_replay_preserve_source_identity(self):
         b = bundle(materials())
         n = b['notices'][0]
