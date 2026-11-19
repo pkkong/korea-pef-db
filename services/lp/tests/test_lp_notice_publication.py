@@ -359,6 +359,51 @@ class BasicNoticePublicationTests(unittest.TestCase):
 
 
 class KdbResultRosterTests(unittest.TestCase):
+    def test_fixed_ai_plan_preserves_joint_budget_and_reads_only_layout_verified_teams(self):
+        from services.lp.src.lp_notice_publication import _terms
+
+        title = '『AI 코리아 펀드』 위탁운용사 '
+        plan = ('위탁운용금액: 총 1,500억원 이내*위탁운용금액은 조정될 수 있음\n'
+                '분야별 출자계획 ○ 출자계획 (단위:개,억원) 분야 산은출자금액 출자비율 펀드별 목표결성금액 '
+                '선정운용사 수 조성목표 AI코리아펀드 중형 600 30.0% 2,000 1 2,000 소형 900 30.0% 1,000 3 3,000 '
+                '합계 1,500 30.0% - 4 5,000 *산은출자금액은 30% 이내\n'
+                '접수일시○2024년 8월 6일(화)10:00~15:00 접수방법○제출서류\n'
+                '출자대상 투자기구 ○ 기관전용 사모집합투자기구 ○ 벤처투자조합 ※선정된 위탁운용사는 확인')
+        table = ('   < AI 코리아 펀드 위탁운용사 선정 결과 >\n\n지원분야        선정 운용사명 (가나다순)\n'
+                 ' 중형             엘비인베스트먼트\n\n                   미래에셋벤처투자\n'
+                 ' 소형             신영증권  - 티인베스트먼트\n                   컴퍼니케이파트너스')
+
+        def kdb(number, day, suffix, text, **extra):
+            url = f'https://www.kdb.co.kr/ai-fixed/{number}'
+            pdf = f'{url}.pdf'
+            return notice(title=title + suffix, body=title + suffix, url=url, day=day, institution_id='kdb',
+                          source_channel='institution_board', attachment_texts={pdf: text},
+                          attachment_hashes={pdf: hashlib.sha256(text.encode()).hexdigest()}, **extra)
+
+        original = kdb(1, '2024-07-09', '선정계획 공고', plan)
+        faq = kdb(2, '2024-07-16', '선정 FAQ 게시', 'AI 코리아 펀드 위탁운용사 선정계획 FAQ\n2024.7.16.')
+        final = kdb(3, '2024-09-11', '선정 결과', table, attachment_extraction_version=3)
+        programs, holds = publish([final, faq, original])
+        self.assertFalse(holds)
+        p, = programs
+        self.assertEqual(p['asset_scope'], 'PE·VC 공동 모집')
+        self.assertEqual(p['commitment_label'], '1,500억원 이내 (PE·VC 합계)')
+        self.assertEqual(p['deadline'], '2024-08-06T15:00:00+09:00')
+        self.assertEqual([e['url'] for e in p['events']], [original['url'], faq['url'], final['url']])
+        self.assertEqual(p['gp_tracks'], {
+            '엘비인베스트먼트': '중형', '미래에셋벤처투자': '소형', '컴퍼니케이파트너스': '소형',
+            '신영증권': '소형 · 공동운용', '티인베스트먼트': '소형 · 공동운용',
+        })
+        for broken in [{**final, 'attachment_extraction_version': 1},
+                       kdb(3, '2024-09-11', '선정 결과', table.replace('\n                   컴퍼니', '컴퍼니'),
+                           attachment_extraction_version=3)]:
+            result, _ = publish([original, broken])
+            self.assertEqual(result[0]['status'], '선정 결과 발표')
+            self.assertEqual(result[0]['selected_gps'], [])
+        facts, raw = _terms(kdb(1, '2024-07-09', '선정계획 공고', plan.replace('1,000 3 3,000', '1,000 3 2,000')), None, NOW)
+        self.assertTrue(raw['allocation_reading_failed'])
+        self.assertNotIn('commitment_amount_krw', facts)
+
     def test_secondary_fund_replay_corrects_scope_and_keeps_existing_selection(self):
         from services.lp.src.lp_notice_publication import _terms
 

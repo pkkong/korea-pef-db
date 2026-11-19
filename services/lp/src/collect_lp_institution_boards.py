@@ -326,7 +326,7 @@ class Session:
 
 def _extraction_version(record):
     version = record.get('attachment_extraction_version', 1)
-    if type(version) is not int or version not in {1, 2}:
+    if type(version) is not int or version not in {1, 2, 3}:
         raise ValueError('unsupported attachment extraction version')
     return version
 
@@ -353,8 +353,9 @@ def _document_text(raw, version):
 
 def attachment_text(raw, name, *, extraction_version=1):
     """Replay versioned byte proofs; fresh file selection uses current policy."""
-    if type(extraction_version) is not int or extraction_version not in {1,2}:
-        raise ValueError('unsupported attachment extraction version')
+    _extraction_version({'attachment_extraction_version': extraction_version})
+    if extraction_version == 3:
+        return '' if is_submission_form_v2(name) else extract_attachment(raw, pdf_layout=True)['text']
     if (is_form(name) if extraction_version==1 else is_submission_form_v2(name)):
         return ''
     kind, text = _document_text(raw, extraction_version)
@@ -451,8 +452,9 @@ def fetch_notice(row, listing_receipt, config, fetch, checked_at, resolver_cache
          'attachment_hashes': {}, 'attachment_texts': {}, 'attachment_bytes': {}}
     if resolution is not None:
         n['discovery_provenance']['attachment_resolution'] = resolution
-    if config.get('attachment_extraction_version')==2:
-        n['attachment_extraction_version']=2
+    version = _extraction_version(config)
+    if version != 1:
+        n['attachment_extraction_version'] = version
     n['sha256'] = original_body_hash(n)
     coverage['detail_count'] = coverage.get('detail_count', 0) + 1
     # Unrelated investment boards remain discoverable, but their
@@ -465,7 +467,7 @@ def fetch_notice(row, listing_receipt, config, fetch, checked_at, resolver_cache
                 continue
             try:
                 raw = fetch(item['url'], n['url'])
-                text = (attachment_text(raw,item['name'],extraction_version=2) if n.get('attachment_extraction_version')==2
+                text = (attachment_text(raw,item['name'],extraction_version=version) if version != 1
                         else attachment_text(raw,item['name']))
                 n['attachment_bytes'][item['url']] = base64.b64encode(raw).decode('ascii')
                 n['attachment_hashes'][item['url']] = digest(raw)
@@ -732,7 +734,7 @@ def validate_notice(raw, checked_at, config=None, *, history_listing=False, requ
         content = base64.b64decode(encoded, validate=True)
         if digest(content) != n['attachment_hashes'][url]:
             raise ValueError('institution attachment fingerprint mismatch')
-        text=(attachment_text(content,observed_attachments[url],extraction_version=2) if version==2
+        text=(attachment_text(content,observed_attachments[url],extraction_version=version) if version != 1
               else attachment_text(content,observed_attachments[url]))
         if text != n['attachment_texts'].get(url, ''):
             raise ValueError('institution attachment text does not match source bytes')

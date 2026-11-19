@@ -72,8 +72,18 @@ class PendingCollectionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'OCR unavailable'):b.attachment_text(raw,'공고.pdf',extraction_version=2)
         with patch.object(b,'extract_attachment',return_value={'format':'pdf','text':'valid body '*50}),patch.object(b,'recognize_pdf') as ocr:
             self.assertEqual(b.attachment_text(raw,'공고.pdf',extraction_version=2),'valid body '*50);ocr.assert_not_called()
-        for version in (True,0,3,'2'):
+        for version in (True,0,4,'2'):
             with self.assertRaises(ValueError):b.validate_notice({'attachment_extraction_version':version},STAMP)
+
+    def test_version_three_uses_pdf_layout_without_ocr(self):
+        raw = b'%PDF-test'
+        with patch.object(b, 'extract_attachment', return_value={'format': 'pdf', 'text': 'small  row'}) as extract, \
+                patch.object(b, 'recognize_pdf') as ocr:
+            self.assertEqual(b.attachment_text(raw, '결과.pdf', extraction_version=3), 'small  row')
+        extract.assert_called_once_with(raw, pdf_layout=True)
+        ocr.assert_not_called()
+        with self.assertRaisesRegex(ValueError, 'requires PDF bytes'):
+            b.attachment_text(b'PK-invalid', '결과.pdf', extraction_version=3)
 
     def test_independent_inventory_uses_whole_board_and_validated_identity(self):
         for iid,url,expected in [('nps',n.URL,'nps:BS20990001:'+n.PID),('cwma',c.DETAIL_URL,'cwma:98765')]:

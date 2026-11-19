@@ -1,9 +1,9 @@
 {
   "kind": "lp_history_import_check_request_v1",
   "institution_id": "kdb",
-  "bundle_commit": "f39e95e480a554daa2e22fbed74e8377e98918ca",
-  "bundle_sha256": "62308c0d7660312499742e0df38656fc1fd333557a31d3d37e8a87f7f5ba5350",
-  "candidate_sha256": "ee577e6714e54b23456fe1c053188e5a5e6d2f1a5aa03c3ff19a2fa15ba0d526",
-  "candidate_checked_at": "2026-11-19T06:36:16.293605+00:00",
-  "reason": "회수시장 발행 44473778769가 공개 상태 저장 단계에서 840초를 넘겼다. 재시도 전 운영 공개본 ID·갱신시각·내용 지문을 이전 읽기 전용 결과와 대조하며 동일한 공식 원문 후보를 검증한다."
+  "bundle_commit": "3c5653c4fa4278e04ca24804483d441762d35994",
+  "bundle_sha256": "787153959e2ed9ec764830197175f57c67febbe8e3c23d974ca7378772723ca6",
+  "candidate_sha256": "ee272eb318b7bca8697d6fa5b6cd297cf17ec8f420190df5d4ddf47ce6b547a0",
+  "candidate_checked_at": "2026-11-19T07:46:06.310990+00:00",
+  "reason": "산업은행 AI 코리아 2024년 모집부터 선정까지 공식 원문 다섯 건을 검증한다. 최종 PDF의 줄과 공동운용 경계를 검증했으며 기존 사업·주소·별칭·GP 이력 보존을 운영에서 읽기 전용으로 대조한다."
 }

@@ -229,10 +229,12 @@ def _hwpx(raw):
         return {"format": "hwpx", "text": "\n".join(texts), "tables": tables}
 
 
-def extract_attachment(raw: bytes) -> dict:
+def extract_attachment(raw: bytes, *, pdf_layout=False) -> dict:
     """Return complete body evidence or raise ValueError; never use PrvText."""
     if not isinstance(raw, bytes) or not raw or len(raw) > MAX_FILE_BYTES:
         raise ValueError("Attachment is empty or exceeds extraction size limit")
+    if pdf_layout and not raw.startswith(b"%PDF-"):
+        raise ValueError("PDF layout extraction requires PDF bytes")
     try:
         if raw.startswith(_OLE):
             result = _hwp(raw)
@@ -245,7 +247,7 @@ def extract_attachment(raw: bytes) -> dict:
                 raise ValueError("PDF is encrypted or exceeds extraction page limit")
             parts, length = [], 0
             for page in reader.pages:
-                text = page.extract_text() or ""
+                text = (page.extract_text(extraction_mode="layout") if pdf_layout else page.extract_text()) or ""
                 length += len(text)
                 if length > MAX_TEXT_CHARS:
                     raise ValueError("PDF text exceeds extraction size limit")
