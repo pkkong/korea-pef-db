@@ -75,8 +75,9 @@ class StateStorageTests(unittest.TestCase):
         before = copy.deepcopy(self.state)
         with patch('publish_lp_programs.publication_phase'):
             store_public_state(conn, self.state, {'index.html': 'unchanged'}, 'r')
-        params = conn.execute.call_args.args[1]
-        packed = json.loads(params[0])
+        data_parts = [c.args[1][2] for c in conn.execute.call_args_list
+                      if 'INSERT INTO pg_temp.lp_program_state_parts' in c.args[0] and c.args[1][0] == 0]
+        packed = json.loads(''.join(data_parts))
         self.assertIn(s.MARKER, packed)
         self.assertEqual(self.state, before)
         conn.execute.return_value.fetchone.return_value = (packed,)

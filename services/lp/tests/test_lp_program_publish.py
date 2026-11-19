@@ -187,16 +187,23 @@ class PublishContracts(unittest.TestCase):
     def test_public_payload_preserves_unicode_zero_and_literal_escapes(self):
         from unittest.mock import Mock
         conn = Mock()
-        data = {'programs': [{'title': '국내 PE 출자', 'count': 0, 'flag': False, 'source': r'\u0000'}]}
-        pages = {'index.html': '<h1>출자사업</h1>'}
+        data = {'programs': [{'title': '국내 PE 출자', 'count': 0, 'flag': False, 'source': r'\u0000',
+                              'text': '한🙂'*160000}]}
+        pages = {'index.html': '<h1>출자사업</h1>' + '원문😊'*130000}
         with patch('publish_lp_programs.publication_phase'):
             store_public_state(conn, data, pages, 'new-run')
+        calls = conn.execute.call_args_list
+        self.assertIn('ON COMMIT DROP', calls[0].args[0])
+        parts = [c.args[1] for c in calls if 'INSERT INTO pg_temp.lp_program_state_parts' in c.args[0]]
+        for field, expected in enumerate((data, pages)):
+            selected = [(seq, text) for part_field, seq, text in parts if part_field == field]
+            self.assertGreater(len(selected), 1)
+            self.assertEqual([seq for seq, _ in selected], list(range(len(selected))))
+            self.assertTrue(all(len(text.encode('utf-8')) <= 1024*1024 for _, text in selected))
+            self.assertEqual(json.loads(''.join(text for _, text in selected)), expected)
         query, params = conn.execute.call_args.args
-        self.assertIn('%s::jsonb', query)
-        self.assertEqual(json.loads(params[0]), data)
-        self.assertEqual(json.loads(params[1]), pages)
-        self.assertIn('국내 PE', params[0])
-        self.assertEqual(params[2], 'new-run')
+        self.assertIn("string_agg(payload,'' ORDER BY seq)::jsonb", query)
+        self.assertEqual(params, ('new-run',))
         conn.commit.assert_not_called()
 
     def test_invalid_public_number_fails_before_writing_or_committing(self):

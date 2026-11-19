@@ -37,6 +37,8 @@ PHASE_COUNTS = {
     'evidence_storage': {'documents'},
     'public_payload_serialization_started': set(),
     'public_payload_serialization': {'data_bytes', 'pages_bytes'},
+    'public_state_parts_started': set(),
+    'public_state_parts_storage': {'parts'},
     'public_state_storage_started': set(),
     'public_state_storage': set(),
     'publication_commit': set(),

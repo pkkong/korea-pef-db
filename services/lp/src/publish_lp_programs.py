@@ -102,6 +102,17 @@ def publication_phase(name, started, **counts):
     print(json.dumps({'lp_phase':name,'seconds':round(time.monotonic()-started,2),**counts}), file=sys.stderr, flush=True)
 
 
+def _utf8_parts(payload):
+    """Bound individual PostgreSQL text parameters to 1 MiB."""
+    offset = 0
+    while offset < len(payload):
+        end = min(offset + 1024 * 1024, len(payload))
+        while end < len(payload) and payload[end] & 0xC0 == 0x80:
+            end -= 1
+        yield payload[offset:end].decode('utf-8')
+        offset = end
+
+
 def store_collection_report(conn, report_json, run_id, institution):
     """Keep the complete JSONB report without one large client bind message.
 
@@ -112,16 +123,11 @@ def store_collection_report(conn, report_json, run_id, institution):
     started = time.monotonic()
     conn.execute('CREATE TEMP TABLE lp_collection_report_parts '
                  '(seq integer PRIMARY KEY,payload text NOT NULL) ON COMMIT DROP')
-    offset, count = 0, 0
-    while offset < len(payload):
-        end = min(offset + 1024 * 1024, len(payload))
-        # Never split a UTF-8 code point between PostgreSQL text parameters.
-        while end < len(payload) and payload[end] & 0xC0 == 0x80:
-            end -= 1
-        part = payload[offset:end].decode('utf-8')
+    count = 0
+    for part in _utf8_parts(payload):
         conn.execute('INSERT INTO pg_temp.lp_collection_report_parts(seq,payload) VALUES (%s,%s)',
                      (count, part))
-        offset, count = end, count + 1
+        count += 1
     publication_phase('collection_report_parts', started, report_bytes=len(payload), parts=count)
     started = time.monotonic()
     conn.execute('INSERT INTO lp_program_private.collection_runs(run_id,institution,report) '
@@ -186,19 +192,36 @@ def store_report_locator(conn, stub, run_id, institution):
 
 
 def store_public_state(conn, data, pages, run_id):
+    """Store pages and their evidence together inside the caller's transaction."""
     started = time.monotonic()
     publication_phase('public_payload_serialization_started', started)
     packed = pack_state(data)
     if unpack_state(packed) != data:
         raise ValueError('Compressed state differs from the prepared evidence')
-    data_json = json.dumps(packed, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
-    pages_json = json.dumps(pages, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+    data_json = json.dumps(packed, ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode('utf-8')
+    pages_json = json.dumps(pages, ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode('utf-8')
     publication_phase('public_payload_serialization', started,
-                      data_bytes=len(data_json.encode()), pages_bytes=len(pages_json.encode()))
+                      data_bytes=len(data_json), pages_bytes=len(pages_json))
+    started = time.monotonic()
+    publication_phase('public_state_parts_started', started)
+    conn.execute('CREATE TEMP TABLE lp_program_state_parts '
+                 '(part smallint,seq integer,payload text NOT NULL,PRIMARY KEY(part,seq)) ON COMMIT DROP')
+    count = 0
+    for field, payload in enumerate((data_json, pages_json)):
+        for seq, part in enumerate(_utf8_parts(payload)):
+            conn.execute('INSERT INTO pg_temp.lp_program_state_parts(part,seq,payload) VALUES (%s,%s,%s)',
+                         (field, seq, part))
+            count += 1
+    publication_phase('public_state_parts_storage', started, parts=count)
     started = time.monotonic()
     publication_phase('public_state_storage_started', started)
-    conn.execute('INSERT INTO lp_program_private.program_state(id,data,pages,run_id) VALUES(1,%s::jsonb,%s::jsonb,%s) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,pages=EXCLUDED.pages,run_id=EXCLUDED.run_id,updated_at=now()',
-                 (data_json, pages_json, run_id))
+    conn.execute(
+        "WITH reassembled AS (SELECT part,string_agg(payload,'' ORDER BY seq)::jsonb AS document "
+        'FROM pg_temp.lp_program_state_parts GROUP BY part) '
+        'INSERT INTO lp_program_private.program_state(id,data,pages,run_id) VALUES '
+        '(1,(SELECT document FROM reassembled WHERE part=0),(SELECT document FROM reassembled WHERE part=1),%s) '
+        'ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,pages=EXCLUDED.pages,run_id=EXCLUDED.run_id,updated_at=now()',
+        (run_id,))
     publication_phase('public_state_storage', started)
 
 

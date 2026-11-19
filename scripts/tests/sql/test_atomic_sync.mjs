@@ -32,7 +32,7 @@ def payload(extra):
 import sys
 from unittest.mock import MagicMock
 sys.path.insert(0,str(Path('services/lp/src').resolve()))
-from publish_lp_programs import store_documents, store_collection_report
+from publish_lp_programs import store_documents, store_collection_report, store_public_state
 base={'url':'https://example.test/lp/a','title':'한국 공고','zero':0,'flag':False,'optional':None,'literal':chr(92)+'u0000','checked_at':'first'}
 def lp_queries(docs):
  conn=MagicMock();cursor=conn.cursor.return_value.__enter__.return_value
@@ -45,7 +45,13 @@ lp_report_json=json.dumps(lp_report_value,ensure_ascii=False,separators=(',',':'
 report_conn=MagicMock()
 store_collection_report(report_conn,lp_report_json,'lp-chunk-test','kgrowth')
 lp_report={'value':lp_report_value,'queries':[{'sql':c.args[0],'params':list(c.args[1]) if len(c.args)>1 else []} for c in report_conn.execute.call_args_list]}
-print(json.dumps({'canonical':canonical,'old':payload(True),'new':payload(False),'lp_documents':lp_documents,'lp_report':lp_report},ensure_ascii=False))
+lp_state_value={'programs':[{'text':'출자🙂abc'*90000,'zero':0,'false':False,'literal':chr(92)+'u0000'}]}
+lp_state_pages={'index.html':'<h1>출자사업</h1>'+'공고😊'*110000,'program-one.html':'<p>선정 원문</p>'}
+state_conn=MagicMock()
+store_public_state(state_conn,lp_state_value,lp_state_pages,'lp-chunk-test')
+lp_state={'value':lp_state_value,'pages':lp_state_pages,
+ 'queries':[{'sql':c.args[0],'params':list(c.args[1]) if len(c.args)>1 else []} for c in state_conn.execute.call_args_list]}
+print(json.dumps({'canonical':canonical,'old':payload(True),'new':payload(False),'lp_documents':lp_documents,'lp_report':lp_report,'lp_state':lp_state},ensure_ascii=False))
 `], {cwd:root,encoding:'utf8',maxBuffer:16*1024*1024});
 assert.equal(python.status, 0, python.stderr);
 const fixture=JSON.parse(python.stdout);
@@ -287,6 +293,19 @@ await check('LP actual chunked report SQL preserves multibyte JSON and drops tem
  await db.exec('COMMIT');
  assert.equal((await db.query("SELECT to_regclass('pg_temp.lp_collection_report_parts') AS name")).rows[0].name,null);
 });
+await check('LP actual state and public pages publish together from bounded multibyte parts',async()=>{
+ const chunks=fixture.lp_state.queries.filter(q=>q.sql.startsWith('INSERT INTO pg_temp.'));
+ for(const field of [0,1])assert.ok(chunks.filter(q=>q.params[0]===field).length>=2);
+ for(const q of chunks)assert.ok(Buffer.byteLength(q.params[2],'utf8')<=1024*1024);
+ await db.exec('BEGIN');
+ for(const batch of fixture.lp_state.queries)await lpReportExecute(batch);
+ await db.exec('COMMIT');
+ const state=(await db.query('SELECT run_id,data,pages FROM lp_program_private.program_state WHERE id=1')).rows[0];
+ assert.deepEqual(state,{run_id:'lp-chunk-test',data:fixture.lp_state.value,pages:fixture.lp_state.pages});
+ assert.deepEqual((await db.query("SELECT lp_program_page('index.html') AS page")).rows[0].page,
+  {run_id:'lp-chunk-test',page_html:fixture.lp_state.pages['index.html']});
+ assert.equal((await db.query("SELECT to_regclass('pg_temp.lp_program_state_parts') AS name")).rows[0].name,null);
+});
 await check('LP chunked report and later document/state changes roll back together',async()=>{
  const before=(await db.query('SELECT * FROM lp_program_private.collection_runs ORDER BY run_id')).rows;
  const docs=(await db.query('SELECT * FROM lp_program_private.documents ORDER BY content_hash')).rows;
@@ -297,13 +316,17 @@ await check('LP chunked report and later document/state changes roll back togeth
   await lpReportExecute(copy);
  }
  await lpExecute(fixture.lp_documents.rollback[0]);
- await db.query("UPDATE lp_program_private.program_state SET run_id='lp-rollback-test',pages='{\"index.html\":\"uncommitted\"}'");
+ for(const batch of fixture.lp_state.queries){
+  const copy={sql:batch.sql,params:batch.params.map(v=>v==='lp-chunk-test'?'lp-rollback-test':v)};
+  await lpReportExecute(copy);
+ }
  await assert.rejects(lpExecute(fixture.lp_documents.rollback[1]),/null value.*source_url|not-null constraint/i);
  await db.exec('ROLLBACK');
  assert.deepEqual((await db.query('SELECT * FROM lp_program_private.collection_runs ORDER BY run_id')).rows,before);
  assert.deepEqual((await db.query('SELECT * FROM lp_program_private.documents ORDER BY content_hash')).rows,docs);
  assert.deepEqual((await db.query('SELECT * FROM lp_program_private.program_state')).rows,state);
  assert.equal((await db.query("SELECT to_regclass('pg_temp.lp_collection_report_parts') AS name")).rows[0].name,null);
+ assert.equal((await db.query("SELECT to_regclass('pg_temp.lp_program_state_parts') AS name")).rows[0].name,null);
 });
 await check('LP archived report input remains private after chunked insertion',async()=>{
  await db.exec('SET ROLE anon');
