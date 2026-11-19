@@ -1,0 +1,14 @@
+[
+  {
+    "institution_id": "kdb",
+    "listing_status": "observed_query_boundary",
+    "candidates": 42,
+    "collected": 6,
+    "attachments": 6,
+    "holds": 1,
+    "by_year": {
+      "2024": 3,
+      "2025": 3
+    }
+  }
+]
