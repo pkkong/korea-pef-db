@@ -42,6 +42,7 @@ from run_daily_news_pipeline import (
     parse_google_news_batch_response,
     has_deal_market_commentary_signal,
     primary_section,
+    refine_news_tags,
     render_markdown,
     select_brief_rows,
     select_review_rows,
@@ -52,11 +53,13 @@ from run_daily_news_pipeline import (
 )
 from news_taxonomy import TAG_TAXONOMY_VERSION
 from daily_news_common import (
+    DEFAULT_OVERRIDES,
     DEFAULT_SOURCES,
     DEFAULT_RULES,
     choose_public_news_title,
     is_truncated_news_title,
     load_gp_aliases,
+    load_manual_overrides,
     load_sources,
     load_rules,
     matches_allowed_publishers,
@@ -1834,6 +1837,45 @@ def test_archive_validator_accepts_distressed_restructuring_issue_and_rejects_wr
                 assert not result.errors, result.errors
             else:
                 assert any("expected=Issue, actual=Ownership" in error for error in result.errors), result.errors
+
+
+def test_20261119_market_corrections_use_section_only_overrides() -> None:
+    cases = [
+        (
+            "적대적 M&A 힘싣는 정부, 선그은 연기금",
+            "https://www.edaily.co.kr/News/Read?mediaCodeNo=257&newsId=04667446645647032",
+        ),
+        (
+            "평판 리스크 지면서 굳이?...적대적 M&A 투자 꺼리는 공적기금",
+            "https://www.edaily.co.kr/News/Read?mediaCodeNo=257&newsId=04723206645647032",
+        ),
+        (
+            "정부는 '베어허그' 띄우지만…저평가 상장사 570곳 경영권은 '철옹성'",
+            "https://www.edaily.co.kr/News/Read?mediaCodeNo=257&newsId=01394006645647360",
+        ),
+        (
+            "시험장 뚫은 AI 안경, M&A 딜 프로세스 관리에도 던져진 숙제",
+            "https://www.investchosun.com/site/data/html_dir/2026/11/18/2026111880095.html",
+        ),
+    ]
+    overrides = load_manual_overrides(DEFAULT_OVERRIDES)
+    for title, url in cases:
+        override = overrides[normalize_url(url)]
+        assert override["review_status"] == "auto"
+        assert not override["force_include"] and not override["force_exclude"]
+        tag_type, tag_value = override["manual_tags"].split(":", 1)
+        tags = refine_news_tags(
+            [
+                {"tag_type": "section", "tag_value": "Deal", "tag_source": "rule"},
+                {"tag_type": "topic", "tag_value": "Deal", "tag_source": "rule"},
+                {"tag_type": tag_type, "tag_value": tag_value, "tag_source": "manual_override"},
+            ],
+            title,
+            "",
+            [],
+        )
+        assert [tag["tag_value"] for tag in tags if tag["tag_type"] == "section"] == ["Market"], title
+        assert all(tag["tag_value"] != "Deal" for tag in tags), title
 
 
 def test_20260609_editorial_quality_regressions() -> None:
