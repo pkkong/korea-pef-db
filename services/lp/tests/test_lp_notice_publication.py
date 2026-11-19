@@ -468,6 +468,56 @@ class KdbResultRosterTests(unittest.TestCase):
         for wrong in (result.replace('기술심화', 'IP'), result.replace('500', '600'), result.replace('선정 결과', '서류심사 결과')):
             self.assertEqual(result_roster(final, wrong, program, split_glued_names), [])
 
+    def test_innovation_three_leagues_keep_plan_contributions_and_cogp_distinct(self):
+        from services.lp.src.lp_kdb_innovation_terms import result_roster
+        from services.lp.src.lp_notice_publication import _attach_result_roster, _identity, _terms, split_glued_names
+        fund = '혁신성장펀드(혁신산업펀드)'
+        header = f'『{fund}』 2025년 위탁운용사 '
+        cap = ('정책출자자 위탁운용 총액 : 총 4,800억원 내외\n(단위: 억원)\n정책출자자\n합 계\n'
+               '정부재정(재정모펀드)\n한국산업은행\n성장사다리펀드2\n2,000\n2,300\n500\n4,800\n* 출자자별 승인\n')
+        plan = ('재정\n산은\n사다리2\n합계(비율)\n'
+                '소 형\n(자율제안)\n540\n190\n320\n1,050(35%)\n750~1,000\n3~4\n3,000\n신한\n'
+                '중 형\n(자율제안)\n1,105\n1,535\n180\n2,820(31%)\n2,000~3,000\n3~5\n9,000\n산은\n'
+                'M&A\n355\n575\n-\n930(31%)\n3,000\n1\n3,000\n'
+                '합 계\n2,000\n2,300\n500\n4,800(32%)\n-\n7~10\n15,000\n')
+        body = (cap + plan + '중형·M&A\n소형\n주관기관\n한국산업은행\n(정책펀드금융실)\n신한자산운용\n(특별자산운용실)\n'
+                '접수일시\n○ 2025년 4월 14일(월) 13:00 ~ 16:00 (분야별 주관기관 앞 제출)\n접수방법\n○ 접수\n'
+                '출자대상투자기구○기관전용사모집합투자기구○벤처투자조합※선정된위탁운용사 허용')
+        original = {'title': header + '선정계획 공고', 'institution_id': 'kdb', 'date': '2025-03-31',
+                    'body': body, 'sha256': 'a'*64, 'url': 'https://www.kdb.co.kr/offer', 'source_channel': 'institution_board'}
+        terms, raw = _terms(original, None, NOW)
+        self.assertEqual(raw['amount_scope'], 'combined')
+        self.assertEqual(terms['commitment_amount_krw'], 4_800 * 10**8)
+        self.assertEqual(terms['contribution_allocations']['한국산업은행'], 2_300 * 10**8)
+        self.assertEqual(terms['deadline'], '2025-04-14T16:00:00+09:00')
+        self.assertEqual([s['amount_krw']//10**8 for s in terms['segments']], [1_050, 2_820, 930])
+        self.assertIn('중형·M&A는 한국산업은행', terms['contribution_note'])
+        broken, raw = _terms({**original, 'body': body.replace('\n575\n', '\n570\n')}, None, NOW)
+        self.assertTrue(raw['allocation_reading_failed'])
+        self.assertNotIn('commitment_amount_krw', broken)
+
+        final = {**original, 'title': header + '선정 결과'}
+        reopened = {**original, 'title': f'『{fund}』 2024년 2차 위탁운용사 선정계획 (재)공고'}
+        self.assertEqual(_identity(original), _identity(final))
+        self.assertNotEqual(_identity(original), _identity(reopened))
+        report = (f'< {fund} 2025년 위탁운용사 선정 결과 > (단위 : 억원, 개) 지원분야(운용사 수) 펀드규모 선정 운용사명 (가나다순)\n'
+                  '소형 (3)750~1,000(총 3,000)아이엠엠인베스트먼트에이치비인베스트먼트프리미어파트너스\n'
+                  '중형 (4)2,000~3,000(총 9,000)에스브이인베스트먼트에스케이에스프라이빗에쿼티'
+                  '우리프라이빗에퀴티자산운용/엔에이치투자증권(Co-GP)케이투인베스트먼트파트너스\n'
+                  'M&A (1)3,000(총 3,000)이음프라이빗에쿼티')
+        program = {**terms, 'asset_scope': 'PE·VC 공동 모집'}
+        roster = result_roster(final, report, program, split_glued_names)
+        self.assertEqual(sum(len(names) for _, names in roster), 9)
+        self.assertIn(('중형 · 공동운용', ['우리프라이빗에퀴티자산운용', '엔에이치투자증권']), roster)
+        for wrong in (report.replace('(Co-GP)', ''), report.replace('중형 (4)', '중형 (5)'),
+                      report.replace('2025년', '2024년'), report.replace('(총 9,000)', '(총 8,000)')):
+            self.assertEqual(result_roster(final, wrong, program, split_glued_names), [])
+        incomplete = {**final, 'attachment_texts': {'https://www.kdb.co.kr/fileView':
+                       '선정 운용사명(가나다순)\n소형아이엠엠인베스트먼트'}}
+        program['institution_id'] = 'kdb'
+        _attach_result_roster(program, [incomplete], [])
+        self.assertNotIn('selected_gps', program)
+
     def test_split_glued_names(self):
         from services.lp.src.lp_notice_publication import split_glued_names
         self.assertEqual(['아이엠엠인베스트먼트', '엘비인베스트먼트'], split_glued_names('아이엠엠인베스트먼트엘비인베스트먼트'))

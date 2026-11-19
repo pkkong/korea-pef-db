@@ -193,6 +193,17 @@ class ProgramListPresentation(unittest.TestCase):
         self.assertIn('PE·VC 공동 모집</span>', pages['program-v.html'])
         self.assertIn('벤처캐피탈이 포함될 수 있습니다', pages['program-v.html'])
 
+    def test_final_only_selection_shows_sourced_league_without_a_shortlist(self):
+        p = self.selected('joint', 'kdb', '한국산업은행', '공동운용파트너스', 'gp-joint')
+        p['asset_scope'] = 'PE·VC 공동 모집'
+        p['selected_gps'][0]['asset_scope'] = p['asset_scope']
+        p['gp_tracks'] = {'공동운용파트너스': '중형 · 공동운용'}
+
+        detail = self.render([p])['program-joint.html']
+
+        self.assertIn('>공동운용파트너스</a><small>중형 · 공동운용</small>', detail)
+        self.assertIn('href="https://official.example/result-joint"', detail)
+
     def test_split_reannouncement_uses_readable_title_and_keeps_official_title(self):
         p = self.program('reopened', '모집 공고', 'kdb', '한국산업은행', event='2025-05-14')
         original = '혁신성장펀드(혁신산업펀드) 2024년 2차 위탁운용사 선정계획 (재)공고'

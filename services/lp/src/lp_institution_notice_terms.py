@@ -9,6 +9,7 @@ try:
     from .lp_kdb_policy_reopen import terms as kdb_reopen_terms
     from .lp_kdb_nuclear_terms import terms as kdb_nuclear_terms
     from .lp_kdb_media_terms import terms as kdb_media_terms
+    from .lp_kdb_innovation_terms import terms as kdb_innovation_terms
     from .lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
     from .lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 except ImportError:
@@ -18,6 +19,7 @@ except ImportError:
     from lp_kdb_policy_reopen import terms as kdb_reopen_terms
     from lp_kdb_nuclear_terms import terms as kdb_nuclear_terms
     from lp_kdb_media_terms import terms as kdb_media_terms
+    from lp_kdb_innovation_terms import terms as kdb_innovation_terms
     from lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
     from lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 
@@ -294,7 +296,8 @@ def extract_terms(n):
     except ValueError as exc:
         cwma_joint = {'allocation_reading_failed': True, 'allocation_error': str(exc)}
     try:
-        kdb_policy = kdb_reopen_terms(n, sources) or kdb_nuclear_terms(n, sources) or kdb_media_terms(n, sources)
+        kdb_policy = (kdb_reopen_terms(n, sources) or kdb_nuclear_terms(n, sources)
+                      or kdb_media_terms(n, sources) or kdb_innovation_terms(n, sources))
     except ValueError as exc:
         kdb_policy = {'allocation_reading_failed': True, 'allocation_error': str(exc)}
     try:

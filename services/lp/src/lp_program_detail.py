@@ -283,8 +283,10 @@ def render_detail_body(p, as_of=None):
     elif p['selected_gps']:
         body += '<div class="scroll"><table><thead><tr><th>운용사</th><th>선정 결과</th></tr></thead><tbody>'
         for gp in p['selected_gps']:
+            track = (p.get('gp_tracks') or {}).get(gp['name'])
+            track_label = f'<small>{h(track)}</small>' if track and track != '공동 모집' else ''
             amount = f'<small>출자 예정 {gp["commitment_amount_krw"]/100000000:,.0f}억원</small>' if gp.get('commitment_amount_krw') else ''
-            body += f'<tr><td><a href="selected-gp-{h(gp["page_key"])}.html">{h(gp["name"])}</a>{profile_link(p, gp["name"])}{amount}</td><td>{link(gp["source_url"],"선정 결과")}</td></tr>'
+            body += f'<tr><td><a href="selected-gp-{h(gp["page_key"])}.html">{h(gp["name"])}</a>{profile_link(p, gp["name"])}{track_label}{amount}</td><td>{link(gp["source_url"],"선정 결과")}</td></tr>'
         body += '</tbody></table></div>'
     else:
         note = ('최종 선정 명단은 아직 확인되지 않았습니다.' if p.get('preferred_gps') else p.get('gp_stage_note'))
