@@ -327,6 +327,7 @@ def shell(title, body, as_of, description='', path=None):
     return f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{h(title)} · LP</title>{meta}<link rel="stylesheet" href="/assets/service.css"><style>{CSS}\n{sample_css}\n{MARK_CSS}{LOGO_TILE_CSS}{logo_css(body)}</style></head><body class="lp-sample"><main>{service_header(path)}{body}</main><nav class="bottom-nav" aria-label="하단 메뉴"><a href="{newsletter_url}/"><span aria-hidden="true" class="nav-dot nav-icon-brief"></span><strong>브리프</strong></a><a class="active" aria-current="page" href="index.html"><span aria-hidden="true" class="nav-dot nav-icon-lp"></span><strong>LP</strong></a><a href="{gp_url}/"><span aria-hidden="true" class="nav-dot nav-icon-gp"></span><strong>GP</strong></a></nav></body></html>'
 
 NEW_NOTICE_DAYS = 7
+RECENT_NOTICE_DAYS = 60
 LOGO_TILE_CSS = ('.lp-sample .lp-mark.has-logo[data-logo]{background-color:#fff;background-repeat:no-repeat;'
                  'background-position:center;background-size:72%}')
 MARK_CSS = (mark_css('.lp-mark', scope='.lp-sample') + mark_css('.lp-mark-large', size=56, radius=14, scope='.lp-sample')
@@ -386,16 +387,30 @@ def build(data, out, gp_profiles=None):
             p['reported_result'] = reported[p['id']]
         p['mixed_scope'] = bool(re.search(r'벤처|신기술|VC', str(p.get('asset_scope') or '')))
     # A recruitment notice with no parsed deadline is not shown as current after 30 days.
-    stale_before = (date.fromisoformat(str(as_of)[:10]) - timedelta(days=30)).isoformat()
+    as_of_day = date.fromisoformat(str(as_of)[:10])
+    stale_before = (as_of_day - timedelta(days=30)).isoformat()
     for p in programs:
         status = display_status(p['status'])
-        if status == '모집 공고' and max(e['date'] for e in p['events']) < stale_before:
+        last_date = latest(p)
+        deadline_day = str(p.get('deadline') or '')[:10]
+        if status == '접수 중' and deadline_day and deadline_day < as_of_day.isoformat():
+            status = '접수 마감'
+        if status == '모집 공고' and last_date < stale_before:
             status = '공고'
         reported_result = p.get('reported_result')
         if reported_result and status not in RESULT_STATUSES:
             # A press-reported outcome is a result, not an open 접수 마감 row.
             status = '선정 없음' if reported_result['stage'] == '선정 없음' else '결과 보도'
         p['display_status'] = status
+        if reported_result and status in ('결과 보도', '선정 없음'):
+            p['activity_date'] = reported_result['reported_at'][:10]
+        elif p['selected_gps'] or status == '선정 완료':
+            p['activity_date'] = max((e['date'] for e in p['events'] if e['type'] in ('선정 결과', '최종 선정')),
+                                     default=last_date)
+        elif status == '접수 마감' and deadline_day and deadline_day <= as_of_day.isoformat():
+            p['activity_date'] = deadline_day
+        else:
+            p['activity_date'] = last_date
     # Reader-facing names: curated short names win; otherwise the cleaned source title.
     # Identical names within one institution are told apart by the notice month.
     for p in programs:
@@ -411,9 +426,10 @@ def build(data, out, gp_profiles=None):
                 when = f"{int(first[5:7])}월 공고" if first[:4] == str(as_of)[:4] else f"{first[:4]}년 {int(first[5:7])}월 공고"
                 p['list_title'] += f' · {when}'
                 p['public_title'] += f' · {when}'
-    # Open recruitments first, nearest deadline first; the rest by latest sourced event.
-    open_now = sorted((p for p in programs if p['status'] == '접수 중'), key=lambda p: (p.get('deadline') or '9999'))
-    programs = open_now + [p for p in programs if p['status'] != '접수 중']
+    open_now = sorted((p for p in programs if p['display_status'] == '접수 중'),
+                      key=lambda p: (p.get('deadline') or '9999', p['id']))
+    other = [p for p in programs if p['display_status'] != '접수 중']
+    programs = open_now + other
     def short_date(value):
         y, m, d = str(value)[:10].split('-')
         return f'{m}.{d}' if y == str(as_of)[:4] else f'{y}.{m}.{d}'
@@ -434,7 +450,7 @@ def build(data, out, gp_profiles=None):
         dday = ''
         reported = p.get('reported_result')
         if p['selected_gps']:
-            timing = f"{short_date(last['date'])} 선정 · {len(p['selected_gps'])}개사"
+            timing = f"{short_date(p['activity_date'])} 선정 · {len(p['selected_gps'])}개사"
         elif reported:
             count = len(reported['managers'])
             outcome = '선정 없음' if not count else (f'{count}개사' if reported['complete'] else f'확인 {count}개사')
@@ -446,7 +462,7 @@ def build(data, out, gp_profiles=None):
             timing = f"{short_date(last['date'])} {status}" + (f" · {len(set(names))}개사" if names else '')
         elif p.get('deadline'):
             timing = f"{short_date(p['deadline'])} 마감"
-            if p['status'] == '접수 중':
+            if status == '접수 중':
                 dday = f'<span class="program-dday" data-lp-dday="{h(str(p["deadline"])[:10])}"></span>'
         elif p['status'] in ('선정 결과 발표', '선정 완료'):
             timing = f"{short_date(last['date'])} 결과 발표"
@@ -471,9 +487,12 @@ def build(data, out, gp_profiles=None):
     shown = {p['display_status'] for p in programs}
     statuses = ''.join(f'<option>{h(s)}</option>' for s in [*[s for s in STATUS_ORDER if s in shown], *sorted(shown - set(STATUS_ORDER))])
     body = f'<header class="list-header"><p class="result-summary"><span id="count">{len(programs)}개 사업</span> · <a class="list-link" href="institution-directory.html">출자기관 {len(institutions)}곳</a></p></header><div class="controls"><input aria-label="사업 검색" placeholder="기관·사업명 검색"><select aria-label="진행 상태"><option value="">모든 상태</option>{statuses}</select><select aria-label="출자기관"><option value="">모든 기관</option>{options}</select></div>'
-    sections = (('진행 중', [p for p in programs if p['display_status'] not in RESULT_STATUSES and p['display_status'] != '공고']),
-                ('결과 발표', [p for p in programs if p['display_status'] in RESULT_STATUSES]),
-                ('지난 공고', [p for p in programs if p['display_status'] == '공고']))
+    # Use the activity date readers see, including an actual deadline or press result.
+    ordered = sorted(other, key=lambda p: (-date.fromisoformat(p['activity_date'][:10]).toordinal(), p['id']))
+    recent_cutoff = (as_of_day - timedelta(days=RECENT_NOTICE_DAYS)).isoformat()
+    sections = (('접수 중', open_now),
+                ('최근 공고·결과', [p for p in ordered if p['activity_date'] >= recent_cutoff]),
+                ('지난 공고·결과', [p for p in ordered if p['activity_date'] < recent_cutoff]))
     for label, group in sections:
         if group:
             body += f'<section class="program-section"><h2 class="section-title">{h(label)} <span>{len(group)}</span></h2>' + ''.join(row(p) for p in group) + '</section>'

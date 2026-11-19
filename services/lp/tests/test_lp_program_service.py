@@ -439,7 +439,7 @@ class PublicNoticeContextContract(unittest.TestCase):
 
 
 class ListSectionsForReaders(unittest.TestCase):
-    """Open work first, results second, old notices last; stage dates after the deadline."""
+    """Open deadlines first, then recent activity and older history."""
     program = ProgramListPresentation.program
     selected = ProgramListPresentation.selected
 
@@ -455,15 +455,22 @@ class ListSectionsForReaders(unittest.TestCase):
         reported = self.program('r', '접수 마감', 'b', 'B', '2026-09-01', event='2026-08-14')
         result = {'r': {'program_id': 'r', 'stage': '최종 선정', 'reported_at': '2026-11-02', 'complete': True,
                         'managers': ['X'], 'sources': [{'publisher': 'P', 'title': 't', 'date': '2026-11-02', 'url': 'https://n.example/1'}]}}
-        pages = self.render([shortlisted, reported, self.selected('d', 'c', 'C', 'GP', 'k1'),
-                             self.program('old', '모집 공고', 'e', 'E', event='2024-12-20')], result)
+        pages = self.render([
+            shortlisted, reported, self.selected('d', 'c', 'C', 'GP', 'k1'),
+            self.program('open-late', '접수 중', 'c', 'C', '2026-11-30', event='2026-11-12'),
+            self.program('open-soon', '접수 중', 'a', 'A', '2026-11-16', event='2026-11-01'),
+            self.program('closed', '접수 중', 'b', 'B', '2026-11-11', event='2026-10-01'),
+            self.program('old', '모집 공고', 'e', 'E', event='2024-12-20'),
+        ], result)
         index = pages['index.html']
-        order = [index.index(t) for t in ('>진행 중 <', '>결과 발표 <', '>지난 공고 <')]
+        order = [index.index(t) for t in ('>접수 중 <', 'program-open-soon.html', 'program-open-late.html',
+                                         '>최근 공고·결과 <', 'program-closed.html', 'program-r.html', 'program-s.html',
+                                         '>지난 공고·결과 <', 'program-d.html', 'program-old.html')]
         self.assertEqual(order, sorted(order))
         self.assertIn('data-status="결과 보도"', index)
+        self.assertIn('11.11 마감', index)
         self.assertIn('10.28 1차 심사 결과 · 3개사', index)
-        self.assertLess(index.index('program-s.html'), index.index('>결과 발표 <'))
-        self.assertGreater(index.index('program-old.html'), index.index('>지난 공고 <'))
+        self.assertNotIn('data-lp-dday="2026-11-11"', index)
 
 
 class DeadlineCalendarAndNewNotice(unittest.TestCase):
