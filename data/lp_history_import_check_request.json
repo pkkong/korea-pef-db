@@ -1,9 +1,9 @@
 {
   "kind": "lp_history_import_check_request_v1",
   "institution_id": "kdb",
-  "bundle_commit": "94aadb5f8ac1d7ca8f5106e515b92ebb3299f08f",
-  "bundle_sha256": "b041f65ffd0043c130c17ae931855872599bcdd50ce250f314cb79faa89569a5",
-  "candidate_sha256": "a19419571267cb8fe1001137d1d93128a2e075f2328384bd83f9571db83f5e1a",
-  "candidate_checked_at": "2026-11-19T01:35:55.381851+00:00",
-  "reason": "산업은행 K-콘텐츠·미디어 기술심화 첫 공고와 4개 후속 공고의 동일 출자액·선정 근거 및 최신 공개 보존을 검증한다."
+  "bundle_commit": "881b78be20c09cfdbdd47c23410c0293cdbd2f3d",
+  "bundle_sha256": "0fd5f7a00b38b3cb932dbc0252cc2f6046ed261e9876882093a314edcadab17a",
+  "candidate_sha256": "b665c15ae623900c8b5a388bc3b61e8740aacccd3cb749ede6e6d43f1ae6a3d7",
+  "candidate_checked_at": "2026-11-19T00:34:29.542628+00:00",
+  "reason": "산업은행 혁신산업펀드 2025년 모집·접수·심사·선정 공식 원문과 소형·중형·M&A 및 공동운용 명단을 검증한다."
 }
