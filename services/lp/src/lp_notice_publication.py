@@ -40,6 +40,7 @@ try:
     from . import lp_kdb_nuclear_terms as kdb_nuclear
     from . import lp_kdb_media_terms as kdb_media
     from . import lp_kdb_innovation_terms as kdb_innovation
+    from . import lp_kdb_growth_support_terms as kdb_growth_support
 except ImportError:
     from lp_offering_policy import procurement_reason,central_not_investing
     from lp_attachment_policy import is_submission_attachment
@@ -65,6 +66,7 @@ except ImportError:
     import lp_kdb_nuclear_terms as kdb_nuclear
     import lp_kdb_media_terms as kdb_media
     import lp_kdb_innovation_terms as kdb_innovation
+    import lp_kdb_growth_support_terms as kdb_growth_support
 
 ROOT = Path(__file__).resolve().parents[3]
 # Large LPs whose policy/pension notices mix PE and VC (user decision 2026-11-12).
@@ -701,7 +703,12 @@ def _attach_result_roster(p, members, holds, known=frozenset()):
             return split_glued_names(names, known)
 
         texts = _texts(result)[1:]
-        if p.get('extraction_evidence', {}).get('innovation_joint_allocation'):
+        evidence = p.get('extraction_evidence', {})
+        if evidence.get('growth_support_joint_allocation'):
+            bank_names = known | set(INSTITUTION_TITLE_NAMES.get('ibk', ()))
+            tables = [kdb_growth_support.result_roster(result, text, p, lambda names: split_glued_names(names, bank_names))
+                      for text in texts]
+        elif evidence.get('innovation_joint_allocation'):
             tables = [kdb_innovation.result_roster(result, text, p, split_names) for text in texts]
         else:
             tables = [kdb_result_roster(text, known) or kdb_reopen.result_roster(result, text, p)

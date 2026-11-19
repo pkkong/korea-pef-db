@@ -553,6 +553,46 @@ class KdbResultRosterTests(unittest.TestCase):
         _attach_result_roster(program, [incomplete], [])
         self.assertNotIn('selected_gps', program)
 
+    def test_growth_support_two_leagues_and_bank_cogp_keep_actual_teams(self):
+        from services.lp.src.lp_notice_publication import _attach_result_roster, _terms
+        title = '『혁신성장펀드(성장지원펀드)』 2025년 위탁운용사 '
+        cap = ('정책출자자 위탁운용 총액 : 총 4,700억원 내외\n(단위: 억원)\n정책출자자\n합 계\n'
+               '정부재정(재정모펀드)\n한국산업은행\n1,000\n3,700\n4,700\n* 출자자별 승인\n')
+        table = ('재정\n산은\n합계(비율)\n'
+                 '중 형\n600\n400\n1,000(33%)\n1,500\n2\n3,000\n우리\n'
+                 '대 형\n(자율제안)\n400\n3,300\n3,700(31%)\n3,000~5,000\n3~4\n12,000\n산은\n'
+                 '합 계\n1,000\n3,700\n4,700(31%)\n-\n5~6\n15,000\n')
+        body = (cap + table + '대형\n중형\n주관기관\n한국산업은행\n(정책펀드금융실)\n우리자산운용\n(신성장기업투자실)\n'
+                '접수일시○2025년3월5일(수)13:00~16:00접수방법○접수\n'
+                '출자대상투자기구○기관전용사모집합투자기구○벤처투자조합※선정된위탁운용사 허용')
+        notice = {'institution_id': 'kdb', 'title': title + '선정계획 공고', 'date': '2025-02-17',
+                  'url': 'https://www.kdb.co.kr/growth-plan', 'source_channel': 'institution_board', 'sha256': 'a'*64, 'body': body}
+        terms, raw = _terms(notice, None, NOW)
+        self.assertEqual(raw['amount_scope'], 'combined')
+        self.assertEqual(terms['contribution_allocations'], {'정부재정': 1_000 * 10**8, '한국산업은행': 3_700 * 10**8})
+        self.assertEqual(terms['deadline'], '2025-03-05T16:00:00+09:00')
+        self.assertEqual(terms['manager_count_label'], '5~6개 팀')
+        self.assertIn('중형은 우리자산운용', terms['contribution_note'])
+        broken, raw = _terms({**notice, 'body': body.replace('\n3,300\n', '\n3,301\n')}, None, NOW)
+        self.assertTrue(raw['allocation_reading_failed'])
+        self.assertNotIn('commitment_amount_krw', broken)
+        attachment = 'https://www.kdb.co.kr/growth-result.pdf'
+        text = ('<혁신성장펀드(성장지원펀드) 2025년 위탁운용사 선정 결과> (단위:억원,개)'
+                '지원분야(운용사 수) 펀드규모 선정 운용사명(가나다순)\n'
+                '중형 (2)1,500(총 3,000)노앤파트너스키움프라이빗에쿼티/중소기업은행(Co-GP)\n'
+                '대형 (3)3,000~5,000(총 12,000)아주아이비투자원익투자파트너스케이스톤파트너스')
+        final = {**notice, 'title': title + '선정 결과', 'date': '2025-03-31', 'url': 'https://www.kdb.co.kr/growth-result',
+                 'attachment_texts': {attachment: text}, 'attachment_hashes': {attachment: 'b'*64}}
+        program = {**terms, 'institution_id': 'kdb', 'asset_scope': 'PE·VC 공동 모집', 'selected_gps': [], 'status': '선정 결과 발표'}
+        for bad in (text.replace('(Co-GP)', ''), text.replace('대형 (3)', '대형 (4)'), text.replace('성장지원펀드', '혁신산업펀드')):
+            _attach_result_roster(program, [{**final, 'attachment_texts': {attachment: bad}}], [])
+            self.assertEqual(program['selected_gps'], [])
+        _attach_result_roster(program, [final], [])
+        self.assertEqual(len(program['selected_gps']), 6)
+        self.assertEqual(program['status'], '선정 완료')
+        self.assertEqual({name for name, track in program['gp_tracks'].items() if track == '중형 · 공동운용'},
+                         {'키움프라이빗에쿼티', '중소기업은행'})
+
     def test_split_glued_names(self):
         from services.lp.src.lp_notice_publication import split_glued_names
         self.assertEqual(['아이엠엠인베스트먼트', '엘비인베스트먼트'], split_glued_names('아이엠엠인베스트먼트엘비인베스트먼트'))

@@ -33,7 +33,7 @@ _RESULT = re.compile(
     r'<' + _FUND + r'(20\d{2})년위탁운용사선정결과>\(단위:억원,개\)'
     r'지원분야\(운용사수\)펀드규모선정운용사명\(가나다순\)(.+)'
 )
-_RESULT_ROW = re.compile(r'(소형|중형|M&A)\(([1-9])\)(' + _RANGE + r')\(총' + _MONEY + r'\)')
+_RESULT_ROW = re.compile(r'(소형|중형|대형|M&A)\(([1-9])\)(' + _RANGE + r')\(총' + _MONEY + r'\)')
 
 
 def _stage(notice, suffix):
@@ -162,9 +162,12 @@ def result_roster(notice, text, program, split_names):
     match = _RESULT.fullmatch(re.sub(r'\s+', '', text))
     if not match or stage[1] != match[1]:
         return []
-    body = match[2]
+    return read_result_rows(match[2], program.get('segments', []), split_names)
+
+
+def read_result_rows(body, segments, split_names):
+    """Check the official selection leagues, sizes and team counts against the recruitment plan."""
     rows = list(_RESULT_ROW.finditer(body))
-    segments = program.get('segments', [])
     if not rows or rows[0].start() or [m[1] for m in rows] != [s['name'] for s in segments]:
         return []
     rosters = []
