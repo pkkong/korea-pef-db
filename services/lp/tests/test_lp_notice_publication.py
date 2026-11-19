@@ -359,6 +359,69 @@ class BasicNoticePublicationTests(unittest.TestCase):
 
 
 class KdbResultRosterTests(unittest.TestCase):
+    def test_secondary_fund_replay_corrects_scope_and_keeps_existing_selection(self):
+        from services.lp.src.lp_notice_publication import _terms
+
+        title = '『2026 회수시장 지원 세컨더리 펀드』 위탁운용사'
+        vehicles = ('출자대상 투자기구 ○「벤처투자촉진에 관한 법률」에 의한 벤처투자조합 '
+                    '○「여신전문금융업법」에 의한 신기술사업투자조합 '
+                    '○「자본시장과 금융투자업에 관한 법률」에 의한 기관전용사모집합투자기구 '
+                    '※선정된 위탁운용사는 관련 법규에 따릅니다.')
+        header = '분야별 출자계획 ○ 출자계획 분야 산은출자금액 산은출자비율 '
+
+        def kdb(number, day, suffix, text):
+            url = f'https://www.kdb.co.kr/secondary-plan/{number}'
+            pdf = f'{url}.pdf'
+            return notice(title=title + suffix, url=url, day=day, institution_id='kdb', source_channel='institution_board',
+                          attachment_texts={pdf: text}, attachment_hashes={pdf: hashlib.sha256(text.encode()).hexdigest()})
+
+        first_title = ' 선정계획 공고'
+        first_pdf = (title + first_title + '\n위탁운용금액 : 총 1,200억원*위탁운용금액은 조정될 수 있으며\n' + header
+                     + '펀드별 목표결성금액 선정운용사 수 조성목표 중형 900억원 30.0% 1,500억원 2개 3,000억원 '
+                     '소형 300억원 30.0% 1,000억원 1개 1,000억원 합계 1,200억원 30.0% - 3개 4,000억원 '
+                     '*산은출자금액은 펀드별 목표결성금액의 30%를 초과할 수 없음\n'
+                     '접수일시○2026년 5월 29일(금)10:00~15:00 접수방법○제출서류\n' + vehicles)
+        small_title = '(소형) 선정계획 재공고'
+        small_pdf = (title + small_title + '\n위탁운용금액: 총 300억원*위탁운용금액은 조정될 수 있으며\n' + header
+                     + '목표결성금액 선정운용사 수 소형 300억원 30.0% 1,000억원 1개 *산은출자금액은 '
+                     '목표결성금액의30%를 초과할 수 없음 ○ʹ26.4.30자 공고한 『2026회수시장지원세컨더리펀드』 '
+                     '출자사업에 지원하였던 위탁운용사의 재지원 가능\n'
+                     '접수일시 및 접수처○2026년 7월 27일(월)09:30~14:00○접수처:한국산업은행 본점\n' + vehicles)
+        recruit = kdb(1, '2026-04-30', first_title, first_pdf)
+        small = kdb(2, '2026-07-08', small_title, small_pdf)
+        final = kdb(3, '2026-06-30', ' 선정 결과', '<위탁운용사 선정 결과>지원분야 선정 운용사명(가나다순)\n'
+                    '중형 아이엠엠인베스트먼트엘비인베스트먼트')
+        documents = [recruit, small, final]
+        baseline, holds = publish(documents)
+        self.assertFalse(holds)
+        self.assertEqual(len(baseline), 2)
+        for p in baseline:
+            p['asset_scope'] = 'PE'
+            for g in p['selected_gps']:
+                g['asset_scope'] = 'PE'
+        updated, holds = publish(documents[::-1], existing=baseline)
+        self.assertFalse(holds)
+        self.assertEqual({p['id'] for p in baseline}, {p['id'] for p in updated})
+        for p, old in zip(sorted(updated, key=lambda x: x['id']), sorted(baseline, key=lambda x: x['id'])):
+            self.assertEqual(p['asset_scope'], 'PE·VC 공동 모집')
+            self.assertEqual(p['events'], old['events'])
+            self.assertEqual(p['selected_gps'], old['selected_gps'])
+            self.assertEqual(p['commitment_amount_krw'], old['commitment_amount_krw'])
+        first = next(p for p in updated if p['selected_gps'])
+        self.assertEqual(first['commitment_label'], '1,200억원 (PE·VC 합계)')
+        self.assertEqual(first['deadline'], '2026-05-29T15:00:00+09:00')
+        self.assertEqual(first['gp_tracks'], {'아이엠엠인베스트먼트': '중형', '엘비인베스트먼트': '중형'})
+        reopened = next(p for p in updated if not p['selected_gps'])
+        self.assertEqual(reopened['commitment_label'], '300억원 (PE·VC 합계)')
+        self.assertEqual(reopened['deadline'], '2026-07-27T14:00:00+09:00')
+        self.assertEqual(reopened['commitment_detail'], '4월 30일 공고의 소형 분야 재모집')
+        self.assertIn('소형 분야 재모집', render_detail_body(reopened))
+        for broken in (first_pdf.replace('900억원', '800억원'), first_pdf.replace(vehicles, ''),
+                       first_pdf.replace(title, '다른 펀드 모집')):
+            terms, raw = _terms(kdb(1, '2026-04-30', first_title, broken), None, NOW)
+            self.assertTrue(raw['allocation_reading_failed'])
+            self.assertNotIn('commitment_amount_krw', terms)
+
     @staticmethod
     def recovery_market_documents():
         fund = '회수시장 활성화 지원 펀드'

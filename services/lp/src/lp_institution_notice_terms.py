@@ -12,6 +12,7 @@ try:
     from .lp_kdb_innovation_terms import terms as kdb_innovation_terms
     from .lp_kdb_growth_support_terms import terms as kdb_growth_support_terms
     from .lp_kdb_recovery_market import terms as kdb_recovery_market_terms
+    from .lp_kdb_secondary_terms import terms as kdb_secondary_terms
     from .lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
     from .lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 except ImportError:
@@ -24,6 +25,7 @@ except ImportError:
     from lp_kdb_innovation_terms import terms as kdb_innovation_terms
     from lp_kdb_growth_support_terms import terms as kdb_growth_support_terms
     from lp_kdb_recovery_market import terms as kdb_recovery_market_terms
+    from lp_kdb_secondary_terms import terms as kdb_secondary_terms
     from lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
     from lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 
@@ -53,8 +55,8 @@ def kdb_joint_size_offering(raw):
 
 
 _KDB_RECEPTION = re.compile(
-    r'접수일시○(20\d{2})년(\d{1,2})월(\d{1,2})일\([월화수목금토일]\)'
-    r'(\d{1,2}):(\d{2})[~～](\d{1,2}):(\d{2})접수방법○'
+    r'접수일시(?:및접수처)?○(20\d{2})년(\d{1,2})월(\d{1,2})일\([월화수목금토일]\)'
+    r'(\d{1,2}):(\d{2})[~～](\d{1,2}):(\d{2})(?:접수방법○|○접수처:)'
 )
 _KDB_SIZE_PLAN = re.compile(
     r'분야별출자계획○출자계획분야산은출자금액산은출자비율펀드별목표결성금액선정운용사수조성목표'
@@ -302,7 +304,8 @@ def extract_terms(n):
     try:
         kdb_policy = (kdb_reopen_terms(n, sources) or kdb_nuclear_terms(n, sources)
                       or kdb_media_terms(n, sources) or kdb_innovation_terms(n, sources)
-                      or kdb_growth_support_terms(n, sources) or kdb_recovery_market_terms(n, sources))
+                      or kdb_growth_support_terms(n, sources) or kdb_recovery_market_terms(n, sources)
+                      or kdb_secondary_terms(n, sources))
     except ValueError as exc:
         kdb_policy = {'allocation_reading_failed': True, 'allocation_error': str(exc)}
     try:
