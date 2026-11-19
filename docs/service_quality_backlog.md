@@ -68,7 +68,7 @@
 ## 뉴스레터
 
 - 현재 뉴스레터 분류·태그 품질 개선은 별도 채팅방이 active owner다. 이 문서는 통합 기준과 회귀 조건만 유지한다.
-- **11/19 딜 분류 검토 (작성: Codex):** 오늘 공개 브리프 20건 중 이데일리의 정부·연기금 입장, 공적기금 평판 리스크, 저평가 상장사 지배구조 분석과 인베스트조선의 AI 안경과 거래 정보 보안 취재노트를 Market 정정 대상으로 확인했다. 정부 정책·시장 구조·거래 관행과 위험이 중심이다. 공개 분류는 아직 Deal이며 분류 담당의 정정 항목으로 남긴다. [정부·연기금](https://www.edaily.co.kr/News/Read?mediaCodeNo=257&newsId=04667446645647032) · [공적기금 평판 리스크](https://www.edaily.co.kr/News/Read?mediaCodeNo=257&newsId=04723206645647032) · [상장사 지배구조](https://www.edaily.co.kr/News/Read?mediaCodeNo=257&newsId=01394006645647360) · [거래 정보 보안](https://www.investchosun.com/site/data/html_dir/2026/11/18/2026111880095.html)
+- **11/19 Market 분류 정정 (작성: Codex, 운영 확인):** 정부·연기금 입장, 공적기금 평판 리스크, 저평가 상장사 지배구조, AI 안경과 거래 정보 보안 기사 4건에 URL별 대표 분류 보정을 적용했다. 19:49 공식 브리프 화면에서 4건 모두 Market에 표시되고 당일 기사 20건과 아카이브 30개가 유지됨을 확인했다. 회귀 검사 1,753개와 아키텍처 검사를 통과했다. [공식 브리프](https://kpef-newsletter.vercel.app/?date=2026-11-19) · [백업 미러 정정](https://github.com/pkkong/kpef-newsletter/commit/e4d1e9ba8c7f99498bae388abb48ab91d352cda1) · [공개 데이터 동기화](https://github.com/pkkong/korea-pef-db/actions/runs/44509071378)
 - 태그 더보기 버튼을 작은 텍스트형 컨트롤로 정리한다. `+N`만 보이는 어두운 버튼은 쓰지 않는다.
 - 0건 날짜는 아카이브에서 숨기거나 `발행 없음` 상태로 명확히 표시한다.
 - 과거 백테스트 기사에도 최신 GP/LP 태그 로직을 다시 적용한다.
