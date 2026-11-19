@@ -484,8 +484,9 @@ def _schedule_order(stages):
     return sorted(stages, key=key)
 
 
-def _refresh(p, members, checked_at, *, original=None):
+def _refresh(p, members, checked_at, *, original=None, previous_recruitment_url=None):
     phases = dict(STAGES)
+    phases['최초 모집 공고'] = 'announcement'
     if p['institution_id'] == 'pck_pension':
         phases['최종 선정'] = 'selection'
     existing_events = {e['url']: copy.deepcopy(e) for e in p['events']}
@@ -498,7 +499,10 @@ def _refresh(p, members, checked_at, *, original=None):
                     event['type'] = previous['type']
                 existing_events[previous['url']] = {**event, 'url': previous['url']}
                 continue
-        existing_events.setdefault(n['url'], _event(n))
+        if n['url'] == previous_recruitment_url:
+            existing_events[n['url']] = {**_event(n), 'type': '최초 모집 공고'}
+        else:
+            existing_events.setdefault(n['url'], _event(n))
     # The verified recruitment anchor precedes its same-day repost. Both the
     # detail header and the original deadline cite the first recruitment event.
     # URL alphabetic order must not make an association the primary source.
@@ -921,6 +925,17 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
     for key, members in sorted(groups.items()):
         try:
             originals = _recruitments(members, shared, checked_at)
+            previous_recruitment = None
+            previous_recruitment_url = None
+            if len(originals) == 2:
+                ordered = sorted(originals, key=lambda n: n['date'])
+                previous_recruitment = kdb_media.verified_previous_recruitment(ordered)
+                if previous_recruitment:
+                    previous, current = ordered
+                    if any(n['date'] < current['date'] and n['url'] != previous['url'] for n in members):
+                        raise ValueError('K-콘텐츠·미디어 첫 모집 후속 공고의 리그 분리 필요')
+                    previous_recruitment_url = previous['url']
+                    originals = [current]
             if len(originals) > 1:
                 # Same-titled recruitments in one year (국민연금 2020: PEF+VC in March, VC only in
                 # August): keep the single PE one; the others are not this program's recruitment.
@@ -949,6 +964,8 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
                 skip(key, members, 'scope:' + str(_scope(original)))
                 continue
             terms, raw_terms = _terms(original, shared.get(original['url']), checked_at)
+            if previous_recruitment:
+                terms.setdefault('extraction_evidence', {})['prior_media_recruitment'] = [previous_recruitment]
             if raw_terms.get('deadline_error'):
                 holds.append({'stage': 'basic_deadline', 'url': original['url'], 'reason': raw_terms['deadline_error']})
             if raw_terms.get('allocation_reading_failed'):
@@ -1030,7 +1047,7 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
                         holds.append({'stage': 'basic_deadline', 'url': latest['url'], 'reason': str(exc)})
                     if revised:
                         p.update(deadline=revised[0], deadline_precision=revised[1], deadline_source_url=latest['url'])
-            _refresh(p, members, checked_at, original=original)
+            _refresh(p, members, checked_at, original=original, previous_recruitment_url=previous_recruitment_url)
             _attach_preferred_roster(p, original, members, checked_at, holds)
             _attach_result_roster(p, members, holds, known_names)
             p['publication_version'] = 1

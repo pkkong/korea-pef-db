@@ -5,8 +5,10 @@ from datetime import datetime
 from itertools import combinations
 
 try:
+    from .lp_attachment_policy import is_submission_attachment
     from .lp_kdb_policy_reopen import mixed_vehicles
 except ImportError:
+    from lp_attachment_policy import is_submission_attachment
     from lp_kdb_policy_reopen import mixed_vehicles
 
 
@@ -30,6 +32,13 @@ _MANDATE = re.compile(
     r'②방송영상콘텐츠·미디어산업에적용되는국내첨단기술주3\)보유·개발기업'
     r'③첨단기술을적용하여제작하는국내방송영상콘텐츠·미디어제작프로젝트주4\)'
 )
+_INITIAL_TECHNOLOGY = re.compile(
+    r'\n기술\n심화\n(' + _NUMBER + r')\n(' + _NUMBER + r')\n(' + _NUMBER + r')\n(\d+)%이내\n('
+    + _NUMBER + r')\n([1-9])\n(' + _NUMBER + r')\n산은\n프로젝트펀드주3\)'
+)
+_INITIAL_DEADLINE = re.compile(r'블라인드펀드IP확보성장금융(20\d{2})년(\d{1,2})월(\d{1,2})일'
+                               r'\([월화수목금토일]\)\d{1,2}:\d{2}~\d{1,2}:\d{2}까지'
+                               r'20\d{2}년\d{1,2}월내기술심화산업은행프로젝트펀드')
 
 
 def _compact(text):
@@ -42,6 +51,45 @@ def _is_stage(notice, suffix):
 
 def _integer(value):
     return int(value.replace(',', ''))
+
+
+def _offering_sources(notice):
+    hashes = notice.get('attachment_hashes', {})
+    return [(url, raw, hashes[url]) for url, raw in notice.get('attachment_texts', {}).items()
+            if url in hashes and not is_submission_attachment(notice, url)]
+
+
+def verified_previous_recruitment(ordered):
+    """Two issuer originals can identify the same technology-depth allocation."""
+    if len(ordered) != 2 or not all(_is_stage(n, r'선정계획공고') for n in ordered):
+        return None
+    initial, later = ordered
+    if (initial['date'][:4] != later['date'][:4] or initial['date'] >= later['date']
+            or not all(n.get('source_channel') == 'institution_board' for n in ordered)
+            or '기술심화분야' not in _compact(later['body'])):
+        return None
+
+    initial_replays = []
+    for url, raw, sha in _offering_sources(initial):
+        lines = '\n'.join(line for raw_line in raw.splitlines() if (line := _compact(raw_line)))
+        row = _INITIAL_TECHNOLOGY.search(lines)
+        compact = lines.replace('\n', '')
+        deadline = _INITIAL_DEADLINE.search(compact)
+        if row and deadline and '주1)‘성장’은한국성장금융투자운용㈜,‘산은’은한국산업은행을의미' in compact:
+            initial_replays.append((row, deadline, url, sha))
+    if len(initial_replays) != 1:
+        return None
+    row, deadline, url, sha = initial_replays[0]
+    fiscal, mother_fund, bank, cap, per_fund, count, target = map(_integer, row.groups())
+    if (per_fund * count != target or not 0 < cap <= 100 or (fiscal + mother_fund + bank) * 100 > cap * target
+            or not initial['date'] <= datetime(*map(int, deadline.groups())).date().isoformat() < later['date']):
+        return None
+    current = terms(later, _offering_sources(later))
+    expected = {'정부재정': fiscal * 10**8, '비재정모펀드': mother_fund * 10**8, '한국산업은행': bank * 10**8}
+    if (current.get('contribution_allocations') != expected or current.get('fund_target_label') != f'{target:,}억원'
+            or not current.get('deadline') or current.get('manager_count') == count):
+        return None
+    return {'source_url': url, 'sha256': sha, 'quote': row[0] + '\n' + deadline[0]}
 
 
 def _shares(digits, total):

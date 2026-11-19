@@ -169,7 +169,7 @@ class ImportPreflightTests(unittest.TestCase):
         digest = hashlib.sha256(raw).hexdigest()
         self.assertEqual(p.load_import(raw, digest), self.payload)
         with self.assertRaises(ValueError): p.load_import(raw + b' ', digest)
-        for key, value in [('notices', []), ('notices', self.payload['notices'] * 5),
+        for key, value in [('notices', []), ('notices', self.payload['notices'] * 6),
                            ('kind', 'unapproved'), ('checked_at', '2099-01-01T00:00:00Z'),
                            ('checked_at', '2026-11-17T00:00:00')]:
             bad = {**self.payload, key: value}

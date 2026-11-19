@@ -468,6 +468,41 @@ class KdbResultRosterTests(unittest.TestCase):
         for wrong in (result.replace('기술심화', 'IP'), result.replace('500', '600'), result.replace('선정 결과', '서류심사 결과')):
             self.assertEqual(result_roster(final, wrong, program, split_glued_names), [])
 
+        prior_attachment = 'https://www.kdb.co.kr/prior-rfp'
+        current_attachment = 'https://www.kdb.co.kr/current-rfp'
+        result_attachment = 'https://www.kdb.co.kr/result-rfp'
+        first_plan = ('분야별 출자계획\n기술\n심화\n160\n40\n200\n40%이내\n1,000\n1\n1,000\n산은\n프로젝트펀드주3)\n'
+                      '주1) ‘성장’은 한국성장금융투자운용㈜, ‘산은’은 한국산업은행을 의미\n'
+                      '블라인드 펀드\nIP확보\n성장금융\n2025년 3월 5일(수) 13:00~16:00까지\n2025년 4월 내\n'
+                      '기술심화\n산업은행\n프로젝트 펀드\n'
+                      '출자대상투자기구○기관전용사모집합투자기구○벤처투자조합※선정된위탁운용사 허용')
+        prior = {**notice, 'url': 'https://www.kdb.co.kr/prior', 'date': '2025-02-12',
+                 'attachment_hashes': {prior_attachment: 'b'*64}, 'attachment_texts': {prior_attachment: first_plan}}
+        current = {**notice, 'body': '전략펀드 기술심화 분야의 새로운 모집 조건을 공고합니다.',
+                   'attachment_hashes': {current_attachment: 'c'*64}, 'attachment_texts': {current_attachment: body}}
+        result_notice = {**final, 'url': 'https://www.kdb.co.kr/final', 'date': '2025-05-27',
+                         'attachment_hashes': {result_attachment: 'd'*64}, 'attachment_texts': {result_attachment: result}}
+
+        def publish_replayed(notices):
+            from unittest.mock import patch
+            with patch('services.lp.src.lp_notice_publication.validate_institution_notice', side_effect=lambda n, _: n):
+                skips = []
+                programs, holds = publish_basic_notices({'programs': [], 'institution_notices': notices}, [], NOW, skips)
+                return programs, holds + skips
+
+        for notices in ([prior, current, result_notice], [result_notice, current, prior]):
+            public, holds = publish_replayed(notices)
+            self.assertTrue(public, holds)
+            only, = public
+            self.assertFalse(holds)
+            self.assertEqual([e['type'] for e in only['events']], ['최초 모집 공고', '모집 공고', '선정 결과'])
+            self.assertEqual(only['deadline'], '2025-04-30T16:30:00+09:00')
+            self.assertEqual(only['commitment_amount_krw'], 400 * 10**8)
+            self.assertEqual(len(only['selected_gps']), 2)
+            self.assertEqual(only['extraction_evidence']['prior_media_recruitment'][0]['source_url'], prior_attachment)
+        wrong_prior = {**prior, 'attachment_texts': {prior_attachment: first_plan.replace('\n160\n40\n200\n', '\n160\n40\n190\n')}}
+        self.assertEqual(publish_replayed([wrong_prior, current])[0], [])
+
     def test_innovation_three_leagues_keep_plan_contributions_and_cogp_distinct(self):
         from services.lp.src.lp_kdb_innovation_terms import result_roster
         from services.lp.src.lp_notice_publication import _attach_result_roster, _identity, _terms, split_glued_names

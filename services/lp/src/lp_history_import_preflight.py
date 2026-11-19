@@ -29,7 +29,7 @@ except ImportError:
     from lp_state_storage import pack_state, unpack_state, MARKER, EVIDENCE_KEYS
 
 MAX_IMPORT_BYTES = 40 * 1024 * 1024
-MAX_NOTICES = 4
+MAX_NOTICES = 5
 _ALLOWED_CHANGED_KEYS = {'programs', 'history_notices'}
 
 
@@ -62,7 +62,7 @@ def _validate_payload(payload):
             or payload['kind'] != 'lp_history_import_v1' or not isinstance(payload['notices'], list)
             or not 1 <= len(payload['notices']) <= MAX_NOTICES
             or not isinstance(payload['checked_at'], str)):
-        raise ValueError('최대4공고의 검토용 가져오기 형식 필요')
+        raise ValueError('최대 5공고의 검토용 가져오기 형식 필요')
     stamp = datetime.fromisoformat(payload['checked_at'].replace('Z', '+00:00'))
     if stamp.tzinfo is None or stamp > datetime.now(timezone.utc):
         raise ValueError('가져오기 관측시각의 시간대·미래시각 불일치')
