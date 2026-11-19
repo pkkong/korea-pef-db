@@ -16,7 +16,7 @@
 | 서비스 | 공식 주소 | 데이터 경로 | 상태 |
 | --- | --- | --- | --- |
 | 브리프(뉴스레터) | https://kpef-newsletter.vercel.app | 매일 수집 → Supabase → Vercel. 백업 미러 https://pkkong.github.io/kpef-newsletter/ | 매일 발행 정상 |
-| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 22기관 82사업·과거 공고 59건. 11:05 K-콘텐츠·미디어 기술심화의 최초 모집·후속 단계·공식 선정 명단을 공개했다. 11/19 10:58 수동 발행에서 새 공고 순서·기존 주소와 별칭·미래에셋 원문 수집을 확인했다 |
+| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 11/19 14:29 확인 기준 22기관 83사업·과거 공고 63건. 산업은행 혁신산업 2025년의 모집·후속 단계·공식 선정 8팀을 공개했다. 10:58 수동 발행에서 새 공고 순서와 미래에셋 원문 수집을 확인했다 |
 | GP 운용사 | https://kpef-gp.vercel.app | 금감원 분기 자료 → Supabase 스냅샷 → Vercel | 2025Q4 기준. 프로필에 LP 선정 이력 표시(11/13). 없는 페이지는 404 |
 | Wiki | — | — | 사용자가 다시 기획할 때까지 숨김 |
 
