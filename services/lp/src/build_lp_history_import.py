@@ -1,9 +1,8 @@
 """Build and apply the one-time 2020+ history import (user approval 2026-11-15).
 
-build  (offline, reviewed): from institution history bundles, keep the notices of the
-       programs the publication code forms, minus any program that overlaps a live
-       program (same institution and notice date), mark them, drop attachment bytes,
-       and validate each with lp_history_notices.validate_history_notice.
+build  (offline, reviewed): keep the notices of programs the publication code forms,
+       exclude live programs by identity when available, drop attachment bytes and
+       validate the retained notices with lp_history_notices.validate_history_notice.
 merge  (daily board job): add a pinned import file to the institution collection as
        `history_import`; the publisher validates again and retains them in state.
 """
@@ -41,7 +40,7 @@ def _bundle_notices(directory):
     return notices
 
 
-def build(bundles, live_events, checked_at, exclude_titles=()):
+def build(bundles, live_events, checked_at, exclude_titles=(), *, live_programs=()):
     notices = _bundle_notices(bundles)
     validated, rejected = [], []
     for n in notices:
@@ -50,11 +49,18 @@ def build(bundles, live_events, checked_at, exclude_titles=()):
         except (ValueError, KeyError, TypeError) as exc:
             rejected.append({'url': n['url'], 'error': str(exc)[:200]})
     programs, holds = publish_basic_notices({'programs': [], 'history_notices': validated}, [], checked_at)
-    live = {(e['institution_id'], e['date']) for e in live_events}
+    # The offline CLI can still take a date-only list. The operating check has
+    # the full program records, so unrelated lifecycle events on one day may coexist.
+    live_dates = {(e['institution_id'], e['date']) for e in live_events}
+    live_keys = {(p['institution_id'], p['source_program_key']) for p in live_programs if p.get('source_program_key')}
+    live_recruitments = {(p['institution_id'], e['url']) for p in live_programs for e in p['events']
+                         if e['type'] == '모집 공고'}
     keep, skipped = set(), []
     for p in programs:
         dates = {(p['institution_id'], e['date']) for e in p.get('events', [])}
-        if dates & live:
+        recruitments = {(p['institution_id'], e['url']) for e in p['events'] if e['type'] == '모집 공고'}
+        if ((p['institution_id'], p.get('source_program_key')) in live_keys
+                or recruitments & live_recruitments or dates & live_dates):
             skipped.append({'program': p['title'], 'reason': 'overlaps a live program'})
         elif any(word in p['title'] for word in exclude_titles):
             skipped.append({'program': p['title'], 'reason': 'excluded after review'})

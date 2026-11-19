@@ -239,7 +239,7 @@ class ImportPreflightTests(unittest.TestCase):
             p.proposal(self.current, self.payload, STAMP)
         self.assertEqual(self.current, original)
 
-    def test_rebuild_uses_live_events_and_rejects_a_stale_review_digest(self):
+    def test_rebuild_keeps_different_programs_on_same_day_and_rejects_duplicates(self):
         n = copy.deepcopy(self.payload['notices'][0])
         listing = n['discovery_provenance']['listing']
         n['discovery_provenance']['listing'] = {k: listing[k] for k in ('url', 'sha256')}
@@ -247,13 +247,18 @@ class ImportPreflightTests(unittest.TestCase):
                   'notices': [n], 'listing_receipts': {listing['sha256']: listing}}
         raw = json.dumps(self.payload, ensure_ascii=False, sort_keys=True).encode()
         digest = hashlib.sha256(raw).hexdigest()
-        rebuilt, candidate, summary = p.build_pinned_import(bundle, self.current['programs'], STAMP, digest)
+        existing = copy.deepcopy(self.current['programs'][0])
+        existing['events'][1]['date'] = n['date']
+        rebuilt, candidate, summary = p.build_pinned_import(bundle, [existing], STAMP, digest)
         self.assertEqual(candidate, raw)
         self.assertEqual(rebuilt, self.payload)
         self.assertEqual(summary['programs_imported'], 1)
         after, _ = p.proposal(self.current, self.payload, STAMP)
-        with self.assertRaises(ValueError):
-            p.build_pinned_import(bundle, after['programs'], STAMP, digest)
+        duplicate = after['programs'][-1]
+        for old in ({**existing, 'source_program_key': duplicate['source_program_key']},
+                    {**duplicate, 'source_program_key': existing['source_program_key']}):
+            with self.assertRaisesRegex(ValueError, '지문 불일치'):
+                p.build_pinned_import(bundle, [old], STAMP, digest)
 
     def test_cli_never_overwrites_an_input_or_a_previous_result(self):
         with tempfile.TemporaryDirectory() as directory:

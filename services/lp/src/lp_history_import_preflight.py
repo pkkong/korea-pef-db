@@ -84,7 +84,7 @@ def _assert_preserved(current, after):
 
 
 def build_pinned_import(bundle, programs, candidate_checked_at, expected_sha256):
-    """Rebuild the reviewed import from pinned originals and live event dates."""
+    """Rebuild the reviewed import from pinned originals and live program identities."""
     try:
         from .build_lp_history_import import build as build_import
     except ImportError:
@@ -95,11 +95,9 @@ def build_pinned_import(bundle, programs, candidate_checked_at, expected_sha256)
             or not 1 <= len(bundle.get('notices', [])) <= 400
             or any(n.get('institution_id') != institution for n in bundle['notices'])):
         raise ValueError('기관별 원문 묶음 형식·기관 불일치')
-    live_events = [{'institution_id': p['institution_id'], 'date': e['date']}
-                   for p in programs for e in p['events']]
     with tempfile.TemporaryDirectory() as directory:
         (Path(directory) / (institution + '.json')).write_bytes(_json(bundle))
-        payload, summary = build_import(directory, live_events, candidate_checked_at)
+        payload, summary = build_import(directory, (), candidate_checked_at, live_programs=programs)
     if summary['rejected'] or summary['publication_holds']:
         raise ValueError('원문 검증·공개 범위 보류가 있는 가져오기 후보')
     # Match the existing build_lp_history_import CLI encoding exactly.
