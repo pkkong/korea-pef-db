@@ -359,6 +359,86 @@ class BasicNoticePublicationTests(unittest.TestCase):
 
 
 class KdbResultRosterTests(unittest.TestCase):
+    @staticmethod
+    def recovery_market_documents():
+        fund = '회수시장 활성화 지원 펀드'
+        title = f'『{fund}』 위탁운용사 '
+        plan = (
+            '위탁운용금액: 총 1,500억원 이내\n'
+            '분야별 출자계획 ○ 출자계획 분야 산은출자금액 산은출자비율 펀드별 목표결성금액(최소결성규모) '
+            '선정운용사 수 조성목표 회수시장 활성화 M&A 900억원 30.0% 500억원 이상 2,000억원 이하 자율제안 '
+            '6개사 이내 3,000억원 세컨더리 600억원 30.0% 1,000억원 2개사 2,000억원 '
+            '합계 1,500억원 30.0% - - 5,000억원 *산은출자금액은 펀드별 목표결성금액의 30%를 초과할 수 없음\n'
+            '출자대상 투자기구 ○ 기관전용 사모집합투자기구 ○ 벤처투자조합 ※ 선정된 위탁운용사는 확인\n'
+            '접수일시 ○ 2025년 1월 22일(수) 10:00~15:00 접수방법 ○ 제출서류\n'
+            '선정일정 일자 내용 비고 2025.1.22(수) 제안서 접수 10:00~15:00 2025.2월 중 최종 선정'
+        )
+        papers = [
+            ('2024-12-20', '선정계획 공고', plan),
+            ('2025-01-06', '선정 FAQ 게시', f'「{fund}」 위탁운용사 선정계획 FAQ\n2025.1.6.'),
+            ('2025-01-24', '제안서 접수결과', f'「{fund}」 위탁운용사 접수 현황(단위 : 억원) 지원분야(지원규모) 조성목표'),
+            ('2025-02-12', '선정 서류심사 결과', f'<{fund} 출자사업 서류심사 통과 운용사> 지원분야 지원 운용사명(가나다순)'),
+            ('2025-02-25', '선정 결과', f'<{fund} 위탁운용사 선정 결과> 지원분야 선정 운용사명(가나다순)\n'
+             'M&A 나우아이비캐피탈헬리오스프라이빗에쿼티\n세컨더리 우리벤처파트너스티에스인베스트먼트'),
+        ]
+        notices = []
+        for number, (day, phase, text) in enumerate(papers):
+            url = f'https://www.kdb.co.kr/recovery-market/{number}'
+            attachment = f'{url}.pdf'
+            body = f'{title}{phase}를 첨부파일과 같이 공고합니다.'
+            if phase == '선정 결과':
+                body = '2025년 ' + body
+            notices.append(notice(title=title + phase, body=body, day=day, url=url, institution_id='kdb',
+                                  source_channel='institution_board', attachment_texts={attachment: text},
+                                  attachment_hashes={attachment: hashlib.sha256(text.encode()).hexdigest()}))
+        return notices
+
+    def test_recovery_market_keeps_recruitment_year_url_and_official_final_roster(self):
+        from services.lp.src.lp_program_detail import standardized_schedule
+
+        documents = self.recovery_market_documents()
+        baseline, holds = publish(documents[:1])
+        self.assertFalse(holds)
+        baseline[0]['id'] = 'existing-recovery-market'
+        programs, holds = publish(documents, existing=baseline)
+        self.assertFalse(holds)
+        self.assertEqual(programs, publish(documents[::-1], existing=baseline)[0])
+        program, = programs
+        self.assertEqual(program['id'], 'existing-recovery-market')
+        self.assertTrue(program['source_program_key'].startswith('kdb:2024:'))
+        self.assertEqual([e['url'] for e in program['events']], [n['url'] for n in documents])
+        self.assertEqual(program['deadline'], '2025-01-22T15:00:00+09:00')
+        self.assertEqual(program['commitment_amount_krw'], 150_000_000_000)
+        self.assertEqual(program['asset_scope'], 'PE·VC 공동 모집')
+        self.assertEqual(program['status'], '선정 완료')
+        self.assertIn('질의응답', standardized_schedule(program['schedule_stages']))
+        self.assertEqual(program['gp_tracks'], {
+            '나우아이비캐피탈': 'M&A', '헬리오스프라이빗에쿼티': 'M&A',
+            '우리벤처파트너스': '세컨더리', '티에스인베스트먼트': '세컨더리',
+        })
+        self.assertTrue(all(gp['source_url'] == documents[-1]['url'] for gp in program['selected_gps']))
+
+    def test_recovery_market_holds_ambiguous_or_conflicting_stages_and_amounts(self):
+        from services.lp.src.lp_notice_publication import _terms
+        original, faq, receipt, screening, final = self.recovery_market_documents()
+        pdf, text = next(iter(original['attachment_texts'].items()))
+        wrong_plan = {**original, 'attachment_texts': {pdf: text.replace('2025.1.22', '2025.1.23')}}
+        wrong_year = {**final, 'body': final['body'].replace('2025년', '2026년')}
+        other_offer = {**original, 'url': original['url'] + '-another', 'date': '2024-12-23'}
+        for documents, excluded in [
+            ([wrong_plan, faq, receipt, screening, final], 4),
+            ([original, faq, receipt, screening, wrong_year], 1),
+            ([original, other_offer, faq, receipt, screening, final], 4),
+            ([original, receipt, {**screening, 'date': '2025-02-26'}, final], 3),
+        ]:
+            programs, holds = publish(documents)
+            self.assertEqual(sum(h['stage'] == 'basic_stage_link' for h in holds), excluded)
+            self.assertTrue(all(not p['selected_gps'] for p in programs))
+        corrupt_table = {**original, 'attachment_texts': {pdf: text.replace('600억원', '650억원')}}
+        terms, details = _terms(corrupt_table, None, NOW)
+        self.assertTrue(details['allocation_reading_failed'])
+        self.assertNotIn('commitment_amount_krw', terms)
+
     """KDB result tables lose cell borders; names are split only when unambiguous."""
     TABLE = ('< 2026 남부권 지역성장지원펀드 위탁운용사 선정 결과 >지원분야지원 운용사명(가나다순)\n'
              'PE더함파트너스릴슨프라이빗에쿼티\nVC리인베스트먼트원익투자파트너스이앤인베스트먼트')

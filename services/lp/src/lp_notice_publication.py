@@ -41,6 +41,7 @@ try:
     from . import lp_kdb_media_terms as kdb_media
     from . import lp_kdb_innovation_terms as kdb_innovation
     from . import lp_kdb_growth_support_terms as kdb_growth_support
+    from . import lp_kdb_recovery_market as kdb_recovery
 except ImportError:
     from lp_offering_policy import procurement_reason,central_not_investing
     from lp_attachment_policy import is_submission_attachment
@@ -67,6 +68,7 @@ except ImportError:
     import lp_kdb_media_terms as kdb_media
     import lp_kdb_innovation_terms as kdb_innovation
     import lp_kdb_growth_support_terms as kdb_growth_support
+    import lp_kdb_recovery_market as kdb_recovery
 
 ROOT = Path(__file__).resolve().parents[3]
 # Large LPs whose policy/pension notices mix PE and VC (user decision 2026-11-12).
@@ -489,6 +491,7 @@ def _schedule_order(stages):
 def _refresh(p, members, checked_at, *, original=None, previous_recruitment_url=None):
     phases = dict(STAGES)
     phases['최초 모집 공고'] = 'announcement'
+    phases['질의응답'] = 'faq'
     if p['institution_id'] == 'pck_pension':
         phases['최종 선정'] = 'selection'
     existing_events = {e['url']: copy.deepcopy(e) for e in p['events']}
@@ -710,6 +713,8 @@ def _attach_result_roster(p, members, holds, known=frozenset()):
                       for text in texts]
         elif evidence.get('innovation_joint_allocation'):
             tables = [kdb_innovation.result_roster(result, text, p, split_names) for text in texts]
+        elif evidence.get('recovery_market_allocation'):
+            tables = [kdb_recovery.result_roster(result, text, p, split_names) for text in texts]
         else:
             tables = [kdb_result_roster(text, known) or kdb_reopen.result_roster(result, text, p)
                       or kdb_nuclear.result_roster(result, text, p, split_names)
@@ -902,8 +907,14 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
     names = _names()
     docs, shared, holds = _sources(data, growth_notices, checked_at)
     groups = defaultdict(list)
+    recovery_stages = kdb_recovery.linked_stages(docs.values(), _texts)
     for n in docs.values():
-        if n['institution_id'] in names and n['institution_id'] not in {'pck_pension','kfinco'} and notice_stage(n['title']) in STAGES:
+        if (phase := kdb_recovery.role(n)) and phase != kdb_recovery.RECRUITMENT:
+            if original := recovery_stages.get(n['url']):
+                groups[_identity(original)].append(n)
+            else:
+                holds.append({'stage': 'basic_stage_link', 'url': n['url'], 'reason': '회수시장 활성화 원공고 일정 또는 후속 근거 미확인'})
+        elif n['institution_id'] in names and n['institution_id'] not in {'pck_pension','kfinco'} and notice_stage(n['title']) in STAGES:
             groups[_identity(n)].append(n)
     # Each observed recruitment anchors its own solicitation. Similar June and
     # September titles do not establish one round or share each other's dates.

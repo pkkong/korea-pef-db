@@ -11,6 +11,7 @@ try:
     from .lp_kdb_media_terms import terms as kdb_media_terms
     from .lp_kdb_innovation_terms import terms as kdb_innovation_terms
     from .lp_kdb_growth_support_terms import terms as kdb_growth_support_terms
+    from .lp_kdb_recovery_market import terms as kdb_recovery_market_terms
     from .lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
     from .lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 except ImportError:
@@ -22,6 +23,7 @@ except ImportError:
     from lp_kdb_media_terms import terms as kdb_media_terms
     from lp_kdb_innovation_terms import terms as kdb_innovation_terms
     from lp_kdb_growth_support_terms import terms as kdb_growth_support_terms
+    from lp_kdb_recovery_market import terms as kdb_recovery_market_terms
     from lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
     from lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 
@@ -300,7 +302,7 @@ def extract_terms(n):
     try:
         kdb_policy = (kdb_reopen_terms(n, sources) or kdb_nuclear_terms(n, sources)
                       or kdb_media_terms(n, sources) or kdb_innovation_terms(n, sources)
-                      or kdb_growth_support_terms(n, sources))
+                      or kdb_growth_support_terms(n, sources) or kdb_recovery_market_terms(n, sources))
     except ValueError as exc:
         kdb_policy = {'allocation_reading_failed': True, 'allocation_error': str(exc)}
     try:
