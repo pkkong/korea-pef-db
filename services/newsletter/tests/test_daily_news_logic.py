@@ -34,6 +34,8 @@ from run_daily_news_pipeline import (
     google_news_encoded_id,
     infer_publisher,
     is_in_coverage_window,
+    feed_distributed_at,
+    to_iso_datetime,
     is_previous_export,
     load_previous_export_keys,
     load_previous_archive_entries,
@@ -108,6 +110,69 @@ def test_coverage_window() -> None:
     assert not is_in_coverage_window("2026-04-30T09:00:00+09:00", "", "2026-04-30")
     assert not is_in_coverage_window("", "2026-04-30", "2026-04-30")
     assert is_in_coverage_window("", "2026-04-29T14:00:00+09:00", "2026-04-30")
+
+
+def test_late_portal_distribution_is_published_once() -> None:
+    # 서울경제 [시그널] 2026-11-20 14:35 on its premium page, on Naver 11-22 13:33,
+    # first collected 11-23 09:07 KST (00:07 UTC). Observed on the live run.
+    page = "2026-11-20T14:35:38+09:00"
+    naver = to_iso_datetime("Sun, 22 Nov 2026 13:33:00 +0900")
+    assert is_in_coverage_window(page, "2026-11-23", "2026-11-23", distributed_at=naver,
+                                 first_seen_at="2026-11-23 00:07:38")
+    assert is_in_coverage_window(page, "2026-11-23", "2026-11-23", distributed_at=naver,
+                                 first_seen_at="2026-11-23T00:07:38+00:00")
+    # Without the portal time or first-seen time the page date still decides.
+    assert not is_in_coverage_window(page, "2026-11-23", "2026-11-23")
+    assert not is_in_coverage_window(page, "2026-11-23", "2026-11-23", distributed_at=naver)
+    # Seen in an earlier run (could have been in an earlier brief): not repeated.
+    assert not is_in_coverage_window(page, "2026-11-23", "2026-11-23", distributed_at=naver,
+                                     first_seen_at="2026-11-13 00:06:54")
+    # Portal time outside this window, or the page older than seven days: not added.
+    assert not is_in_coverage_window(page, "2026-11-23", "2026-11-23",
+                                     distributed_at="2026-11-21T10:00:00+09:00",
+                                     first_seen_at="2026-11-23 00:07:38")
+    assert not is_in_coverage_window("2026-11-14T10:00:00+09:00", "2026-11-23", "2026-11-23",
+                                     distributed_at=naver, first_seen_at="2026-11-23 00:07:38")
+    # A page date after the window is never pulled in by the portal time.
+    assert not is_in_coverage_window("2026-11-23T09:00:00+09:00", "2026-11-23", "2026-11-23",
+                                     distributed_at=naver, first_seen_at="2026-11-23 00:07:38")
+
+
+def test_run_candidates_include_a_late_distributed_story_once() -> None:
+    from daily_news_common import DEFAULT_SCHEMA
+    from run_daily_news_pipeline import load_run_candidate_rows
+
+    naver = {"feed_item": {"published_at": "Sun, 22 Nov 2026 13:33:00 +0900"}}
+    with sqlite3.connect(":memory:") as conn:
+        conn.executescript(DEFAULT_SCHEMA.read_text(encoding="utf-8"))
+        conn.execute("INSERT INTO news_source(source_code, source_name, source_kind, locator) VALUES ('naver','N','naver_news_api','q')")
+        conn.execute("INSERT INTO news_run(run_id, run_date, started_at, status) VALUES ('r23','2026-11-23','2026-11-23T00:05:00+00:00','running')")
+        rows = [
+            (1, "https://www.sedaily.com/article/20116956", "제네시스PE, 8500억 2호 블라인드펀드 결성[시그널]",
+             "2026-11-20T14:35:38+09:00", naver, "2026-11-23 00:07:38"),
+            (2, "https://www.thebell.co.kr/a", "제네시스PE, 크레딧 투자법인 세운다",
+             "2026-11-13T08:18:00+09:00", naver, "2026-11-13 00:06:54"),
+            (3, "https://www.hankyung.com/b", "오늘 기사", "2026-11-22T20:00:00+09:00", {}, "2026-11-23 00:07:00"),
+        ]
+        for news_id, url, title, published, payload, created in rows:
+            conn.execute(
+                "INSERT INTO news_document(news_id, run_id, source_code, source_url, normalized_source_url, publisher, title,"
+                " published_at, discovered_at, relevance_score, relevance_label, is_pe_relevant, raw_payload_json, created_at)"
+                " VALUES (?, 'r23', 'naver', ?, ?, '서울경제', ?, ?, '2026-11-23', 0.9, 'high', 1, ?, ?)",
+                (news_id, url, url, title, published, json.dumps(payload, ensure_ascii=False), created),
+            )
+        titles = [row["title"] for row in load_run_candidate_rows(conn, "r23", "2026-11-23")]
+    assert "제네시스PE, 8500억 2호 블라인드펀드 결성[시그널]" in titles
+    assert "오늘 기사" in titles
+    assert "제네시스PE, 크레딧 투자법인 세운다" not in titles
+
+
+def test_feed_distributed_at_reads_the_feed_item() -> None:
+    payload = json.dumps({"feed_item": {"published_at": "Sun, 22 Nov 2026 13:33:00 +0900"}})
+    assert feed_distributed_at(payload) == "2026-11-22T13:33:00+09:00"
+    assert feed_distributed_at("") == ""
+    assert feed_distributed_at("not json") == ""
+    assert feed_distributed_at(json.dumps({"feed_item": {"published_at": ""}})) == ""
 
 
 def test_monday_coverage_window_stays_daily_when_weekend_publishes() -> None:

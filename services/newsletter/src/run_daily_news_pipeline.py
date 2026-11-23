@@ -14,7 +14,7 @@ import ssl
 import sys
 import time
 from difflib import SequenceMatcher
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from html import unescape
 from pathlib import Path
 from urllib.parse import parse_qs, quote, quote_plus, urlparse
@@ -752,8 +752,11 @@ def load_run_candidate_rows(conn: sqlite3.Connection, run_id: str, report_date: 
             COALESCE(vr.section_override_tags, '') AS section_override_tags,
             COALESCE(vr.topic_tags, '') AS topic_tags,
             COALESCE(vr.document_type_tags, '') AS document_type_tags,
-            COALESCE(vr.gp_names, '') AS gp_names
+            COALESCE(vr.gp_names, '') AS gp_names,
+            nd.raw_payload_json,
+            nd.created_at
         FROM v_news_relevant vr
+        JOIN news_document nd ON nd.news_id = vr.news_id
         WHERE vr.run_id = ?
           AND vr.is_pe_relevant = 1
         ORDER BY vr.relevance_score DESC, COALESCE(vr.published_at, vr.discovered_at) DESC, vr.news_id DESC
@@ -766,7 +769,13 @@ def load_run_candidate_rows(conn: sqlite3.Connection, run_id: str, report_date: 
             continue
         published_at = str(row[5] or "")
         discovered_at = str(row[6] or "")
-        if not is_in_coverage_window(published_at, discovered_at, report_date):
+        if not is_in_coverage_window(
+            published_at,
+            discovered_at,
+            report_date,
+            distributed_at=feed_distributed_at(row[18]),
+            first_seen_at=str(row[19] or ""),
+        ):
             continue
         rows.append(
             {
@@ -2857,14 +2866,80 @@ def parse_coverage_datetime(value: str) -> datetime | None:
     return parsed.astimezone(SEOUL_TZ)
 
 
-def is_in_coverage_window(published_at: str, discovered_at: str, report_date: str) -> bool:
+# A story first posted on a paid or premium page (e.g. 서울경제 [시그널]) can reach the
+# news portals days later. Its page date then falls before every brief window it could
+# be found in, so it would never be published. Such a story still goes into the brief
+# of the window in which the portal distributed it and we first saw it (user decision
+# 2026-11-23: missing a story is worse than repeating an event other outlets covered).
+LATE_DISTRIBUTION_MAX_DAYS = 7
+
+
+def feed_distributed_at(raw_payload_json: object) -> str:
+    """Portal distribution time recorded with the feed item, as ISO text, or ''."""
+    try:
+        payload = json.loads(str(raw_payload_json or "") or "{}")
+    except ValueError:
+        return ""
+    feed_item = payload.get("feed_item") if isinstance(payload, dict) else None
+    if not isinstance(feed_item, dict):
+        return ""
+    try:
+        return to_iso_datetime(str(feed_item.get("published_at") or ""))
+    except (TypeError, ValueError):
+        return ""
+
+
+def parse_first_seen_datetime(value: str) -> datetime | None:
+    """news_document.created_at: SQLite CURRENT_TIMESTAMP (UTC, no zone) or ISO text."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(SEOUL_TZ)
+
+
+def is_late_distribution(
+    published_dt: datetime,
+    distributed_at: str,
+    first_seen_at: str,
+    start: datetime,
+    end: datetime,
+) -> bool:
+    distributed_dt = parse_coverage_datetime(distributed_at)
+    first_seen_dt = parse_first_seen_datetime(first_seen_at)
+    return bool(
+        distributed_dt
+        and first_seen_dt
+        and published_dt < start
+        and start - timedelta(days=LATE_DISTRIBUTION_MAX_DAYS) <= published_dt
+        and start <= distributed_dt < end
+        # First seen after the window opened: no earlier brief could have carried it.
+        and first_seen_dt >= start
+    )
+
+
+def is_in_coverage_window(
+    published_at: str,
+    discovered_at: str,
+    report_date: str,
+    *,
+    distributed_at: str = "",
+    first_seen_at: str = "",
+) -> bool:
     try:
         start, end = coverage_window(report_date)
     except ValueError:
         return True
     published_dt = parse_coverage_datetime(published_at)
     if published_dt:
-        return start <= published_dt < end
+        if start <= published_dt < end:
+            return True
+        return is_late_distribution(published_dt, distributed_at, first_seen_at, start, end)
     discovered_value = (discovered_at or "").strip()
     if "T" not in discovered_value and not re.search(r"\d{1,2}:\d{2}", discovered_value):
         return False
