@@ -1,0 +1,137 @@
+name: Backfill late-distributed newsletter articles
+
+# One-off repair of briefs published before 2026-11-23, when stories distributed
+# late by the news portals (page date older than the brief window) were dropped.
+# Dry run by default: it lists what each brief would gain. With apply=true it
+# updates the public mirror archive and refreshes the Supabase/Vercel read model.
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: "First brief date (YYYY-MM-DD)"
+        required: true
+        type: string
+      end_date:
+        description: "Last brief date (YYYY-MM-DD)"
+        required: true
+        type: string
+      apply:
+        description: "Publish the additions (false = report only)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  # Same queue as the daily brief build: never edits the mirror while it publishes.
+  group: newsletter-pages
+  cancel-in-progress: false
+
+env:
+  NEWSLETTER_PUBLIC_REPO: pkkong/kpef-newsletter
+  NEWSLETTER_PUBLIC_BRANCH: gh-pages
+  NEWSLETTER_PUBLIC_URL: https://pkkong.github.io/kpef-newsletter/
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Restore canonical newsletter collection
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        shell: bash
+        run: |
+          runtime_dir="$(mktemp -d)"
+          echo "NEWSLETTER_RUNTIME_DIR=${runtime_dir}" >> "$GITHUB_ENV"
+          python3 services/newsletter/src/sync_newsletter_canonical_supabase.py \
+            --restore \
+            --db "${runtime_dir}/daily_news.sqlite"
+
+      - name: Check out the public mirror
+        env:
+          NEWSLETTER_PUBLIC_REPO_TOKEN: ${{ secrets.NEWSLETTER_PUBLIC_REPO_TOKEN }}
+        shell: bash
+        run: |
+          git clone --depth 1 --branch "${NEWSLETTER_PUBLIC_BRANCH}" \
+            "https://x-access-token:${NEWSLETTER_PUBLIC_REPO_TOKEN}@github.com/${NEWSLETTER_PUBLIC_REPO}.git" \
+            "${NEWSLETTER_RUNTIME_DIR}/site-repo"
+
+      - name: Add late-distributed stories to the briefs
+        env:
+          # GP/LP display tags read the published GP directory (read-only key).
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        shell: bash
+        run: |
+          python3 services/newsletter/src/backfill_late_distributed_articles.py \
+            --db "${NEWSLETTER_RUNTIME_DIR}/daily_news.sqlite" \
+            --site-dir "${NEWSLETTER_RUNTIME_DIR}/site-repo" \
+            --start "${{ inputs.start_date }}" \
+            --end "${{ inputs.end_date }}" \
+            --report-out "${NEWSLETTER_RUNTIME_DIR}/backfill-report.json" \
+            ${{ inputs.apply && '--apply' || '' }} | tee "${NEWSLETTER_RUNTIME_DIR}/backfill.log"
+          {
+            echo "### Late-distribution backfill (apply=${{ inputs.apply }})"
+            echo '```'
+            cat "${NEWSLETTER_RUNTIME_DIR}/backfill.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check the updated public pages
+        if: ${{ inputs.apply }}
+        shell: bash
+        run: |
+          python3 - "${NEWSLETTER_RUNTIME_DIR}/site-repo" <<'EOF'
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0, ".")
+          from services.newsletter.src.newsletter_site_support import read_embedded_archive
+          site = Path(sys.argv[1])
+          archive = json.loads((site / "archive.json").read_text(encoding="utf-8"))
+          for name in ("index.html", "daily-news.html"):
+              assert read_embedded_archive(site / name) == archive, f"{name} archive differs from archive.json"
+          for entry in archive:
+              assert entry["articleCount"] == len(entry["articles"]), entry["reportDate"]
+              assert len({a["id"] for a in entry["articles"]}) == len(entry["articles"]), entry["reportDate"]
+          print(f"archive ok: {len(archive)} briefs")
+          EOF
+
+      - name: Publish the public mirror
+        id: publish
+        if: ${{ inputs.apply }}
+        shell: bash
+        run: |
+          cd "${NEWSLETTER_RUNTIME_DIR}/site-repo"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add archive.json index.html daily-news.html
+          if git diff --cached --quiet; then
+            echo "No brief changes to publish."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "Backfill late-distributed articles ${{ inputs.start_date }}..${{ inputs.end_date }}" >/dev/null
+          git push origin "${NEWSLETTER_PUBLIC_BRANCH}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch Supabase and Vercel sync
+        if: ${{ inputs.apply && steps.publish.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          latest="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))[0]['reportDate'])" "${NEWSLETTER_RUNTIME_DIR}/site-repo/archive.json")"
+          sleep 60  # let GitHub Pages serve the new archive before the sync downloads it
+          gh workflow run "Sync newsletter Supabase read model" \
+            --repo "${GITHUB_REPOSITORY}" --ref "${GITHUB_REF_NAME:-main}" -f report_date="${latest}"
+          echo "Dispatched Sync newsletter Supabase read model for ${latest}"

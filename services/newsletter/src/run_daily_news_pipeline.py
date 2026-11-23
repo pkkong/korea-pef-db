@@ -14,6 +14,7 @@ import ssl
 import sys
 import time
 from difflib import SequenceMatcher
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
 from html import unescape
 from pathlib import Path
@@ -731,9 +732,7 @@ def replace_tags_and_links(conn: sqlite3.Connection, news_id: int, tags: list[di
         )
 
 
-def load_run_candidate_rows(conn: sqlite3.Connection, run_id: str, report_date: str) -> list[dict[str, object]]:
-    cursor = conn.execute(
-        """
+CANDIDATE_SELECT = """
         SELECT
             vr.news_id,
             vr.publisher,
@@ -757,47 +756,70 @@ def load_run_candidate_rows(conn: sqlite3.Connection, run_id: str, report_date: 
             nd.created_at
         FROM v_news_relevant vr
         JOIN news_document nd ON nd.news_id = vr.news_id
-        WHERE vr.run_id = ?
-          AND vr.is_pe_relevant = 1
-        ORDER BY vr.relevance_score DESC, COALESCE(vr.published_at, vr.discovered_at) DESC, vr.news_id DESC
-        """,
-        (run_id,),
-    )
+        WHERE vr.is_pe_relevant = 1
+"""
+CANDIDATE_ORDER = "ORDER BY vr.relevance_score DESC, COALESCE(vr.published_at, vr.discovered_at) DESC, vr.news_id DESC"
+
+
+def candidate_row(row: Sequence[object], report_date: str) -> dict[str, object]:
+    return {
+        "news_id": int(row[0]),
+        "publisher": str(row[1] or ""),
+        "title": str(row[2] or ""),
+        "source_url": str(row[3] or ""),
+        "normalized_source_url": str(row[4] or ""),
+        "published_at": str(row[5] or ""),
+        "report_date": report_date,
+        "summary_text": str(row[8] or row[7] or ""),
+        "relevance_score": float(row[9] or 0),
+        "relevance_label": str(row[10] or ""),
+        "comment_text": str(row[11] or ""),
+        "review_status": str(row[12] or ""),
+        "section_tags": str(row[13] or ""),
+        "section_override_tags": str(row[14] or ""),
+        "topic_tags": str(row[15] or ""),
+        "document_type_tags": str(row[16] or ""),
+        "gp_names": str(row[17] or ""),
+    }
+
+
+def is_generic_candidate(row: Sequence[object]) -> bool:
+    return is_generic_aggregator_text(str(row[2] or "")) and is_generic_aggregator_text(str(row[8] or row[7] or ""))
+
+
+def load_run_candidate_rows(conn: sqlite3.Connection, run_id: str, report_date: str) -> list[dict[str, object]]:
+    cursor = conn.execute(f"{CANDIDATE_SELECT} AND vr.run_id = ? {CANDIDATE_ORDER}", (run_id,))
     rows: list[dict[str, object]] = []
     for row in cursor.fetchall():
-        if is_generic_aggregator_text(str(row[2] or "")) and is_generic_aggregator_text(str(row[8] or row[7] or "")):
+        if is_generic_candidate(row):
             continue
-        published_at = str(row[5] or "")
-        discovered_at = str(row[6] or "")
         if not is_in_coverage_window(
-            published_at,
-            discovered_at,
+            str(row[5] or ""),
+            str(row[6] or ""),
             report_date,
             distributed_at=feed_distributed_at(row[18]),
             first_seen_at=str(row[19] or ""),
         ):
             continue
-        rows.append(
-            {
-                "news_id": int(row[0]),
-                "publisher": str(row[1] or ""),
-                "title": str(row[2] or ""),
-                "source_url": str(row[3] or ""),
-                "normalized_source_url": str(row[4] or ""),
-                "published_at": published_at,
-                "report_date": report_date,
-                "summary_text": str(row[8] or row[7] or ""),
-                "relevance_score": float(row[9] or 0),
-                "relevance_label": str(row[10] or ""),
-                "comment_text": str(row[11] or ""),
-                "review_status": str(row[12] or ""),
-                "section_tags": str(row[13] or ""),
-                "section_override_tags": str(row[14] or ""),
-                "topic_tags": str(row[15] or ""),
-                "document_type_tags": str(row[16] or ""),
-                "gp_names": str(row[17] or ""),
-            }
-        )
+        rows.append(candidate_row(row, report_date))
+    return rows
+
+
+def load_late_distribution_rows(conn: sqlite3.Connection, report_date: str) -> list[dict[str, object]]:
+    """Stories of any run that only the late-distribution rule puts in this brief window.
+
+    Used to backfill briefs published before that rule existed; the daily run keeps
+    using load_run_candidate_rows.
+    """
+    start, end = coverage_window(report_date)
+    cursor = conn.execute(f"{CANDIDATE_SELECT} AND vr.published_at IS NOT NULL {CANDIDATE_ORDER}")
+    rows: list[dict[str, object]] = []
+    for row in cursor.fetchall():
+        published_dt = parse_coverage_datetime(str(row[5] or ""))
+        if not published_dt or start <= published_dt < end or is_generic_candidate(row):
+            continue
+        if is_late_distribution(published_dt, feed_distributed_at(row[18]), str(row[19] or ""), start, end):
+            rows.append(candidate_row(row, report_date))
     return rows
 
 
