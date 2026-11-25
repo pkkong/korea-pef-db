@@ -21,14 +21,14 @@ try:
     from . import lp_kgrowth_history_replay as replay
     from .lp_kgrowth_history_terms import review_bundle, _identity as notice_identity
     from .lp_kgrowth_scaleup_history import compact
-    from .lp_notice_publication import _rule_valid_name
+    from .lp_notice_publication import _refresh, _rule_valid_name
     from .lp_notice_triage import notice_stage
     from .lp_program_service import validate
 except ImportError:
     import lp_kgrowth_history_replay as replay
     from lp_kgrowth_history_terms import review_bundle, _identity as notice_identity
     from lp_kgrowth_scaleup_history import compact
-    from lp_notice_publication import _rule_valid_name
+    from lp_notice_publication import _refresh, _rule_valid_name
     from lp_notice_triage import notice_stage
     from lp_program_service import validate
 
@@ -418,6 +418,7 @@ def review_newdeal_growth_selection(bundle_bytes, recruitment_capture, load_atta
                                  'asset_scope': 'PE', 'source_url': result_url} for name in names],
                'gp_tracks': {name: track['label'] for name in names},
                'manager_list_sources': {'selected_gps': result_url}, 'publication_ready': False}
+    _refresh(program, [], program['checked_at'])
     validate({'as_of': checked_at[:10], 'programs': [program]})
     return {'identity': copy.deepcopy(identity), 'track': copy.deepcopy(track), 'selection': selection, 'program': program,
             'recruitment_proof': candidate['source_replay'], 'official_result_proof': proof,

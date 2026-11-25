@@ -115,6 +115,10 @@ class JointHistoryProjectionTests(unittest.TestCase):
             self.assertEqual(program['funding_plan']['actual_gp_allocation_krw'], None)
             self.assertNotIn('commitment_amount_krw', program)
             self.assertTrue(program['commitment_label'].startswith('공동 정책출자 예정'))
+            deadline, = [s for s in program['schedule_stages'] if s['status'] == 'announced_deadline']
+            self.assertEqual(deadline['date'], program['deadline'])
+            self.assertEqual(deadline['precision'], 'datetime')
+            self.assertEqual(deadline['source_url'], program['events'][0]['url'])
             with self.assertRaisesRegex(ValueError, '연결 지문 불일치'):
                 reviewed({**captures, 'failed_pdf': failure + b' '})
             with patch.dict(proof['detail'], {'stated_round': '수시'}), self.assertRaisesRegex(ValueError, '회차'):
