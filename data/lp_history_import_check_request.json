@@ -1,9 +1,9 @@
 {
   "kind": "lp_history_import_check_request_v1",
   "institution_id": "kdb",
-  "bundle_commit": "3c5653c4fa4278e04ca24804483d441762d35994",
-  "bundle_sha256": "787153959e2ed9ec764830197175f57c67febbe8e3c23d974ca7378772723ca6",
-  "candidate_sha256": "ee272eb318b7bca8697d6fa5b6cd297cf17ec8f420190df5d4ddf47ce6b547a0",
-  "candidate_checked_at": "2026-11-19T07:46:06.310990+00:00",
-  "reason": "산업은행 AI 코리아 2024년 모집부터 선정까지 공식 원문 다섯 건을 검증한다. 최종 PDF의 줄과 공동운용 경계를 검증했으며 기존 사업·주소·별칭·GP 이력 보존을 운영에서 읽기 전용으로 대조한다."
+  "bundle_commit": "b1c65fdadc926a8863a933bf8e945ad4300a7cda",
+  "bundle_sha256": "52c0050576d9de3016bdff6291260b875ad3cd871ba9e622892e2e68e1b7ae5e",
+  "candidate_sha256": "4332d0d15d76bee2c565324f9bb5973192ae0e84c6eadba59146531bba694039",
+  "candidate_checked_at": "2026-11-19T11:37:58.887845+00:00",
+  "reason": "산업은행 반도체 생태계펀드 2차년도 블라인드 모집과 후속 원문 네 건을 재구성한다. 공동 주관 블라인드 모집을 별도 프로젝트 범위와 분리했고 6월 28일 공식 명단을 확인했다. 기존 사업·공개 주소·별칭·공식 선정 이력의 보존을 읽기 전용으로 대조한다."
 }

@@ -14,6 +14,7 @@ try:
     from .lp_kdb_recovery_market import terms as kdb_recovery_market_terms
     from .lp_kdb_secondary_terms import terms as kdb_secondary_terms
     from .lp_kdb_ai_fixed_terms import terms as kdb_ai_fixed_terms
+    from .lp_kdb_semiconductor_terms import terms as kdb_semiconductor_terms
     from .lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
     from .lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 except ImportError:
@@ -28,6 +29,7 @@ except ImportError:
     from lp_kdb_recovery_market import terms as kdb_recovery_market_terms
     from lp_kdb_secondary_terms import terms as kdb_secondary_terms
     from lp_kdb_ai_fixed_terms import terms as kdb_ai_fixed_terms
+    from lp_kdb_semiconductor_terms import terms as kdb_semiconductor_terms
     from lp_moel_iaci_notice_terms import extract_deadline as iaci_deadline
     from lp_moel_iaci_notice_terms import extract_allocation as iaci_allocation
 
@@ -299,6 +301,11 @@ def extract_terms(n):
     sources = [(n['url'], n['body'], n['sha256'])]
     sources += [(u, t, n['attachment_hashes'][u]) for u, t in n.get('attachment_texts', {}).items()
                 if not is_submission_attachment(n, u)]
+    try:
+        if semiconductor := kdb_semiconductor_terms(n, sources):
+            return semiconductor
+    except ValueError as exc:
+        return {'allocation_reading_failed': True, 'allocation_error': str(exc)}
     try:
         cwma_joint = _cwma_joint_allocation(n, sources)
     except ValueError as exc:

@@ -43,6 +43,7 @@ try:
     from . import lp_kdb_growth_support_terms as kdb_growth_support
     from . import lp_kdb_recovery_market as kdb_recovery
     from . import lp_kdb_ai_fixed_terms as kdb_ai_fixed
+    from . import lp_kdb_semiconductor_terms as kdb_semiconductor
 except ImportError:
     from lp_offering_policy import procurement_reason,central_not_investing
     from lp_attachment_policy import is_submission_attachment
@@ -71,6 +72,7 @@ except ImportError:
     import lp_kdb_growth_support_terms as kdb_growth_support
     import lp_kdb_recovery_market as kdb_recovery
     import lp_kdb_ai_fixed_terms as kdb_ai_fixed
+    import lp_kdb_semiconductor_terms as kdb_semiconductor
 
 ROOT = Path(__file__).resolve().parents[3]
 # Large LPs whose policy/pension notices mix PE and VC (user decision 2026-11-12).
@@ -105,7 +107,7 @@ STAGES = {'모집 공고': 'announcement', '접수 결과': 'application',
 def _identity(n):
     # A reannouncement is a separate solicitation unless a source explicitly
     # ties its later documents to that round. Never merge it with the first call.
-    if key := kdb_reopen.identity(n):
+    if key := kdb_reopen.identity(n) or kdb_semiconductor.identity(n):
         return key
     title = re.sub(r'[\[【(][^\]】)]*공고\s*제?\s*20\d{2}\s*[-–]\s*\d+\s*호[^\]】)]*[\]】)]', '', n['title'])
     # 『펀드명』 and 펀드명 are the same fund: stage notices often drop the quote brackets.
@@ -719,6 +721,8 @@ def _attach_result_roster(p, members, holds, known=frozenset()):
             tables = [kdb_recovery.result_roster(result, text, p, split_names) for text in texts]
         elif evidence.get('ai_fixed_joint_allocation'):
             tables = [kdb_ai_fixed.result_roster(result, text, p) for text in texts]
+        elif evidence.get('semiconductor_blind_allocation'):
+            tables = [kdb_semiconductor.result_roster(result, text, p) for text in texts]
         else:
             tables = [kdb_result_roster(text, known) or kdb_reopen.result_roster(result, text, p)
                       or kdb_nuclear.result_roster(result, text, p, split_names)
