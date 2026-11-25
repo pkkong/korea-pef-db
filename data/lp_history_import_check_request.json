@@ -1,9 +1,9 @@
 {
   "kind": "lp_history_import_check_request_v1",
   "institution_id": "kdb",
-  "bundle_commit": "e6a5d8a0de7e0ee0b03632e918cb75f98c370b7a",
-  "bundle_sha256": "5c09d62154e9e8627fc2418a6ab19ac5a93374acb5fc944ae3b4e96d7b4b6697",
-  "candidate_sha256": "ae2575943259d2dee6fc85e74bed6c06b8f6e84811838561d96ea88fa040571f",
-  "candidate_checked_at": "2026-11-25T11:51:18+00:00",
-  "reason": "45608748767에서 발행 요청 파일이 없는 이전 소스 버전을 읽어 쓰기 단계 전에 중단됐다. 운영 DB의 공개 ID·갱신시각·지문이 같은지 검증하고 같은 반도체 일반·재정 후보를 다시 재생한다."
+  "bundle_commit": "7141f9b74bbcd19ae0cf421a5f3cd600d3d49ae9",
+  "bundle_sha256": "25cf10e182f8e2a1005887fd1429c6d92f84dd853c2c27165708068c6e120148",
+  "candidate_sha256": "682a161fe57e0d1d676bc1eaf2ddf35686b7abc8b1607936a45f4f47baf76241",
+  "candidate_checked_at": "2026-11-25T12:48:42+00:00",
+  "reason": "2021년 정시 정책형 뉴딜성장형의 공동 모집·최종 선정 원문을 재생하고, 산업은행·성장금융 기존 사업과 보관 원문·별칭·GP 선정 이력을 쓰기 없이 대조한다."
 }

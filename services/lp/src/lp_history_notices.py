@@ -16,9 +16,17 @@ except ImportError:
     import collect_lp_institution_boards as boards
 
 KIND = 'lp_history_notice_v1'
+JOINT_KIND = 'lp_newdeal_joint_history_notice_v1'
+JOINT_IMPORT_KIND = 'lp_newdeal_joint_history_import_v1'
 
 
 def validate_history_notice(raw, checked_at):
+    if raw.get('history_import') == JOINT_KIND:
+        try:
+            from .lp_newdeal_history_import import validate_retained_notice
+        except ImportError:
+            from lp_newdeal_history_import import validate_retained_notice
+        return validate_retained_notice(raw, checked_at)
     if raw.get('history_import') != KIND:
         raise ValueError('not an imported history notice')
     n = copy.deepcopy(raw)

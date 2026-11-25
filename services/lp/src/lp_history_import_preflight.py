@@ -22,6 +22,7 @@ try:
     from .lp_program_aliases import alias_pages, missing_published_ids
     from .lp_state_storage import pack_state, unpack_state, MARKER, EVIDENCE_KEYS
     from . import lp_kdb_semiconductor_2025 as kdb_semiconductor_2025
+    from . import lp_newdeal_history_import as newdeal
 except ImportError:
     from lp_history_notices import validate_history_notice
     from lp_notice_publication import publish_basic_notices
@@ -29,6 +30,7 @@ except ImportError:
     from lp_program_aliases import alias_pages, missing_published_ids
     from lp_state_storage import pack_state, unpack_state, MARKER, EVIDENCE_KEYS
     import lp_kdb_semiconductor_2025 as kdb_semiconductor_2025
+    import lp_newdeal_history_import as newdeal
 
 MAX_IMPORT_BYTES = 40 * 1024 * 1024
 MAX_NOTICES = 6
@@ -60,7 +62,11 @@ def load_import(raw, expected_sha256):
 
 
 def _validate_payload(payload):
-    if (not isinstance(payload, dict) or set(payload) != {'kind', 'checked_at', 'notices'}
+    joint = isinstance(payload, dict) and payload.get('kind') == newdeal.IMPORT_KIND
+    if joint:
+        if set(payload) != {'kind', 'checked_at', 'source'} or not isinstance(payload['checked_at'], str):
+            raise ValueError('뉴딜 공동 과거 가져오기 형식 불일치')
+    elif (not isinstance(payload, dict) or set(payload) != {'kind', 'checked_at', 'notices'}
             or payload['kind'] != 'lp_history_import_v1' or not isinstance(payload['notices'], list)
             or not 1 <= len(payload['notices']) <= MAX_NOTICES
             or not isinstance(payload['checked_at'], str)):
@@ -87,6 +93,11 @@ def _assert_preserved(current, after):
 
 def build_pinned_import(bundle, programs, candidate_checked_at, expected_sha256):
     """Rebuild the reviewed import from pinned originals and live program identities."""
+    if bundle.get('kind') == newdeal.BUNDLE_KIND:
+        payload = {'kind': newdeal.IMPORT_KIND, 'checked_at': candidate_checked_at, 'source': bundle}
+        raw = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode('utf-8')
+        load_import(raw, expected_sha256)
+        return payload, raw, {'source_type': newdeal.BUNDLE_KIND}
     try:
         from .build_lp_history_import import build as build_import
     except ImportError:
@@ -129,7 +140,14 @@ def proposal(current, payload, checked_at):
     """Append source-validated programs and their stages; keep old programs exact."""
     _validate_payload(payload)
     validate(current)
-    incoming = [validate_history_notice(n, checked_at) for n in payload['notices']]
+    joint = payload['kind'] == newdeal.IMPORT_KIND
+    if joint:
+        program, incoming = newdeal.project(payload['source'], checked_at)
+        newdeal.assert_no_overlap(current['programs'], program, incoming)
+        programs, holds = [program], []
+    else:
+        incoming = [validate_history_notice(n, checked_at) for n in payload['notices']]
+        programs, holds = publish_basic_notices({'programs': [], 'history_notices': incoming}, [], checked_at)
     if len({n['url'] for n in incoming}) != len(incoming):
         raise ValueError('가져올 원문 URL 중복')
     retained = {n['url']: n for n in current.get('history_notices', [])}
@@ -142,13 +160,15 @@ def proposal(current, payload, checked_at):
     if any(old.get('attachment_ocr') != n.get('attachment_ocr') for url, n in incoming_by_url.items()
            if (old := retained.get(url)) is not None):
         raise ValueError('기존 과거 원문의 OCR 영수증과 가져올 버전 불일치')
+    joint_by_key = {newdeal.source_key(url): n for url, n in incoming_by_url.items()} if joint else {}
     for old in _catalog_versions(current):
         n = incoming_by_url.get(old.get('url'))
+        if joint and n is None and old.get('url'):
+            n = joint_by_key.get(newdeal.source_key(old['url']))
         if n and (old.get('institution_id') != n['institution_id']
                   or old.get('sha256') != n['sha256']
                   or old.get('attachment_hashes', {}) != n.get('attachment_hashes', {})):
             raise ValueError('기존 원문 카탈로그의 기관·본문·첨부 버전 충돌')
-    programs, holds = publish_basic_notices({'programs': [], 'history_notices': incoming}, [], checked_at)
     represented = {e['url'] for p in programs for e in p['events']}
     if holds or represented != {n['url'] for n in incoming}:
         raise ValueError('가져오기 원문이 모두 검증된 모집 사업으로 연결되지 않음')
@@ -182,7 +202,8 @@ def proposal(current, payload, checked_at):
         if any(g.get('source_url') not in selection_urls for g in p['selected_gps']):
             raise ValueError('가져오기 선정 GP의 공식 결과 원문 연결 미확인')
         source = next(n for n in incoming if n['url'] in urls)
-        p['checked_at'] = source['checked_at']
+        if not joint:
+            p['checked_at'] = source['checked_at']
         after['programs'].append(p)
         added.append(p)
         ids.add(p['id'])

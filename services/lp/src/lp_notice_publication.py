@@ -189,6 +189,10 @@ def _sources(data, growth_notices, checked_at):
     for raw in data.get('history_notices', []):
         try:
             n = _valid(history_notices.validate_history_notice(raw, checked_at), checked_at)
+            if n.get('history_import') == history_notices.JOINT_KIND:
+                # The publisher has already linked the verified lead and track.
+                # Replaying the host's mixed notice here could create a second program.
+                continue
             current = docs.setdefault(n['url'], n)  # a current daily version of the same notice wins
             if (current is not n and kdb_semiconductor_2025.role(n) == 'recruitment'
                     and n.get('attachment_ocr') and current['sha256'] == n['sha256']
