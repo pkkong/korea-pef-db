@@ -12,6 +12,7 @@ try:
     from .lp_kdb_innovation_terms import terms as kdb_innovation_terms
     from .lp_kdb_growth_support_terms import terms as kdb_growth_support_terms
     from .lp_kdb_growth_support_2024 import terms as kdb_growth_support_2024_terms
+    from .lp_kdb_innovation_2024_second import terms as kdb_innovation_2024_second_terms
     from .lp_kdb_recovery_market import terms as kdb_recovery_market_terms
     from .lp_kdb_secondary_terms import terms as kdb_secondary_terms
     from .lp_kdb_ai_fixed_terms import terms as kdb_ai_fixed_terms
@@ -28,6 +29,7 @@ except ImportError:
     from lp_kdb_innovation_terms import terms as kdb_innovation_terms
     from lp_kdb_growth_support_terms import terms as kdb_growth_support_terms
     from lp_kdb_growth_support_2024 import terms as kdb_growth_support_2024_terms
+    from lp_kdb_innovation_2024_second import terms as kdb_innovation_2024_second_terms
     from lp_kdb_recovery_market import terms as kdb_recovery_market_terms
     from lp_kdb_secondary_terms import terms as kdb_secondary_terms
     from lp_kdb_ai_fixed_terms import terms as kdb_ai_fixed_terms
@@ -308,6 +310,8 @@ def extract_terms(n):
             return semiconductor
         if growth_support := kdb_growth_support_2024_terms(n, sources):
             return growth_support
+        if innovation := kdb_innovation_2024_second_terms(n, sources):
+            return innovation
     except ValueError as exc:
         return {'allocation_reading_failed': True, 'allocation_error': str(exc)}
     try:
