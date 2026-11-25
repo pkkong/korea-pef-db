@@ -178,7 +178,7 @@ class PublishContracts(unittest.TestCase):
         event = {'type': '질의응답', 'title': '기업투자 FAQ', 'date': '2026-07-15',
                  'url': 'https://www.kgrowth.or.kr/notice_view.asp?idx=445&str_type=1&tab=1'}
         data = {**current, 'programs': [append_followup(program, event)], 'history_notices': [event]}
-        summary = {'new_programs': [], 'updated_programs': [{'id': program['id'], 'added_event': event}],
+        summary = {'new_programs': [], 'updated_programs': [{'id': program['id'], 'added_events': [event]}],
                    'reused_program_ids': [], 'history_notices_before': 0}
         revision = (('baseline', 'stamp'), current['review_decisions'])
         conn = MagicMock()

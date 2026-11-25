@@ -3,6 +3,7 @@
 import base64
 import copy
 import hashlib
+import io
 import json
 import re
 from datetime import date, datetime
@@ -11,29 +12,40 @@ from urllib.parse import parse_qs, urlsplit
 try:
     from . import lp_kgrowth_history_replay as replay
     from .lp_history_notices import JOINT_KIND as NOTICE_KIND, JOINT_IMPORT_KIND as IMPORT_KIND
-    from .lp_history_notices import JOINT_FOLLOWUP_IMPORT_KIND as FOLLOWUP_IMPORT_KIND
+    from .lp_history_notices import (JOINT_FOLLOWUP_IMPORT_KIND as FOLLOWUP_IMPORT_KIND,
+                                    JOINT_STAGES_IMPORT_KIND as STAGES_IMPORT_KIND)
     from .lp_kgrowth_history_attachment_queue import file_labels
     from .lp_joint_history_projection import review_newdeal_growth_selection
-    from .lp_kgrowth_press_probe import _press_detail_url, _press_result_detail_dom
+    from .lp_kgrowth_press_probe import (_followup_url, _page_contract, _press_detail_dom, _press_detail_url,
+                                       _press_listing_rows, _press_result_detail_dom)
     from .lp_notice_triage import compact
     from .lp_notice_publication import _schedule_order
 except ImportError:
     import lp_kgrowth_history_replay as replay
     from lp_history_notices import JOINT_KIND as NOTICE_KIND, JOINT_IMPORT_KIND as IMPORT_KIND
-    from lp_history_notices import JOINT_FOLLOWUP_IMPORT_KIND as FOLLOWUP_IMPORT_KIND
+    from lp_history_notices import (JOINT_FOLLOWUP_IMPORT_KIND as FOLLOWUP_IMPORT_KIND,
+                                   JOINT_STAGES_IMPORT_KIND as STAGES_IMPORT_KIND)
     from lp_kgrowth_history_attachment_queue import file_labels
     from lp_joint_history_projection import review_newdeal_growth_selection
-    from lp_kgrowth_press_probe import _press_detail_url, _press_result_detail_dom
+    from lp_kgrowth_press_probe import (_followup_url, _page_contract, _press_detail_dom, _press_detail_url,
+                                      _press_listing_rows, _press_result_detail_dom)
     from lp_notice_triage import compact
     from lp_notice_publication import _schedule_order
 
 
 BUNDLE_KIND = 'lp_newdeal_joint_history_source_v1'
 FOLLOWUP_BUNDLE_KIND = 'lp_newdeal_joint_followup_source_v1'
+STAGES_BUNDLE_KIND = 'lp_newdeal_lifecycle_evidence_v1'
 _ROLES = ('search', 'followup', 'detail', 'failed_pdf', 'pdf')
 _FUND = '정책형 뉴딜펀드'
 _SOURCE_KEYS = {'kind', 'institution_id', 'bundle', 'recruitment', 'press', 'attachments'}
 _FAQ_REVISION = re.compile(r"['‘’](\d{2})\.(\d{1,2})\.(\d{1,2})\(([월화수목금토일])\)에기업투자faq및붙임\d+를추가하여첨부")
+_STAGES = {
+    '접수 결과': ('application', '(보도자료) 産銀·성장금융, 정책형 뉴딜펀드 조성을 위한 첫발을 내딛다',
+               '(보도자료) 산은-성장금융 정책형 뉴딜펀드 조성을 위한 첫발을 내딛다'),
+    '1차 심사 결과': ('screening', '(보도자료) 産銀·성장금융 「정책형 뉴딜펀드」 서류심사 결과 발표',
+                 '(보도자료) 정책형뉴딜펀드 21년 위탁운용사 선정 서류심사결과_FN'),
+}
 
 
 def _faq_date(body):
@@ -102,12 +114,18 @@ def validate_retained_notice(notice, checked_at):
         canonical, _ = _press_detail_url(n['url'], _FUND)
         raw = _decode(encoded, replay.MAX_DETAIL_BYTES)
         if canonical != n['url'] or replay._sha(raw) != digest:
-            raise ValueError('뉴딜 최종 결과의 원문 주소·지문 불일치')
-        detail, pdf = _press_result_detail_dom(raw, {**n, 'board_record_id': key[1]}, _FUND, digest)
-        if (n['event_type'] != '선정 결과' or n['body'] != detail['body'] or n['sha256'] != detail['body_text_sha256']
+            raise ValueError('뉴딜 보도자료 원문의 주소·지문 불일치')
+        target = {**n, 'board_record_id': key[1]}
+        if n['event_type'] in _STAGES:
+            detail, pdf = _stage_detail(raw, target, n['event_type'], digest)
+        elif n['event_type'] == '선정 결과':
+            detail, pdf = _press_result_detail_dom(raw, target, _FUND, digest)
+        else:
+            raise ValueError('뉴딜 보도자료 원문의 단계 불일치')
+        if (n['body'] != detail['body'] or n['sha256'] != detail['body_text_sha256']
                 or n['attachments'] != [a['url'] for a in detail['attachments']]
                 or set(n['attachment_hashes']) != {pdf['url']}):
-            raise ValueError('뉴딜 최종 결과의 본문·첨부 원문 불일치')
+            raise ValueError('뉴딜 보도자료의 본문·첨부 원문 불일치')
     return n
 
 
@@ -235,22 +253,158 @@ def project_followup(source, current_programs, checked_at):
     return program['id'], event, validate_retained_notice(notice, checked_at)
 
 
+def _stage_detail(raw, target, event_type, digest):
+    _, title, stem = _STAGES[event_type]
+    detail, pdf = _press_detail_dom(raw, target, digest, stem)
+    body = compact(detail['body'])
+    marker = ('정책형뉴딜펀드｢2021년도정시위탁운용사선정계획｣에따른운용사제안서접수'
+              if event_type == '접수 결과' else '『정책형뉴딜펀드』2021년정시위탁운용사선정서류심사결과')
+    if (detail['title'] != title or marker not in body
+            or not all(name in body for name in ('한국산업은행', '한국성장금융'))):
+        raise ValueError('뉴딜 접수·심사 원문의 공동 정시 사업 불일치')
+    return detail, pdf
+
+
+def _observed_bytes(receipt, limit, not_before, checked_at):
+    observed = _stamp(receipt['checked_at'])
+    raw = _decode(receipt['raw_base64'], limit)
+    if (receipt.get('http_status') != 200 or not not_before <= observed <= _stamp(checked_at)
+            or len(raw) != receipt.get('bytes') or replay._sha(raw) != receipt.get('sha256')):
+        raise ValueError('뉴딜 보도자료 원응답의 시각·크기·지문 불일치')
+    return raw
+
+
+def _stage_pdf(raw, layout_pages):
+    from pypdf import PdfReader
+
+    if not re.match(br'%PDF-[12]\.\d[\r\n]', raw) or not raw.rstrip().endswith(b'%%EOF'):
+        raise ValueError('뉴딜 보도자료의 PDF 경계 불일치')
+    reader = PdfReader(io.BytesIO(raw), strict=True)
+    if reader.is_encrypted or not max(layout_pages) < len(reader.pages) <= 8:
+        raise ValueError('뉴딜 보도자료 PDF의 페이지 범위 미확인')
+    return [reader.pages[i].extract_text(extraction_mode='layout') for i in layout_pages]
+
+
+def _stage_facts(application_pdf, screening_pdf, deadline, target_amount):
+    application, applicants = _stage_pdf(application_pdf, (0, 4))
+    screening, shortlisted = _stage_pdf(screening_pdf, (0, 1))
+    dates = []
+    for text in (application, screening):
+        heading_date = re.search(r'www\.KDB\.co\.kr\s+\((2021\.\d{2}\.\d{2})\)', text)
+        if not heading_date:
+            raise ValueError('뉴딜 접수·심사 PDF의 발표일 미확인')
+        dates.append(date.fromisoformat(heading_date[1].replace('.', '-')))
+    year, month, day = map(int, deadline[:10].split('-'))
+    if (dates[0].year != year
+            or f'운용사제안서접수를{month}월{day}일마감' not in compact(application)
+            or f'뉴딜성장형{target_amount:,}' not in compact(applicants)
+            or not compact(applicants).startswith('분야선정지원운용사명규모(가나다순)')
+            or '정책형뉴딜펀드2021년정시출자사업서류심사결과' not in compact(shortlisted)
+            or '뉴딜성장형' not in shortlisted):
+        raise ValueError('뉴딜 접수·심사 PDF의 날짜·리그·모집 구획 불일치')
+    # The official screening table reports the earlier application count in
+    # the same column as the shortlist. Blank project entries are separate.
+    lines = screening.splitlines()
+    if not any(re.search(r'투자제안형\s+뉴딜성장형\s+국민참여형', line) for line in lines):
+        raise ValueError('서류심사 표의 지원 및 통과 수 열 순서 미확인')
+    counts = []
+    for label in ('지원 운용사', '서류통과 운용사'):
+        rows = [re.fullmatch(rf'\s*{label}\s+\d+\s+(\d+)\s+\d+\s+\d+\s+(?:-\s+)?\d+\s*', line)
+                for line in lines]
+        matches = [m for m in rows if m]
+        if len(matches) != 1:
+            raise ValueError('서류심사 표의 뉴딜성장형 접수·통과 수 미확인')
+        counts.append(int(matches[0][1]))
+    application_count, screening_count = counts
+    if not (0 < screening_count < application_count) or f'뉴딜성장형{screening_count}개사' not in compact(screening):
+        raise ValueError('뉴딜성장형 서류심사 표와 발표문 수치 불일치')
+    return dates, counts
+
+
+def project_stages(source, current_programs, checked_at):
+    """Replay both board posts and their PDFs before extending one existing schedule."""
+    if (not isinstance(source, dict) or source.get('kind') != STAGES_BUNDLE_KIND
+            or source.get('institution_id') != 'kdb' or source.get('source_institution_id') != 'kgrowth'
+            or len(source.get('notices', [])) != len(_STAGES)):
+        raise ValueError('뉴딜 접수·심사 과거 원본 묶음 형식 불일치')
+    identity = {'target_institution_id': 'kdb', 'fund': compact(_FUND), 'year': '2021', 'round': '정시'}
+    owners = [p for p in current_programs if p.get('joint_history_identity') == identity]
+    if len(owners) != 1:
+        raise ValueError('공개된 뉴딜성장형의 사업·회차 고유성이 미확인')
+    program, = owners
+    deadline = program.get('deadline')
+    previous = {e['type']: e for e in program['events']}
+    if (program['institution_id'] != 'kdb' or program.get('joint_history_track_keys') != ['blind_newdeal_growth']
+            or not program.get('joint_history_bundle_sha256') or program['status'] != '선정 완료'
+            or program.get('manual_review_id') or not deadline or not program.get('schedule_stages')
+            or not {'모집 공고', '선정 결과'} <= previous.keys()):
+        raise ValueError('기존 뉴딜성장형의 원본·리그·선정 단계 불일치')
+    listing = source['listing_receipt']
+    search_url = _followup_url(_FUND)
+    if (listing.get('url') != search_url or listing.get('response_url') != search_url or listing.get('holds')
+            or listing.get('truncated') is not False or listing.get('full_response_retained') is not True):
+        raise ValueError('뉴딜 접수·심사의 원목록 요청·응답 불일치')
+    raw = _observed_bytes(listing, replay.MAX_INPUT_BYTES, _stamp('2021-01-01T00:00:00+00:00'), checked_at)
+    if _page_contract(raw, _FUND, 2) != listing.get('page_contract'):
+        raise ValueError('뉴딜 접수·심사의 원목록 페이지 불일치')
+    rows = _press_listing_rows(raw, _FUND, search_url, listing['checked_at'])
+    proof = []
+    for event_type, (_, title, _) in _STAGES.items():
+        target, = [r for r in rows if r['title'] == title]
+        saved, = [s for s in source['notices'] if s.get('id') == target['board_record_id']]
+        detail_receipt, pdf_receipt = saved['sources']
+        if (saved['title'] != title or saved['posted_date'] != target['date']
+                or detail_receipt['url'] != target['url'] or detail_receipt['referer'] != search_url):
+            raise ValueError('뉴딜 접수·심사 원목록과 상세 주소·제목·날짜 불일치')
+        detail_raw = _observed_bytes(detail_receipt, replay.MAX_DETAIL_BYTES, _stamp(listing['checked_at']), checked_at)
+        detail, pdf = _stage_detail(detail_raw, target, event_type, detail_receipt['sha256'])
+        if (pdf_receipt['url'] != pdf['url'] or pdf_receipt['label'] != pdf['name']
+                or pdf_receipt['referer'] != target['url'] or pdf_receipt.get('pdf_verified') is not True):
+            raise ValueError('뉴딜 접수·심사 PDF의 첨부 링크·파일명 불일치')
+        pdf_raw = _observed_bytes(pdf_receipt, replay.MAX_FILE_BYTES, _stamp(detail_receipt['checked_at']), checked_at)
+        fields = {**{k: detail[k] for k in ('title', 'date', 'body')}, 'event_type': event_type, 'url': target['url'],
+                  'source_id': target['board_record_id'], 'sha256': detail['body_text_sha256'],
+                  'attachments': [a['url'] for a in detail['attachments']],
+                  'attachment_hashes': {pdf['url']: pdf_receipt['sha256']}}
+        proof.append((validate_retained_notice(_source_notice(fields, detail_receipt), checked_at), pdf_raw))
+    (application, application_pdf), (screening, screening_pdf) = proof
+    assert_no_overlap(current_programs, program, (application, screening))
+    target_amount = int(program['fund_target_label'].removesuffix('억원').replace(',', ''))
+    (applied, screened), (applied_count, screened_count) = _stage_facts(
+        application_pdf, screening_pdf, deadline, target_amount)
+    if (application['date'] != applied.isoformat()
+            or not previous['모집 공고']['date'] < deadline[:10] < application['date'] < screened.isoformat()
+            or not screened.isoformat() <= screening['date'] < previous['선정 결과']['date']
+            or f'{screened.month}월{screened.day}일' not in compact(screening['body'])):
+        raise ValueError('뉴딜 접수·서류심사와 기존 모집·선정 일정의 날짜 불일치')
+    events = [
+        {'date': n['date'], 'type': n['event_type'], 'title': n['title'], 'url': n['url'], 'detail': detail}
+        for n, detail in ((application, f'뉴딜성장형 {applied_count}팀 접수'),
+                          (screening, f'{screened.isoformat()} 발표 · 뉴딜성장형 {screened_count}팀 통과'))
+    ]
+    return program['id'], events, [application, screening]
+
+
 def append_followup(program, event):
-    """Add a confirmed FAQ while preserving every existing stage and offering field."""
-    if event['type'] != '질의응답':
-        raise ValueError('확인된 뉴딜 FAQ만 기존 일정에 추가할 수 있음')
+    """Add a confirmed follow-up while preserving every existing stage and offering field."""
+    event_type = event['type']
+    if event_type == '질의응답':
+        stage_key, detail = 'faq', '기업투자 FAQ 추가'
+    else:
+        stage_key, _, _ = _STAGES[event_type]
+        detail = event['detail']
     previous = [e for e in program['events'] if source_key(e['url']) == source_key(event['url'])]
     if previous:
         if previous != [event]:
-            raise ValueError('기존 공개 FAQ 원문·날짜와 다른 버전')
+            raise ValueError('기존 공개 후속 원문·날짜와 다른 버전')
         return program
     output = copy.deepcopy(program)
     output['events'] = sorted([*output['events'], event], key=lambda e: e['date'])
-    stage = {'stage': 'faq', 'label': '질의응답', 'original_label': '질의응답', 'date': event['date'],
+    stage = {'stage': stage_key, 'label': event_type, 'original_label': event_type, 'date': event['date'],
              'precision': 'date', 'status': 'confirmed', 'source_url': event['url'], 'show_source': True,
-             'detail': '기업투자 FAQ 추가'}
+             'detail': detail}
     output['schedule_stages'] = _schedule_order([*output['schedule_stages'], stage])
     if ([e for e in output['events'] if e != event] != program['events']
             or [s for s in output['schedule_stages'] if s != stage] != program['schedule_stages']):
-        raise ValueError('뉴딜 FAQ 추가가 기존 공개 단계 순서를 변경함')
+        raise ValueError('뉴딜 후속 일정 추가가 기존 공개 단계 순서를 변경함')
     return output

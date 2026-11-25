@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+from datetime import date
 from tempfile import TemporaryDirectory
 from pathlib import Path
 from unittest.mock import patch
@@ -109,7 +110,7 @@ def test_faq_publication_changes_only_the_confirmed_stage_and_is_idempotent():
     with patch.object(newdeal, 'project_followup', return_value=(program['id'], faq, receipt)), \
             patch.object(preflight, 'validate_history_notice', side_effect=lambda notice, _: notice):
         after, summary = preflight.proposal(current, payload, STAMP)
-        assert summary['new_programs'] == [] and summary['updated_programs'] == [{'id': program['id'], 'added_event': faq}]
+        assert summary['new_programs'] == [] and summary['updated_programs'] == [{'id': program['id'], 'added_events': [faq]}]
         assert len(after['programs']) == 1
         updated = after['programs'][0]
         assert updated['events'][1] == faq
@@ -140,3 +141,57 @@ def test_faq_date_comes_from_the_corporate_revision_and_checks_weekday():
         assert '요일' in str(error)
     else:
         raise AssertionError('A mismatched weekday was accepted')
+
+
+def test_stages_take_counts_from_the_named_growth_column():
+    application = 'www.KDB.co.kr (2021.01.27)\n운용사 제안서 접수를 1월 26일 마감한 결과'
+    roster = '분야 선정 지원운용사명\n 규모 (가나다순)\n 뉴딜성장형 9,000 운용사'
+    screening = ('www.KDB.co.kr (2021.02.16)\n뉴딜성장형 6개사\n'
+                 '투자제안형 뉴딜성장형 국민참여형\n지원 운용사 42 11 17 14 84\n'
+                 '서류통과 운용사 20 6 17 10 - 53')
+    shortlist = '정책형 뉴딜펀드 2021년 정시 출자사업 서류심사 결과\n뉴딜성장형'
+    with patch.object(newdeal, '_stage_pdf', side_effect=((application, roster), (screening, shortlist))):
+        assert newdeal._stage_facts(b'a', b'b', '2021-01-26', 9000) == (
+            [date(2021, 1, 27), date(2021, 2, 16)], [11, 6])
+    for invalid in (screening.replace('20 6 17', '20 5 17'),
+                    screening.replace('투자제안형 뉴딜성장형', '뉴딜성장형 투자제안형')):
+        with patch.object(newdeal, '_stage_pdf', side_effect=((application, roster), (invalid, shortlist))):
+            try:
+                newdeal._stage_facts(b'a', b'b', '2021-01-26', 9000)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError('A substituted shortlist count or column was accepted')
+
+
+def test_two_stages_preserve_the_selection_and_repeat_without_duplicates():
+    program, notices = example()
+    program['deadline'] = '2021-01-26T16:00:00+09:00'
+    publication._refresh(program, [], STAMP)
+    events = [
+        {'type': event_type, 'date': day, 'url': f'https://www.kgrowth.or.kr/notice_view.asp?idx={number}&str_type=3',
+         'title': event_type, 'detail': detail}
+        for event_type, day, number, detail in (
+            ('접수 결과', '2021-01-27', 23, '뉴딜성장형 11팀 접수'),
+            ('1차 심사 결과', '2021-02-17', 24, '2021-02-16 발표 · 뉴딜성장형 6팀 통과'))
+    ]
+    sources = [{**notices[0], 'url': e['url'], 'date': e['date'], 'event_type': e['type']} for e in events]
+    current = {'as_of': '2026-11-25', 'programs': [program], 'history_notices': notices,
+               'program_aliases': {'existing-alias': program['id']}}
+    payload = {'kind': newdeal.STAGES_IMPORT_KIND, 'checked_at': STAMP, 'source': {}}
+    with patch.object(newdeal, 'project_stages', return_value=(program['id'], events, sources)), \
+            patch.object(preflight, 'validate_history_notice', side_effect=lambda notice, _: notice):
+        after, summary = preflight.proposal(current, payload, STAMP)
+        assert summary['updated_programs'] == [{'id': program['id'], 'added_events': events}]
+        assert summary['new_programs'] == []
+        updated, = after['programs']
+        assert updated['events'] == [program['events'][0], *events, program['events'][1]]
+        assert updated['selected_gps'] == program['selected_gps']
+        assert updated['deadline'] == program['deadline']
+        assert after['history_notices'] == [*notices, *sources]
+        assert after['program_aliases'] == current['program_aliases']
+        repeat, repeated = preflight.proposal(after, payload, STAMP)
+        assert repeat == after and repeated['updated_programs'] == []
+        refreshed = copy.deepcopy(updated)
+        publication._refresh(refreshed, [], STAMP)
+        assert refreshed['schedule_stages'] == updated['schedule_stages']

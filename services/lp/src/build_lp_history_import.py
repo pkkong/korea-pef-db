@@ -79,7 +79,8 @@ def merge(collection_path, import_path, expected_sha256):
     if len(raw) > MAX_IMPORT_BYTES or hashlib.sha256(raw).hexdigest() != expected_sha256:
         raise ValueError('history import file differs from the reviewed request')
     payload = json.loads(raw)
-    if payload.get('kind') in {history.JOINT_IMPORT_KIND, history.JOINT_FOLLOWUP_IMPORT_KIND}:
+    if payload.get('kind') in {history.JOINT_IMPORT_KIND, history.JOINT_FOLLOWUP_IMPORT_KIND,
+                               history.JOINT_STAGES_IMPORT_KIND}:
         # This import requires a separately verified operating snapshot.
         return 0
     if payload.get('kind') != 'lp_history_import_v1':

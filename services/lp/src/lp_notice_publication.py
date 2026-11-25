@@ -543,7 +543,8 @@ def _refresh(p, members, checked_at, *, original=None, previous_recruitment_url=
         if kind:
             stages.append({'stage': kind, 'label': event['type'], 'original_label': event['type'],
                            'date': event['date'], 'precision': 'date', 'status': 'confirmed',
-                           'source_url': event['url'], 'show_source': True})
+                           'source_url': event['url'], 'show_source': True,
+                           **({'detail': event['detail']} if event.get('detail') else {})})
     if p.get('deadline'):
         original = next(e['url'] for e in p['events'] if e['type'] == '모집 공고')
         stages.append({'stage': 'application', 'label': '접수 마감', 'original_label': '접수 마감',

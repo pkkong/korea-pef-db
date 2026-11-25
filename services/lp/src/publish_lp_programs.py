@@ -506,7 +506,7 @@ def prepare_historical_addition(payload, expected_run, checked_at):
     # The proposal verifies surviving source versions. A new program can
     # legitimately cite a joint result already retained for another program.
     if bool(added) == bool(updated) or summary['reused_program_ids']:
-        raise ValueError('Pinned import must add unpublished programs or a single verified follow-up')
+        raise ValueError('Pinned import must add unpublished programs or verified stages on one program')
     new_ids = {p['id'] for p in added}
     if added:
         previous_results = current.get('reported_results', {})

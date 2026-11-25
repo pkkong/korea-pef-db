@@ -19,6 +19,7 @@ KIND = 'lp_history_notice_v1'
 JOINT_KIND = 'lp_newdeal_joint_history_notice_v1'
 JOINT_IMPORT_KIND = 'lp_newdeal_joint_history_import_v1'
 JOINT_FOLLOWUP_IMPORT_KIND = 'lp_newdeal_joint_followup_import_v1'
+JOINT_STAGES_IMPORT_KIND = 'lp_newdeal_joint_stages_import_v1'
 
 
 def validate_history_notice(raw, checked_at):

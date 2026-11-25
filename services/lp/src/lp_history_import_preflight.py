@@ -35,8 +35,10 @@ except ImportError:
 MAX_IMPORT_BYTES = 40 * 1024 * 1024
 MAX_NOTICES = 6
 _ALLOWED_CHANGED_KEYS = {'programs', 'history_notices'}
-_JOINT_IMPORTS = (newdeal.IMPORT_KIND, newdeal.FOLLOWUP_IMPORT_KIND)
-_JOINT_BUNDLES = {newdeal.BUNDLE_KIND: newdeal.IMPORT_KIND, newdeal.FOLLOWUP_BUNDLE_KIND: newdeal.FOLLOWUP_IMPORT_KIND}
+_JOINT_FOLLOWUPS = {newdeal.FOLLOWUP_IMPORT_KIND, newdeal.STAGES_IMPORT_KIND}
+_JOINT_BUNDLES = {newdeal.BUNDLE_KIND: newdeal.IMPORT_KIND, newdeal.FOLLOWUP_BUNDLE_KIND: newdeal.FOLLOWUP_IMPORT_KIND,
+                  newdeal.STAGES_BUNDLE_KIND: newdeal.STAGES_IMPORT_KIND}
+_JOINT_IMPORTS = set(_JOINT_BUNDLES.values())
 
 
 def _json(value):
@@ -79,8 +81,12 @@ def _validate_payload(payload):
 
 
 def _assert_preserved(current, after, updated=()):
-    events = {row['id']: row['added_event'] for row in updated}
-    expected = [newdeal.append_followup(p, events[p['id']]) if p['id'] in events else p for p in current['programs']]
+    events = {row['id']: row['added_events'] for row in updated}
+    expected = []
+    for program in current['programs']:
+        for event in events.get(program['id'], []):
+            program = newdeal.append_followup(program, event)
+        expected.append(program)
     if after['programs'][:len(current['programs'])] != expected:
         raise ValueError('기존 공개 사업 필드 변경')
     if after.get('history_notices', [])[:len(current.get('history_notices', []))] != current.get('history_notices', []):
@@ -146,10 +152,14 @@ def proposal(current, payload, checked_at):
     _validate_payload(payload)
     validate(current)
     joint = payload['kind'] in _JOINT_IMPORTS
-    followup = payload['kind'] == newdeal.FOLLOWUP_IMPORT_KIND
+    followup = payload['kind'] in _JOINT_FOLLOWUPS
     if followup:
-        update_id, added_event, notice = newdeal.project_followup(payload['source'], current['programs'], checked_at)
-        incoming, programs, holds = [notice], [], []
+        if payload['kind'] == newdeal.FOLLOWUP_IMPORT_KIND:
+            update_id, event, notice = newdeal.project_followup(payload['source'], current['programs'], checked_at)
+            events, incoming = [event], [notice]
+        else:
+            update_id, events, incoming = newdeal.project_stages(payload['source'], current['programs'], checked_at)
+        programs, holds = [], []
     elif joint:
         program, incoming = newdeal.project(payload['source'], checked_at)
         newdeal.assert_no_overlap(current['programs'], program, incoming)
@@ -178,7 +188,7 @@ def proposal(current, payload, checked_at):
                   or old.get('sha256') != n['sha256']
                   or old.get('attachment_hashes', {}) != n.get('attachment_hashes', {})):
             raise ValueError('기존 원문 카탈로그의 기관·본문·첨부 버전 충돌')
-    represented = {added_event['url']} if followup else {e['url'] for p in programs for e in p['events']}
+    represented = {e['url'] for e in events} if followup else {e['url'] for p in programs for e in p['events']}
     if holds or represented != {n['url'] for n in incoming}:
         raise ValueError('가져오기 원문이 모두 검증된 모집 사업으로 연결되지 않음')
     after = copy.deepcopy(current)
@@ -189,11 +199,16 @@ def proposal(current, payload, checked_at):
     aliases = current.get('program_aliases', {})
     if followup:
         index, = [i for i, p in enumerate(after['programs']) if p['id'] == update_id]
-        before = after['programs'][index]
-        program = newdeal.append_followup(before, added_event)
-        if program != before:
+        program = after['programs'][index]
+        added_events = []
+        for event in events:
+            once = newdeal.append_followup(program, event)
+            if once != program:
+                program = once
+                added_events.append(event)
+        if added_events:
             after['programs'][index] = program
-            updated.append({'id': update_id, 'added_event': added_event})
+            updated.append({'id': update_id, 'added_events': added_events})
     for p in programs:
         urls = {e['url'] for e in p['events'] if e['type'] == '모집 공고'}
         matches = []

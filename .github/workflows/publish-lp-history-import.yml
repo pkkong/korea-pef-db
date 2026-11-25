@@ -70,9 +70,10 @@ jobs:
           assert bool(checked['new_programs']) != bool(updates) and not checked['reused_program_ids']
           if updates:
               change, = updates
-              assert change['added_event']['type'] == '질의응답'
+              events = change['added_events']
+              assert [event['type'] for event in events] in (['질의응답'], ['접수 결과', '1차 심사 결과'])
               assert checked['programs_before'] == checked['programs_after']
-              assert checked['history_notices_after'] == checked['history_notices_before'] + 1
+              assert checked['history_notices_after'] == checked['history_notices_before'] + len(events)
           assert checked['source_code_commit'] == os.environ['LP_HISTORY_PREFLIGHT_SHA']
           assert re.fullmatch('[a-f0-9]{24}', baseline) and re.fullmatch('[a-f0-9]{64}', digest)
           assert candidate.stat().st_size == checked['candidate_bytes'] <= 40 * 1024 * 1024
@@ -122,13 +123,15 @@ jobs:
                       time.sleep(5)
           health = fetch('health.json')
           expected = {p['id']: p for p in checked['new_programs']}
-          updated = {row['id']: row['added_event'] for row in checked.get('updated_programs', [])}
+          updated = {row['id']: row['added_events'] for row in checked.get('updated_programs', [])}
           assert (expected.keys() | updated.keys()) <= set(publication['program_ids'])
           for program in publication['program_ids']:
               detail = fetch(f'program-{program}.html')
               assert '진행 일정' in detail
-              if event := updated.get(program):
+              for event in updated.get(program, []):
                   assert all(html.escape(event[key]) in detail for key in ('url', 'date', 'type'))
+                  if event.get('detail'):
+                      assert html.escape(event['detail']) in detail
               for gp in expected.get(program, {}).get('selected_gps', []):
                   assert html.escape(gp['name']) in detail and html.escape(gp['source_url']) in detail
           for old, target in publication['program_aliases'].items():

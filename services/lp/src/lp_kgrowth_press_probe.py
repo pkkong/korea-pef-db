@@ -492,16 +492,24 @@ def _verified_followup(first_capture, followup_capture, expected_terms, checked_
 
 
 def _joint_result_listing_target(raw, term, listing_url, observed_at):
+    pattern = (r'\(보도자료\)産銀·성장금융「' + re.escape(re.sub(r'\s+', '', term))
+               + r'」[1-9]\d*개운용사최종선정')
+    candidates = [r for r in _press_listing_rows(raw, term, listing_url, observed_at)
+                  if re.fullmatch(pattern, re.sub(r'\s+', '', r['title']))]
+    if len(candidates) != 1:
+        raise ValueError('공동 최종 선정 보도자료가 실제 목록에서 하나로 확인되지 않음')
+    return candidates[0]
+
+
+def _press_listing_rows(raw, term, listing_url, observed_at):
     try:
         from .collect_shared_lp_notices import Document
     except ImportError:
         from collect_shared_lp_notices import Document
     root = Document(raw.decode('cp949')).root
     table = next(t for t in root.nodes('table') if 'notice_tbl' in t.attrs.get('class', '').split())
-    candidates, seen = [], set()
+    rows, seen = [], set()
     previous_date = None
-    pattern = (r'\(보도자료\)産銀·성장금융「' + re.escape(re.sub(r'\s+', '', term))
-               + r'」[1-9]\d*개운용사최종선정')
     for row in table.nodes('tr'):
         cells = [n for n in row.children if getattr(n, 'tag', '') == 'td']
         if not cells:
@@ -521,13 +529,10 @@ def _joint_result_listing_target(raw, term, listing_url, observed_at):
         if ident in seen:
             raise ValueError('보도자료 목록의 공고 ID 중복·충돌')
         seen.add(ident)
-        if re.fullmatch(pattern, re.sub(r'\s+', '', title)):
-            candidates.append({'source_institution_id': 'kgrowth', 'board_type': 3,
-                               'source_id': 'kgrowth:press:' + ident, 'board_record_id': ident,
-                               'title': title, 'date': day, 'url': url, 'observed_href': href})
-    if len(candidates) != 1:
-        raise ValueError('공동 최종 선정 보도자료가 실제 목록에서 하나로 확인되지 않음')
-    return candidates[0]
+        rows.append({'source_institution_id': 'kgrowth', 'board_type': 3,
+                     'source_id': 'kgrowth:press:' + ident, 'board_record_id': ident,
+                     'title': title, 'date': day, 'url': url, 'observed_href': href})
+    return rows
 
 
 def capture_press_result_detail(first_capture, followup_capture, expected_terms, fetch, *,
@@ -573,6 +578,19 @@ def _complete_press_detail(raw):
 
 
 def _press_result_detail_dom(raw, target, term, digest):
+    stem = re.sub(r'\s+', ' ', target['title'].replace('産銀·성장금융', '산은 성장금융')
+                  .replace('「', '').replace('」', '')).strip()
+    detail, pdf = _press_detail_dom(raw, target, digest, stem)
+    compact = re.sub(r'[\s\u200b\xa0]+', '', detail['body'])
+    business = re.search(r'『' + re.escape(re.sub(r'\s+', '', term)) + r'』(20\d{2})년정시위탁운용사선정결과', compact)
+    headline = re.search(r'([1-9]\d*)개운용사최종선정$', re.sub(r'\s+', '', detail['title']))
+    if (not business or not headline or not all(name in compact for name in ('한국산업은행', '한국성장금융'))
+            or not re.search(r'최종' + re.escape(headline[1]) + r'개사가선정되었다고', compact)):
+        raise ValueError('보도자료 상세의 공동 정시 최종 선정 본문 불일치')
+    return {**detail, 'stated_business_year': business[1], 'stated_round': '정시'}, pdf
+
+
+def _press_detail_dom(raw, target, digest, attachment_stem):
     try:
         from .collect_shared_lp_notices import Document
     except ImportError:
@@ -606,17 +624,10 @@ def _press_result_detail_dom(raw, target, term, digest):
     if len(cls(root, 'div', 'view_info')) != 1 or len(cls(root, 'div', 'veiw_contents')) != 1:
         raise ValueError('보도자료 상세에 이웃 제목·본문 구획이 섞임')
     body = contents.clean()
-    compact = re.sub(r'[\s\u200b\xa0]+', '', body)
-    business = re.search(r'『' + re.escape(re.sub(r'\s+', '', term)) + r'』(20\d{2})년정시위탁운용사선정결과', compact)
-    headline = re.search(r'([1-9]\d*)개운용사최종선정$', re.sub(r'\s+', '', title))
-    if (not business or not headline or not all(name in compact for name in ('한국산업은행', '한국성장금융'))
-            or not re.search(r'최종' + re.escape(headline[1]) + r'개사가선정되었다고', compact)):
-        raise ValueError('보도자료 상세의 공동 정시 최종 선정 본문 불일치')
     files = one(cls(article, 'ul', 'file_list'), '첨부 목록')
     anchors = list(files.nodes('a'))
     if len(anchors) != 2 or len(cls(root, 'ul', 'file_list')) != 1:
         raise ValueError('보도자료 상세의 HWP·PDF 첨부 수 불일치')
-    stem = re.sub(r'\s+', ' ', title.replace('産銀·성장금융', '산은 성장금융').replace('「', '').replace('」', '')).strip()
     attachments = {}
     for anchor in anchors:
         name = anchor.clean()
@@ -632,7 +643,7 @@ def _press_result_detail_dom(raw, target, term, digest):
                     {'idx': target['board_record_id'], 'SelType': slot})):
             raise ValueError('보도자료 첨부의 호스트·경로·ID·News 구획 불일치')
         extension = '.hwp' if slot == 'News1' else '.pdf'
-        if name != stem + extension or anchor.attrs.get('title') != f'첨부파일 [{name}] 다운로드':
+        if name != attachment_stem + extension or anchor.attrs.get('title') != f'첨부파일 [{name}] 다운로드':
             raise ValueError('보도자료 첨부 파일명·형식과 공고 제목 불일치')
         attachments[slot] = {'url': url, 'name': name, 'slot': slot,
                              'board_record_id': target['board_record_id'], 'source_detail_sha256': digest,
@@ -641,7 +652,6 @@ def _press_result_detail_dom(raw, target, term, digest):
         raise ValueError('보도자료의 단일 News2 PDF 원문 링크 미확인')
     return {'title': title, 'date': day, 'body': body,
             'body_text_sha256': hashlib.sha256(body.encode('utf-8')).hexdigest(),
-            'stated_business_year': business[1], 'stated_round': '정시',
             'attachments': [attachments['News1'], attachments['News2']]}, attachments['News2']
 
 
