@@ -124,6 +124,12 @@ class PublishContracts(unittest.TestCase):
         new['events'].append({'type': '선정 결과', 'date': '2020-10-01', 'url': source, 'title': '선정 결과'})
         new['status'] = '선정 완료'
         new['selected_gps'] = [{'id': 'new-gp', 'name': '새로운파트너스', 'asset_scope': 'PE', 'source_url': source}]
+        shared = {'url': source, 'title': '공동 선정 결과'}
+        payload['notices'].append(shared)
+        current['history_notices'] = [shared]
+        data['history_notices'].insert(0, shared)
+        summary['history_notices_before'] = 1
+        summary['history_notices_after'] = 2
         revision = (('baseline', 'stamp'), current['review_decisions'])
         conn = MagicMock()
         conn.__enter__.return_value = conn
@@ -143,6 +149,8 @@ class PublishContracts(unittest.TestCase):
             self.assertEqual(published['public_notice_context']['notices'][:-1], current['public_notice_context']['notices'])
             self.assertEqual(published['public_notice_context']['notices'][-1]['selectedGpNames'], ['새로운파트너스'])
             self.assertEqual(report['new_program_ids'], [new['id']])
+            self.assertEqual(published['history_notices'][0], shared)
+            self.assertEqual(report['notices'], data['history_notices'][1:])
             with self.assertRaisesRegex(ValueError, 'changed since history-import preflight'):
                 prepare_historical_addition(payload, 'other-run', STAMP)
 

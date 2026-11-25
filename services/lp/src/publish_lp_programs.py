@@ -502,9 +502,10 @@ def prepare_historical_addition(payload, expected_run, checked_at):
     started = time.monotonic()
     data, summary = proposal(current, payload, checked_at)
     added = summary['new_programs']
-    if (not added or summary['reused_program_ids']
-            or summary['history_notices_after'] - summary['history_notices_before'] != len(payload['notices'])):
-        raise ValueError('Pinned import must append only previously unpublished programs and stages')
+    # The proposal verifies surviving source versions. A new program can
+    # legitimately cite a joint result already retained for another program.
+    if not added or summary['reused_program_ids']:
+        raise ValueError('Pinned import must append only previously unpublished programs')
     new_ids = {p['id'] for p in added}
     previous_results = current.get('reported_results', {})
     results, holds = load_reported_results(added)
