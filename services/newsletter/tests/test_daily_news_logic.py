@@ -1989,6 +1989,12 @@ def test_20261125_reviewed_sections_survive_export_classification() -> None:
             "Deal",
             "Market",
         ),
+        (
+            "다올투자證 경영권 매각설 수면 위로",
+            "https://www.fnnews.com/news/202611242109161913",
+            "Deal",
+            "Market",
+        ),
     ]
     overrides = load_manual_overrides(DEFAULT_OVERRIDES)
     for title, url, old_section, expected in cases:
