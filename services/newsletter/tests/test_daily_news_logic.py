@@ -1943,6 +1943,59 @@ def test_20261119_market_corrections_use_section_only_overrides() -> None:
         assert all(tag["tag_value"] != "Deal" for tag in tags), title
 
 
+def test_20261125_reviewed_sections_survive_export_classification() -> None:
+    cases = [
+        ("삼성 금융 네트워크 글로벌 영토 넓힌다…해외 M&A 속도", "https://www.sedaily.com/article/20118374", "Deal", "Market"),
+        (
+            '[마켓인]"바이아웃만으론 부족"…글로벌 PE들 하이브리드 투자 확대',
+            "https://www.edaily.co.kr/News/Read?mediaCodeNo=257&newsId=04280406645649000",
+            "Deal",
+            "Market",
+        ),
+        ("“대기업 믿었는데” 자금 회수 막히자 법정 찾는 FI [시그널]", "https://www.sedaily.com/article/20118387", "Deal", "Market"),
+        (
+            "[마켓인]올해 신규 인수 ‘0건’…바이아웃 명가 한앤코의 변신",
+            "https://www.edaily.co.kr/News/Read?mediaCodeNo=257&newsId=03903206645649000",
+            "Deal",
+            "GP",
+        ),
+        (
+            "미래에셋벤처, 시드부터 프리IPO까지…딥테크 성장 파트너",
+            "https://www.thebell.co.kr/free/content/ArticleView.asp?key=202611241359264560108412",
+            "Deal",
+            "GP",
+        ),
+        (
+            "'IPO 드림팀' 4인방, 상장 길목마다 밀착 밸류업",
+            "https://www.thebell.co.kr/free/content/ArticleView.asp?key=202611231024031520107813",
+            "Deal",
+            "GP",
+        ),
+        (
+            "TKL인베스트먼트, 풍원정밀 200억 영구CB 투자 추진",
+            "https://www.thebell.co.kr/free/content/ArticleView.asp?key=202611201359234720101010",
+            "Market",
+            "Deal",
+        ),
+    ]
+    overrides = load_manual_overrides(DEFAULT_OVERRIDES)
+    for title, url, old_section, expected in cases:
+        override = overrides[normalize_url(url)]
+        assert override["review_status"] == "auto"
+        assert not override["force_include"] and not override["force_exclude"]
+        tag_type, tag_value = override["manual_tags"].split(":", 1)
+        assert tag_type == "section_override"
+        row = {
+            "title": title,
+            "section_tags": old_section,
+            "topic_tags": old_section,
+            "section_override_tags": tag_value,
+        }
+        assert normalize_export_classification(row) == expected, title
+        assert row["current_category"] == row["section_tags"] == expected, title
+        assert old_section != "Deal" or "Deal" not in str(row["topic_tags"]).split(","), title
+
+
 def test_20260609_editorial_quality_regressions() -> None:
     insurance = {
         "publisher": "한국경제",
