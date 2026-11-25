@@ -16,7 +16,7 @@
 | 서비스 | 공식 주소 | 데이터 경로 | 상태 |
 | --- | --- | --- | --- |
 | 브리프(뉴스레터) | https://kpef-newsletter.vercel.app | 매일 수집 → Supabase → Vercel. 백업 미러 https://pkkong.github.io/kpef-newsletter/ | 매일 발행 정상 |
-| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 11/25 21:00 과거 사업 추가 기준 22기관 92사업·과거 공고 97건. 산업은행 2025년 반도체 일반·재정과 선정 이력 두 곳을 공개했다. 18:16 지연 정기는 산재·고용보험기금 목록 장애로 최종 장애 보고가 실패했다 |
+| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 11/25 21:59 과거 사업 추가 기준 22기관 93사업·과거 공고 99건. 산업은행 2021년 정시 뉴딜성장형과 공식 선정 이력 세 곳을 공개했다. 18:16 지연 정기는 산재·고용보험기금 목록 장애로 최종 장애 보고가 실패했다 |
 | GP 운용사 | https://kpef-gp.vercel.app | 금감원 분기 자료 → Supabase 스냅샷 → Vercel | 2025Q4 기준. 프로필에 LP 선정 이력 표시(11/13). 없는 페이지는 404 |
 | Wiki | — | — | 사용자가 다시 기획할 때까지 숨김 |
 
