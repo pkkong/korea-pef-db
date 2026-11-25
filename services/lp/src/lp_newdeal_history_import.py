@@ -334,7 +334,8 @@ def project_stages(source, current_programs, checked_at):
     program, = owners
     deadline = program.get('deadline')
     previous = {e['type']: e for e in program['events']}
-    if (program['institution_id'] != 'kdb' or program.get('joint_history_track_keys') != ['blind_newdeal_growth']
+    if (program['institution_id'] != 'kdb' or program['asset_scope'] != 'PE'
+            or program.get('joint_history_track_keys') != ['blind_newdeal_growth']
             or not program.get('joint_history_bundle_sha256') or program['status'] != '선정 완료'
             or program.get('manual_review_id') or not deadline or not program.get('schedule_stages')
             or not {'모집 공고', '선정 결과'} <= previous.keys()):
@@ -348,6 +349,11 @@ def project_stages(source, current_programs, checked_at):
     if _page_contract(raw, _FUND, 2) != listing.get('page_contract'):
         raise ValueError('뉴딜 접수·심사의 원목록 페이지 불일치')
     rows = _press_listing_rows(raw, _FUND, search_url, listing['checked_at'])
+    final = previous['선정 결과']
+    final_matches = [r for r in rows if (r['title'], r['date'], source_key(r['url']))
+                     == (final['title'], final['date'], source_key(final['url']))]
+    if len(final_matches) != 1:
+        raise ValueError('뉴딜 접수·심사 원목록과 공개된 최종 선정 원문 불일치')
     proof = []
     for event_type, (_, title, _) in _STAGES.items():
         target, = [r for r in rows if r['title'] == title]
@@ -372,7 +378,9 @@ def project_stages(source, current_programs, checked_at):
     target_amount = int(program['fund_target_label'].removesuffix('억원').replace(',', ''))
     (applied, screened), (applied_count, screened_count) = _stage_facts(
         application_pdf, screening_pdf, deadline, target_amount)
-    if (application['date'] != applied.isoformat()
+    recruited = date.fromisoformat(previous['모집 공고']['date'])
+    if (application['date'] != applied.isoformat() or recruited.year != applied.year - 1
+            or f'지난해{recruited.month}월{recruited.day}일공고한' not in compact(application['body'])
             or not previous['모집 공고']['date'] < deadline[:10] < application['date'] < screened.isoformat()
             or not screened.isoformat() <= screening['date'] < previous['선정 결과']['date']
             or f'{screened.month}월{screened.day}일' not in compact(screening['body'])):

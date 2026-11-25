@@ -81,6 +81,23 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as env:
               env.write(f'LP_EXPECTED_PUBLICATION_BASELINE={baseline}\nLP_HISTORY_IMPORT_SHA256={digest}\n')
           PY
+      - name: Keep the current public schedule and selection for follow-ups
+        run: |
+          python3 - <<'PY'
+          import json, os, re, urllib.request
+          from pathlib import Path
+
+          root = Path('/tmp/lp-history-import-check')
+          checked = json.loads((root / 'preflight.json').read_bytes())
+          for row in checked.get('updated_programs', []):
+              program = row['id']
+              assert re.fullmatch('[a-z0-9_-]+', program)
+              url = f'https://kpef-lp.vercel.app/program-{program}.html?refresh=1'
+              with urllib.request.urlopen(url, timeout=30) as response:
+                  assert response.headers['X-LP-Data-Source'] == 'supabase'
+                  assert response.headers['X-LP-Run'] == os.environ['LP_EXPECTED_PUBLICATION_BASELINE']
+                  (root / f'previous-{program}.html').write_bytes(response.read())
+          PY
       - name: Install LP source replay and database dependencies
         run: python3 -m pip install -r services/lp/web/requirements.txt 'psycopg[binary]==3.2.10' 'pypdf==6.10.0' 'olefile==0.47'
       - name: Publish the exact historical addition in one transaction
@@ -97,11 +114,12 @@ jobs:
       - name: Verify the public state, detail pages and aliases
         run: |
           python3 - <<'PY'
-          import html, json, time, urllib.request
+          import html, json, re, time, urllib.request
           from pathlib import Path
 
           out = Path('/tmp/lp-history-import-publication')
-          checked = json.loads(Path('/tmp/lp-history-import-check/preflight.json').read_bytes())
+          root = Path('/tmp/lp-history-import-check')
+          checked = json.loads((root / 'preflight.json').read_bytes())
           publication = json.loads((out / 'publication.json').read_bytes())
           assert publication['programs'] == checked['programs_after']
           assert publication['history_notices'] == checked['history_notices_after']
@@ -125,13 +143,26 @@ jobs:
           expected = {p['id']: p for p in checked['new_programs']}
           updated = {row['id']: row['added_events'] for row in checked.get('updated_programs', [])}
           assert (expected.keys() | updated.keys()) <= set(publication['program_ids'])
+          def section(page, name):
+              block, = re.findall(rf'<section id="{name}">.*?</section>', page, re.S)
+              return block
+
           for program in publication['program_ids']:
               detail = fetch(f'program-{program}.html')
               assert '진행 일정' in detail
-              for event in updated.get(program, []):
-                  assert all(html.escape(event[key]) in detail for key in ('url', 'date', 'type'))
-                  if event.get('detail'):
-                      assert html.escape(event['detail']) in detail
+              if events := updated.get(program):
+                  previous = (root / f'previous-{program}.html').read_text(encoding='utf-8')
+                  schedule = section(detail, 'schedule')
+                  entries = re.findall(r'<li class="event">.*?</li>', schedule, re.S)
+                  for event in events:
+                      phrases = [html.escape(event[key]) for key in ('url', 'date', 'type')]
+                      if event.get('detail'):
+                          phrases.append(html.escape(event['detail']))
+                      added, = [entry for entry in entries if all(phrase in entry for phrase in phrases)]
+                      schedule = schedule.replace(added, '', 1)
+                  assert schedule == section(previous, 'schedule')
+                  for name in ('offering', 'selection'):
+                      assert section(detail, name) == section(previous, name)
               for gp in expected.get(program, {}).get('selected_gps', []):
                   assert html.escape(gp['name']) in detail and html.escape(gp['source_url']) in detail
           for old, target in publication['program_aliases'].items():

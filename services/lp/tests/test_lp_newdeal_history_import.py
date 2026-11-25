@@ -195,3 +195,18 @@ def test_two_stages_preserve_the_selection_and_repeat_without_duplicates():
         refreshed = copy.deepcopy(updated)
         publication._refresh(refreshed, [], STAMP)
         assert refreshed['schedule_stages'] == updated['schedule_stages']
+
+
+def test_stage_replay_refuses_a_non_pe_program_before_loading_receipts():
+    program, _ = example()
+    program.update(asset_scope='PE·VC', deadline='2021-01-26T16:00:00+09:00',
+                   joint_history_track_keys=['blind_newdeal_growth'], joint_history_bundle_sha256='1' * 64)
+    publication._refresh(program, [], STAMP)
+    source = {'kind': newdeal.STAGES_BUNDLE_KIND, 'institution_id': 'kdb',
+              'source_institution_id': 'kgrowth', 'notices': [{}, {}]}
+    try:
+        newdeal.project_stages(source, [program], STAMP)
+    except ValueError as error:
+        assert '리그' in str(error)
+    else:
+        raise AssertionError('A combined PE and VC program accepted the PE-only stages')
