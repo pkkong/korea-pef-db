@@ -1,7 +1,7 @@
 """Propose a pinned history import against one read-only operating snapshot.
 
-Only new programs anchored by a recruitment and their validated source receipts are appended.
-Existing programs, aliases, decisions, freshness and other catalogs stay exact.
+Add a source-verified recruitment or append an official follow-up to one existing timeline.
+Preserve existing addresses, offering terms, selection rosters and evidence catalogs.
 This is an isolated import preview, not a simulation of new daily source updates,
 and is never approval to publish or permission to call a write function.
 """
@@ -142,7 +142,7 @@ def _catalog_versions(current):
 
 
 def proposal(current, payload, checked_at):
-    """Append source-validated programs and their stages; keep old programs exact."""
+    """Propose a verified historical addition with preservation checks."""
     _validate_payload(payload)
     validate(current)
     joint = payload['kind'] in _JOINT_IMPORTS
@@ -293,7 +293,7 @@ def preflight(conn, payload, checked_at, *, source_bundle=None, candidate_checke
             'pages_bytes': page_bytes + sum(len(s.encode()) for s in generated_aliases.values()),
             'official_http_requests': 0, 'database_writes': 0, 'published': False,
             'approval_required': True, 'requires_recheck_before_publish': True,
-            'scope': '새 과거 사업 추가만 비교; 정기 수집의 새 관측은 재현하지 않음'}
+            'scope': '고정 과거 원문의 사업 또는 후속 단계와 기존 공개본 보존을 비교'}
 
 
 def main(argv=None):

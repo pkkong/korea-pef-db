@@ -16,7 +16,7 @@
 | 서비스 | 공식 주소 | 데이터 경로 | 상태 |
 | --- | --- | --- | --- |
 | 브리프(뉴스레터) | https://kpef-newsletter.vercel.app | 매일 수집 → Supabase → Vercel. 백업 미러 https://pkkong.github.io/kpef-newsletter/ | 매일 발행 정상 |
-| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 11/25 21:59 과거 사업 추가 기준 22기관 93사업·과거 공고 99건. 산업은행 2021년 정시 뉴딜성장형과 공식 선정 이력 세 곳을 공개했다. 18:16 지연 정기는 산재·고용보험기금 목록 장애로 최종 장애 보고가 실패했다 |
+| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 11/25 22:56 과거 공고 추가 기준 22기관 93사업·과거 공고 100건. 산업은행 2021년 정시 뉴딜성장형의 기존 상세에 기업투자 FAQ를 연결했다. 18:16 지연 정기는 산재·고용보험기금 목록 장애로 최종 장애 보고가 실패했다 |
 | GP 운용사 | https://kpef-gp.vercel.app | 금감원 분기 자료 → Supabase 스냅샷 → Vercel | 2025Q4 기준. 프로필에 LP 선정 이력 표시(11/13). 없는 페이지는 404 |
 | Wiki | — | — | 사용자가 다시 기획할 때까지 숨김 |
 
@@ -71,7 +71,7 @@
 | LP 정기 | `find-lp-reported-results` | 월요일 08:43, 브리프 기사에서 선정 결과 보도 후보 찾기(읽기 전용, [절차](lp_reported_results_operations.md)) |
 | LP 복구·진단 | `recover-lp-publication`, `diagnose-lp-board-http`, `diagnose-lp-inventory-failures` | 발행 복구, 공식 응답 제한 진단, 감사 실패 진단 |
 | LP 원문 확인 | `verify-lp-kgrowth-history` | 요청 파일 push로 누락 상세 최대 2건, 보도자료 첫 목록, 공동 원모집 펀드명 검색 최대 2건 또는 검증한 검색 2쪽 1건의 응답을 보존. 명단 연결과 발행은 별도 경로 |
-| LP 가져오기 확인 | `verify-lp-history-import` | 고정 원본으로 후보를 재구성하고 읽기 전용 운영 상태와 기존 사업·원문·별칭·크기 보존을 비교. 운영 상태·검토 메모를 artifact에 내보내지 않음. DB 쓰기·발행 없음 |
+| LP 가져오기 확인 | `verify-lp-history-import` | 고정 원본에서 가져오기·공식 FAQ 보강 후보를 재생한다. 읽기 전용으로 기존 주소·조건·명단·별칭과 저장 크기를 대조한다. 운영 상태·검토 메모를 artifact에 내보내지 않음. DB 쓰기·발행 없음 |
 | LP 과거 이력 | `discover-lp-history`, `discover-ktcu-history`, `inspect-lp-history`, `collect-lp-history-bodies`, `collect-lp-history-attachments`, `collect-kgrowth-history-attachments`, `plan-lp-history-attachments`, `prepare-lp-history-publication`, `publish-lp-history` | 2020년 이후 이력 수집(진행 중 과제) |
 | LP 배포·설정 | `deploy-lp-vercel`, `deploy-lp-source-worker`, `configure-lp-reviewer` | 앱 배포, 서울 경유 수집 중계, 검토자 설정 |
 | 브리프 | `deploy-newsletter-pages`(매일 08:37), `newsletter-watchdog`(09:22), `sync-newsletter-supabase`, `deploy-newsletter-vercel`, `apply-newsletter-supabase-migration`, `check-newsletter-vercel-readiness` | 미러 수집·빌드 → Supabase 동기화 → Vercel |
