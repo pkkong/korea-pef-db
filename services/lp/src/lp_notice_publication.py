@@ -41,6 +41,7 @@ try:
     from . import lp_kdb_media_terms as kdb_media
     from . import lp_kdb_innovation_terms as kdb_innovation
     from . import lp_kdb_growth_support_terms as kdb_growth_support
+    from . import lp_kdb_growth_support_2024 as kdb_growth_support_2024
     from . import lp_kdb_recovery_market as kdb_recovery
     from . import lp_kdb_ai_fixed_terms as kdb_ai_fixed
     from . import lp_kdb_semiconductor_terms as kdb_semiconductor
@@ -70,6 +71,7 @@ except ImportError:
     import lp_kdb_media_terms as kdb_media
     import lp_kdb_innovation_terms as kdb_innovation
     import lp_kdb_growth_support_terms as kdb_growth_support
+    import lp_kdb_growth_support_2024 as kdb_growth_support_2024
     import lp_kdb_recovery_market as kdb_recovery
     import lp_kdb_ai_fixed_terms as kdb_ai_fixed
     import lp_kdb_semiconductor_terms as kdb_semiconductor
@@ -715,6 +717,8 @@ def _attach_result_roster(p, members, holds, known=frozenset()):
             bank_names = known | set(INSTITUTION_TITLE_NAMES.get('ibk', ()))
             tables = [kdb_growth_support.result_roster(result, text, p, lambda names: split_glued_names(names, bank_names))
                       for text in texts]
+        elif evidence.get('growth_support_2024_first_allocation'):
+            tables = [kdb_growth_support_2024.result_roster(result, text, p) for text in texts]
         elif evidence.get('innovation_joint_allocation'):
             tables = [kdb_innovation.result_roster(result, text, p, split_names) for text in texts]
         elif evidence.get('recovery_market_allocation'):
@@ -917,6 +921,7 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
     groups = defaultdict(list)
     recovery_stages = kdb_recovery.linked_stages(docs.values(), _texts)
     ai_faqs = kdb_ai_fixed.linked_faqs(docs.values(), _texts)
+    growth_support_stages = kdb_growth_support_2024.linked_stages(docs.values(), _texts)
     for n in docs.values():
         if (phase := kdb_recovery.role(n)) and phase != kdb_recovery.RECRUITMENT:
             if original := recovery_stages.get(n['url']):
@@ -925,6 +930,11 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
                 holds.append({'stage': 'basic_stage_link', 'url': n['url'], 'reason': '회수시장 활성화 원공고 일정 또는 후속 근거 미확인'})
         elif original := ai_faqs.get(n['url']):
             groups[_identity(original)].append(n)
+        elif kdb_growth_support_2024.shared_stage(n):
+            if original := growth_support_stages.get(n['url']):
+                groups[_identity(original)].append(n)
+            else:
+                skip(_identity(n), [n], 'unverified_shared_stage')
         elif n['institution_id'] in names and n['institution_id'] not in {'pck_pension','kfinco'} and notice_stage(n['title']) in STAGES:
             groups[_identity(n)].append(n)
     # Each observed recruitment anchors its own solicitation. Similar June and
@@ -977,8 +987,10 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
                 continue
             original = originals[0]
             urls = {n['url'] for n in members}
+            # Shared lifecycle notices establish a stage, not a program's identity.
+            identity_urls = urls - growth_support_stages.keys()
             matches = [p for p in programs.values() if p['institution_id'] == original['institution_id']
-                       and (p.get('source_program_key') == key or urls & {e['url'] for e in p['events']}
+                       and (p.get('source_program_key') == key or identity_urls & {e['url'] for e in p['events']}
                             or (original['institution_id'] == 'pck_pension' and urls & {
                                 pck_programs._canonical(e['url']) for e in p['events']}))]
             if len(matches) > 1:
