@@ -96,11 +96,17 @@ def _binary(helper_sha):
 
 def validate_result(value, raw, helper_sha):
     """Validate process output before any caller can treat it as source evidence."""
+    return validate_proof(value, hashlib.sha256(raw).hexdigest(), len(raw), helper_sha)
+
+
+def validate_proof(value, input_sha, input_bytes, helper_sha):
+    """Replay an OCR receipt against the retained attachment fingerprint."""
     if not isinstance(value,dict) or value.get('version')!=1 or value.get('engine')!=ENGINE or value.get('revision')!=3:
         raise ValueError('unexpected OCR engine contract')
     if value.get('languages')!=['ko-KR','en-US'] or not isinstance(value.get('os_version'),str) or not value['os_version']:
         raise ValueError('missing required OCR language or OS identity')
-    if value.get('input_sha256')!=hashlib.sha256(raw).hexdigest() or value.get('input_bytes')!=len(raw):
+    if (value.get('input_sha256') != input_sha or value.get('input_bytes') != input_bytes
+            or type(input_bytes) is not int or not 0 < input_bytes <= MAX_INPUT_BYTES):
         raise ValueError('OCR source checksum mismatch')
     pages=value.get('pages')
     if not isinstance(pages,list) or not 1<=len(pages)<=MAX_PAGES:raise ValueError('OCR page limit')

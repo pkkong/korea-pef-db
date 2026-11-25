@@ -21,15 +21,17 @@ try:
     from .lp_program_service import validate, assert_selected_gp_history, build
     from .lp_program_aliases import alias_pages, missing_published_ids
     from .lp_state_storage import pack_state, unpack_state, MARKER, EVIDENCE_KEYS
+    from . import lp_kdb_semiconductor_2025 as kdb_semiconductor_2025
 except ImportError:
     from lp_history_notices import validate_history_notice
     from lp_notice_publication import publish_basic_notices
     from lp_program_service import validate, assert_selected_gp_history, build
     from lp_program_aliases import alias_pages, missing_published_ids
     from lp_state_storage import pack_state, unpack_state, MARKER, EVIDENCE_KEYS
+    import lp_kdb_semiconductor_2025 as kdb_semiconductor_2025
 
 MAX_IMPORT_BYTES = 40 * 1024 * 1024
-MAX_NOTICES = 5
+MAX_NOTICES = 6
 _ALLOWED_CHANGED_KEYS = {'programs', 'history_notices'}
 
 
@@ -62,7 +64,7 @@ def _validate_payload(payload):
             or payload['kind'] != 'lp_history_import_v1' or not isinstance(payload['notices'], list)
             or not 1 <= len(payload['notices']) <= MAX_NOTICES
             or not isinstance(payload['checked_at'], str)):
-        raise ValueError('최대 5공고의 검토용 가져오기 형식 필요')
+        raise ValueError(f'최대 {MAX_NOTICES}공고의 검토용 가져오기 형식 필요')
     stamp = datetime.fromisoformat(payload['checked_at'].replace('Z', '+00:00'))
     if stamp.tzinfo is None or stamp > datetime.now(timezone.utc):
         raise ValueError('가져오기 관측시각의 시간대·미래시각 불일치')
@@ -137,6 +139,9 @@ def proposal(current, payload, checked_at):
     for old in retained.values():
         validate_history_notice(old, checked_at)
     incoming_by_url = {n['url']: n for n in incoming}
+    if any(old.get('attachment_ocr') != n.get('attachment_ocr') for url, n in incoming_by_url.items()
+           if (old := retained.get(url)) is not None):
+        raise ValueError('기존 과거 원문의 OCR 영수증과 가져올 버전 불일치')
     for old in _catalog_versions(current):
         n = incoming_by_url.get(old.get('url'))
         if n and (old.get('institution_id') != n['institution_id']
@@ -162,6 +167,10 @@ def proposal(current, payload, checked_at):
             shared_url = bool(urls & old_urls)
             if shared_url and old['institution_id'] != p['institution_id']:
                 raise ValueError('공개 모집 원문의 기관 귀속 충돌')
+            if shared_url and kdb_semiconductor_2025.distinct_offerings(p, old):
+                continue
+            if shared_url and p.get('source_program_key') in kdb_semiconductor_2025.KEYS.values() and not same_key:
+                raise ValueError('반도체 2025년 공동 모집과 단일 기존 공개 사업의 관계 미확인')
             if old['institution_id'] == p['institution_id'] and (same_key or shared_url):
                 matches.append(old)
         if len(matches) > 1 or (p['id'] in ids and not matches) or p['id'] in aliases:

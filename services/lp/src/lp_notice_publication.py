@@ -47,6 +47,7 @@ try:
     from . import lp_kdb_recovery_market as kdb_recovery
     from . import lp_kdb_ai_fixed_terms as kdb_ai_fixed
     from . import lp_kdb_semiconductor_terms as kdb_semiconductor
+    from . import lp_kdb_semiconductor_2025 as kdb_semiconductor_2025
 except ImportError:
     from lp_offering_policy import procurement_reason,central_not_investing
     from lp_attachment_policy import is_submission_attachment
@@ -79,6 +80,7 @@ except ImportError:
     import lp_kdb_recovery_market as kdb_recovery
     import lp_kdb_ai_fixed_terms as kdb_ai_fixed
     import lp_kdb_semiconductor_terms as kdb_semiconductor
+    import lp_kdb_semiconductor_2025 as kdb_semiconductor_2025
 
 ROOT = Path(__file__).resolve().parents[3]
 # Large LPs whose policy/pension notices mix PE and VC (user decision 2026-11-12).
@@ -187,7 +189,11 @@ def _sources(data, growth_notices, checked_at):
     for raw in data.get('history_notices', []):
         try:
             n = _valid(history_notices.validate_history_notice(raw, checked_at), checked_at)
-            docs.setdefault(n['url'], n)  # a current daily version of the same notice wins
+            current = docs.setdefault(n['url'], n)  # a current daily version of the same notice wins
+            if (current is not n and kdb_semiconductor_2025.role(n) == 'recruitment'
+                    and n.get('attachment_ocr') and current['sha256'] == n['sha256']
+                    and current.get('attachment_hashes') == n.get('attachment_hashes')):
+                current['attachment_ocr'] = n['attachment_ocr']
         except (KeyError, TypeError, ValueError) as exc:
             holds.append({'stage': 'basic_publication', 'url': raw.get('url'), 'reason': str(exc)})
     return docs, shared, holds
@@ -735,6 +741,8 @@ def _attach_result_roster(p, members, holds, known=frozenset()):
             tables = [kdb_ai_fixed.result_roster(result, text, p) for text in texts]
         elif evidence.get('semiconductor_blind_allocation'):
             tables = [kdb_semiconductor.result_roster(result, text, p) for text in texts]
+        elif p.get('source_program_key') in kdb_semiconductor_2025.KEYS.values():
+            tables = [kdb_semiconductor_2025.result_roster(result, text, p) for text in texts]
         else:
             tables = [kdb_result_roster(text, known) or kdb_reopen.result_roster(result, text, p)
                       or kdb_nuclear.result_roster(result, text, p, split_names)
@@ -927,6 +935,12 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
     names = _names()
     docs, shared, holds = _sources(data, growth_notices, checked_at)
     groups = defaultdict(list)
+    try:
+        semiconductor = kdb_semiconductor_2025.offerings(docs.values())
+    except (KeyError, TypeError, ValueError) as exc:
+        semiconductor = {}
+        holds.append({'stage': 'basic_publication', 'institution_id': 'kdb', 'reason': str(exc)})
+    groups.update({key: members for key, (_, _, members) in semiconductor.items()})
     recovery_stages = kdb_recovery.linked_stages(docs.values(), _texts)
     ai_faqs = kdb_ai_fixed.linked_faqs(docs.values(), _texts)
     policy_stages = defaultdict(list)
@@ -934,6 +948,8 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
         for url, original in policy.linked_stages(docs.values(), _texts).items():
             policy_stages[url].append(original)
     for n in docs.values():
+        if kdb_semiconductor_2025.role(n):
+            continue
         if (phase := kdb_recovery.role(n)) and phase != kdb_recovery.RECRUITMENT:
             if original := recovery_stages.get(n['url']):
                 groups[_identity(original)].append(n)
@@ -1001,12 +1017,18 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
                 continue
             original = originals[0]
             urls = {n['url'] for n in members}
+            split = semiconductor.get(key)
             # Shared lifecycle notices establish a stage, not a program's identity.
             identity_urls = urls - policy_stages.keys()
             matches = [p for p in programs.values() if p['institution_id'] == original['institution_id']
                        and (p.get('source_program_key') == key or identity_urls & {e['url'] for e in p['events']}
                             or (original['institution_id'] == 'pck_pension' and urls & {
                                 pck_programs._canonical(e['url']) for e in p['events']}))]
+            if split:
+                identified = {'institution_id': original['institution_id'], 'source_program_key': key}
+                matches = [p for p in matches if not kdb_semiconductor_2025.distinct_offerings(p, identified)]
+                if any(p.get('source_program_key') != key for p in matches):
+                    raise ValueError('반도체 2025년 공동 모집과 단일 기존 공개 사업의 관계 미확인')
             if len(matches) > 1:
                 raise ValueError('복수 기존 사업과 연결; 차수 확인 필요')
             if matches and matches[0].get('manual_review_id'):
@@ -1015,10 +1037,15 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
             # evidence. Advancing its sourced stage does not require reapproving
             # its terms or interpreting its GP list again.
             reviewed = matches and not matches[0].get('basic_publication')
-            if not reviewed and _scope(original) not in ('pe_blind', 'mixed_pe_blind'):
-                skip(key, members, 'scope:' + str(_scope(original)))
+            scope = 'mixed_pe_blind' if split else _scope(original)
+            if not reviewed and scope not in ('pe_blind', 'mixed_pe_blind'):
+                skip(key, members, 'scope:' + str(scope))
                 continue
-            terms, raw_terms = _terms(original, shared.get(original['url']), checked_at)
+            if split:
+                title, raw_terms, _ = split
+                terms = {field: copy.deepcopy(raw_terms[field]) for field in OFFERING_FIELDS if field in raw_terms}
+            else:
+                terms, raw_terms = _terms(original, shared.get(original['url']), checked_at)
             if previous_recruitment:
                 terms.setdefault('extraction_evidence', {})['prior_media_recruitment'] = [previous_recruitment]
             if raw_terms.get('deadline_error'):
@@ -1026,7 +1053,7 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
             if raw_terms.get('allocation_reading_failed'):
                 holds.append({'stage': 'basic_allocation', 'url': original['url'], 'reason': raw_terms['allocation_error']})
             mixed_open = False
-            if not reviewed and _scope(original) == 'mixed_pe_blind' and not ((raw_terms.get('amount_scope') == 'pe_only' and raw_terms.get('commitment_amount_krw')) or kbiz_terms.pe_track(original)):
+            if not reviewed and scope == 'mixed_pe_blind' and not ((raw_terms.get('amount_scope') == 'pe_only' and raw_terms.get('commitment_amount_krw')) or kbiz_terms.pe_track(original)):
                 if original['institution_id'] not in PE_TRACK_INSTITUTIONS:
                     skip(key, members, 'mixed_without_pe_amount')
                     continue
@@ -1071,9 +1098,10 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
                     # Joint notices (several LPs) and funds already published by another LP.
                     holds.append({'stage': 'basic_publication', 'program_key': key, 'reason': '같은 펀드가 다른 기관 사업으로 이미 공개됨'})
                     continue
-                identity = original['institution_id'] + '-' + original['date'][:4] + '-' + hashlib.sha256(original['url'].encode()).hexdigest()[:16]
+                identity_input = f"{original['url']}#{key}" if split else original['url']
+                identity = original['institution_id'] + '-' + original['date'][:4] + '-' + hashlib.sha256(identity_input.encode()).hexdigest()[:16]
                 p = {'id': identity, 'institution_id': original['institution_id'],
-                     'institution_name': names[original['institution_id']], 'title': original['title'],
+                     'institution_name': names[original['institution_id']], 'title': title if split else original['title'],
                      'asset_scope': 'PE', 'status': '모집 공고', 'selected_gps': [], 'events': [],
                      'basic_publication': True, 'source_program_key': key, **terms}
             if mixed_open:

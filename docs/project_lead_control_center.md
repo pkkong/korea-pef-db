@@ -16,7 +16,7 @@
 | 서비스 | 공식 주소 | 데이터 경로 | 상태 |
 | --- | --- | --- | --- |
 | 브리프(뉴스레터) | https://kpef-newsletter.vercel.app | 매일 수집 → Supabase → Vercel. 백업 미러 https://pkkong.github.io/kpef-newsletter/ | 매일 발행 정상 |
-| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 11/25 17:28 수동 보완 공개 확인 기준 22기관 90사업·과거 공고 91건. 2024년 1차 혁신산업 공식 선정 7곳과 기존 89개 사업 주소를 확인했다 |
+| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 11/25 18:16 지연 정기 공개 확인 기준 22기관 90사업·과거 공고 91건. 산재·고용보험기금 목록 장애로 마지막 장애 보고는 실패했다. 2025년 반도체 일반·재정은 로컬 검증을 마쳤다 |
 | GP 운용사 | https://kpef-gp.vercel.app | 금감원 분기 자료 → Supabase 스냅샷 → Vercel | 2025Q4 기준. 프로필에 LP 선정 이력 표시(11/13). 없는 페이지는 404 |
 | Wiki | — | — | 사용자가 다시 기획할 때까지 숨김 |
 
