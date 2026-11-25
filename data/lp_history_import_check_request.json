@@ -1,9 +1,9 @@
 {
   "kind": "lp_history_import_check_request_v1",
   "institution_id": "kdb",
-  "bundle_commit": "b5dbf0dbbc3b7333afd8bf352f11dd4c8c5a3870",
-  "bundle_sha256": "1a851ad70262531795efc24578b763764eb3739c7e3583f4513a979577a22c2c",
-  "candidate_sha256": "cc9365a51ed4d1504ca794ad50f3bf007ca7f29d5b794e165b3d466c1c66cdd7",
-  "candidate_checked_at": "2026-11-25T17:54:21+00:00",
-  "reason": "2021년 정시 뉴딜성장형의 접수·서류심사를 다시 확인한다. 독립 PE와 기존 모집·선정 원문이 일치해야 하며, 기존 93사업과 GP 이력을 보존하면서 한 사업의 단계 두 건만 추가한다."
+  "bundle_commit": "af2c753ecbe2c414ac539a345de99181419ee017",
+  "bundle_sha256": "b7dd60f542fdad881c50222fbc6c8b6a9aea9993f44ea4d5f5750ef9012d594c",
+  "candidate_sha256": "e37480400fb9a9aa3ceb44590cce1608582c3c7665a2e380522b2cf6d6d23bfd",
+  "candidate_checked_at": "2026-11-25T19:02:58+00:00",
+  "reason": "2021년 소부장 2차의 공동 모집 원문과 산업은행 보도자료 4건을 다시 읽는다. 산은 주관 블라인드 일반·반도체, 공식 선정 3팀과 기존 사업·주소·GP 이력 보존을 읽기 전용으로 확인한다."
 }

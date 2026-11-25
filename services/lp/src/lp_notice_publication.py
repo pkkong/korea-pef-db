@@ -107,7 +107,7 @@ OFFERING_FIELDS = (
     'contribution_allocations', 'total_commitment_amount_krw', 'per_fund_amount_krw',
     'per_fund_range_krw', 'per_fund_qualifier', 'extraction_evidence',
 )
-STAGES = {'모집 공고': 'announcement', '접수 결과': 'application',
+STAGES = {'모집 공고': 'announcement', '공동 모집 보도자료': 'announcement', '접수 결과': 'application',
           '1차 심사 결과': 'screening', '우선협상대상자': 'selection',
           '선정 결과': 'selection', '변경 공고': 'announcement'}
 
@@ -189,7 +189,7 @@ def _sources(data, growth_notices, checked_at):
     for raw in data.get('history_notices', []):
         try:
             n = _valid(history_notices.validate_history_notice(raw, checked_at), checked_at)
-            if n.get('history_import') == history_notices.JOINT_KIND:
+            if n.get('history_import') in history_notices.PROJECTED_KINDS:
                 # The publisher has already linked the verified lead and track.
                 # Replaying the host's mixed notice here could create a second program.
                 continue

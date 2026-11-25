@@ -22,6 +22,7 @@ try:
     from .lp_program_aliases import alias_pages, missing_published_ids
     from .lp_state_storage import pack_state, unpack_state, MARKER, EVIDENCE_KEYS
     from . import lp_kdb_semiconductor_2025 as kdb_semiconductor_2025
+    from . import lp_kdb_materials_history_import as materials
     from . import lp_newdeal_history_import as newdeal
 except ImportError:
     from lp_history_notices import validate_history_notice
@@ -30,6 +31,7 @@ except ImportError:
     from lp_program_aliases import alias_pages, missing_published_ids
     from lp_state_storage import pack_state, unpack_state, MARKER, EVIDENCE_KEYS
     import lp_kdb_semiconductor_2025 as kdb_semiconductor_2025
+    import lp_kdb_materials_history_import as materials
     import lp_newdeal_history_import as newdeal
 
 MAX_IMPORT_BYTES = 40 * 1024 * 1024
@@ -37,7 +39,8 @@ MAX_NOTICES = 6
 _ALLOWED_CHANGED_KEYS = {'programs', 'history_notices'}
 _JOINT_FOLLOWUPS = {newdeal.FOLLOWUP_IMPORT_KIND, newdeal.STAGES_IMPORT_KIND}
 _JOINT_BUNDLES = {newdeal.BUNDLE_KIND: newdeal.IMPORT_KIND, newdeal.FOLLOWUP_BUNDLE_KIND: newdeal.FOLLOWUP_IMPORT_KIND,
-                  newdeal.STAGES_BUNDLE_KIND: newdeal.STAGES_IMPORT_KIND}
+                  newdeal.STAGES_BUNDLE_KIND: newdeal.STAGES_IMPORT_KIND,
+                  materials.BUNDLE_KIND: materials.IMPORT_KIND}
 _JOINT_IMPORTS = set(_JOINT_BUNDLES.values())
 
 
@@ -152,6 +155,7 @@ def proposal(current, payload, checked_at):
     _validate_payload(payload)
     validate(current)
     joint = payload['kind'] in _JOINT_IMPORTS
+    materials_plan = payload['kind'] == materials.IMPORT_KIND
     followup = payload['kind'] in _JOINT_FOLLOWUPS
     if followup:
         if payload['kind'] == newdeal.FOLLOWUP_IMPORT_KIND:
@@ -160,6 +164,9 @@ def proposal(current, payload, checked_at):
         else:
             update_id, events, incoming = newdeal.project_stages(payload['source'], current['programs'], checked_at)
         programs, holds = [], []
+    elif materials_plan:
+        program, incoming = materials.project(payload['source'], current['programs'], checked_at)
+        programs, holds = [program], []
     elif joint:
         program, incoming = newdeal.project(payload['source'], checked_at)
         newdeal.assert_no_overlap(current['programs'], program, incoming)
@@ -179,11 +186,12 @@ def proposal(current, payload, checked_at):
     if any(old.get('attachment_ocr') != n.get('attachment_ocr') for url, n in incoming_by_url.items()
            if (old := retained.get(url)) is not None):
         raise ValueError('기존 과거 원문의 OCR 영수증과 가져올 버전 불일치')
-    joint_by_key = {newdeal.source_key(url): n for url, n in incoming_by_url.items()} if joint else {}
+    source_key = materials.source_key if materials_plan else newdeal.source_key
+    joint_by_key = {source_key(url): n for url, n in incoming_by_url.items()} if joint else {}
     for old in _catalog_versions(current):
         n = incoming_by_url.get(old.get('url'))
         if joint and n is None and old.get('url'):
-            n = joint_by_key.get(newdeal.source_key(old['url']))
+            n = joint_by_key.get(source_key(old['url']))
         if n and (old.get('institution_id') != n['institution_id']
                   or old.get('sha256') != n['sha256']
                   or old.get('attachment_hashes', {}) != n.get('attachment_hashes', {})):

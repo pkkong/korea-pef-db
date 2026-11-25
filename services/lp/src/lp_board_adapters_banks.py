@@ -65,22 +65,32 @@ def _url(url, institution, paths):
     return parse_qs(p.query, keep_blank_values=True)
 
 
+KDB_NOTICE_BOARD = 'https://www.kdb.co.kr/CHBIPR23N00.act?_mnuId=IHIHIR0087'
+KDB_PRESS_BOARD = 'https://www.kdb.co.kr/CHBIPR25N00.act?_mnuId=IHIHIR0089'
+
+
+def _kdb_board(config):
+    if config.get('listing_url') == KDB_PRESS_BOARD:
+        return 'SMR024', 'IHIHIR0089', 'CHBIPR25N00', KDB_PRESS_BOARD
+    return 'STD119', 'IHIHIR0087', 'CHBIPR23N00', KDB_NOTICE_BOARD
+
+
 def _context(url, config, detail=False):
     institution = config.get('institution_id')
     if institution not in {'kdb', 'ibk'}:
         raise ValueError('Unsupported policy bank institution')
     if institution == 'kdb':
-        listing = config.get('listing_url', 'https://www.kdb.co.kr/CHBIPR23N00.act?_mnuId=IHIHIR0087')
-        _url(listing, 'kdb', {'/CHBIPR23N00.act', '/BOUBUF01R01.jct'})
+        board, menu, parent, referer = _kdb_board(config)
+        _url(config.get('listing_url', referer), 'kdb', {'/' + parent + '.act', '/BOUBUF01R01.jct'})
         query = _url(url, 'kdb', {'/BOUBUF02N00.act'} if detail else {'/BOUBUF01R01.jct'})
-        if query.get('_mnuId', ['IHIHIR0087']) != ['IHIHIR0087']:
+        if query.get('_mnuId', [menu]) != [menu]:
             raise ValueError('KDB menu mismatch')
         parameter = '_PARM_DATA' if detail else '_JSON_'
         raw = _one(query.get(parameter, []), 'KDB request payload')
         payload = json.loads(raw)
-        if not isinstance(payload, dict) or payload.get('ITR_BLB_ID') != 'STD119':
+        if not isinstance(payload, dict) or payload.get('ITR_BLB_ID') != board:
             raise ValueError('KDB board identity mismatch')
-        if detail and payload.get('FIRST_MENU_ID') != 'CHBIPR23N00':
+        if detail and payload.get('FIRST_MENU_ID') != parent:
             raise ValueError('KDB detail parent menu mismatch')
         return institution, payload
     listing = config.get('listing_url', 'https://www.ibk.co.kr/cyber/noticeListCyber.ibk?pageId=IR03010400')
@@ -104,12 +114,12 @@ def listing_requests(config: dict) -> list[dict]:
     for term in terms:
         for page in range(1, pages + 1):
             if institution == 'kdb':
+                board, _, _, referer = _kdb_board(config)
                 payload = {'SEARCH_CONDITION': 'NAC_CONE_TTL', 'SEARCH_KEYWORD': term, 'SEARCH_CATEGORY': '',
-                           'ORDER_TYPE': 'new', 'MODE': '1,2,5,6', 'ITR_BLB_ID': 'STD119',
+                           'ORDER_TYPE': 'new', 'MODE': '1,2,5,6', 'ITR_BLB_ID': board,
                            'HEADER_STD_WEB': {'REQ_PAGE_NO': page, 'PAGE_ROW_COUNT': '50', 'NEXT_PAGE_YN': 'S',
                                               'NEXTPAGDTT': 'P', 'GRID_NEXTKEY_ITR_CND': ''}}
                 url = 'https://www.kdb.co.kr/BOUBUF01R01.jct?' + urlencode({'_JSON_': json.dumps(payload, ensure_ascii=False)})
-                referer = 'https://www.kdb.co.kr/CHBIPR23N00.act?_mnuId=IHIHIR0087'
             else:
                 url = 'https://www.ibk.co.kr/cyber/noticeListCyber.ibk?' + urlencode(
                     {'pageId': 'IR03010400', 'pageNum': page, 'searchKey': 'TTL', 'searchValue': term})
@@ -176,18 +186,19 @@ def _calendar(text):
     return values.pop()
 
 
-def _kdb_detail_url(ident):
-    payload = {'ITR_NAC_ID_MNG_SNO': ident, 'ITR_BLB_ID': 'STD119', 'NAC_SNO': '', 'FIRST_MENU_ID': 'CHBIPR23N00'}
+def _kdb_detail_url(ident, config=None):
+    board, menu, parent, _ = _kdb_board(config or {})
+    payload = {'ITR_NAC_ID_MNG_SNO': ident, 'ITR_BLB_ID': board, 'NAC_SNO': '', 'FIRST_MENU_ID': parent}
     return 'https://www.kdb.co.kr/BOUBUF02N00.act?' + urlencode(
-        {'_mnuId': 'IHIHIR0087', '_PARAM_NAME': 'NEXT_DATA', '_PARM_DATA': json.dumps(payload, ensure_ascii=False, separators=(',', ':'))})
+        {'_mnuId': menu, '_PARAM_NAME': 'NEXT_DATA', '_PARM_DATA': json.dumps(payload, ensure_ascii=False, separators=(',', ':'))})
 
 
 def parse_listing(html_or_json: str, url: str, config: dict) -> list[dict]:
-    institution, _ = _context(url, config)
+    institution, payload = _context(url, config)
     result = {}
     if institution == 'kdb':
         data = json.loads(html_or_json)
-        if (not isinstance(data, dict) or data.get('ITR_BLB_ID') != 'STD119'
+        if (not isinstance(data, dict) or data.get('ITR_BLB_ID') != payload['ITR_BLB_ID']
                 or not isinstance(data.get('COMMON_HEAD'), dict) or data['COMMON_HEAD'].get('ERROR') is not False
                 or not isinstance(data.get('STDLIST_REC'), list) or not isinstance(data.get('HEADER_STD_WEB'), dict)):
             raise ValueError('Incomplete or rejected KDB JSON listing')
@@ -204,7 +215,7 @@ def parse_listing(html_or_json: str, url: str, config: dict) -> list[dict]:
             title = row['NAC_CONE_TTL']
             if not isinstance(title, str) or not title.strip():
                 raise ValueError('KDB notice title missing')
-            item = {'url': _kdb_detail_url(ident), 'title': title.strip(), 'date': published, 'source_id': 'kdb:' + ident}
+            item = {'url': _kdb_detail_url(ident, config), 'title': title.strip(), 'date': published, 'source_id': 'kdb:' + ident}
             if ident in result and result[ident] != item:
                 raise ValueError('Conflicting KDB duplicate source')
             result[ident] = item
@@ -237,7 +248,7 @@ def parse_detail(html: str, url: str, config: dict) -> dict:
     root = _Document(html).root
     if institution == 'kdb':
         ident = _identifier(payload.get('ITR_NAC_ID_MNG_SNO'))
-        for field, expected in [('itrNacIdMngSno', ident), ('itrBlbId', 'STD119')]:
+        for field, expected in [('itrNacIdMngSno', ident), ('itrBlbId', payload['ITR_BLB_ID'])]:
             if _one((n.attrs.get('value') for n in root.nodes('input') if n.attrs.get('id') == field), 'KDB detail identity') != expected:
                 raise ValueError('KDB detail notice or board mismatch')
         article = _one(root.nodes('article', 'bbs'), 'KDB detail article')

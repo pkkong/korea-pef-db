@@ -20,6 +20,9 @@ JOINT_KIND = 'lp_newdeal_joint_history_notice_v1'
 JOINT_IMPORT_KIND = 'lp_newdeal_joint_history_import_v1'
 JOINT_FOLLOWUP_IMPORT_KIND = 'lp_newdeal_joint_followup_import_v1'
 JOINT_STAGES_IMPORT_KIND = 'lp_newdeal_joint_stages_import_v1'
+KDB_PRESS_KIND = 'lp_kdb_projected_press_notice_v1'
+KDB_MATERIALS_IMPORT_KIND = 'lp_kdb_materials_joint_history_import_v1'
+PROJECTED_KINDS = {JOINT_KIND, KDB_PRESS_KIND}
 
 
 def validate_history_notice(raw, checked_at):
@@ -29,6 +32,12 @@ def validate_history_notice(raw, checked_at):
         except ImportError:
             from lp_newdeal_history_import import validate_retained_notice
         return validate_retained_notice(raw, checked_at)
+    if raw.get('history_import') == KDB_PRESS_KIND:
+        try:
+            from .lp_kdb_materials_history_import import validate_retained_press
+        except ImportError:
+            from lp_kdb_materials_history_import import validate_retained_press
+        return validate_retained_press(raw, checked_at)
     if raw.get('history_import') != KIND:
         raise ValueError('not an imported history notice')
     n = copy.deepcopy(raw)
