@@ -669,7 +669,8 @@ def _history_listing_ok(url, config):
     return urlsplit(url).path in daily
 
 
-def validate_notice(raw, checked_at, config=None, *, history_listing=False, require_attachment_bytes=True):
+def validate_notice(raw, checked_at, config=None, *, history_listing=False, require_attachment_bytes=True,
+                    title_match=None):
     """history_listing: the listing page came from the 2020+ history walk (deep pages of
     the same official board), so it is checked by host and board route, not by the
     daily configured page set.
@@ -700,7 +701,7 @@ def validate_notice(raw, checked_at, config=None, *, history_listing=False, requ
     if bounded(config):
         adapter(config).last_page(listing['html'], listing['url'], config)
     detail = _detail(proof['detail_html'], n['url'], config, proof.get('attachment_resolution'))
-    titles_match = getattr(adapter(config), 'titles_match', lambda a,b: a==b)
+    titles_match = title_match or getattr(adapter(config), 'titles_match', lambda a,b: a==b)
     if not any(all(row[k] == n[k] for k in ('url', 'date', 'source_id')) and titles_match(row['title'], n['title']) for row in rows):
         raise ValueError('notice was not observed on the configured official listing')
     if any(n[k] != detail[k] for k in ('title', 'date', 'body', 'attachments')):

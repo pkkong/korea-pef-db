@@ -55,3 +55,34 @@ def test_team_rosters_match_across_reports_with_one_row_per_co_gp():
             pass
         else:
             raise AssertionError('An unrelated roster entered the KDB blind fund')
+
+
+def test_2020_application_only_accepts_observed_title_spacing():
+    title = '산업은행, 소부장 투자 전용펀드 위탁운용사 접수결과'
+    listed = title.replace(', ', ',  ', 1)
+    assert materials._application_title_match(listed, title)
+    assert materials._application_title_match(title, title)
+    assert not materials._application_title_match(listed.replace('접수', '선정'), title)
+    assert not materials._application_title_match(listed.replace('전용펀드', '전용 펀드'), title)
+
+
+def test_2020_final_co_gp_aliases_require_the_same_pe_teams_in_the_shortlist():
+    applications = ('비 고\n3\n( 2 )\n비엔더블유인베스트먼트/\n중소기업은행\nPE\n'
+                    '에스케이에스프라이빗에쿼티/\n한국투자프라이빗에쿼티\nPE\n'
+                    '메디치인베스트먼트\nVC\n * 지원 운용사명 가나다순')
+    shortlist = ('서류심사 통과 운용사 명단 >\n운용사명\n투자기구\n'
+                 '비엔더블유인베스트먼트/\n중소기업은행\nPE\n'
+                 '에스케이에스프라이빗에쿼티/\n한국투자프라이빗에쿼티\nPE\n * 운용사명 가나다순')
+    final = '□ 선정된 위탁운용사는 BNW인베스트먼트·기업은행*, SKS PE·한투PE로 2020년 7월까지 결성한다.'
+    reports = {'접수 결과': applications, '1차 심사 결과': shortlist, '선정 결과': final}
+    assert materials._rosters_2020(reports) == (
+        3, 2, [('비엔더블유인베스트먼트', '중소기업은행'),
+               ('에스케이에스프라이빗에쿼티', '한국투자프라이빗에쿼티')])
+    for bad in ({**reports, '선정 결과': final.replace('기업은행', '다른은행')},
+                {**reports, '1차 심사 결과': shortlist.replace('중소기업은행\nPE', '중소기업은행\nVC')}):
+        try:
+            materials._rosters_2020(bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError('A changed co-GP or legal form bypassed the official shortlist')

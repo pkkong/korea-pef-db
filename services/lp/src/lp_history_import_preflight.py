@@ -40,7 +40,7 @@ _ALLOWED_CHANGED_KEYS = {'programs', 'history_notices'}
 _JOINT_FOLLOWUPS = {newdeal.FOLLOWUP_IMPORT_KIND, newdeal.STAGES_IMPORT_KIND}
 _JOINT_BUNDLES = {newdeal.BUNDLE_KIND: newdeal.IMPORT_KIND, newdeal.FOLLOWUP_BUNDLE_KIND: newdeal.FOLLOWUP_IMPORT_KIND,
                   newdeal.STAGES_BUNDLE_KIND: newdeal.STAGES_IMPORT_KIND,
-                  materials.BUNDLE_KIND: materials.IMPORT_KIND}
+                  materials.BUNDLE_KIND: materials.IMPORT_KIND, materials.BUNDLE_2020_KIND: materials.IMPORT_KIND}
 _JOINT_IMPORTS = set(_JOINT_BUNDLES.values())
 
 
