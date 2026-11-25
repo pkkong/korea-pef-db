@@ -1977,6 +1977,12 @@ def test_20261125_reviewed_sections_survive_export_classification() -> None:
             "Market",
             "Deal",
         ),
+        (
+            "“몸값 높여야 하는데”…투썸, 강매 의혹에 엑시트 암초? [재계톡톡]",
+            "https://www.mk.co.kr/news/business/12214716",
+            "Deal",
+            "Market",
+        ),
     ]
     overrides = load_manual_overrides(DEFAULT_OVERRIDES)
     for title, url, old_section, expected in cases:
