@@ -4,12 +4,12 @@ import re
 
 try:
     from .lp_kdb_growth_support_2024 import _own_round, _reception
-    from .lp_kdb_innovation_terms import _MONEY, _int
+    from .lp_kdb_innovation_terms import _MONEY, _int, common_investment_2024
     from .lp_kdb_policy_reopen import _ALLOCATION, mixed_vehicles
     from .lp_notice_triage import compact
 except ImportError:
     from lp_kdb_growth_support_2024 import _own_round, _reception
-    from lp_kdb_innovation_terms import _MONEY, _int
+    from lp_kdb_innovation_terms import _MONEY, _int, common_investment_2024
     from lp_kdb_policy_reopen import _ALLOCATION, mixed_vehicles
     from lp_notice_triage import compact
 
@@ -27,12 +27,6 @@ _GROWTH_FINANCE_ROW = re.compile(
 _PLAN = re.compile(r'\n재정\n산은\n사다리2주2\)\n합계\(비율\)\n소형주1\)\n'
                    + r'\n'.join([_MONEY] * 4) + r'\((\d{1,3})%\)\n' + _MONEY
                    + r'\n([1-9]\d?)\n' + _MONEY + r'\n산은\n')
-_PURPOSE = re.compile(
-    r'❶혁신성장공동품목기준해당중소·중견기업목표결성액의(\d+)%초과결성액의(\d+)%'
-    r'❷❷-1新성장4\.03대분야15대프로젝트,❷-2‘글로벌초격차산업육성지원’및‘미래유망산업지원분야'
-    r'영위중소·중견기업목표결성액의(\d+)%초과결성액의(\d+)%'
-    r'❸중소·중견기업목표결성액의(\d+)%초과결성액의(\d+)%'
-)
 _AI = re.compile(
     r'\(선택\)아래품목을주목적투자대상으로추가제안한운용사를우선하여선정\(1개사\)'
     r'.{1,150}?소형\(1,000억원\)혁신성장공동기준품목중ai기반산업품목영위중소·중견기업'
@@ -111,13 +105,7 @@ def terms(notice, sources):
         evidence['deadline'] = [proof(fragment)]
     else:
         terms['deadline_error'] = '혁신산업 2024년 2차 접수 마감 시각 미확인'
-    items, quotes = [], []
-    if (purpose := _PURPOSE.search(re.sub(r'\s+', '', raw))) and all(0 < int(p) <= 100 for p in purpose.groups()):
-        labels = ('혁신성장 공동품목기준에 해당하는 중소·중견기업',
-                  '신성장 4.0·글로벌 초격차·미래유망 분야 영위 중소·중견기업', '중소·중견기업')
-        items.extend(f'{label} · 목표결성액의 {purpose[i]}%, 초과결성액의 {purpose[i+1]}%'
-                     for i, label in zip((1, 3, 5), labels))
-        quotes.append(purpose[0])
+    items, quotes = common_investment_2024(re.sub(r'\s+', '', raw))
     if (ai := _AI.search(compact(raw))) and 0 < int(ai[1]) <= 100:
         items.append(f'선택 주목적 · AI 기반 산업 품목 영위 중소·중견기업에 목표결성액의 {ai[1]}% 이상 투자 제안 시 1개사 우선 선정')
         quotes.append(ai[0])

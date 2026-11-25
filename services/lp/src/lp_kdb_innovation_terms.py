@@ -10,24 +10,37 @@ except ImportError:
 
 
 _FUND = r'혁신성장펀드\(혁신산업펀드\)'
+_FIRST_RECRUITMENT = re.compile(r'[『「]' + _FUND + r'[』」]2024년1차(?:위탁운용사)?선정계획공고')
 _NUM = r'[1-9]\d{0,2}(?:,\d{3})*'
 _RANGE = _NUM + r'(?:~' + _NUM + r')?'
 _MONEY = r'(' + _NUM + r')'
-_ROW = (r'(소형|중형|M&A)(?:\n\(자율제안\))?\n' + _MONEY + r'\n' + _MONEY
+_ROW = (r'(소형|중형|대형|M&A)(?:주1\))?(?:\n\(자율제안\))?\n' + _MONEY + r'\n' + _MONEY
         + r'\n(' + _NUM + r'|-)\n' + _MONEY + r'\((\d+)%\)\n(' + _RANGE + r')\n'
-        + r'([1-9](?:~[1-9])?)\n' + _MONEY + r'(?:\n(?:신한|산은))?\n')
+        + r'([1-9](?:~[1-9])?)\n' + _MONEY + r'(?:\n(신한|산은))?\n')
 _PLAN = re.compile(
-    r'\n재정\n산은\n사다리2\n합계\(비율\)\n((?:' + _ROW + r'){3})합계\n'
+    r'\n재정\n산은\n사다리2(?:주2\))?\n합계\(비율\)\n((?:' + _ROW + r'){3})합계\n'
     + r'\n'.join([_MONEY] * 4) + r'\((\d+)%\)\n-\n([1-9]\d?(?:~[1-9]\d?)?)\n' + _MONEY + r'\n'
 )
 _LEADS = re.compile(r'중형·M&A소형주관기관한국산업은행\(정책펀드금융실\)신한자산운용\(특별자산운용실\)')
-_RECEPTION = re.compile(r'접수일시○(20\d{2})년(\d{1,2})월(\d{1,2})일\([월화수목금토일]\)'
+_RECEPTION = re.compile(r'접수일시○(20\d{2})년(\d{1,2})월(\d{1,2})일\(([월화수목금토일])\)'
                         r'(\d{1,2}):(\d{2})~(\d{1,2}):(\d{2})\(분야별주관기관앞제출\)접수방법○')
 _PURPOSE = re.compile(
     r'❶혁신성장공동기준품목영위중소·중견기업목표결성액의(\d+)%초과결성액의(\d+)%'
     r'❷新성장4\.03대분야15대프로젝트영위중소·중견기업목표결성액의(\d+)%초과결성액의(\d+)%'
     r'.{1,750}?\(M&A\)아래주목적투자비율준수주목적투자대상의무투자비율'
     r'혁신성장공동기준품목영위중소·중견기업의사업재편주\)목표결성액의(\d+)%초과결성액의(\d+)%'
+)
+_PURPOSE_2024 = re.compile(
+    r'❶혁신성장공동품목기준해당중소·중견기업목표결성액의(\d+)%초과결성액의(\d+)%'
+    r'❷❷-1新성장4\.03대분야15대프로젝트,❷-2‘글로벌초격차산업육성지원’및‘미래유망산업지원분야'
+    r'영위중소·중견기업목표결성액의(\d+)%초과결성액의(\d+)%'
+    r'❸중소·중견기업목표결성액의(\d+)%초과결성액의(\d+)%'
+)
+_FIRST_OPTION = re.compile(
+    r'\(선택\)아래❶또는❷을주목적투자대상으로추가제안한운용사를우선하여선정\(분야별1개사\)'
+    r'.{1,160}?중형\(2,000억원\)❶공통형❷-2의‘글로벌초격차산업육성지원’및‘미래유망산업지원분야’'
+    r'영위중견기업목표결성액의(\d+)%이상소형\(1,000억원\)❷혁신성장공동기준품목중'
+    r'환경분야영위중소·중견기업\(4대이니셔티브중탄소중립·녹색경제실현관련품목\)목표결성액의(\d+)%이상'
 )
 _RESULT = re.compile(
     r'<' + _FUND + r'(20\d{2})년위탁운용사선정결과>\(단위:억원,개\)'
@@ -55,8 +68,25 @@ def _rounded(amount, target, ratio):
     return 0 < ratio <= 100 and 2 * abs(amount * 100 - ratio * target) <= target
 
 
+def first_recruitment(notice):
+    return (notice.get('institution_id') == 'kdb' and notice.get('source_channel') == 'institution_board'
+            and not notice.get('channel_id') and notice['date'].startswith('2024-')
+            and bool(_FIRST_RECRUITMENT.fullmatch(re.sub(r'\s+', '', notice['title']))))
+
+
+def common_investment_2024(compact):
+    mandate = _PURPOSE_2024.search(compact)
+    if not mandate or not all(0 < int(pct) <= 100 for pct in mandate.groups()):
+        return [], []
+    labels = ('혁신성장 공동품목기준에 해당하는 중소·중견기업',
+              '신성장 4.0·글로벌 초격차·미래유망 분야 영위 중소·중견기업', '중소·중견기업')
+    return [f'{label} · 목표결성액의 {mandate[i]}%, 초과결성액의 {mandate[i+1]}%'
+            for i, label in zip((1, 3, 5), labels)], [mandate[0]]
+
+
 def terms(notice, sources):
-    if not _stage(notice, r'위탁운용사선정계획공고'):
+    first = first_recruitment(notice)
+    if not first and not _stage(notice, r'위탁운용사선정계획공고'):
         return {}
     sources = [(url, raw, sha) for url, raw, sha in sources if mixed_vehicles(raw)]
     if len(sources) != 1:
@@ -65,18 +95,23 @@ def terms(notice, sources):
     lines = '\n'.join(line for line in re.sub(r'[^\S\n]+', '', raw).splitlines() if line)
     caps, plans = list(_ALLOCATION.finditer(lines)), list(_PLAN.finditer(lines))
     compact = lines.replace('\n', '')
-    leads = _LEADS.search(compact)
-    if len(caps) != 1 or len(plans) != 1 or not leads:
+    first_heading = re.match(r'[『「]' + _FUND + r'[』」]\n2024년1차위탁운용사선정계획공고', lines)
+    lead_proof = first_heading if first else _LEADS.search(compact)
+    if len(caps) != 1 or len(plans) != 1 or not lead_proof:
         raise ValueError('혁신산업 공동 출자자·리그·주관기관 표 미확인')
     cap, plan = caps[0], plans[0]
     total, fiscal, bank, ladder, table_total = map(_int, cap.groups())
     table_fiscal, table_bank, table_ladder, planned, ratio = map(_int, plan.groups()[-7:-2])
     count, target = plan.groups()[-2], _int(plan.groups()[-1])
     rows = list(re.finditer(_ROW, plan[1]))
-    if ([r[1] for r in rows] != ['소형', '중형', 'M&A']
+    expected_leagues = ['소형', '중형', '대형' if first else 'M&A']
+    if ([r[1] for r in rows] != expected_leagues
             or (fiscal, bank, ladder, total) != (table_fiscal, table_bank, table_ladder, planned)
             or total != table_total or total != fiscal + bank + ladder or not _rounded(total, target, ratio)):
         raise ValueError('혁신산업 공동 출자 개요와 합계 행 불일치')
+    # The bank's heading spans the medium and large rows in the first call.
+    if first and [r[10] for r in rows] != ['신한', '산은', None]:
+        raise ValueError('혁신산업 2024년 1차 주관기관 표 불일치')
     if [sum(_int(r[i]) for r in rows) for i in (2, 3, 4, 5, 9)] != [fiscal, bank, ladder, total, target]:
         raise ValueError('혁신산업 리그별 공동 출자와 결성 목표 합계 불일치')
     count_bounds = [_bounds(r[8]) for r in rows]
@@ -84,13 +119,15 @@ def terms(notice, sources):
         raise ValueError('혁신산업 리그별 선정 예정 수 불일치')
     segments = []
     for row, (count_low, count_high) in zip(rows, count_bounds):
-        name, fiscal_share, bank_share, ladder_share, amount, ratio, size, count_label, goal = row.groups()
+        name, fiscal_share, bank_share, ladder_share, amount, ratio, size, count_label, goal, _ = row.groups()
         fiscal_share, bank_share, ladder_share, amount, ratio, goal = map(
             _int, (fiscal_share, bank_share, ladder_share, amount, ratio, goal))
         minimum, maximum = _bounds(size)
         if (fiscal_share + bank_share + ladder_share != amount or not _rounded(amount, goal, ratio)
                 or minimum > maximum or count_low > count_high or not count_low * minimum <= goal <= count_high * maximum):
             raise ValueError('혁신산업 리그별 출자액·결성 범위 불일치')
+        if first and (minimum != maximum or count_low != count_high or minimum * count_low != goal):
+            raise ValueError('혁신산업 2024년 1차 리그별 결성 규모·예정 수 불일치')
         segments.append({'name': name, 'amount_krw': amount * 10**8, 'manager_count': count_label,
                          'fund_target_range_krw': [minimum * 10**8, maximum * 10**8],
                          'fund_target_total_krw': goal * 10**8})
@@ -101,23 +138,25 @@ def terms(notice, sources):
     contributions = {'정부재정': fiscal * 10**8, '한국산업은행': bank * 10**8, '성장사다리펀드2': ladder * 10**8}
     bank_shares = ' · '.join(f'{row[1]} {_int(row[3]):,}억원' for row in rows)
     target_shares = ' · '.join(f'{row[1]} {_int(row[9]):,}억원' for row in rows)
-    evidence = {'innovation_joint_allocation': [proof(cap[0]), proof(plan[0]), proof(leads[0])]}
+    evidence_key = 'innovation_2024_first_allocation' if first else 'innovation_joint_allocation'
+    evidence = {evidence_key: [proof(cap[0]), proof(plan[0]), proof(lead_proof[0])]}
+    bank_leagues = '중형·대형은' if first else '중형·M&A는'
     result = {'amount_scope': 'combined', 'commitment_amount_krw': total * 10**8,
               'commitment_label': f'공동 정책출자 예정 {total:,}억원 내외', 'fund_target_label': f'{target:,}억원',
               'manager_count_label': f'{count}개 팀', 'segments': segments, 'contribution_allocations': contributions,
               'commitment_detail': (f'정부재정 {fiscal:,}억원 · 산업은행 {bank:,}억원({bank_shares})'
                                     f' · 성장사다리펀드2 {ladder:,}억원'),
-              'contribution_note': (f'리그별 결성 목표는 {target_shares}입니다. 소형은 신한자산운용, 중형·M&A는 '
+              'contribution_note': (f'리그별 결성 목표는 {target_shares}입니다. 소형은 신한자산운용, {bank_leagues} '
                                     '한국산업은행이 주관합니다. 출자자별 승인 절차를 거쳐 확정됩니다.'),
               'extraction_evidence': evidence}
     receptions = list(_RECEPTION.finditer(compact))
     if len(receptions) == 1:
         reception = receptions[0]
-        year, month, day, start_hour, start_minute, end_hour, end_minute = map(int, reception.groups())
+        y, m, d, weekday, start_hour, start_minute, end_hour, end_minute = reception.groups()
         try:
-            start = datetime(year, month, day, start_hour, start_minute)
-            end = datetime(year, month, day, end_hour, end_minute)
-            if start >= end or end.date().isoformat() < notice['date']:
+            start = datetime(*map(int, (y, m, d, start_hour, start_minute)))
+            end = datetime(*map(int, (y, m, d, end_hour, end_minute)))
+            if start >= end or end.date().isoformat() < notice['date'] or '월화수목금토일'[end.weekday()] != weekday:
                 raise ValueError('invalid reception window')
         except ValueError:
             result['deadline_error'] = '혁신산업 공동 모집의 접수 구간 불일치'
@@ -126,8 +165,18 @@ def terms(notice, sources):
             evidence['deadline'] = [proof(reception[0])]
     elif receptions:
         result['deadline_error'] = '혁신산업 공동 모집의 접수 구간이 여러 개'
-    mandate = _PURPOSE.search(compact)
-    if mandate and all(0 < int(pct) <= 100 for pct in mandate.groups()):
+    if first:
+        items, quotes = common_investment_2024(compact)
+        if (option := _FIRST_OPTION.search(compact)) and all(0 < int(pct) <= 100 for pct in option.groups()):
+            items.extend([
+                f'중형 선택 주목적 · 글로벌 초격차·미래유망 분야 중견기업에 목표결성액의 {option[1]}% 이상 투자 제안 시 1개사 우선 선정',
+                f'소형 선택 주목적 · 환경 분야 중소·중견기업에 목표결성액의 {option[2]}% 이상 투자 제안 시 1개사 우선 선정',
+            ])
+            quotes.append(option[0])
+        if items:
+            result['primary_investment'] = {'source_url': url, 'items': items}
+            evidence['purpose'] = [proof(quote) for quote in quotes]
+    elif (mandate := _PURPOSE.search(compact)) and all(0 < int(pct) <= 100 for pct in mandate.groups()):
         labels = ('소형·중형 · 혁신성장 공동기준 품목 영위 중소·중견기업',
                   '소형·중형 · 신성장 4.0 분야 중소·중견기업', 'M&A · 혁신성장 공동기준 품목 영위 중소·중견기업의 사업재편')
         result['primary_investment'] = {'source_url': url, 'items': [

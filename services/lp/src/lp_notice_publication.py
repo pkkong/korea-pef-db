@@ -42,6 +42,7 @@ try:
     from . import lp_kdb_innovation_terms as kdb_innovation
     from . import lp_kdb_growth_support_terms as kdb_growth_support
     from . import lp_kdb_growth_support_2024 as kdb_growth_support_2024
+    from . import lp_kdb_innovation_2024_first as kdb_innovation_2024_first
     from . import lp_kdb_innovation_2024_second as kdb_innovation_2024_second
     from . import lp_kdb_recovery_market as kdb_recovery
     from . import lp_kdb_ai_fixed_terms as kdb_ai_fixed
@@ -73,6 +74,7 @@ except ImportError:
     import lp_kdb_innovation_terms as kdb_innovation
     import lp_kdb_growth_support_terms as kdb_growth_support
     import lp_kdb_growth_support_2024 as kdb_growth_support_2024
+    import lp_kdb_innovation_2024_first as kdb_innovation_2024_first
     import lp_kdb_innovation_2024_second as kdb_innovation_2024_second
     import lp_kdb_recovery_market as kdb_recovery
     import lp_kdb_ai_fixed_terms as kdb_ai_fixed
@@ -721,6 +723,8 @@ def _attach_result_roster(p, members, holds, known=frozenset()):
                       for text in texts]
         elif evidence.get('growth_support_2024_first_allocation'):
             tables = [kdb_growth_support_2024.result_roster(result, text, p) for text in texts]
+        elif evidence.get('innovation_2024_first_allocation'):
+            tables = [kdb_innovation_2024_first.result_roster(result, text, p) for text in texts]
         elif evidence.get('innovation_2024_second_allocation'):
             tables = [kdb_innovation_2024_second.result_roster(result, text, p) for text in texts]
         elif evidence.get('innovation_joint_allocation'):
@@ -925,10 +929,10 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
     groups = defaultdict(list)
     recovery_stages = kdb_recovery.linked_stages(docs.values(), _texts)
     ai_faqs = kdb_ai_fixed.linked_faqs(docs.values(), _texts)
-    policy_stages = {
-        **kdb_growth_support_2024.linked_stages(docs.values(), _texts),
-        **kdb_innovation_2024_second.linked_stages(docs.values(), _texts),
-    }
+    policy_stages = defaultdict(list)
+    for policy in (kdb_growth_support_2024, kdb_innovation_2024_first, kdb_innovation_2024_second):
+        for url, original in policy.linked_stages(docs.values(), _texts).items():
+            policy_stages[url].append(original)
     for n in docs.values():
         if (phase := kdb_recovery.role(n)) and phase != kdb_recovery.RECRUITMENT:
             if original := recovery_stages.get(n['url']):
@@ -938,8 +942,9 @@ def publish_basic_notices(data, growth_notices, checked_at, skips=None, known_gp
         elif original := ai_faqs.get(n['url']):
             groups[_identity(original)].append(n)
         elif kdb_growth_support_2024.shared_stage(n) or kdb_innovation_2024_second.shared_stage(n):
-            if original := policy_stages.get(n['url']):
-                groups[_identity(original)].append(n)
+            if originals := policy_stages.get(n['url']):
+                for original in originals:
+                    groups[_identity(original)].append(n)
             else:
                 skip(_identity(n), [n], 'unverified_shared_stage')
         elif kdb_innovation_2024_second.growth_finance_recruitment(n, _texts):

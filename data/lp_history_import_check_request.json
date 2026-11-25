@@ -1,9 +1,9 @@
 {
   "kind": "lp_history_import_check_request_v1",
   "institution_id": "kdb",
-  "bundle_commit": "2199847d45734e564da0753a1db51b20f6d0f093",
-  "bundle_sha256": "cd2403fa0fafe6cc6f29a33a6e0be5fc01c226d8b119be6131e99bea40b6912f",
-  "candidate_sha256": "0d3e703c6495e153ea3049650d54023f047af730dc133646d319c45f9f7bf305",
-  "candidate_checked_at": "2026-11-25T06:47:54.946473+00:00",
-  "reason": "혁신성장펀드 2024년 2차 혁신산업 소형의 산업은행 주관 모집과 공식 후속 원문 3건을 연결한다. 공동 결과에서 해당 리그만 읽고 같은 날의 성장지원과 기존 재공고는 분리한다. 기존 사업·주소·원문·별칭·공식 이력과 저장 가능 크기를 읽기 전용으로 확인한다."
+  "bundle_commit": "889be2cb4caaa5db86b636f97f8c8435e7d5f485",
+  "bundle_sha256": "6fe0282fb6757a0ad56d27a93ec79e05c17f39cbce5d5365286c9f5d23ac952b",
+  "candidate_sha256": "1fd74786ae1497dfa01f6550c3722ff34bfec6ab6878cff8c4a6764a4a308231",
+  "candidate_checked_at": "2026-11-25T07:50:54.423897+00:00",
+  "reason": "2024년 1차 혁신산업의 모집·심사와 이미 보존된 공동 접수·선정을 연결한다. 리그별 주관과 공식 선정 7곳을 대조하고 성장지원과 별도인 모집 식별·기존 주소·선정 이력·공동 원문 한 번 저장을 읽기 전용 확인한다."
 }
