@@ -1983,6 +1983,12 @@ def test_20261125_reviewed_sections_survive_export_classification() -> None:
             "Deal",
             "Market",
         ),
+        (
+            "[밸류업 점검] LG화학, 바이오 R&D 2조 투자…다음 과제는 매출",
+            "https://www.bloter.net/news/articleView.html?idxno=679513",
+            "Deal",
+            "Market",
+        ),
     ]
     overrides = load_manual_overrides(DEFAULT_OVERRIDES)
     for title, url, old_section, expected in cases:
