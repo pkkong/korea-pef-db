@@ -35,6 +35,8 @@ except ImportError:
 MAX_IMPORT_BYTES = 40 * 1024 * 1024
 MAX_NOTICES = 6
 _ALLOWED_CHANGED_KEYS = {'programs', 'history_notices'}
+_JOINT_IMPORTS = (newdeal.IMPORT_KIND, newdeal.FOLLOWUP_IMPORT_KIND)
+_JOINT_BUNDLES = {newdeal.BUNDLE_KIND: newdeal.IMPORT_KIND, newdeal.FOLLOWUP_BUNDLE_KIND: newdeal.FOLLOWUP_IMPORT_KIND}
 
 
 def _json(value):
@@ -62,7 +64,7 @@ def load_import(raw, expected_sha256):
 
 
 def _validate_payload(payload):
-    joint = isinstance(payload, dict) and payload.get('kind') == newdeal.IMPORT_KIND
+    joint = isinstance(payload, dict) and payload.get('kind') in _JOINT_IMPORTS
     if joint:
         if set(payload) != {'kind', 'checked_at', 'source'} or not isinstance(payload['checked_at'], str):
             raise ValueError('뉴딜 공동 과거 가져오기 형식 불일치')
@@ -76,8 +78,10 @@ def _validate_payload(payload):
         raise ValueError('가져오기 관측시각의 시간대·미래시각 불일치')
 
 
-def _assert_preserved(current, after):
-    if after['programs'][:len(current['programs'])] != current['programs']:
+def _assert_preserved(current, after, updated=()):
+    events = {row['id']: row['added_event'] for row in updated}
+    expected = [newdeal.append_followup(p, events[p['id']]) if p['id'] in events else p for p in current['programs']]
+    if after['programs'][:len(current['programs'])] != expected:
         raise ValueError('기존 공개 사업 필드 변경')
     if after.get('history_notices', [])[:len(current.get('history_notices', []))] != current.get('history_notices', []):
         raise ValueError('기존 과거 원문 변경')
@@ -93,11 +97,12 @@ def _assert_preserved(current, after):
 
 def build_pinned_import(bundle, programs, candidate_checked_at, expected_sha256):
     """Rebuild the reviewed import from pinned originals and live program identities."""
-    if bundle.get('kind') == newdeal.BUNDLE_KIND:
-        payload = {'kind': newdeal.IMPORT_KIND, 'checked_at': candidate_checked_at, 'source': bundle}
+    source_kind = bundle.get('kind')
+    if isinstance(source_kind, str) and (kind := _JOINT_BUNDLES.get(source_kind)):
+        payload = {'kind': kind, 'checked_at': candidate_checked_at, 'source': bundle}
         raw = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode('utf-8')
         load_import(raw, expected_sha256)
-        return payload, raw, {'source_type': newdeal.BUNDLE_KIND}
+        return payload, raw, {'source_type': source_kind}
     try:
         from .build_lp_history_import import build as build_import
     except ImportError:
@@ -140,8 +145,12 @@ def proposal(current, payload, checked_at):
     """Append source-validated programs and their stages; keep old programs exact."""
     _validate_payload(payload)
     validate(current)
-    joint = payload['kind'] == newdeal.IMPORT_KIND
-    if joint:
+    joint = payload['kind'] in _JOINT_IMPORTS
+    followup = payload['kind'] == newdeal.FOLLOWUP_IMPORT_KIND
+    if followup:
+        update_id, added_event, notice = newdeal.project_followup(payload['source'], current['programs'], checked_at)
+        incoming, programs, holds = [notice], [], []
+    elif joint:
         program, incoming = newdeal.project(payload['source'], checked_at)
         newdeal.assert_no_overlap(current['programs'], program, incoming)
         programs, holds = [program], []
@@ -169,15 +178,22 @@ def proposal(current, payload, checked_at):
                   or old.get('sha256') != n['sha256']
                   or old.get('attachment_hashes', {}) != n.get('attachment_hashes', {})):
             raise ValueError('기존 원문 카탈로그의 기관·본문·첨부 버전 충돌')
-    represented = {e['url'] for p in programs for e in p['events']}
+    represented = {added_event['url']} if followup else {e['url'] for p in programs for e in p['events']}
     if holds or represented != {n['url'] for n in incoming}:
         raise ValueError('가져오기 원문이 모두 검증된 모집 사업으로 연결되지 않음')
     after = copy.deepcopy(current)
-    added, reused = [], []
+    added, reused, updated = [], [], []
     ids = {p['id'] for p in current['programs']}
     if len(ids) != len(current['programs']):
         raise ValueError('기존 공개 사업 식별자 중복')
     aliases = current.get('program_aliases', {})
+    if followup:
+        index, = [i for i, p in enumerate(after['programs']) if p['id'] == update_id]
+        before = after['programs'][index]
+        program = newdeal.append_followup(before, added_event)
+        if program != before:
+            after['programs'][index] = program
+            updated.append({'id': update_id, 'added_event': added_event})
     for p in programs:
         urls = {e['url'] for e in p['events'] if e['type'] == '모집 공고'}
         matches = []
@@ -214,12 +230,12 @@ def proposal(current, payload, checked_at):
     if catalog or 'history_notices' in current:
         after['history_notices'] = catalog
     validate(after)
-    _assert_preserved(current, after)
+    _assert_preserved(current, after, updated)
     packed = pack_state(after)
     if unpack_state(packed) != after:
         raise ValueError('가져오기 후 상태 압축·복원 불일치')
     meta = packed.get(MARKER, {})
-    return after, {'new_programs': added, 'reused_program_ids': reused,
+    return after, {'new_programs': added, 'reused_program_ids': reused, 'updated_programs': updated,
                    'programs_before': len(current['programs']), 'programs_after': len(after['programs']),
                    'history_notices_before': len(current.get('history_notices', [])),
                    'history_notices_after': len(catalog),
@@ -268,7 +284,7 @@ def preflight(conn, payload, checked_at, *, source_bundle=None, candidate_checke
             raise ValueError('기존 별칭 주소와 새 공개 페이지 충돌')
         files = list(out.glob('*.html'))
         page_bytes = sum(p.stat().st_size for p in files)
-        _assert_preserved(current, after)
+        _assert_preserved(current, after, result['updated_programs'])
     return {**result, 'kind': 'lp_history_import_preflight_v1', 'checked_at': checked_at,
             'import_build_summary': import_summary,
             'existing_gp_context_preserved': gp_context_preserved,

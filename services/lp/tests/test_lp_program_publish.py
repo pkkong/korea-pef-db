@@ -154,6 +154,47 @@ class PublishContracts(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'changed since history-import preflight'):
                 prepare_historical_addition(payload, 'other-run', STAMP)
 
+    def test_history_followup_replaces_only_its_existing_detail(self):
+        import tempfile
+        from unittest.mock import MagicMock
+        from lp_newdeal_history_import import append_followup
+        from lp_notice_publication import _refresh
+        from lp_program_aliases import alias_pages
+        from lp_program_service import build
+        from lp_state_storage import pack_state
+        from publish_lp_programs import prepare_historical_addition
+        from services.lp.tests.test_lp_history_import_preflight import payload_fixture, current_fixture, STAMP
+
+        payload = payload_fixture()
+        current = current_fixture(payload)
+        program, = current['programs']
+        _refresh(program, [], STAMP)
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            current['public_notice_context'] = build(copy.deepcopy(current), out)['public_notice_context']
+            saved = {p.name: p.read_text() for p in out.glob('*.html')}
+        saved.update(alias_pages(current['programs'], current['program_aliases']))
+        saved['review.html'] = '<p>Existing review</p>'
+        event = {'type': '질의응답', 'title': '기업투자 FAQ', 'date': '2026-07-15',
+                 'url': 'https://www.kgrowth.or.kr/notice_view.asp?idx=445&str_type=1&tab=1'}
+        data = {**current, 'programs': [append_followup(program, event)], 'history_notices': [event]}
+        summary = {'new_programs': [], 'updated_programs': [{'id': program['id'], 'added_event': event}],
+                   'reused_program_ids': [], 'history_notices_before': 0}
+        revision = (('baseline', 'stamp'), current['review_decisions'])
+        conn = MagicMock()
+        conn.__enter__.return_value = conn
+        conn.execute.return_value.fetchone.return_value = (pack_state(current), saved)
+        with patch('publish_lp_programs.connect', return_value=conn), \
+             patch('publish_lp_programs.publication_revision', return_value=revision), \
+             patch('lp_history_import_preflight.proposal', return_value=(data, summary)), \
+             patch('publish_lp_programs.publication_phase'):
+            report, published, pages, _ = prepare_historical_addition(payload, 'baseline', STAMP)
+        changed = {page for page, html in pages.items() if saved.get(page) != html}
+        self.assertEqual(changed, {f"program-{program['id']}.html"})
+        self.assertIn('기업투자 FAQ 추가', pages[f"program-{program['id']}.html"])
+        self.assertEqual(report['updated_program_ids'], [program['id']])
+        self.assertEqual(published['public_notice_context'], current['public_notice_context'])
+
     def test_changed_publication_or_review_cannot_write_prepared_results(self):
         from unittest.mock import MagicMock
         from publish_lp_programs import publish_prepared

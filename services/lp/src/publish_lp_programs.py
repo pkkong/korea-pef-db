@@ -483,7 +483,7 @@ def prepare_publication(report):
 
 
 def prepare_historical_addition(payload, expected_run, checked_at):
-    """Add pinned historical programs while preserving already published evidence."""
+    """Publish a pinned historical addition or a verified follow-up on an existing page."""
     from lp_history_import_preflight import proposal, retained_gp_context
     from lp_reported_results import load_reported_results
 
@@ -502,27 +502,31 @@ def prepare_historical_addition(payload, expected_run, checked_at):
     started = time.monotonic()
     data, summary = proposal(current, payload, checked_at)
     added = summary['new_programs']
+    updated = summary['updated_programs']
     # The proposal verifies surviving source versions. A new program can
     # legitimately cite a joint result already retained for another program.
-    if not added or summary['reused_program_ids']:
-        raise ValueError('Pinned import must append only previously unpublished programs')
+    if bool(added) == bool(updated) or summary['reused_program_ids']:
+        raise ValueError('Pinned import must add unpublished programs or a single verified follow-up')
     new_ids = {p['id'] for p in added}
-    previous_results = current.get('reported_results', {})
-    results, holds = load_reported_results(added)
-    new_result_holds = [h for h in holds if h['program_id'] in new_ids]
-    if new_ids & previous_results.keys() or any(h['reason'] != 'official result exists' for h in new_result_holds):
-        raise ValueError('Historical addition has conflicting reported results')
-    if results:
-        data['reported_results'] = {**previous_results, **results}
-    if 'reported_result_holds' in current or new_result_holds:
-        data['reported_result_holds'] = [h for h in current.get('reported_result_holds', []) if h['program_id'] not in new_ids]
-        data['reported_result_holds'].extend(new_result_holds)
+    if added:
+        previous_results = current.get('reported_results', {})
+        results, holds = load_reported_results(added)
+        new_result_holds = [h for h in holds if h['program_id'] in new_ids]
+        if new_ids & previous_results.keys() or any(h['reason'] != 'official result exists' for h in new_result_holds):
+            raise ValueError('Historical addition has conflicting reported results')
+        if results:
+            data['reported_results'] = {**previous_results, **results}
+        if 'reported_result_holds' in current or new_result_holds:
+            data['reported_result_holds'] = [h for h in current.get('reported_result_holds', []) if h['program_id'] not in new_ids]
+            data['reported_result_holds'].extend(new_result_holds)
 
     aliases = alias_pages(current['programs'], current.get('program_aliases', {}))
     required_pages = {'review.html', 'index.html', 'institution-directory.html'} | {
         f"program-{p['id']}.html" for p in current['programs']}
-    changed_pages = {'index.html', 'institution-directory.html'} | {
-        f"institution-{p['institution_id']}.html" for p in added}
+    changed_pages = {f"program-{row['id']}.html" for row in updated}
+    if added:
+        changed_pages.update({'index.html', 'institution-directory.html',
+                              *(f"institution-{p['institution_id']}.html" for p in added)})
     new_pages = {f'program-{program_id}.html' for program_id in new_ids}
     if (not isinstance(old_pages, dict) or any(not old_pages.get(n) for n in required_pages)
             or any(old_pages.get(n) != html for n, html in aliases.items()) or new_pages & old_pages.keys()):
@@ -544,6 +548,7 @@ def prepare_historical_addition(payload, expected_run, checked_at):
     notices = data['history_notices'][summary['history_notices_before']:]
     report = {'kind': 'lp_history_import_publication_v1', 'checked_at': payload['checked_at'],
               'prepared_at': checked_at, 'baseline_run_id': expected_run, 'new_program_ids': sorted(new_ids),
+              'updated_program_ids': [row['id'] for row in updated],
               'notices': notices, 'official_http_requests': 0}
     publication_phase('source_validation_and_pages', started, programs=len(data['programs']))
     return report, data, pages, revision

@@ -94,3 +94,49 @@ def test_joint_proof_requires_pinned_workflow_and_cannot_supply_prepared_facts()
         assert '형식' in str(error)
     else:
         raise AssertionError('Prepared program facts entered the joint-source import')
+
+
+def test_faq_publication_changes_only_the_confirmed_stage_and_is_idempotent():
+    program, notices = example()
+    program.update(deadline='2021-01-26T16:00:00+09:00', commitment_label='2,700억원 예정')
+    publication._refresh(program, [], STAMP)
+    faq = {'date': '2021-01-19', 'type': '질의응답', 'title': '정책형 뉴딜펀드 기업투자 FAQ 추가',
+           'url': 'https://www.kgrowth.or.kr/notice_view.asp?idx=21&str_type=1&tab=1'}
+    receipt = {**notices[0], 'url': faq['url'], 'date': '2021-01-06', 'event_type': '질의응답'}
+    current = {'as_of': '2026-11-25', 'programs': [program], 'history_notices': notices,
+               'program_aliases': {'existing-alias': program['id']}}
+    payload = {'kind': newdeal.FOLLOWUP_IMPORT_KIND, 'checked_at': STAMP, 'source': {}}
+    with patch.object(newdeal, 'project_followup', return_value=(program['id'], faq, receipt)), \
+            patch.object(preflight, 'validate_history_notice', side_effect=lambda notice, _: notice):
+        after, summary = preflight.proposal(current, payload, STAMP)
+        assert summary['new_programs'] == [] and summary['updated_programs'] == [{'id': program['id'], 'added_event': faq}]
+        assert len(after['programs']) == 1
+        updated = after['programs'][0]
+        assert updated['events'][1] == faq
+        assert [stage for stage in updated['schedule_stages'] if stage['stage'] != 'faq'] == program['schedule_stages']
+        assert updated['selected_gps'] == program['selected_gps']
+        assert after['program_aliases'] == current['program_aliases']
+        assert after['history_notices'] == [*notices, receipt]
+        repeat, repeated = preflight.proposal(after, payload, STAMP)
+        assert repeat == after and repeated['updated_programs'] == []
+        for field, value in (('deadline', '2021-01-27T16:00:00+09:00'), ('commitment_label', '2,800억원')):
+            bad = copy.deepcopy(after)
+            bad['programs'][0][field] = value
+            try:
+                preflight._assert_preserved(current, bad, summary['updated_programs'])
+            except ValueError as error:
+                assert '기존 공개 사업' in str(error)
+            else:
+                raise AssertionError(f'An FAQ changed {field}')
+
+
+def test_faq_date_comes_from_the_corporate_revision_and_checks_weekday():
+    body = "※ '21.1.19(화)에 기업투자 FAQ 및 붙임4를 추가하여 첨부하였으니 참고하시기 바랍니다. " \
+           "'21.10.28(목)에 붙임5(프로젝트펀드 FAQ)를 추가하여 첨부하였으니 참고하시기 바랍니다."
+    assert newdeal._faq_date(body) == '2021-01-19'
+    try:
+        newdeal._faq_date(body.replace('(화)', '(금)'))
+    except ValueError as error:
+        assert '요일' in str(error)
+    else:
+        raise AssertionError('A mismatched weekday was accepted')

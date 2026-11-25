@@ -5,27 +5,46 @@ import copy
 import hashlib
 import json
 import re
-from datetime import datetime
+from datetime import date, datetime
 from urllib.parse import parse_qs, urlsplit
 
 try:
     from . import lp_kgrowth_history_replay as replay
     from .lp_history_notices import JOINT_KIND as NOTICE_KIND, JOINT_IMPORT_KIND as IMPORT_KIND
+    from .lp_history_notices import JOINT_FOLLOWUP_IMPORT_KIND as FOLLOWUP_IMPORT_KIND
+    from .lp_kgrowth_history_attachment_queue import file_labels
     from .lp_joint_history_projection import review_newdeal_growth_selection
     from .lp_kgrowth_press_probe import _press_detail_url, _press_result_detail_dom
     from .lp_notice_triage import compact
+    from .lp_notice_publication import _schedule_order
 except ImportError:
     import lp_kgrowth_history_replay as replay
     from lp_history_notices import JOINT_KIND as NOTICE_KIND, JOINT_IMPORT_KIND as IMPORT_KIND
+    from lp_history_notices import JOINT_FOLLOWUP_IMPORT_KIND as FOLLOWUP_IMPORT_KIND
+    from lp_kgrowth_history_attachment_queue import file_labels
     from lp_joint_history_projection import review_newdeal_growth_selection
     from lp_kgrowth_press_probe import _press_detail_url, _press_result_detail_dom
     from lp_notice_triage import compact
+    from lp_notice_publication import _schedule_order
 
 
 BUNDLE_KIND = 'lp_newdeal_joint_history_source_v1'
+FOLLOWUP_BUNDLE_KIND = 'lp_newdeal_joint_followup_source_v1'
 _ROLES = ('search', 'followup', 'detail', 'failed_pdf', 'pdf')
 _FUND = '정책형 뉴딜펀드'
 _SOURCE_KEYS = {'kind', 'institution_id', 'bundle', 'recruitment', 'press', 'attachments'}
+_FAQ_REVISION = re.compile(r"['‘’](\d{2})\.(\d{1,2})\.(\d{1,2})\(([월화수목금토일])\)에기업투자faq및붙임\d+를추가하여첨부")
+
+
+def _faq_date(body):
+    dates = _FAQ_REVISION.findall(compact(body))
+    if len(dates) != 1:
+        raise ValueError('뉴딜 기업투자 FAQ를 추가한 날짜가 미확인')
+    year, month, day, weekday = dates[0]
+    stamp = date(2000 + int(year), int(month), int(day))
+    if '월화수목금토일'[stamp.weekday()] != weekday:
+        raise ValueError('뉴딜 기업투자 FAQ 추가일과 요일 불일치')
+    return stamp.isoformat()
 
 
 def _decode(encoded, limit):
@@ -73,7 +92,10 @@ def validate_retained_notice(notice, checked_at):
         raise ValueError('뉴딜 공동 원문의 첨부 지문 불일치')
     encoded, digest = proof['detail_base64'], proof['detail_sha256']
     if key[0] == '1':
-        if n['event_type'] != '모집 공고':
+        if n['event_type'] == '질의응답':
+            if not replay.newdeal_faq(n) or n['faq_date'] != _faq_date(n['body']) or n['faq_date'] < n['date']:
+                raise ValueError('뉴딜 설명회·FAQ 원문의 단계·추가일 불일치')
+        elif n['event_type'] != '모집 공고':
             raise ValueError('뉴딜 원모집의 공고 단계 불일치')
         replay._detail(n, encoded, digest)
     else:
@@ -154,3 +176,81 @@ def assert_no_overlap(current_programs, program, sources):
             if (old['id'] != program['id'] or old['institution_id'] != program['institution_id']
                     or old.get('source_program_key') != program['source_program_key']):
                 raise ValueError('뉴딜 공동 원문·사업연도·리그가 기존 공개 사업과 겹침')
+
+
+def project_followup(source, current_programs, checked_at):
+    """Replay one FAQ on the existing, independently selected KDB track."""
+    if (not isinstance(source, dict) or set(source) != {'kind', 'institution_id', 'bundle', 'detail', 'faq_pdf'}
+            or source.get('kind') != FOLLOWUP_BUNDLE_KIND or source.get('institution_id') != 'kdb'):
+        raise ValueError('뉴딜 FAQ 과거 원본 묶음 형식 불일치')
+    bundle_raw = _decode(source['bundle'], replay.MAX_INPUT_BYTES)
+    bundle = json.loads(bundle_raw)
+    group, notices = replay.target_group(bundle, review_scope=replay.NEWDEAL_FOLLOWUPS)
+    original, = notices
+    identity = {'target_institution_id': 'kdb', **{k: v for k, v in group['identity'].items() if k != 'kind'}}
+    owners = [p for p in current_programs if p.get('joint_history_identity') == identity]
+    if len(owners) != 1:
+        raise ValueError('공개된 뉴딜성장형의 사업·회차 고유성이 미확인')
+    program, = owners
+    if (program['institution_id'] != 'kdb' or program.get('joint_history_track_keys') != ['blind_newdeal_growth']
+            or program.get('joint_history_bundle_sha256') != replay._sha(bundle_raw)
+            or program['status'] != '선정 완료' or program.get('manual_review_id')):
+        raise ValueError('기존 뉴딜성장형의 원본·리그·선정 단계 불일치')
+    original_events = [e for e in program['events'] if e['type'] == '모집 공고']
+    if len(original_events) != 1 or not program.get('deadline') or not program.get('schedule_stages'):
+        raise ValueError('기존 뉴딜성장형 모집·접수 일정 누락')
+    key = source_key(original['url'])
+    if any(source_key(e['url']) == key for p in current_programs if p is not program for e in p['events']):
+        raise ValueError('뉴딜 FAQ 원문이 다른 공개 사업에 이미 연결됨')
+
+    capture = json.loads(_decode(source['detail'], replay.MAX_INPUT_BYTES))
+    if capture.get('holds'):
+        raise ValueError('뉴딜 FAQ 상세 원본 보류')
+    recovered = replay._captured(bundle, capture, notices, review_scope=replay.NEWDEAL_FOLLOWUPS, group=group)
+    receipt = recovered[original['url']]
+    labels = file_labels({**original, 'discovery_provenance': {'detail_response_base64': receipt['raw_base64'],
+                                                             'detail_response_sha256': receipt['sha256']}})
+    urls = [url for url, name in labels.items() if '기업투자' in compact(name) and 'faq' in compact(name)
+            and compact(name).endswith('.pdf')]
+    if len(urls) != 1:
+        raise ValueError('공식 설명회에서 기업투자 FAQ PDF의 파일명과 주소 미확인')
+    attachment_url, = urls
+    raw_pdf = _decode(source['faq_pdf'], replay.MAX_FILE_BYTES)
+    digest = replay._sha(raw_pdf)
+    extracted = replay.kgrowth_attachment_text(raw_pdf)
+    if (digest != original['attachment_hashes'].get(attachment_url)
+            or extracted != original['attachment_texts'].get(attachment_url)):
+        raise ValueError('뉴딜 FAQ의 원본 바이트·추출문 지문 불일치')
+    faq_date = _faq_date(original['body'])
+    text = compact(extracted)
+    dated = '.'.join(str(int(part)) for part in faq_date.split('-'))
+    if (not original_events[0]['date'] < original['date'] <= faq_date < program['deadline'][:10]
+            or f'출자사업faq{dated}정책형뉴딜펀드운영사무국' not in text
+            or not re.search(r'\(뉴딜성장형\)최소\d+개,최대\d+개운용사', text)
+            or not re.search(r'뉴딜성장형[\d,]+~[\d,]+\d{2}%[\d,]+\d+산은\(단위:억원,%\)', text)):
+        raise ValueError('뉴딜 FAQ 본문과 PDF의 발행일·산업은행 뉴딜성장형 구획 불일치')
+    notice = _source_notice({**{k: original[k] for k in replay._FIELDS}, 'event_type': '질의응답',
+                             'faq_date': faq_date, 'attachment_hashes': {attachment_url: digest}}, receipt)
+    event = {'date': faq_date, 'type': '질의응답', 'title': '정책형 뉴딜펀드 기업투자 FAQ 추가', 'url': notice['url']}
+    return program['id'], event, validate_retained_notice(notice, checked_at)
+
+
+def append_followup(program, event):
+    """Add a confirmed FAQ while preserving every existing stage and offering field."""
+    if event['type'] != '질의응답':
+        raise ValueError('확인된 뉴딜 FAQ만 기존 일정에 추가할 수 있음')
+    previous = [e for e in program['events'] if source_key(e['url']) == source_key(event['url'])]
+    if previous:
+        if previous != [event]:
+            raise ValueError('기존 공개 FAQ 원문·날짜와 다른 버전')
+        return program
+    output = copy.deepcopy(program)
+    output['events'] = sorted([*output['events'], event], key=lambda e: e['date'])
+    stage = {'stage': 'faq', 'label': '질의응답', 'original_label': '질의응답', 'date': event['date'],
+             'precision': 'date', 'status': 'confirmed', 'source_url': event['url'], 'show_source': True,
+             'detail': '기업투자 FAQ 추가'}
+    output['schedule_stages'] = _schedule_order([*output['schedule_stages'], stage])
+    if ([e for e in output['events'] if e != event] != program['events']
+            or [s for s in output['schedule_stages'] if s != stage] != program['schedule_stages']):
+        raise ValueError('뉴딜 FAQ 추가가 기존 공개 단계 순서를 변경함')
+    return output
