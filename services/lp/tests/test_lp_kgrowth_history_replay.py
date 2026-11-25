@@ -248,6 +248,18 @@ class GrowthReplayTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '공동 원모집'):
             replay.press_search_terms(iii())
 
+    def test_newdeal_followup_capture_selects_only_the_source_advertised_faq(self):
+        faq = notice('701', '【선정공고】 「정책형 뉴딜펀드」 2021년 정시 출자사업 온라인 설명회',
+                     '2021-01-06', '기업투자 FAQ를 추가하여 첨부하였으니 참고하시기 바랍니다.', '')
+        unrelated = notice('702', '【선정결과】 「정책형 뉴딜펀드」 2021년 정시 기업투자 1차 심사 결과',
+                           '2021-02-17', '1차 심사를 통과한 15개 펀드', '')
+        b = bundle(newdeal(), unrelated, faq)
+        capture, calls = self.capture(b, {faq['url']: detail(faq)}, review_scope=replay.NEWDEAL_FOLLOWUPS)
+        self.assertEqual(calls, [faq['url']])
+        self.assertEqual(capture['holds'], [])
+        self.assertEqual(capture['database_writes'], 0)
+        self.assertFalse(capture['published'])
+
     def test_joint_capture_and_attachment_replay_preserve_source_identity(self):
         b = bundle(materials())
         n = b['notices'][0]

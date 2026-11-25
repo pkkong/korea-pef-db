@@ -38,7 +38,8 @@ MAX_DETAIL_BYTES = 12 * 1024 * 1024
 MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_INPUT_BYTES = 40 * 1024 * 1024
 _FIELDS = ('source_id', 'url', 'title', 'date', 'body', 'sha256', 'attachments')
-REVIEW_SCOPES = ('pe_roster', 'joint_originals')
+NEWDEAL_FOLLOWUPS = 'newdeal_followups'
+REVIEW_SCOPES = ('pe_roster', 'joint_originals', NEWDEAL_FOLLOWUPS)
 PRESS_PDF_SCOPES = ('press_pdf', 'press_pdf_session')
 PRESS_CHAIN_SCOPES = ('press_followup', 'press_result') + PRESS_PDF_SCOPES
 CAPTURE_SCOPES = REVIEW_SCOPES + ('press_listing', 'press_search') + PRESS_CHAIN_SCOPES
@@ -67,7 +68,17 @@ def target_group(bundle, *, review_scope='pe_roster'):
     report = review_bundle(bundle, valid_name=_rule_valid_name)
     if report['metadata_check']['errors']:
         raise ValueError('보관 목록·본문 메타 검증 실패')
-    if review_scope == 'joint_originals':
+    if review_scope == NEWDEAL_FOLLOWUPS:
+        identity = {'fund': '정책형뉴딜펀드', 'year': '2021', 'round': '정시'}
+        originals = [p for p in report['joint_offerings'] if p['identity'] == identity]
+        if len(originals) != 1:
+            raise ValueError('뉴딜성장형 공동 모집과 설명회 관계 미확인')
+        urls = {n['url'] for n in bundle['notices'] if n['date'] > originals[0]['issued_date']
+                and newdeal_faq(n)}
+        if len(urls) != 1:
+            raise ValueError('뉴딜성장형 공동 설명회 원문 누락·중복')
+        group = {'identity': {'kind': NEWDEAL_FOLLOWUPS, **identity}, 'remaining_candidates': 0}
+    elif review_scope == 'joint_originals':
         if report['joint_holds']:
             raise ValueError('공동 모집 판독 보류를 먼저 확인해야 함')
         candidates = sorted(report['joint_offerings'], key=lambda g: (
@@ -97,6 +108,14 @@ def target_group(bundle, *, review_scope='pe_roster'):
             raise ValueError('보관 상세의 표준 원문 주소 불일치')
         _stamp(n['checked_at'])
     return group, notices
+
+
+def newdeal_faq(notice):
+    title = re.sub(r'\s+', '', notice.get('title', ''))
+    body = re.sub(r'\s+', '', notice.get('body', ''))
+    return (notice.get('institution_id') == 'kgrowth'
+            and bool(re.fullmatch(r'(?:【선정공고】|〖선정공고〗)「정책형뉴딜펀드」2021년정시출자사업온라인설명회', title))
+            and '기업투자FAQ' in body and '추가하여첨부' in body)
 
 
 def press_search_terms(bundle):

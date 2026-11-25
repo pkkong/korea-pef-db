@@ -1,12 +1,7 @@
 {
   "bundle_commit": "8044b5d7b107481a70b3b2bb7891cd19dfd66898",
   "bundle_sha256": "a5b4c1d35660dbbbcd376149e6856814e4405242452a5dc63458b9a3d5bca97b",
-  "reason": "저장된 첨부 직접 접근 안내 응답을 검증한다. 정상 공개 경로에서 상세를 한 번 열고 제목·본문·첨부가 일치하면 같은 익명 세션에서 관측 PDF 링크를 한 번 요청한다.",
-  "attempt": 8,
-  "review_scope": "press_pdf_session",
-  "prior_press_commit": "7154eb45f08c79a5cd621743145edb3ffc9534a1",
-  "prior_press_sha256": "98654f72a68e04d8367dbded968a1cd8f97783c179c9677fa84eae7a576ac524",
-  "followup_press_sha256": "aa4b6439a9dccd8ec46c34a9ab35091b2e2833bcf560482e5a7b662da2387599",
-  "result_press_sha256": "b1af29bb50107bb7234138d156e1e63ecdcdaf070fb1d468af37129cb761075a",
-  "failed_press_sha256": "e54139b743783a4c98ed8770df0d57daab52cfa53aee99bcd2cedda63551c3c8"
+  "reason": "공동 모집과 동일한 사업연도·회차에 속하고 기업투자 FAQ 추가를 명시한 설명회 상세 원응답을 한 번 보관한다. 기존 원문 지문과 본문 및 첨부 주소를 재생한다.",
+  "attempt": 9,
+  "review_scope": "newdeal_followups"
 }

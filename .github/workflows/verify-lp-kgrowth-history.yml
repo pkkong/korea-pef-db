@@ -1,7 +1,7 @@
 name: Verify retained LP KGrowth history
 
 # A request-file push only: recover missing raw detail evidence for one
-# automatically selected PE group or first two supported joint originals.
+# automatically selected PE group, joint originals, or a scoped follow-up.
 # Press scopes retain a listing, its verified detail, or the detail's observed PDF.
 # No DB credentials, publication, manual dispatch,
 # or notice-ID inputs. Originals stay in an artifact.
@@ -44,7 +44,7 @@ jobs:
           assert re.fullmatch(r'[a-f0-9]{40}', commit)
           assert re.fullmatch(r'[a-f0-9]{64}', digest)
           assert type(request['attempt']) is int and request['attempt'] > 0
-          assert proof_count or scope in {'pe_roster', 'joint_originals', 'press_listing', 'press_search'}
+          assert proof_count or scope in {'pe_roster', 'joint_originals', 'newdeal_followups', 'press_listing', 'press_search'}
           subprocess.run(['git', 'fetch', '--no-tags', '--depth=1', 'origin', commit], check=True)
           raw = subprocess.check_output(['git', 'show', commit + ':kgrowth.json'])
           assert len(raw) <= 40 * 1024 * 1024
