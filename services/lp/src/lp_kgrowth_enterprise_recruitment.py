@@ -3,11 +3,12 @@
 import base64
 from datetime import date, datetime, timezone
 import hashlib
+from http.cookiejar import CookieJar
 import json
 from pathlib import Path
 import re
 from urllib.error import HTTPError
-from urllib.request import Request, build_opener
+from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 try:
     from . import kgrowth_listing, lp_kgrowth_history_replay as replay
@@ -51,19 +52,25 @@ def listed_recruitment(bundle, selection):
     return next(iter(matches.values()))
 
 
-def fetch(url, referer, limit):
-    request = Request(url, headers={'Accept-Encoding': 'identity', 'Referer': referer,
-                                    'User-Agent': 'Mozilla/5.0 (LP source verification)'})
-    try:
-        response = build_opener(replay._NoRedirect()).open(request, timeout=25)
-    except HTTPError as error:
-        response = error
-    with response:
-        return response.code, response.geturl(), response.read(limit + 1)
+def public_session():
+    opener = build_opener(HTTPCookieProcessor(CookieJar()), replay._NoRedirect())
+
+    def fetch(url, referer, limit):
+        request = Request(url, headers={'Accept-Encoding': 'identity', 'Referer': referer,
+                                        'User-Agent': 'Mozilla/5.0 (LP source verification)'})
+        try:
+            response = opener.open(request, timeout=25)
+        except HTTPError as error:
+            response = error
+        with response:
+            return response.code, response.geturl(), response.read(limit + 1)
+
+    return fetch
 
 
-def capture(bundle, selection, retain, acquire=fetch):
+def capture(bundle, selection, retain, acquire=None):
     row, listing_url, digest = listed_recruitment(bundle, selection)
+    acquire = acquire or public_session()
     report = {'kind': 'lp_kgrowth_enterprise_recruitment_capture_v1', 'row': row,
               'listing_url': listing_url, 'listing_sha256': digest, 'responses': [], 'holds': [],
               'database_writes': 0, 'published': False}

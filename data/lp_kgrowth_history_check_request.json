@@ -1,8 +1,8 @@
 {
   "bundle_commit": "8044b5d7b107481a70b3b2bb7891cd19dfd66898",
   "bundle_sha256": "a5b4c1d35660dbbbcd376149e6856814e4405242452a5dc63458b9a3d5bca97b",
-  "reason": "산업은행 2022년 1차 중형·대형 보도자료와 대조할 공동 기업투자 모집 상세와 첨부를 보존한다. 같은 회차의 인프라는 요청하지 않는다.",
-  "attempt": 10,
+  "reason": "45734168122에서 상세는 확인했고 첨부는 67바이트 접근 거절 응답이었다. 상세와 그 상세가 연결한 기업투자 PDF를 같은 공개 세션에서 한 번씩 보존한다.",
+  "attempt": 11,
   "review_scope": "enterprise_recruitment",
   "recruitment": {
     "fund": "정책형 뉴딜펀드",

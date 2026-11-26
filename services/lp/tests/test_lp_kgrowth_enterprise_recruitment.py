@@ -1,6 +1,8 @@
 import base64
 import hashlib
 import unittest
+from unittest.mock import patch
+from urllib.request import HTTPCookieProcessor
 
 from services.lp.src import kgrowth_listing
 from services.lp.src import lp_kgrowth_enterprise_recruitment as recruitment
@@ -20,6 +22,20 @@ def listing_bundle(*rows):
 
 
 class EnterpriseRecruitmentTests(unittest.TestCase):
+    def test_uses_one_public_cookie_session_for_the_detail_and_file(self):
+        with patch.object(recruitment, 'build_opener') as build:
+            opener = build.return_value
+            response = opener.open.return_value
+            response.code = 200
+            response.geturl.return_value = 'https://www.kgrowth.or.kr/'
+            response.read.return_value = b'bytes'
+            acquire = recruitment.public_session()
+            acquire('https://www.kgrowth.or.kr/notice_view.asp', 'https://www.kgrowth.or.kr/notice.asp', 50)
+            acquire('https://www.kgrowth.or.kr/down_file.asp', 'https://www.kgrowth.or.kr/notice_view.asp', 50)
+        build.assert_called_once()
+        self.assertIsInstance(build.call_args.args[0], HTTPCookieProcessor)
+        self.assertEqual(opener.open.call_count, 2)
+
     def test_only_the_matching_archived_enterprise_offering_is_selected(self):
         bundle = listing_bundle(('1', '80', TITLE.replace('1차', '2차'), '2022-01-07'),
                                 ('2', '81', TITLE, '2022-01-07'))
