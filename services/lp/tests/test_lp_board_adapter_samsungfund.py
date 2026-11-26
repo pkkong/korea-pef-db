@@ -80,6 +80,35 @@ def config():
 
 
 class SamsungFundAdapterTests(unittest.TestCase):
+    def test_read_only_desktop_search_selects_the_same_fund_results(self):
+        mobile = sam.parse_listing(fragment(ROWS[:10]), LIST + '1', config())
+        rows = ''.join(
+            f'<li><a href="notice-view.do?no={no}&amp;searchText={FUND}">'
+            f'<h3>{title}</h3><span class="date">{day}</span></a></li>'
+            for no, title, day, _ in ROWS[:10]
+        )
+        markup = (f'<html><body><main class="notice-wrap"><input name="searchText" value="{FUND}">'
+                  f'<div class="list-wrap"><ul class="list">{rows}</ul></div></main></body></html>')
+        with TemporaryDirectory() as folder:
+            out = Path(folder) / 'receipt'
+            calls = []
+
+            def fetch(url, headers):
+                calls.append((url, headers))
+                return 200, url, {}, markup.encode()
+
+            result = diagnostic.capture(out, fetch, desktop=True)
+            self.assertEqual(calls, [(diagnostic._DESKTOP_LIST + '?searchText=' + quote(FUND),
+                                      boards.request_headers(diagnostic._DESKTOP_LIST))])
+            self.assertEqual((out / 'response.bin').read_text(), markup)
+            self.assertEqual(result['notice_ids'], [r['source_id'] for r in mobile])
+            self.assertEqual(result['pe_result_ids'], [r['source_id'] for r in mobile if r['institution_id']])
+            self.assertEqual((result['requests'], result['database_writes']), (1, 0))
+        for broken in (markup.replace(f'value="{FUND}"', 'value=""'), markup[:-7],
+                       markup.replace('243848', '244408', 1)):
+            with self.assertRaises(ValueError):
+                diagnostic._desktop_rows(broken, config())
+
     def test_diagnostic_preserves_the_exact_first_denial_without_parsing_it(self):
         raw = b'<html>Forbidden</html>'
         with TemporaryDirectory() as folder, patch.object(sam, 'parse_listing') as parse:

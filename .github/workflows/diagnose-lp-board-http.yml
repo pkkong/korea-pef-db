@@ -10,6 +10,10 @@ on:
         type: choice
         default: cu
         options: [cu, kfcc, kfinco, tp, kexim, koreapost, moel_eif_ocio, moel_iaci_ocio, all]
+      samsung_desktop:
+        description: Read the first page of Samsung Fund's public desktop search
+        type: boolean
+        default: false
       koreapost_collection_run:
         description: Completed current collection for automatic preferred-stage raw reuse/capture
         type: string
@@ -76,7 +80,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Retain only the first Samsung OCIO listing response
-        run: python3 services/lp/src/diagnose_lp_samsungfund_listing.py --out /tmp/lp-samsung-ocio-listing
+        run: python3 services/lp/src/diagnose_lp_samsungfund_listing.py --out /tmp/lp-samsung-ocio-listing ${{ inputs.samsung_desktop && '--desktop' || '' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
