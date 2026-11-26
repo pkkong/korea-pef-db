@@ -1,9 +1,14 @@
 """산재보험기금 OCIO (삼성자산운용) notices: results only, fund named, PE track."""
 import copy
+import hashlib
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 from urllib.parse import quote
 
 from services.lp.src import collect_lp_institution_boards as boards
+from services.lp.src import diagnose_lp_samsungfund_listing as diagnostic
 from services.lp.src import lp_board_adapter_samsungfund as sam
 from services.lp.src.lp_notice_publication import publish_basic_notices
 
@@ -75,6 +80,38 @@ def config():
 
 
 class SamsungFundAdapterTests(unittest.TestCase):
+    def test_diagnostic_preserves_the_exact_first_denial_without_parsing_it(self):
+        raw = b'<html>Forbidden</html>'
+        with TemporaryDirectory() as folder, patch.object(sam, 'parse_listing') as parse:
+            out = Path(folder) / 'receipt'
+            calls = []
+
+            def denied(url, headers):
+                calls.append((url, headers))
+                return 403, url, {'Content-Type': 'text/html'}, raw
+
+            result = diagnostic.capture(out, denied)
+            self.assertEqual((out / 'response.bin').read_bytes(), raw)
+            self.assertEqual(calls, [(LIST + '1', boards.request_headers(config()['listing_url']))])
+            self.assertEqual((result['http_status'], result['sha256']), (403, hashlib.sha256(raw).hexdigest()))
+            parse.assert_not_called()
+
+    def test_diagnostic_saves_successful_bytes_before_running_the_listing_parser(self):
+        raw = fragment(ROWS[:10]).encode()
+        original = sam.parse_listing
+        with TemporaryDirectory() as folder:
+            out = Path(folder) / 'receipt'
+
+            def verify_saved(text, url, conf):
+                self.assertEqual((out / 'response.bin').read_bytes(), raw)
+                self.assertTrue((out / 'receipt.json').is_file())
+                return original(text, url, conf)
+
+            with patch.object(sam, 'parse_listing', side_effect=verify_saved):
+                result = diagnostic.capture(out, lambda url, _: (200, url, {}, raw))
+            self.assertEqual(result['row_count'], 10)
+            self.assertEqual(result['requests'], 1)
+
     def test_channel_is_a_second_board_of_the_fund(self):
         c = config()
         self.assertEqual((c['institution_id'], c['channel_id'], c['since']), ('moel_iaci', 'moel_iaci_ocio', '2020-01-01'))

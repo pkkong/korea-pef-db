@@ -215,6 +215,14 @@ def _same_host(url, config):
         raise ValueError('official institution HTTPS host mismatch')
 
 
+def request_headers(referer=None):
+    headers = {'User-Agent': 'Mozilla/5.0 (LP official board collector)',
+               'Accept-Encoding': 'identity', 'Connection': 'close'}
+    if referer:
+        headers['Referer'] = referer
+    return headers
+
+
 class Session:
     def __init__(self, config):
         self.config = config
@@ -251,10 +259,7 @@ class Session:
                 self._kfinco_retry_budget = [4]
             request_url = kfinco.detail_request(url) if urlsplit(url).path.startswith('/pr/notice/detail/') else url
             return _fetch_with_retry(native_tls_fetch, request_url, self._kfinco_retry_budget)
-        headers = {'User-Agent': 'Mozilla/5.0 (LP official board collector)',
-                   'Accept-Encoding': 'identity', 'Connection': 'close'}
-        if referer:
-            headers['Referer'] = referer
+        headers = request_headers(referer)
         request_url, request_data = url, None
         planner = (nh if self.config['institution_id']=='nh_central' and re.fullmatch(r'/ecenter/(notice|bid)/\1(?:List|View)\.do',urlsplit(url).path) else
                    suhyup if self.config['institution_id']=='suhyup' and urlsplit(url).path==suhyup.LANDING else

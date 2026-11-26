@@ -9,7 +9,7 @@ on:
       institution:
         type: choice
         default: cu
-        options: [cu, kfcc, kfinco, tp, kexim, koreapost, moel_eif_ocio, all]
+        options: [cu, kfcc, kfinco, tp, kexim, koreapost, moel_eif_ocio, moel_iaci_ocio, all]
       koreapost_collection_run:
         description: Completed current collection for automatic preferred-stage raw reuse/capture
         type: string
@@ -64,6 +64,26 @@ concurrency:
   group: lp-program-collection
   cancel-in-progress: false
 jobs:
+  samsung-listing:
+    if: inputs.institution == 'moel_iaci_ocio' && github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Retain only the first Samsung OCIO listing response
+        run: python3 services/lp/src/diagnose_lp_samsungfund_listing.py --out /tmp/lp-samsung-ocio-listing
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lp-samsung-ocio-listing
+          path: /tmp/lp-samsung-ocio-listing
+          retention-days: 30
+          if-no-files-found: error
   eif-listing:
     if: inputs.institution == 'moel_eif_ocio' && github.repository == 'pkkong/korea-pef-db' && github.ref == 'refs/heads/main'
     runs-on: ${{ inputs.runner }}
@@ -259,7 +279,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
   diagnose:
-    if: inputs.institution != 'kexim' && inputs.institution != 'koreapost' && inputs.institution != 'moel_eif_ocio'
+    if: inputs.institution != 'kexim' && inputs.institution != 'koreapost' && inputs.institution != 'moel_eif_ocio' && inputs.institution != 'moel_iaci_ocio'
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     steps:
