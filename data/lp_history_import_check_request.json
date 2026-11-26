@@ -1,9 +1,9 @@
 {
   "kind": "lp_history_import_check_request_v1",
   "institution_id": "kdb",
-  "bundle_commit": "1ccf8f491af2606fe2e47b692cfe176b8661cbef",
-  "bundle_sha256": "d22e61889c07d1f1cab91dcc1d4e4f237d44b3f44920457f3afc356ff1b304dc",
-  "candidate_sha256": "04ac7bf99eacaeb8fd54db98bfac547c15ec634a08d05ec29b6deaa912f84b6d",
-  "candidate_checked_at": "2026-11-26T01:19:52+00:00",
-  "reason": "정책형 뉴딜 2022년 1차 산업은행 중형·대형의 공동 모집과 공식 선정 7팀을 대조한다. 기존 주소·별칭·선정 이력·저장 크기를 읽기 전용으로 검증한다."
+  "bundle_commit": "c4f071b8330d16ee263518d26f4bd62719b4a38b",
+  "bundle_sha256": "e78d2983ac3fc44739a13b577f15ffac49d5e46ea16fd7b2d0043411485b87c0",
+  "candidate_sha256": "5f9b4d48853f0f9a7c7547951875c94d317fcab4cf33718abebb32d0763ceefd",
+  "candidate_checked_at": "2026-11-26T04:05:00+00:00",
+  "reason": "2023년 1차 혁신산업의 산업은행 중형 모집·접수·심사·선정 3팀을 대조한다. 기존 사업 주소·별칭·운용사 이력·저장 크기를 읽기 전용으로 검증한다."
 }

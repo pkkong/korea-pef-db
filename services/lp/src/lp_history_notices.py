@@ -26,7 +26,9 @@ ENTERPRISE_2022_KIND = 'lp_enterprise_newdeal_2022_notice_v1'
 ENTERPRISE_2022_IMPORT_KIND = 'lp_enterprise_newdeal_2022_import_v1'
 POLICY_FIRST_2022_KIND = 'lp_kdb_policy_newdeal_first_2022_notice_v1'
 POLICY_FIRST_2022_IMPORT_KIND = 'lp_kdb_policy_newdeal_first_2022_import_v1'
-PROJECTED_KINDS = {JOINT_KIND, KDB_PRESS_KIND, ENTERPRISE_2022_KIND, POLICY_FIRST_2022_KIND}
+INNOVATION_FIRST_2023_KIND = 'lp_kdb_innovation_first_2023_notice_v1'
+INNOVATION_FIRST_2023_IMPORT_KIND = 'lp_kdb_innovation_first_2023_import_v1'
+PROJECTED_KINDS = {JOINT_KIND, KDB_PRESS_KIND, ENTERPRISE_2022_KIND, POLICY_FIRST_2022_KIND, INNOVATION_FIRST_2023_KIND}
 
 
 def validate_history_notice(raw, checked_at):
@@ -53,6 +55,12 @@ def validate_history_notice(raw, checked_at):
             from .lp_kdb_policy_newdeal_first_2022 import validate_retained_notice
         except ImportError:
             from lp_kdb_policy_newdeal_first_2022 import validate_retained_notice
+        return validate_retained_notice(raw, checked_at)
+    if raw.get('history_import') == INNOVATION_FIRST_2023_KIND:
+        try:
+            from .lp_kdb_innovation_2023_first import validate_retained_notice
+        except ImportError:
+            from lp_kdb_innovation_2023_first import validate_retained_notice
         return validate_retained_notice(raw, checked_at)
     if raw.get('history_import') != KIND:
         raise ValueError('not an imported history notice')
