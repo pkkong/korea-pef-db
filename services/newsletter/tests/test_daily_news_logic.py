@@ -1943,7 +1943,7 @@ def test_20261119_market_corrections_use_section_only_overrides() -> None:
         assert all(tag["tag_value"] != "Deal" for tag in tags), title
 
 
-def test_20261125_reviewed_sections_survive_export_classification() -> None:
+def test_reviewed_november_2026_sections_survive_export_classification() -> None:
     cases = [
         ("삼성 금융 네트워크 글로벌 영토 넓힌다…해외 M&A 속도", "https://www.sedaily.com/article/20118374", "Deal", "Market"),
         (
@@ -1994,6 +1994,48 @@ def test_20261125_reviewed_sections_survive_export_classification() -> None:
             "https://www.fnnews.com/news/202611242109161913",
             "Deal",
             "Market",
+        ),
+        (
+            "E&F PE의 쎄노텍, 매각 재도전 앞두고 실적 개선",
+            "https://www.thebell.co.kr/free/content/ArticleView.asp?key=202611240019568520106721",
+            "Deal",
+            "Market",
+        ),
+        (
+            "PEF연합회 출범키로…초대 회장 임유철에 관료 투톱",
+            "https://dealsite.co.kr/articles/173442",
+            "GP",
+            "Market",
+        ),
+        (
+            "'모험자본 플랫폼' 참여 936개사 돌파…창업·벤처 PEF 인정·NCR 완화 추진",
+            "https://marketinsight.hankyung.com/article/202611259075r",
+            "GP",
+            "Market",
+        ),
+        (
+            "종투사 모험자본 공급 11조원 넘어...'1호 출자' 플랫폼은 KB증권",
+            "https://www.asiae.co.kr/article/2026112514251929440",
+            "GP",
+            "Market",
+        ),
+        (
+            "[마켓인]TPG 측 이사 임기 만료 임박…카카오모빌리티 이사회 재편되나",
+            "https://www.edaily.co.kr/News/Read?mediaCodeNo=257&newsId=03611286645649328",
+            "GP",
+            "Market",
+        ),
+        (
+            "하이워터마크의 벽…헤지펀드 성과보수 보릿고개",
+            "https://www.thebell.co.kr/free/content/ArticleView.asp?key=202611231304050840101039",
+            "GP",
+            "Market",
+        ),
+        (
+            "에코프로비엠, 5700억 CB 발행 추진…1700억은 추가 모집",
+            "https://www.thebell.co.kr/free/content/ArticleView.asp?key=202611240803310060108768",
+            "Market",
+            "Deal",
         ),
     ]
     overrides = load_manual_overrides(DEFAULT_OVERRIDES)

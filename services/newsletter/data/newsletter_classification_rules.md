@@ -54,6 +54,11 @@ Use `Deal` for specific transactions. Examples include acquisition, sale,
 merger, carve-out, IPO, block trade, CB/BW/mezzanine financing, project
 financing, minority investment, or company-level capital raise.
 
+For portfolio company coverage, look for a concrete step in a current
+transaction, such as a sell-side mandate, due diligence, a bid, or signing.
+Use `Market` for reporting centered on operating results when an eventual
+sale is mentioned only as a possibility.
+
 If a company receives investment from financial investors, classify it as
 `Deal`, unless the article is mainly about the GP's fund strategy.
 
