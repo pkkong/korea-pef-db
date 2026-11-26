@@ -1,9 +1,9 @@
 {
   "kind": "lp_history_import_check_request_v1",
   "institution_id": "kdb",
-  "bundle_commit": "e5a152e9155f995253ef117dbf2bc947bb2c7f28",
-  "bundle_sha256": "710b6dc9e004d73433fcb75385e599c94b1893f4e8c0f02861c5cc58018779ac",
-  "candidate_sha256": "d13ca8e72b73e2f699f271afd48406a5bdeb649360bab987af49b4eb91283507",
-  "candidate_checked_at": "2026-11-26T00:05:17+00:00",
-  "reason": "산업은행 2022년 2차 기업투자 지역혁신의 PE·VC 공동 모집과 최종 선정 3팀을 대조한다. 기존 사업의 주소와 별칭, 선정 이력, 저장 크기는 읽기 전용으로 검증한다."
+  "bundle_commit": "1ccf8f491af2606fe2e47b692cfe176b8661cbef",
+  "bundle_sha256": "d22e61889c07d1f1cab91dcc1d4e4f237d44b3f44920457f3afc356ff1b304dc",
+  "candidate_sha256": "04ac7bf99eacaeb8fd54db98bfac547c15ec634a08d05ec29b6deaa912f84b6d",
+  "candidate_checked_at": "2026-11-26T01:19:52+00:00",
+  "reason": "정책형 뉴딜 2022년 1차 산업은행 중형·대형의 공동 모집과 공식 선정 7팀을 대조한다. 기존 주소·별칭·선정 이력·저장 크기를 읽기 전용으로 검증한다."
 }

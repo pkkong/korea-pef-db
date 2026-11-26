@@ -24,7 +24,9 @@ KDB_PRESS_KIND = 'lp_kdb_projected_press_notice_v1'
 KDB_MATERIALS_IMPORT_KIND = 'lp_kdb_materials_joint_history_import_v1'
 ENTERPRISE_2022_KIND = 'lp_enterprise_newdeal_2022_notice_v1'
 ENTERPRISE_2022_IMPORT_KIND = 'lp_enterprise_newdeal_2022_import_v1'
-PROJECTED_KINDS = {JOINT_KIND, KDB_PRESS_KIND, ENTERPRISE_2022_KIND}
+POLICY_FIRST_2022_KIND = 'lp_kdb_policy_newdeal_first_2022_notice_v1'
+POLICY_FIRST_2022_IMPORT_KIND = 'lp_kdb_policy_newdeal_first_2022_import_v1'
+PROJECTED_KINDS = {JOINT_KIND, KDB_PRESS_KIND, ENTERPRISE_2022_KIND, POLICY_FIRST_2022_KIND}
 
 
 def validate_history_notice(raw, checked_at):
@@ -45,6 +47,12 @@ def validate_history_notice(raw, checked_at):
             from .lp_enterprise_newdeal_2022 import validate_retained_notice
         except ImportError:
             from lp_enterprise_newdeal_2022 import validate_retained_notice
+        return validate_retained_notice(raw, checked_at)
+    if raw.get('history_import') == POLICY_FIRST_2022_KIND:
+        try:
+            from .lp_kdb_policy_newdeal_first_2022 import validate_retained_notice
+        except ImportError:
+            from lp_kdb_policy_newdeal_first_2022 import validate_retained_notice
         return validate_retained_notice(raw, checked_at)
     if raw.get('history_import') != KIND:
         raise ValueError('not an imported history notice')

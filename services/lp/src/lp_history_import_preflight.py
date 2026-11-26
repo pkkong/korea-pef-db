@@ -24,6 +24,7 @@ try:
     from . import lp_kdb_semiconductor_2025 as kdb_semiconductor_2025
     from . import lp_kdb_materials_history_import as materials
     from . import lp_enterprise_newdeal_2022 as enterprise_2022
+    from . import lp_kdb_policy_newdeal_first_2022 as policy_first_2022
     from . import lp_newdeal_history_import as newdeal
 except ImportError:
     from lp_history_notices import validate_history_notice
@@ -34,6 +35,7 @@ except ImportError:
     import lp_kdb_semiconductor_2025 as kdb_semiconductor_2025
     import lp_kdb_materials_history_import as materials
     import lp_enterprise_newdeal_2022 as enterprise_2022
+    import lp_kdb_policy_newdeal_first_2022 as policy_first_2022
     import lp_newdeal_history_import as newdeal
 
 MAX_IMPORT_BYTES = 40 * 1024 * 1024
@@ -43,7 +45,8 @@ _JOINT_FOLLOWUPS = {newdeal.FOLLOWUP_IMPORT_KIND, newdeal.STAGES_IMPORT_KIND}
 _JOINT_BUNDLES = {newdeal.BUNDLE_KIND: newdeal.IMPORT_KIND, newdeal.FOLLOWUP_BUNDLE_KIND: newdeal.FOLLOWUP_IMPORT_KIND,
                   newdeal.STAGES_BUNDLE_KIND: newdeal.STAGES_IMPORT_KIND,
                   materials.BUNDLE_KIND: materials.IMPORT_KIND, materials.BUNDLE_2020_KIND: materials.IMPORT_KIND,
-                  enterprise_2022.BUNDLE_KIND: enterprise_2022.IMPORT_KIND}
+                  enterprise_2022.BUNDLE_KIND: enterprise_2022.IMPORT_KIND,
+                  policy_first_2022.BUNDLE_KIND: policy_first_2022.IMPORT_KIND}
 _JOINT_IMPORTS = set(_JOINT_BUNDLES.values())
 
 
@@ -159,6 +162,7 @@ def proposal(current, payload, checked_at):
     validate(current)
     joint = payload['kind'] in _JOINT_IMPORTS
     materials_plan = payload['kind'] == materials.IMPORT_KIND
+    policy_first = payload['kind'] == policy_first_2022.IMPORT_KIND
     followup = payload['kind'] in _JOINT_FOLLOWUPS
     if followup:
         if payload['kind'] == newdeal.FOLLOWUP_IMPORT_KIND:
@@ -172,6 +176,9 @@ def proposal(current, payload, checked_at):
         programs, holds = [program], []
     elif payload['kind'] == enterprise_2022.IMPORT_KIND:
         program, incoming = enterprise_2022.project(payload['source'], current['programs'], checked_at)
+        programs, holds = [program], []
+    elif policy_first:
+        program, incoming = policy_first_2022.project(payload['source'], current['programs'], checked_at)
         programs, holds = [program], []
     elif joint:
         program, incoming = newdeal.project(payload['source'], checked_at)
@@ -192,7 +199,7 @@ def proposal(current, payload, checked_at):
     if any(old.get('attachment_ocr') != n.get('attachment_ocr') for url, n in incoming_by_url.items()
            if (old := retained.get(url)) is not None):
         raise ValueError('기존 과거 원문의 OCR 영수증과 가져올 버전 불일치')
-    source_key = materials.source_key if materials_plan else newdeal.source_key
+    source_key = materials.source_key if materials_plan or policy_first else newdeal.source_key
     joint_by_key = {source_key(url): n for url, n in incoming_by_url.items()} if joint else {}
     for old in _catalog_versions(current):
         n = incoming_by_url.get(old.get('url'))
