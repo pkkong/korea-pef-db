@@ -16,7 +16,7 @@
 | 서비스 | 공식 주소 | 데이터 경로 | 상태 |
 | --- | --- | --- | --- |
 | 브리프(뉴스레터) | https://kpef-newsletter.vercel.app | 매일 수집 → Supabase → Vercel. 백업 미러 https://pkkong.github.io/kpef-newsletter/ | 매일 발행 정상 |
-| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 11/26 13:11 산은 2023 혁신산업 중형 추가 후 22기관 98사업·과거 공고 128건 확인. 09:20 정기는 미생성이고 오전 자동 보완의 삼성·미래에셋 목록 오류는 남음 |
+| LP 출자사업 | https://kpef-lp.vercel.app | 평일 2회 수집 설정 → Supabase 공개본 → Vercel | 11/26 14:17 산은 2023 성장지원 대형 추가 후 22기관 99사업·과거 공고 133건 확인. 오전 자동 보완의 삼성·미래에셋 목록 오류는 남음 |
 | GP 운용사 | https://kpef-gp.vercel.app | 금감원 분기 자료 → Supabase 스냅샷 → Vercel | 2025Q4 기준. 프로필에 LP 선정 이력 표시(11/13). 없는 페이지는 404 |
 | Wiki | — | — | 사용자가 다시 기획할 때까지 숨김 |
 
