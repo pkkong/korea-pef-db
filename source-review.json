@@ -1,0 +1,91 @@
+{
+  "kind": "kdb_growth_support_first_2023_official_source_review_v1",
+  "published": false,
+  "notices": [
+    {
+      "stage": "recruitment",
+      "title": "혁신성장펀드(성장지원펀드) 2023년 1차 위탁운용사 선정계획 공고",
+      "date": "2023-04-28",
+      "body": {
+        "url": "https://www.shinhanfund.com/ko/pc/board/noticeView?no=133",
+        "final_url": "https://www.shinhanfund.com/ko/pc/board/noticeView?no=133",
+        "referer": "https://www.shinhanfund.com/ko/pc/board/noticeView?no=134",
+        "status": 200,
+        "checked_at": "2026-11-26T04:09:08.202992+00:00",
+        "bytes": 54867,
+        "sha256": "b39a600ea5b0785ce1a7eb0bbf11ca83d69659421c595421887694cd687d70cb"
+      },
+      "attachments": [
+        "recruitment-attachment"
+      ]
+    },
+    {
+      "stage": "faq",
+      "title": "혁신성장펀드(성장지원펀드) 2023년 1차 위탁운용사 선정계획 관련 FAQ",
+      "date": "2023-05-12",
+      "body": {
+        "url": "https://www.shinhanfund.com/ko/pc/board/noticeView?no=134",
+        "final_url": "https://www.shinhanfund.com/ko/pc/board/noticeView?no=134",
+        "referer": "https://www.shinhanfund.com/ko/pc/board/notice",
+        "status": 200,
+        "bytes": 55029,
+        "checked_at": "2026-11-26T04:08:27.445506+00:00",
+        "sha256": "c5c20861873a87822f6e1eb548d72e25a13825e0e31568bb9cf1383764df20af"
+      },
+      "attachments": [
+        "faq-attachment"
+      ]
+    },
+    {
+      "stage": "applications",
+      "title": "혁신성장펀드(성장지원펀드) 2023년 1차 출자사업 성장지원 일반/대형 분야 위탁운용사 접수 결과",
+      "date": "2023-05-19",
+      "body": {
+        "url": "https://www.shinhanfund.com/ko/pc/board/noticeView?no=135",
+        "final_url": "https://www.shinhanfund.com/ko/pc/board/noticeView?no=135",
+        "referer": "https://www.shinhanfund.com/ko/pc/board/notice",
+        "status": 200,
+        "bytes": 54761,
+        "checked_at": "2026-11-26T04:08:27.403193+00:00",
+        "sha256": "051b7b14075147f237b9d4f6eb06d891c78934e9bc186f3d7543ada1ea50f086"
+      },
+      "attachments": [
+        "applications-attachment"
+      ]
+    },
+    {
+      "stage": "screening",
+      "title": "혁신성장펀드(성장지원펀드) 2023년 1차 위탁운용사 선정 서류심사 결과",
+      "date": "2023-06-09",
+      "body": {
+        "url": "https://www.shinhanfund.com/ko/pc/board/noticeView?no=136",
+        "final_url": "https://www.shinhanfund.com/ko/pc/board/noticeView?no=136",
+        "referer": "https://www.shinhanfund.com/ko/pc/board/notice",
+        "status": 200,
+        "bytes": 54184,
+        "checked_at": "2026-11-26T04:08:27.403309+00:00",
+        "sha256": "c3ad82ff63c5a631d5017264a3eeb286a1112669b45cc2197c4d33b6d4f32ffe"
+      },
+      "attachments": [
+        "screening-attachment"
+      ]
+    },
+    {
+      "stage": "selection",
+      "title": "혁신성장펀드(성장지원펀드) 2023년 1차 위탁운용사 선정 결과",
+      "date": "2023-06-26",
+      "body": {
+        "url": "https://www.shinhanfund.com/ko/pc/board/noticeView?no=137",
+        "final_url": "https://www.shinhanfund.com/ko/pc/board/noticeView?no=137",
+        "referer": "https://www.shinhanfund.com/ko/pc/board/notice",
+        "status": 200,
+        "bytes": 53959,
+        "checked_at": "2026-11-26T04:08:27.402553+00:00",
+        "sha256": "a2f255a9c453d8ad6b41a27e1ca62a3fad645096ce741372d81997354d6e1945"
+      },
+      "attachments": [
+        "selection-attachment"
+      ]
+    }
+  ]
+}
