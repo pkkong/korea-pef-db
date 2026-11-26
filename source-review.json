@@ -1,0 +1,58 @@
+{
+  "observed_at": "2026-11-26T01:09:33.675562+00:00",
+  "press": {
+    "recruitment": [
+      "2022-01-06",
+      "https://www.kdb.co.kr/BOUBUF02N00.act?_mnuId=IHIHIR0089&_PARAM_NAME=NEXT_DATA&_PARM_DATA=%7B%22ITR_NAC_ID_MNG_SNO%22%3A%22169748%22%2C%22ITR_BLB_ID%22%3A%22SMR024%22%2C%22NAC_SNO%22%3A%22%22%2C%22FIRST_MENU_ID%22%3A%22CHBIPR25N00%22%7D"
+    ],
+    "applications": [
+      "2022-02-08",
+      "https://www.kdb.co.kr/BOUBUF02N00.act?_mnuId=IHIHIR0089&_PARAM_NAME=NEXT_DATA&_PARM_DATA=%7B%22ITR_NAC_ID_MNG_SNO%22%3A%22169999%22%2C%22ITR_BLB_ID%22%3A%22SMR024%22%2C%22NAC_SNO%22%3A%22%22%2C%22FIRST_MENU_ID%22%3A%22CHBIPR25N00%22%7D"
+    ],
+    "screening": [
+      "2022-02-24",
+      "https://www.kdb.co.kr/BOUBUF02N00.act?_mnuId=IHIHIR0089&_PARAM_NAME=NEXT_DATA&_PARM_DATA=%7B%22ITR_NAC_ID_MNG_SNO%22%3A%22170153%22%2C%22ITR_BLB_ID%22%3A%22SMR024%22%2C%22NAC_SNO%22%3A%22%22%2C%22FIRST_MENU_ID%22%3A%22CHBIPR25N00%22%7D"
+    ],
+    "selection": [
+      "2022-03-08",
+      "https://www.kdb.co.kr/BOUBUF02N00.act?_mnuId=IHIHIR0089&_PARAM_NAME=NEXT_DATA&_PARM_DATA=%7B%22ITR_NAC_ID_MNG_SNO%22%3A%22170283%22%2C%22ITR_BLB_ID%22%3A%22SMR024%22%2C%22NAC_SNO%22%3A%22%22%2C%22FIRST_MENU_ID%22%3A%22CHBIPR25N00%22%7D"
+    ]
+  },
+  "funnel": [
+    [
+      7,
+      6,
+      3
+    ],
+    [
+      7,
+      7,
+      4
+    ]
+  ],
+  "selected_teams": [
+    [
+      "인터베스트",
+      "KB증권/노앤파트너스",
+      "LB인베스트먼트"
+    ],
+    [
+      "스톤브릿지캐피탈",
+      "아주아이비투자",
+      "에스지프라이빗에쿼티",
+      "한국투자프라이빗에쿼티"
+    ]
+  ],
+  "planned_joint_commitment_eok": [
+    1920,
+    4200
+  ],
+  "planned_target_eok": [
+    4800,
+    14000
+  ],
+  "joint_round_own_kdb_eok": 4540,
+  "official_press_full_round_joint_eok": 9840,
+  "original_scope_bytes_available": false,
+  "publish_ready": false
+}
