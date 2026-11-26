@@ -56,7 +56,7 @@
 
 ### 코드·운영 부담
 
-- **D-11 오전 정기 실행 지연** — 11/26 09:20 정기는 미생성이다. 11:40 [자동 보완](https://github.com/pkkong/korea-pef-db/actions/runs/45744008394)이 발행·공개 확인을 마쳤다. 삼성 403과 미래에셋 미완료로 장애 보고는 실패했다. 15:20 정기와 실제 수집 상태를 별도로 확인한다.
+- **D-11 정기 실행 지연** — 11/26 09:20 정기는 미생성이다. 11:40 [자동 보완](https://github.com/pkkong/korea-pef-db/actions/runs/45744008394)이 발행·공개 확인을 마쳤다. 삼성 403과 미래에셋 미완료로 장애 보고는 실패했다. 15:20 정기도 17:10까지 미생성이어서 17:11 [수동 감시 보완](https://github.com/pkkong/korea-pef-db/actions/runs/45781021893)을 시작했다. 수집·발행·공개 확인 결과를 대조한다.
 - **D-3 현황표 자동 생성**: `lp_collection_status.md`의 기관별 표를 정기 실행 결과(`build_lp_collection_health.py`)에서 생성하는 방안.
 - **D-10 남은 구버전 공개 데이터 경로**: `scripts/build_public_service_data.py`(옛 `service_data.json`의 `lp_commitment_notices`), `lp_public_visibility.py`, `check_public_frontend.py`의 `check_public_lp_json_contract`, 로컬 대시보드 스크립트(`build_dashboard_data.py`, `open_dashboard.py` 등)는 운영 workflow가 쓰지 않는다. 쓰는 사람이 없는지 확인한 뒤 정리한다.
 - **관찰: 수출입은행 목록 기간**: `lp_kexim_listing.py`는 옛 모니터의 기준을 그대로 옮겨 2024-01-01 이전 공고를 버린다. 2023년 이력 백필(B-3)에서 수출입은행을 다룰 때 이 기준을 2023-01-01로 바꿀지 확인한다.
