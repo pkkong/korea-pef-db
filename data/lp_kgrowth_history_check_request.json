@@ -1,7 +1,12 @@
 {
   "bundle_commit": "8044b5d7b107481a70b3b2bb7891cd19dfd66898",
   "bundle_sha256": "a5b4c1d35660dbbbcd376149e6856814e4405242452a5dc63458b9a3d5bca97b",
-  "reason": "공동 모집과 동일한 사업연도·회차에 속하고 기업투자 FAQ 추가를 명시한 설명회 상세 원응답을 한 번 보관한다. 기존 원문 지문과 본문 및 첨부 주소를 재생한다.",
-  "attempt": 9,
-  "review_scope": "newdeal_followups"
+  "reason": "산업은행 2022년 1차 중형·대형 보도자료와 대조할 공동 기업투자 모집 상세와 첨부를 보존한다. 같은 회차의 인프라는 요청하지 않는다.",
+  "attempt": 10,
+  "review_scope": "enterprise_recruitment",
+  "recruitment": {
+    "fund": "정책형 뉴딜펀드",
+    "round": 1,
+    "date": "2022-01-07"
+  }
 }

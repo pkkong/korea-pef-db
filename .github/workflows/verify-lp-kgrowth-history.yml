@@ -34,6 +34,8 @@ jobs:
           request = json.loads(pathlib.Path('data/lp_kgrowth_history_check_request.json').read_bytes())
           fields = {'bundle_commit', 'bundle_sha256', 'reason', 'attempt', 'review_scope'}
           scope = request.get('review_scope')
+          if scope == 'enterprise_recruitment':
+              fields.add('recruitment')
           proof_roles = ('prior', 'followup', 'result', 'failed')
           proof_count = {'press_followup': 1, 'press_result': 2, 'press_pdf': 3, 'press_pdf_session': 4}.get(scope, 0)
           if proof_count:
@@ -44,7 +46,8 @@ jobs:
           assert re.fullmatch(r'[a-f0-9]{40}', commit)
           assert re.fullmatch(r'[a-f0-9]{64}', digest)
           assert type(request['attempt']) is int and request['attempt'] > 0
-          assert proof_count or scope in {'pe_roster', 'joint_originals', 'newdeal_followups', 'press_listing', 'press_search'}
+          assert proof_count or scope in {'pe_roster', 'joint_originals', 'newdeal_followups', 'press_listing', 'press_search',
+                                         'enterprise_recruitment'}
           subprocess.run(['git', 'fetch', '--no-tags', '--depth=1', 'origin', commit], check=True)
           raw = subprocess.check_output(['git', 'show', commit + ':kgrowth.json'])
           assert len(raw) <= 40 * 1024 * 1024
@@ -72,6 +75,11 @@ jobs:
           import json, pathlib, subprocess
           root = pathlib.Path('/tmp/lp-kgrowth-history-check')
           request = json.loads((root / 'request.json').read_text())
+          if request['review_scope'] == 'enterprise_recruitment':
+              result = subprocess.run(['python3', 'services/lp/src/lp_kgrowth_enterprise_recruitment.py',
+                                       '--bundle', str(root / 'bundle.json'), '--request', str(root / 'request.json'),
+                                       '--out', str(root / 'capture.json')])
+              raise SystemExit(result.returncode)
           args = ['python3', 'services/lp/src/lp_kgrowth_history_replay.py',
                   '--bundle', str(root / 'bundle.json'), '--capture-details',
                   '--review-scope', request['review_scope'], '--out', str(root / 'capture.json')]
