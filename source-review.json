@@ -1,0 +1,47 @@
+{
+  "title": "혁신성장펀드 2023년 1차 혁신산업 일반 중형",
+  "planned_kdb_own_eok": 1590,
+  "planned_government_eok": 786,
+  "planned_joint_commitment_eok": 2376,
+  "planned_fund_eok": 2200,
+  "planned_total_formation_eok": 6600,
+  "deadline": "2023-05-17T15:00:00+09:00",
+  "scope": "PE·VC 공동 모집",
+  "funds_selected": 3,
+  "final_roster": [
+    "비엔더블유인베스트먼트",
+    "스마일게이트인베스트먼트",
+    "스틱인베스트먼트"
+  ],
+  "dates": [
+    {
+      "phase": "모집 공고",
+      "id": "715",
+      "source_url": "https://www.kgrowth.or.kr/notice_view.asp?idx=715&str_type=1&tab=1",
+      "date": "2023-04-28",
+      "file_sha256": "8700bf55e297c6eb0d0a7bf47c3b9c35f976ec59270fa7c859589e3237909f25"
+    },
+    {
+      "phase": "접수 결과",
+      "id": "726",
+      "source_url": "https://www.kgrowth.or.kr/notice_view.asp?idx=726&str_type=1&tab=1",
+      "date": "2023-05-19",
+      "file_sha256": "fcfdd9af05bb1ff046f4463d26719bab76afe2244def9e0fc9c2ebce5534e280"
+    },
+    {
+      "phase": "1차 심사 결과",
+      "id": "730",
+      "source_url": "https://www.kgrowth.or.kr/notice_view.asp?idx=730&str_type=1&tab=1",
+      "date": "2023-06-09",
+      "file_sha256": "c4fcd7ddf8fd09146976dd895be010de3f6ac3ea80485394bf219652308f5cd8"
+    },
+    {
+      "phase": "선정 결과",
+      "id": "736",
+      "source_url": "https://www.kgrowth.or.kr/notice_view.asp?idx=736&str_type=1&tab=1",
+      "date": "2023-06-26",
+      "file_sha256": "15ca0d287522674f7724fc32429b108fb331adfc81f417823d19244614599f5b"
+    }
+  ],
+  "published": false
+}
