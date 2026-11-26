@@ -26,6 +26,7 @@ try:
     from . import lp_enterprise_newdeal_2022 as enterprise_2022
     from . import lp_kdb_policy_newdeal_first_2022 as policy_first_2022
     from . import lp_kdb_innovation_2023_first as innovation_first_2023
+    from . import lp_kdb_growth_support_2023_first as growth_first_2023
     from . import lp_newdeal_history_import as newdeal
 except ImportError:
     from lp_history_notices import validate_history_notice
@@ -38,6 +39,7 @@ except ImportError:
     import lp_enterprise_newdeal_2022 as enterprise_2022
     import lp_kdb_policy_newdeal_first_2022 as policy_first_2022
     import lp_kdb_innovation_2023_first as innovation_first_2023
+    import lp_kdb_growth_support_2023_first as growth_first_2023
     import lp_newdeal_history_import as newdeal
 
 MAX_IMPORT_BYTES = 40 * 1024 * 1024
@@ -49,7 +51,8 @@ _JOINT_BUNDLES = {newdeal.BUNDLE_KIND: newdeal.IMPORT_KIND, newdeal.FOLLOWUP_BUN
                   materials.BUNDLE_KIND: materials.IMPORT_KIND, materials.BUNDLE_2020_KIND: materials.IMPORT_KIND,
                   enterprise_2022.BUNDLE_KIND: enterprise_2022.IMPORT_KIND,
                   policy_first_2022.BUNDLE_KIND: policy_first_2022.IMPORT_KIND,
-                  innovation_first_2023.BUNDLE_KIND: innovation_first_2023.IMPORT_KIND}
+                  innovation_first_2023.BUNDLE_KIND: innovation_first_2023.IMPORT_KIND,
+                  growth_first_2023.BUNDLE_KIND: growth_first_2023.IMPORT_KIND}
 _JOINT_IMPORTS = set(_JOINT_BUNDLES.values())
 
 
@@ -167,6 +170,7 @@ def proposal(current, payload, checked_at):
     materials_plan = payload['kind'] == materials.IMPORT_KIND
     policy_first = payload['kind'] == policy_first_2022.IMPORT_KIND
     innovation_first = payload['kind'] == innovation_first_2023.IMPORT_KIND
+    growth_first = payload['kind'] == growth_first_2023.IMPORT_KIND
     followup = payload['kind'] in _JOINT_FOLLOWUPS
     if followup:
         if payload['kind'] == newdeal.FOLLOWUP_IMPORT_KIND:
@@ -187,6 +191,9 @@ def proposal(current, payload, checked_at):
     elif innovation_first:
         program, incoming = innovation_first_2023.project(payload['source'], current['programs'], checked_at)
         programs, holds = [program], []
+    elif growth_first:
+        program, incoming = growth_first_2023.project(payload['source'], current['programs'], checked_at)
+        programs, holds = [program], []
     elif joint:
         program, incoming = newdeal.project(payload['source'], checked_at)
         newdeal.assert_no_overlap(current['programs'], program, incoming)
@@ -206,7 +213,11 @@ def proposal(current, payload, checked_at):
     if any(old.get('attachment_ocr') != n.get('attachment_ocr') for url, n in incoming_by_url.items()
            if (old := retained.get(url)) is not None):
         raise ValueError('기존 과거 원문의 OCR 영수증과 가져올 버전 불일치')
-    source_key = materials.source_key if materials_plan or policy_first or innovation_first else newdeal.source_key
+    source_key = newdeal.source_key
+    if materials_plan or policy_first or innovation_first:
+        source_key = materials.source_key
+    if growth_first:
+        source_key = growth_first_2023.source_key
     joint_by_key = {source_key(url): n for url, n in incoming_by_url.items()} if joint else {}
     for old in _catalog_versions(current):
         n = incoming_by_url.get(old.get('url'))
