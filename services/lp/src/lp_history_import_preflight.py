@@ -23,6 +23,7 @@ try:
     from .lp_state_storage import pack_state, unpack_state, MARKER, EVIDENCE_KEYS
     from . import lp_kdb_semiconductor_2025 as kdb_semiconductor_2025
     from . import lp_kdb_materials_history_import as materials
+    from . import lp_enterprise_newdeal_2022 as enterprise_2022
     from . import lp_newdeal_history_import as newdeal
 except ImportError:
     from lp_history_notices import validate_history_notice
@@ -32,6 +33,7 @@ except ImportError:
     from lp_state_storage import pack_state, unpack_state, MARKER, EVIDENCE_KEYS
     import lp_kdb_semiconductor_2025 as kdb_semiconductor_2025
     import lp_kdb_materials_history_import as materials
+    import lp_enterprise_newdeal_2022 as enterprise_2022
     import lp_newdeal_history_import as newdeal
 
 MAX_IMPORT_BYTES = 40 * 1024 * 1024
@@ -40,7 +42,8 @@ _ALLOWED_CHANGED_KEYS = {'programs', 'history_notices'}
 _JOINT_FOLLOWUPS = {newdeal.FOLLOWUP_IMPORT_KIND, newdeal.STAGES_IMPORT_KIND}
 _JOINT_BUNDLES = {newdeal.BUNDLE_KIND: newdeal.IMPORT_KIND, newdeal.FOLLOWUP_BUNDLE_KIND: newdeal.FOLLOWUP_IMPORT_KIND,
                   newdeal.STAGES_BUNDLE_KIND: newdeal.STAGES_IMPORT_KIND,
-                  materials.BUNDLE_KIND: materials.IMPORT_KIND, materials.BUNDLE_2020_KIND: materials.IMPORT_KIND}
+                  materials.BUNDLE_KIND: materials.IMPORT_KIND, materials.BUNDLE_2020_KIND: materials.IMPORT_KIND,
+                  enterprise_2022.BUNDLE_KIND: enterprise_2022.IMPORT_KIND}
 _JOINT_IMPORTS = set(_JOINT_BUNDLES.values())
 
 
@@ -166,6 +169,9 @@ def proposal(current, payload, checked_at):
         programs, holds = [], []
     elif materials_plan:
         program, incoming = materials.project(payload['source'], current['programs'], checked_at)
+        programs, holds = [program], []
+    elif payload['kind'] == enterprise_2022.IMPORT_KIND:
+        program, incoming = enterprise_2022.project(payload['source'], current['programs'], checked_at)
         programs, holds = [program], []
     elif joint:
         program, incoming = newdeal.project(payload['source'], checked_at)
